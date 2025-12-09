@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: 0 0% 100%;
+  --color-foreground: 0 0% 3.9%;
+  --color-card: 0 0% 100%;
+  --color-card-foreground: 0 0% 3.9%;
+  --color-popover: 0 0% 100%;
+  --color-popover-foreground: 0 0% 3.9%;
+  --color-primary: 280 50% 60%;
+  --color-primary-foreground: 0 0% 98%;
+  --color-secondary: 0 0% 96.1%;
+  --color-secondary-foreground: 0 0% 9%;
+  --color-muted: 0 0% 96.1%;
+  --color-muted-foreground: 0 0% 45.1%;
+  --color-accent: 280 30% 85%;
+  --color-accent-foreground: 0 0% 9%;
+  --color-destructive: 0 84.2% 60.2%;
+  --color-destructive-foreground: 0 0% 98%;
+  --color-border: 0 0% 20%;
+  --color-input: 0 0% 20%;
+  --color-ring: 280 50% 60%;
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme inline {
+    --color-background: 0 0% 0%;
+    --color-foreground: 0 0% 98%;
+    --color-card: 0 0% 5%;
+    --color-card-foreground: 0 0% 98%;
+    --color-popover: 0 0% 5%;
+    --color-popover-foreground: 0 0% 98%;
+    --color-primary: 280 50% 70%;
+    --color-primary-foreground: 0 0% 98%;
+    --color-secondary: 0 0% 10%;
+    --color-secondary-foreground: 0 0% 98%;
+    --color-muted: 0 0% 15%;
+    --color-muted-foreground: 0 0% 70%;
+    --color-accent: 280 30% 20%;
+    --color-accent-foreground: 0 0% 98%;
+    --color-destructive: 0 62.8% 30.6%;
+    --color-destructive-foreground: 0 0% 98%;
+    --color-border: 0 0% 25%;
+    --color-input: 0 0% 25%;
+    --color-ring: 280 50% 70%;
+  }
+}
+
+* {
+  border-color: hsl(var(--color-border));
+}
+
+body {
+  background-color: #020617;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.65));
+  background-position: center center;
+  background-size: 140% auto;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  color: hsl(var(--color-foreground));
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Ball Draw Simulator Styles */
+.glass-panel {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sphere-overlay {
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 20%, transparent 50%, rgba(0,0,0,0.4) 100%);
+  pointer-events: none;
+}
+
+/* Breathing animation for Play Tickets button */
+@keyframes breathing {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.5), 0 0 40px rgba(34, 197, 94, 0.3);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 30px rgba(34, 197, 94, 0.7), 0 0 60px rgba(34, 197, 94, 0.5);
+  }
+}
+
+@keyframes fly-to-display {
+  0% {
+    transform: scale(0.2) translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(5.5) translateY(0); /* ~350px visual size on base 48px ball */
+    opacity: 1;
+  }
+  75% {
+    transform: scale(4.5) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(-270px);
+    opacity: 0.2;
+  }
+}
+
+.animate-fly-to-display {
+  animation: fly-to-display 1.4s ease-in-out forwards;
+}
+
+/* Shimmer animation for magic border */
+@keyframes shimmer {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
+}
+
+/* Magic border spin animation */
+@keyframes magic-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.magic-border {
+  animation: magic-spin 5s linear infinite;
+  transform-origin: center center;
+}
+
+/* Keno Ticket Animations */
+@keyframes ticket-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(2rem) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.keno-ticket {
+  animation: ticket-reveal 0.8s ease-out forwards;
+}
+
+/* 3D Flip Animation for Tickets */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}

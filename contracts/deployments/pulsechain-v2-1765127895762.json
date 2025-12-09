@@ -1,0 +1,12 @@
+{
+  "network": "pulsechain",
+  "contractAddress": "0x48d8492ed78FFDC01F13087078E1eef372E7AFD6",
+  "deploymentBlock": 25209612,
+  "deployer": "0x70444750eedF1B2c9b777cbF096a5919A14895e5",
+  "psshToken": "0xB5C4ecEF450fd36d0eBa1420F6A19DBfBeE5292e",
+  "wplsToken": "0xA1077a294dDE1B09bB078844df40758a5D0f9a27",
+  "pulseXRouter": "0x165C3410fC91EF562C50559f7d2289fEbed552d9",
+  "roundDuration": 600,
+  "version": "V2",
+  "timestamp": "2025-12-07T17:18:15.762Z"
+}
