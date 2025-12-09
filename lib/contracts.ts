@@ -16,13 +16,13 @@ export const WPLS_TO_MORBIUS_BUFFER_BPS = 11000 as const // 10% buffer
 export const LOTTERY_ADDRESS_OLD = '0xa216b3295685D44d12Aaf12112b9212cE45787eD' as const
 
 // NEW Lottery contract (6-of-55 version) - Using PulseX V1 Router
-export const LOTTERY_ADDRESS = '0x8F46A6d0E92A2119050B97c20dB834ADdDEaF910' as const
+export const LOTTERY_ADDRESS = '0x5DCe9c1C35C5e3853FC7E5b00FEfF73c5c997a87' as const
 
 // Keno contract
 export const KENO_ADDRESS = '0x5559BB5dF01B3f4c962B4A7D014b745Dd9816a0A' as const
 
 // Contract deployment info
-export const LOTTERY_DEPLOY_BLOCK = 25211863
+export const LOTTERY_DEPLOY_BLOCK = 25220602
 export const KENO_DEPLOY_BLOCK = 25220311
 // Placeholder - update when deployed
 

@@ -38,13 +38,11 @@ async function main() {
   const SuperStakeLottery6of55 = await hre.ethers.getContractFactory("contracts/SuperStakeLottery6of55V2.sol:SuperStakeLottery6of55");
   console.log("\nDeploying…");
 
-  // PulseChain has 1,000,000x the supply of ETH, so gas prices are 1,000,000x higher
-  // 20,000,000 Gwei on PulseChain ≈ 20 Gwei on Ethereum
-  const gasPrice = hre.ethers.parseUnits("20000000", "gwei");
+  // Use network fee data; fallback to a modest value if provider returns nulls
+  const feeData = await hre.ethers.provider.getFeeData();
+  const gasPrice = feeData.gasPrice || hre.ethers.parseUnits("50", "gwei");
 
-  console.log("Using gas price: 20,000,000 Gwei (20 Gwei equivalent on ETH)");
-  const estimatedCost = (gasPrice * 8_000_000n) / BigInt(1e18);
-  console.log("Estimated deployment cost: ~", estimatedCost.toString(), "PLS");
+  console.log("Using gas price:", hre.ethers.formatUnits(gasPrice, "gwei"), "Gwei");
 
   const lottery = await SuperStakeLottery6of55.deploy(
     PSSH_TOKEN_ADDRESS,
