@@ -434,22 +434,27 @@ export default function Home() {
 
                       <div>
                         <h3 className="font-semibold text-white mb-2 funnel-display-semibold">2. Purchase Tickets</h3>
-                        <p className="text-sm">Each ticket costs 1 Morbius token. You can buy multiple tickets and play up to 10 rounds in advance.</p>
+                        <p className="text-sm">Each ticket costs 100 Morbius tokens. You can buy multiple tickets (up to 100 per transaction) and play up to 100 rounds in advance.</p>
                       </div>
 
                       <div>
                         <h3 className="font-semibold text-white mb-2 funnel-display-semibold">3. Wait For The Draw</h3>
-                        <p className="text-sm">Draws happen automatically at the end of each round. Watch the countdown timer in the header.</p>
+                        <p className="text-sm">Rounds last 30 minutes. Draws happen automatically at the end of each round. Watch the countdown timer!</p>
                       </div>
 
                       <div>
                         <h3 className="font-semibold text-white mb-2 funnel-display-semibold">4. Win Prizes</h3>
-                        <p className="text-sm">Match numbers to win! The more numbers you match, the bigger your prize. Prize pool is distributed 60% to winners, 20% burned, and 20% to MegaMorbius.</p>
+                        <p className="text-sm">Match numbers to win! The more numbers you match, the bigger your prize. Prize distribution: 70% to winners, 10% to MegaMorbius jackpot, 10% burned, 5% to keeper, 5% to deployer.</p>
                       </div>
 
                       <div className="pt-4 border-t border-white/10">
-                        <h3 className="font-semibold text-white mb-2 funnel-display-semibold">MegaMorbius Rounds</h3>
-                        <p className="text-sm">Every {MEGA_MILLIONS_INTERVAL} rounds, the accumulated MegaMorbius bank is added to the prize pool for a massive jackpot opportunity!</p>
+                        <h3 className="font-semibold text-white mb-2 funnel-display-semibold">MegaMorbius Jackpot</h3>
+                        <p className="text-sm">Every {MEGA_MILLIONS_INTERVAL} rounds (20, 40, 60...), the accumulated MegaMorbius bank is distributed: 90% to the winners pool for massive prizes, 10% to deployer!</p>
+                      </div>
+
+                      <div className="pt-4 border-t border-white/10">
+                        <h3 className="font-semibold text-white mb-2 funnel-display-semibold">Unclaimed Prizes</h3>
+                        <p className="text-sm">If a bracket has no winners, the prize rolls over: 75% to next round&apos;s winners pool, 10% to MegaMorbius bank, 10% burned, and 5% to deployer.</p>
                       </div>
                     </DialogDescription>
                   </DialogHeader>
@@ -485,7 +490,7 @@ export default function Home() {
                     : burnedNum.toFixed(0)
                 })()}
               </div>
-              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-medium">
+              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-small">
                 Burned
               </div>
             </div>
@@ -494,7 +499,7 @@ export default function Home() {
             <div className="text-center">
               <div className="text-3xl md:text-5xl lg:text-6xl font-bold text-white/90 mb-2 md:mb-4 funnel-display-bold">
                 {(() => {
-                  const pool = (totalPssh * BigInt(6000)) / BigInt(10000)
+                  const pool = (totalPssh * BigInt(7000)) / BigInt(10000)
                   const poolNum = parseFloat(formatUnits(pool, TOKEN_DECIMALS))
                   return poolNum >= 1_000_000
                     ? (poolNum / 1_000_000).toFixed(1) + 'M'
@@ -503,7 +508,7 @@ export default function Home() {
                     : poolNum.toFixed(0)
                 })()}
               </div>
-              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-medium">
+              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-small">
                 <div>Player</div>
                 <div>Pool</div>
               </div>
@@ -521,7 +526,7 @@ export default function Home() {
                     : megaNum.toFixed(0)
                 })()}
               </div>
-              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-medium">
+              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-small">
                 Jackpot
               </div>
             </div>
