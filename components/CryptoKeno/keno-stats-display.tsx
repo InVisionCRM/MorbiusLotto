@@ -41,7 +41,7 @@ export function KenoStatsDisplay() {
 
   const totalWageredEth = Number(formatEther(playerStats.totalWagered))
   const totalWonEth = Number(formatEther(playerStats.totalWon))
-  const unclaimedEth = Number(formatEther(unclaimedWinnings && typeof unclaimedWinnings === 'bigint' ? unclaimedWinnings : BigInt(0)))
+  const unclaimedEth = Number(formatEther(typeof unclaimedWinnings === 'bigint' ? unclaimedWinnings : BigInt(0)))
   const ticketCount = Number(playerStats.ticketCount)
   const winCount = Number(playerStats.winCount)
 

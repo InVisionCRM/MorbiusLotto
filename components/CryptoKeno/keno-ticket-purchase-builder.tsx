@@ -134,10 +134,11 @@ export function KenoTicketPurchaseBuilder({
 
   // Process addon costs
   useEffect(() => {
-    if (addonCostResults) {
-      const [multiplierCost, bullsEyeCost] = addonCostResults as [bigint, bigint]
-      setMultiplierCostWei(multiplierCost || BigInt(0))
-      setBullsEyeCostWei(bullsEyeCost || BigInt(0))
+    if (addonCostResults && addonCostResults.length >= 2) {
+      const multiplierCost = addonCostResults[0]?.result as bigint || BigInt(0)
+      const bullsEyeCost = addonCostResults[1]?.result as bigint || BigInt(0)
+      setMultiplierCostWei(multiplierCost)
+      setBullsEyeCostWei(bullsEyeCost)
     }
   }, [addonCostResults])
 
@@ -504,7 +505,7 @@ export function KenoTicketPurchaseBuilder({
                     className="mt-2"
                     size="sm"
                   >
-                    {isApprovePending ? <LoaderOne className="h-4 w-4 mr-2" /> : null}
+                    {isApprovePending ? <div className="h-4 w-4 mr-2"><LoaderOne /></div> : null}
                     Approve MORBIUS
                   </Button>
                 )}
@@ -527,7 +528,7 @@ export function KenoTicketPurchaseBuilder({
                 >
                   {isBuyPending ? (
                     <>
-                      <LoaderOne className="h-5 w-5 mr-2" />
+                      <div className="h-5 w-5 mr-2"><LoaderOne /></div>
                       Purchasing...
                     </>
                   ) : (
