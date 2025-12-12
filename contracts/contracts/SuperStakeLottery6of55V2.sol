@@ -1066,12 +1066,11 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
         currentRoundState = RoundState.FINALIZED;
     }
 
-    function _generateWinningNumbers(uint256 roundId, uint256 closingBlock) private view returns (uint8[6] memory) {
-        uint256 targetBlock = closingBlock > blockDelay ? closingBlock - blockDelay : closingBlock;
-
+    function _generateWinningNumbers(uint256 roundId, uint256 drawBlock) private view returns (uint8[6] memory) {
+        // drawBlock is already the future block (closingBlock + blockDelay)
+        // Use it directly for randomness
         uint256 seed = uint256(keccak256(abi.encodePacked(
-            blockhash(targetBlock),
-            blockhash(closingBlock),
+            blockhash(drawBlock),
             roundId,
             currentRoundTotalMorbius,
             currentRoundTotalTickets,

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   LOTTERY_ADDRESS,
   TICKET_PRICE,
@@ -34,7 +33,7 @@ import { formatUnits, formatEther } from 'viem'
 import { toast } from 'sonner'
 import { LoaderOne } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
-import { Trash2, Edit2, Plus, Minus } from 'lucide-react'
+import { Trash2, Edit2, Plus, Minus, ChevronDown } from 'lucide-react'
 
 const ROUTER_ABI = [
   {
@@ -105,6 +104,14 @@ export function TicketPurchaseBuilder({
 
   const { data: psshBalance, isLoading: isLoadingBalance, error: balanceError } = useReadContract({
     address: PSSH_TOKEN_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address, refetchInterval: 5000 },
+  })
+
+  const { data: wplsBalance, isLoading: isLoadingWplsBalance } = useReadContract({
+    address: WPLS_TOKEN_ADDRESS as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
@@ -203,7 +210,9 @@ export function TicketPurchaseBuilder({
   )
   const currentAllowance = optimisticAllowance ?? psshAllowance ?? BigInt(0)
   const needsApproval = currentAllowance < psshCost
-  const hasEnoughBalance = psshBalance !== undefined && psshBalance >= psshCost
+  const hasEnoughBalance = paymentMethod === 'pls'
+    ? (wplsBalance !== undefined && wplsBalance >= plsValueWei)
+    : (psshBalance !== undefined && psshBalance >= psshCost)
   const isProcessing = isApprovePending || isApproveLoading || isBuyPsshPending || isBuyMultiPending || isBuyPlsPending || isBuyLoading
 
   useEffect(() => {
@@ -434,108 +443,73 @@ export function TicketPurchaseBuilder({
       <div className="relative flex flex-col lg:flex-row gap-4 p-4 min-h-0">
         {/* LEFT PANEL - Builder */}
         <div className="flex-1 lg:flex-[3] space-y-4">
-          <h2 className="text-xl font-bold text-white">Build Your Play</h2>
+          <h2 className="text-xl font-bold text-white">GET TICKETS</h2>
 
-          <Tabs defaultValue="manual" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 bg-white/5 mb-6">
-              <TabsTrigger value="manual" className="data-[state=active]:bg-white/10">Manual</TabsTrigger>
-              <TabsTrigger value="quick" className="data-[state=active]:bg-white/10">Quick Pick</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="manual" className="space-y-3">
-              {/* Number Grid */}
-              <div>
-                <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-11 gap-1.5 mb-3">
-                  {Array.from({ length: MAX_NUMBER }, (_, i) => i + MIN_NUMBER).map((num) => {
-                    const selected = workingTicket.includes(num)
-                    return (
-                      <button
-                        key={num}
-                        onClick={() => toggleNumber(num)}
-                        disabled={!selected && workingTicket.length >= NUMBERS_PER_TICKET}
-                        className={cn(
-                          'h-8 rounded border text-xs font-semibold transition-all',
-                          selected
-                            ? 'bg-white text-black border-white scale-105'
-                            : 'bg-black/40 border-white/20 text-white hover:border-white/40 hover:bg-white/5'
-                        )}
-                      >
-                        {num}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {/* Selected Numbers Display */}
-                <div className="bg-black/40 border border-white/10 rounded-lg p-2 mb-2">
-                  <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center mb-2">
-                    {workingTicket.length > 0 ? (
-                      workingTicket.map((n) => (
-                        <span
-                          key={n}
-                          className="h-7 min-w-7 px-2 flex items-center justify-center rounded-full bg-white text-black font-bold text-sm"
-                        >
-                          {n}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-white/50 text-sm">Select {NUMBERS_PER_TICKET} numbers</span>
+          {/* Number Grid */}
+          <div>
+            <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-11 gap-1.5 mb-3">
+              {Array.from({ length: MAX_NUMBER }, (_, i) => i + MIN_NUMBER).map((num) => {
+                const selected = workingTicket.includes(num)
+                return (
+                  <button
+                    key={num}
+                    onClick={() => toggleNumber(num)}
+                    disabled={!selected && workingTicket.length >= NUMBERS_PER_TICKET}
+                    className={cn(
+                      'h-8 rounded border text-xs font-semibold transition-all',
+                      selected
+                        ? 'bg-white text-black border-white scale-105'
+                        : 'bg-black/40 border-white/20 text-white hover:border-white/40 hover:bg-white/5'
                     )}
-                    <span className="ml-auto text-white/60 text-xs">
-                      {workingTicket.length}/{NUMBERS_PER_TICKET}
+                  >
+                    {num}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Selected Numbers Display */}
+            <div className="bg-black/40 border border-white/10 rounded-lg p-2 mb-2">
+              <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center mb-2">
+                {workingTicket.length > 0 ? (
+                  workingTicket.map((n) => (
+                    <span
+                      key={n}
+                      className="h-7 min-w-7 px-2 flex items-center justify-center rounded-full bg-white text-black font-bold text-sm"
+                    >
+                      {n}
                     </span>
-                  </div>
-
-                  {/* Quick Actions - Inline */}
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-white/30 text-white text-xs px-2 h-7"
-                      onClick={handleQuickPick}
-                    >
-                      Quick Pick
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-white/30 text-white text-xs px-2 h-7"
-                      onClick={() => setWorkingTicket([])}
-                      disabled={workingTicket.length === 0}
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                </div>
+                  ))
+                ) : (
+                  <span className="text-white/50 text-sm">Select {NUMBERS_PER_TICKET} numbers</span>
+                )}
+                <span className="ml-auto text-white/60 text-xs">
+                  {workingTicket.length}/{NUMBERS_PER_TICKET}
+                </span>
               </div>
-            </TabsContent>
 
-            <TabsContent value="quick" className="space-y-3">
-              <div className="text-center py-8 space-y-3">
-                <p className="text-white/70 mb-6">Generate random numbers instantly</p>
+              {/* Quick Actions - Inline */}
+              <div className="flex gap-2">
                 <Button
-                  size="lg"
-                  className="bg-white/10 border border-white/20 text-white hover:bg-white/20"
+                  size="sm"
+                  variant="outline"
+                  className="border-white/30 text-white text-xs px-2 h-7"
                   onClick={handleQuickPick}
                 >
-                  Generate Numbers
+                  Quick Pick
                 </Button>
-                
-                {workingTicket.length === NUMBERS_PER_TICKET && (
-                  <div className="flex flex-wrap gap-2 justify-center pt-4">
-                    {workingTicket.map((n) => (
-                      <span
-                        key={n}
-                        className="h-10 min-w-10 px-3 flex items-center justify-center rounded-full bg-white text-black font-bold"
-                      >
-                        {n}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-white/30 text-white text-xs px-2 h-7"
+                  onClick={() => setWorkingTicket([])}
+                  disabled={workingTicket.length === 0}
+                >
+                  Clear
+                </Button>
               </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
 
           {/* Rounds Selector */}
           <div className="space-y-2">
@@ -607,11 +581,51 @@ export function TicketPurchaseBuilder({
               {editingIndex !== null ? 'Update Ticket' : '+ Add to Cart'}
             </Button>
           </div>
+
+          {/* Scroll Down Arrow - Mobile Only */}
+          {ticketCount > 0 && (
+            <div className="flex justify-center py-4 lg:hidden">
+              <div className="flex flex-col items-center gap-2 animate-bounce">
+                <span className="text-white/70 text-xs font-medium">View Cart</span>
+                <ChevronDown className="w-6 h-6 text-white/80" />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* RIGHT PANEL - Cart */}
         <div className="lg:flex-[2] lg:max-w-sm bg-black/40 rounded-lg p-4 flex flex-col">
-          <h2 className="text-lg font-bold text-white mb-3">Your Cart</h2>
+          <h2 className="text-lg font-bold text-white mb-3">CONFIRM</h2>
+
+          {/* Payment Method Selection - Text Labels */}
+          <div className="mb-4 p-3 bg-white/5 rounded-lg">
+            <div className="text-xs text-white/70 mb-2 font-medium text-center">Pay In...</div>
+            <div className="flex items-center justify-center gap-4">
+              <span
+                className={cn(
+                  'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
+                  paymentMethod === 'morbius'
+                    ? 'mitr-semibold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent'
+                    : 'mitr-regular text-white/70 hover:text-white'
+                )}
+                onClick={() => setPaymentMethod('morbius')}
+              >
+                MORBIUS
+              </span>
+              <span className="text-white/50 text-xl">/</span>
+              <span
+                className={cn(
+                  'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
+                  paymentMethod === 'pls'
+                    ? 'mitr-semibold bg-gradient-to-r from-pink-400 via-red-400 to-purple-500 bg-clip-text text-transparent'
+                    : 'mitr-regular text-white/70 hover:text-white'
+                )}
+                onClick={() => setPaymentMethod('pls')}
+              >
+                PLS
+              </span>
+            </div>
+          </div>
 
           {/* Cart Items */}
           <div className="flex-1 space-y-2 mb-4 overflow-y-auto max-h-[300px]">
@@ -678,13 +692,13 @@ export function TicketPurchaseBuilder({
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-white/70">Cost</span>
-              <span className="text-white font-semibold">{formatToken(psshCost)} Morbius</span>
+              <span className="text-white font-semibold">
+                {paymentMethod === 'pls'
+                  ? `${Number(formatEther(plsValueWei)).toFixed(4)} PLS`
+                  : `${formatToken(psshCost)} MORBIUS`
+                }
+              </span>
             </div>
-            {paymentMethod === 'pls' && wplsRequiredWei > BigInt(0) && (
-              <div className="text-xs text-amber-200">
-                Requires ~{Number(formatEther(plsValueWei)).toFixed(4)} PLS (includes {(WPLS_TO_MORBIUS_BUFFER_BPS - 10000) / 100}% buffer and contract floor) — will wrap to WPLS and swap to Morbius on-chain.
-              </div>
-            )}
             <div className="flex justify-between text-xs">
               <span className="text-white/70">Balance</span>
               <span
@@ -692,35 +706,26 @@ export function TicketPurchaseBuilder({
                   'font-semibold',
                   hasEnoughBalance ? 'text-emerald-400' : 'text-amber-400'
                 )}
-                title={`Raw: ${psshBalance?.toString() || 'undefined'} | Address: ${address || 'not connected'}`}
+                title={`Raw: ${paymentMethod === 'pls' ? wplsBalance?.toString() : psshBalance?.toString() || 'undefined'} | Address: ${address || 'not connected'}`}
               >
-                {isLoadingBalance ? (
-                  'Loading...'
-                ) : psshBalance !== undefined ? (
-                  `${formatToken(psshBalance)} Morbius`
+                {paymentMethod === 'pls' ? (
+                  isLoadingWplsBalance ? (
+                    'Loading...'
+                  ) : wplsBalance !== undefined ? (
+                    `${Number(formatEther(wplsBalance)).toFixed(4)} PLS`
+                  ) : (
+                    `— ${address ? '(fetching...)' : '(connect wallet)'}`
+                  )
                 ) : (
-                  `— ${address ? '(fetching...)' : '(connect wallet)'}`
+                  isLoadingBalance ? (
+                    'Loading...'
+                  ) : psshBalance !== undefined ? (
+                    `${formatToken(psshBalance)} MORBIUS`
+                  ) : (
+                    `— ${address ? '(fetching...)' : '(connect wallet)'}`
+                  )
                 )}
               </span>
-            </div>
-
-            <div className="flex gap-1.5">
-              <Button
-                size="sm"
-                variant={paymentMethod === 'morbius' ? 'default' : 'outline'}
-                className="font-semibold text-xs px-3 h-8"
-                onClick={() => setPaymentMethod('morbius')}
-              >
-                Morbius
-              </Button>
-              <Button
-                size="sm"
-                variant={paymentMethod === 'pls' ? 'default' : 'outline'}
-                className="font-semibold text-xs px-3 h-8"
-                onClick={() => setPaymentMethod('pls')}
-              >
-                PLS
-              </Button>
             </div>
 
             {/* Error/Success Messages */}
