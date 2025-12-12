@@ -119,7 +119,7 @@ export function LotteryTicket({
 
   return (
     <div
-      className="relative w-80 mx-auto my-4"
+      className="relative w-full max-w-sm mx-auto my-4"
       style={{ perspective: '1000px' }}
     >
       <div
@@ -138,7 +138,7 @@ export function LotteryTicket({
       >
       {/* Front of ticket */}
       <div
-        className="lottery-ticket relative w-80 border border-black overflow-hidden"
+        className="lottery-ticket relative w-full border border-black overflow-hidden"
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', ...ticketBackground }}
       >
       {/* Left edge vertical text */}
@@ -294,7 +294,7 @@ export function LotteryTicket({
 
       {/* Back of ticket */}
       <div
-        className="absolute inset-0 w-80 border border-black overflow-hidden"
+        className="absolute inset-0 w-full border border-black overflow-hidden"
         style={{
           backfaceVisibility: 'hidden',
           WebkitBackfaceVisibility: 'hidden',

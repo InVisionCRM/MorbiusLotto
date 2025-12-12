@@ -209,7 +209,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
                 <MultiClaimModal />
               </div>
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent className="z-30">
               <p>Claim your lottery prizes</p>
             </TooltipContent>
           </Tooltip>
@@ -223,7 +223,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
                 <PlayerStatsModal />
               </div>
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent className="z-30">
               <p>View your performance</p>
             </TooltipContent>
           </Tooltip>
@@ -237,7 +237,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
                 <PlayerTicketsModal roundId={roundId} playerTickets={playerTickets} />
               </div>
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent className="z-30">
               <p>See purchased tickets</p>
             </TooltipContent>
           </Tooltip>
@@ -252,7 +252,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
                   <PayoutBreakdownDialog totalPssh={totalPssh} />
                 </div>
               </TooltipTrigger>
-              <TooltipContent>
+              <TooltipContent className="z-30">
                 <p>Pool distribution</p>
               </TooltipContent>
             </Tooltip>
