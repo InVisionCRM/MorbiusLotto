@@ -69,6 +69,7 @@ export function useMultiRoundPurchases(playerAddress?: `0x${string}`) {
             }
           })
           .filter(Boolean)
+          .filter(Boolean)
           .filter((p): p is MultiRoundPurchase => p !== null)
 
         setPurchases(multiRoundPurchases)
