@@ -114,10 +114,9 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
   return (
     <>
-      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-3xl w-full mx-auto bg-white/10 backdrop-blur-xl ${cardDisabledClass}`}>
+      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-3xl w-full mx-auto bg-Black/10 backdrop-blur-xl ${cardDisabledClass}`}>
       {/* House Ticket Numbers - Vertical on left */}
       <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
-        <div className="text-xs text-white/40 text-center mb-1">House Ticket</div>
         {houseTicketNumbers && houseTicketNumbers.length === 6 ? (
           houseTicketNumbers.map((num, idx) => (
             <div
@@ -279,7 +278,7 @@ export function PayoutBreakdownDialog({ totalPssh }: PayoutBreakdownDialogProps)
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-white z-10 w-10 h-10 p-0" title="Payouts">
+        <Button variant="outline" className="text-white z-10 w-10 h-10 p-0 bg-slate-900/50 backdrop-blur-sm border-white/20 hover:bg-slate-800/60" title="Payouts">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
