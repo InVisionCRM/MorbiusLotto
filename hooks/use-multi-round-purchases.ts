@@ -68,9 +68,7 @@ export function useMultiRoundPurchases(playerAddress?: `0x${string}`) {
               endRound: Math.max(...roundIds),
             }
           })
-          .filter(Boolean)
-          .filter(Boolean)
-          .filter((p): p is MultiRoundPurchase => p !== null)
+          .filter((item): item is MultiRoundPurchase => item !== null)
 
         setPurchases(multiRoundPurchases)
       } catch (error) {
