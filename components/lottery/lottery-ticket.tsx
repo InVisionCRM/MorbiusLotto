@@ -119,7 +119,7 @@ export function LotteryTicket({
 
   return (
     <div
-      className="relative w-full max-w-xs sm:max-w-sm md:max-w-md mx-auto my-4 px-2 sm:px-0"
+      className="relative w-full max-w-sm mx-auto my-4"
       style={{ perspective: '1000px' }}
     >
       <div
