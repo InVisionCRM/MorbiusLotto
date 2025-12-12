@@ -114,7 +114,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
   return (
     <>
-      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-xl w-full mx-auto bg-transparent ${cardDisabledClass}`}>
+      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-3xl w-full mx-auto bg-transparent ${cardDisabledClass}`}>
       {/* House Ticket Numbers - Vertical on left */}
       <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
         {houseTicketNumbers && houseTicketNumbers.length === 6 ? (
@@ -188,13 +188,14 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
         <div className="absolute bottom-2 left-2">
           <Button
             variant="outline"
-            className="text-white border-white/20 bg-green-500/50 hover:bg-green-600/60 backdrop-blur-sm w-12 h-12 p-0 rounded-full"
+            className="text-white border-white/20 bg-green-500/50 hover:bg-green-600/60 backdrop-blur-sm px-4 py-2 rounded-full flex items-center gap-2"
             title="Buy lottery tickets"
             onClick={onBuyTicketsClick}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
+            <span className="text-sm font-medium">Buy Tickets</span>
           </Button>
         </div>
       )}
