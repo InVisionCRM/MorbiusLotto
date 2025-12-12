@@ -177,9 +177,8 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
           onClick={() => setShowHistory(!showHistory)}
           className="text-white border-white/20 bg-black/20 hover:bg-white/10 backdrop-blur-sm"
         >
-          <History className="w-4 h-4 mr-1" />
-          History
-          {showHistory ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+          <History className="w-4 h-4" />
+          {showHistory ? <ChevronUp className="w-4 h-4 ml-2" /> : <ChevronDown className="w-4 h-4 ml-2" />}
         </Button>
       </div>
 
