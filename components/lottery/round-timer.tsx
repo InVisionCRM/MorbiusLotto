@@ -8,6 +8,7 @@ import { formatUnits } from 'viem'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
 import { PlayerTicketsModal } from './player-tickets-modal'
 import { PlayerStatsModal } from './player-stats-modal'
+import { MultiClaimModal } from './modals/multi-claim-modal'
 import { AnimatedTooltip } from '@/components/ui/animated-tooltip'
 import { RoundHistory } from './round-history'
 import { ChevronUp, ChevronDown, History } from 'lucide-react'
@@ -113,7 +114,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
   return (
     <>
-      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-xl w-full mx-auto bg-white/20 backdrop-blur-xl ${cardDisabledClass}`}>
+      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-3xl w-full mx-auto bg-white/10 backdrop-blur-xl ${cardDisabledClass}`}>
       {/* House Ticket Numbers - Vertical on left */}
       <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
         <div className="text-xs text-white/40 text-center mb-1">House Ticket</div>
@@ -170,7 +171,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
       </div>
 
       {/* History Dropdown Button */}
-      <div className="absolute bottom-2 right-2">
+      <div className="absolute bottom-2 right-4">
         <Button
           variant="outline"
           size="sm"
@@ -183,33 +184,42 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
         </Button>
       </div>
 
-      {/* Buttons - vertical stack on right side */}
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
-        {/* Buy Tickets Button */}
-        {onBuyTicketsClick && (
+      {/* Buy Tickets Button - Bottom Left */}
+      {onBuyTicketsClick && (
+        <div className="absolute bottom-2 left-2">
           <Button
             variant="outline"
-            className="text-white z-10 w-10 h-10 p-0"
+            className="text-white border-white/20 bg-green-500/50 hover:bg-green-600/60 backdrop-blur-sm px-4 py-2 rounded-full flex items-center gap-2"
             title="Buy lottery tickets"
             onClick={onBuyTicketsClick}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
+            <span className="text-sm font-medium">Buy Tickets</span>
           </Button>
-        )}
+        </div>
+      )}
 
+      {/* Buttons - vertical stack on right side */}
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2">
         {/* Other buttons with tooltips */}
         <AnimatedTooltip
           items={[
             {
               id: 1,
+              name: 'Claim winnings',
+              designation: 'Claim your lottery prizes',
+              render: <MultiClaimModal />,
+            },
+            {
+              id: 2,
               name: 'Player stats',
               designation: 'View your performance',
               render: <PlayerStatsModal />,
             },
             {
-              id: 2,
+              id: 3,
               name: 'Your tickets',
               designation: 'See purchased tickets',
               render: <PlayerTicketsModal roundId={roundId} playerTickets={playerTickets} />,
@@ -217,7 +227,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
             ...(totalPssh !== undefined
               ? [
                   {
-                    id: 3,
+                    id: 4,
                     name: 'Payouts',
                     designation: 'Pool distribution',
                     render: <PayoutBreakdownDialog totalPssh={totalPssh} />,
