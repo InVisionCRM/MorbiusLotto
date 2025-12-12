@@ -23,6 +23,8 @@ interface BallDrawSimulatorProps {
     ticketId: bigint | number
     numbers: readonly (number | bigint)[]
     isFreeTicket: boolean
+    startRound?: number
+    endRound?: number
   }> // User's tickets for this round
   ballCount?: number // Default 30
   drawCount?: number // Default 6
@@ -268,17 +270,28 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
                             const isFree = ticket.isFreeTicket
                             const cost = isFree ? BigInt(0) : TICKET_PRICE
                             const ticketId = ticket.ticketId ? Number(ticket.ticketId) : idx + 1
+                            const hasRoundRange = ticket.startRound && ticket.endRound
+                            const roundRangeText = hasRoundRange
+                              ? ticket.startRound === ticket.endRound
+                                ? `Round ${ticket.startRound}`
+                                : `Rounds ${ticket.startRound}-${ticket.endRound}`
+                              : null
                             return (
                               <div
                                 key={idx}
                                 className="p-2.5 bg-black/40 border border-white/10 rounded-lg"
                               >
                                 <div className="flex items-center justify-between mb-2">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <span className="text-xs font-semibold">Ticket #{ticketId}</span>
                                     {isFree && (
                                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30">
                                         FREE
+                                      </span>
+                                    )}
+                                    {roundRangeText && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold">
+                                        {roundRangeText}
                                       </span>
                                     )}
                                   </div>

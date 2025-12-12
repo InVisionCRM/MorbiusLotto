@@ -18,6 +18,7 @@ import { RoundFinalizedTransactions } from '@/components/lottery/round-finalized
 import { MorbiusMovementFeed } from '@/components/lottery/morbius-movement-feed'
 import { useNumberHeatmap } from '@/hooks/use-number-heatmap'
 import { useMorbiusBurned } from '@/hooks/use-morbius-burned'
+import { useMultiRoundPurchases, getRoundRangeForTx } from '@/hooks/use-multi-round-purchases'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -95,6 +96,9 @@ export default function Home() {
   const { data: playerTicketsCurrent, isLoading: isLoadingTicketsCurrent, refetch: refetchTicketsCurrent } = usePlayerTickets(Number(roundId), address as `0x${string}` | undefined)
   const { data: playerTicketsFinal, isLoading: isLoadingTicketsFinal, refetch: refetchTicketsFinal } = usePlayerTickets(displayRoundId, address as `0x${string}` | undefined)
   const { data: houseTicketRaw } = useHouseTicket(Number(roundId))
+
+  // Fetch multi-round purchase data to determine round ranges for tickets
+  const { purchases: multiRoundPurchases } = useMultiRoundPurchases(address as `0x${string}` | undefined)
 
   // Extract house ticket numbers
   const houseTicketNumbers = useMemo(() => {
@@ -252,11 +256,18 @@ export default function Home() {
 
   const playerTicketsWithTx = useMemo(() => {
     if (!Array.isArray(playerTicketsCurrent)) return []
-    return playerTicketsCurrent.map((t: any) => ({
-      ...t,
-      transactionHash: ticketTxMap.get((t?.ticketId ?? '').toString()),
-    }))
-  }, [playerTicketsCurrent, ticketTxMap])
+    return playerTicketsCurrent.map((t: any) => {
+      const txHash = ticketTxMap.get((t?.ticketId ?? '').toString())
+      const roundRange = getRoundRangeForTx(txHash, multiRoundPurchases)
+
+      return {
+        ...t,
+        transactionHash: txHash,
+        startRound: roundRange?.startRound,
+        endRound: roundRange?.endRound,
+      }
+    })
+  }, [playerTicketsCurrent, ticketTxMap, multiRoundPurchases])
 
   const recentRoundHistory = (() => {
     if (!Array.isArray(playerTicketsFinal) || winningNumbers.length !== 6 || displayRoundId <= 0) return []

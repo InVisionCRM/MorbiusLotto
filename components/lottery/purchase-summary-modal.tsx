@@ -399,9 +399,28 @@ export function PurchaseSummaryModal({
                 <span className="text-white/50 text-xs">max 10</span>
               </div>
             </div>
+
+            {/* Multi-Round Explanation */}
+            {effectiveRounds > 1 && (
+              <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                  <div className="space-y-1 text-xs text-purple-200">
+                    <div className="font-semibold">Your tickets will play in {effectiveRounds} consecutive rounds:</div>
+                    <div className="text-purple-300/80">
+                      Each of your {ticketCount} ticket{ticketCount !== 1 ? 's' : ''} will be entered in rounds <strong>Current → Current+{effectiveRounds-1}</strong>
+                    </div>
+                    <div className="text-purple-300/60 italic">
+                      You'll have {effectiveRounds} chances to win with the same numbers!
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between text-sm">
               <span className="text-white/60">Total entries (tickets × rounds):</span>
-              <span className="font-semibold">{totalEntries}</span>
+              <span className="font-semibold text-green-400">{totalEntries}</span>
             </div>
 
             <div className="pt-2 border-t border-white/10">
@@ -438,7 +457,26 @@ export function PurchaseSummaryModal({
             <Alert className="border-green-500/50 bg-green-500/10">
               <CheckCircle2 className="h-4 w-4 text-green-400" />
               <AlertDescription className="text-green-400">
-                Tickets purchased successfully! Good luck!
+                <div className="space-y-2">
+                  <div className="font-semibold text-base">✅ Purchase Confirmed!</div>
+                  <div className="text-sm space-y-1.5">
+                    {effectiveRounds === 1 ? (
+                      <div>You now have {ticketCount} ticket{ticketCount !== 1 ? 's' : ''} for the current round. Good luck!</div>
+                    ) : (
+                      <>
+                        <div>
+                          You now have <strong className="text-green-300">{ticketCount} ticket{ticketCount !== 1 ? 's' : ''} in each of the next {effectiveRounds} rounds</strong> ({totalEntries} total entries).
+                        </div>
+                        <div className="text-green-300/90">
+                          Your tickets will automatically play in the next {effectiveRounds} consecutive rounds!
+                        </div>
+                        <div className="pt-2 border-t border-green-500/20 text-xs text-green-200/80">
+                          💡 <strong>Note:</strong> Your future round tickets are saved on the blockchain. They will appear automatically when each round starts. No action needed!
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               </AlertDescription>
             </Alert>
           )}
@@ -494,10 +532,15 @@ export function PurchaseSummaryModal({
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Purchasing...
                 </>
+              ) : effectiveRounds > 1 ? (
+                <>
+                  <Ticket className="h-4 w-4 mr-2" />
+                  Buy {ticketCount} Ticket{ticketCount !== 1 ? 's' : ''} × {effectiveRounds} Rounds ({totalEntries} Entries)
+                </>
               ) : (
                 <>
                   <Ticket className="h-4 w-4 mr-2" />
-                  Buy {totalEntries} Entr{totalEntries === 1 ? 'y' : 'ies'} with {currentTokenSymbol}
+                  Buy {totalEntries} Ticket{totalEntries === 1 ? '' : 's'} with {currentTokenSymbol}
                 </>
               )}
             </Button>

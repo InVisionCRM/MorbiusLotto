@@ -386,3 +386,27 @@ export function useWatchFreeTickets(
     },
   })
 }
+
+// Watch for multi-round purchases
+export function useWatchMultiRoundPurchases(
+  playerAddress: `0x${string}` | undefined,
+  onMultiRoundPurchase: (roundIds: readonly bigint[], ticketCounts: readonly bigint[], transactionHash: string) => void
+) {
+  useWatchContractEvent({
+    address: LOTTERY_ADDRESS as `0x${string}`,
+    abi: LOTTERY_6OF55_V2_ABI,
+    eventName: 'TicketsPurchasedForRounds',
+    args: playerAddress ? { player: playerAddress } : undefined,
+    onLogs(logs) {
+      logs.forEach((log: any) => {
+        if (log.args?.roundIds && log.args?.ticketCounts && log.transactionHash) {
+          onMultiRoundPurchase(
+            log.args.roundIds,
+            log.args.ticketCounts,
+            log.transactionHash
+          )
+        }
+      })
+    },
+  })
+}
