@@ -170,7 +170,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
       </div>
 
       {/* History Dropdown Button */}
-      <div className="absolute bottom-2 right-2">
+      <div className="absolute bottom-2 right-4">
         <Button
           variant="outline"
           size="sm"
@@ -201,7 +201,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
       )}
 
       {/* Buttons - vertical stack on right side */}
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2">
         {/* Other buttons with tooltips */}
         <AnimatedTooltip
           items={[
