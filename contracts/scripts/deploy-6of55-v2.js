@@ -21,14 +21,14 @@ async function main() {
   let ROUND_DURATION;
   const MEGA_MORBIUS_INTERVAL = 20; // every 20 rounds
   if (hre.network.name === "pulsechainTestnet") {
-    ROUND_DURATION = 3600; // 1 hour for testnet
-    console.log("Testnet detected - using 1 hour rounds");
+    ROUND_DURATION = 1800; // 30 minutes for testnet
+    console.log("Testnet detected - using 30 minute rounds");
   } else if (hre.network.name === "pulsechain") {
-    ROUND_DURATION = 3600; // 1 hour for mainnet
-    console.log("Mainnet detected - using 1 hour rounds");
+    ROUND_DURATION = 1800; // 30 minutes for mainnet
+    console.log("Mainnet detected - using 30 minute rounds");
   } else {
-    ROUND_DURATION = 3600; // 1 hour default
-    console.log("Local network detected - using 1 hour rounds");
+    ROUND_DURATION = 1800; // 30 minutes default
+    console.log("Local network detected - using 30 minute rounds");
   }
 
   console.log("\nConfig:");
@@ -109,7 +109,7 @@ async function main() {
   }
 
   console.log("\n🔄 Rollover Logic:");
-  console.log("- Unclaimed brackets: 70% to next round winners, 15% burn, 15% MegaMorbius");
+  console.log("- Unclaimed brackets: 75% to next round winners, 10% MegaMorbius, 5% deployer, 10% burn");
 
   console.log("\n💰 WPLS Payment:");
   console.log("- Auto-swap WPLS → Morbius via PulseX");

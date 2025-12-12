@@ -57,7 +57,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
   const [showHistory, setShowHistory] = useState(false)
 
   // Buttons should always be clickable regardless of disabled state
-  const cardDisabledClass = disabled ? 'opacity-60' : ''
+  const cardDisabledClass = ''
 
   useEffect(() => {
     const update = () => {
@@ -114,7 +114,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
   return (
     <>
-      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-3xl w-full mx-auto bg-Black/10 backdrop-blur-xl ${cardDisabledClass}`}>
+      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-3xl w-full mx-auto bg-Black/10 backdrop-blur-md ${cardDisabledClass}`}>
       {/* House Ticket Numbers - Vertical on left */}
       <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
         {houseTicketNumbers && houseTicketNumbers.length === 6 ? (
