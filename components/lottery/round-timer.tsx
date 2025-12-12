@@ -9,7 +9,7 @@ import { TOKEN_DECIMALS } from '@/lib/contracts'
 import { PlayerTicketsModal } from './player-tickets-modal'
 import { PlayerStatsModal } from './player-stats-modal'
 import { MultiClaimModal } from './modals/multi-claim-modal'
-import { AnimatedTooltip } from '@/components/ui/animated-tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { RoundHistory } from './round-history'
 import { ChevronUp, ChevronDown, History } from 'lucide-react'
 
@@ -201,39 +201,63 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
       {/* Buttons - vertical stack on right side */}
       <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2">
-        {/* Other buttons with tooltips */}
-        <AnimatedTooltip
-          items={[
-            {
-              id: 1,
-              name: 'Claim winnings',
-              designation: 'Claim your lottery prizes',
-              render: <MultiClaimModal />,
-            },
-            {
-              id: 2,
-              name: 'Player stats',
-              designation: 'View your performance',
-              render: <PlayerStatsModal />,
-            },
-            {
-              id: 3,
-              name: 'Your tickets',
-              designation: 'See purchased tickets',
-              render: <PlayerTicketsModal roundId={roundId} playerTickets={playerTickets} />,
-            },
-            ...(totalPssh !== undefined
-              ? [
-                  {
-                    id: 4,
-                    name: 'Payouts',
-                    designation: 'Pool distribution',
-                    render: <PayoutBreakdownDialog totalPssh={totalPssh} />,
-                  },
-                ]
-              : []),
-          ]}
-        />
+        {/* Claim winnings button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <MultiClaimModal />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Claim your lottery prizes</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Player stats button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <PlayerStatsModal />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>View your performance</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Your tickets button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <PlayerTicketsModal roundId={roundId} playerTickets={playerTickets} />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>See purchased tickets</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Payouts button (conditional) */}
+        {totalPssh !== undefined && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <PayoutBreakdownDialog totalPssh={totalPssh} />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Pool distribution</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
     </Card>
 
