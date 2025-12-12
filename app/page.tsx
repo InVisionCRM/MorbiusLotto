@@ -533,7 +533,7 @@ export default function Home() {
         {/* Round Timer - Centered at Top */}
         <div className="flex justify-center">
           <div className="w-full max-w-xl min-h-[610px] relative">
-            <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute inset-0 pointer-events-none z-20">
               <BallDrawSimulator
                 winningNumbers={simulatorNumbers}
                 roundId={Number(roundId)}
