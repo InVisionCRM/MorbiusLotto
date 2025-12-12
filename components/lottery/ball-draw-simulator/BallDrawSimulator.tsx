@@ -86,9 +86,9 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
 
   // Auto-start if enabled (guarded by stable numbers key + round ID)
   useEffect(() => {
-    // Don't start if we don't have valid winning numbers
+    // Check if we have valid winning numbers
     const hasValidNumbers = winningNumbers.length === drawCount && winningNumbers.every(n => n > 0)
-    
+
     console.log('🎱 BallDrawSimulator update:', {
       roundId,
       winningNumbers,
@@ -97,7 +97,14 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
       drawCount,
       lastKey: lastNumbersKeyRef.current
     })
-    
+
+    // If no valid numbers and in background mode, just show idle animation
+    if (!hasValidNumbers && isBackground) {
+      console.log('🎱 Showing idle animation (no winning numbers yet)')
+      setCurrentState(DrawState.IDLE)
+      return
+    }
+
     if (!hasValidNumbers) {
       console.log('🎱 Skipping: invalid winning numbers')
       return
@@ -345,9 +352,11 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
                 className="glass-panel p-0.5 rounded-full shadow-[0_0_55px_-12px_rgba(59,130,246,0.25)] relative border border-white/5 bg-gray-900/40 z-0 overflow-visible flex items-center justify-center"
                 style={{ width: `${visualSize}px`, height: `${visualSize}px` }}
               >
-              <span 
-                className="absolute inset-0 bg-[url('/morbius/MorbiusLogo%20(3).png')] bg-center bg-no-repeat bg-[length:180px_180px] opacity-50 pointer-events-none" 
-              />
+              <div className="absolute inset-0 animate-[spin_30s_linear_infinite] pointer-events-none">
+                <span
+                  className="absolute inset-0 bg-[url('/morbius/MorbiusLogo%20(3).png')] bg-center bg-no-repeat bg-[length:180px_180px] opacity-50"
+                />
+              </div>
               <PhysicsMachine
                 width={clampedMachineSize}
                 height={clampedMachineSize}

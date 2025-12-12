@@ -50,7 +50,7 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
 
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
-    uint256 public constant TICKET_PRICE_DEFAULT = 100 * 1e18; // 100 Morbius (18 decimals)
+    uint256 public constant TICKET_PRICE_DEFAULT = 1000 * 1e18; // 1000 Morbius (18 decimals)
     uint8 public constant NUMBERS_PER_TICKET = 6;
     uint8 public constant MIN_NUMBER = 1;
     uint8 public constant MAX_NUMBER = 55;
@@ -69,11 +69,10 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     uint256[6] public BRACKET_PERCENTAGES = [400, 600, 1000, 1500, 2000, 4500];
     // Bracket 1: 4%, Bracket 2: 6%, Bracket 3: 10%, Bracket 4: 15%, Bracket 5: 20%, Bracket 6: 45% (of Winners Pool)
 
-    // Rollover rule: unclaimed pools → 75% next round, 10% MegaMorbius, 5% deployer, 10% burn
-    uint256 public constant ROLLOVER_TO_NEXT_ROUND_PCT = 7500; // 75%
-    uint256 public constant ROLLOVER_TO_MEGA_PCT = 1000; // 10%
-    uint256 public constant ROLLOVER_TO_DEPLOYER_PCT = 500; // 5%
-    uint256 public constant ROLLOVER_TO_BURN_PCT = 1000; // 10%
+    // Rollover rule: unclaimed pools → 70% next round, 15% burn, 15% MegaMorbius
+    uint256 public constant ROLLOVER_TO_NEXT_ROUND_PCT = 7000; // 70%
+    uint256 public constant ROLLOVER_TO_BURN_PCT = 1500; // 15%
+    uint256 public constant ROLLOVER_TO_MEGA_PCT = 1500; // 15%
 
     // WPLS swap buffer (5.5% tax + 5% slippage)
     uint256 public constant WPLS_SWAP_BUFFER_PCT = 11100; // 11.1% extra
@@ -81,7 +80,6 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     // Randomness delay: use block hash from N blocks in the future
     // Higher = more secure but longer wait. 10 blocks = ~50 seconds on PulseChain
     uint256 public blockDelay = 10;
-    uint256 public constant MAX_DRAW_DELAY = 10; // Must draw within 10 blocks after drawBlock to prevent blockhash expiration
 
     // ============ Enums ============
 
@@ -1021,7 +1019,6 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
 
         require(round.state == RoundState.LOCKED, "Round not locked");
         require(block.number >= round.drawBlock, "Draw block not reached yet");
-        require(block.number <= round.drawBlock + MAX_DRAW_DELAY, "Draw window expired - use recovery");
         require(round.totalTickets > 0, "No tickets in round");
 
         // Generate winning numbers using future block hash
@@ -1050,39 +1047,6 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
         emit RoundFinalized(roundId, winningNumbers, round.totalMorbiusCollected, round.totalTickets, round.uniquePlayers);
     }
 
-    /**
-     * @notice Emergency recovery if draw window expires (owner only)
-     * @dev Uses current block data if original draw window missed (after MAX_DRAW_DELAY blocks)
-     */
-    function drawNumbersRecovery(uint256 roundId) external nonReentrant onlyOwner {
-        Round storage round = rounds[roundId];
-
-        require(round.state == RoundState.LOCKED, "Round not locked");
-        require(block.number > round.drawBlock + MAX_DRAW_DELAY, "Normal draw still available");
-        require(round.totalTickets > 0, "No tickets in round");
-
-        // Use current block hash as fallback
-        uint8[6] memory winningNumbers = _generateWinningNumbersFallback(roundId);
-
-        emit NumbersDrawn(roundId, winningNumbers, block.number);
-
-        _calculateBrackets(roundId, winningNumbers);
-
-        bool isMegaMillions = (roundId % megaMillionsInterval == 0);
-        if (isMegaMillions) {
-            _handleMegaMillions(roundId);
-        }
-
-        _distributePrizes(roundId);
-        round.state = RoundState.FINALIZED;
-
-        if (roundId == currentRoundId) {
-            currentRoundState = RoundState.FINALIZED;
-        }
-
-        emit RoundFinalized(roundId, winningNumbers, round.totalMorbiusCollected, round.totalTickets, round.uniquePlayers);
-    }
-
     function _handleEmptyRound(uint256 roundId) private {
         // Round is already partially filled by _finalizeRound, just complete it
         rounds[roundId].winningNumbers = [0, 0, 0, 0, 0, 0];
@@ -1101,53 +1065,16 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
         currentRoundState = RoundState.FINALIZED;
     }
 
-    function _generateWinningNumbers(uint256 roundId, uint256 drawBlock) private view returns (uint8[6] memory) {
-        // drawBlock is already the future block (closingBlock + blockDelay)
-        // Use it directly for randomness
-        bytes32 blockHash = blockhash(drawBlock);
-
-        // Validate blockhash is available (EVM only stores last 256 block hashes)
-        require(blockHash != bytes32(0), "Draw block hash expired");
-        require(block.number <= drawBlock + MAX_DRAW_DELAY, "Draw window expired");
+    function _generateWinningNumbers(uint256 roundId, uint256 closingBlock) private view returns (uint8[6] memory) {
+        uint256 targetBlock = closingBlock > blockDelay ? closingBlock - blockDelay : closingBlock;
 
         uint256 seed = uint256(keccak256(abi.encodePacked(
-            blockHash,
+            blockhash(targetBlock),
+            blockhash(closingBlock),
             roundId,
             currentRoundTotalMorbius,
             currentRoundTotalTickets,
             block.timestamp
-        )));
-
-        uint8[6] memory numbers;
-        bool[56] memory used;
-
-        for (uint256 i = 0; i < NUMBERS_PER_TICKET; i++) {
-            uint8 num;
-            uint256 attempts = 0;
-
-            do {
-                seed = uint256(keccak256(abi.encodePacked(seed, i, attempts)));
-                num = uint8((seed % MAX_NUMBER) + 1);
-                attempts++;
-            } while (used[num] && attempts < 100);
-
-            require(!used[num], "RNG failed");
-            numbers[i] = num;
-            used[num] = true;
-        }
-
-        return _sortNumbers(numbers);
-    }
-
-    function _generateWinningNumbersFallback(uint256 roundId) private view returns (uint8[6] memory) {
-        // Use current block for emergency recovery
-        uint256 seed = uint256(keccak256(abi.encodePacked(
-            blockhash(block.number - 1),
-            roundId,
-            currentRoundTotalMorbius,
-            currentRoundTotalTickets,
-            block.timestamp,
-            "RECOVERY"
         )));
 
         uint8[6] memory numbers;
@@ -1251,25 +1178,22 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     }
 
     function _handleUnclaimedBracket(uint256 roundId, uint256 bracket, uint256 amount) private {
-        // Split unclaimed funds: 75% next round, 10% MegaMorbius, 5% deployer, 10% burn
-        uint256 toNextRound = (amount * ROLLOVER_TO_NEXT_ROUND_PCT) / TOTAL_PCT;
-        uint256 toMega = (amount * ROLLOVER_TO_MEGA_PCT) / TOTAL_PCT;
-        uint256 toDeployer = (amount * ROLLOVER_TO_DEPLOYER_PCT) / TOTAL_PCT;
+        // Split unclaimed funds: next round, burn, MegaMorbius
+            uint256 toNextRound = (amount * ROLLOVER_TO_NEXT_ROUND_PCT) / TOTAL_PCT;
         uint256 toBurn = (amount * ROLLOVER_TO_BURN_PCT) / TOTAL_PCT;
+        uint256 toMega = amount - toNextRound - toBurn;
 
-        rolloverReserve += toNextRound;
-        megaMorbiusBank += toMega;
-        if (toDeployer > 0) {
-            MORBIUS_TOKEN.safeTransfer(deployerWallet, toDeployer);
-        }
+            rolloverReserve += toNextRound;
         if (toBurn > 0) {
             _accrueBurn(toBurn);
         }
+        if (toMega > 0) {
+            megaMorbiusBank += toMega;
+        }
 
-        emit UnclaimedPrizeRolledOver(roundId, bracket, toNextRound, "NextRoundWinnersPool");
-        emit UnclaimedPrizeRolledOver(roundId, bracket, toMega, "MegaMorbius");
-        emit UnclaimedPrizeRolledOver(roundId, bracket, toDeployer, "Deployer");
-        emit UnclaimedPrizeRolledOver(roundId, bracket, toBurn, "Burn");
+            emit UnclaimedPrizeRolledOver(roundId, bracket, toNextRound, "NextRoundWinnersPool");
+        if (toBurn > 0) emit UnclaimedPrizeRolledOver(roundId, bracket, toBurn, "Burn");
+        if (toMega > 0) emit UnclaimedPrizeRolledOver(roundId, bracket, toMega, "MegaMorbius");
     }
 
     function _distributePrizes(uint256 roundId) private {
@@ -1306,20 +1230,25 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     function _handleMegaMillions(uint256 roundId) private {
         if (megaMorbiusBank == 0) return;
 
-        uint256 toPlayerPool = (megaMorbiusBank * 9000) / 10000; // 90% to player pool
-        uint256 toDeployer = megaMorbiusBank - toPlayerPool; // 10% to deployer
+        uint256 toBracket6 = (megaMorbiusBank * 80) / 100;
+        uint256 toBracket5 = megaMorbiusBank - toBracket6;
 
-        // Add to the current round's winners pool
-        currentRoundTotalMorbius += toPlayerPool;
+        rounds[roundId].brackets[5].poolAmount += toBracket6;
+        rounds[roundId].brackets[4].poolAmount += toBracket5;
 
-        // Transfer to deployer
-        if (toDeployer > 0) {
-            MORBIUS_TOKEN.safeTransfer(deployerWallet, toDeployer);
+        if (rounds[roundId].brackets[5].winnerCount > 0) {
+            rounds[roundId].brackets[5].payoutPerWinner =
+                rounds[roundId].brackets[5].poolAmount / rounds[roundId].brackets[5].winnerCount;
+        }
+
+        if (rounds[roundId].brackets[4].winnerCount > 0) {
+            rounds[roundId].brackets[4].payoutPerWinner =
+                rounds[roundId].brackets[4].poolAmount / rounds[roundId].brackets[4].winnerCount;
         }
 
         rounds[roundId].isMegaMillionsRound = true;
 
-        emit MegaMillionsTriggered(roundId, megaMorbiusBank, toPlayerPool, toDeployer);
+        emit MegaMillionsTriggered(roundId, megaMorbiusBank, toBracket6, toBracket5);
 
         megaMorbiusBank = 0;
     }

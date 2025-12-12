@@ -46,6 +46,7 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
   const shouldRestartRef = useRef<boolean>(false) // Flag to restart animation
   const settleFramesRef = useRef<number>(0) // Keep animating briefly after draw completes
   const updatePhysicsRef = useRef<() => void>(() => {}) // Ref to latest updatePhysics function
+  const initialAnimationFrames = useRef<number>(180) // Keep animating for 3 seconds on mount (60fps * 3)
 
   // Keep latest props in refs for the loop
   const propsRef = useRef({ isMixing, drawnBallIds, targetWinningNumber, onBallSelected })
@@ -387,12 +388,17 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
       settleFramesRef.current -= 1
     }
 
+    if (initialAnimationFrames.current > 0) {
+      initialAnimationFrames.current -= 1
+    }
+
     const shouldAnimate =
       isMixing ||
       currentState === 'selecting' ||
       currentState === 'sucking' ||
       areBallsMoving ||
-      settleFramesRef.current > 0
+      settleFramesRef.current > 0 ||
+      initialAnimationFrames.current > 0
 
     // --- Rendering ---
     balls.forEach((b) => {
@@ -461,7 +467,14 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
 
   // Start Loop - ensure it starts when needed
   useEffect(() => {
-    // Start animation if mixing is active and loop isn't running
+    // Start animation on initial mount or when mixing is active
+    if (!requestRef.current) {
+      requestRef.current = requestAnimationFrame(() => updatePhysicsRef.current())
+    }
+  }, [])
+
+  // Continue animation when mixing toggles on
+  useEffect(() => {
     if (isMixing && !requestRef.current) {
       requestRef.current = requestAnimationFrame(() => updatePhysicsRef.current())
     }
