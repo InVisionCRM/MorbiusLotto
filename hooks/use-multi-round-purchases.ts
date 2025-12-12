@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { usePublicClient } from 'wagmi'
+import { decodeEventLog } from 'viem'
 import { LOTTERY_ADDRESS } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 
@@ -52,23 +53,37 @@ export function useMultiRoundPurchases(playerAddress?: `0x${string}`) {
 
         if (!mounted) return
 
-        const multiRoundPurchases: MultiRoundPurchase[] = logs
-          .map((log) => {
-            const args = log.args as any
-            if (!args?.roundIds || !args?.ticketCounts) return null
+        const multiRoundPurchases: MultiRoundPurchase[] = logs.reduce((acc, log) => {
+          try {
+            // Decode the log data
+            const decodedLog = decodeEventLog({
+              abi: LOTTERY_6OF55_V2_ABI,
+              data: log.data,
+              topics: log.topics,
+            })
+
+            const args = decodedLog.args as any
+            if (!args?.roundIds || !args?.ticketCounts) {
+              return acc // Skip invalid logs
+            }
 
             const roundIds = (args.roundIds as bigint[]).map((id) => Number(id))
             const ticketCounts = (args.ticketCounts as bigint[]).map((count) => Number(count))
 
-            return {
+            acc.push({
               transactionHash: log.transactionHash,
               roundIds,
               ticketCounts,
               startRound: Math.min(...roundIds),
               endRound: Math.max(...roundIds),
-            }
-          })
-          .filter((item): item is MultiRoundPurchase => item !== null)
+            })
+          } catch (error) {
+            // Skip logs that can't be decoded
+            console.warn('Failed to decode log:', error)
+          }
+
+          return acc
+        }, [] as MultiRoundPurchase[])
 
         setPurchases(multiRoundPurchases)
       } catch (error) {
