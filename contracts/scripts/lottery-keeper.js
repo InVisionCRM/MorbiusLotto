@@ -23,10 +23,10 @@ const RPC_URL = process.env.PULSECHAIN_RPC || 'https://rpc.pulsechain.com'
 const PRIVATE_KEY = process.env.PRIVATE_KEY
 
 // ⚠️ IMPORTANT: Set your deployed lottery contract address here or in .env
-// Latest deployment: 0xEa6F2C484B720103EF11c77f71BF07eC11640e29 (Block 25247554)
+// Latest deployment: 0x86805A6f49A3dbBF6B9B2Ee1AC46a89aa4637EFC (Block 25253114)
 // Get from: lib/contracts.ts or your deployment logs
 const LOTTERY_ADDRESS =
-  process.env.LOTTERY_ADDRESS || '0xEa6F2C484B720103EF11c77f71BF07eC11640e29'
+  process.env.LOTTERY_ADDRESS || '0x86805A6f49A3dbBF6B9B2Ee1AC46a89aa4637EFC'
 
 const POLL_MS = parseInt(process.env.KEEPER_POLL_MS || '15000', 10)
 const GAS_LIMIT = parseInt(process.env.KEEPER_GAS_LIMIT || '2000000', 10)
