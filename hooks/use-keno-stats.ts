@@ -77,14 +77,14 @@ export function useKenoStats() {
   })
 
   // Process player stats
-  const playerStats: PlayerStats | null = playerStatsRaw
+  const playerStats: PlayerStats | null = playerStatsRaw && Array.isArray(playerStatsRaw)
     ? {
-        totalWagered: playerStatsRaw[0],
-        totalWon: playerStatsRaw[1],
-        ticketCount: playerStatsRaw[2],
-        winCount: playerStatsRaw[3],
-        winRateBps: playerStatsRaw[4],
-        netPnL: playerStatsRaw[5],
+        totalWagered: playerStatsRaw[0] as bigint,
+        totalWon: playerStatsRaw[1] as bigint,
+        ticketCount: playerStatsRaw[2] as bigint,
+        winCount: playerStatsRaw[3] as bigint,
+        winRateBps: playerStatsRaw[4] as bigint,
+        netPnL: playerStatsRaw[5] as bigint,
         winRate: Number(playerStatsRaw[4]) / 100, // BPS to percentage
         netProfitLoss: Number(formatEther(playerStatsRaw[5])),
         isProfit: playerStatsRaw[5] >= BigInt(0),
@@ -92,12 +92,12 @@ export function useKenoStats() {
     : null
 
   // Process global stats
-  const globalStats: GlobalStats | null = globalStatsRaw
+  const globalStats: GlobalStats | null = globalStatsRaw && Array.isArray(globalStatsRaw)
     ? {
-        totalWagered: globalStatsRaw[0],
-        totalWon: globalStatsRaw[1],
-        ticketCount: globalStatsRaw[2],
-        activeRoundId: globalStatsRaw[3],
+        totalWagered: globalStatsRaw[0] as bigint,
+        totalWon: globalStatsRaw[1] as bigint,
+        ticketCount: globalStatsRaw[2] as bigint,
+        activeRoundId: globalStatsRaw[3] as bigint,
       }
     : null
 

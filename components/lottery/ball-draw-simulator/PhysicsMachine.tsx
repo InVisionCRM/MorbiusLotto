@@ -13,14 +13,15 @@ interface PhysicsMachineProps {
   onBallSelected: (ballId: number, winningNumber: number) => void // ballId and the winning number
   targetWinningNumber?: number | null // The winning number (1-55) to assign to the selected ball
   triggerDraw: boolean // Toggle this to trigger a draw sequence
+  isBackground?: boolean // Whether this is a background animation (pointer events disabled)
 }
 
-const BALL_RADIUS = 15
-const DAMPING = 0.99
-const WALL_BOUNCE = 0.6
-const BALL_BOUNCE = 0.8
-const GRAVITY = 0.25
-const MIX_FORCE = 0.8
+const BALL_RADIUS = 10
+const DAMPING = 0.960 // More realistic air resistance
+const WALL_BOUNCE = 0.70 // Slightly more elastic bounce
+const BALL_BOUNCE = 0.70 // Realistic ball-to-ball collision
+const GRAVITY = 0.25 // More realistic gravity
+const MIX_FORCE = 1.2 // Increased for more energetic mixing
 
 const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
   width,
@@ -31,6 +32,7 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
   onBallSelected,
   targetWinningNumber,
   triggerDraw,
+  isBackground = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const requestRef = useRef<number | null>(null)
@@ -40,18 +42,41 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
   const drawingStateRef = useRef<'idle' | 'selecting' | 'sucking'>('idle')
   const selectedBallRef = useRef<BallData | null>(null)
   const suctionFramesRef = useRef<number>(0)
+  const mixingTimeRef = useRef<number>(0) // Track mixing time for varied forces
+  const shouldRestartRef = useRef<boolean>(false) // Flag to restart animation
+  const settleFramesRef = useRef<number>(0) // Keep animating briefly after draw completes
+  const updatePhysicsRef = useRef<() => void>(() => {}) // Ref to latest updatePhysics function
 
   // Keep latest props in refs for the loop
   const propsRef = useRef({ isMixing, drawnBallIds, targetWinningNumber, onBallSelected })
 
   useEffect(() => {
+    const wasMixing = propsRef.current.isMixing
     propsRef.current = { isMixing, drawnBallIds, targetWinningNumber, onBallSelected }
+
+    // Kick the loop when mixing toggles on, and keep it alive for a bit when mixing stops
+    if (isMixing && !wasMixing) {
+      shouldRestartRef.current = true
+      // Ensure loop starts if not already running
+      if (!requestRef.current) {
+        requestRef.current = requestAnimationFrame(() => updatePhysicsRef.current())
+      }
+    }
+    if (!isMixing && wasMixing) {
+      settleFramesRef.current = 240 // ~4s of settling time
+      shouldRestartRef.current = true
+      // CRITICAL: Start loop if not running - settling needs animation to continue
+      if (!requestRef.current) {
+        requestRef.current = requestAnimationFrame(() => updatePhysicsRef.current())
+      }
+    }
   }, [isMixing, drawnBallIds, targetWinningNumber, onBallSelected])
 
   useEffect(() => {
     if (triggerDraw && drawingStateRef.current === 'idle') {
       drawingStateRef.current = 'selecting'
       suctionFramesRef.current = 0
+      shouldRestartRef.current = true
     }
   }, [triggerDraw])
 
@@ -137,6 +162,8 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
             if (b.y < 60 || suctionFramesRef.current > 240) {
               b.state = 'drawn'
               drawingStateRef.current = 'idle'
+              settleFramesRef.current = Math.max(settleFramesRef.current, 240)
+              shouldRestartRef.current = true
               // Pass both ball ID and the winning number (from label)
               const winningNumber = parseInt(b.label, 10)
               onBallSelected(b.id, winningNumber)
@@ -167,34 +194,88 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
           // --- Standard Physics ---
 
           if (isMixing) {
-            // 1. Random Chaos
+            mixingTimeRef.current += 0.016 // ~60fps
+            
+            // 1. Random Chaos - affects all balls
             b.vx += (Math.random() - 0.5) * MIX_FORCE / SUB_STEPS
             b.vy += (Math.random() - 0.5) * MIX_FORCE / SUB_STEPS
 
-            // 2. Swirling Vortex Wind (Rotational force)
             const dx = b.x - centerX
             const dy = b.y - centerY
+            const distFromCenter = Math.sqrt(dx * dx + dy * dy)
             const angle = Math.atan2(dy, dx)
 
-            // Force perpendicular to radius (tangential)
-            const swirlStrength = 0.18
+            // 2. Alternating Vortex Wind - changes direction periodically
+            const vortexDirection = Math.sin(mixingTimeRef.current * 0.5) > 0 ? 1 : -1
+            const swirlStrength = 0.25 * vortexDirection
             b.vx += -Math.sin(angle) * swirlStrength / SUB_STEPS
             b.vy += Math.cos(angle) * swirlStrength / SUB_STEPS
 
-            // 3. Central Updraft (Push up from bottom middle)
-            if (Math.abs(dx) < 40 && dy > 0) {
-              b.vy -= MIX_FORCE * 1.8 / SUB_STEPS
-              // Push out slightly to cycle them
-              b.vx += (dx > 0 ? 1 : -1) * 0.8 / SUB_STEPS
+            // 3. Circular Convection Current - up at bottom, down at top, sides rotate
+            const normalizedY = (b.y - centerY) / containerRadius // -1 (top) to 1 (bottom)
+            const normalizedX = (b.x - centerX) / containerRadius // -1 (left) to 1 (right)
+            
+            // Vertical circulation: up at bottom, down at top
+            if (normalizedY > 0.2) {
+              // Bottom half - push up
+              const upForce = (normalizedY - 0.2) * MIX_FORCE * 1.8
+              b.vy -= upForce / SUB_STEPS
+            } else if (normalizedY < -0.2) {
+              // Top half - push down
+              const downForce = (-normalizedY - 0.2) * MIX_FORCE * 1.5
+              b.vy += downForce / SUB_STEPS
+            }
+
+            // Horizontal circulation at sides
+            if (Math.abs(normalizedX) > 0.4) {
+              // Push toward center at sides
+              const towardCenter = -Math.sign(normalizedX) * MIX_FORCE * 0.4
+              b.vx += towardCenter / SUB_STEPS
+            }
+
+            // 4. Center updraft - strongest in middle
+            if (Math.abs(dx) < containerRadius * 0.3 && dy > 0) {
+              b.vy -= MIX_FORCE * 1.2 / SUB_STEPS
+            }
+
+            // 5. Turbulent Air Jets - random bursts
+            const jetFrequency = Math.sin(mixingTimeRef.current * 2 + b.id) > 0.85
+            if (jetFrequency) {
+              const jetAngle = mixingTimeRef.current * 3 + b.id
+              b.vx += Math.cos(jetAngle) * MIX_FORCE * 0.6 / SUB_STEPS
+              b.vy += Math.sin(jetAngle) * MIX_FORCE * 0.6 / SUB_STEPS
+            }
+
+            // 6. Anti-clustering - push balls apart if too many nearby
+            let nearbyCount = 0
+            let pushX = 0
+            let pushY = 0
+            for (const other of balls) {
+              if (other.id === b.id) continue
+              const dx2 = other.x - b.x
+              const dy2 = other.y - b.y
+              const dist = Math.sqrt(dx2 * dx2 + dy2 * dy2)
+              if (dist < BALL_RADIUS * 6) {
+                nearbyCount++
+                pushX -= dx2 / dist
+                pushY -= dy2 / dist
+              }
+            }
+            if (nearbyCount > 3) {
+              b.vx += pushX * 0.15 / SUB_STEPS
+              b.vy += pushY * 0.15 / SUB_STEPS
             }
           } else {
-            // Air resistance when not mixing
-            b.vx *= 0.99
-            b.vy *= 0.99
+            mixingTimeRef.current = 0
+            // Very light air resistance when not mixing - let balls fall naturally
+            b.vx *= 0.995
+            b.vy *= 0.995
           }
 
+          // Always apply gravity
           b.vy += GRAVITY / SUB_STEPS
 
+          // Update position
           b.x += b.vx
           b.y += b.vy
           b.angle += b.vAngle / SUB_STEPS
@@ -225,12 +306,19 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
             }
           }
 
-          // Damping
-          b.vx *= Math.pow(DAMPING, 1 / SUB_STEPS)
-          b.vy *= Math.pow(DAMPING, 1 / SUB_STEPS)
+          // Damping - only when mixing
+          if (isMixing) {
+            b.vx *= Math.pow(DAMPING, 1 / SUB_STEPS)
+            b.vy *= Math.pow(DAMPING, 1 / SUB_STEPS)
+          }
 
           // Angular damping
-          b.vAngle *= 0.95
+          b.vAngle *= isMixing ? 0.95 : 0.92
+          
+          // Only zero out truly microscopic velocities
+          if (Math.abs(b.vx) < 0.0001) b.vx = 0
+          if (Math.abs(b.vy) < 0.0001) b.vy = 0
+          if (Math.abs(b.vAngle) < 0.0001) b.vAngle = 0
         }
       }
 
@@ -289,20 +377,37 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
       }
     }
 
+    // Re-check motion AFTER physics updates so gravity can kick in even if we started from rest
+    const areBallsMoving = balls.some((b) => {
+      if (drawnBallIds.includes(b.id) && b.state === 'drawn') return false
+      return Math.abs(b.vx) > 0.0001 || Math.abs(b.vy) > 0.0001
+    })
+
+    if (settleFramesRef.current > 0) {
+      settleFramesRef.current -= 1
+    }
+
+    const shouldAnimate =
+      isMixing ||
+      currentState === 'selecting' ||
+      currentState === 'sucking' ||
+      areBallsMoving ||
+      settleFramesRef.current > 0
+
     // --- Rendering ---
     balls.forEach((b) => {
       if (drawnBallIds.includes(b.id) && b.state === 'drawn') return
 
-      // Shadow
+      // Shadow (adjusted for smaller balls)
       ctx.beginPath()
-      ctx.arc(b.x + 2, b.y + 2, BALL_RADIUS, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(0,0,0,0.2)'
+      ctx.arc(b.x + 1.5, b.y + 1.5, BALL_RADIUS, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'
       ctx.fill()
 
       // Ball Body
       ctx.beginPath()
       ctx.arc(b.x, b.y, BALL_RADIUS, 0, Math.PI * 2)
-      const grad = ctx.createRadialGradient(b.x - 5, b.y - 5, 2, b.x, b.y, BALL_RADIUS)
+      const grad = ctx.createRadialGradient(b.x - 3, b.y - 3, 1, b.x, b.y, BALL_RADIUS)
       grad.addColorStop(0, '#ffffff')
       grad.addColorStop(1, '#cbd5e1')
       ctx.fillStyle = grad
@@ -313,14 +418,14 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
       ctx.translate(b.x, b.y)
       ctx.rotate(b.angle)
       ctx.fillStyle = '#1e293b'
-      ctx.font = 'bold 14px Roboto, Arial'
+      ctx.font = 'bold 11px Roboto, Arial'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(b.label, 0, 1)
+      ctx.fillText(b.label, 0, 0.5)
 
-      // Underscore for 6/9 ambiguity
+      // Underscore for 6/9 ambiguity (adjusted for smaller balls)
       if (['6', '9', '66', '99', '69', '96', '19', '61'].includes(b.label)) {
-        ctx.fillRect(-5, 8, 10, 1.5)
+        ctx.fillRect(-4, 6, 8, 1)
       }
       ctx.restore()
     })
@@ -342,20 +447,52 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
     ctx.arc(centerX, centerY, containerRadius, 0, Math.PI * 2)
     ctx.fill()
 
-    requestRef.current = requestAnimationFrame(updatePhysics)
+    // Only continue animation if needed or restart requested
+    if (shouldAnimate || shouldRestartRef.current) {
+      shouldRestartRef.current = false
+      requestRef.current = requestAnimationFrame(() => updatePhysicsRef.current())
+    } else {
+      requestRef.current = null
+    }
   }, [width, height])
 
-  // Start Loop
+  // Update ref to always point to latest updatePhysics
+  updatePhysicsRef.current = updatePhysics
+
+  // Start Loop - ensure it starts when needed
   useEffect(() => {
-    requestRef.current = requestAnimationFrame(updatePhysics)
-    return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current)
+    // Start animation if mixing is active and loop isn't running
+    if (isMixing && !requestRef.current) {
+      requestRef.current = requestAnimationFrame(() => updatePhysicsRef.current())
     }
-  }, [updatePhysics])
+  }, [isMixing])
+
+  // Effect to restart loop when settling begins (when mixing stops)
+  useEffect(() => {
+    if (!isMixing && settleFramesRef.current > 0 && !requestRef.current) {
+      // Mixing just stopped and we need to settle - ensure loop runs
+      requestRef.current = requestAnimationFrame(() => updatePhysicsRef.current())
+    }
+  }, [isMixing])
+
+  // Cleanup only on unmount
+  useEffect(() => {
+    return () => {
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current)
+        requestRef.current = null
+      }
+    }
+  }, [])
 
   return (
     <div className="relative mx-auto">
-      <canvas ref={canvasRef} width={width} height={height} className="block" />
+      <canvas 
+        ref={canvasRef} 
+        width={width} 
+        height={height} 
+        className={`block ${isBackground ? 'pointer-events-none' : ''}`}
+      />
     </div>
   )
 }

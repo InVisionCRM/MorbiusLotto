@@ -31,6 +31,50 @@ export function usePlayerTickets(roundId: number, playerAddress?: `0x${string}`)
   })
 }
 
+// Read player's round history
+export function usePlayerRoundHistory(playerAddress?: `0x${string}`, start = 0, count = 10) {
+  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  return useReadContract({
+    address: LOTTERY_ADDRESS as `0x${string}`,
+    abi: LOTTERY_6OF55_V2_ABI,
+    functionName: 'getPlayerRoundHistory',
+    args: playerAddress ? [playerAddress, BigInt(start), BigInt(count)] : undefined,
+    query: {
+      enabled: isValidAddress && !!playerAddress,
+    },
+  })
+}
+
+// Read player's lifetime stats
+export function usePlayerLifetime(playerAddress?: `0x${string}`) {
+  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  return useReadContract({
+    address: LOTTERY_ADDRESS as `0x${string}`,
+    abi: LOTTERY_6OF55_V2_ABI,
+    functionName: 'getPlayerLifetime',
+    args: playerAddress ? [playerAddress] : undefined,
+    query: {
+      enabled: isValidAddress && !!playerAddress,
+      refetchInterval: 5000,
+    },
+  })
+}
+
+// Read house (contract's) ticket for a specific round
+export function useHouseTicket(roundId: number) {
+  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  return useReadContract({
+    address: LOTTERY_ADDRESS as `0x${string}`,
+    abi: LOTTERY_6OF55_V2_ABI,
+    functionName: 'getPlayerTickets',
+    args: [BigInt(roundId), LOTTERY_ADDRESS as `0x${string}`],
+    query: {
+      enabled: isValidAddress && roundId > 0,
+      refetchInterval: 5000, // Refetch every 5 seconds
+    },
+  })
+}
+
 // Read round history
 export function useRound(roundId: number) {
   const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
@@ -41,6 +85,7 @@ export function useRound(roundId: number) {
     args: [BigInt(roundId)],
     query: {
       enabled: isValidAddress && roundId > 0,
+      refetchInterval: 5000, // Refetch every 5 seconds to catch finalized rounds
     },
   })
 }
@@ -153,6 +198,9 @@ export function useBuyTicketsForRounds() {
 
     const formattedOffsets = offsets.map(o => BigInt(o))
 
+    // Calculate total tickets across all groups for gas estimation
+    const totalTickets = ticketGroups.reduce((sum, group) => sum + group.length, 0)
+
     writeContract({
       address: LOTTERY_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
@@ -186,6 +234,26 @@ export function useBuyTicketsWithWPLS(defaultExtraBufferBp: number = 2500) {
   }
 
   return { buyTicketsWithWPLS, ...rest }
+}
+
+// Write: Buy tickets with native PLS (wraps and swaps on-chain)
+export function useBuyTicketsWithPLS() {
+  const { writeContract, ...rest } = useWriteContract()
+
+  const buyTicketsWithPLS = (tickets: number[][], valueWei: bigint) => {
+    const formattedTickets = tickets.map(ticket => ticket.map(n => n as number)) as unknown as readonly [number, number, number, number, number, number][]
+
+    writeContract({
+      address: LOTTERY_ADDRESS as `0x${string}`,
+      abi: LOTTERY_6OF55_V2_ABI,
+      functionName: 'buyTicketsWithPLS',
+      args: [formattedTickets as any],
+      chainId: pulsechain.id,
+      value: valueWei,
+    })
+  }
+
+  return { buyTicketsWithPLS, ...rest }
 }
 
 // Write: Finalize round
@@ -230,8 +298,8 @@ export function useWatchRoundFinalized(
     abi: LOTTERY_6OF55_V2_ABI,
     eventName: 'RoundFinalized',
     onLogs(logs) {
-      logs.forEach((log) => {
-        if (log.args.roundId && log.args.winningNumbers && log.args.totalPssh) {
+      logs.forEach((log: any) => {
+        if (log.args?.roundId && log.args?.winningNumbers && log.args?.totalPssh) {
           onRoundFinalized(
             log.args.roundId,
             Array.from(log.args.winningNumbers).map(n => Number(n)),
@@ -254,8 +322,8 @@ export function useWatchTicketsPurchased(
     eventName: 'TicketsPurchased',
     args: playerAddress ? { player: playerAddress } : undefined,
     onLogs(logs) {
-      logs.forEach((log) => {
-        if (log.args.roundId && log.args.ticketCount) {
+      logs.forEach((log: any) => {
+        if (log.args?.roundId && log.args?.ticketCount) {
           onTicketsPurchased(log.args.roundId, log.args.ticketCount)
         }
       })
@@ -272,8 +340,8 @@ export function useWatchMegaMillions(
     abi: LOTTERY_6OF55_V2_ABI,
     eventName: 'MegaMillionsTriggered',
     onLogs(logs) {
-      logs.forEach((log) => {
-        if (log.args.roundId && log.args.bankAmount) {
+      logs.forEach((log: any) => {
+        if (log.args?.roundId && log.args?.bankAmount) {
           onMegaMillions(log.args.roundId, log.args.bankAmount)
         }
       })
@@ -290,8 +358,8 @@ export function useWatchHexOverlay(
     abi: LOTTERY_6OF55_V2_ABI,
     eventName: 'HexOverlayTriggered',
     onLogs(logs) {
-      logs.forEach((log) => {
-        if (log.args.roundId && log.args.hexAmount) {
+      logs.forEach((log: any) => {
+        if (log.args?.roundId && log.args?.hexAmount) {
           onHexOverlay(log.args.roundId, log.args.hexAmount)
         }
       })
@@ -310,8 +378,8 @@ export function useWatchFreeTickets(
     eventName: 'FreeTicketsCredited',
     args: playerAddress ? { player: playerAddress } : undefined,
     onLogs(logs) {
-      logs.forEach((log) => {
-        if (log.args.credits) {
+      logs.forEach((log: any) => {
+        if (log.args?.credits) {
           onFreeTickets(log.args.credits)
         }
       })

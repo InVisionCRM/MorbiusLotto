@@ -1,0 +1,12 @@
+{
+  "network": "pulsechain",
+  "contractAddress": "0x39C89222AA09F89cE673af28C8724bDf9F7457dD",
+  "deploymentBlock": 25222360,
+  "deployer": "0x2775dD8242C4f589536113475B7C80F42ab4A70A",
+  "morbiusToken": "0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1",
+  "wplsToken": "0xA1077a294dDE1B09bB078844df40758a5D0f9a27",
+  "pulseXRouter": "0x165C3410fC91EF562C50559f7d2289fEbed552d9",
+  "roundDuration": 300,
+  "version": "V2",
+  "timestamp": "2025-12-09T05:37:06.455Z"
+}

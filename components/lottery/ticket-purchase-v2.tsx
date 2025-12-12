@@ -1,16 +1,31 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useChainId } from 'wagmi'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useChainId, usePublicClient } from 'wagmi'
 import { formatUnits } from 'viem'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, CheckCircle2, XCircle, Ticket, Coins, AlertCircle } from 'lucide-react'
-import { LOTTERY_ADDRESS, PSSH_TOKEN_ADDRESS, TICKET_PRICE, TOKEN_DECIMALS } from '@/lib/contracts'
+import { LOTTERY_ADDRESS, PSSH_TOKEN_ADDRESS, TICKET_PRICE, TOKEN_DECIMALS, PULSEX_V1_ROUTER_ADDRESS, WPLS_TOKEN_ADDRESS, WPLS_TO_MORBIUS_BUFFER_BPS } from '@/lib/contracts'
 import { pulsechain } from '@/lib/chains'
 import { useBuyTickets } from '@/hooks/use-lottery-6of55'
 import { ERC20_ABI } from '@/abi/erc20'
+import { LOTTERY_6OF55_ABI } from '@/abi/lottery6of55'
+import { toast } from 'sonner'
+
+const ROUTER_ABI = [
+  {
+    inputs: [
+      { name: 'amountOut', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+    ],
+    name: 'getAmountsIn',
+    outputs: [{ name: 'amounts', type: 'uint256[]' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const
 
 interface TicketPurchaseProps {
   tickets: number[][]
@@ -23,12 +38,13 @@ export function TicketPurchaseV2({
   onSuccess,
   onError,
 }: TicketPurchaseProps) {
-  const { address } = useAccount()
+  const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
+  const publicClient = usePublicClient()
   const [step, setStep] = useState<'idle' | 'approving' | 'buying' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string>('')
-  const paymentMethod: 'pssh' = 'pssh' // WPLS disabled
+  const [paymentMethod, setPaymentMethod] = useState<'pssh' | 'pls'>('pssh')
 
   // Read pSSH balance
   const { data: psshBalance } = useReadContract({
@@ -79,8 +95,16 @@ export function TicketPurchaseV2({
     error: buyPsshError,
   } = useBuyTickets()
 
+  // Buy tickets with PLS
+  const {
+    writeContractAsync: writeBuyPLSAsync,
+    data: buyPLSHash,
+    isPending: isBuyPLSPending,
+    error: buyPLSError,
+  } = useWriteContract()
+
   // Wait for buy transaction
-  const buyHash = buyPsshHash
+  const buyHash = paymentMethod === 'pls' ? buyPLSHash : buyPsshHash
   const {
     isLoading: isBuyLoading,
     isSuccess: isBuySuccess
@@ -92,13 +116,34 @@ export function TicketPurchaseV2({
   const ticketCount = tickets.length
   const psshCost = TICKET_PRICE * BigInt(ticketCount)
 
+  // Get PLS quote from PulseX router
+  const { data: wplsQuote } = useReadContract({
+    address: PULSEX_V1_ROUTER_ADDRESS,
+    abi: ROUTER_ABI,
+    functionName: 'getAmountsIn',
+    args:
+      paymentMethod === 'pls' && psshCost > BigInt(0)
+        ? [psshCost, [WPLS_TOKEN_ADDRESS, PSSH_TOKEN_ADDRESS]]
+        : undefined,
+    query: {
+      enabled: paymentMethod === 'pls' && psshCost > BigInt(0),
+      refetchInterval: 10000,
+    },
+  })
+
+  const wplsRequiredWei = useMemo(() => {
+    const quote = Array.isArray(wplsQuote) ? (wplsQuote as bigint[])[0] ?? BigInt(0) : BigInt(0)
+    if (quote === BigInt(0)) return BigInt(0)
+    return (quote * BigInt(WPLS_TO_MORBIUS_BUFFER_BPS)) / BigInt(10000)
+  }, [wplsQuote])
+
   const currentAllowance = psshAllowance
   const requiredAmount = psshCost
-  const needsApproval = currentAllowance !== undefined && currentAllowance < requiredAmount
+  const needsApproval = paymentMethod === 'pssh' && currentAllowance !== undefined && currentAllowance < requiredAmount
 
   // Check if user has enough balance
-  const currentBalance = psshBalance
-  const hasEnoughBalance = currentBalance !== undefined && currentBalance >= psshCost
+  const currentBalance = paymentMethod === 'pls' ? undefined : psshBalance
+  const hasEnoughBalance = paymentMethod === 'pls' ? true : (currentBalance !== undefined && currentBalance >= psshCost)
 
   // Handle approval success
   useEffect(() => {
@@ -177,6 +222,11 @@ export function TicketPurchaseV2({
   }
 
   const handleBuy = async () => {
+    if (!isConnected || !address) {
+      toast.error('Connect wallet to buy.')
+      return
+    }
+
     setStep('buying')
     setErrorMessage('')
 
@@ -184,6 +234,40 @@ export function TicketPurchaseV2({
       await switchChainAsync({ chainId: pulsechain.id })
     }
 
+    // Handle PLS payment
+    if (paymentMethod === 'pls') {
+      try {
+        if (wplsRequiredWei === BigInt(0)) {
+          toast.error('Unable to quote PLS required. Please try again.')
+          return
+        }
+
+        // Convert tickets to the required format for the contract
+        const ticketNumbers = tickets.map(ticket => ticket as [number, number, number, number, number, number])
+
+        const buyHashTx = await writeBuyPLSAsync({
+          address: LOTTERY_ADDRESS as `0x${string}`,
+          abi: LOTTERY_6OF55_ABI,
+          functionName: 'buyTicketsWithPLS',
+          args: [ticketNumbers],
+          value: wplsRequiredWei,
+        })
+        await publicClient?.waitForTransactionReceipt({ hash: buyHashTx })
+        toast.success('Tickets purchased with PLS')
+        setStep('success')
+        onSuccess?.()
+      } catch (err) {
+        console.error(err)
+        const message = err instanceof Error ? err.message : 'Purchase failed'
+        toast.error(message)
+        setStep('error')
+        setErrorMessage(message)
+        onError?.(err instanceof Error ? err : new Error(message))
+      }
+      return
+    }
+
+    // Handle Morbius payment (original logic)
     buyTickets(tickets)
   }
 
@@ -195,7 +279,7 @@ export function TicketPurchaseV2({
     })
   }
 
-  const isProcessing = isApprovePending || isApproveLoading || isBuyPsshPending || isBuyLoading
+  const isProcessing = isApprovePending || isApproveLoading || isBuyPsshPending || isBuyPLSPending || isBuyLoading
 
   if (!address) {
     return (
@@ -221,20 +305,40 @@ export function TicketPurchaseV2({
     )
   }
 
-  const currentTokenSymbol = 'Morbius'
-  const displayCost = psshCost
+  const currentTokenSymbol = paymentMethod === 'pls' ? 'PLS' : 'Morbius'
+  const displayCost = paymentMethod === 'pls' ? wplsRequiredWei : psshCost
 
   return (
     <Card className="p-6 space-y-6">
-      {/* Payment Method (WPLS disabled) */}
+      {/* Payment Method Selection */}
       <div className="space-y-2">
         <label className="text-sm font-medium flex items-center gap-2">
           <Coins className="h-4 w-4" />
-          Payment Method: Morbius
+          Payment Method
         </label>
-        <p className="text-xs text-muted-foreground">
-          WPLS purchase is temporarily disabled. Please use Morbius to buy tickets.
-        </p>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant={paymentMethod === 'pssh' ? 'default' : 'outline'}
+            onClick={() => setPaymentMethod('pssh')}
+            className="text-sm"
+            type="button"
+          >
+            Pay with Morbius
+          </Button>
+          <Button
+            variant={paymentMethod === 'pls' ? 'default' : 'outline'}
+            onClick={() => setPaymentMethod('pls')}
+            className="text-sm"
+            type="button"
+          >
+            Pay with PLS (native)
+          </Button>
+        </div>
+        {paymentMethod === 'pls' && (
+          <p className="text-xs text-muted-foreground">
+            Includes {((WPLS_TO_MORBIUS_BUFFER_BPS - 10000) / 100).toFixed(1)}% buffer — contract wraps PLS to WPLS and swaps to Morbius before purchase.
+          </p>
+        )}
       </div>
 
       {/* Purchase Summary */}
@@ -261,12 +365,14 @@ export function TicketPurchaseV2({
             </div>
           </div>
 
-          <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">Your {currentTokenSymbol} Balance:</span>
-            <span className={hasEnoughBalance ? 'text-green-500' : 'text-red-500'}>
-              {currentBalance ? formatToken(currentBalance, currentTokenSymbol) : '0'} {currentTokenSymbol}
-            </span>
-          </div>
+          {paymentMethod === 'pssh' && (
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Your {currentTokenSymbol} Balance:</span>
+              <span className={hasEnoughBalance ? 'text-green-500' : 'text-red-500'}>
+                {currentBalance ? formatToken(currentBalance, currentTokenSymbol) : '0'} {currentTokenSymbol}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -289,7 +395,7 @@ export function TicketPurchaseV2({
       )}
 
       {/* Insufficient Balance Warning */}
-      {!hasEnoughBalance && ticketsToPay > 0 && (
+      {!hasEnoughBalance && ticketCount > 0 && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>

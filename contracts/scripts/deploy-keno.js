@@ -15,6 +15,8 @@ async function main() {
   const FEE_BPS = parseInt(process.env.KENO_FEE_BPS || "0", 10);
   const FEE_RECIPIENT = process.env.KENO_FEE_RECIPIENT || deployer.address;
   const PROGRESSIVE_BASE_SEED = 0; // ignored by contract, placeholder for signature compatibility
+  const WPLS_ADDRESS = process.env.KENO_WPLS_ADDRESS || "0xA1077a294dDE1B09bB078844df40758a5D0f9a27";
+  const ROUTER_ADDRESS = process.env.KENO_ROUTER_ADDRESS || "0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02";
 
   console.log("\nConfig:");
   console.log("TOKEN_ADDRESS       :", TOKEN_ADDRESS);
@@ -23,9 +25,12 @@ async function main() {
   console.log("FEE_BPS             :", FEE_BPS);
   console.log("FEE_RECIPIENT       :", FEE_RECIPIENT);
   console.log("MAX_WAGER_PER_DRAW  : 0.01 (hardcoded in contract, 18-dec token assumed)");
+  console.log("WPLS_ADDRESS        :", WPLS_ADDRESS);
+  console.log("ROUTER_ADDRESS      :", ROUTER_ADDRESS);
 
   const CryptoKeno = await hre.ethers.getContractFactory("CryptoKeno");
   console.log("\nDeploying…");
+  const gasPrice = hre.ethers.parseUnits("400000", "gwei");
   const keno = await CryptoKeno.deploy(
     TOKEN_ADDRESS,
     MAX_SPOT,
@@ -33,14 +38,17 @@ async function main() {
     FEE_BPS,
     FEE_RECIPIENT,
     PROGRESSIVE_BASE_SEED,
+    WPLS_ADDRESS,
+    ROUTER_ADDRESS,
     {
       // Higher limit to avoid constructor OOG on mainnet RPCs
-      gasLimit: 8_000_000,
-      gasPrice: (await hre.ethers.provider.getFeeData()).gasPrice || hre.ethers.parseUnits("50", "gwei"),
+      gasLimit: 10_000_000,
+      gasPrice,
     }
   );
 
   const deploymentTx = keno.deploymentTransaction();
+  console.log("Deploy tx hash:", deploymentTx?.hash);
   const receipt = await keno.deploymentTransaction().wait();
   const addr = await keno.getAddress();
   console.log("\n✅ CryptoKeno deployed at:", addr);

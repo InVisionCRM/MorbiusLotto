@@ -45,6 +45,26 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
+interface IPulseXRouter {
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function getAmountsIn(
+        uint256 amountOut,
+        address[] calldata path
+    ) external view returns (uint256[] memory amounts);
+}
+
+interface IWrappedPulse is IERC20 {
+    function deposit() external payable;
+    function withdraw(uint256 amount) external;
+}
+
 interface IRandomProvider {
     function requestRandomness(uint256 roundId) external returns (bytes32);
 }
@@ -115,6 +135,8 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
     // ============ State Variables ============
 
     IERC20 public immutable token;
+    IWrappedPulse public immutable wrappedPulse;
+    IPulseXRouter public immutable pulseXRouter;
     uint8 public immutable maxSpot; // Configurable upper bound, default 10
     uint256 public roundDuration; // Seconds per draw cadence
     uint256 public currentRoundId;
@@ -161,6 +183,10 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
     uint256 public globalTotalWagered;
     uint256 public globalTotalWon;
     uint256 public globalTicketCount;
+
+    // Burn accumulator
+    uint256 public burnThreshold = 100_000 * 1e18; // 100k token threshold
+    uint256 public pendingBurnToken;
 
     // Auto-claim feature
     mapping(address => bool) public autoClaimEnabled;
@@ -209,14 +235,6 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
     event RandomnessProviderUpdated(address provider);
     event RoundDurationUpdated(uint256 newDuration);
     event MaxWagerUpdated(uint256 maxWagerPerDraw);
-    event PlayerStatsUpdated(
-        address indexed player,
-        uint256 totalWagered,
-        uint256 totalWon,
-        uint256 ticketCount,
-        uint256 winCount
-    );
-    event GlobalStatsUpdated(uint256 totalWagered, uint256 totalWon, uint256 ticketCount);
     event AutoClaimEnabled(address indexed player, bool enabled);
     event AutoClaimProcessed(uint256 indexed roundId, uint256 indexed ticketId, address indexed player, uint256 prize);
     event ProgressiveWon(
@@ -228,6 +246,8 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
     );
     event ProgressivePoolUpdated(uint256 newAmount, uint256 totalCollected);
     event ProgressiveConfigUpdated(uint256 baseSeed, uint256 costPerDraw, uint256 feeBps);
+    event BurnExecuted(uint256 amount);
+    event BurnThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
 
     // ============ Errors ============
 
@@ -252,14 +272,20 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
         uint256 roundDuration_,
         uint256 feeBps_,
         address feeRecipient_,
-        uint256 /* progressiveBaseSeed_ */ // kept for signature compatibility
+        uint256 /* progressiveBaseSeed_ */, // kept for signature compatibility
+        address wrappedPulse_,
+        address pulseXRouter_
     ) Ownable(msg.sender) {
         require(token_ != address(0), "token required");
         require(feeRecipient_ != address(0), "fee recipient required");
         require(maxSpot_ >= MIN_SPOT && maxSpot_ <= 20, "maxSpot bounds");
+        require(wrappedPulse_ != address(0), "wrapped PLS required");
+        require(pulseXRouter_ != address(0), "router required");
         token = IERC20(token_);
+        wrappedPulse = IWrappedPulse(wrappedPulse_);
+        pulseXRouter = IPulseXRouter(pulseXRouter_);
         maxSpot = maxSpot_;
-        roundDuration = 180; // 180 seconds per round (3 minutes)
+        roundDuration = roundDuration_; // configurable cadence
         feeBps = feeBps_;
         feeRecipient = feeRecipient_;
         maxWagerPerDraw = 0.001 ether; // lower default cap for testing; adjust via setter post-deploy
@@ -428,7 +454,6 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
         uint256 wagerPerDraw
     ) external whenNotPaused nonReentrant onlyExistingRound(roundId) {
         roundId = _ensureOpenRound(roundId);
-        Round storage roundInfo = rounds[roundId];
         if (spotSize < MIN_SPOT || spotSize > maxSpot) revert InvalidSpotSize();
         if (draws == 0) revert InvalidNumbers();
         if (maxWagerPerDraw > 0 && wagerPerDraw > maxWagerPerDraw) revert WagerTooHigh();
@@ -445,7 +470,7 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
         uint256 fee = feePerDraw * draws;
         uint256 net = netPerDraw * draws;
 
-        token.safeTransferFrom(msg.sender, feeRecipient, fee);
+        _accrueBurn(fee);
         token.safeTransferFrom(msg.sender, address(this), net);
 
         uint256 ticketId = nextTicketId++;
@@ -504,16 +529,123 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
             wagerPerDraw,
             gross
         );
+    }
 
-        emit PlayerStatsUpdated(
-            msg.sender,
-            playerTotalWagered[msg.sender],
-            playerTotalWon[msg.sender],
-            playerTicketCount[msg.sender],
-            playerWinCount[msg.sender]
+    /**
+     * @notice Buy a ticket using native PLS (wraps to WPLS then swaps to the game token)
+     * @dev Uses router getAmountsIn to determine required WPLS for the gross cost, refunds any excess PLS.
+     */
+    function buyTicketWithPLS(
+        uint256 roundId,
+        uint8[] calldata numbers,
+        uint8 spotSize,
+        uint8 draws,
+        uint16 addons,
+        uint256 wagerPerDraw
+    ) external payable whenNotPaused nonReentrant onlyExistingRound(roundId) {
+        roundId = _ensureOpenRound(roundId);
+        if (spotSize < MIN_SPOT || spotSize > maxSpot) revert InvalidSpotSize();
+        if (draws == 0) revert InvalidNumbers();
+        if (maxWagerPerDraw > 0 && wagerPerDraw > maxWagerPerDraw) revert WagerTooHigh();
+        _ensureFutureRounds(roundId, draws);
+        _validateAddonFlags(addons);
+
+        uint256 numbersBitmap = _packNumbers(numbers, spotSize);
+
+        uint256 addonCostPerDraw = _addonCost(addons, wagerPerDraw);
+        uint256 grossPerDraw = wagerPerDraw + addonCostPerDraw;
+        uint256 feePerDraw = (grossPerDraw * feeBps) / BPS_DENOMINATOR;
+        uint256 netPerDraw = grossPerDraw - feePerDraw;
+        uint256 gross = grossPerDraw * draws;
+        uint256 fee = feePerDraw * draws;
+        address[] memory path = new address[](2);
+        path[0] = address(wrappedPulse);
+        path[1] = address(token);
+        uint256[] memory amountsIn = pulseXRouter.getAmountsIn(gross, path);
+        uint256 wplsNeeded = amountsIn[0];
+
+        require(msg.value >= wplsNeeded, "Insufficient PLS");
+
+        wrappedPulse.deposit{value: wplsNeeded}();
+        wrappedPulse.approve(address(pulseXRouter), wplsNeeded);
+
+        uint256 tokenBefore = token.balanceOf(address(this));
+
+        pulseXRouter.swapExactTokensForTokens(
+            wplsNeeded,
+            0, // allow any output; enforce below
+            path,
+            address(this),
+            block.timestamp + 300
         );
 
-        emit GlobalStatsUpdated(globalTotalWagered, globalTotalWon, globalTicketCount);
+        uint256 tokenReceived = token.balanceOf(address(this)) - tokenBefore;
+        require(tokenReceived >= gross, "Swap underfunded");
+
+        if (msg.value > wplsNeeded) {
+            payable(msg.sender).transfer(msg.value - wplsNeeded);
+        }
+
+        if (fee > 0) {
+            _accrueBurn(fee);
+        }
+
+        uint256 ticketId = nextTicketId++;
+        tickets[ticketId] = Ticket({
+            player: msg.sender,
+            firstRoundId: uint64(roundId),
+            draws: draws,
+            spotSize: spotSize,
+            addons: addons,
+            drawsRemaining: draws,
+            wagerPerDraw: wagerPerDraw,
+            numbersBitmap: numbersBitmap
+        });
+
+        // Track participation per round for claims/analytics
+        for (uint256 i = 0; i < draws; i++) {
+            uint256 rid = roundId + i;
+            ticketsByRound[rid].push(ticketId);
+            Round storage r = rounds[rid];
+            r.totalBaseWager += wagerPerDraw;
+            if ((addons & ADDON_MULTIPLIER) != 0) {
+                r.totalMultiplierAddon += multiplierCostPerDraw;
+            }
+            if ((addons & ADDON_BULLSEYE) != 0) {
+                r.totalBullsEyeAddon += bullsEyeCostPerDraw;
+            }
+            if ((addons & ADDON_PLUS3) != 0) {
+                r.totalPlus3Addon += wagerPerDraw; // Plus 3 costs same as base wager (doubles it)
+            }
+            if ((addons & ADDON_PROGRESSIVE) != 0) {
+                r.totalProgressiveAddon += progressiveCostPerDraw;
+                // Add portion to progressive pool
+                uint256 toPool = (progressiveCostPerDraw * progressiveFeeBps) / BPS_DENOMINATOR;
+                progressivePool += toPool;
+                progressiveTotalCollected += toPool;
+            }
+            r.poolBalance += netPerDraw;
+        }
+
+        // Update player statistics
+        playerTickets[msg.sender].push(ticketId);
+        playerTicketCount[msg.sender]++;
+        playerTotalWagered[msg.sender] += gross;
+
+        // Update global statistics
+        globalTicketCount++;
+        globalTotalWagered += gross;
+
+        emit TicketPurchased(
+            msg.sender,
+            ticketId,
+            roundId,
+            draws,
+            spotSize,
+            addons,
+            wagerPerDraw,
+            gross
+        );
     }
 
     // ============ Round Lifecycle ============
@@ -1006,6 +1138,42 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
         emit RoundStarted(newRoundId, start, end);
     }
 
+    // ============ Burn Accumulator ============
+
+    function _accrueBurn(uint256 amount) private {
+        if (amount == 0) return;
+        pendingBurnToken += amount;
+        if (pendingBurnToken >= burnThreshold) {
+            _flushBurn();
+        }
+    }
+
+    function _flushBurn() private {
+        uint256 amount = pendingBurnToken;
+        if (amount == 0) return;
+        pendingBurnToken = 0;
+        token.safeTransfer(address(0x000000000000000000000000000000000000dEaD), amount);
+        emit BurnExecuted(amount);
+    }
+
+    /**
+     * @notice Manually flush the burn accumulator when threshold is met
+     */
+    function flushBurn() external nonReentrant {
+        require(pendingBurnToken >= burnThreshold, "Below threshold");
+        _flushBurn();
+    }
+
+    /**
+     * @notice Update burn threshold (owner)
+     */
+    function updateBurnThreshold(uint256 newThreshold) external onlyOwner {
+        require(newThreshold > 0, "Threshold must be > 0");
+        uint256 old = burnThreshold;
+        burnThreshold = newThreshold;
+        emit BurnThresholdUpdated(old, newThreshold);
+    }
+
     function _materializeResults(uint256 roundId) internal {
         Round storage roundInfo = rounds[roundId];
         require(roundInfo.randomSeed != bytes32(0), "seed missing");
@@ -1103,16 +1271,6 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
             playerTotalWon[ticket.player] += paid;
             playerWinCount[ticket.player]++;
             globalTotalWon += paid;
-
-            emit PlayerStatsUpdated(
-                ticket.player,
-                playerTotalWagered[ticket.player],
-                playerTotalWon[ticket.player],
-                playerTicketCount[ticket.player],
-                playerWinCount[ticket.player]
-            );
-
-            emit GlobalStatsUpdated(globalTotalWagered, globalTotalWon, globalTicketCount);
         }
 
         emit PrizeClaimed(roundId, ticketId, ticket.player, basePrize, bullsEyePrize, multiplierApplied, paid);

@@ -29,7 +29,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { KenoTicket } from '@/components/CryptoKeno/keno-ticket'
 import { LiveKenoBoard } from '@/components/CryptoKeno/live-keno-board'
 import { usePulseProgressive } from '@/hooks/usePulseProgressive'
+import { useKenoTicketRoundHistory } from '@/hooks/use-keno-ticket-round-history'
 import { KenoStatsDisplay } from '@/components/CryptoKeno/keno-stats-display'
+import { ContractAddress } from '@/components/ui/contract-address'
 
 const ALL_NUMBERS = Array.from({ length: 80 }, (_, i) => i + 1)
 const ADDON_MULTIPLIER_FLAG = 1 << 0
@@ -106,6 +108,86 @@ type MyTicket = {
   roundTo: number
   currentWin: string
   purchaseTimestamp?: number
+  transactionHash?: string
+}
+
+// Wrapper component that fetches round history for a keno ticket
+function KenoTicketWithHistory({
+  ticket,
+  index,
+}: {
+  ticket: MyTicket
+  index: number
+}) {
+  const ticketForHook = {
+    numbers: ticket.numbers,
+    spotSize: ticket.spotSize,
+    wagerPerDraw: ticket.wagerPerDraw,
+    firstRoundId: ticket.firstRoundId,
+    roundTo: ticket.roundTo,
+    addons: ticket.addons,
+  }
+
+  const { roundHistory } = useKenoTicketRoundHistory(ticketForHook)
+
+  const hasMultiplier = (ticket.addons & ADDON_MULTIPLIER_FLAG) !== 0
+  const hasBullsEye = (ticket.addons & ADDON_BULLSEYE_FLAG) !== 0
+  const hasPlus3 = (ticket.addons & ADDON_PLUS3_FLAG) !== 0
+  const hasProgressive = (ticket.addons & ADDON_PROGRESSIVE_FLAG) !== 0
+  const isActive = ticket.drawsRemaining > 0
+
+  return (
+    <KenoTicket
+      key={ticket.ticketId.toString()}
+      ticketId={ticket.ticketId}
+      numbers={ticket.numbers}
+      spotSize={ticket.spotSize}
+      wager={ticket.wagerPerDraw}
+      draws={ticket.draws}
+      drawsRemaining={ticket.drawsRemaining}
+      firstRoundId={ticket.firstRoundId}
+      roundTo={ticket.roundTo}
+      addons={{
+        multiplier: hasMultiplier,
+        bullsEye: hasBullsEye,
+        plus3: hasPlus3,
+        progressive: hasProgressive,
+      }}
+      isActive={isActive}
+      currentWin={ticket.currentWin}
+      purchaseTimestamp={ticket.purchaseTimestamp}
+      transactionHash={ticket.transactionHash}
+      roundHistory={roundHistory}
+      index={index}
+    />
+  )
+}
+
+// Memoized function that enriches tickets with round history for LiveKenoBoard
+// Since we can't call hooks in loops, we'll use a simpler approach for now
+function useTicketsWithHistoryMemo(tickets: MyTicket[]) {
+  return useMemo(() => {
+    return tickets.map(t => ({
+      ticketId: t.ticketId,
+      numbers: t.numbers,
+      spotSize: t.spotSize,
+      wager: t.wagerPerDraw,
+      draws: t.draws,
+      drawsRemaining: t.drawsRemaining,
+      firstRoundId: t.firstRoundId,
+      roundTo: t.roundTo,
+      addons: {
+        multiplier: Boolean(t.addons & ADDON_MULTIPLIER_FLAG),
+        bullsEye: Boolean(t.addons & ADDON_BULLSEYE_FLAG),
+        plus3: Boolean(t.addons & ADDON_PLUS3_FLAG),
+        progressive: Boolean(t.addons & ADDON_PROGRESSIVE_FLAG),
+      },
+      isActive: t.drawsRemaining > 0,
+      currentWin: t.currentWin,
+      purchaseTimestamp: t.purchaseTimestamp,
+      roundHistory: [], // For now, LiveKenoBoard won't show round history to avoid hook order issues
+    }))
+  }, [tickets])
 }
 
 function formatCountdown(target: number | null) {
@@ -132,7 +214,7 @@ export default function KenoPage() {
   const [bullsEye, setBullsEye] = useState(false)
   const [plus3, setPlus3] = useState(false)
   const [progressive, setProgressive] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<'morbius' | 'wpls'>('morbius')
+  const [paymentMethod, setPaymentMethod] = useState<'morbius' | 'pls'>('morbius')
   const [multiplierCostWei, setMultiplierCostWei] = useState<bigint>(BigInt(0))
   const [bullsEyeCostWei, setBullsEyeCostWei] = useState<bigint>(BigInt(0))
   const [nextDrawTime, setNextDrawTime] = useState<number | null>(null)
@@ -145,6 +227,7 @@ export default function KenoPage() {
   const [hasLoadedTicketsOnce, setHasLoadedTicketsOnce] = useState(false)
   const [ticketIds, setTicketIds] = useState<bigint[]>([])
   const [ticketPurchaseTimestamps, setTicketPurchaseTimestamps] = useState<Map<string, number>>(new Map())
+  const [ticketTransactionHashes, setTicketTransactionHashes] = useState<Map<string, string>>(new Map())
   const ticketBuilderRef = useRef<HTMLDivElement | null>(null)
   const [pendingBuy, setPendingBuy] = useState<{
     roundIdArg: bigint
@@ -166,6 +249,7 @@ export default function KenoPage() {
   } | null>(null)
   const [showLiveBoard, setShowLiveBoard] = useState(false)
   const [showNoTicketsDialog, setShowNoTicketsDialog] = useState(false)
+
 
   // Costs, allowance, round
   const { data: addonCostResults } = useReadContracts({
@@ -322,11 +406,11 @@ export default function KenoPage() {
     abi: ROUTER_ABI,
     functionName: 'getAmountsIn',
     args:
-      paymentMethod === 'wpls' && totalCostWei > BigInt(0)
+      paymentMethod !== 'morbius' && totalCostWei > BigInt(0)
         ? [totalCostWei, [WPLS_TOKEN_ADDRESS, MORBIUS_TOKEN_ADDRESS]]
         : undefined,
     query: {
-      enabled: paymentMethod === 'wpls' && totalCostWei > BigInt(0),
+      enabled: paymentMethod !== 'morbius' && totalCostWei > BigInt(0),
       refetchInterval: 10000,
     },
   })
@@ -371,10 +455,6 @@ export default function KenoPage() {
       toast.error(`Pick ${spotSize} numbers before buying.`)
       return
     }
-    if (paymentMethod === 'wpls' && wplsRequiredWei === BigInt(0)) {
-      toast.error('Unable to quote WPLS required. Please try again.')
-      return
-    }
     const roundIdArg = BigInt(Math.max(1, activeRoundId))
     const numbersArg = selectedNumbers.map((n) => Number(n))
     const addonsArg = (() => {
@@ -388,42 +468,21 @@ export default function KenoPage() {
     const wagerArg = parseEther(wager.toString())
     const purchase = { roundIdArg, numbersArg, spotArg: spotSize, drawsArg: draws, addonsArg, wagerArg, totalCostWei }
 
-    if (paymentMethod === 'wpls') {
+    if (paymentMethod === 'pls') {
       try {
-        if (morbiusAllowanceWei < totalCostWei) {
-          const txHash = await writeApproveAsync({
-            address: MORBIUS_TOKEN_ADDRESS,
-            abi: ERC20_ABI,
-            functionName: 'approve',
-            args: [KENO_ADDRESS, totalCostWei],
-          })
-          await publicClient?.waitForTransactionReceipt({ hash: txHash })
+        if (wplsRequiredWei === BigInt(0)) {
+          toast.error('Unable to quote PLS required. Please try again.')
+          return
         }
-        if (wplsAllowanceWei < wplsRequiredWei) {
-          const txHash = await writeApproveAsync({
-            address: WPLS_TOKEN_ADDRESS,
-            abi: ERC20_ABI,
-            functionName: 'approve',
-            args: [PULSEX_V1_ROUTER_ADDRESS, wplsRequiredWei],
-          })
-          await publicClient?.waitForTransactionReceipt({ hash: txHash })
-        }
-        const deadline = BigInt(Math.floor(Date.now() / 1000) + 900)
-        const swapHash = await writeSwapAsync({
-          address: PULSEX_V1_ROUTER_ADDRESS,
-          abi: ROUTER_ABI,
-          functionName: 'swapExactTokensForTokens',
-          args: [wplsRequiredWei, totalCostWei, [WPLS_TOKEN_ADDRESS, MORBIUS_TOKEN_ADDRESS], address, deadline],
-        })
-        await publicClient?.waitForTransactionReceipt({ hash: swapHash })
         const buyHashTx = await writeBuyAsync({
           address: KENO_ADDRESS,
           abi: KENO_ABI,
-          functionName: 'buyTicket',
+          functionName: 'buyTicketWithPLS',
           args: [roundIdArg, numbersArg, spotSize, draws, addonsArg, wagerArg],
+          value: wplsRequiredWei,
         })
         await publicClient?.waitForTransactionReceipt({ hash: buyHashTx })
-        toast.success('Tickets purchased with WPLS (swapped to Morbius)')
+        toast.success('Tickets purchased with PLS')
         setPendingBuy(null)
       } catch (err) {
         console.error(err)
@@ -435,9 +494,19 @@ export default function KenoPage() {
 
     if (morbiusAllowanceWei < totalCostWei) {
       setPendingBuy(purchase)
-      writeApprove({ address: MORBIUS_TOKEN_ADDRESS, abi: ERC20_ABI, functionName: 'approve', args: [KENO_ADDRESS, totalCostWei] })
+      writeApprove({ 
+        address: MORBIUS_TOKEN_ADDRESS, 
+        abi: ERC20_ABI, 
+        functionName: 'approve', 
+        args: [KENO_ADDRESS, totalCostWei],
+      })
     } else {
-      writeBuy({ address: KENO_ADDRESS, abi: KENO_ABI, functionName: 'buyTicket', args: [roundIdArg, numbersArg, spotSize, draws, addonsArg, wagerArg] })
+      writeBuy({ 
+        address: KENO_ADDRESS, 
+        abi: KENO_ABI, 
+        functionName: 'buyTicket', 
+        args: [roundIdArg, numbersArg, spotSize, draws, addonsArg, wagerArg],
+      })
     }
   }
 
@@ -475,19 +544,22 @@ export default function KenoPage() {
           const ids = logs.map((l) => l.args.ticketId).filter((id): id is bigint => id !== undefined)
           setTicketIds(ids)
           
-          // Fetch timestamps for each ticket
+          // Fetch timestamps and transaction hashes for each ticket
           const timestampMap = new Map<string, number>()
+          const txHashMap = new Map<string, string>()
           for (const log of logs) {
             if (log.args.ticketId !== undefined) {
               try {
                 const block = await publicClient.getBlock({ blockNumber: log.blockNumber })
                 timestampMap.set(log.args.ticketId.toString(), Number(block.timestamp) * 1000)
+                txHashMap.set(log.args.ticketId.toString(), log.transactionHash)
               } catch (err) {
                 console.error('Failed to fetch block timestamp', err)
               }
             }
           }
           setTicketPurchaseTimestamps(timestampMap)
+          setTicketTransactionHashes(txHashMap)
           setHasLoadedTicketsOnce(true)
         } catch (err) {
           console.error('ticket reload failed', err)
@@ -507,19 +579,22 @@ export default function KenoPage() {
         const ids = logs.map((l) => l.args.ticketId).filter((id): id is bigint => id !== undefined)
         setTicketIds(ids)
         
-        // Fetch timestamps for each ticket
+        // Fetch timestamps and transaction hashes for each ticket
         const timestampMap = new Map<string, number>()
+        const txHashMap = new Map<string, string>()
         for (const log of logs) {
           if (log.args.ticketId !== undefined) {
             try {
               const block = await publicClient.getBlock({ blockNumber: log.blockNumber })
               timestampMap.set(log.args.ticketId.toString(), Number(block.timestamp) * 1000)
+              txHashMap.set(log.args.ticketId.toString(), log.transactionHash)
             } catch (err) {
               console.error('Failed to fetch block timestamp', err)
             }
           }
         }
         setTicketPurchaseTimestamps(timestampMap)
+        setTicketTransactionHashes(txHashMap)
       } catch (err) {
         console.error('my tickets query failed', err)
       } finally {
@@ -587,6 +662,7 @@ export default function KenoPage() {
             ).toFixed(4)
           : '0.0000'
       const purchaseTimestamp = ticketPurchaseTimestamps.get(ticketIds[idx].toString())
+      const transactionHash = ticketTransactionHashes.get(ticketIds[idx].toString())
       enriched.push({
         ticketId: ticketIds[idx],
         firstRoundId: BigInt(from),
@@ -599,10 +675,14 @@ export default function KenoPage() {
         roundTo: lastRound,
         currentWin,
         purchaseTimestamp,
+        transactionHash,
       })
     })
     return enriched.sort((a, b) => Number(b.ticketId - a.ticketId))
-  }, [ticketDetails, ticketIds, activeRoundId, roundData, calculateRoundWin, ticketPurchaseTimestamps])
+  }, [ticketDetails, ticketIds, activeRoundId, roundData, calculateRoundWin, ticketPurchaseTimestamps, ticketTransactionHashes])
+
+  // Enrich tickets with round history for LiveKenoBoard
+  const ticketsWithHistory = useTicketsWithHistoryMemo(myTicketsEnriched)
 
   useEffect(() => {
     if (!isConnected) {
@@ -666,24 +746,6 @@ export default function KenoPage() {
         </div>
       </header>
 
-      {/* Floating Next Draw toggle */}
-      <div className="fixed right-0 top-1/2 z-50 -translate-y-1/2">
-        <Button
-          variant="secondary"
-          size="lg"
-          className="h-auto min-h-[48px] rounded-l-none bg-emerald-600/80 hover:bg-emerald-600 text-white px-4 py-3 flex flex-col items-center shadow-lg"
-          onClick={() => {
-            setShowLiveBoard(true)
-            if (typeof window !== 'undefined') {
-              document.getElementById('live-keno-board')?.scrollIntoView({ behavior: 'smooth' })
-            }
-          }}
-        >
-          <span className="text-sm font-semibold">Next Draw</span>
-          <span className="text-sm text-emerald-100 leading-none">{formatCountdown(nextDrawTime)}</span>
-        </Button>
-      </div>
-
       <main className="px-6 pb-16">
         {lastDraw && showLiveBoard && (
           <div className="mb-6" id="live-keno-board">
@@ -696,25 +758,7 @@ export default function KenoPage() {
               active={showLiveBoard}
               onClose={() => setShowLiveBoard(false)}
               nextDrawTime={nextDrawTime ? Math.floor(nextDrawTime / 1000) : undefined}
-              tickets={myTicketsEnriched.map(t => ({
-                ticketId: t.ticketId,
-                numbers: t.numbers,
-                spotSize: t.spotSize,
-                wager: t.wagerPerDraw,
-                draws: t.draws,
-                drawsRemaining: t.drawsRemaining,
-                firstRoundId: t.firstRoundId,
-                roundTo: t.roundTo,
-                addons: {
-                  multiplier: Boolean(t.addons & ADDON_MULTIPLIER_FLAG),
-                  bullsEye: Boolean(t.addons & ADDON_BULLSEYE_FLAG),
-                  plus3: Boolean(t.addons & ADDON_PLUS3_FLAG),
-                  progressive: Boolean(t.addons & ADDON_PROGRESSIVE_FLAG),
-                },
-                isActive: t.drawsRemaining > 0,
-                currentWin: t.currentWin,
-                purchaseTimestamp: t.purchaseTimestamp,
-              }))}
+              tickets={ticketsWithHistory}
             />
           </div>
         )}
@@ -739,50 +783,6 @@ export default function KenoPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card ref={ticketBuilderRef} className="bg-white/5 border-white/10 backdrop-blur-xl p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm text-gray-300">Next Draw</p>
-                <h2 className="text-3xl font-semibold text-white">{formatCountdown(nextDrawTime)}</h2>
-                <p className="text-xs text-gray-400">20 of 80 numbers drawn</p>
-              </div>
-              <div className="w-full md:w-64">
-                <p className="text-xs text-gray-300 mb-1">Round Fill</p>
-                <Progress value={progress} className="h-2" />
-                <div className="mt-2 flex gap-3 text-xs text-gray-300">
-                  <span>Pool: {poolDisplay} Morbius</span>
-                  <span>Active Round: {activeRoundId}</span>
-                </div>
-              </div>
-            </div>
-            <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-              <Card className="bg-white/5 border-white/10 px-4 py-3">
-                <p className="text-xs text-gray-400">Pool Balance</p>
-                <p className="text-lg font-semibold text-emerald-200">
-                  {roundStats ? Number(formatEther(roundStats.poolBalance)).toFixed(4) : '0.0000'} Morbius
-                </p>
-              </Card>
-              <Card className="bg-white/5 border-white/10 px-4 py-3">
-                <p className="text-xs text-gray-400">Total Wager</p>
-                <p className="text-lg font-semibold text-amber-200">
-                  {roundStats ? Number(formatEther(roundStats.totalBaseWager)).toFixed(4) : '0.0000'} Morbius
-                </p>
-              </Card>
-              <Card className="bg-white/5 border-white/10 px-4 py-3">
-                <p className="text-xs text-gray-400">Multiplier Add-ons</p>
-                <p className="text-lg font-semibold text-purple-200">
-                  {roundStats ? Number(formatEther(roundStats.totalMultiplierAddon)).toFixed(4) : '0.0000'} Morbius
-                </p>
-              </Card>
-              <Card className="bg-white/5 border-white/10 px-4 py-3">
-                <p className="text-xs text-gray-400">Bulls-Eye Add-ons</p>
-                <p className="text-lg font-semibold text-blue-200">
-                  {roundStats ? Number(formatEther(roundStats.totalBullsEyeAddon)).toFixed(4) : '0.0000'} Morbius
-                </p>
-              </Card>
-            </div>
-          </Card>
-
           <Card className="bg-white/5 border-white/10 p-6">
             <div className="mb-6">
               <h3 className="text-2xl font-bold text-white mb-2">KENO!</h3>
@@ -1094,24 +1094,28 @@ export default function KenoPage() {
                   Pay with Morbius
                 </Button>
                 <Button
-                  variant={paymentMethod === 'wpls' ? 'default' : 'outline'}
-                  onClick={() => setPaymentMethod('wpls')}
+                  variant={paymentMethod === 'pls' ? 'default' : 'outline'}
+                  onClick={() => setPaymentMethod('pls')}
                   className="text-sm"
                 >
-                  Pay with WPLS (auto-swap)
+                  Pay with PLS (native)
                 </Button>
               </div>
               <div>
                 <p className="text-sm font-semibold text-emerald-200 mb-1">Total Ticket Cost</p>
-                <p className="text-3xl font-bold text-white mb-2">{totalCost.toFixed(4)} Morbius</p>
+                <p className="text-3xl font-bold text-white mb-2">
+                  {paymentMethod === 'pls'
+                    ? `~${Number(formatEther(wplsRequiredWei)).toFixed(4)} PLS`
+                    : `${totalCost.toFixed(4)} Morbius`}
+                </p>
                 <div className="text-xs text-gray-300 space-y-1">
                   <p>Base Cost: {wager.toFixed(4)} Morbius × {draws} draw{draws !== 1 ? 's' : ''} = {(wager * draws).toFixed(4)} Morbius</p>
                   {addonPerDrawWei > BigInt(0) && (
                     <p>Add-ons: {Number(formatEther(addonPerDrawWei)).toFixed(4)} Morbius × {draws} draw{draws !== 1 ? 's' : ''} = {(Number(formatEther(addonPerDrawWei)) * draws).toFixed(4)} Morbius</p>
                   )}
-                  {paymentMethod === 'wpls' && (
+                  {paymentMethod === 'pls' && (
                     <p className="text-amber-200">
-                      Requires ~{Number(formatEther(wplsRequiredWei)).toFixed(4)} WPLS (includes {((WPLS_TO_MORBIUS_BUFFER_BPS - 10000) / 100).toFixed(1)}% buffer) — will auto-swap to Morbius before purchase.
+                      Includes {((WPLS_TO_MORBIUS_BUFFER_BPS - 10000) / 100).toFixed(1)}% buffer — contract wraps PLS to WPLS and swaps to Morbius before purchase.
                     </p>
                   )}
                   <p className="pt-2 border-t border-white/10">
@@ -1439,57 +1443,44 @@ export default function KenoPage() {
             </Accordion>
           </Card>
 
-          <Card className="bg-white/5 border-white/10 p-6 lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-gray-300">My Tickets (on-chain)</p>
-              {(loadingMyTickets || isApprovePending || isBuyPending) && (
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-                  <span className="text-xs text-gray-400">Loading...</span>
+          <Accordion type="single" collapsible className="w-full lg:col-span-2">
+            <AccordionItem value="my-tickets" className="border-white/10">
+              <AccordionTrigger className="text-white hover:text-emerald-400 px-6">
+                <div className="flex items-center justify-between w-full mr-4">
+                  <p className="text-sm text-gray-300">My Tickets (on-chain)</p>
+                  {(loadingMyTickets || isApprovePending || isBuyPending) && (
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                      <span className="text-xs text-gray-400">Loading...</span>
+                    </div>
+                  )}
+                  {!loadingMyTickets && myTicketsEnriched.length > 0 && (
+                    <span className="text-xs text-gray-400 bg-white/10 px-2 py-1 rounded">
+                      {myTicketsEnriched.length} ticket{myTicketsEnriched.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="mt-3">
-              {!loadingMyTickets && myTicketsEnriched.length === 0 && (
-                <div className="rounded-md border border-white/10 bg-white/5 px-4 py-6 text-center">
-                  <p className="text-sm text-gray-400">No purchased tickets found for this wallet.</p>
+              </AccordionTrigger>
+              <AccordionContent className="text-gray-300 px-6 pb-6">
+                <div className="mt-3">
+                  {!loadingMyTickets && myTicketsEnriched.length === 0 && (
+                    <div className="rounded-md border border-white/10 bg-white/5 px-4 py-6 text-center">
+                      <p className="text-sm text-gray-400">No purchased tickets found for this wallet.</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 justify-items-center">
+                    {myTicketsEnriched.map((t, idx) => (
+                      <KenoTicketWithHistory
+                        key={t.ticketId.toString()}
+                        ticket={t}
+                        index={idx}
+                      />
+                    ))}
+                  </div>
                 </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 justify-items-center">
-                {myTicketsEnriched.map((t, idx) => {
-                  const hasMultiplier = (t.addons & ADDON_MULTIPLIER_FLAG) !== 0
-                  const hasBullsEye = (t.addons & ADDON_BULLSEYE_FLAG) !== 0
-                  const hasPlus3 = (t.addons & ADDON_PLUS3_FLAG) !== 0
-                  const hasProgressive = (t.addons & ADDON_PROGRESSIVE_FLAG) !== 0
-                  const isActive = t.drawsRemaining > 0
-                  
-                  return (
-                    <KenoTicket
-                      key={t.ticketId.toString()}
-                      ticketId={t.ticketId}
-                      numbers={t.numbers}
-                      spotSize={t.spotSize}
-                      wager={t.wagerPerDraw}
-                      draws={t.draws}
-                      drawsRemaining={t.drawsRemaining}
-                      firstRoundId={t.firstRoundId}
-                      roundTo={t.roundTo}
-                      addons={{
-                        multiplier: hasMultiplier,
-                        bullsEye: hasBullsEye,
-                        plus3: hasPlus3,
-                        progressive: hasProgressive,
-                      }}
-                      isActive={isActive}
-                      currentWin={t.currentWin}
-                      purchaseTimestamp={t.purchaseTimestamp}
-                      index={idx}
-                    />
-                  )
-                })}
-              </div>
-            </div>
-          </Card>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
       </main>
 
@@ -1686,6 +1677,16 @@ export default function KenoPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Footer */}
+      <footer className="border-t border-white/10 mt-12 py-6 px-6">
+        <div className="flex justify-center">
+          <ContractAddress
+            address={KENO_ADDRESS}
+            label="CryptoKeno Contract"
+          />
+        </div>
+      </footer>
     </div>
   )
 }

@@ -41,7 +41,7 @@ export function KenoStatsDisplay() {
 
   const totalWageredEth = Number(formatEther(playerStats.totalWagered))
   const totalWonEth = Number(formatEther(playerStats.totalWon))
-  const unclaimedEth = Number(formatEther(unclaimedWinnings || BigInt(0)))
+  const unclaimedEth = Number(formatEther(unclaimedWinnings && typeof unclaimedWinnings === 'bigint' ? unclaimedWinnings : BigInt(0)))
   const ticketCount = Number(playerStats.ticketCount)
   const winCount = Number(playerStats.winCount)
 
@@ -156,38 +156,6 @@ export function KenoStatsDisplay() {
         </Card>
       </div>
 
-      {/* Global Stats */}
-      {globalStats && (
-        <Card className="border border-white/10 bg-gradient-to-br from-slate-900/50 to-slate-950/50 p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Global Statistics</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-sm text-gray-400">Total Wagered</p>
-              <p className="text-xl font-bold text-white">
-                {Number(formatEther(globalStats.totalWagered)).toFixed(2)} WPLS
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Claimed</p>
-              <p className="text-xl font-bold text-white">
-                {Number(formatEther(globalStats.totalWon)).toFixed(2)} WPLS
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Total Tickets</p>
-              <p className="text-xl font-bold text-white">
-                {Number(globalStats.ticketCount)}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Unclaimed (global)</p>
-              <p className="text-xl font-bold text-white">
-                0.00 WPLS
-              </p>
-            </div>
-          </div>
-        </Card>
-      )}
     </div>
   )
 }

@@ -125,7 +125,7 @@ export function NavigationMenu({
                 {menuItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => handleMenuItemClick(item.id, item.href)}
+                    onClick={() => handleMenuItemClick(item.id)}
                     className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
                   >
                     {item.label}

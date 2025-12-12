@@ -32,6 +32,7 @@ interface KenoTicketProps {
   isActive: boolean
   currentWin: string
   purchaseTimestamp?: number
+  transactionHash?: string
   index?: number
   roundHistory?: RoundHistory[]
   multiplierCostWei?: bigint
@@ -68,6 +69,7 @@ export function KenoTicket({
   isActive,
   currentWin,
   purchaseTimestamp,
+  transactionHash,
   index = 0,
   roundHistory = [],
   multiplierCostWei = BigInt(0),
@@ -294,6 +296,24 @@ export function KenoTicket({
           <div className="text-[9px] font-mono">
             {shortId}{secondaryId.slice(0, 2)} {dateInfo.month}{dateInfo.date.toString().padStart(2, '0')} {dateInfo.year} {printTime} {secondaryId}
           </div>
+
+          {/* Transaction Hash Link */}
+          {transactionHash && (
+            <div className="mt-2">
+              <a
+                href={`https://scan.pulsechain.box/tx/${transactionHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[9px] font-bold text-black/70 hover:text-purple-700 underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span>TX: {transactionHash.slice(0, 6)}...{transactionHash.slice(-4)}</span>
+                <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Barcode - Moved to bottom */}

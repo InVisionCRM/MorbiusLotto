@@ -9,9 +9,9 @@ async function main() {
   console.log("Balance:", hre.ethers.formatEther(balance), "PLS");
 
   // Contract parameters
-  const PSSH_TOKEN_ADDRESS = "0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1"; // Morbius token on PulseChain
+  const MORBIUS_TOKEN_ADDRESS = "0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1"; // Morbius token on PulseChain
   const WPLS_TOKEN_ADDRESS = "0xA1077a294dDE1B09bB078844df40758a5D0f9a27"; // Wrapped PLS on PulseChain
-  const PULSEX_ROUTER_ADDRESS = "0x165C3410fC91EF562C50559f7d2289fEbed552d9"; // PulseX V2 Router
+  const PULSEX_ROUTER_ADDRESS = "0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02"; // PulseX V1 Router (align with Keno)
 
   // Round duration and MegaMorbius interval
   let ROUND_DURATION;
@@ -28,7 +28,7 @@ async function main() {
   }
 
   console.log("\nConfig:");
-  console.log("PSSH_TOKEN_ADDRESS  :", PSSH_TOKEN_ADDRESS);
+  console.log("MORBIUS_TOKEN_ADDR  :", MORBIUS_TOKEN_ADDRESS);
   console.log("WPLS_TOKEN_ADDRESS  :", WPLS_TOKEN_ADDRESS);
   console.log("PULSEX_ROUTER       :", PULSEX_ROUTER_ADDRESS);
   console.log("ROUND_DURATION      :", ROUND_DURATION, "seconds");
@@ -38,14 +38,13 @@ async function main() {
   const SuperStakeLottery6of55 = await hre.ethers.getContractFactory("contracts/SuperStakeLottery6of55V2.sol:SuperStakeLottery6of55");
   console.log("\nDeploying…");
 
-  // Use network fee data; fallback to a modest value if provider returns nulls
-  const feeData = await hre.ethers.provider.getFeeData();
-  const gasPrice = feeData.gasPrice || hre.ethers.parseUnits("50", "gwei");
+  // Use increased gas price for reliable deployment
+  const gasPrice = hre.ethers.parseUnits("400000", "gwei");
 
   console.log("Using gas price:", hre.ethers.formatUnits(gasPrice, "gwei"), "Gwei");
 
   const lottery = await SuperStakeLottery6of55.deploy(
-    PSSH_TOKEN_ADDRESS,
+    MORBIUS_TOKEN_ADDRESS,
     WPLS_TOKEN_ADDRESS,
     PULSEX_ROUTER_ADDRESS,
     ROUND_DURATION,
@@ -79,13 +78,14 @@ async function main() {
   // Display important addresses
   console.log("\n📋 Important Addresses:");
   console.log("- Lottery Contract:", lotteryAddress);
-  console.log("- pSSH Token:", await lottery.pSSH_TOKEN());
+  console.log("- Morbius Token:", await lottery.MORBIUS_TOKEN());
   console.log("- WPLS Token:", await lottery.WPLS_TOKEN());
   console.log("- PulseX Router:", await lottery.pulseXRouter());
 
   // Display key parameters
   console.log("\n⚙️  Key Parameters (V2 Changes):");
-  console.log("- Ticket Price:", (await lottery.TICKET_PRICE()).toString(), "wei (1e18 = 1 Morbius)");
+  console.log("- Ticket Price (Morbius):", (await lottery.ticketPriceMorbius()).toString(), "wei");
+  console.log("- Ticket Price (PLS beats):", (await lottery.ticketPricePls()).toString(), "wei");
   console.log("- Numbers Per Ticket:", await lottery.NUMBERS_PER_TICKET());
   console.log("- Number Range:", await lottery.MIN_NUMBER(), "-", await lottery.MAX_NUMBER());
   console.log("- MegaMorbius Interval:", (await lottery.megaMillionsInterval()).toString(), "rounds");
@@ -101,13 +101,11 @@ async function main() {
   }
 
   console.log("\n🔄 Rollover Logic:");
-  console.log("- Brackets 1-4 unclaimed → 100% to MegaMillions");
-  console.log("- Bracket 5 unclaimed → 60% to Bracket 6, 40% to MegaMillions");
-  console.log("- Bracket 6 unclaimed → 60% to Bracket 5, 40% to MegaMillions");
+  console.log("- Unclaimed brackets: 70% to next round winners, 15% burn, 15% MegaMorbius");
 
   console.log("\n💰 WPLS Payment:");
-  console.log("- Auto-swap WPLS → pSSH via PulseX");
-  console.log("- Accounts for 5.5% pSSH tax + 5% slippage");
+  console.log("- Auto-swap WPLS → Morbius via PulseX");
+  console.log("- Accounts for 5.5% Morbius tax + 5% slippage");
   console.log("- Buffer:", (await lottery.WPLS_SWAP_BUFFER_PCT()).toString(), "bps (11.1%)");
 
   // Save deployment info
@@ -116,7 +114,7 @@ async function main() {
     contractAddress: lotteryAddress,
     deploymentBlock: deploymentBlock,
     deployer: deployer.address,
-    psshToken: PSSH_TOKEN_ADDRESS,
+    morbiusToken: MORBIUS_TOKEN_ADDRESS,
     wplsToken: WPLS_TOKEN_ADDRESS,
     pulseXRouter: PULSEX_ROUTER_ADDRESS,
     roundDuration: ROUND_DURATION,
@@ -133,13 +131,13 @@ async function main() {
   console.log(`   export const LOTTERY_ADDRESS = '${lotteryAddress}'`);
   console.log(`   export const LOTTERY_DEPLOY_BLOCK = ${deploymentBlock}`);
   console.log("");
-  console.log("2. Generate and update ABI in abi/lottery.ts");
+  console.log("2. ABI already regenerated: abi/lottery6of55-v2.json");
   console.log("");
   console.log("3. Verify contract on PulseScan:");
-  console.log(`   npx hardhat verify --network ${hre.network.name} ${lotteryAddress} "${PSSH_TOKEN_ADDRESS}" "${WPLS_TOKEN_ADDRESS}" "${PULSEX_ROUTER_ADDRESS}" ${ROUND_DURATION}`);
+  console.log(`   npx hardhat verify --network ${hre.network.name} ${lotteryAddress} "${MORBIUS_TOKEN_ADDRESS}" "${WPLS_TOKEN_ADDRESS}" "${PULSEX_ROUTER_ADDRESS}" ${ROUND_DURATION} ${MEGA_MORBIUS_INTERVAL}`);
   console.log("");
   console.log("4. Test the contract:");
-  console.log("   - Buy tickets with pSSH (buyTickets)");
+  console.log("   - Buy tickets with Morbius (buyTickets)");
   console.log("   - Buy tickets with WPLS (buyTicketsWithWPLS)");
   console.log("   - Wait for round to expire");
   console.log("   - Call finalizeRound()");

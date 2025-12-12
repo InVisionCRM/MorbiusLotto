@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
-import { Play, ChevronDown, ChevronUp, Receipt } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { Play, ChevronDown, ChevronUp, Receipt, RotateCcw } from 'lucide-react'
 import PhysicsMachine from './PhysicsMachine'
 import BallResult from './BallResult'
 import { DrawState } from './types'
@@ -29,6 +29,11 @@ interface BallDrawSimulatorProps {
   onComplete?: () => void // Callback when draw completes
   autoStart?: boolean // Auto-start the draw
   onClose?: () => void // Callback to close the simulator
+  onDrawStart?: () => void // Notify when draw begins
+  onDrawEnd?: () => void // Notify when draw ends
+  isBackground?: boolean // Background-only mode (no controls/receipt)
+  isMegaMorbius?: boolean // Whether this is a MegaMorbius round
+  timeRemaining?: number // Time remaining in seconds for idle animation
 }
 
 const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
@@ -40,6 +45,11 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
   onComplete,
   autoStart = false,
   onClose,
+  onDrawStart,
+  onDrawEnd,
+  isBackground = false,
+  isMegaMorbius = false,
+  timeRemaining = 0,
 }) => {
   const [currentState, setCurrentState] = useState<DrawState>(DrawState.IDLE)
   const [drawnNumbers, setDrawnNumbers] = useState<number[]>([]) // Winning numbers drawn
@@ -48,16 +58,24 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
   const [currentTarget, setCurrentTarget] = useState<number | null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
   const [machineSize, setMachineSize] = useState(getPhysicsMachineSize())
-  const clampedMachineSize = Math.min(machineSize.width, 332) // keep physics area within 350px wrapper
+  const startedRef = useRef(false)
+  const lastNumbersKeyRef = useRef<string | null>(null)
+  const hasAnimatedRef = useRef(false) // Track if animation has played for current round
+  const completedRef = useRef(false) // Track if onComplete has been called for current round
+  const clampedMachineSize = Math.min(machineSize.width, 330) // keep globe large but responsive
+  const visualSize = Math.min(clampedMachineSize + 5, 335) // wrapper only 5px larger than globe
 
-  // Update machine size on window resize
+  // Update machine size on window resize and initial mount
   useEffect(() => {
     const handleResize = () => {
       setMachineSize(getPhysicsMachineSize())
     }
+    // Set initial size on mount
+    handleResize()
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
 
   const formatPssh = (amount: bigint) => {
     return parseFloat(formatUnits(amount, 9)).toLocaleString(undefined, {
@@ -66,13 +84,57 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
     })
   }
 
-  // Auto-start if enabled
+  // Auto-start if enabled (guarded by stable numbers key + round ID)
   useEffect(() => {
-    if (autoStart && currentState === DrawState.IDLE && winningNumbers.length === drawCount) {
-      resetDraw()
-      setCurrentState(DrawState.MIXING)
+    // Don't start if we don't have valid winning numbers
+    const hasValidNumbers = winningNumbers.length === drawCount && winningNumbers.every(n => n > 0)
+    
+    console.log('🎱 BallDrawSimulator update:', {
+      roundId,
+      winningNumbers,
+      hasValidNumbers,
+      autoStart,
+      drawCount,
+      lastKey: lastNumbersKeyRef.current
+    })
+    
+    if (!hasValidNumbers) {
+      console.log('🎱 Skipping: invalid winning numbers')
+      return
     }
-  }, [autoStart, currentState, winningNumbers.length, drawCount])
+    
+    // Create unique key combining round ID and winning numbers
+    const numbersKey = `${roundId}-${winningNumbers.join(',')}`
+    
+    // Skip if this exact combination has already been shown
+    if (numbersKey === lastNumbersKeyRef.current) {
+      console.log('🎱 Skipping: already shown this round')
+      return
+    }
+    
+    console.log('🎱 Starting new draw for:', numbersKey)
+    
+    // Update key and reset flags for new round
+    lastNumbersKeyRef.current = numbersKey
+    hasAnimatedRef.current = false
+    completedRef.current = false
+
+    resetDraw()
+    setCurrentState(DrawState.IDLE)
+    startedRef.current = false
+
+    const canStart = autoStart && hasValidNumbers
+    
+    if (canStart) {
+      console.log('🎱 AUTO-STARTING animation!')
+      startedRef.current = true
+      hasAnimatedRef.current = true
+      setCurrentState(DrawState.MIXING)
+      onDrawStart?.()
+    } else {
+      console.log('🎱 Not auto-starting:', { autoStart, hasValidNumbers })
+    }
+  }, [winningNumbers, roundId, autoStart, drawCount, onDrawStart])
 
   const resetDraw = () => {
     setDrawnNumbers([])
@@ -104,12 +166,17 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
         }, 2000)
       } else {
         setCurrentState(DrawState.COMPLETED)
-        onComplete?.()
+        // Only fire callbacks once per round
+        if (!completedRef.current) {
+          completedRef.current = true
+          onComplete?.()
+          onDrawEnd?.()
+        }
       }
     }
 
     return () => clearTimeout(timeout)
-  }, [currentState, drawnNumbers, winningNumbers, drawCount, onComplete])
+  }, [currentState, drawnNumbers, winningNumbers, drawCount, onComplete, onDrawEnd])
 
   // Callbacks from Physics Machine
   const handleBallSelected = useCallback(
@@ -125,15 +192,29 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
   const startDraw = () => {
     resetDraw()
     setCurrentState(DrawState.MIXING)
+    startedRef.current = true
+    onDrawStart?.()
+  }
+
+  const handleReplay = () => {
+    // Allow replay even if already played this round
+    hasAnimatedRef.current = false
+    completedRef.current = false
+    startDraw()
   }
 
   return (
-    <div className="w-screen h-screen min-w-[340px] bg-gradient-to-b from-gray-950 via-gray-900 to-black text-white font-sans flex flex-col items-center justify-center px-6 py-6 relative overflow-hidden">
+    <div className={`relative w-full max-w-xl min-h-[610px] min-w-[280px] ${isBackground ? 'bg-transparent' : 'bg-gradient-to-b from-gray-950 via-gray-900 to-black'} text-white font-sans flex flex-col items-center justify-center px-5 py-5 overflow-hidden rounded-2xl mx-auto`}>
       {/* Round Number - Top Center */}
-      {roundId !== undefined && (
+      {!isBackground && roundId !== undefined && (
         <div className="absolute inset-x-0 z-20 top-3 z-30 text-center pointer-events-none">
-          <div className="inline-block px-3 py-1 rounded-full bg-black/40 border border-white/10 shadow-lg">
-            <span className="text-lg font-bold bg-gradient-to-r from-purple-400 via-blue-400 to-pink-400 bg-clip-text text-transparent">
+          <div className={`inline-block px-3 py-1 rounded-full ${isMegaMorbius ? 'bg-gradient-to-r from-yellow-500/20 via-pink-500/20 to-purple-500/20 border-2 border-yellow-400/40 shadow-[0_0_20px_rgba(251,191,36,0.4)]' : 'bg-black/40 border border-white/10'} shadow-lg`}>
+            {isMegaMorbius && (
+              <span className="text-xs font-bold bg-gradient-to-r from-yellow-300 via-pink-400 to-purple-400 bg-clip-text text-transparent mr-1.5 tracking-wider">
+                ⭐ MEGA
+              </span>
+            )}
+            <span className={`text-lg font-bold ${isMegaMorbius ? 'bg-gradient-to-r from-yellow-300 via-pink-400 to-purple-400' : 'bg-gradient-to-r from-purple-400 via-blue-400 to-pink-400'} bg-clip-text text-transparent`}>
               Round #{roundId}
             </span>
           </div>
@@ -141,6 +222,7 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
       )}
       
       {/* Receipt - Top Right (spaced left of global X) */}
+      {!isBackground && (
       <div className="absolute top-4 right-14 z-20">
         <div className="relative">
           <button
@@ -194,7 +276,7 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
                                     )}
                                   </div>
                                   <div className="text-xs font-semibold">
-                                    {formatPssh(cost)} <span className="text-white/60 text-[10px]">Morbius</span>
+                                    {formatPssh(cost)} <span className="text-white/60 text-[10px]">pSSH</span>
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
@@ -232,20 +314,21 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
               )}
         </div>
       </div>
+      )}
 
       <main className="w-full h-full flex flex-col items-center justify-center space-y-4 overflow-visible pt-14 pb-6 relative">
         {/* Drawn Numbers Display */}
         <section className="absolute top-8 left-0 right-0 flex justify-center">
-          <div className="flex flex-wrap gap-2 justify-center items-center z-10 px-4">
+          <div className="flex flex-wrap gap-3 justify-center items-center z-10 px-4">
             {Array.from({ length: drawCount }).map((_, i) => (
               <div
                 key={`ball-${i}`}
-                className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center"
+                className={`w-14 h-14 flex items-center justify-center rounded-full ${drawnNumbers[i] ? 'border-1 border-purple-800 shadow-[0_0_8px_rgba(107,33,168,0.8)]' : ''}`}
               >
                 {drawnNumbers[i] ? (
                   <BallResult number={drawnNumbers[i]} type="white" animate={true} />
                 ) : (
-                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-dashed border-green-700/50 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full border-2 border-dashed border-green-700/50 flex items-center justify-center">
                     <span className="text-gray-800 text-base font-bold">{i + 1}</span>
                   </div>
                 )}
@@ -256,16 +339,15 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
 
         {/* Machine */}
         <section className="flex justify-center flex-1 items-center w-full overflow-hidden min-h-0 pt-16">
-          <div className="flex flex-col items-center transition-transform">
-            <div
-              className="glass-panel p-3 rounded-full shadow-[0_0_55px_-12px_rgba(59,130,246,0.25)] relative border border-white/5 bg-gray-900/40"
-              style={{
-                width: `${Math.min(machineSize.width + 18, 350)}px`,
-                height: `${Math.min(machineSize.height + 18, 350)}px`,
-                maxWidth: '350px',
-                maxHeight: '350px',
-              }}
-            >
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col items-center transition-transform relative">
+              <div
+                className="glass-panel p-0.5 rounded-full shadow-[0_0_55px_-12px_rgba(59,130,246,0.25)] relative border border-white/5 bg-gray-900/40 z-0 overflow-visible flex items-center justify-center"
+                style={{ width: `${visualSize}px`, height: `${visualSize}px` }}
+              >
+              <span 
+                className="absolute inset-0 bg-[url('/morbius/MorbiusLogo%20(3).png')] bg-center bg-no-repeat bg-[length:180px_180px] opacity-50 pointer-events-none" 
+              />
               <PhysicsMachine
                 width={clampedMachineSize}
                 height={clampedMachineSize}
@@ -275,11 +357,34 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
                 onBallSelected={handleBallSelected}
                 triggerDraw={triggerDraw}
                 targetWinningNumber={currentTarget}
+                isBackground={isBackground}
               />
               {/* Reflection Overlay */}
-              <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none sphere-overlay"></div>
+              <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none sphere-overlay z-10"></div>
+              
+              {/* MegaMorbius Orbital Particles */}
+              {isMegaMorbius && (
+                <>
+                  {[...Array(8)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="absolute inset-0 pointer-events-none z-20"
+                      style={{
+                        animation: `orbit 4s linear infinite`,
+                        animationDelay: `${i * 0.5}s`,
+                      }}
+                    >
+                      <div
+                        className="absolute top-0 left-1/2 w-3 h-3 -ml-1.5 -mt-1.5 rounded-full bg-gradient-to-br from-yellow-300 via-pink-400 to-purple-500 shadow-[0_0_12px_rgba(236,72,153,0.8)] animate-pulse"
+                      />
+                    </div>
+                  ))}
+                  {/* Holographic ring glow */}
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent bg-gradient-to-r from-yellow-400/30 via-pink-400/30 to-purple-500/30 bg-clip-padding pointer-events-none z-15 animate-[spin_8s_linear_infinite]" />
+                </>
+              )}
             </div>
-
+            </div>
           </div>
         </section>
 
@@ -308,3 +413,4 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
 }
 
 export default BallDrawSimulator
+
