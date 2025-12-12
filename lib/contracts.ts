@@ -16,19 +16,19 @@ export const WPLS_TO_MORBIUS_BUFFER_BPS = 11000 as const // 10% buffer
 export const LOTTERY_ADDRESS_OLD = '0xa216b3295685D44d12Aaf12112b9212cE45787eD' as const
 
 // NEW Lottery contract (6-of-55 version V2) - Fixed PLS purchases
-export const LOTTERY_ADDRESS = '0xEa6F2C484B720103EF11c77f71BF07eC11640e29' as const
+export const LOTTERY_ADDRESS = '0x1EfdC60DD1c998445E8AE963eD93bc59952C54C5' as const
 
 // Keno contract
 export const KENO_ADDRESS = '0xb04913A3085993153DaEE58704760BeB67c58705' as const
 
 // Contract deployment info
-export const LOTTERY_DEPLOY_BLOCK = 25247554
+export const LOTTERY_DEPLOY_BLOCK = 25253157
 export const KENO_DEPLOY_BLOCK = 25243758
 // Placeholder - update when deployed
 
 // Lottery constants
-export const TICKET_PRICE = BigInt(1_000_000_000_000_000_000_000) // 1000 tokens (18 decimals)
+export const TICKET_PRICE = BigInt(100_000_000_000_000_000_000) // 100 tokens (18 decimals)
 export const NUMBERS_PER_TICKET = 6
 export const MIN_NUMBER = 1
 export const MAX_NUMBER = 55
-export const MEGA_MILLIONS_INTERVAL = 5 // Every 5th round
+export const MEGA_MILLIONS_INTERVAL = 20 // Every 20th round

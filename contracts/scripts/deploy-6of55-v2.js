@@ -111,6 +111,10 @@ async function main() {
   console.log("\n🔄 Rollover Logic:");
   console.log("- Unclaimed brackets: 75% to next round winners, 10% MegaMorbius, 5% deployer, 10% burn");
 
+  console.log("\n🎰 MegaMorbius (Every 20 Rounds):");
+  console.log("- Triggers on round 20, 40, 60, etc.");
+  console.log("- Distribution: 90% to winners pool, 10% to deployer");
+
   console.log("\n💰 WPLS Payment:");
   console.log("- Auto-swap WPLS → Morbius via PulseX");
   console.log("- Accounts for 5.5% Morbius tax + 5% slippage");
