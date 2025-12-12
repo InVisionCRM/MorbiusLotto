@@ -81,6 +81,7 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     // Randomness delay: use block hash from N blocks in the future
     // Higher = more secure but longer wait. 10 blocks = ~50 seconds on PulseChain
     uint256 public blockDelay = 10;
+    uint256 public constant MAX_DRAW_DELAY = 10; // Must draw within 10 blocks after drawBlock to prevent blockhash expiration
 
     // ============ Enums ============
 
@@ -1020,6 +1021,7 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
 
         require(round.state == RoundState.LOCKED, "Round not locked");
         require(block.number >= round.drawBlock, "Draw block not reached yet");
+        require(block.number <= round.drawBlock + MAX_DRAW_DELAY, "Draw window expired - use recovery");
         require(round.totalTickets > 0, "No tickets in round");
 
         // Generate winning numbers using future block hash
@@ -1048,6 +1050,39 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
         emit RoundFinalized(roundId, winningNumbers, round.totalMorbiusCollected, round.totalTickets, round.uniquePlayers);
     }
 
+    /**
+     * @notice Emergency recovery if draw window expires (owner only)
+     * @dev Uses current block data if original draw window missed (after MAX_DRAW_DELAY blocks)
+     */
+    function drawNumbersRecovery(uint256 roundId) external nonReentrant onlyOwner {
+        Round storage round = rounds[roundId];
+
+        require(round.state == RoundState.LOCKED, "Round not locked");
+        require(block.number > round.drawBlock + MAX_DRAW_DELAY, "Normal draw still available");
+        require(round.totalTickets > 0, "No tickets in round");
+
+        // Use current block hash as fallback
+        uint8[6] memory winningNumbers = _generateWinningNumbersFallback(roundId);
+
+        emit NumbersDrawn(roundId, winningNumbers, block.number);
+
+        _calculateBrackets(roundId, winningNumbers);
+
+        bool isMegaMillions = (roundId % megaMillionsInterval == 0);
+        if (isMegaMillions) {
+            _handleMegaMillions(roundId);
+        }
+
+        _distributePrizes(roundId);
+        round.state = RoundState.FINALIZED;
+
+        if (roundId == currentRoundId) {
+            currentRoundState = RoundState.FINALIZED;
+        }
+
+        emit RoundFinalized(roundId, winningNumbers, round.totalMorbiusCollected, round.totalTickets, round.uniquePlayers);
+    }
+
     function _handleEmptyRound(uint256 roundId) private {
         // Round is already partially filled by _finalizeRound, just complete it
         rounds[roundId].winningNumbers = [0, 0, 0, 0, 0, 0];
@@ -1069,12 +1104,50 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     function _generateWinningNumbers(uint256 roundId, uint256 drawBlock) private view returns (uint8[6] memory) {
         // drawBlock is already the future block (closingBlock + blockDelay)
         // Use it directly for randomness
+        bytes32 blockHash = blockhash(drawBlock);
+
+        // Validate blockhash is available (EVM only stores last 256 block hashes)
+        require(blockHash != bytes32(0), "Draw block hash expired");
+        require(block.number <= drawBlock + MAX_DRAW_DELAY, "Draw window expired");
+
         uint256 seed = uint256(keccak256(abi.encodePacked(
-            blockhash(drawBlock),
+            blockHash,
             roundId,
             currentRoundTotalMorbius,
             currentRoundTotalTickets,
             block.timestamp
+        )));
+
+        uint8[6] memory numbers;
+        bool[56] memory used;
+
+        for (uint256 i = 0; i < NUMBERS_PER_TICKET; i++) {
+            uint8 num;
+            uint256 attempts = 0;
+
+            do {
+                seed = uint256(keccak256(abi.encodePacked(seed, i, attempts)));
+                num = uint8((seed % MAX_NUMBER) + 1);
+                attempts++;
+            } while (used[num] && attempts < 100);
+
+            require(!used[num], "RNG failed");
+            numbers[i] = num;
+            used[num] = true;
+        }
+
+        return _sortNumbers(numbers);
+    }
+
+    function _generateWinningNumbersFallback(uint256 roundId) private view returns (uint8[6] memory) {
+        // Use current block for emergency recovery
+        uint256 seed = uint256(keccak256(abi.encodePacked(
+            blockhash(block.number - 1),
+            roundId,
+            currentRoundTotalMorbius,
+            currentRoundTotalTickets,
+            block.timestamp,
+            "RECOVERY"
         )));
 
         uint8[6] memory numbers;

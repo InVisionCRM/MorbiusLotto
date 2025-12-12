@@ -114,7 +114,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
   return (
     <>
-      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-3xl w-full mx-auto bg-transparent ${cardDisabledClass}`}>
+      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-3xl w-full mx-auto bg-white/20 backdrop-blur-xl ${cardDisabledClass}`}>
       {/* House Ticket Numbers - Vertical on left */}
       <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
         {houseTicketNumbers && houseTicketNumbers.length === 6 ? (

@@ -13,6 +13,10 @@ async function main() {
   const WPLS_TOKEN_ADDRESS = "0xA1077a294dDE1B09bB078844df40758a5D0f9a27"; // Wrapped PLS on PulseChain
   const PULSEX_ROUTER_ADDRESS = "0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02"; // PulseX V1 Router (align with Keno)
 
+  // Wallet addresses (keeper receives 5% of ticket sales, deployer receives 5%)
+  const KEEPER_WALLET = process.env.KEEPER_WALLET || deployer.address; // Defaults to deployer
+  const DEPLOYER_WALLET = process.env.DEPLOYER_WALLET || deployer.address; // Defaults to deployer
+
   // Round duration and MegaMorbius interval
   let ROUND_DURATION;
   const MEGA_MORBIUS_INTERVAL = 20; // every 20 rounds
@@ -31,6 +35,8 @@ async function main() {
   console.log("MORBIUS_TOKEN_ADDR  :", MORBIUS_TOKEN_ADDRESS);
   console.log("WPLS_TOKEN_ADDRESS  :", WPLS_TOKEN_ADDRESS);
   console.log("PULSEX_ROUTER       :", PULSEX_ROUTER_ADDRESS);
+  console.log("KEEPER_WALLET       :", KEEPER_WALLET);
+  console.log("DEPLOYER_WALLET     :", DEPLOYER_WALLET);
   console.log("ROUND_DURATION      :", ROUND_DURATION, "seconds");
   console.log("MEGA_MORBIUS_INTERVAL:", MEGA_MORBIUS_INTERVAL, "rounds");
 
@@ -49,6 +55,8 @@ async function main() {
     PULSEX_ROUTER_ADDRESS,
     ROUND_DURATION,
     MEGA_MORBIUS_INTERVAL,
+    KEEPER_WALLET,
+    DEPLOYER_WALLET,
     {
       gasLimit: 8_000_000,
       gasPrice: gasPrice,
@@ -117,7 +125,10 @@ async function main() {
     morbiusToken: MORBIUS_TOKEN_ADDRESS,
     wplsToken: WPLS_TOKEN_ADDRESS,
     pulseXRouter: PULSEX_ROUTER_ADDRESS,
+    keeperWallet: KEEPER_WALLET,
+    deployerWallet: DEPLOYER_WALLET,
     roundDuration: ROUND_DURATION,
+    megaMorbiusInterval: MEGA_MORBIUS_INTERVAL,
     version: "V2",
     timestamp: new Date().toISOString(),
   };
@@ -134,13 +145,18 @@ async function main() {
   console.log("2. ABI already regenerated: abi/lottery6of55-v2.json");
   console.log("");
   console.log("3. Verify contract on PulseScan:");
-  console.log(`   npx hardhat verify --network ${hre.network.name} ${lotteryAddress} "${MORBIUS_TOKEN_ADDRESS}" "${WPLS_TOKEN_ADDRESS}" "${PULSEX_ROUTER_ADDRESS}" ${ROUND_DURATION} ${MEGA_MORBIUS_INTERVAL}`);
+  console.log(`   npx hardhat verify --network ${hre.network.name} ${lotteryAddress} "${MORBIUS_TOKEN_ADDRESS}" "${WPLS_TOKEN_ADDRESS}" "${PULSEX_ROUTER_ADDRESS}" ${ROUND_DURATION} ${MEGA_MORBIUS_INTERVAL} "${KEEPER_WALLET}" "${DEPLOYER_WALLET}"`);
   console.log("");
-  console.log("4. Test the contract:");
+  console.log("4. Start the keeper bot:");
+  console.log(`   node scripts/lottery-keeper.js`);
+  console.log("");
+  console.log("5. Test the contract:");
   console.log("   - Buy tickets with Morbius (buyTickets)");
   console.log("   - Buy tickets with WPLS (buyTicketsWithWPLS)");
   console.log("   - Wait for round to expire");
-  console.log("   - Call finalizeRound()");
+  console.log("   - Keeper calls finalizeRound() (Step 1: Locks round)");
+  console.log("   - Wait 10 blocks (~50 seconds)");
+  console.log("   - Keeper calls drawNumbers() (Step 2: Draws winning numbers)");
   console.log("   - Check winning numbers and claim prizes");
 
   // Export deployment info to file

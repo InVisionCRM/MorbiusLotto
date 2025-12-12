@@ -154,7 +154,9 @@ async function main() {
 
       const roundExpired = timeRemaining <= 0
       const roundOpen = state === 0
+      const roundLocked = state === 1
 
+      // Handle OPEN rounds that have expired (Step 1: Lock and set draw block)
       if (roundOpen && roundExpired) {
         console.log(`\n🎫 Finalizing round ${roundId.toString()}...`)
         
@@ -220,6 +222,51 @@ async function main() {
             }
             consecutiveErrors++
           }
+        }
+      }
+
+      // Handle LOCKED rounds ready for number drawing (Step 2: Draw winning numbers)
+      if (roundLocked) {
+        const currentBlock = await provider.getBlockNumber()
+        const round = await lottery.getRound(roundId)
+        const drawBlock = Number(round.drawBlock)
+        const blocksUntilDraw = drawBlock - currentBlock
+        const blocksAfterDraw = currentBlock - drawBlock
+
+        console.log(
+          `   🔒 Round LOCKED | Draw block: ${drawBlock} | Current: ${currentBlock} | Delta: ${blocksAfterDraw >= 0 ? '+' : ''}${blocksAfterDraw}`
+        )
+
+        if (currentBlock >= drawBlock && blocksAfterDraw <= 10) {
+          console.log(`\n🎲 Drawing numbers for round ${roundId.toString()}...`)
+          try {
+            const tx = await lottery.drawNumbers(roundId, { gasLimit: GAS_LIMIT })
+            console.log(`   📝 Transaction: ${tx.hash}`)
+            console.log(`   ⏳ Waiting for confirmation...`)
+            const receipt = await tx.wait()
+            console.log(`   ✅ Numbers drawn in block ${receipt.blockNumber}`)
+            console.log(`   ⛽ Gas used: ${receipt.gasUsed.toString()}`)
+            consecutiveErrors = 0
+          } catch (drawErr) {
+            const reason = drawErr.reason || drawErr.message || drawErr
+            console.error(`   ❌ Draw error:`, reason)
+            if (drawErr.receipt) {
+              console.error(
+                `   Status: ${drawErr.receipt.status} | Gas used: ${drawErr.receipt.gasUsed}`
+              )
+            }
+            if (drawErr.data) {
+              console.error(`   Error data:`, drawErr.data)
+            }
+            consecutiveErrors++
+          }
+        } else if (blocksAfterDraw > 10) {
+          console.error(`\n⚠️⚠️⚠️  CRITICAL: Round ${roundId.toString()} draw window EXPIRED!`)
+          console.error(`   Draw was at block ${drawBlock}, now at ${currentBlock}`)
+          console.error(`   Blocks past deadline: ${blocksAfterDraw - 10}`)
+          console.error(`   Manual intervention required - owner must call drawNumbersRecovery()`)
+        } else if (blocksUntilDraw <= 3 && blocksUntilDraw > 0) {
+          console.log(`   ⏰ Draw available in ${blocksUntilDraw} block(s)...`)
         }
       }
 
