@@ -122,10 +122,12 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
       </DialogTrigger>
       <DialogContent className="bg-slate-900/95 border-white/20 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-white text-center">Your Tickets</DialogTitle>
+          <DialogTitle className="text-white text-center">
+            Your Tickets {enrichedTickets.length > 0 && `(${enrichedTickets.length})`}
+          </DialogTitle>
           {roundId !== undefined && (
             <DialogDescription className="text-white/60 text-center">
-              Round #{Number(roundId)} • Click ticket to flip
+              Round #{Number(roundId)} • {enrichedTickets.length} ticket{enrichedTickets.length !== 1 ? 's' : ''} • Click ticket to flip
             </DialogDescription>
           )}
         </DialogHeader>
@@ -152,11 +154,15 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
                   align: "center",
                   loop: true,
                 }}
-                className="w-full mx-auto mb-6"
+                className="w-full mx-auto mb-6 px-2 sm:px-4"
               >
                 <CarouselContent>
                   {enrichedTickets.map((ticket, idx) => (
                     <CarouselItem key={ticket.ticketId.toString()}>
+                      {/* Current ticket indicator */}
+                      <div className="text-center text-white/60 text-xs sm:text-sm mb-2">
+                        Ticket {idx + 1} of {enrichedTickets.length}
+                      </div>
                       <div className="flex items-center justify-center">
                         <LotteryTicketWithHistory
                           ticket={ticket}
@@ -166,8 +172,8 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
                     </CarouselItem>
                   ))}
                 </CarouselContent>
-                <CarouselPrevious className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700" />
-                <CarouselNext className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700" />
+                <CarouselPrevious className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700 h-10 w-10 sm:h-12 sm:w-12" />
+                <CarouselNext className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700 h-10 w-10 sm:h-12 sm:w-12" />
               </Carousel>
               
               <div className="border-t border-white/10 pt-4">

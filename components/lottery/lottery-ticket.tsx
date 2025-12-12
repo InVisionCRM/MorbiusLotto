@@ -119,7 +119,7 @@ export function LotteryTicket({
 
   return (
     <div
-      className="relative w-full max-w-sm mx-auto my-4"
+      className="relative w-full max-w-xs sm:max-w-sm md:max-w-md mx-auto my-4 px-2 sm:px-0"
       style={{ perspective: '1000px' }}
     >
       <div
@@ -152,7 +152,7 @@ export function LotteryTicket({
       </div>
 
       {/* Main content */}
-      <div className="ml-6 mr-2 py-3 px-3 flex flex-col min-h-full">
+      <div className="ml-6 mr-2 py-3 px-2 sm:px-3 flex flex-col min-h-full">
         {/* Top Section - P/L badge and Print Info */}
         <div className="text-center mb-2 relative">
           {pl !== 0 && (
