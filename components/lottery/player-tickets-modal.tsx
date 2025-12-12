@@ -120,7 +120,7 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
           <Receipt className="w-5 h-5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-slate-900/95 border-white/20 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-slate-900/95 border-white/20 text-white max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-white text-center">
             Your Tickets {enrichedTickets.length > 0 && `(${enrichedTickets.length})`}

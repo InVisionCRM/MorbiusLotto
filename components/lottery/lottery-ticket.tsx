@@ -119,7 +119,7 @@ export function LotteryTicket({
 
   return (
     <div
-      className="relative w-full max-w-sm mx-auto my-4"
+      className="relative w-full max-w-[280px] sm:max-w-sm md:max-w-md mx-auto my-4 px-1"
       style={{ perspective: '1000px' }}
     >
       <div
@@ -142,9 +142,9 @@ export function LotteryTicket({
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', ...ticketBackground }}
       >
       {/* Left edge vertical text */}
-      <div className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center">
-        <div 
-          className="text-[10px] font-bold text-black writing-vertical-rl transform rotate-180"
+      <div className="absolute left-0 top-0 bottom-0 w-4 sm:w-6 flex items-center justify-center">
+        <div
+          className="text-[8px] sm:text-[10px] font-bold text-black writing-vertical-rl transform rotate-180"
           style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
           morbius.io
@@ -152,7 +152,7 @@ export function LotteryTicket({
       </div>
 
       {/* Main content */}
-      <div className="ml-6 mr-2 py-3 px-2 sm:px-3 flex flex-col min-h-full">
+      <div className="ml-4 sm:ml-6 mr-1 sm:mr-2 py-2 sm:py-3 px-2 sm:px-3 flex flex-col min-h-full">
         {/* Top Section - P/L badge and Print Info */}
         <div className="text-center mb-2 relative">
           {pl !== 0 && (
@@ -315,14 +315,14 @@ export function LotteryTicket({
           {/* Round History Table */}
           {roundHistory && roundHistory.length > 0 ? (
             <div className="space-y-1 mb-4">
-              <div className="grid grid-cols-4 gap-1 text-[10px] font-bold text-black border-b-2 border-black pb-1">
+              <div className="grid grid-cols-4 gap-1 text-[9px] sm:text-[10px] font-bold text-black border-b-2 border-black pb-1">
                 <div>ROUND</div>
                 <div>MATCHES</div>
                 <div className="text-right">PAYOUT</div>
                 <div className="text-right">NUMBERS</div>
               </div>
               {roundHistory.map((round) => (
-                <div key={round.roundId} className="grid grid-cols-4 gap-1 text-[10px] text-black border-b border-black/20 py-1">
+                <div key={round.roundId} className="grid grid-cols-4 gap-1 text-[9px] sm:text-[10px] text-black border-b border-black/20 py-1">
                   <div className="font-mono font-bold">#{round.roundId}</div>
                   <div
                     className={cn(
