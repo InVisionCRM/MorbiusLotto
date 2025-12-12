@@ -50,7 +50,7 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
 
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
-    uint256 public constant TICKET_PRICE_DEFAULT = 1000 * 1e18; // 1000 Morbius (18 decimals)
+    uint256 public constant TICKET_PRICE_DEFAULT = 100 * 1e18; // 100 Morbius (18 decimals)
     uint8 public constant NUMBERS_PER_TICKET = 6;
     uint8 public constant MIN_NUMBER = 1;
     uint8 public constant MAX_NUMBER = 55;
@@ -69,10 +69,11 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     uint256[6] public BRACKET_PERCENTAGES = [400, 600, 1000, 1500, 2000, 4500];
     // Bracket 1: 4%, Bracket 2: 6%, Bracket 3: 10%, Bracket 4: 15%, Bracket 5: 20%, Bracket 6: 45% (of Winners Pool)
 
-    // Rollover rule: unclaimed pools → 70% next round, 15% burn, 15% MegaMorbius
-    uint256 public constant ROLLOVER_TO_NEXT_ROUND_PCT = 7000; // 70%
-    uint256 public constant ROLLOVER_TO_BURN_PCT = 1500; // 15%
-    uint256 public constant ROLLOVER_TO_MEGA_PCT = 1500; // 15%
+    // Rollover rule: unclaimed pools → 75% next round, 10% MegaMorbius, 5% deployer, 10% burn
+    uint256 public constant ROLLOVER_TO_NEXT_ROUND_PCT = 7500; // 75%
+    uint256 public constant ROLLOVER_TO_MEGA_PCT = 1000; // 10%
+    uint256 public constant ROLLOVER_TO_DEPLOYER_PCT = 500; // 5%
+    uint256 public constant ROLLOVER_TO_BURN_PCT = 1000; // 10%
 
     // WPLS swap buffer (5.5% tax + 5% slippage)
     uint256 public constant WPLS_SWAP_BUFFER_PCT = 11100; // 11.1% extra
@@ -1178,22 +1179,25 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     }
 
     function _handleUnclaimedBracket(uint256 roundId, uint256 bracket, uint256 amount) private {
-        // Split unclaimed funds: next round, burn, MegaMorbius
-            uint256 toNextRound = (amount * ROLLOVER_TO_NEXT_ROUND_PCT) / TOTAL_PCT;
+        // Split unclaimed funds: 75% next round, 10% MegaMorbius, 5% deployer, 10% burn
+        uint256 toNextRound = (amount * ROLLOVER_TO_NEXT_ROUND_PCT) / TOTAL_PCT;
+        uint256 toMega = (amount * ROLLOVER_TO_MEGA_PCT) / TOTAL_PCT;
+        uint256 toDeployer = (amount * ROLLOVER_TO_DEPLOYER_PCT) / TOTAL_PCT;
         uint256 toBurn = (amount * ROLLOVER_TO_BURN_PCT) / TOTAL_PCT;
-        uint256 toMega = amount - toNextRound - toBurn;
 
-            rolloverReserve += toNextRound;
+        rolloverReserve += toNextRound;
+        megaMorbiusBank += toMega;
+        if (toDeployer > 0) {
+            MORBIUS_TOKEN.safeTransfer(deployerWallet, toDeployer);
+        }
         if (toBurn > 0) {
             _accrueBurn(toBurn);
         }
-        if (toMega > 0) {
-            megaMorbiusBank += toMega;
-        }
 
-            emit UnclaimedPrizeRolledOver(roundId, bracket, toNextRound, "NextRoundWinnersPool");
-        if (toBurn > 0) emit UnclaimedPrizeRolledOver(roundId, bracket, toBurn, "Burn");
-        if (toMega > 0) emit UnclaimedPrizeRolledOver(roundId, bracket, toMega, "MegaMorbius");
+        emit UnclaimedPrizeRolledOver(roundId, bracket, toNextRound, "NextRoundWinnersPool");
+        emit UnclaimedPrizeRolledOver(roundId, bracket, toMega, "MegaMorbius");
+        emit UnclaimedPrizeRolledOver(roundId, bracket, toDeployer, "Deployer");
+        emit UnclaimedPrizeRolledOver(roundId, bracket, toBurn, "Burn");
     }
 
     function _distributePrizes(uint256 roundId) private {
@@ -1230,25 +1234,20 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     function _handleMegaMillions(uint256 roundId) private {
         if (megaMorbiusBank == 0) return;
 
-        uint256 toBracket6 = (megaMorbiusBank * 80) / 100;
-        uint256 toBracket5 = megaMorbiusBank - toBracket6;
+        uint256 toPlayerPool = (megaMorbiusBank * 9000) / 10000; // 90% to player pool
+        uint256 toDeployer = megaMorbiusBank - toPlayerPool; // 10% to deployer
 
-        rounds[roundId].brackets[5].poolAmount += toBracket6;
-        rounds[roundId].brackets[4].poolAmount += toBracket5;
+        // Add to the current round's winners pool
+        currentRoundTotalMorbius += toPlayerPool;
 
-        if (rounds[roundId].brackets[5].winnerCount > 0) {
-            rounds[roundId].brackets[5].payoutPerWinner =
-                rounds[roundId].brackets[5].poolAmount / rounds[roundId].brackets[5].winnerCount;
-        }
-
-        if (rounds[roundId].brackets[4].winnerCount > 0) {
-            rounds[roundId].brackets[4].payoutPerWinner =
-                rounds[roundId].brackets[4].poolAmount / rounds[roundId].brackets[4].winnerCount;
+        // Transfer to deployer
+        if (toDeployer > 0) {
+            MORBIUS_TOKEN.safeTransfer(deployerWallet, toDeployer);
         }
 
         rounds[roundId].isMegaMillionsRound = true;
 
-        emit MegaMillionsTriggered(roundId, megaMorbiusBank, toBracket6, toBracket5);
+        emit MegaMillionsTriggered(roundId, megaMorbiusBank, toPlayerPool, toDeployer);
 
         megaMorbiusBank = 0;
     }

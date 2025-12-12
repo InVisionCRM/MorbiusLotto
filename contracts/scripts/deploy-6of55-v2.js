@@ -15,16 +15,16 @@ async function main() {
 
   // Round duration and MegaMorbius interval
   let ROUND_DURATION;
-  const MEGA_MORBIUS_INTERVAL = 5; // default to every 5 rounds
+  const MEGA_MORBIUS_INTERVAL = 20; // every 20 rounds
   if (hre.network.name === "pulsechainTestnet") {
-    ROUND_DURATION = 300; // 5 minutes for testnet
-    console.log("Testnet detected - using 5 minute rounds");
+    ROUND_DURATION = 3600; // 1 hour for testnet
+    console.log("Testnet detected - using 1 hour rounds");
   } else if (hre.network.name === "pulsechain") {
-    ROUND_DURATION = 300; // 5 minutes for mainnet
-    console.log("Mainnet detected - using 5 minute rounds");
+    ROUND_DURATION = 3600; // 1 hour for mainnet
+    console.log("Mainnet detected - using 1 hour rounds");
   } else {
-    ROUND_DURATION = 300; // 5 minutes default
-    console.log("Local network detected - using 5 minute rounds");
+    ROUND_DURATION = 3600; // 1 hour default
+    console.log("Local network detected - using 1 hour rounds");
   }
 
   console.log("\nConfig:");

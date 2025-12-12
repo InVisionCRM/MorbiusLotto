@@ -55,7 +55,7 @@ export function LotteryTicket({
   index = 0,
   roundHistory = [],
   transactionHash,
-  ticketPrice = BigInt(1000_000_000_000_000_000_000), // 1000 Morbius
+  ticketPrice = BigInt(100_000_000_000_000_000_000), // 100 Morbius
 }: LotteryTicketProps) {
   const [isRevealed, setIsRevealed] = useState(false)
   const [isFlipped, setIsFlipped] = useState(false)
