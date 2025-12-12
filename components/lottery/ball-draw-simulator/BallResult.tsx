@@ -17,10 +17,10 @@ const BallResult: React.FC<BallResultProps> = ({ number, type, animate, delay = 
 
   return (
     <div
-      className={`relative inline-flex overflow-hidden rounded-full w-12 h-12 p-[1px] transition-all duration-500 ${motionClass}`}
+      className={`relative inline-flex overflow-hidden rounded-full w-8 h-8 p-[1px] transition-all duration-500 ${motionClass}`}
     >
       {/* Ball base */}
-      <span className="relative inline-flex items-center justify-center rounded-full font-bold w-full h-full text-lg z-[1] bg-white text-purple-950 overflow-hidden">
+      <span className="relative inline-flex items-center justify-center rounded-full font-bold w-full h-full text-md z-[1] bg-white text-purple-950 overflow-hidden">
         <span className="relative drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]">{number}</span>
       </span>
     </div>

@@ -323,13 +323,13 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
             {Array.from({ length: drawCount }).map((_, i) => (
               <div
                 key={`ball-${i}`}
-                className={`w-14 h-14 flex items-center justify-center rounded-full ${drawnNumbers[i] ? 'border-1 border-purple-800 shadow-[0_0_8px_rgba(107,33,168,0.8)]' : ''}`}
+                className={`w-10 h-10 flex items-center justify-center rounded-full ${drawnNumbers[i] ? 'border-1 border-purple-800 shadow-[0_0_8px_rgba(107,33,168,0.8)]' : ''}`}
               >
                 {drawnNumbers[i] ? (
                   <BallResult number={drawnNumbers[i]} type="white" animate={true} />
                 ) : (
-                  <div className="w-12 h-12 rounded-full border-2 border-dashed border-green-700/50 flex items-center justify-center">
-                    <span className="text-gray-800 text-base font-bold">{i + 1}</span>
+                  <div className="w-8 h-8 rounded-full border-2 border-dashed border-green-700/50 flex items-center justify-center">
+                    <span className="text-gray-800 text-sm font-bold">{i + 1}</span>
                   </div>
                 )}
               </div>

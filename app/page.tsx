@@ -37,7 +37,6 @@ import BallDrawSimulator from '@/components/lottery/ball-draw-simulator/BallDraw
 import { TicketPurchaseBuilder } from '@/components/lottery/ticket-purchase-builder'
 import { TicketPurchaseAccordion } from '@/components/lottery/ticket-purchase-accordion'
 import { ContractAddress } from '@/components/ui/contract-address'
-import { RoundTimerDock } from '@/components/lottery/round-timer-dock'
 
 type ContractTicket = {
   ticketId: bigint | number
@@ -579,15 +578,6 @@ export default function Home() {
 
       </main>
 
-      {/* Floating Dock - Bottom Center */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <RoundTimerDock
-          roundId={roundId ? BigInt(roundId) : undefined}
-          playerTickets={Array.isArray(playerTicketsWithTx) ? playerTicketsWithTx : []}
-          totalPssh={totalPssh}
-          onBuyTicketsClick={() => setShowTicketAccordion(!showTicketAccordion)}
-        />
-      </div>
 
       {/* Footer */}
       <footer className="border-t border-white/10 py-6 mt-12">
