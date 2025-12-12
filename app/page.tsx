@@ -485,7 +485,7 @@ export default function Home() {
                     : burnedNum.toFixed(0)
                 })()}
               </div>
-              <div className="text-xl text-white/50 tracking-[0.2em] uppercase mitr-medium">
+              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-medium">
                 Burned
               </div>
             </div>
@@ -503,7 +503,7 @@ export default function Home() {
                     : poolNum.toFixed(0)
                 })()}
               </div>
-              <div className="text-xl text-white/50 tracking-[0.2em] uppercase mitr-medium">
+              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-medium">
                 <div>Player</div>
                 <div>Pool</div>
               </div>
@@ -521,7 +521,7 @@ export default function Home() {
                     : megaNum.toFixed(0)
                 })()}
               </div>
-              <div className="text-xl text-white/50 tracking-[0.2em] uppercase mitr-medium">
+              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-medium">
                 Jackpot
               </div>
             </div>

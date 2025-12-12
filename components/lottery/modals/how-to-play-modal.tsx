@@ -14,14 +14,18 @@ export function HowToPlayModal() {
           </li>
           <li className="flex items-start gap-3">
             <span className="text-purple-400 font-bold">2.</span>
-            <span>Each ticket costs 1 Morbius</span>
+            <span>Each ticket costs 100 Morbius</span>
           </li>
           <li className="flex items-start gap-3">
             <span className="text-purple-400 font-bold">3.</span>
-            <span>Buy up to 10 tickets per transaction</span>
+            <span>Rounds last 30 minutes</span>
           </li>
           <li className="flex items-start gap-3">
             <span className="text-purple-400 font-bold">4.</span>
+            <span>Buy up to 100 tickets per transaction</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="text-purple-400 font-bold">5.</span>
             <span>Match more numbers to win bigger prizes</span>
           </li>
         </ul>
@@ -31,22 +35,26 @@ export function HowToPlayModal() {
       <div className="relative p-6 rounded-xl bg-gradient-to-br from-pink-900/30 to-pink-950/20 border-2 border-pink-500/30 backdrop-blur-sm hover:border-pink-400/50 transition-all duration-300 group">
         <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
         <h4 className="font-bold mb-4 text-lg text-pink-300 relative z-10">Prize Distribution</h4>
-        <ul className="space-y-3 text-white/80 relative z-10">
+        <ul className="space-y-2 text-white/80 relative z-10 text-sm">
           <li className="flex items-start gap-3">
-            <span className="text-pink-400 font-bold">60%</span>
+            <span className="text-pink-400 font-bold">70%</span>
             <span>Winners (prize brackets)</span>
           </li>
           <li className="flex items-start gap-3">
-            <span className="text-pink-400 font-bold">20%</span>
+            <span className="text-pink-400 font-bold">10%</span>
             <span>MegaMorbius progressive jackpot</span>
           </li>
           <li className="flex items-start gap-3">
-            <span className="text-pink-400 font-bold">20%</span>
+            <span className="text-pink-400 font-bold">10%</span>
             <span>Burned (supply reduction)</span>
           </li>
-          <li className="flex items-start gap-3 text-sm">
-            <span className="text-pink-400 font-bold">*</span>
-            <span>Zero-winner bracket: 75% rolls to next round, 25% to MegaMorbius</span>
+          <li className="flex items-start gap-3">
+            <span className="text-pink-400 font-bold">5%</span>
+            <span>Keeper (automation)</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="text-pink-400 font-bold">5%</span>
+            <span>Deployer (development)</span>
           </li>
         </ul>
       </div>
@@ -58,35 +66,39 @@ export function HowToPlayModal() {
         <ul className="space-y-3 text-white/80 relative z-10">
           <li className="flex items-start gap-3">
             <span className="text-amber-400 font-bold">•</span>
-            <span>Triggers every 5th round</span>
+            <span>Triggers every 20th round (20, 40, 60...)</span>
           </li>
           <li className="flex items-start gap-3">
             <span className="text-amber-400 font-bold">•</span>
-            <span>Entire bank distributed to all winning brackets</span>
+            <span>90% to winners pool, 10% to deployer</span>
           </li>
           <li className="flex items-start gap-3">
             <span className="text-amber-400 font-bold">•</span>
-            <span>Resets after distribution</span>
+            <span>Bank resets after distribution</span>
           </li>
         </ul>
       </div>
 
-      {/* Free Tickets */}
+      {/* Rollover Logic */}
       <div className="relative p-6 rounded-xl bg-gradient-to-br from-green-900/30 to-green-950/20 border-2 border-green-500/30 backdrop-blur-sm hover:border-green-400/50 transition-all duration-300 group">
         <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-        <h4 className="font-bold mb-4 text-lg text-green-300 relative z-10">Free Tickets</h4>
-        <ul className="space-y-3 text-white/80 relative z-10">
+        <h4 className="font-bold mb-4 text-lg text-green-300 relative z-10">Unclaimed Prizes</h4>
+        <ul className="space-y-2 text-white/80 relative z-10 text-sm">
           <li className="flex items-start gap-3">
-            <span className="text-green-400 font-bold">•</span>
-            <span>Earn 1 credit per non-winning ticket</span>
+            <span className="text-green-400 font-bold">75%</span>
+            <span>Rolls to next round winners pool</span>
           </li>
           <li className="flex items-start gap-3">
-            <span className="text-green-400 font-bold">•</span>
-            <span>Credits applied automatically at purchase</span>
+            <span className="text-green-400 font-bold">10%</span>
+            <span>Added to MegaMorbius Bank</span>
           </li>
           <li className="flex items-start gap-3">
-            <span className="text-green-400 font-bold">•</span>
-            <span>Never expire</span>
+            <span className="text-green-400 font-bold">10%</span>
+            <span>Burned (supply reduction)</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="text-green-400 font-bold">5%</span>
+            <span>Deployer wallet</span>
           </li>
         </ul>
       </div>
