@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("Deploying SuperStakeLottery6of55 V2 to", hre.network.name, "…");
+  console.log("Deploying MegaMorbiusLottery to", hre.network.name, "…");
 
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deployer:", deployer.address);
@@ -41,7 +41,7 @@ async function main() {
   console.log("MEGA_MORBIUS_INTERVAL:", MEGA_MORBIUS_INTERVAL, "rounds");
 
   // Deploy contract (use fully qualified name to avoid ambiguity)
-  const SuperStakeLottery6of55 = await hre.ethers.getContractFactory("contracts/SuperStakeLottery6of55V2.sol:SuperStakeLottery6of55");
+  const MegaMorbiusLottery = await hre.ethers.getContractFactory("contracts/SuperStakeLottery6of55V2.sol:MegaMorbiusLottery");
   console.log("\nDeploying…");
 
   // Use increased gas price for reliable deployment
@@ -49,7 +49,7 @@ async function main() {
 
   console.log("Using gas price:", hre.ethers.formatUnits(gasPrice, "gwei"), "Gwei");
 
-  const lottery = await SuperStakeLottery6of55.deploy(
+  const lottery = await MegaMorbiusLottery.deploy(
     MORBIUS_TOKEN_ADDRESS,
     WPLS_TOKEN_ADDRESS,
     PULSEX_ROUTER_ADDRESS,
@@ -66,7 +66,7 @@ async function main() {
   const deploymentTx = lottery.deploymentTransaction();
   const receipt = await lottery.deploymentTransaction().wait();
   const lotteryAddress = await lottery.getAddress();
-  console.log("\n✅ SuperStakeLottery6of55 V2 deployed at:", lotteryAddress);
+  console.log("\n✅ MegaMorbiusLottery deployed at:", lotteryAddress);
   console.log("Tx hash:", deploymentTx?.hash);
   console.log("Block number:", receipt?.blockNumber?.toString?.() ?? "unknown");
 
