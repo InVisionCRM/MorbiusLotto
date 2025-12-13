@@ -77,13 +77,9 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     // WPLS swap buffer (5.5% tax + 5% slippage)
     uint256 public constant WPLS_SWAP_BUFFER_PCT = 11100; // 11.1% extra
 
-    // Randomness delay: use block hash from N blocks in the future
-    // Higher = more secure but longer wait. 10 blocks = ~50 seconds on PulseChain
-    uint256 public blockDelay = 10;
-
     // ============ Enums ============
 
-    enum RoundState { OPEN, LOCKED, FINALIZED }
+    enum RoundState { OPEN, FINALIZED }
 
     // ============ Structs ============
 
@@ -189,7 +185,6 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     event TicketsPurchased(address indexed player, uint256 indexed roundId, uint256 ticketCount, uint256 freeTicketsUsed, uint256 morbiusSpent);
     event TicketsPurchasedForRounds(address indexed player, uint256[] roundIds, uint256[] ticketCounts, uint256 morbiusSpent);
     event WPLSSwappedForTickets(address indexed player, uint256 wplsSpent, uint256 morbiusReceived);
-    event RoundLocked(uint256 indexed roundId, uint256 closingBlock, uint256 drawBlock, uint256 totalTickets, uint256 totalMorbius);
     event NumbersDrawn(uint256 indexed roundId, uint8[6] winningNumbers, uint256 drawBlock);
     event RoundFinalized(uint256 indexed roundId, uint8[6] winningNumbers, uint256 totalMorbius, uint256 totalTickets, uint256 uniquePlayers);
     event BracketResults(uint256 indexed roundId, uint256 bracket, uint256 winnerCount, uint256 poolAmount, uint256 payoutPerWinner);
@@ -636,13 +631,6 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
         emit TicketPricesUpdated(newMorbiusPrice, newPlsPrice);
     }
 
-    /**
-     * @notice Update block delay for randomness (owner only)
-     */
-    function updateBlockDelay(uint256 _newDelay) external onlyOwner {
-        blockDelay = _newDelay;
-    }
-
     // ============ View Functions ============
 
     function getCurrentRoundInfo() external view returns (
@@ -980,71 +968,50 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Step 1: Lock the round and set future draw block (called by keeper)
+     * @notice Finalize round and draw numbers immediately
      */
     function _finalizeRound() private {
         require(currentRoundState == RoundState.OPEN, "Round not open");
 
         uint256 finalizingRoundId = currentRoundId;
         uint256 closingBlock = block.number;
-        uint256 drawBlock = closingBlock + blockDelay;
-
-        // Lock the round
-        currentRoundState = RoundState.LOCKED;
 
         // Store basic round info
         rounds[finalizingRoundId].roundId = finalizingRoundId;
         rounds[finalizingRoundId].startTime = currentRoundStartTime;
         rounds[finalizingRoundId].endTime = block.timestamp;
         rounds[finalizingRoundId].closingBlock = closingBlock;
-        rounds[finalizingRoundId].drawBlock = drawBlock;
+        rounds[finalizingRoundId].drawBlock = closingBlock;
         rounds[finalizingRoundId].totalMorbiusCollected = currentRoundTotalCollectedFromPlayers;
         rounds[finalizingRoundId].totalTickets = currentRoundTotalTickets;
         rounds[finalizingRoundId].uniquePlayers = roundPlayers[finalizingRoundId].length;
-        rounds[finalizingRoundId].state = RoundState.LOCKED;
 
-        emit RoundLocked(finalizingRoundId, closingBlock, drawBlock, currentRoundTotalTickets, currentRoundTotalMorbius);
-
-        // Handle empty round immediately
+        // Handle empty round or draw numbers
         if (currentRoundTotalTickets == 0) {
             _handleEmptyRound(finalizingRoundId);
+        } else {
+            // Generate winning numbers immediately
+            uint8[6] memory winningNumbers = _generateWinningNumbers(finalizingRoundId, closingBlock);
+            rounds[finalizingRoundId].winningNumbers = winningNumbers;
+
+            emit NumbersDrawn(finalizingRoundId, winningNumbers, closingBlock);
+
+            // Calculate brackets and distribute prizes
+            _calculateBrackets(finalizingRoundId, winningNumbers);
+
+            bool isMegaMillions = (finalizingRoundId % megaMillionsInterval == 0);
+            if (isMegaMillions) {
+                _handleMegaMillions(finalizingRoundId);
+            }
+
+            _distributePrizes(finalizingRoundId);
         }
-    }
-
-    /**
-     * @notice Step 2: Generate winning numbers and distribute prizes (anyone can call after drawBlock)
-     */
-    function drawNumbers(uint256 roundId) external nonReentrant {
-        Round storage round = rounds[roundId];
-
-        require(round.state == RoundState.LOCKED, "Round not locked");
-        require(block.number >= round.drawBlock, "Draw block not reached yet");
-        require(round.totalTickets > 0, "No tickets in round");
-
-        // Generate winning numbers using future block hash
-        uint8[6] memory winningNumbers = _generateWinningNumbers(roundId, round.drawBlock);
-
-        emit NumbersDrawn(roundId, winningNumbers, round.drawBlock);
-
-        // Calculate brackets and distribute prizes
-        _calculateBrackets(roundId, winningNumbers);
-
-        bool isMegaMillions = (roundId % megaMillionsInterval == 0);
-        if (isMegaMillions) {
-            _handleMegaMillions(roundId);
-        }
-
-        _distributePrizes(roundId);
 
         // Finalize the round
-        round.state = RoundState.FINALIZED;
+        rounds[finalizingRoundId].state = RoundState.FINALIZED;
+        currentRoundState = RoundState.FINALIZED;
 
-        // If this is the current round, update state
-        if (roundId == currentRoundId) {
-            currentRoundState = RoundState.FINALIZED;
-        }
-
-        emit RoundFinalized(roundId, winningNumbers, round.totalMorbiusCollected, round.totalTickets, round.uniquePlayers);
+        emit RoundFinalized(finalizingRoundId, rounds[finalizingRoundId].winningNumbers, rounds[finalizingRoundId].totalMorbiusCollected, rounds[finalizingRoundId].totalTickets, rounds[finalizingRoundId].uniquePlayers);
     }
 
     function _handleEmptyRound(uint256 roundId) private {
@@ -1060,21 +1027,20 @@ contract SuperStakeLottery6of55 is Ownable, ReentrancyGuard {
         ];
         rounds[roundId].megaBankContribution = 0;
         rounds[roundId].isMegaMillionsRound = (roundId % megaMillionsInterval == 0);
-        rounds[roundId].state = RoundState.FINALIZED;
-
-        currentRoundState = RoundState.FINALIZED;
     }
 
     function _generateWinningNumbers(uint256 roundId, uint256 closingBlock) private view returns (uint8[6] memory) {
-        uint256 targetBlock = closingBlock > blockDelay ? closingBlock - blockDelay : closingBlock;
+        // Use previous block hash for randomness
+        uint256 prevBlock = closingBlock > 0 ? closingBlock - 1 : 0;
 
         uint256 seed = uint256(keccak256(abi.encodePacked(
-            blockhash(targetBlock),
+            blockhash(prevBlock),
             blockhash(closingBlock),
             roundId,
             currentRoundTotalMorbius,
             currentRoundTotalTickets,
-            block.timestamp
+            block.timestamp,
+            tx.origin
         )));
 
         uint8[6] memory numbers;

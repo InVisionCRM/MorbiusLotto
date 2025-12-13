@@ -1,12 +1,11 @@
 /**
  * PulseChain SuperStakeLottery6of55 V2 Keeper
  *
- * 2-Step keeper that:
- * 1. Locks rounds when they expire (finalizeRound)
- * 2. Draws winning numbers after blockDelay (drawNumbers)
+ * Keeper that:
+ * 1. Finalizes rounds when they expire (draws numbers immediately)
  *
  * Requirements:
- * - PRIVATE_KEY in .env (any funded key; both functions are permissionless)
+ * - PRIVATE_KEY in .env (any funded key; function is permissionless)
  * - LOTTERY_ADDRESS in .env (defaults to mainnet address)
  * - Optional: PULSECHAIN_RPC, KEEPER_POLL_MS, KEEPER_GAS_LIMIT
  *
@@ -23,10 +22,10 @@ const RPC_URL = process.env.PULSECHAIN_RPC || 'https://rpc.pulsechain.com'
 const PRIVATE_KEY = process.env.PRIVATE_KEY
 
 // ⚠️ IMPORTANT: Set your deployed lottery contract address here or in .env
-// Latest deployment: 0x86805A6f49A3dbBF6B9B2Ee1AC46a89aa4637EFC (Block 25253114)
+// Latest deployment: 0x91fFE6630f15E91Ad23160D17F103FFb88442806 (Block 25254179)
 // Get from: lib/contracts.ts or your deployment logs
 const LOTTERY_ADDRESS =
-  process.env.LOTTERY_ADDRESS || '0x86805A6f49A3dbBF6B9B2Ee1AC46a89aa4637EFC'
+  process.env.LOTTERY_ADDRESS || '0x91fFE6630f15E91Ad23160D17F103FFb88442806'
 
 const POLL_MS = parseInt(process.env.KEEPER_POLL_MS || '15000', 10)
 const GAS_LIMIT = parseInt(process.env.KEEPER_GAS_LIMIT || '2000000', 10)
@@ -57,6 +56,10 @@ async function main() {
   const wallet = new ethers.Wallet(PRIVATE_KEY, provider)
   const lottery = new ethers.Contract(LOTTERY_ADDRESS, ABI, wallet)
 
+  // Track Morbius balance for keeper rewards
+  let lastMorbiusBalance = BigInt(0)
+  let morbiusEarned = BigInt(0)
+
   console.log('🤖 Lottery Keeper Started')
   console.log('━'.repeat(50))
   console.log(`Keeper Address: ${wallet.address}`)
@@ -76,6 +79,26 @@ async function main() {
   } catch (err) {
     console.error('❌ Failed to connect to contract:', err.message)
     process.exit(1)
+  }
+
+  // Get Morbius token contract
+  const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1'
+  const ERC20_ABI = [
+    'function balanceOf(address) view returns (uint256)',
+    'function symbol() view returns (string)',
+    'function decimals() view returns (uint8)'
+  ]
+  const morbiusToken = new ethers.Contract(MORBIUS_TOKEN_ADDRESS, ERC20_ABI, provider)
+
+  // Get initial balances
+  try {
+    lastMorbiusBalance = await morbiusToken.balanceOf(wallet.address)
+    const plsBalance = await provider.getBalance(wallet.address)
+    console.log('💰 Initial Balances:')
+    console.log(`   PLS: ${ethers.formatEther(plsBalance)} PLS`)
+    console.log(`   Morbius: ${ethers.formatUnits(lastMorbiusBalance, 18)} MORBIUS\n`)
+  } catch (err) {
+    console.error('⚠️  Could not fetch initial balances:', err.message, '\n')
   }
 
   let consecutiveErrors = 0
@@ -117,8 +140,8 @@ async function main() {
       const uniquePlayers = Number(info[5])
       const timeRemaining = Number(info[6])
       const isMegaMillions = info[7]
-      const state = Number(info[8]) // 0=OPEN,1=LOCKED,2=FINALIZED
-      const stateLabel = ['OPEN', 'LOCKED', 'FINALIZED'][state] || `UNKNOWN(${state})`
+      const state = Number(info[8]) // 0=OPEN,1=FINALIZED
+      const stateLabel = ['OPEN', 'FINALIZED'][state] || `UNKNOWN(${state})`
 
       // Detect round changes
       const roundChanged = lastRoundId !== null && roundId !== lastRoundId
@@ -154,9 +177,8 @@ async function main() {
 
       const roundExpired = timeRemaining <= 0
       const roundOpen = state === 0
-      const roundLocked = state === 1
 
-      // Handle OPEN rounds that have expired (Step 1: Lock and set draw block)
+      // Handle OPEN rounds that have expired (finalize and draw immediately)
       if (roundOpen && roundExpired) {
         console.log(`\n🎫 Finalizing round ${roundId.toString()}...`)
         
@@ -180,7 +202,7 @@ async function main() {
           console.log(`      Block timestamp: ${blockTimestamp} (blockchain time)`)
           console.log(`      System time: ${currentTime} (local time)`)
           console.log(`      Time diff: ${currentTime - Number(blockTimestamp)}s`)
-          console.log(`      Contract state: ${stateNum} (0=OPEN, 1=LOCKED, 2=FINALIZED)`)
+          console.log(`      Contract state: ${stateNum} (0=OPEN, 1=FINALIZED)`)
           console.log(`      Round start: ${startTime}`)
           console.log(`      Duration: ${duration}s`)
           console.log(`      Expires at: ${expiryTime}`)
@@ -209,7 +231,59 @@ async function main() {
             console.log(`   ⏳ Waiting for confirmation...`)
             const receipt = await tx.wait()
             console.log(`   ✅ Finalized in block ${receipt.blockNumber}`)
-            console.log(`   ⛽ Gas used: ${receipt.gasUsed.toString()}`)
+
+            // Calculate gas cost
+            const gasUsed = receipt.gasUsed
+            const gasPrice = receipt.gasPrice || tx.gasPrice
+            const gasCostWei = gasUsed * gasPrice
+            const gasCostPls = ethers.formatEther(gasCostWei)
+
+            console.log(`   ⛽ Gas Used: ${gasUsed.toString()} units`)
+            console.log(`   💸 Gas Cost: ${gasCostPls} PLS`)
+
+            // Get finalized round details
+            try {
+              const finalizedRound = await lottery.getRound(finalizingRoundId)
+              const winningNumbers = Array.from(finalizedRound.winningNumbers).map(n => Number(n))
+
+              console.log(`\n   🎲 Winning Numbers: ${winningNumbers.join(', ')}`)
+              console.log(`   🎫 Total Tickets: ${finalizedRound.totalTickets.toString()}`)
+              console.log(`   👥 Unique Players: ${finalizedRound.uniquePlayers.toString()}`)
+              console.log(`   💰 Total Pool: ${ethers.formatUnits(finalizedRound.totalMorbiusCollected, 18)} MORBIUS`)
+            } catch (roundErr) {
+              console.log(`   ⚠️  Could not fetch round details: ${roundErr.message}`)
+            }
+
+            // Get updated balances
+            try {
+              const plsBalance = await provider.getBalance(wallet.address)
+              const newMorbiusBalance = await morbiusToken.balanceOf(wallet.address)
+              morbiusEarned = newMorbiusBalance - lastMorbiusBalance
+              const totalMorbius = newMorbiusBalance
+
+              // Estimate remaining draws
+              const avgGasCost = BigInt(gasCostWei)
+              const estimatedDrawsLeft = avgGasCost > 0 ? plsBalance / avgGasCost : 0n
+
+              console.log(`\n   ═══════════════════════════════════════════════`)
+              console.log(`   💼 KEEPER WALLET STATUS`)
+              console.log(`   ═══════════════════════════════════════════════`)
+              console.log(`   💎 PLS Balance: ${ethers.formatEther(plsBalance)} PLS`)
+              console.log(`   📊 Estimated Draws Remaining: ${estimatedDrawsLeft.toString()} draws`)
+              console.log(`   `)
+              console.log(`   🪙 Morbius Balance: ${ethers.formatUnits(totalMorbius, 18)} MORBIUS`)
+              if (morbiusEarned > 0) {
+                console.log(`   ✨ Morbius Earned This Round: +${ethers.formatUnits(morbiusEarned, 18)} MORBIUS`)
+              } else if (morbiusEarned < 0) {
+                console.log(`   ⚠️  Morbius Change: ${ethers.formatUnits(morbiusEarned, 18)} MORBIUS`)
+              }
+              console.log(`   ═══════════════════════════════════════════════\n`)
+
+              lastMorbiusBalance = newMorbiusBalance
+            } catch (balanceErr) {
+              console.log(`   ⚠️  Could not fetch updated balances: ${balanceErr.message}\n`)
+            }
+
             consecutiveErrors = 0
           } catch (finalizeErr) {
             const reason = finalizeErr.reason || finalizeErr.message || finalizeErr
@@ -222,51 +296,6 @@ async function main() {
             }
             consecutiveErrors++
           }
-        }
-      }
-
-      // Handle LOCKED rounds ready for number drawing (Step 2: Draw winning numbers)
-      if (roundLocked) {
-        const currentBlock = await provider.getBlockNumber()
-        const round = await lottery.getRound(roundId)
-        const drawBlock = Number(round.drawBlock)
-        const blocksUntilDraw = drawBlock - currentBlock
-        const blocksAfterDraw = currentBlock - drawBlock
-
-        console.log(
-          `   🔒 Round LOCKED | Draw block: ${drawBlock} | Current: ${currentBlock} | Delta: ${blocksAfterDraw >= 0 ? '+' : ''}${blocksAfterDraw}`
-        )
-
-        if (currentBlock >= drawBlock && blocksAfterDraw <= 10) {
-          console.log(`\n🎲 Drawing numbers for round ${roundId.toString()}...`)
-          try {
-            const tx = await lottery.drawNumbers(roundId, { gasLimit: GAS_LIMIT })
-            console.log(`   📝 Transaction: ${tx.hash}`)
-            console.log(`   ⏳ Waiting for confirmation...`)
-            const receipt = await tx.wait()
-            console.log(`   ✅ Numbers drawn in block ${receipt.blockNumber}`)
-            console.log(`   ⛽ Gas used: ${receipt.gasUsed.toString()}`)
-            consecutiveErrors = 0
-          } catch (drawErr) {
-            const reason = drawErr.reason || drawErr.message || drawErr
-            console.error(`   ❌ Draw error:`, reason)
-            if (drawErr.receipt) {
-              console.error(
-                `   Status: ${drawErr.receipt.status} | Gas used: ${drawErr.receipt.gasUsed}`
-              )
-            }
-            if (drawErr.data) {
-              console.error(`   Error data:`, drawErr.data)
-            }
-            consecutiveErrors++
-          }
-        } else if (blocksAfterDraw > 10) {
-          console.error(`\n⚠️⚠️⚠️  CRITICAL: Round ${roundId.toString()} draw window EXPIRED!`)
-          console.error(`   Draw was at block ${drawBlock}, now at ${currentBlock}`)
-          console.error(`   Blocks past deadline: ${blocksAfterDraw - 10}`)
-          console.error(`   Manual intervention required - owner must call drawNumbersRecovery()`)
-        } else if (blocksUntilDraw <= 3 && blocksUntilDraw > 0) {
-          console.log(`   ⏰ Draw available in ${blocksUntilDraw} block(s)...`)
         }
       }
 

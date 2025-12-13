@@ -120,7 +120,7 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
           <Receipt className="w-5 h-5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-slate-900/95 border-white/20 text-white max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-slate-900/95 border-white/20 text-white max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="text-white text-center">
             Your Tickets {enrichedTickets.length > 0 && `(${enrichedTickets.length})`}
@@ -154,16 +154,16 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
                   align: "center",
                   loop: true,
                 }}
-                className="w-full mx-auto mb-6"
+                className="w-full mx-auto mb-6 overflow-hidden"
               >
-                <CarouselContent>
+                <CarouselContent className="-ml-2 md:-ml-4">
                   {enrichedTickets.map((ticket, idx) => (
-                    <CarouselItem key={ticket.ticketId.toString()}>
+                    <CarouselItem key={ticket.ticketId.toString()} className="flex flex-col justify-center items-center pl-2 md:pl-4">
                       {/* Current ticket indicator */}
                       <div className="text-center text-white/60 text-xs sm:text-sm mb-2">
                         Ticket {idx + 1} of {enrichedTickets.length}
                       </div>
-                      <div className="flex items-center justify-center">
+                      <div className="w-full max-w-[min(100%,320px)] mx-auto">
                         <LotteryTicketWithHistory
                           ticket={ticket}
                           index={idx}
@@ -172,8 +172,8 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
                     </CarouselItem>
                   ))}
                 </CarouselContent>
-                <CarouselPrevious className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700 h-10 w-10 sm:h-12 sm:w-12" />
-                <CarouselNext className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700 h-10 w-10 sm:h-12 sm:w-12" />
+                <CarouselPrevious className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700 h-10 w-10 sm:h-12 sm:w-12 left-2 sm:-left-12" />
+                <CarouselNext className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700 h-10 w-10 sm:h-12 sm:w-12 right-2 sm:-right-12" />
               </Carousel>
               
               <div className="border-t border-white/10 pt-4">

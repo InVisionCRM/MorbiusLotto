@@ -917,7 +917,7 @@ function CurrentRoundStats() {
             <div>
               <p className="text-xs text-white/50">State</p>
               <p className="text-xl font-bold">
-                {stats[8] === 0 ? 'OPEN' : stats[8] === 1 ? 'LOCKED' : 'FINALIZED'}
+                {stats[8] === 0 ? 'OPEN' : 'FINALIZED'}
               </p>
             </div>
             <div>

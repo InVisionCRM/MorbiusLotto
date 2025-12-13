@@ -25,7 +25,7 @@ export function TicketPurchaseModal({
 }: TicketPurchaseModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-black/95 border-white/20 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-black/95 border-white/20 text-white max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] overflow-x-hidden">
 
         <div className="mt-6">
           <TicketPurchaseBuilder

@@ -16,7 +16,7 @@ async function main() {
   console.log('Round ID:', info[0].toString());
   console.log('Total MORBIUS Collected:', ethers.formatUnits(info[3], 18));
   console.log('Total Tickets:', info[4].toString());
-  console.log('State:', ['OPEN', 'LOCKED', 'FINALIZED'][Number(info[8])]);
+  console.log('State:', ['OPEN', 'FINALIZED'][Number(info[8])]);
   
   const rollover = await lottery.rolloverReserve();
   console.log('\nRollover Reserve:', ethers.formatUnits(rollover, 18), 'MORBIUS');

@@ -16,28 +16,28 @@ async function main() {
   const info = await lottery.getCurrentRoundInfo();
   console.log('=== CURRENT ROUND INFO ===');
   console.log('Round ID:', info[0].toString());
-  console.log('State:', ['OPEN', 'LOCKED', 'FINALIZED'][Number(info[8])]);
+  console.log('State:', ['OPEN', 'FINALIZED'][Number(info[8])]);
   console.log('Total Tickets:', info[4].toString());
   console.log('Total MORBIUS:', ethers.formatUnits(info[3], 18));
-  
+
   // Try to get the previous round (27) details
   const currentRoundId = Number(info[0]);
   console.log('\n=== CHECKING ROUND', currentRoundId - 1, '===');
   try {
     const prevRound = await lottery.getRound(currentRoundId - 1);
-    console.log('State:', ['OPEN', 'LOCKED', 'FINALIZED'][Number(prevRound.state)]);
+    console.log('State:', ['OPEN', 'FINALIZED'][Number(prevRound.state)]);
     console.log('Winning Numbers:', prevRound.winningNumbers.map(n => n.toString()).join(', '));
     console.log('Total Tickets:', prevRound.totalTickets.toString());
     console.log('Closing Block:', prevRound.closingBlock.toString());
   } catch (err) {
     console.log('Error fetching round:', err.message);
   }
-  
+
   // Also check current round
   console.log('\n=== CHECKING CURRENT ROUND', currentRoundId, '===');
   try {
     const currRound = await lottery.getRound(currentRoundId);
-    console.log('State:', ['OPEN', 'LOCKED', 'FINALIZED'][Number(currRound.state)]);
+    console.log('State:', ['OPEN', 'FINALIZED'][Number(currRound.state)]);
     console.log('Winning Numbers:', currRound.winningNumbers.map(n => n.toString()).join(', '));
     console.log('Total Tickets:', currRound.totalTickets.toString());
     if (currRound.closingBlock > 0) {

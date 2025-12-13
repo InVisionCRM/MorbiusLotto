@@ -322,15 +322,15 @@ export function TicketPurchaseCarousel({
   }
 
   return (
-    <Card className="relative overflow-hidden bg-black/70 border-white/10 shadow-2xl p-0">
+    <Card className="relative overflow-hidden bg-black/70 border-white/10 shadow-2xl p-0 max-w-full">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.12),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.12),transparent_30%),radial-gradient(circle_at_50%_80%,rgba(236,72,153,0.12),transparent_40%)]" />
-      <div className="relative p-4 md:p-6 space-y-6">
+      <div className="relative p-4 md:p-6 space-y-6 overflow-x-hidden">
         <div className="flex items-center justify-between gap-3 flex-wrap" />
 
-        <Carousel opts={{ loop: false, align: 'start' }} setApi={setCarouselApi} className="relative">
+        <Carousel opts={{ loop: false, align: 'start' }} setApi={setCarouselApi} className="relative overflow-hidden">
           <CarouselContent className="pb-12">
             {/* Step 0: Pick */}
-            <CarouselItem className="basis-full">
+            <CarouselItem className="basis-full px-2 md:px-0">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4 md:p-6 backdrop-blur-xl space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -449,7 +449,7 @@ export function TicketPurchaseCarousel({
             </CarouselItem>
 
             {/* Step 1: Rounds per ticket */}
-            <CarouselItem className="basis-full">
+            <CarouselItem className="basis-full px-2 md:px-0">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4 md:p-6 backdrop-blur-xl space-y-5 text-center">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -558,7 +558,7 @@ export function TicketPurchaseCarousel({
             </CarouselItem>
 
             {/* Step 2: Review & Buy */}
-            <CarouselItem className="basis-full">
+            <CarouselItem className="basis-full px-2 md:px-0">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4 md:p-6 backdrop-blur-xl space-y-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -661,8 +661,8 @@ export function TicketPurchaseCarousel({
               </div>
             </CarouselItem>
           </CarouselContent>
-          <CarouselPrevious className="-left-10 bg-white/10 hover:bg-white/20 border-none" />
-          <CarouselNext className="-right-10 bg-white/10 hover:bg-white/20 border-none" />
+          <CarouselPrevious className="left-2 md:-left-10 bg-white/10 hover:bg-white/20 border-none" />
+          <CarouselNext className="right-2 md:-right-10 bg-white/10 hover:bg-white/20 border-none" />
         </Carousel>
       </div>
     </Card>

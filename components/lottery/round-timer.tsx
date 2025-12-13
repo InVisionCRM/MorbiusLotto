@@ -155,8 +155,9 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
         <div className="absolute top-2 left-1/2 -translate-x-1/2 text-center">
           <div className="text-sm text-white/60 mb-1">Total Pool Amount</div>
           <div className="text-2xl font-bold text-white">
-            {formatPssh(totalPssh)} <span className="text-sm text-white/60">Morbius</span>
+            {formatPssh(totalPssh)}
           </div>
+          <div className="text-sm text-white/60">Morbius</div>
         </div>
       )}
 

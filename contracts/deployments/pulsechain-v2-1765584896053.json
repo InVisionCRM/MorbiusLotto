@@ -1,0 +1,15 @@
+{
+  "network": "pulsechain",
+  "contractAddress": "0xA4e20FE1Fc059254eAA4B8b27B27503F0edC9d62",
+  "deploymentBlock": 25253858,
+  "deployer": "0x2775dD8242C4f589536113475B7C80F42ab4A70A",
+  "morbiusToken": "0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1",
+  "wplsToken": "0xA1077a294dDE1B09bB078844df40758a5D0f9a27",
+  "pulseXRouter": "0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02",
+  "keeperWallet": "0x2775dD8242C4f589536113475B7C80F42ab4A70A",
+  "deployerWallet": "0x2775dD8242C4f589536113475B7C80F42ab4A70A",
+  "roundDuration": 1800,
+  "megaMorbiusInterval": 20,
+  "version": "V2",
+  "timestamp": "2025-12-13T00:14:56.052Z"
+}

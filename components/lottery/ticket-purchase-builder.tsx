@@ -437,17 +437,17 @@ export function TicketPurchaseBuilder({
   const isBuyLoadingState = uiState === 'buying' || isBuyLoading || isBuyPsshPending || isBuyMultiPending || isBuyPlsPending
 
   return (
-    <Card className="relative overflow-hidden bg-black/70 border-white/10 shadow-2xl p-0">
+    <Card className="relative overflow-hidden bg-black/70 border-white/10 shadow-2xl p-0 w-full max-w-full">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
 
-      <div className="relative flex flex-col lg:flex-row gap-4 p-4 min-h-0">
+      <div className="relative flex flex-col lg:flex-row gap-4 p-4 min-h-0 overflow-x-hidden w-full">
         {/* LEFT PANEL - Builder */}
-        <div className="flex-1 lg:flex-[3] space-y-4">
+        <div className="flex-1 lg:flex-[3] space-y-4 min-w-0 w-full overflow-x-hidden">
           <h2 className="text-xl font-bold text-white">GET TICKETS</h2>
 
           {/* Number Grid */}
-          <div>
-            <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-11 gap-1.5 mb-3">
+          <div className="w-full overflow-x-hidden">
+            <div className="grid grid-cols-6 xs:grid-cols-7 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-11 gap-1.5 mb-3 w-full">
               {Array.from({ length: MAX_NUMBER }, (_, i) => i + MIN_NUMBER).map((num) => {
                 const selected = workingTicket.includes(num)
                 return (
@@ -594,7 +594,7 @@ export function TicketPurchaseBuilder({
         </div>
 
         {/* RIGHT PANEL - Cart */}
-        <div className="lg:flex-[2] lg:max-w-sm bg-black/40 rounded-lg p-4 flex flex-col">
+        <div className="lg:flex-[2] lg:max-w-sm bg-black/40 rounded-lg p-4 flex flex-col min-w-0 w-full overflow-x-hidden">
           <h2 className="text-lg font-bold text-white mb-3">CONFIRM</h2>
 
           {/* Payment Method Selection - Text Labels */}

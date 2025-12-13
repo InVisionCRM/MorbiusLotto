@@ -21,14 +21,14 @@ async function main() {
   let ROUND_DURATION;
   const MEGA_MORBIUS_INTERVAL = 20; // every 20 rounds
   if (hre.network.name === "pulsechainTestnet") {
-    ROUND_DURATION = 1800; // 30 minutes for testnet
-    console.log("Testnet detected - using 30 minute rounds");
+    ROUND_DURATION = 120; // 2 minutes for testnet
+    console.log("Testnet detected - using 2 minute rounds");
   } else if (hre.network.name === "pulsechain") {
-    ROUND_DURATION = 1800; // 30 minutes for mainnet
-    console.log("Mainnet detected - using 30 minute rounds");
+    ROUND_DURATION = 120; // 2 minutes for mainnet
+    console.log("Mainnet detected - using 2 minute rounds");
   } else {
-    ROUND_DURATION = 1800; // 30 minutes default
-    console.log("Local network detected - using 30 minute rounds");
+    ROUND_DURATION = 120; // 2 minutes default
+    console.log("Local network detected - using 2 minute rounds");
   }
 
   console.log("\nConfig:");
@@ -157,10 +157,8 @@ async function main() {
   console.log("5. Test the contract:");
   console.log("   - Buy tickets with Morbius (buyTickets)");
   console.log("   - Buy tickets with WPLS (buyTicketsWithWPLS)");
-  console.log("   - Wait for round to expire");
-  console.log("   - Keeper calls finalizeRound() (Step 1: Locks round)");
-  console.log("   - Wait 10 blocks (~50 seconds)");
-  console.log("   - Keeper calls drawNumbers() (Step 2: Draws winning numbers)");
+  console.log("   - Wait for round to expire (2 minutes)");
+  console.log("   - Keeper calls finalizeRound() (draws numbers immediately)");
   console.log("   - Check winning numbers and claim prizes");
 
   // Export deployment info to file
