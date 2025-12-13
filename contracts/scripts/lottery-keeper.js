@@ -22,10 +22,10 @@ const RPC_URL = process.env.PULSECHAIN_RPC || 'https://rpc.pulsechain.com'
 const PRIVATE_KEY = process.env.PRIVATE_KEY
 
 // ⚠️ IMPORTANT: Set your deployed lottery contract address here or in .env
-// Latest deployment: 0x91fFE6630f15E91Ad23160D17F103FFb88442806 (Block 25254179)
+// Latest deployment: 0x4704C7d7eEF0968d8343E8574bc2865E612D84ED (Block 25257253)
 // Get from: lib/contracts.ts or your deployment logs
 const LOTTERY_ADDRESS =
-  process.env.LOTTERY_ADDRESS || '0x91fFE6630f15E91Ad23160D17F103FFb88442806'
+  process.env.LOTTERY_ADDRESS || '0x4704C7d7eEF0968d8343E8574bc2865E612D84ED'
 
 const POLL_MS = parseInt(process.env.KEEPER_POLL_MS || '15000', 10)
 const GAS_LIMIT = parseInt(process.env.KEEPER_GAS_LIMIT || '2000000', 10)
@@ -243,7 +243,7 @@ async function main() {
 
             // Get finalized round details
             try {
-              const finalizedRound = await lottery.getRound(finalizingRoundId)
+              const finalizedRound = await lottery.getRound(roundId)
               const winningNumbers = Array.from(finalizedRound.winningNumbers).map(n => Number(n))
 
               console.log(`\n   🎲 Winning Numbers: ${winningNumbers.join(', ')}`)

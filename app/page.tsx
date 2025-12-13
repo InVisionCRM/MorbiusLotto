@@ -37,6 +37,7 @@ import { LOTTERY_ADDRESS, LOTTERY_DEPLOY_BLOCK, TOKEN_DECIMALS, MEGA_MILLIONS_IN
 import BallDrawSimulator from '@/components/lottery/ball-draw-simulator/BallDrawSimulator'
 import { TicketPurchaseBuilder } from '@/components/lottery/ticket-purchase-builder'
 import { TicketPurchaseAccordion } from '@/components/lottery/ticket-purchase-accordion'
+import { AllTicketsAccordion } from '@/components/lottery/all-tickets-accordion'
 import { ContractAddress } from '@/components/ui/contract-address'
 
 type ContractTicket = {
@@ -591,6 +592,11 @@ export default function Home() {
             setRoundsToPlay(r)
           }}
         />
+
+        {/* All Purchased Tickets Accordion */}
+        <div className="container mx-auto px-4 max-w-7xl mt-8">
+          <AllTicketsAccordion />
+        </div>
 
       </main>
 

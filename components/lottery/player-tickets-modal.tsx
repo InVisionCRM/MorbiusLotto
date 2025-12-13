@@ -7,6 +7,7 @@ import { formatUnits } from 'viem'
 import { TICKET_PRICE, TOKEN_DECIMALS } from '@/lib/contracts'
 import { useAccount } from 'wagmi'
 import { useLotteryTicketRoundHistory } from '@/hooks/use-lottery-ticket-round-history'
+import { useMultiRoundPurchases, getRoundRangeForTx } from '@/hooks/use-multi-round-purchases'
 import { useState, useEffect } from 'react'
 import { LotteryTicket } from './lottery-ticket'
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel'
@@ -73,7 +74,9 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
   const { address } = useAccount()
   const [enrichedTickets, setEnrichedTickets] = useState<EnrichedTicket[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
-  
+
+  // Fetch multi-round purchase data to get actual round ranges
+  const { purchases: multiRoundPurchases } = useMultiRoundPurchases(address)
 
   // Process tickets to add round information
   useEffect(() => {
@@ -85,26 +88,32 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
     setIsProcessing(true)
 
     // Convert to PlayerTicket format with round information
-    // Tickets fetched for current round are valid for that round
     const currentRoundNum = Number(roundId)
 
-    // NOTE: Each ticket returned from getPlayerTickets is for a SPECIFIC round
-    // If user bought a 5-round ticket, the contract creates 5 separate tickets (one per round)
-    // So roundsPurchased is always 1 per ticket, and start/end round are the same
-    const processed: EnrichedTicket[] = playerTickets.map(ticket => ({
-      ticketId: ticket.ticketId,
-      numbers: ticket.numbers,
-      isFreeTicket: ticket.isFreeTicket,
-      roundsPurchased: 1, // Always 1 - each ticket is per-round
-      startRound: currentRoundNum,
-      endRound: currentRoundNum,
-      transactionHash: ticket.transactionHash,
-      roundHistory: [], // Will be populated by individual ticket hooks
-    }))
+    // Enrich tickets with multi-round purchase data if available
+    const processed: EnrichedTicket[] = playerTickets.map(ticket => {
+      // Try to get round range from multi-round purchase data
+      const roundRange = getRoundRangeForTx(ticket.transactionHash, multiRoundPurchases)
+
+      const startRound = roundRange?.startRound ?? currentRoundNum
+      const endRound = roundRange?.endRound ?? currentRoundNum
+      const roundsPurchased = endRound - startRound + 1
+
+      return {
+        ticketId: ticket.ticketId,
+        numbers: ticket.numbers,
+        isFreeTicket: ticket.isFreeTicket,
+        roundsPurchased,
+        startRound,
+        endRound,
+        transactionHash: ticket.transactionHash,
+        roundHistory: [], // Will be populated by individual ticket hooks
+      }
+    })
 
     setEnrichedTickets(processed)
     setIsProcessing(false)
-  }, [playerTickets, roundId])
+  }, [playerTickets, roundId, multiRoundPurchases])
 
   const formatPssh = (amount: bigint) => {
     return parseFloat(formatUnits(amount, TOKEN_DECIMALS)).toLocaleString(undefined, {

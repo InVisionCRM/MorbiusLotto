@@ -16,13 +16,13 @@ export const WPLS_TO_MORBIUS_BUFFER_BPS = 11000 as const // 10% buffer
 export const LOTTERY_ADDRESS_OLD = '0xa216b3295685D44d12Aaf12112b9212cE45787eD' as const
 
 // NEW Lottery contract (6-of-55 version V2) - Immediate drawing, 2-min rounds
-export const LOTTERY_ADDRESS = '0x91fFE6630f15E91Ad23160D17F103FFb88442806' as const
+export const LOTTERY_ADDRESS = '0x4704C7d7eEF0968d8343E8574bc2865E612D84ED' as const
 
 // Keno contract
 export const KENO_ADDRESS = '0xb04913A3085993153DaEE58704760BeB67c58705' as const
 
 // Contract deployment info
-export const LOTTERY_DEPLOY_BLOCK = 25254179
+export const LOTTERY_DEPLOY_BLOCK = 25257253
 export const KENO_DEPLOY_BLOCK = 25243758
 // Placeholder - update when deployed
 
