@@ -143,17 +143,17 @@ export function RoundHistory({ currentRoundId, maxRounds = 10 }: RoundHistoryPro
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loadedRounds, setLoadedRounds] = useState<Map<number, any>>(new Map())
 
-  // Initialize round IDs (from current round backwards, excluding current if not finalized)
+  // Initialize round IDs (from current round backwards, including current round)
   useEffect(() => {
     if (currentRoundId > 0) {
       const rounds: number[] = []
-      // Start from currentRoundId - 1 (most recent finalized) going backwards
+      // Start from currentRoundId going backwards
       const startRound = Math.max(1, currentRoundId - maxRounds)
-      for (let i = currentRoundId - 1; i >= startRound; i--) {
-        if (i > 0) rounds.push(i)
+      for (let i = currentRoundId; i >= startRound; i--) {
+        rounds.push(i)
       }
       setRoundIds(rounds)
-      setCurrentIndex(0) // Start with most recent finalized round
+      setCurrentIndex(0) // Start with most recent round (current)
     }
   }, [currentRoundId, maxRounds])
 
@@ -261,7 +261,7 @@ export function RoundHistory({ currentRoundId, maxRounds = 10 }: RoundHistoryPro
   const winningNumbers = round?.winningNumbers || []
   const brackets = round?.brackets || []
   const roundState = round?.state || 0
-  const isFinalized = roundState === 2
+  const isFinalized = roundState === 1
 
   return (
     <Card className="p-4 bg-white/5 backdrop-blur-sm border-white/10">

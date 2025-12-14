@@ -1,24 +1,42 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { formatUnits } from 'viem'
 import { TOKEN_DECIMALS, LOTTERY_ADDRESS } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
-import { usePlayerRoundHistory } from '@/hooks/use-lottery-6of55'
+import { usePlayerRoundHistory, useRound, usePlayerTickets } from '@/hooks/use-lottery-6of55'
 import { toast } from 'sonner'
-import { Loader2, Coins, CheckCircle2 } from 'lucide-react'
+import { Loader2, Coins, CheckCircle2, History, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+interface Ticket {
+  ticketId: bigint
+  numbers: readonly number[]
+  isFreeTicket: boolean
+}
 
 interface ClaimableRound {
   roundId: number
   tickets: number
   amount: bigint
+  winningNumbers?: number[]
+  userTickets?: Ticket[]
+  ticketMatches?: number[]
+}
+
+interface RoundHistory {
+  roundId: number
+  tickets: number
+  amount: bigint
+  hasClaimed: boolean
+  status: 'claimed' | 'claimable' | 'no-win'
 }
 
 export function MultiClaimModal() {
@@ -28,20 +46,114 @@ export function MultiClaimModal() {
   const [isClaiming, setIsClaiming] = useState(false)
   const [singleRoundId, setSingleRoundId] = useState('')
   const [isClaimingSingle, setIsClaimingSingle] = useState(false)
+  const [claimedRounds, setClaimedRounds] = useState<Set<number>>(new Set())
+  const [fullHistory, setFullHistory] = useState<RoundHistory[]>([])
+  const [isLoadingFullHistory, setIsLoadingFullHistory] = useState(false)
+  const [expandedRounds, setExpandedRounds] = useState<Set<number>>(new Set())
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
 
+  // Fetch claimed status for ALL rounds and build full history
+  useEffect(() => {
+    if (!publicClient || !address || !roundHistoryData || !Array.isArray(roundHistoryData)) return
+
+    const checkClaimedStatus = async () => {
+      setIsLoadingFullHistory(true)
+      console.log('🔄 Starting claim status check...')
+      const [ids, tickets, wins] = roundHistoryData as [bigint[], bigint[], bigint[]]
+      const claimed = new Set<number>()
+      const history: RoundHistory[] = []
+
+      // Check each round
+      for (let i = 0; i < ids.length; i++) {
+        const roundId = Number(ids[i])
+        const amount = wins[i] || BigInt(0)
+        const ticketCount = Number(tickets[i])
+
+        if (roundId > 0) {
+          try {
+            const hasClaimed = await publicClient.readContract({
+              address: LOTTERY_ADDRESS as `0x${string}`,
+              abi: LOTTERY_6OF55_V2_ABI,
+              functionName: 'hasClaimed',
+              args: [BigInt(roundId), address],
+            }) as boolean
+
+            let status: 'claimed' | 'claimable' | 'no-win'
+            if (amount === BigInt(0)) {
+              status = 'no-win'
+            } else if (hasClaimed) {
+              status = 'claimed'
+              claimed.add(roundId)
+            } else {
+              status = 'claimable'
+            }
+
+            history.push({
+              roundId,
+              tickets: ticketCount,
+              amount,
+              hasClaimed,
+              status,
+            })
+          } catch (err) {
+            console.error(`Error checking claim status for round ${roundId}:`, err)
+            // Add to history anyway with best guess
+            history.push({
+              roundId,
+              tickets: ticketCount,
+              amount,
+              hasClaimed: false,
+              status: amount > 0 ? 'claimable' : 'no-win',
+            })
+          }
+        }
+      }
+
+      setClaimedRounds(claimed)
+      setFullHistory(history.reverse()) // Most recent first
+      setIsLoadingFullHistory(false)
+
+      console.log('✅ Claim status check complete:', {
+        totalRounds: history.length,
+        claimedRounds: Array.from(claimed),
+        claimableRounds: history.filter(h => h.status === 'claimable').length,
+        noWinRounds: history.filter(h => h.status === 'no-win').length,
+      })
+    }
+
+    checkClaimedStatus()
+  }, [publicClient, address, roundHistoryData])
+
+  // Fetch claimed status for all rounds
   const claimableRounds = useMemo(() => {
-    if (!roundHistoryData || !Array.isArray(roundHistoryData) || roundHistoryData.length < 3) return []
+    if (!roundHistoryData || !Array.isArray(roundHistoryData) || roundHistoryData.length < 3) {
+      console.log('❌ No roundHistoryData or invalid format')
+      return []
+    }
     const [ids, tickets, wins] = roundHistoryData as [bigint[], bigint[], bigint[]]
-    return ids.map((id, i) => ({
+    console.log('📊 Raw round history:', {
+      ids: ids.map(id => Number(id)),
+      tickets: tickets.map(t => Number(t)),
+      wins: wins.map(w => w.toString())
+    })
+
+    const filtered = ids.map((id, i) => ({
       roundId: Number(id),
       tickets: Number(tickets[i]),
       amount: wins[i] || BigInt(0)
     }))
-      .filter(r => r.amount > 0 && r.roundId > 0)
+      .filter(r => r.amount > 0 && r.roundId > 0 && !claimedRounds.has(r.roundId))
       .reverse()
-  }, [roundHistoryData])
+
+    console.log('✅ Filtered claimable rounds:', filtered.map(r => ({
+      roundId: r.roundId,
+      amount: r.amount.toString(),
+      claimed: claimedRounds.has(r.roundId)
+    })))
+
+    return filtered
+  }, [roundHistoryData, claimedRounds])
 
   const totalSelected = useMemo(() => {
     return Array.from(selectedRounds).reduce((total, roundId) => {
@@ -56,6 +168,12 @@ export function MultiClaimModal() {
       maximumFractionDigits: 2,
     })
 
+  // Helper function to count matches between user numbers and winning numbers
+  const countMatches = (userNumbers: number[], winningNumbers: number[]): number => {
+    if (!userNumbers || !winningNumbers) return 0
+    return userNumbers.filter(num => winningNumbers.includes(num)).length
+  }
+
   const toggleRound = (roundId: number) => {
     const newSelected = new Set(selectedRounds)
     if (newSelected.has(roundId)) {
@@ -64,6 +182,16 @@ export function MultiClaimModal() {
       newSelected.add(roundId)
     }
     setSelectedRounds(newSelected)
+  }
+
+  const toggleExpanded = (roundId: number) => {
+    const newExpanded = new Set(expandedRounds)
+    if (newExpanded.has(roundId)) {
+      newExpanded.delete(roundId)
+    } else {
+      newExpanded.add(roundId)
+    }
+    setExpandedRounds(newExpanded)
   }
 
   const selectAll = () => {
@@ -117,6 +245,20 @@ export function MultiClaimModal() {
     try {
       const parsedRoundId = BigInt(singleRoundId)
 
+      // Check if already claimed
+      const hasClaimed = await publicClient.readContract({
+        address: LOTTERY_ADDRESS as `0x${string}`,
+        abi: LOTTERY_6OF55_V2_ABI,
+        functionName: 'hasClaimed',
+        args: [parsedRoundId, address],
+      }) as boolean
+
+      if (hasClaimed) {
+        toast.error(`Round #${singleRoundId} has already been claimed`)
+        setIsClaimingSingle(false)
+        return
+      }
+
       // Get the claimable amount first
       const claimableAmount = await publicClient.readContract({
         address: LOTTERY_ADDRESS as `0x${string}`,
@@ -124,6 +266,12 @@ export function MultiClaimModal() {
         functionName: 'getClaimableWinnings',
         args: [parsedRoundId, address],
       }) as bigint
+
+      if (claimableAmount === BigInt(0)) {
+        toast.error(`No winnings to claim for Round #${singleRoundId}`)
+        setIsClaimingSingle(false)
+        return
+      }
 
       const { request } = await publicClient.simulateContract({
         address: LOTTERY_ADDRESS as `0x${string}`,
@@ -152,6 +300,102 @@ export function MultiClaimModal() {
 
   const totalClaimable = claimableRounds.reduce((total, round) => total + round.amount, BigInt(0))
 
+  // Component for detailed round information
+  const RoundDetails = ({ round }: { round: ClaimableRound }) => {
+    const { data: roundData, isLoading: isLoadingRound } = useRound(round.roundId)
+    const { data: userTickets, isLoading: isLoadingTickets } = usePlayerTickets(round.roundId, address)
+
+    if (isLoadingRound || isLoadingTickets) {
+      return (
+        <div className="mt-2 p-3 bg-black/20 rounded border border-white/10">
+          <div className="flex items-center gap-2 text-white/60">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Loading round details...
+          </div>
+        </div>
+      )
+    }
+
+    // Extract winning numbers from round data - the contract returns an object with winningNumbers as property
+    const winningNumbers = roundData && typeof roundData === 'object' && 'winningNumbers' in roundData
+      ? (roundData as any).winningNumbers
+      : undefined
+    const tickets = userTickets || []
+
+    return (
+      <div className="mt-2 p-3 bg-black/20 rounded border border-white/10 space-y-2">
+        {/* Winning Numbers */}
+        {winningNumbers && Array.isArray(winningNumbers) && (
+          <div className="text-xs">
+            <div className="text-white/70 font-medium mb-1">Winning Numbers:</div>
+            <div className="flex gap-1 flex-wrap">
+              {winningNumbers.map((num: number, idx: number) => (
+                <span key={idx} className="inline-flex items-center justify-center w-6 h-6 bg-yellow-500/20 text-yellow-300 text-xs font-bold rounded border border-yellow-500/30">
+                  {num}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* User Tickets */}
+        {Array.isArray(tickets) && tickets.length > 0 && (
+          <div className="text-xs">
+            <div className="text-white/70 font-medium mb-1">Your Tickets:</div>
+            <div className="space-y-1">
+              {tickets.map((ticket, idx) => {
+                const ticketNumbers = Array.from(ticket.numbers as number[])
+                const matches = countMatches(ticketNumbers, Array.isArray(winningNumbers) ? winningNumbers : [])
+                const isWinner = matches > 0
+                return (
+                  <div key={ticket.ticketId.toString()} className="flex items-center gap-2">
+                    <span className="text-white/60">#{idx + 1}:</span>
+                    <div className="flex gap-1 flex-wrap">
+                      {ticketNumbers.map((num: number, numIdx: number) => {
+                        const isMatch = Array.isArray(winningNumbers) && winningNumbers.includes(num)
+                        return (
+                          <span
+                            key={numIdx}
+                            className={cn(
+                              "inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded border",
+                              isMatch
+                                ? "bg-green-500/20 text-green-300 border-green-500/30"
+                                : "bg-white/10 text-white/70 border-white/20"
+                            )}
+                          >
+                            {num}
+                          </span>
+                        )
+                      })}
+                    </div>
+                    <span className={cn(
+                      "text-xs font-medium",
+                      isWinner ? "text-green-400" : "text-white/60"
+                    )}>
+                      ({matches} match{matches !== 1 ? 'es' : ''})
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Debug logging for claim button visibility
+  console.log('🔍 Claim UI Debug:', {
+    address: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'not connected',
+    isLoadingHistory,
+    claimableRoundsCount: claimableRounds.length,
+    selectedRoundsCount: selectedRounds.size,
+    isClaiming,
+    totalClaimable: totalClaimable.toString(),
+    roundHistoryData: roundHistoryData ? 'loaded' : 'null',
+    claimedRoundsCount: claimedRounds.size,
+  })
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -159,7 +403,7 @@ export function MultiClaimModal() {
           <Coins className="w-5 h-5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-slate-900/98 border-white/20 text-white max-w-2xl max-h-[85vh] overflow-hidden p-0">
+      <DialogContent className="bg-slate-900/98 border-white/20 text-white max-w-2xl max-h-[85vh] overflow-hidden p-0 flex flex-col">
         <DialogHeader className="px-4 pt-4 pb-2 border-b border-white/10">
           <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
             <Coins className="w-4 h-4" />
@@ -172,140 +416,241 @@ export function MultiClaimModal() {
         ) : isLoadingHistory ? (
           <div className="px-4 py-8 flex items-center justify-center gap-2 text-xs text-white/50">
             <Loader2 className="w-3 h-3 animate-spin" />
-            Loading claimable rounds...
+            Loading rounds...
           </div>
-        ) : claimableRounds.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-white/50">No winnings to claim</div>
         ) : (
-          <div className="overflow-y-auto max-h-[calc(85vh-120px)]">
-            {/* Quick Single Claim */}
-            <div className="px-4 py-3 bg-black/20 border-b border-white/10">
-              <div className="text-xs font-medium text-white/70 mb-3 uppercase tracking-wide">Quick Claim</div>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Label htmlFor="quick-claim-round" className="text-xs text-white/60">Round ID</Label>
-                  <Input
-                    id="quick-claim-round"
-                    value={singleRoundId}
-                    onChange={(e) => setSingleRoundId(e.target.value)}
-                    placeholder="42"
-                    type="number"
-                    className="bg-black/40 border-white/10 text-white placeholder:text-white/50 text-sm h-8 mt-1"
-                  />
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    onClick={handleSingleClaim}
-                    disabled={!singleRoundId || isClaimingSingle}
-                    size="sm"
-                    className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3"
-                  >
-                    {isClaimingSingle ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      'Claim'
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
+          <Tabs defaultValue="claimable" className="w-full flex-1 flex flex-col min-h-0">
+            <TabsList className="w-full grid grid-cols-2 bg-black/40 mx-4" style={{ width: 'calc(100% - 2rem)' }}>
+              <TabsTrigger value="claimable" className="data-[state=active]:bg-green-600/20 data-[state=active]:text-green-400">
+                <Coins className="w-3 h-3 mr-2" />
+                Claimable ({claimableRounds.length})
+              </TabsTrigger>
+              <TabsTrigger value="history" className="data-[state=active]:bg-blue-600/20 data-[state=active]:text-blue-400">
+                <History className="w-3 h-3 mr-2" />
+                History ({fullHistory.length})
+              </TabsTrigger>
+            </TabsList>
 
-            {/* Summary */}
-            <div className="px-4 py-3 bg-black/20 border-b border-white/10">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-xs text-white/60">Total Claimable</div>
-                <div className="text-sm font-bold text-green-400">{fmt(totalClaimable)} Morbius</div>
-              </div>
-              {selectedRounds.size > 0 && (
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-white/60">Selected to Claim</div>
-                  <div className="text-sm font-bold text-yellow-400">{fmt(totalSelected)} Morbius</div>
-                </div>
-              )}
-            </div>
-
-            {/* Selection Controls */}
-            <div className="px-4 py-2 border-b border-white/10 flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={selectAll}
-                className="text-xs h-6 px-2 text-blue-400 hover:text-blue-300"
-                disabled={selectedRounds.size === claimableRounds.length}
-              >
-                Select All
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearAll}
-                className="text-xs h-6 px-2 text-gray-400 hover:text-gray-300"
-                disabled={selectedRounds.size === 0}
-              >
-                Clear All
-              </Button>
-              <div className="text-xs text-white/50 ml-auto">
-                {selectedRounds.size} of {claimableRounds.length} selected
-              </div>
-            </div>
-
-            {/* Rounds List */}
-            <div className="px-4 py-2">
-              <div className="text-xs font-medium text-white/70 mb-3 uppercase tracking-wide">Claimable Rounds</div>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {claimableRounds.map((round) => (
-                  <div
-                    key={round.roundId}
-                    className={cn(
-                      "flex items-center gap-3 p-3 rounded border transition-colors cursor-pointer",
-                      selectedRounds.has(round.roundId)
-                        ? "bg-yellow-500/10 border-yellow-500/30"
-                        : "bg-black/20 border-white/5 hover:bg-white/5"
-                    )}
-                    onClick={() => toggleRound(round.roundId)}
-                  >
-                    <Checkbox
-                      checked={selectedRounds.has(round.roundId)}
-                      onChange={() => toggleRound(round.roundId)}
-                      className="border-white/30 data-[state=checked]:bg-yellow-500 data-[state=checked]:border-yellow-500"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="font-mono font-semibold text-white">Round #{round.roundId}</div>
-                        <div className="text-xs text-white/60">({round.tickets} ticket{round.tickets !== 1 ? 's' : ''})</div>
-                      </div>
-                    </div>
-                    <div className="text-sm font-bold text-green-400">
-                      {fmt(round.amount)} Morbius
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        {address && claimableRounds.length > 0 && (
-          <div className="px-4 py-3 border-t border-white/10 bg-black/20">
-            <Button
-              onClick={handleClaim}
-              disabled={selectedRounds.size === 0 || isClaiming}
-              className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-bold"
-            >
-              {isClaiming ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Claiming...
-                </>
+            <TabsContent value="claimable" className="mt-0 flex-1 flex flex-col min-h-0">
+              {claimableRounds.length === 0 ? (
+                <div className="px-4 py-8 text-center text-xs text-white/50 flex-1">No winnings to claim</div>
               ) : (
                 <>
-                  <Coins className="w-4 h-4 mr-2" />
-                  Claim {selectedRounds.size} Round{selectedRounds.size !== 1 ? 's' : ''} ({fmt(totalSelected)} Morbius)
+                  <div className="overflow-y-auto max-h-[calc(85vh-200px)] flex-1">
+                    {/* Quick Single Claim */}
+                    <div className="px-4 py-3 bg-black/20 border-b border-white/10">
+                      <div className="text-xs font-medium text-white/70 mb-3 uppercase tracking-wide">Quick Claim</div>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <Label htmlFor="quick-claim-round" className="text-xs text-white/60">Round ID</Label>
+                          <Input
+                            id="quick-claim-round"
+                            value={singleRoundId}
+                            onChange={(e) => setSingleRoundId(e.target.value)}
+                            placeholder="42"
+                            type="number"
+                            className="bg-black/40 border-white/10 text-white placeholder:text-white/50 text-sm h-8 mt-1"
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            onClick={handleSingleClaim}
+                            disabled={!singleRoundId || isClaimingSingle}
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3"
+                          >
+                            {isClaimingSingle ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              'Claim'
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Summary */}
+                    <div className="px-4 py-3 bg-black/20 border-b border-white/10">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs text-white/60">Total Claimable</div>
+                        <div className="text-sm font-bold text-green-400">{fmt(totalClaimable)} Morbius</div>
+                      </div>
+                      {selectedRounds.size > 0 && (
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-white/60">Selected to Claim</div>
+                          <div className="text-sm font-bold text-yellow-400">{fmt(totalSelected)} Morbius</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Selection Controls */}
+                    <div className="px-4 py-2 border-b border-white/10 flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={selectAll}
+                        className="text-xs h-6 px-2 text-blue-400 hover:text-blue-300"
+                        disabled={selectedRounds.size === claimableRounds.length}
+                      >
+                        Select All
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAll}
+                        className="text-xs h-6 px-2 text-gray-400 hover:text-gray-300"
+                        disabled={selectedRounds.size === 0}
+                      >
+                        Clear All
+                      </Button>
+                      <div className="text-xs text-white/50 ml-auto">
+                        {selectedRounds.size} of {claimableRounds.length} selected
+                      </div>
+                    </div>
+
+                    {/* Rounds List */}
+                    <div className="px-4 py-2">
+                      <div className="text-xs font-medium text-white/70 mb-3 uppercase tracking-wide">Claimable Rounds</div>
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {claimableRounds.map((round) => (
+                          <div key={round.roundId}>
+                            <div
+                              className={cn(
+                                "flex items-center gap-3 p-3 rounded border transition-colors cursor-pointer",
+                                selectedRounds.has(round.roundId)
+                                  ? "bg-yellow-500/10 border-yellow-500/30"
+                                  : "bg-black/20 border-white/5 hover:bg-white/5"
+                              )}
+                              onClick={() => toggleRound(round.roundId)}
+                            >
+                              <Checkbox
+                                checked={selectedRounds.has(round.roundId)}
+                                onChange={() => toggleRound(round.roundId)}
+                                className="border-white/30 data-[state=checked]:bg-yellow-500 data-[state=checked]:border-yellow-500"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="font-mono font-semibold text-white">Round #{round.roundId}</div>
+                                  <div className="text-xs text-white/60">({round.tickets} ticket{round.tickets !== 1 ? 's' : ''})</div>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-white/60 hover:text-white p-1 h-6 w-6"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleExpanded(round.roundId)
+                                }}
+                              >
+                                {expandedRounds.has(round.roundId) ? '−' : '+'}
+                              </Button>
+                              <div className="text-sm font-bold text-green-400">
+                                {fmt(round.amount)} Morbius
+                              </div>
+                            </div>
+
+                            {/* Expanded Details */}
+                            {expandedRounds.has(round.roundId) && (
+                              <RoundDetails round={round} />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fixed footer with claim button - always visible */}
+                  <div className="px-4 py-3 border-t border-white/10 bg-black/20 flex-shrink-0">
+                    <Button
+                      onClick={handleClaim}
+                      disabled={selectedRounds.size === 0 || isClaiming}
+                      className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-bold"
+                    >
+                      {isClaiming ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Claiming...
+                        </>
+                      ) : (
+                        <>
+                          <Coins className="w-4 h-4 mr-2" />
+                          Claim {selectedRounds.size} Round{selectedRounds.size !== 1 ? 's' : ''} ({fmt(totalSelected)} Morbius)
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </>
               )}
-            </Button>
-          </div>
+            </TabsContent>
+
+            <TabsContent value="history" className="mt-0 flex-1 flex flex-col min-h-0">
+              {isLoadingFullHistory ? (
+                <div className="px-4 py-8 flex items-center justify-center gap-2 text-xs text-white/50 flex-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading history...
+                </div>
+              ) : fullHistory.length === 0 ? (
+                <div className="px-4 py-8 text-center text-xs text-white/50 flex-1">No rounds found</div>
+              ) : (
+                <div className="overflow-y-auto max-h-[calc(85vh-160px)] px-4 py-3 flex-1">
+                  <div className="text-xs font-medium text-white/70 mb-3 uppercase tracking-wide">Claim History</div>
+                  <div className="space-y-2">
+                    {fullHistory.map((round) => (
+                      <div
+                        key={round.roundId}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded border",
+                          round.status === 'claimed'
+                            ? "bg-blue-500/10 border-blue-500/30"
+                            : round.status === 'claimable'
+                            ? "bg-green-500/10 border-green-500/30"
+                            : "bg-gray-500/10 border-gray-500/20"
+                        )}
+                      >
+                        <div className="flex-shrink-0">
+                          {round.status === 'claimed' && (
+                            <CheckCircle2 className="w-5 h-5 text-blue-400" />
+                          )}
+                          {round.status === 'claimable' && (
+                            <Coins className="w-5 h-5 text-green-400" />
+                          )}
+                          {round.status === 'no-win' && (
+                            <XCircle className="w-5 h-5 text-gray-500" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="font-mono font-semibold text-white">Round #{round.roundId}</div>
+                            <div className="text-xs text-white/60">({round.tickets} ticket{round.tickets !== 1 ? 's' : ''})</div>
+                          </div>
+                          <div className="text-xs mt-0.5">
+                            {round.status === 'claimed' && (
+                              <span className="text-blue-400">✓ Claimed</span>
+                            )}
+                            {round.status === 'claimable' && (
+                              <span className="text-green-400">• Ready to Claim</span>
+                            )}
+                            {round.status === 'no-win' && (
+                              <span className="text-gray-500">No Winnings</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className={cn(
+                          "text-sm font-bold",
+                          round.status === 'claimed' ? "text-blue-400" :
+                          round.status === 'claimable' ? "text-green-400" :
+                          "text-gray-500"
+                        )}>
+                          {round.amount > 0 ? fmt(round.amount) : '0'} Morbius
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
       </DialogContent>
     </Dialog>

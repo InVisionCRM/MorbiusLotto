@@ -7,9 +7,10 @@ import { formatUnits } from 'viem'
 import { TICKET_PRICE, TOKEN_DECIMALS } from '@/lib/contracts'
 import { useAccount } from 'wagmi'
 import { useLotteryTicketRoundHistory } from '@/hooks/use-lottery-ticket-round-history'
+import { useMultiRoundPurchases, getRoundRangeForTx } from '@/hooks/use-multi-round-purchases'
 import { useState, useEffect } from 'react'
 import { LotteryTicket } from './lottery-ticket'
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 type EnrichedTicket = {
   ticketId: bigint | number
@@ -34,6 +35,8 @@ interface PlayerTicketsModalProps {
     numbers: readonly (number | bigint)[]
     isFreeTicket: boolean
     transactionHash?: string
+    startRound?: number
+    endRound?: number
   }>
 }
 
@@ -73,7 +76,11 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
   const { address } = useAccount()
   const [enrichedTickets, setEnrichedTickets] = useState<EnrichedTicket[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
-  
+  const [currentPage, setCurrentPage] = useState(1)
+  const ticketsPerPage = 10
+
+  // Fetch multi-round purchase data to get actual round ranges
+  const { purchases: multiRoundPurchases } = useMultiRoundPurchases(address)
 
   // Process tickets to add round information
   useEffect(() => {
@@ -85,32 +92,87 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
     setIsProcessing(true)
 
     // Convert to PlayerTicket format with round information
-    // Tickets fetched for current round are valid for that round
     const currentRoundNum = Number(roundId)
 
-    // NOTE: Each ticket returned from getPlayerTickets is for a SPECIFIC round
-    // If user bought a 5-round ticket, the contract creates 5 separate tickets (one per round)
-    // So roundsPurchased is always 1 per ticket, and start/end round are the same
-    const processed: EnrichedTicket[] = playerTickets.map(ticket => ({
-      ticketId: ticket.ticketId,
-      numbers: ticket.numbers,
-      isFreeTicket: ticket.isFreeTicket,
-      roundsPurchased: 1, // Always 1 - each ticket is per-round
-      startRound: currentRoundNum,
-      endRound: currentRoundNum,
-      transactionHash: ticket.transactionHash,
-      roundHistory: [], // Will be populated by individual ticket hooks
-    }))
+    // Enrich tickets with multi-round purchase data if available
+    const processed: EnrichedTicket[] = playerTickets.map(ticket => {
+      // Use existing round data if already provided (from page.tsx), otherwise look it up
+      let startRound: number
+      let endRound: number
 
-    setEnrichedTickets(processed)
+      if (ticket.startRound !== undefined && ticket.endRound !== undefined) {
+        // Round data already provided
+        startRound = ticket.startRound
+        endRound = ticket.endRound
+      } else {
+        // Try to get round range from multi-round purchase data
+        const roundRange = getRoundRangeForTx(ticket.transactionHash, multiRoundPurchases)
+        startRound = roundRange?.startRound ?? currentRoundNum
+        endRound = roundRange?.endRound ?? currentRoundNum
+      }
+
+      const roundsPurchased = endRound - startRound + 1
+
+      console.log('🎫 Processing ticket:', {
+        ticketId: ticket.ticketId.toString(),
+        txHash: ticket.transactionHash?.slice(0, 10) + '...',
+        startRound,
+        endRound,
+        roundsPurchased,
+        multiRoundPurchasesCount: multiRoundPurchases.length
+      })
+
+      return {
+        ticketId: ticket.ticketId,
+        numbers: ticket.numbers,
+        isFreeTicket: ticket.isFreeTicket,
+        roundsPurchased,
+        startRound,
+        endRound,
+        transactionHash: ticket.transactionHash,
+        roundHistory: [], // Will be populated by individual ticket hooks
+      }
+    })
+
+    // Sort tickets: non-expired tickets first (endRound >= current round), then by most recent endRound
+    const sorted = processed.sort((a, b) => {
+      // Non-expired tickets get highest priority (still valid for future/current rounds)
+      const aIsActive = a.endRound >= currentRoundNum
+      const bIsActive = b.endRound >= currentRoundNum
+
+      if (aIsActive && !bIsActive) return -1  // Active tickets first
+      if (!aIsActive && bIsActive) return 1   // Active tickets first
+
+      // Within active/inactive groups, sort by most recent endRound (highest first)
+      return b.endRound - a.endRound
+    })
+
+    setEnrichedTickets(sorted)
     setIsProcessing(false)
-  }, [playerTickets, roundId])
+  }, [playerTickets, roundId, multiRoundPurchases])
 
   const formatPssh = (amount: bigint) => {
     return parseFloat(formatUnits(amount, TOKEN_DECIMALS)).toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     })
+  }
+
+  // Pagination calculations
+  const totalPages = Math.ceil(enrichedTickets.length / ticketsPerPage)
+  const startIndex = (currentPage - 1) * ticketsPerPage
+  const endIndex = startIndex + ticketsPerPage
+  const currentTickets = enrichedTickets.slice(startIndex, endIndex)
+
+  // Reset to first page when tickets change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [enrichedTickets.length])
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page)
+    }
   }
 
   return (
@@ -126,8 +188,8 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
             Your Tickets {enrichedTickets.length > 0 && `(${enrichedTickets.length})`}
           </DialogTitle>
           {roundId !== undefined && (
-            <DialogDescription className="text-white/60 text-center">
-              Round #{Number(roundId)} • {enrichedTickets.length} ticket{enrichedTickets.length !== 1 ? 's' : ''} • Click ticket to flip
+            <DialogDescription className="text-white/60 text-center text-sm break-words">
+              Round #{Number(roundId)} • {enrichedTickets.length} ticket{enrichedTickets.length !== 1 ? 's' : ''} • Click tickets to flip
             </DialogDescription>
           )}
         </DialogHeader>
@@ -148,34 +210,65 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
             </div>
           ) : (
             <>
-              {/* Carousel for tickets - centered single view */}
-              <Carousel
-                opts={{
-                  align: "center",
-                  loop: true,
-                }}
-                className="w-full mx-auto mb-6 overflow-hidden"
-              >
-                <CarouselContent className="-ml-2 md:-ml-4">
-                  {enrichedTickets.map((ticket, idx) => (
-                    <CarouselItem key={ticket.ticketId.toString()} className="flex flex-col justify-center items-center pl-2 md:pl-4">
-                      {/* Current ticket indicator */}
-                      <div className="text-center text-white/60 text-xs sm:text-sm mb-2">
-                        Ticket {idx + 1} of {enrichedTickets.length}
+              {/* Grid layout for tickets - 2 wide on desktop, 1 wide on mobile */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 max-h-[60vh] overflow-y-auto">
+                {currentTickets.map((ticket, idx) => {
+                  const globalIndex = startIndex + idx
+                  return (
+                    <div key={ticket.ticketId.toString()} className="flex flex-col items-center">
+                      {/* Ticket indicator */}
+                      <div className="text-center text-white/60 text-xs sm:text-sm mb-2 w-full">
+                        Ticket {globalIndex + 1} of {enrichedTickets.length}
                       </div>
-                      <div className="w-full max-w-[min(100%,320px)] mx-auto">
+                      {/* Ticket component - scalable to fit grid */}
+                      <div className="w-full max-w-[320px] mx-auto">
                         <LotteryTicketWithHistory
                           ticket={ticket}
-                          index={idx}
+                          index={globalIndex}
                         />
                       </div>
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                <CarouselPrevious className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700 h-10 w-10 sm:h-12 sm:w-12 left-2 sm:-left-12" />
-                <CarouselNext className="bg-slate-800/90 border-white/20 text-white hover:bg-slate-700 h-10 w-10 sm:h-12 sm:w-12 right-2 sm:-right-12" />
-              </Carousel>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mb-4 px-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="text-white bg-slate-900 border-white/10 hover:bg-black/60 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </Button>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/60 text-sm">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <span className="text-white/40 text-xs">
+                      ({startIndex + 1}-{Math.min(endIndex, enrichedTickets.length)} of {enrichedTickets.length})
+                    </span>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="text-white bg-slate-900 border-white/10 hover:bg-black/60 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
               
+              {/* Total summary - always shows full ticket count and cost */}
               <div className="border-t border-white/10 pt-4">
                 <div className="flex justify-between items-center text-sm">
                   <span className="font-semibold">Total Cost:</span>

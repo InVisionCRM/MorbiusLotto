@@ -19,7 +19,6 @@ interface LotteryTicketProps {
   numbers: readonly (number | bigint)[]
   isFreeTicket: boolean
   rounds: number
-  roundsRemaining?: number
   startRound: number
   endRound: number
   isActive?: boolean
@@ -46,7 +45,6 @@ export function LotteryTicket({
   numbers,
   isFreeTicket,
   rounds,
-  roundsRemaining,
   startRound,
   endRound,
   isActive = true,
@@ -59,7 +57,7 @@ export function LotteryTicket({
 }: LotteryTicketProps) {
   const [isRevealed, setIsRevealed] = useState(false)
   const [isFlipped, setIsFlipped] = useState(false)
-  
+
   // Freeze timestamp at component mount - never update it
   const [frozenTimestamp] = useState(() => purchaseTimestamp || Date.now())
 
@@ -236,7 +234,9 @@ export function LotteryTicket({
 
           {/* Round Numbers */}
           <div className="text-[10px]">
-            ROUND NUMBER {startRound} - {endRound}
+            {rounds > 1
+              ? `ROUNDS ${startRound} THROUGH ${endRound}`
+              : `ROUND NUMBER ${startRound}`}
           </div>
 
           {/* Transaction hash link */}

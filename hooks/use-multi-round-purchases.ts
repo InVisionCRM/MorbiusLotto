@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { usePublicClient } from 'wagmi'
 import { decodeEventLog } from 'viem'
-import { LOTTERY_ADDRESS } from '@/lib/contracts'
+import { LOTTERY_ADDRESS, LOTTERY_DEPLOY_BLOCK } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 
 export type MultiRoundPurchase = {
@@ -32,6 +32,7 @@ export function useMultiRoundPurchases(playerAddress?: `0x${string}`) {
       setIsLoading(true)
       try {
         // Fetch TicketsPurchasedForRounds events for this player
+        const fromBlock = LOTTERY_DEPLOY_BLOCK ? BigInt(LOTTERY_DEPLOY_BLOCK) : BigInt(0)
         const logs = await publicClient.getLogs({
           address: LOTTERY_ADDRESS as `0x${string}`,
           event: {
@@ -47,11 +48,13 @@ export function useMultiRoundPurchases(playerAddress?: `0x${string}`) {
           args: {
             player: playerAddress,
           },
-          fromBlock: 'earliest',
+          fromBlock,
           toBlock: 'latest',
         } as any)
 
         if (!mounted) return
+
+        console.log('🎫 Multi-round purchase event logs found:', logs.length)
 
         const multiRoundPurchases: MultiRoundPurchase[] = logs.reduce((acc, log) => {
           try {
@@ -70,13 +73,22 @@ export function useMultiRoundPurchases(playerAddress?: `0x${string}`) {
             const roundIds = (args.roundIds as bigint[]).map((id) => Number(id))
             const ticketCounts = (args.ticketCounts as bigint[]).map((count) => Number(count))
 
-            acc.push({
+            const purchase = {
               transactionHash: log.transactionHash,
               roundIds,
               ticketCounts,
               startRound: Math.min(...roundIds),
               endRound: Math.max(...roundIds),
+            }
+
+            console.log('🎫 Multi-round purchase detected:', {
+              txHash: log.transactionHash.slice(0, 10) + '...',
+              rounds: roundIds.length,
+              startRound: purchase.startRound,
+              endRound: purchase.endRound
             })
+
+            acc.push(purchase)
           } catch (error) {
             // Skip logs that can't be decoded
             console.warn('Failed to decode log:', error)
@@ -118,6 +130,7 @@ export function getRoundRangeForTx(
   if (!txHash) return null
 
   const purchase = purchases.find((p) => p.transactionHash.toLowerCase() === txHash.toLowerCase())
+
   if (!purchase) return null
 
   return {

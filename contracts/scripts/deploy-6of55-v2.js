@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("Deploying SuperStakeLottery6of55 V2 to", hre.network.name, "…");
+  console.log("Deploying MegaMorbiusLottery to", hre.network.name, "…");
 
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deployer:", deployer.address);
@@ -13,9 +13,9 @@ async function main() {
   const WPLS_TOKEN_ADDRESS = "0xA1077a294dDE1B09bB078844df40758a5D0f9a27"; // Wrapped PLS on PulseChain
   const PULSEX_ROUTER_ADDRESS = "0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02"; // PulseX V1 Router (align with Keno)
 
-  // Wallet addresses (keeper receives 5% of ticket sales, deployer receives 5%)
+  // Wallet addresses (keeper receives 10% of ticket sales)
   const KEEPER_WALLET = process.env.KEEPER_WALLET || deployer.address; // Defaults to deployer
-  const DEPLOYER_WALLET = process.env.DEPLOYER_WALLET || deployer.address; // Defaults to deployer
+  const DEPLOYER_WALLET = deployer.address; // Not used anymore, kept for constructor compatibility
 
   // Round duration and MegaMorbius interval
   let ROUND_DURATION;
@@ -41,7 +41,7 @@ async function main() {
   console.log("MEGA_MORBIUS_INTERVAL:", MEGA_MORBIUS_INTERVAL, "rounds");
 
   // Deploy contract (use fully qualified name to avoid ambiguity)
-  const SuperStakeLottery6of55 = await hre.ethers.getContractFactory("contracts/SuperStakeLottery6of55V2.sol:SuperStakeLottery6of55");
+  const MegaMorbiusLottery = await hre.ethers.getContractFactory("contracts/SuperStakeLottery6of55V2.sol:MegaMorbiusLottery");
   console.log("\nDeploying…");
 
   // Use increased gas price for reliable deployment
@@ -49,7 +49,7 @@ async function main() {
 
   console.log("Using gas price:", hre.ethers.formatUnits(gasPrice, "gwei"), "Gwei");
 
-  const lottery = await SuperStakeLottery6of55.deploy(
+  const lottery = await MegaMorbiusLottery.deploy(
     MORBIUS_TOKEN_ADDRESS,
     WPLS_TOKEN_ADDRESS,
     PULSEX_ROUTER_ADDRESS,
@@ -66,7 +66,7 @@ async function main() {
   const deploymentTx = lottery.deploymentTransaction();
   const receipt = await lottery.deploymentTransaction().wait();
   const lotteryAddress = await lottery.getAddress();
-  console.log("\n✅ SuperStakeLottery6of55 V2 deployed at:", lotteryAddress);
+  console.log("\n✅ MegaMorbiusLottery deployed at:", lotteryAddress);
   console.log("Tx hash:", deploymentTx?.hash);
   console.log("Block number:", receipt?.blockNumber?.toString?.() ?? "unknown");
 
@@ -97,9 +97,10 @@ async function main() {
   console.log("- Numbers Per Ticket:", await lottery.NUMBERS_PER_TICKET());
   console.log("- Number Range:", await lottery.MIN_NUMBER(), "-", await lottery.MAX_NUMBER());
   console.log("- MegaMorbius Interval:", (await lottery.megaMillionsInterval()).toString(), "rounds");
-  console.log("- Winners Pool:", (await lottery.WINNERS_POOL_PCT()).toString(), "bps (60%)");
-  console.log("- Burn:", (await lottery.BURN_PCT()).toString(), "bps (20%)");
-  console.log("- Mega Bank:", (await lottery.MEGA_BANK_PCT()).toString(), "bps (20%)");
+  console.log("- Keeper Fee:", (await lottery.KEEPER_FEE_PCT()).toString(), "bps (10%)");
+  console.log("- Winners Pool:", (await lottery.WINNERS_POOL_PCT()).toString(), "bps (70%)");
+  console.log("- Burn:", (await lottery.BURN_PCT()).toString(), "bps (10%)");
+  console.log("- Mega Bank:", (await lottery.MEGA_BANK_PCT()).toString(), "bps (10%)");
 
   // Display bracket percentages
   console.log("\n🎯 Bracket Percentages (REBALANCED):");
@@ -109,11 +110,11 @@ async function main() {
   }
 
   console.log("\n🔄 Rollover Logic:");
-  console.log("- Unclaimed brackets: 75% to next round winners, 10% MegaMorbius, 5% deployer, 10% burn");
+  console.log("- Unclaimed brackets: 100% to next round winners pool");
 
   console.log("\n🎰 MegaMorbius (Every 20 Rounds):");
   console.log("- Triggers on round 20, 40, 60, etc.");
-  console.log("- Distribution: 90% to winners pool, 10% to deployer");
+  console.log("- Distribution: 80% to bracket 6, 20% to bracket 5");
 
   console.log("\n💰 WPLS Payment:");
   console.log("- Auto-swap WPLS → Morbius via PulseX");
