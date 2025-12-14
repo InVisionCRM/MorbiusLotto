@@ -49,3 +49,17 @@ Specific Solidity Features (msg.value, payable, msg.sender):
 msg.value: This global variable holds the raw amount of PLS (in beats/wei) sent with the transaction to the contract. It works verbatim: if a user sends 1 PLS, msg.value == 1,000,000,000. The compiler generates identical bytecode checks (e.g., revert if non-payable function receives value).
 payable functions: Mark functions with payable to accept PLS, just like ETH. Without it, incoming value reverts (EVM opcode REVERT if msg.value > 0). Example: function deposit() external payable { balances[msg.sender] += msg.value; } credits the sender's balance in raw PLS.
 msg.sender: Always the caller's address (EOA or contract), unchanged by the chain. It propagates correctly in nested calls (e.g., via CALL, DELEGATECALL). No cross-chain weirdness—it's pure EVM.
+
+DITRIBUTION OF ALL PURCHASES Wether through Morbius, PLS or WPLS goes as follows
+
+5% KEEPER WALLET
+5% DEPLOYER WALLET
+10% BURN ADDRESS
+10% MegaBorbius Bank
+70% PLAYER POOL
+
+----
+
+ROLLOVER MACHANIC
+
+100% of remaining bracket should be rolled over to next round.
