@@ -13,7 +13,7 @@ export function useCurrentRound() {
     functionName: 'getCurrentRoundInfo',
     query: {
       enabled: isValidAddress,
-      refetchInterval: isValidAddress ? 5000 : false, // Refetch every 5 seconds
+      refetchInterval: false, // Disabled to prevent cycling
     },
   })
 }

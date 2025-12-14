@@ -32,12 +32,12 @@ interface LotteryTicketProps {
 
 // Lottery payout brackets
 const PAYOUT_TABLE = [
-  { matches: 6, percentage: 25, description: 'Jackpot' },
-  { matches: 5, percentage: 10, description: '5 Numbers' },
-  { matches: 4, percentage: 8, description: '4 Numbers' },
-  { matches: 3, percentage: 6, description: '3 Numbers' },
-  { matches: 2, percentage: 4, description: '2 Numbers' },
-  { matches: 1, percentage: 2, description: '1 Number' },
+  { matches: 6, percentage: 40, description: 'Jackpot' },
+  { matches: 5, percentage: 25, description: '5 Numbers' },
+  { matches: 4, percentage: 16, description: '4 Numbers' },
+  { matches: 3, percentage: 10, description: '3 Numbers' },
+  { matches: 2, percentage: 6, description: '2 Numbers' },
+  { matches: 1, percentage: 3, description: '1 Number' },
 ]
 
 export function LotteryTicket({

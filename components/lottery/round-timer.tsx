@@ -88,24 +88,24 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
     const megaBank = total * 0.20 // 20% MegaMorbius
     
     // Bracket percentages (of winners pool)
-    const bracket6 = winnersPool * 0.25
+    const bracket6 = winnersPool * 0.40
     const bracket5 = winnersPool * 0.25
-    const bracket4 = winnersPool * 0.20
-    const bracket3 = winnersPool * 0.15
-    const bracket2 = winnersPool * 0.10
-    const bracket1 = winnersPool * 0.05
+    const bracket4 = winnersPool * 0.16
+    const bracket3 = winnersPool * 0.10
+    const bracket2 = winnersPool * 0.06
+    const bracket1 = winnersPool * 0.03
 
     return {
       winnersPool,
       burnAllocation,
       megaBank,
       brackets: [
-        { id: 6, percentage: 25, amount: bracket6 },
+        { id: 6, percentage: 40, amount: bracket6 },
         { id: 5, percentage: 25, amount: bracket5 },
-        { id: 4, percentage: 20, amount: bracket4 },
-        { id: 3, percentage: 15, amount: bracket3 },
-        { id: 2, percentage: 10, amount: bracket2 },
-        { id: 1, percentage: 5, amount: bracket1 },
+        { id: 4, percentage: 16, amount: bracket4 },
+        { id: 3, percentage: 10, amount: bracket3 },
+        { id: 2, percentage: 6, amount: bracket2 },
+        { id: 1, percentage: 3, amount: bracket1 },
       ]
     }
   }
@@ -114,14 +114,14 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
   return (
     <>
-      <Card className={`p-8 border-white/10 relative min-h-[610px] max-w-3xl w-full mx-auto bg-Black/10 backdrop-blur-md ${cardDisabledClass}`}>
+      <Card className={`p-4 sm:p-6 md:p-8 border-white/10 relative min-h-[400px] sm:min-h-[500px] md:min-h-[610px] max-w-3xl w-full mx-auto bg-Black/10 backdrop-blur-md ${cardDisabledClass}`}>
       {/* House Ticket Numbers - Vertical on left */}
-      <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+      <div className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 flex flex-col gap-1 sm:gap-2">
         {houseTicketNumbers && houseTicketNumbers.length === 6 ? (
           houseTicketNumbers.map((num, idx) => (
             <div
               key={idx}
-              className="w-10 h-10 rounded-full bg-purple-950/20 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white font-bold text-sm shadow-lg"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-purple-950/20 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg"
             >
               {num}
             </div>
@@ -138,23 +138,23 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
       </div>
 
       {totalTickets !== undefined && (
-        <div className="absolute top-4 left-4">
-          <div className="text-sm text-white/60">Total Tickets</div>
-          <div className="text-2xl font-bold text-white">{Number(totalTickets).toLocaleString()}</div>
+        <div className="absolute top-2 sm:top-4 left-2 sm:left-4">
+          <div className="text-xs sm:text-sm text-white/60">Total Tickets</div>
+          <div className="text-lg sm:text-xl md:text-2xl font-bold text-white">{Number(totalTickets).toLocaleString()}</div>
         </div>
       )}
       {roundId !== undefined && (
-        <div className="absolute top-4 right-4">
-          <div className="text-sm text-white/60">Round</div>
-          <div className="text-2xl font-bold text-white">#{Number(roundId)}</div>
+        <div className="absolute top-2 sm:top-4 right-2 sm:right-4">
+          <div className="text-xs sm:text-sm text-white/60">Round</div>
+          <div className="text-lg sm:text-xl md:text-2xl font-bold text-white">#{Number(roundId)}</div>
         </div>
       )}
 
       {/* Total Pool Amount at top-center */}
       {totalPssh !== undefined && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 text-center">
-          <div className="text-sm text-white/60 mb-1">Total Pool Amount</div>
-          <div className="text-2xl font-bold text-white">
+        <div className="absolute top-1 sm:top-2 left-1/2 -translate-x-1/2 text-center">
+          <div className="text-xs sm:text-sm text-white/60 mb-0.5 sm:mb-1">Total Pool Amount</div>
+          <div className="text-lg sm:text-xl md:text-2xl font-bold text-white">
             {formatPssh(totalPssh)}
           </div>
           <div className="text-sm text-white/60">Morbius</div>
@@ -163,9 +163,9 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
 
       {/* Timer at bottom-center */}
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center">
-        <div className="text-xs text-white/60 mb-2">Time Remaining</div>
-        <div className="text-3xl font-bold bg-gradient-to-r from-purple-400 via-blue-400 to-pink-400 bg-clip-text text-transparent">
+      <div className="absolute bottom-1 sm:bottom-2 left-1/2 -translate-x-1/2 text-center">
+        <div className="text-xs text-white/60 mb-1 sm:mb-2">Time Remaining</div>
+        <div className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-400 via-blue-400 to-pink-400 bg-clip-text text-transparent">
           {formatSeconds(remaining)}
         </div>
       </div>
@@ -185,23 +185,23 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
       {/* Tickets Button - Bottom Left */}
       {onBuyTicketsClick && (
-        <div className="absolute bottom-2 left-2">
+        <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2">
           <Button
             variant="outline"
-            className="text-white border-white/20 bg-green-500/50 hover:bg-green-600/60 backdrop-blur-sm px-4 py-2 rounded-full flex items-center gap-2"
+            className="text-white border-white/20 bg-green-500/50 hover:bg-green-600/60 backdrop-blur-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
             title="Buy lottery tickets"
             onClick={onBuyTicketsClick}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            <span className="text-sm font-medium">Tickets</span>
+            <span className="text-xs sm:text-sm font-medium">Tickets</span>
           </Button>
         </div>
       )}
 
       {/* Buttons - vertical stack on right side */}
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+      <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-1 sm:gap-2">
         {/* Claim winnings button */}
         <TooltipProvider>
           <Tooltip>
@@ -291,12 +291,12 @@ export function PayoutBreakdownDialog({ totalPssh }: PayoutBreakdownDialogProps)
   const megaBank = total * 0.20
 
   const brackets = [
-    { id: 6, label: 'Match 6 (25%)', amount: winnersPool * 0.25 },
+    { id: 6, label: 'Match 6 (40%)', amount: winnersPool * 0.40 },
     { id: 5, label: 'Match 5 (25%)', amount: winnersPool * 0.25 },
-    { id: 4, label: 'Match 4 (20%)', amount: winnersPool * 0.20 },
-    { id: 3, label: 'Match 3 (15%)', amount: winnersPool * 0.15 },
-    { id: 2, label: 'Match 2 (10%)', amount: winnersPool * 0.10 },
-    { id: 1, label: 'Match 1 (5%)', amount: winnersPool * 0.05 },
+    { id: 4, label: 'Match 4 (16%)', amount: winnersPool * 0.16 },
+    { id: 3, label: 'Match 3 (10%)', amount: winnersPool * 0.10 },
+    { id: 2, label: 'Match 2 (6%)', amount: winnersPool * 0.06 },
+    { id: 1, label: 'Match 1 (3%)', amount: winnersPool * 0.03 },
   ]
 
   return (
