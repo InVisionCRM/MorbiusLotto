@@ -88,24 +88,24 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
     const megaBank = total * 0.20 // 20% MegaMorbius
     
     // Bracket percentages (of winners pool)
-    const bracket6 = winnersPool * 0.45
-    const bracket5 = winnersPool * 0.20
-    const bracket4 = winnersPool * 0.15
-    const bracket3 = winnersPool * 0.10
-    const bracket2 = winnersPool * 0.06
-    const bracket1 = winnersPool * 0.04
-    
+    const bracket6 = winnersPool * 0.25
+    const bracket5 = winnersPool * 0.25
+    const bracket4 = winnersPool * 0.20
+    const bracket3 = winnersPool * 0.15
+    const bracket2 = winnersPool * 0.10
+    const bracket1 = winnersPool * 0.05
+
     return {
       winnersPool,
       burnAllocation,
       megaBank,
       brackets: [
-        { id: 6, percentage: 45, amount: bracket6 },
-        { id: 5, percentage: 20, amount: bracket5 },
-        { id: 4, percentage: 15, amount: bracket4 },
-        { id: 3, percentage: 10, amount: bracket3 },
-        { id: 2, percentage: 6, amount: bracket2 },
-        { id: 1, percentage: 4, amount: bracket1 },
+        { id: 6, percentage: 25, amount: bracket6 },
+        { id: 5, percentage: 25, amount: bracket5 },
+        { id: 4, percentage: 20, amount: bracket4 },
+        { id: 3, percentage: 15, amount: bracket3 },
+        { id: 2, percentage: 10, amount: bracket2 },
+        { id: 1, percentage: 5, amount: bracket1 },
       ]
     }
   }
@@ -291,12 +291,12 @@ export function PayoutBreakdownDialog({ totalPssh }: PayoutBreakdownDialogProps)
   const megaBank = total * 0.20
 
   const brackets = [
-    { id: 6, label: 'Match 6 (45%)', amount: winnersPool * 0.45 },
-    { id: 5, label: 'Match 5 (20%)', amount: winnersPool * 0.20 },
-    { id: 4, label: 'Match 4 (15%)', amount: winnersPool * 0.15 },
-    { id: 3, label: 'Match 3 (10%)', amount: winnersPool * 0.10 },
-    { id: 2, label: 'Match 2 (6%)', amount: winnersPool * 0.06 },
-    { id: 1, label: 'Match 1 (4%)', amount: winnersPool * 0.04 },
+    { id: 6, label: 'Match 6 (25%)', amount: winnersPool * 0.25 },
+    { id: 5, label: 'Match 5 (25%)', amount: winnersPool * 0.25 },
+    { id: 4, label: 'Match 4 (20%)', amount: winnersPool * 0.20 },
+    { id: 3, label: 'Match 3 (15%)', amount: winnersPool * 0.15 },
+    { id: 2, label: 'Match 2 (10%)', amount: winnersPool * 0.10 },
+    { id: 1, label: 'Match 1 (5%)', amount: winnersPool * 0.05 },
   ]
 
   return (

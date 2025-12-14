@@ -61,7 +61,7 @@ export default function Home() {
   // Fetch current round data
   const { data: roundDataRaw, isLoading: isLoadingRound, refetch: refetchRound, error: roundError } = useCurrentRound()
   const { data: megaBankRaw, refetch: refetchMegaBank } = useMegaMillionsBank()
-  
+
   const [roundsToPlay, setRoundsToPlay] = useState(1)
 
   // Parse round data from getCurrentRoundInfo (memoized to prevent recreating BigInts)
@@ -72,7 +72,7 @@ export default function Home() {
     }
     return undefined
   }, [roundDataRaw])
-  
+
   const roundId = roundData?.[0] ?? BigInt(0)
   const startTime = roundData?.[1] ?? BigInt(0)
   const endTime = roundData?.[2] ?? BigInt(0)
@@ -82,6 +82,15 @@ export default function Home() {
   const timeRemaining = roundData?.[6] ?? BigInt(0)
   const isMegaMillionsRound = roundData?.[7] || false
   const roundState = roundData?.[8] || 0
+
+  // Debug round state
+  console.log('🎰 Round state:', {
+    roundId: roundId.toString(),
+    roundState,
+    timeRemaining: timeRemaining.toString(),
+    isRoundOpen: roundState === 0, // 0 = OPEN, 1 = FINALIZED
+    roundData
+  })
 
   const megaBank = (megaBankRaw ?? BigInt(0)) as bigint
 
@@ -511,7 +520,18 @@ export default function Home() {
             <div className="text-center">
               <div className="text-3xl md:text-5xl lg:text-6xl font-bold text-white/90 mb-2 md:mb-4 funnel-display-bold">
                 {(() => {
-                  const pool = (totalPssh * BigInt(7000)) / BigInt(10000)
+                  let pool: bigint
+
+                  // If current round has tickets, show current player pool (70% of collected funds)
+                  if (totalTickets > BigInt(0)) {
+                    pool = (totalPssh * BigInt(7000)) / BigInt(10000)
+                  } else {
+                    // If no current tickets, show previous round's total winners pool
+                    pool = brackets.reduce((sum, bracket) => {
+                      return sum + BigInt(bracket.poolAmount || 0)
+                    }, BigInt(0))
+                  }
+
                   const poolNum = parseFloat(formatUnits(pool, TOKEN_DECIMALS))
                   return poolNum >= 1_000_000
                     ? (poolNum / 1_000_000).toFixed(1) + 'M'

@@ -170,16 +170,27 @@ export function useBuyTickets() {
   const { writeContract, ...rest } = useWriteContract()
 
   const buyTickets = (tickets: number[][]) => {
-    // Convert to uint8[6][] format
-    const formattedTickets = tickets.map(ticket =>
-      ticket.map(n => n as number)
-    ) as unknown as readonly [number, number, number, number, number, number][]
+    // Validate tickets first
+    for (const ticket of tickets) {
+      if (ticket.length !== 6) {
+        throw new Error(`Invalid ticket length: expected 6 numbers, got ${ticket.length}`)
+      }
+      for (const n of ticket) {
+        if (n < 1 || n > 55) {
+          throw new Error(`Invalid number ${n}: must be between 1-55`)
+        }
+      }
+    }
 
+    console.log('🛒 buyTickets: raw tickets:', tickets)
+
+    // Convert to the exact format expected by the contract: uint8[6][]
+    // wagmi/viem should handle the conversion from number[][] to uint8[6][]
     writeContract({
       address: LOTTERY_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTickets',
-      args: [formattedTickets as any],
+      args: [tickets as any], // Type assertion needed for wagmi
       chainId: pulsechain.id,
     })
   }

@@ -8,6 +8,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type PurchaseEntry = {
@@ -32,6 +34,7 @@ export type PurchaseSummary = {
   potentialPl?: string | number
   roi?: string | number
   potentialRoi?: string | number
+  wonRounds?: number
 }
 
 interface PlayerPurchaseHistoryProps {
@@ -40,6 +43,7 @@ interface PlayerPurchaseHistoryProps {
   entries: PurchaseEntry[]
   pulseUrl?: (tx: string) => string
   className?: string
+  onRefresh?: () => void
 }
 
 const defaultPulseUrl = (tx: string) => `https://scan.pulsechain.box/tx/${tx}`
@@ -50,21 +54,42 @@ export function PlayerPurchaseHistory({
   entries,
   pulseUrl = defaultPulseUrl,
   className,
+  onRefresh,
 }: PlayerPurchaseHistoryProps) {
   const hasSummary = summary && Object.values(summary).some((v) => v !== undefined && v !== null)
   return (
     <div className={cn("rounded-2xl border border-white/15 bg-slate-900/90 backdrop-blur-md shadow-lg overflow-hidden text-white", className)}>
       <div className="px-4 pt-4 pb-3 border-b border-white/10">
-        <div className="text-xs uppercase tracking-[0.25em] text-white/60">Showcase</div>
-        <h2 className="text-2xl font-bold text-white mt-1">{title}</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-[0.25em] text-white/60">Showcase</div>
+            <h2 className="text-2xl font-bold text-white mt-1">{title}</h2>
+          </div>
+          {onRefresh && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRefresh}
+              className="text-white/60 hover:text-white hover:bg-white/10"
+              title="Refresh purchase history"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+          )}
+        </div>
       </div>
 
       {hasSummary && (
         <>
-          <div className="grid grid-cols-4 gap-px bg-white/5 border-b border-white/10">
+          <div className="grid grid-cols-5 gap-px bg-white/5 border-b border-white/10">
             <div className="bg-slate-900 p-3">
               <div className="text-[10px] text-white/50 uppercase tracking-wide mb-0.5">Tickets</div>
               <div className="text-lg font-bold text-white">{summary?.tickets ?? '—'}</div>
+            </div>
+            <div className="bg-slate-900 p-3">
+              <div className="text-[10px] text-blue-400/70 uppercase tracking-wide mb-0.5">Won Rounds</div>
+              <div className="text-lg font-bold text-blue-300">{summary?.wonRounds ?? '—'}</div>
             </div>
             <div className="bg-slate-900 p-3">
               <div className="text-[10px] text-red-400/70 uppercase tracking-wide mb-0.5">Spent</div>

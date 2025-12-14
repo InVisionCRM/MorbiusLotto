@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   LOTTERY_ADDRESS,
   TICKET_PRICE,
@@ -74,6 +75,9 @@ export function TicketPurchaseBuilder({
   const [optimisticAllowance, setOptimisticAllowance] = useState<bigint | null>(null)
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [uiState, setUiState] = useState<'idle' | 'approving' | 'buying' | 'success' | 'error'>('idle')
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [successTxHash, setSuccessTxHash] = useState<string>('')
+  const [successRoundsCount, setSuccessRoundsCount] = useState(0)
 
   const onSuccessRef = useRef<typeof onSuccess>(onSuccess)
   const onErrorRef = useRef<typeof onError>(onError)
@@ -110,6 +114,15 @@ export function TicketPurchaseBuilder({
     query: { enabled: !!address, refetchInterval: 5000 },
   })
 
+  // Debug balance fetching
+  console.log('💰 Balance fetch:', {
+    address: address?.slice(0, 6) + '...',
+    balance: psshBalance?.toString() ?? 'undefined',
+    error: balanceError?.message,
+    isLoading: isLoadingBalance,
+    tokenAddress: PSSH_TOKEN_ADDRESS
+  })
+
   const { data: wplsBalance, isLoading: isLoadingWplsBalance } = useReadContract({
     address: WPLS_TOKEN_ADDRESS as `0x${string}`,
     abi: ERC20_ABI,
@@ -130,12 +143,22 @@ export function TicketPurchaseBuilder({
     })
   }, [psshBalance, address, isLoadingBalance, balanceError])
 
-  const { data: psshAllowance, refetch: refetchPsshAllowance } = useReadContract({
+  const { data: psshAllowance, refetch: refetchPsshAllowance, error: allowanceError, isLoading: isLoadingAllowance } = useReadContract({
     address: PSSH_TOKEN_ADDRESS as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'allowance',
     args: address ? [address, LOTTERY_ADDRESS as `0x${string}`] : undefined,
-    query: { enabled: !!address, refetchInterval: 3000, staleTime: 0 },
+    query: { enabled: !!address, refetchInterval: 500, staleTime: 0 }, // Faster refresh for allowance changes
+  })
+
+  // Debug allowance fetching
+  console.log('🔍 Allowance fetch:', {
+    address: address?.slice(0, 6) + '...',
+    allowance: psshAllowance?.toString() ?? 'undefined',
+    error: allowanceError?.message,
+    isLoading: isLoadingAllowance,
+    tokenAddress: PSSH_TOKEN_ADDRESS,
+    spenderAddress: LOTTERY_ADDRESS
   })
 
   const {
@@ -182,56 +205,120 @@ export function TicketPurchaseBuilder({
   )
   const maxRounds = useMemo(() => (roundsByTicket.length ? Math.max(...roundsByTicket) : 1), [roundsByTicket])
   const pricePerTicket = (ticketPriceMorbiusData as bigint | undefined) ?? TICKET_PRICE
-  const pricePerTicketPls = (ticketPricePlsData as bigint | undefined) ?? pricePerTicket
   const psshCost = pricePerTicket * BigInt(totalEntries || 0)
-  const { data: wplsQuote } = useReadContract({
+
+  // Dynamic PLS pricing: base cost + 50% tax + 20% buffer
+  const { data: plsBaseQuote } = useReadContract({
     address: PULSEX_V1_ROUTER_ADDRESS,
     abi: ROUTER_ABI,
     functionName: 'getAmountsIn',
     args:
-      paymentMethod === 'pls' && psshCost > BigInt(0)
+      paymentMethod === 'pls' && totalEntries > 0
         ? [psshCost, [WPLS_TOKEN_ADDRESS, MORBIUS_TOKEN_ADDRESS]]
         : undefined,
     query: {
-      enabled: paymentMethod === 'pls' && psshCost > BigInt(0),
+      enabled: paymentMethod === 'pls' && totalEntries > 0,
       refetchInterval: 10000,
     },
   })
-  const wplsRequiredWei = useMemo(() => {
-    const quote = Array.isArray(wplsQuote) ? (wplsQuote as bigint[])[0] ?? BigInt(0) : BigInt(0)
-    if (quote === BigInt(0)) return BigInt(0)
-    return (quote * BigInt(WPLS_TO_MORBIUS_BUFFER_BPS)) / BigInt(10000)
-  }, [wplsQuote])
-  // Contract requires msg.value to clear BOTH the swap quote and the on-chain ticketPricePls floor
-  const plsFloorWei = useMemo(() => pricePerTicketPls * BigInt(ticketCount || 0), [pricePerTicketPls, ticketCount])
-  const plsValueWei = useMemo(
-    () => (wplsRequiredWei > plsFloorWei ? wplsRequiredWei : plsFloorWei),
-    [wplsRequiredWei, plsFloorWei]
-  )
+
+  const plsValueWei = useMemo(() => {
+    if (!plsBaseQuote || !Array.isArray(plsBaseQuote)) {
+      console.log('❌ PLS quote not available:', plsBaseQuote)
+      return BigInt(0)
+    }
+
+    const basePlsCost = plsBaseQuote[0] ?? BigInt(0)
+    console.log('💰 PLS base cost for', totalEntries, 'entries:', basePlsCost.toString(), 'wei')
+
+    if (basePlsCost === BigInt(0)) return BigInt(0)
+
+    // Apply 50% tax (making PLS payments 50% more expensive)
+    const taxedAmount = (basePlsCost * BigInt(15000)) / BigInt(10000)
+    console.log('💰 PLS after 50% tax:', taxedAmount.toString(), 'wei')
+
+    // Add 20% buffer for slippage and DEX fees
+    const totalPlsRequired = (taxedAmount * BigInt(12000)) / BigInt(10000)
+    console.log('💰 PLS final cost:', totalPlsRequired.toString(), 'wei')
+
+    return totalPlsRequired
+  }, [plsBaseQuote, totalEntries])
   const currentAllowance = optimisticAllowance ?? psshAllowance ?? BigInt(0)
-  const needsApproval = currentAllowance < psshCost
+  // Only consider approval needed if we have loaded allowance data and it's insufficient
+  const needsApproval = psshAllowance !== undefined && !isLoadingAllowance && currentAllowance < psshCost
+
+  // Force approval check for debugging
+  console.log('🔐 Allowance check:', {
+    address: address?.slice(0, 6) + '...',
+    contractAddress: LOTTERY_ADDRESS,
+    allowance: psshAllowance?.toString() ?? 'undefined',
+    currentAllowance: currentAllowance.toString(),
+    psshCost: psshCost.toString(),
+    needsApproval,
+    isLoadingAllowance
+  })
   const hasEnoughBalance = paymentMethod === 'pls'
     ? (wplsBalance !== undefined && wplsBalance >= plsValueWei)
     : (psshBalance !== undefined && psshBalance >= psshCost)
-  const isProcessing = isApprovePending || isApproveLoading || isBuyPsshPending || isBuyMultiPending || isBuyPlsPending || isBuyLoading
+  const isProcessing = isApprovePending || isApproveLoading || isBuyPsshPending || isBuyMultiPending || isBuyPlsPending
+
+  const canBuy =
+    paymentMethod === 'morbius'
+      ? ticketCount > 0 && hasEnoughBalance && !needsApproval
+      : ticketCount > 0
+  const isApproveLoadingState = uiState === 'approving' || isApprovePending || isApproveLoading
+  const isBuyLoadingState = uiState === 'buying' || isBuyLoading || isBuyPsshPending || isBuyMultiPending || isBuyPlsPending
+
+  // Debug purchase conditions
+  console.log('🛒 Purchase conditions:', {
+    paymentMethod,
+    ticketCount,
+    totalEntries,
+    psshCost: psshCost.toString(),
+    plsValueWei: plsValueWei.toString(),
+    plsValueDisplay: formatEther ? Number(formatEther(plsValueWei)).toFixed(4) : 'N/A',
+    psshAllowance: psshAllowance?.toString() ?? 'undefined',
+    optimisticAllowance: optimisticAllowance?.toString() ?? 'undefined',
+    currentAllowance: currentAllowance.toString(),
+    needsApproval,
+    hasEnoughBalance,
+    psshBalance: psshBalance?.toString() ?? 'undefined',
+    wplsBalance: wplsBalance?.toString() ?? 'undefined',
+    canBuy,
+    isProcessing,
+    address: address?.slice(0, 6) + '...',
+    whichButton: (paymentMethod === 'morbius' && needsApproval && hasEnoughBalance) ? 'APPROVE' : 'BUY'
+  })
 
   useEffect(() => {
     if (isApproveSuccess) {
-      setOptimisticAllowance(psshCost)
-      const t = setTimeout(() => {
-        refetchPsshAllowance()
-        setOptimisticAllowance(null)
-      }, 800)
+      console.log('✅ Approval transaction successful - refreshing allowance')
+      // Clear optimistic allowance and force refresh
+      setOptimisticAllowance(null)
+      refetchPsshAllowance()
       setUiState('idle')
-      return () => clearTimeout(t)
     }
-  }, [isApproveSuccess, psshCost, refetchPsshAllowance])
+  }, [isApproveSuccess, refetchPsshAllowance])
+
+  useEffect(() => {
+    if (approveError) {
+      console.error('❌ Approval failed:', approveError)
+    }
+  }, [approveError])
 
   const hasHandledBuySuccess = useRef(false)
   useEffect(() => {
     if (isBuySuccess && !hasHandledBuySuccess.current) {
       hasHandledBuySuccess.current = true
       setUiState('success')
+
+      // Show success modal if we have buyHash
+      if (buyHash) {
+        setSuccessTxHash(buyHash)
+        setSuccessRoundsCount(maxRounds)
+        setShowSuccessModal(true)
+      }
+
       setTickets([])
       setRoundsByTicket([])
       setWorkingTicket([])
@@ -241,7 +328,7 @@ export function TicketPurchaseBuilder({
     if (!isBuySuccess) {
       hasHandledBuySuccess.current = false
     }
-  }, [isBuySuccess])
+  }, [isBuySuccess, buyHash, maxRounds])
 
   useEffect(() => {
     if (approveError) {
@@ -281,16 +368,34 @@ export function TicketPurchaseBuilder({
     if (chainId !== pulsechain.id && switchChainAsync) {
       await switchChainAsync({ chainId: pulsechain.id })
     }
+    // Approve a large amount to avoid needing approval again
+    const approvalAmount = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935') // uint256.max
+
+    console.log('✅ Approving MORBIUS:', {
+      spender: LOTTERY_ADDRESS,
+      amount: approvalAmount.toString(),
+      currentAllowance: currentAllowance.toString()
+    })
+
     approve({
       address: PSSH_TOKEN_ADDRESS as `0x${string}`,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [LOTTERY_ADDRESS as `0x${string}`, psshCost],
+      args: [LOTTERY_ADDRESS as `0x${string}`, approvalAmount],
       chainId: pulsechain.id,
     })
   }
 
   const handleBuy = async () => {
+    console.log('🛒 handleBuy called with:', {
+      address,
+      ticketCount,
+      paymentMethod,
+      hasEnoughBalance,
+      tickets,
+      roundsByTicket
+    })
+
     if (!address) {
       setErrorMessage('Connect wallet')
       setUiState('error')
@@ -306,7 +411,7 @@ export function TicketPurchaseBuilder({
       setUiState('error')
       return
     }
-    if (paymentMethod === 'pls' && wplsRequiredWei === BigInt(0)) {
+    if (paymentMethod === 'pls' && plsValueWei === BigInt(0)) {
       setErrorMessage('Unable to quote PLS required')
       setUiState('error')
       return
@@ -314,6 +419,7 @@ export function TicketPurchaseBuilder({
     setUiState('buying')
     setErrorMessage('')
     if (chainId !== pulsechain.id && switchChainAsync) {
+      console.log('🔄 Switching to PulseChain...')
       await switchChainAsync({ chainId: pulsechain.id })
     }
     try {
@@ -322,21 +428,26 @@ export function TicketPurchaseBuilder({
         if (valueWei === BigInt(0)) {
           throw new Error('PLS amount is zero')
         }
+        console.log('💰 Buying with PLS:', { tickets, valueWei: valueWei.toString() })
         buyTicketsWithPLS(tickets, valueWei)
       } else {
         const boundedRounds = roundsByTicket.map((r) => Math.max(1, Math.min(100, r || 1)))
         const highest = boundedRounds.length ? Math.max(...boundedRounds) : 1
+        console.log('🎫 Buying with MORBIUS:', { tickets, boundedRounds, highest })
         if (highest > 1) {
           const offsets = Array.from({ length: highest }, (_, i) => i)
           const groups = offsets.map((offset) =>
             tickets.filter((_, idx) => boundedRounds[idx] > offset)
           )
+          console.log('📅 Buying for multiple rounds:', { groups, offsets })
           buyTicketsForRounds(groups, offsets)
         } else {
+          console.log('🎫 Buying for current round:', tickets)
           buyTickets(tickets)
         }
       }
     } catch (err) {
+      console.error('❌ Purchase error:', err)
       const message = err instanceof Error ? err.message : 'Purchase failed'
       setUiState('error')
       setErrorMessage(message)
@@ -429,12 +540,6 @@ export function TicketPurchaseBuilder({
   }
 
   const canAddToCart = workingTicket.length === NUMBERS_PER_TICKET
-  const canBuy =
-    paymentMethod === 'morbius'
-      ? ticketCount > 0 && hasEnoughBalance && !needsApproval
-      : ticketCount > 0
-  const isApproveLoadingState = uiState === 'approving' || isApprovePending || isApproveLoading
-  const isBuyLoadingState = uiState === 'buying' || isBuyLoading || isBuyPsshPending || isBuyMultiPending || isBuyPlsPending
 
   return (
     <Card className="relative overflow-hidden bg-black/70 border-white/10 shadow-2xl p-0 w-full max-w-full">
@@ -531,6 +636,7 @@ export function TicketPurchaseBuilder({
                 value={workingRounds}
                 onChange={(e) => setWorkingRounds(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
                 className="w-16 h-8 rounded border border-white/20 bg-black/40 text-white text-center font-semibold text-sm"
+                title="Number of rounds for this ticket"
               />
               <Button
                 size="sm"
@@ -741,7 +847,7 @@ export function TicketPurchaseBuilder({
             )}
 
             {/* Buy/Approve Button */}
-            {paymentMethod === 'morbius' && needsApproval && hasEnoughBalance ? (
+            {paymentMethod === 'morbius' && needsApproval ? (
               <Button
                 className={cn(
                   'w-full h-12 font-semibold',
@@ -781,6 +887,58 @@ export function TicketPurchaseBuilder({
           </div>
         </div>
       </div>
+
+      {/* Success Modal */}
+      <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+        <DialogContent className="bg-slate-900 border-white/20 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-center text-emerald-400">
+              Purchase Successful!
+            </DialogTitle>
+            <DialogDescription className="text-white/80 text-center pt-2">
+              Your lottery tickets have been purchased
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Rounds Purchased */}
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="text-sm text-white/60 mb-1">Rounds Purchased</div>
+              <div className="text-3xl font-black text-emerald-400">
+                {successRoundsCount} {successRoundsCount === 1 ? 'Round' : 'Rounds'}
+              </div>
+            </div>
+
+            {/* Transaction Hash */}
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="text-sm text-white/60 mb-2">Transaction Hash</div>
+              <div className="font-mono text-xs text-white/80 break-all">
+                {successTxHash}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500"
+                onClick={() => {
+                  window.open(`https://scan.pulsechain.box/tx/${successTxHash}`, '_blank')
+                }}
+              >
+                View Txn
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 bg-white/10 hover:bg-white/20 text-white border-white/20"
+                onClick={() => setShowSuccessModal(false)}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
