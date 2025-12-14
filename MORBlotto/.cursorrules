@@ -1,0 +1,65 @@
+Hey, quick clarification on PulseChain for our site: It's a full Ethereum fork (EVM-compatible), so PLS is exactly like ETH in smart contracts - no wrappers, no special handling needed. Think of it as Ethereum but with lower fees and a copy of all state.
+
+Gas & Native Token: PLS pays gas (in 'beats' = wei). Bridge ETH -> PLS 1:1. Raw tx values are in beats, just like wei.
+
+Solidity Code: Unmodified Ethereum contracts deploy/run perfectly.
+
+Key Globals:
+
+msg.value: Raw PLS amount sent (e.g., 1 PLS = 1e9 beats). Bytecode: CALLVALUE pushes it to stack.
+
+payable: Functions/addresses accept PLS like ETH. Non-payable reverts on msg.value > 0 (same EVM check).
+
+msg.sender: Caller's address, propagates in calls (CALL/DELEGATECALL).
+
+Example (unchanged from ETH):
+
+soliditypragma solidity ^0.8.7;
+
+contract PulseSiteEscrow {
+
+    mapping(address => uint) public balances;
+
+    function deposit() external payable {
+
+        balances[msg.sender] += msg.value;  // Credits raw PLS
+
+    }
+
+    function withdraw(uint amount) external {
+
+        require(balances[msg.sender] >= amount);
+
+        balances[msg.sender] -= amount;
+
+        payable(msg.sender).transfer(amount);  // Sends raw PLS
+
+    }
+
+}
+
+Deploy to PulseChain RPC (ID 369) - gas in PLS, but logic identical to ETH. Test in Remix with Injected Provider (MetaMask on PulseChain). Docs: pulsechain.com/developers.
+
+This keeps our site contracts portable. Let's build!
+
+
+
+Raw Transaction Handling (Wei/Beats): At the EVM level, everything is "raw" like Ethereum. Values are in the smallest unit (beats for PLS, wei for ETH), pushed via opcodes like CALLVALUE onto the stack. No differences in serialization, signing, or execution. Transactions are structured the same: nonce, gas price/limit, to, value (in native token), data (calldata for contracts), etc.
+Specific Solidity Features (msg.value, payable, msg.sender):
+msg.value: This global variable holds the raw amount of PLS (in beats/wei) sent with the transaction to the contract. It works verbatim: if a user sends 1 PLS, msg.value == 1,000,000,000. The compiler generates identical bytecode checks (e.g., revert if non-payable function receives value).
+payable functions: Mark functions with payable to accept PLS, just like ETH. Without it, incoming value reverts (EVM opcode REVERT if msg.value > 0). Example: function deposit() external payable { balances[msg.sender] += msg.value; } credits the sender's balance in raw PLS.
+msg.sender: Always the caller's address (EOA or contract), unchanged by the chain. It propagates correctly in nested calls (e.g., via CALL, DELEGATECALL). No cross-chain weirdness—it's pure EVM.
+
+DITRIBUTION OF ALL PURCHASES Wether through Morbius, PLS or WPLS goes as follows
+
+5% KEEPER WALLET
+5% DEPLOYER WALLET
+10% BURN ADDRESS
+10% MegaBorbius Bank
+70% PLAYER POOL
+
+----
+
+ROLLOVER MACHANIC
+
+100% of remaining bracket should be rolled over to next round.
