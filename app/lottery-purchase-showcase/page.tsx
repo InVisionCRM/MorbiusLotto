@@ -176,9 +176,9 @@ export default function LotteryPurchaseShowcase() {
 
         if (multiRoundLog && multiRoundLog.args) {
           // Multi-round purchase
-          const roundIds = multiRoundLog.args.roundIds as readonly bigint[]
-          const ticketCounts = multiRoundLog.args.ticketCounts as readonly bigint[]
-          const morbiusSpent = BigInt(multiRoundLog.args.morbiusSpent ?? 0)
+          const roundIds = (multiRoundLog.args as any).roundIds as readonly bigint[]
+          const ticketCounts = (multiRoundLog.args as any).ticketCounts as readonly bigint[]
+          const morbiusSpent = BigInt((multiRoundLog.args as any).morbiusSpent ?? 0)
 
           // Calculate round range and total tickets
           const sortedRounds = roundIds.map(id => Number(id)).sort((a, b) => a - b)
