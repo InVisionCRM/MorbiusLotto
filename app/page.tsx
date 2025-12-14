@@ -373,7 +373,7 @@ export default function Home() {
       >
         <Header nextDrawEndTime={endTime} fallbackRemaining={timeRemaining} />
         <main className="container mx-auto px-4 py-6">
-          <Skeleton className="h-[800px] w-full"         />
+          <Skeleton className="h-[400px] sm:h-[600px] md:h-[800px] w-full"         />
       </main>
 
       {/* Footer */}
@@ -407,12 +407,12 @@ export default function Home() {
       />
 
       {/* Hero Section - MegaMorbius */}
-      <section className="relative py-20 md:py-32 overflow-hidden">
+      <section className="relative py-12 sm:py-16 md:py-20 lg:py-32 overflow-hidden">
         <div className="container mx-auto px-4 max-w-7xl">
           {/* Main MegaMorbius Display */}
-          <div className="text-center mb-20 md:mb-32">
+          <div className="text-center mb-12 sm:mb-16 md:mb-20 lg:mb-32">
             {/* Animated Title */}
-            <h1 className="text-4xl md:text-5xl lg:text-6xl tracking-[0.3em] md:tracking-[0.5em] font-light text-white/90 mb-8 md:mb-12 funnel-display-light">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl tracking-[0.2em] sm:tracking-[0.25em] md:tracking-[0.3em] lg:tracking-[0.4em] xl:tracking-[0.5em] font-light text-white/90 mb-4 sm:mb-6 md:mb-8 lg:mb-10 xl:mb-12 funnel-display-light">
               {['M', 'E', 'G', 'A', 'M', 'O', 'R', 'B', 'I', 'U', 'S'].map((letter, i) => (
                 <span
                   key={i}
@@ -425,7 +425,7 @@ export default function Home() {
             </h1>
 
             {/* Action Buttons */}
-            <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 max-w-xs mx-auto">
               {/* Play Now Button */}
               <button
                 onClick={() => {
@@ -447,7 +447,7 @@ export default function Home() {
                 <DialogContent className="bg-black/95 border-white/20 text-white max-w-2xl funnel-display-regular">
                   <DialogHeader>
                     <DialogTitle className="text-2xl font-bold mb-4 funnel-display-bold">How To Play Morbius Lottery</DialogTitle>
-                    <DialogDescription className="text-white/80 space-y-4 text-left funnel-display-regular">
+                    <div className="text-white/80 space-y-4 text-left funnel-display-regular">
                       <div>
                         <h3 className="font-semibold text-white mb-2 funnel-display-semibold">1. Pick Your Numbers</h3>
                         <p className="text-sm">Select 6 numbers between 1-55. You can choose your own lucky numbers or use Quick Pick for random selection.</p>
@@ -477,7 +477,7 @@ export default function Home() {
                         <h3 className="font-semibold text-white mb-2 funnel-display-semibold">Unclaimed Prizes</h3>
                         <p className="text-sm">If a bracket has no winners, the prize rolls over: 75% to next round&apos;s winners pool, 10% to MegaMorbius bank, 10% burned, and 5% to deployer.</p>
                       </div>
-                    </DialogDescription>
+                    </div>
                   </DialogHeader>
                 </DialogContent>
               </Dialog>
@@ -493,13 +493,13 @@ export default function Home() {
           </div>
           
           {/* Divider */}
-          <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent mb-16 md:mb-24" />
-          
+          <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent mb-8 sm:mb-12 md:mb-16 lg:mb-20 xl:mb-24" />
+
           {/* Stats Row - Always 3 columns */}
-          <div className="grid grid-cols-3 gap-4 md:gap-8 lg:gap-16 max-w-5xl mx-auto">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 lg:gap-8 xl:gap-16 max-w-5xl mx-auto">
             {/* Burned */}
             <div className="text-center">
-              <div className="text-3xl md:text-5xl lg:text-6xl font-bold text-white/90 mb-2 md:mb-4 funnel-display-bold">
+              <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold text-white/90 mb-1 sm:mb-2 md:mb-3 lg:mb-4 xl:mb-4 funnel-display-bold">
                 {isLoadingBurned ? (
                   <span className="text-white/50">...</span>
                 ) : (() => {
@@ -518,7 +518,7 @@ export default function Home() {
 
             {/* Player Pool */}
             <div className="text-center">
-              <div className="text-3xl md:text-5xl lg:text-6xl font-bold text-white/90 mb-2 md:mb-4 funnel-display-bold">
+              <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold text-white/90 mb-1 sm:mb-2 md:mb-3 lg:mb-4 xl:mb-4 funnel-display-bold">
                 {(() => {
                   let pool: bigint
 
@@ -548,7 +548,7 @@ export default function Home() {
 
             {/* Jackpot */}
             <div className="text-center">
-              <div className="text-3xl md:text-5xl lg:text-6xl font-bold text-white/90 mb-2 md:mb-4 funnel-display-bold">
+              <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold text-white/90 mb-1 sm:mb-2 md:mb-3 lg:mb-4 xl:mb-4 funnel-display-bold">
                 {(() => {
                   const megaNum = parseFloat(formatUnits(megaBank, TOKEN_DECIMALS))
                   return megaNum >= 1_000_000
@@ -566,16 +566,16 @@ export default function Home() {
         </div>
       </section>
 
-      <main className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
+      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6 max-w-7xl">
         {/* Round Timer - Centered at Top */}
         <div className="flex justify-center">
-          <div className="w-full max-w-3xl min-h-[610px] relative">
+          <div className="w-full max-w-3xl min-h-[400px] sm:min-h-[500px] md:min-h-[610px] relative">
             <div className="absolute inset-0 pointer-events-none z-20">
               <BallDrawSimulator
                 winningNumbers={simulatorNumbers}
                 roundId={Number(roundId)}
                 playerTickets={[]}
-                autoStart={true}
+                autoStart={false}
                 isBackground
                 isMegaMorbius={Number(roundId) % MEGA_MILLIONS_INTERVAL === 0 && Number(roundId) > 0}
                 onDrawStart={() => setIsDrawing(true)}
@@ -622,9 +622,9 @@ export default function Home() {
 
 
       {/* Footer */}
-      <footer className="border-t border-white/10 py-6 mt-12">
+      <footer className="border-t border-white/10 py-4 sm:py-6 mt-8 sm:mt-12">
         <div className="container mx-auto px-4 max-w-7xl">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-2">
               <ContractAddress
                 address={LOTTERY_ADDRESS}

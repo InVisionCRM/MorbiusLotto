@@ -1,61 +1,6 @@
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
-
-//  _____                                                                _____
-// ( ___ )                                                              ( ___ )
-//  |   |~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|   |
-//  |   |                                                                |   |
-//  |   |                                                                |   |
-//  |   |    ___  ___              _      _                 _            |   |
-//  |   |    |  \/  |             | |    (_)               (_)           |   |
-//  |   |    | .  . |  ___   _ __ | |__   _  _   _  ___     _   ___      |   |
-//  |   |    | |\/| | / _ \ | '__|| '_ \ | || | | |/ __|   | | / _ \     |   |
-//  |   |    | |  | || (_) || |   | |_) || || |_| |\__ \ _ | || (_) |    |   |
-//  |   |    \_|  |_/ \___/ |_|   |_.__/ |_| \__,_||___/(_)|_| \___/     |   |
-//  |   |                                                                |   |
-//  |   |                                                                |   |
-//  |___|~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|___|
-// (_____)                                                              (_____)
-
-/*
-                                                                     
-                                 ███                                 
-                              █████████                              
-                          ████████████████                           
-                     ██████████████████████████                      
-           ████████████████████       ████████████████████           
-     ██████████████████████               ██████████████████████     
-     ████████████████                           ████████████████     
-     █████                                                 █████     
-     █████       █████████                 █████████       █████     
-     █████   ██████████████               ██████████████   █████     
-     █████   ███████████████             ███████████████   █████     
-     █████   ████████████████           ████████████████   █████     
-     █████   █████████████████         █████████████████   █████     
-     █████   ██████████████████       ██████████████████   █████     
-     ██████  ███████████████████     ███████████████████  █████      
-      █████  ████████████████████   ████████████████████  █████      
-      █████  █████████ ███████████ ███████████ █████████  █████      
-      ██████ █████████  █████████████████████  █████████ █████       
-       █████ █████████   ███████████████████   █████████ █████       
-        ████ █████████    █████████████████    █████████ ████        
-        ████ █████████     ███████████████     █████████ ████        
-         ███ █████████      █████████████      █████████ ███         
-          ██ █████████       ███████████       █████████ ██          
-           █ █████████        █████████        █████████ █           
-             █████████         ███████         █████████             
-              ███████           █████          ████████              
-               ██████            ███            ██████               
-                █████  ██         █         █   █████                
-                 ████  ████               ███  ████                  
-                   ███  █████          ██████  ███                   
-                     █  ████████     ████████  █                     
-                         ███████████████████                         
-                          ████████████████                           
-                             ███████████                             
-                                █████                                
-                                                                     
-*/
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -86,7 +31,8 @@ interface IPulseXRouter {
  * @title MegaMorbiusLottery
  * @notice 6-of-55 lottery with improved bracket allocation, smart rollovers, and WPLS payment support
  * @dev Distribution (applied ONLY on ticket purchases, NOT rollovers):
- *      - 10% to Keeper wallet
+ *      - 5% to Keeper wallet
+ *      - 5% to Deployer wallet
  *      - 10% to Burn (dead address)
  *      - 10% to MegaMorbius Bank
  *      - 70% to Winners Pool (prize brackets)
@@ -111,7 +57,8 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
     uint8 public constant MAX_NUMBER = 55;
     // Distribution percentages (basis points, 1% = 100 bp)
     // ONLY applied on ticket purchases, NOT on rollovers
-    uint256 public constant KEEPER_FEE_PCT = 1000; // 10% to keeper
+    uint256 public constant KEEPER_FEE_PCT = 500; // 5% to keeper
+    uint256 public constant DEPLOYER_FEE_PCT = 500; // 5% to deployer
     uint256 public constant BURN_PCT = 1000; // 10% burn (only on purchases)
     uint256 public constant MEGA_BANK_PCT = 1000; // 10% to MegaMorbius (only on purchases)
     uint256 public constant WINNERS_POOL_PCT = 7000; // 70% to winners
@@ -119,9 +66,9 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
     uint256 public constant MAX_FUTURE_ROUND_OFFSET = 100; // allow scheduling up to 100 rounds ahead
 
     // Bracket percentages (of 70% winners pool, in basis points)
-    // More balanced distribution - arithmetic progression
-    uint256[6] public BRACKET_PERCENTAGES = [500, 1000, 1500, 2000, 2500, 2500];
-    // Bracket 1: 5%, Bracket 2: 10%, Bracket 3: 15%, Bracket 4: 20%, Bracket 5: 25%, Bracket 6: 25% (of Winners Pool)
+    // Rebalanced to favor higher matches
+    uint256[6] public BRACKET_PERCENTAGES = [300, 600, 1000, 1600, 2500, 4000];
+    // Bracket 1: 3%, Bracket 2: 6%, Bracket 3: 10%, Bracket 4: 16%, Bracket 5: 25%, Bracket 6: 40% (of Winners Pool)
 
     // Rollover rule: unclaimed pools → 100% to next round winners pool
     uint256 public constant ROLLOVER_TO_NEXT_ROUND_PCT = 10000; // 100%
@@ -197,9 +144,7 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
     uint256 public currentRoundTotalTickets;
     uint256 public nextTicketId;
 
-    // Burn accumulator
-    uint256 public burnThreshold = 100_000 * 1e18; // 100k Morbius default threshold
-    uint256 public pendingBurnMorbius;
+    // Burn accumulator removed - burns happen immediately
 
     // Lifetime counters
     uint256 public totalTicketsEver;
@@ -245,7 +190,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
     event UnclaimedPrizeRolledOver(uint256 indexed roundId, uint256 bracket, uint256 amount, string destination);
     event TicketPricesUpdated(uint256 morbiusPrice, uint256 plsPrice);
     event BurnExecuted(uint256 amount);
-    event BurnThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
     event PoolDonation(address indexed donor, uint256 amount, uint256 roundId);
 
     // ============ Constructor ============
@@ -308,13 +252,17 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
 
             // Calculate distribution (ONLY on purchases, NOT rollovers)
             uint256 keeperFee = (morbiusRequired * KEEPER_FEE_PCT) / TOTAL_PCT;
+            uint256 deployerFee = (morbiusRequired * DEPLOYER_FEE_PCT) / TOTAL_PCT;
             uint256 burnAmount = (morbiusRequired * BURN_PCT) / TOTAL_PCT;
             uint256 megaContribution = (morbiusRequired * MEGA_BANK_PCT) / TOTAL_PCT;
-            uint256 toWinnersPool = morbiusRequired - keeperFee - burnAmount - megaContribution;
+            uint256 toWinnersPool = morbiusRequired - keeperFee - deployerFee - burnAmount - megaContribution;
 
             // Distribute immediately
             if (keeperFee > 0) {
                 MORBIUS_TOKEN.safeTransfer(keeperWallet, keeperFee);
+            }
+            if (deployerFee > 0) {
+                MORBIUS_TOKEN.safeTransfer(deployerWallet, deployerFee);
             }
             if (burnAmount > 0) {
                 _accrueBurn(burnAmount);
@@ -378,57 +326,25 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         require(totalTickets <= 500, "Too many tickets");
 
         if (totalCost > 0) {
-            // Transfer full amount from player
             MORBIUS_TOKEN.safeTransferFrom(msg.sender, address(this), totalCost);
-
-            // Calculate distribution (ONLY on purchases, NOT rollovers)
-            uint256 keeperFee = (totalCost * KEEPER_FEE_PCT) / TOTAL_PCT;
-            uint256 burnAmount = (totalCost * BURN_PCT) / TOTAL_PCT;
-            uint256 megaContribution = (totalCost * MEGA_BANK_PCT) / TOTAL_PCT;
-            uint256 toWinnersPool = totalCost - keeperFee - burnAmount - megaContribution;
-
-            // Distribute immediately
-            if (keeperFee > 0) {
-                MORBIUS_TOKEN.safeTransfer(keeperWallet, keeperFee);
-            }
-            if (burnAmount > 0) {
-                _accrueBurn(burnAmount);
-            }
-            if (megaContribution > 0) {
-                megaMorbiusBank += megaContribution;
-            }
-
-            // Track statistics
             totalMorbiusEverCollected += totalCost;
             totalTicketsEver += totalTickets;
             playerTotals[msg.sender].ticketsBought += totalTickets;
             playerTotals[msg.sender].totalSpent += totalCost;
+        }
 
-            // Calculate per-ticket winners pool amount
-            uint256 winnersPoolPerTicket = toWinnersPool / totalTickets;
+        // Allocate tickets per target round and track balances
+        for (uint256 i = 0; i < ticketGroups.length; i++) {
+            uint256 targetRoundId = targetRoundIds[i];
+            uint256 count = ticketCounts[i];
+            uint8[6][] calldata ticketsForRound = ticketGroups[i];
 
-            // Allocate tickets per target round and track balances
-            for (uint256 i = 0; i < ticketGroups.length; i++) {
-                uint256 targetRoundId = targetRoundIds[i];
-                uint256 count = ticketCounts[i];
-                uint8[6][] calldata ticketsForRound = ticketGroups[i];
+            _processTickets(msg.sender, ticketsForRound, targetRoundId);
 
-                _processTickets(msg.sender, ticketsForRound, targetRoundId);
-
-                // Allocate only the winners pool (70%) to rounds, not full ticket price
-                uint256 roundAllocation = count * winnersPoolPerTicket;
-                if (targetRoundId == currentRoundId) {
-                    currentRoundTotalMorbius += roundAllocation;
-                } else {
-                    pendingRoundMorbius[targetRoundId] += roundAllocation;
-                }
-            }
-        } else {
-            // No cost - just process tickets
-            for (uint256 i = 0; i < ticketGroups.length; i++) {
-                uint256 targetRoundId = targetRoundIds[i];
-                uint8[6][] calldata ticketsForRound = ticketGroups[i];
-                _processTickets(msg.sender, ticketsForRound, targetRoundId);
+            if (targetRoundId == currentRoundId) {
+                currentRoundTotalMorbius += count * ticketPriceMorbius;
+            } else {
+                pendingRoundMorbius[targetRoundId] += count * ticketPriceMorbius;
             }
         }
 
@@ -462,18 +378,18 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
             uint256[] memory amountsIn = pulseXRouter.getAmountsIn(morbiusToRequest, path);
             uint256 wplsForMorbius = amountsIn[0];
 
-            // Add 10% keeper fee in WPLS
-            uint256 keeperFeeWpls = (wplsForMorbius * 1000) / TOTAL_PCT; // 10% of swap amount
+            // Add 5% keeper fee in PLS
+            uint256 keeperFeeWpls = (wplsForMorbius * 500) / TOTAL_PCT; // 5% of swap amount
             uint256 totalWplsNeeded = wplsForMorbius + keeperFeeWpls;
 
             // Transfer total WPLS from user
             IERC20(address(WPLS_TOKEN)).safeTransferFrom(msg.sender, address(this), totalWplsNeeded);
 
-            // Send keeper fee directly in WPLS
+            // Send keeper fee directly in PLS
             IERC20(address(WPLS_TOKEN)).safeTransfer(keeperWallet, keeperFeeWpls);
 
             // Approve remaining WPLS for swap
-            uint256 wplsToSwap = wplsForMorbius;
+            uint256 wplsToSwap = wplsForMorbius; // wplsForMorbius amount (keeper fee already separated)
             IERC20(address(WPLS_TOKEN)).approve(address(pulseXRouter), wplsToSwap);
 
             uint256 morbiusBefore = MORBIUS_TOKEN.balanceOf(address(this));
@@ -491,12 +407,18 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
             uint256 morbiusReceived = MORBIUS_TOKEN.balanceOf(address(this)) - morbiusBefore;
             require(morbiusReceived >= morbiusRequired, "Insufficient Morbius after swap");
 
-            // Apply remaining fee structure (keeper fee already taken in WPLS)
+            // Apply same fee structure as MORBIUS purchases (on the base amount)
+            // Note: Keeper fee is already taken in WPLS, so we don't calculate it here
+            uint256 deployerFee = (morbiusRequired * DEPLOYER_FEE_PCT) / TOTAL_PCT;
             uint256 burnAmount = (morbiusRequired * BURN_PCT) / TOTAL_PCT;
             uint256 megaContribution = (morbiusRequired * MEGA_BANK_PCT) / TOTAL_PCT;
-            uint256 toWinnersPool = morbiusRequired - burnAmount - megaContribution;
+            uint256 toWinnersPool = morbiusRequired - deployerFee - burnAmount - megaContribution;
 
-            // Distribute MORBIUS fees (keeper already taken in WPLS)
+            // Note: Keeper fee for PLS is already taken in WPLS above, so we don't transfer MORBIUS keeper fee
+            // But we still apply the other fees proportionally
+            if (deployerFee > 0) {
+                MORBIUS_TOKEN.safeTransfer(deployerWallet, deployerFee);
+            }
             if (burnAmount > 0) {
                 _accrueBurn(burnAmount);
             }
@@ -506,7 +428,8 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
 
             // Add only the winners pool portion (70%) to the round pool
             currentRoundTotalMorbius += toWinnersPool;
-            totalMorbiusEverCollected += morbiusReceived;
+            currentRoundTotalCollectedFromPlayers += morbiusRequired; // Track full amount for display
+            totalMorbiusEverCollected += morbiusReceived; // Total collected includes fees
             totalTicketsEver += ticketsToBuy;
             playerTotals[msg.sender].ticketsBought += ticketsToBuy;
             playerTotals[msg.sender].totalSpent += morbiusReceived;
@@ -571,24 +494,7 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
             uint256 morbiusReceived = MORBIUS_TOKEN.balanceOf(address(this)) - morbiusBefore;
             require(morbiusReceived >= morbiusRequired, "Insufficient Morbius after swap");
 
-            // Apply fee distribution
-            uint256 keeperFee = (morbiusRequired * KEEPER_FEE_PCT) / TOTAL_PCT;
-            uint256 burnAmount = (morbiusRequired * BURN_PCT) / TOTAL_PCT;
-            uint256 megaContribution = (morbiusRequired * MEGA_BANK_PCT) / TOTAL_PCT;
-            uint256 toWinnersPool = morbiusRequired - keeperFee - burnAmount - megaContribution;
-
-            // Distribute fees
-            if (keeperFee > 0) {
-                MORBIUS_TOKEN.safeTransfer(keeperWallet, keeperFee);
-            }
-            if (burnAmount > 0) {
-                _accrueBurn(burnAmount);
-            }
-            if (megaContribution > 0) {
-                megaMorbiusBank += megaContribution;
-            }
-
-            currentRoundTotalMorbius += toWinnersPool;
+            currentRoundTotalMorbius += morbiusReceived;
             totalMorbiusEverCollected += morbiusReceived;
             totalTicketsEver += ticketsToBuy;
             playerTotals[msg.sender].ticketsBought += ticketsToBuy;
@@ -603,8 +509,9 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
 
     /**
      * @notice Buy lottery tickets with native PLS (wraps to WPLS then swaps to Morbius)
-     * @dev Accepts msg.value, swaps ALL PLS for Morbius, then applies same distribution as buyTickets.
-     *      No refunds - all PLS is used.
+     * @dev Accepts msg.value in beats, applies the same swap buffer used for WPLS purchases,
+     *      takes 5% keeper fee in PLS, and refunds any excess PLS to the caller.
+     *      Applies same fee structure as Morbius purchases.
      */
     function buyTicketsWithPLS(uint8[6][] calldata ticketNumbers) external payable nonReentrant {
         if (_isRoundExpired()) {
@@ -615,62 +522,85 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         require(currentRoundState == RoundState.OPEN, "Round not open");
         require(ticketNumbers.length > 0, "Must buy at least 1 ticket");
         require(ticketNumbers.length <= 100, "Max 100 tickets per tx");
-        require(msg.value > 0, "Must send PLS");
 
         uint256 ticketsToBuy = ticketNumbers.length;
+        uint256 morbiusRequired = ticketsToBuy * ticketPriceMorbius;
 
-        // Wrap all PLS to WPLS
-        WPLS_TOKEN.deposit{value: msg.value}();
+        if (morbiusRequired > 0) {
+            // Calculate fair PLS price: MORBIUS_price * amount_needed * 1.5_tax + buffer
+            address[] memory path = new address[](2);
+            path[0] = address(WPLS_TOKEN);
+            path[1] = address(MORBIUS_TOKEN);
 
-        // Swap all WPLS for Morbius
-        address[] memory path = new address[](2);
-        path[0] = address(WPLS_TOKEN);
-        path[1] = address(MORBIUS_TOKEN);
+            // Get current PLS price for the required MORBIUS
+            uint256[] memory amountsIn = pulseXRouter.getAmountsIn(morbiusRequired, path);
+            uint256 basePlsCost = amountsIn[0];
 
-        IERC20(address(WPLS_TOKEN)).approve(address(pulseXRouter), msg.value);
+            // Add 50% tax to discourage PLS payments
+            uint256 taxedAmount = (basePlsCost * 15000) / 10000;
 
-        uint256 morbiusBefore = MORBIUS_TOKEN.balanceOf(address(this));
+            // Add 20% buffer for slippage and fees
+            uint256 totalPlsRequired = (taxedAmount * 12000) / 10000;
 
-        pulseXRouter.swapExactTokensForTokens(
-            msg.value,
-            0, // Accept any amount of Morbius
-            path,
-            address(this),
-            block.timestamp + 300
-        );
+            // Split: 5% to keeper, rest for swap
+            uint256 keeperFee = (totalPlsRequired * KEEPER_FEE_PCT) / TOTAL_PCT;
+            uint256 swapAmount = totalPlsRequired - keeperFee;
 
-        uint256 morbiusReceived = MORBIUS_TOKEN.balanceOf(address(this)) - morbiusBefore;
-        require(morbiusReceived > 0, "Swap failed");
+            require(msg.value == totalPlsRequired, "Send exact PLS amount required");
 
-        // Apply same distribution as buyTickets: 10% keeper, 10% burn, 10% mega, 70% winners
-        uint256 keeperFee = (morbiusReceived * KEEPER_FEE_PCT) / TOTAL_PCT;
-        uint256 burnAmount = (morbiusReceived * BURN_PCT) / TOTAL_PCT;
-        uint256 megaContribution = (morbiusReceived * MEGA_BANK_PCT) / TOTAL_PCT;
-        uint256 toWinnersPool = morbiusReceived - keeperFee - burnAmount - megaContribution;
+            // Send keeper fee
+            payable(keeperWallet).transfer(keeperFee);
 
-        // Distribute fees
-        if (keeperFee > 0) {
-            MORBIUS_TOKEN.safeTransfer(keeperWallet, keeperFee);
+            // Wrap PLS for swap
+            WPLS_TOKEN.deposit{value: swapAmount}();
+            IERC20(address(WPLS_TOKEN)).approve(address(pulseXRouter), swapAmount);
+
+            uint256 morbiusBefore = MORBIUS_TOKEN.balanceOf(address(this));
+
+            pulseXRouter.swapExactTokensForTokens(
+                swapAmount,
+                0, // allow any output; enforce via received check
+                path,
+                address(this),
+                block.timestamp + 300
+            );
+
+            uint256 morbiusReceived = MORBIUS_TOKEN.balanceOf(address(this)) - morbiusBefore;
+            require(morbiusReceived >= morbiusRequired, "Insufficient Morbius after swap");
+
+            // No refunds - exact payment required
+
+            // Apply same fee structure as MORBIUS purchases (on the base amount)
+            uint256 deployerFee = (morbiusRequired * DEPLOYER_FEE_PCT) / TOTAL_PCT;
+            uint256 burnAmount = (morbiusRequired * BURN_PCT) / TOTAL_PCT;
+            uint256 megaContribution = (morbiusRequired * MEGA_BANK_PCT) / TOTAL_PCT;
+            uint256 toWinnersPool = morbiusRequired - deployerFee - burnAmount - megaContribution;
+
+            // Distribute fees
+            if (deployerFee > 0) {
+                MORBIUS_TOKEN.safeTransfer(deployerWallet, deployerFee);
+            }
+            if (burnAmount > 0) {
+                _accrueBurn(burnAmount);
+            }
+            if (megaContribution > 0) {
+                megaMorbiusBank += megaContribution;
+            }
+
+            // Only the winners pool (70%) goes to the round
+            currentRoundTotalMorbius += toWinnersPool;
+            currentRoundTotalCollectedFromPlayers += morbiusRequired; // Track full amount for display
+            totalMorbiusEverCollected += morbiusRequired; // Count the base amount for consistency
+            totalTicketsEver += ticketsToBuy;
+            playerTotals[msg.sender].ticketsBought += ticketsToBuy;
+            playerTotals[msg.sender].totalSpent += morbiusRequired;
+
+            emit WPLSSwappedForTickets(msg.sender, totalPlsRequired, morbiusReceived);
         }
-        if (burnAmount > 0) {
-            _accrueBurn(burnAmount);
-        }
-        if (megaContribution > 0) {
-            megaMorbiusBank += megaContribution;
-        }
-
-        // Only the winners pool (70%) goes to the round
-        currentRoundTotalMorbius += toWinnersPool;
-        currentRoundTotalCollectedFromPlayers += morbiusReceived;
-        totalMorbiusEverCollected += morbiusReceived;
-        totalTicketsEver += ticketsToBuy;
-        playerTotals[msg.sender].ticketsBought += ticketsToBuy;
-        playerTotals[msg.sender].totalSpent += morbiusReceived;
 
         _processTickets(msg.sender, ticketNumbers, currentRoundId);
 
-        emit WPLSSwappedForTickets(msg.sender, msg.value, morbiusReceived);
-        emit TicketsPurchased(msg.sender, currentRoundId, ticketNumbers.length, 0, morbiusReceived);
+        emit TicketsPurchased(msg.sender, currentRoundId, ticketNumbers.length, 0, morbiusRequired);
     }
 
     /**
@@ -870,13 +800,15 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         uint256 winnersPoolPercent,
         uint256 burnPercent,
         uint256 megaBankPercent,
-        uint256 keeperFeePercent
+        uint256 keeperFeePercent,
+        uint256 deployerFeePercent
     ) {
         bracketPercents = BRACKET_PERCENTAGES;
         winnersPoolPercent = WINNERS_POOL_PCT;
         burnPercent = BURN_PCT;
         megaBankPercent = MEGA_BANK_PCT;
         keeperFeePercent = KEEPER_FEE_PCT;
+        deployerFeePercent = DEPLOYER_FEE_PCT;
     }
 
     function getUnclaimedForRound(uint256 roundId) external view returns (
@@ -1132,6 +1064,9 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         ];
         rounds[roundId].megaBankContribution = 0;
         rounds[roundId].isMegaMillionsRound = (roundId % megaMillionsInterval == 0);
+
+        // FIX: Roll over the entire prize pool since there are no tickets
+        rolloverReserve += currentRoundTotalMorbius;
     }
 
     function _generateWinningNumbers(uint256 roundId, uint256 closingBlock) private view returns (uint8[6] memory) {
@@ -1255,42 +1190,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         emit UnclaimedPrizeRolledOver(roundId, bracket, amount, "NextRoundWinnersPool-100%");
     }
 
-    function _swapKeeperFeeToPLS(uint256 morbiusAmount) private {
-        if (morbiusAmount == 0) return;
-
-        // Path: MORBIUS -> WPLS
-        address[] memory path = new address[](2);
-        path[0] = address(MORBIUS_TOKEN);
-        path[1] = address(WPLS_TOKEN);
-
-        // Use getAmountsIn to estimate minimum output (reverse of what we want)
-        // This gives us the input needed for our output, so we use it to set a reasonable minimum
-        uint256[] memory amountsIn = pulseXRouter.getAmountsIn(morbiusAmount, path);
-        // amountsIn[0] is how much MORBIUS we need to get morbiusAmount WPLS
-        // So for our morbiusAmount input, we expect roughly morbiusAmount output
-        // Set minimum to 80% to account for slippage and fees
-        uint256 wplsMinOut = (morbiusAmount * 80) / 100;
-
-        // Approve router
-        MORBIUS_TOKEN.approve(address(pulseXRouter), morbiusAmount);
-
-        // Execute swap
-        pulseXRouter.swapExactTokensForTokens(
-            morbiusAmount,
-            wplsMinOut,
-            path,
-            address(this),
-            block.timestamp + 300
-        );
-
-        // Unwrap WPLS to PLS and send to keeper
-        uint256 wplsBalance = WPLS_TOKEN.balanceOf(address(this));
-        if (wplsBalance > 0) {
-            WPLS_TOKEN.withdraw(wplsBalance);
-            // Send PLS to keeper
-            payable(keeperWallet).transfer(wplsBalance);
-        }
-    }
 
     function _distributePrizes(uint256 roundId) private {
         Ticket[] storage tickets = roundTickets[roundId];
@@ -1349,36 +1248,9 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
 
     function _accrueBurn(uint256 amount) private {
         if (amount == 0) return;
-        pendingBurnMorbius += amount;
-        if (pendingBurnMorbius >= burnThreshold) {
-            _flushBurn();
-        }
-    }
-
-    function _flushBurn() private {
-        uint256 amount = pendingBurnMorbius;
-        if (amount == 0) return;
-        pendingBurnMorbius = 0;
         MORBIUS_TOKEN.safeTransfer(BURN_ADDRESS, amount);
         emit BurnExecuted(amount);
     }
 
-    /**
-     * @notice Manually flush the burn accumulator when threshold met
-     */
-    function flushBurn() external nonReentrant {
-        require(pendingBurnMorbius >= burnThreshold, "Below threshold");
-        _flushBurn();
-    }
-
-    /**
-     * @notice Update the burn threshold (owner)
-     */
-    function updateBurnThreshold(uint256 newThreshold) external onlyOwner {
-        require(newThreshold > 0, "Threshold must be > 0");
-        uint256 old = burnThreshold;
-        burnThreshold = newThreshold;
-        emit BurnThresholdUpdated(old, newThreshold);
-    }
 
 }

@@ -1456,53 +1456,53 @@ contract CryptoKeno is Ownable, ReentrancyGuard, Pausable {
 
         // 3-SPOT GAME
         paytable[3][3] = 27;
-        paytable[3][2] = 2;
+        paytable[3][2] = 1; // Reduced from 2
 
         // 4-SPOT GAME
-        paytable[4][4] = 72;
-        paytable[4][3] = 5;
-        paytable[4][2] = 1;
+        paytable[4][4] = 120; // Increased from 72
+        paytable[4][3] = 3; // Reduced from 5
+        paytable[4][2] = 0; // Reduced from 1
 
         // 5-SPOT GAME
-        paytable[5][5] = 410;
-        paytable[5][4] = 18;
-        paytable[5][3] = 2;
+        paytable[5][5] = 600; // Increased from 410
+        paytable[5][4] = 30; // Increased from 18
+        paytable[5][3] = 1; // Reduced from 2
 
         // 6-SPOT GAME
-        paytable[6][6] = 1100;
-        paytable[6][5] = 57;
-        paytable[6][4] = 7;
-        paytable[6][3] = 1;
+        paytable[6][6] = 1650; // Increased from 1100
+        paytable[6][5] = 90; // Increased from 57
+        paytable[6][4] = 12; // Increased from 7
+        paytable[6][3] = 0; // Reduced from 1
 
         // 7-SPOT GAME
         paytable[7][7] = 2000;
-        paytable[7][6] = 100;
-        paytable[7][5] = 11;
-        paytable[7][4] = 5;
-        paytable[7][3] = 1;
+        paytable[7][6] = 150; // Increased from 100
+        paytable[7][5] = 18; // Increased from 11
+        paytable[7][4] = 8; // Increased from 5
+        paytable[7][3] = 0; // Reduced from 1
 
         // 8-SPOT GAME
         paytable[8][8] = 10000;
         paytable[8][7] = 300;
-        paytable[8][6] = 50;
-        paytable[8][5] = 15;
-        paytable[8][4] = 2;
+        paytable[8][6] = 80; // Increased from 50
+        paytable[8][5] = 25; // Increased from 15
+        paytable[8][4] = 3; // Increased from 2
 
         // 9-SPOT GAME
         paytable[9][9] = 25000;
         paytable[9][8] = 2000;
         paytable[9][7] = 100;
-        paytable[9][6] = 20;
-        paytable[9][5] = 5;
-        paytable[9][4] = 2;
+        paytable[9][6] = 35; // Increased from 20
+        paytable[9][5] = 8; // Increased from 5
+        paytable[9][4] = 3; // Increased from 2
 
         // 10-SPOT GAME
         paytable[10][10] = 100000;
         paytable[10][9] = 5000;
         paytable[10][8] = 500;
         paytable[10][7] = 50;
-        paytable[10][6] = 10;
-        paytable[10][5] = 2;
+        paytable[10][6] = 18; // Increased from 10
+        paytable[10][5] = 4; // Increased from 2
         paytable[10][0] = 5;  // Special: Zero hits consolation prize
 
         // Bulls-Eye paytable (bonus when Bulls-Eye number is hit)

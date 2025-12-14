@@ -208,7 +208,7 @@ export function TicketPurchaseBuilder({
   const psshCost = pricePerTicket * BigInt(totalEntries || 0)
 
   // Dynamic PLS pricing: base cost + 50% tax + 20% buffer
-  const { data: plsBaseQuote } = useReadContract({
+  const { data: plsBaseQuote, error: plsQuoteError, isLoading: isLoadingPlsQuote } = useReadContract({
     address: PULSEX_V1_ROUTER_ADDRESS,
     abi: ROUTER_ABI,
     functionName: 'getAmountsIn',
@@ -219,12 +219,20 @@ export function TicketPurchaseBuilder({
     query: {
       enabled: paymentMethod === 'pls' && totalEntries > 0,
       refetchInterval: 10000,
+      retry: 3,
+      retryDelay: 1000,
     },
   })
 
   const plsValueWei = useMemo(() => {
     if (!plsBaseQuote || !Array.isArray(plsBaseQuote)) {
-      console.log('❌ PLS quote not available:', plsBaseQuote)
+      console.log('❌ PLS quote not available:', {
+        plsBaseQuote,
+        error: plsQuoteError?.message,
+        isLoading: isLoadingPlsQuote,
+        paymentMethod,
+        totalEntries,
+      })
       return BigInt(0)
     }
 
@@ -242,7 +250,7 @@ export function TicketPurchaseBuilder({
     console.log('💰 PLS final cost:', totalPlsRequired.toString(), 'wei')
 
     return totalPlsRequired
-  }, [plsBaseQuote, totalEntries])
+  }, [plsBaseQuote, totalEntries, plsQuoteError, isLoadingPlsQuote, paymentMethod])
   const currentAllowance = optimisticAllowance ?? psshAllowance ?? BigInt(0)
   // Only consider approval needed if we have loaded allowance data and it's insufficient
   const needsApproval = psshAllowance !== undefined && !isLoadingAllowance && currentAllowance < psshCost
@@ -265,7 +273,7 @@ export function TicketPurchaseBuilder({
   const canBuy =
     paymentMethod === 'morbius'
       ? ticketCount > 0 && hasEnoughBalance && !needsApproval
-      : ticketCount > 0
+      : ticketCount > 0 && hasEnoughBalance
   const isApproveLoadingState = uiState === 'approving' || isApprovePending || isApproveLoading
   const isBuyLoadingState = uiState === 'buying' || isBuyLoading || isBuyPsshPending || isBuyMultiPending || isBuyPlsPending
 
@@ -412,8 +420,12 @@ export function TicketPurchaseBuilder({
       return
     }
     if (paymentMethod === 'pls' && plsValueWei === BigInt(0)) {
-      setErrorMessage('Unable to quote PLS required')
+      const errorDetail = plsQuoteError
+        ? `PLS price quote failed: ${plsQuoteError.message.slice(0, 100)}`
+        : 'Unable to fetch PLS price quote. Please try MORBIUS payment or refresh.'
+      setErrorMessage(errorDetail)
       setUiState('error')
+      console.error('❌ PLS quote error:', plsQuoteError)
       return
     }
     setUiState('buying')
@@ -799,10 +811,19 @@ export function TicketPurchaseBuilder({
             <div className="flex justify-between text-xs">
               <span className="text-white/70">Cost</span>
               <span className="text-white font-semibold">
-                {paymentMethod === 'pls'
-                  ? `${Number(formatEther(plsValueWei)).toFixed(4)} PLS`
-                  : `${formatToken(psshCost)} MORBIUS`
-                }
+                {paymentMethod === 'pls' ? (
+                  isLoadingPlsQuote ? (
+                    'Loading...'
+                  ) : plsQuoteError ? (
+                    <span className="text-red-400">Error</span>
+                  ) : plsValueWei === BigInt(0) ? (
+                    <span className="text-amber-400">Quote unavailable</span>
+                  ) : (
+                    `${Number(formatEther(plsValueWei)).toFixed(4)} PLS`
+                  )
+                ) : (
+                  `${formatToken(psshCost)} MORBIUS`
+                )}
               </span>
             </div>
             <div className="flex justify-between text-xs">
@@ -843,6 +864,19 @@ export function TicketPurchaseBuilder({
             {uiState === 'success' && (
               <Alert className="border-emerald-400/40 bg-emerald-500/10">
                 <AlertDescription className="text-emerald-200 text-sm">Success! Good luck!</AlertDescription>
+              </Alert>
+            )}
+            {/* PLS Quote Error Warning */}
+            {paymentMethod === 'pls' && plsQuoteError && (
+              <Alert variant="destructive">
+                <AlertDescription className="text-sm">
+                  Unable to fetch PLS price quote. Try using MORBIUS or refreshing the page.
+                </AlertDescription>
+              </Alert>
+            )}
+            {paymentMethod === 'pls' && isLoadingPlsQuote && ticketCount > 0 && (
+              <Alert className="border-blue-400/40 bg-blue-500/10">
+                <AlertDescription className="text-blue-200 text-sm">Loading PLS price...</AlertDescription>
               </Alert>
             )}
 
