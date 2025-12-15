@@ -515,7 +515,7 @@ export function KenoTicketPurchaseBuilder({
             {/* Purchase Button */}
             <div className="flex justify-center">
               {!isConnected ? (
-                <ConnectButton />
+                <WalletConnect />
               ) : (
                 <Button
                   onClick={handlePurchase}
