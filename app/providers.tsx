@@ -5,6 +5,7 @@ import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { config } from '@/lib/wagmi-config'
+import { pulsechain } from '@/lib/chains'
 import { useState } from 'react'
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -12,12 +13,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        // Prevent refetching immediately after connection
         staleTime: 5000,
-        // Keep inactive queries in cache
         gcTime: 1000 * 60 * 60 * 24, // 24 hours
-        // Retry failed queries
-        retry: 3,
+        retry: (failureCount, error) => {
+          // Don't retry on user rejection errors
+          if (error?.message?.includes('user rejected') ||
+              error?.message?.includes('User rejected')) {
+            return false
+          }
+          // Retry other errors up to 3 times
+          return failureCount < 3
+        },
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       },
     },
@@ -27,12 +33,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider
-          theme={darkTheme()}
+          theme={darkTheme({
+            accentColor: '#8B5CF6', // Purple accent to match your theme
+            accentColorForeground: 'white',
+            borderRadius: 'medium',
+            fontStack: 'system',
+            overlayBlur: 'small',
+          })}
           modalSize="compact"
-          appInfo={{
-            appName: 'Morbius Lotto',
-            learnMoreUrl: 'https://morbius.io',
-          }}
+          coolMode={true}
+          showRecentTransactions={true}
         >
           {children}
         </RainbowKitProvider>

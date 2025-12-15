@@ -211,8 +211,6 @@ export function useBuyTicketsForRounds() {
 
     // Calculate total tickets across all groups for gas estimation
     const totalTickets = ticketGroups.reduce((sum, group) => sum + group.length, 0)
-    // Estimate gas: base gas + gas per ticket
-    const estimatedGas = BigInt(150000 + (totalTickets * 25000))
 
     writeContract({
       address: LOTTERY_ADDRESS as `0x${string}`,
@@ -220,7 +218,6 @@ export function useBuyTicketsForRounds() {
       functionName: 'buyTicketsForRounds',
       args: [formattedGroups as any, formattedOffsets as any],
       chainId: pulsechain.id,
-      gas: estimatedGas,
     })
   }
 
@@ -238,16 +235,12 @@ export function useBuyTicketsWithWPLS(defaultExtraBufferBp: number = 2500) {
       ticket.map(n => n as number)
     ) as unknown as readonly [number, number, number, number, number, number][]
 
-    // Estimate gas: base gas for swap + approval + gas per ticket
-    const estimatedGas = BigInt(300000 + (tickets.length * 50000))
-
     writeContract({
       address: LOTTERY_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTicketsWithWPLSAndBuffer',
       args: [formattedTickets as any, BigInt(bufferBp)],
       chainId: pulsechain.id,
-      gas: estimatedGas,
     })
   }
 
@@ -261,9 +254,6 @@ export function useBuyTicketsWithPLS() {
   const buyTicketsWithPLS = (tickets: number[][], valueWei: bigint) => {
     const formattedTickets = tickets.map(ticket => ticket.map(n => n as number)) as unknown as readonly [number, number, number, number, number, number][]
 
-    // Estimate gas: base gas for wrap + swap + lottery call + gas per ticket
-    const estimatedGas = BigInt(400000 + (tickets.length * 60000))
-
     writeContract({
       address: LOTTERY_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
@@ -271,7 +261,6 @@ export function useBuyTicketsWithPLS() {
       args: [formattedTickets as any],
       chainId: pulsechain.id,
       value: valueWei,
-      gas: estimatedGas,
     })
   }
 
