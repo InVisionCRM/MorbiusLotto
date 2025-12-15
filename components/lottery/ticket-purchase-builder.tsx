@@ -30,6 +30,9 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from 'wagmi'
+import { useWalletDetection } from '@/hooks/use-wallet-detection'
+import { useNetworkValidation } from '@/hooks/use-network-validation'
+import { useNativeBalance } from '@/hooks/use-native-balance'
 import { formatUnits, formatEther } from 'viem'
 import { toast } from 'sonner'
 import { LoaderOne } from '@/components/ui/loader'
@@ -65,6 +68,15 @@ export function TicketPurchaseBuilder({
   const { address } = useAccount()
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
+
+  // Enhanced wallet detection and network validation
+  const {
+    isInternetMoney,
+    getSafeGasEstimate,
+    clearWalletCache,
+    isMobile
+  } = useWalletDetection()
+  const { isOnPulseChain, switchToPulseChain } = useNetworkValidation()
 
   const [tickets, setTickets] = useState<number[][]>([])
   const [roundsByTicket, setRoundsByTicket] = useState<number[]>([])
@@ -123,13 +135,8 @@ export function TicketPurchaseBuilder({
     tokenAddress: PSSH_TOKEN_ADDRESS
   })
 
-  const { data: wplsBalance, isLoading: isLoadingWplsBalance } = useReadContract({
-    address: WPLS_TOKEN_ADDRESS as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address, refetchInterval: 5000 },
-  })
+  // Use native PLS balance for PLS payments
+  const { balance: nativePlsBalance, isLoading: isLoadingPlsBalance } = useNativeBalance(address)
 
   // Debug balance fetching
   useEffect(() => {
@@ -266,7 +273,7 @@ export function TicketPurchaseBuilder({
     isLoadingAllowance
   })
   const hasEnoughBalance = paymentMethod === 'pls'
-    ? (wplsBalance !== undefined && wplsBalance >= plsValueWei)
+    ? (nativePlsBalance !== undefined && nativePlsBalance >= plsValueWei)
     : (psshBalance !== undefined && psshBalance >= psshCost)
   const isProcessing = isApprovePending || isApproveLoading || isBuyPsshPending || isBuyMultiPending || isBuyPlsPending
 
@@ -291,7 +298,7 @@ export function TicketPurchaseBuilder({
     needsApproval,
     hasEnoughBalance,
     psshBalance: psshBalance?.toString() ?? 'undefined',
-    wplsBalance: wplsBalance?.toString() ?? 'undefined',
+    nativePlsBalance: nativePlsBalance?.toString() ?? 'undefined',
     canBuy,
     isProcessing,
     address: address?.slice(0, 6) + '...',
@@ -430,22 +437,42 @@ export function TicketPurchaseBuilder({
     }
     setUiState('buying')
     setErrorMessage('')
-    if (chainId !== pulsechain.id && switchChainAsync) {
+
+    // Check network first
+    if (!isOnPulseChain) {
       console.log('🔄 Switching to PulseChain...')
-      await switchChainAsync({ chainId: pulsechain.id })
+      try {
+        await switchToPulseChain()
+        // Wait a moment for network switch to complete
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      } catch (error) {
+        console.error('Failed to switch network:', error)
+        setErrorMessage('Please switch to PulseChain network manually in your wallet.')
+        setUiState('error')
+        return
+      }
     }
+
     try {
+      if (isInternetMoney) {
+        console.log('🌐 Preparing transaction for Internet Money wallet...')
+      }
+
       if (paymentMethod === 'pls') {
         const valueWei = plsValueWei
         if (valueWei === BigInt(0)) {
           throw new Error('PLS amount is zero')
         }
         console.log('💰 Buying with PLS:', { tickets, valueWei: valueWei.toString() })
+
+        // Note: The hook buyTicketsWithPLS already handles gas estimation
+        // If we need custom gas, we'd need to modify the hook
         buyTicketsWithPLS(tickets, valueWei)
       } else {
         const boundedRounds = roundsByTicket.map((r) => Math.max(1, Math.min(100, r || 1)))
         const highest = boundedRounds.length ? Math.max(...boundedRounds) : 1
         console.log('🎫 Buying with MORBIUS:', { tickets, boundedRounds, highest })
+
         if (highest > 1) {
           const offsets = Array.from({ length: highest }, (_, i) => i)
           const groups = offsets.map((offset) =>
@@ -460,7 +487,24 @@ export function TicketPurchaseBuilder({
       }
     } catch (err) {
       console.error('❌ Purchase error:', err)
-      const message = err instanceof Error ? err.message : 'Purchase failed'
+      let message = err instanceof Error ? err.message : 'Purchase failed'
+
+      // Special handling for Internet Money wallet errors
+      if (isInternetMoney) {
+        if (err?.message?.includes('gas') || err?.message?.includes('estimation')) {
+          console.log('🌐 Gas estimation failed for Internet Money - clearing cache')
+          message = 'Connection issue detected. Please try again.'
+          clearWalletCache()
+
+          // Suggest retry after cache clear
+          setTimeout(() => {
+            toast.info('Connection refreshed. You can try purchasing again.')
+          }, 2000)
+        } else if (err?.message?.includes('network') || err?.message?.includes('chain')) {
+          message = 'Please ensure Internet Money is connected to PulseChain network.'
+        }
+      }
+
       setUiState('error')
       setErrorMessage(message)
       onErrorRef.current?.(err as Error)
@@ -833,13 +877,13 @@ export function TicketPurchaseBuilder({
                   'font-semibold',
                   hasEnoughBalance ? 'text-emerald-400' : 'text-amber-400'
                 )}
-                title={`Raw: ${paymentMethod === 'pls' ? wplsBalance?.toString() : psshBalance?.toString() || 'undefined'} | Address: ${address || 'not connected'}`}
+                title={`Raw: ${paymentMethod === 'pls' ? nativePlsBalance?.toString() : psshBalance?.toString() || 'undefined'} | Address: ${address || 'not connected'}`}
               >
                 {paymentMethod === 'pls' ? (
-                  isLoadingWplsBalance ? (
+                  isLoadingPlsBalance ? (
                     'Loading...'
-                  ) : wplsBalance !== undefined ? (
-                    `${Number(formatEther(wplsBalance)).toFixed(4)} PLS`
+                  ) : nativePlsBalance !== undefined ? (
+                    `${Number(formatEther(nativePlsBalance)).toFixed(4)} PLS`
                   ) : (
                     `— ${address ? '(fetching...)' : '(connect wallet)'}`
                   )
