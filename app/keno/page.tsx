@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { WalletConnect } from '@/components/wallet-connect'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, usePublicClient, useReadContract, useReadContracts } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { formatEther, parseAbiItem, parseEther } from 'viem'
@@ -742,7 +742,7 @@ export default function KenoPage() {
             <Trophy className="h-4 w-4 mr-2" />
             Prize Pool
           </Button>
-          <WalletConnect />
+          <ConnectButton />
         </div>
       </header>
 

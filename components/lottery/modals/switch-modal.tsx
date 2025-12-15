@@ -1,6 +1,6 @@
 'use client'
 
-import { WalletConnect } from '@/components/wallet-connect'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount } from 'wagmi'
 
 export function SwitchModal() {
@@ -11,7 +11,7 @@ export function SwitchModal() {
       {!isConnected ? (
         <div className="flex flex-col items-center justify-center py-12 gap-4">
           <p className="text-white/60 text-sm mb-2">Connect your wallet to use the swap feature</p>
-          <WalletConnect />
+          <ConnectButton showBalance={false} />
         </div>
       ) : (
         <iframe

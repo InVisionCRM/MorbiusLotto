@@ -569,7 +569,7 @@ export default function Home() {
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6 max-w-7xl">
         {/* Round Timer - Centered at Top */}
         <div className="flex justify-center">
-          <div className="w-full max-w-3xl min-h-[500px] sm:min-h-[650px] md:min-h-[750px] relative">
+          <div className="w-full max-w-3xl min-h-[400px] sm:min-h-[500px] md:min-h-[610px] relative">
             <div className="absolute inset-0 pointer-events-none z-20">
               <BallDrawSimulator
                 winningNumbers={simulatorNumbers}

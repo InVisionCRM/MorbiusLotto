@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { WalletConnect } from '@/components/wallet-connect'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, usePublicClient, useReadContract, useReadContracts } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { formatEther, parseAbiItem, parseEther } from 'viem'
@@ -515,7 +515,7 @@ export function KenoTicketPurchaseBuilder({
             {/* Purchase Button */}
             <div className="flex justify-center">
               {!isConnected ? (
-                <WalletConnect />
+                <ConnectButton />
               ) : (
                 <Button
                   onClick={handlePurchase}

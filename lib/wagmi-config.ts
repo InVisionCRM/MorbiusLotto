@@ -1,15 +1,33 @@
-import { createConfig, http } from 'wagmi'
+import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { pulsechain } from './chains'
-import { walletConnect, injected } from 'wagmi/connectors'
 
-export const config = createConfig({
+export const config = getDefaultConfig({
+  appName: 'Morbius Lotto',
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
   chains: [pulsechain],
-  connectors: [
-    walletConnect({ projectId: '21fef48091f12692cad574a6f7753643' }),
-    injected(),
-  ],
-  transports: {
-    [pulsechain.id]: http(),
-  },
   ssr: true,
+  walletConnectVersion: '2',
+  storage: typeof window !== 'undefined' ? {
+    getItem: (key: string) => {
+      try {
+        return localStorage.getItem(key)
+      } catch {
+        return null
+      }
+    },
+    setItem: (key: string, value: string) => {
+      try {
+        localStorage.setItem(key, value)
+      } catch {
+        // Handle storage quota exceeded or other errors silently
+      }
+    },
+    removeItem: (key: string) => {
+      try {
+        localStorage.removeItem(key)
+      } catch {
+        // Handle errors silently
+      }
+    },
+  } : undefined,
 })
