@@ -273,7 +273,7 @@ export function TicketPurchaseBuilder({
   const canBuy =
     paymentMethod === 'morbius'
       ? ticketCount > 0 && hasEnoughBalance && !needsApproval
-      : ticketCount > 0 && hasEnoughBalance
+      : ticketCount > 0  // Always allow PLS purchases
   const isApproveLoadingState = uiState === 'approving' || isApprovePending || isApproveLoading
   const isBuyLoadingState = uiState === 'buying' || isBuyLoading || isBuyPsshPending || isBuyMultiPending || isBuyPlsPending
 

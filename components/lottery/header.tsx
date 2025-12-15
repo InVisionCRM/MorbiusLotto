@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { WalletConnect } from '@/components/wallet-connect'
 import Link from 'next/link'
 
 interface HeaderProps {
@@ -57,74 +57,7 @@ export function Header({ nextDrawEndTime, fallbackRemaining = BigInt(0) }: Heade
 
 
           <div className="flex items-center gap-2 ml-auto">
-            <ConnectButton.Custom>
-              {({
-                account,
-                chain,
-                openAccountModal,
-                openChainModal,
-                openConnectModal,
-                authenticationStatus,
-                mounted,
-              }) => {
-                const ready = mounted && authenticationStatus !== 'loading'
-                const connected =
-                  ready &&
-                  account &&
-                  chain &&
-                  (!authenticationStatus ||
-                    authenticationStatus === 'authenticated')
-
-                return (
-                  <div
-                    {...(!ready && {
-                      'aria-hidden': true,
-                      style: {
-                        opacity: 0,
-                        pointerEvents: 'none',
-                        userSelect: 'none',
-                      },
-                    })}
-                  >
-                    {(() => {
-                      if (!connected) {
-                        return (
-                          <button
-                            onClick={openConnectModal}
-                            type="button"
-                            className="px-3 py-1.5 text-sm font-medium bg-white text-black rounded-lg hover:bg-white/90 transition-colors"
-                          >
-                            Connect
-                          </button>
-                        )
-                      }
-
-                      if (chain.unsupported) {
-                        return (
-                          <button
-                            onClick={openChainModal}
-                            type="button"
-                            className="px-3 py-1.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                          >
-                            Wrong network
-                          </button>
-                        )
-                      }
-
-                      return (
-                        <button
-                          onClick={openAccountModal}
-                          type="button"
-                          className="px-3 py-1.5 text-sm font-medium bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors border border-white/20"
-                        >
-                          {account.displayName}
-                        </button>
-                      )
-                    })()}
-                  </div>
-                )
-              }}
-            </ConnectButton.Custom>
+            <WalletConnect />
           </div>
         </div>
 

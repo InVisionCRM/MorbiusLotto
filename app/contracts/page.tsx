@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LotteryContractInterface } from '@/components/contracts/lottery-interface'
 import { KenoContractInterface } from '@/components/contracts/keno-interface'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { WalletConnect } from '@/components/wallet-connect'
 import { AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
@@ -44,7 +44,7 @@ export default function ContractsPage() {
             <AlertDescription className="text-white/70">
               Connect your wallet to interact with write functions. Read functions will still work.
               <div className="mt-3">
-                <ConnectButton />
+                <WalletConnect />
               </div>
             </AlertDescription>
           </Alert>

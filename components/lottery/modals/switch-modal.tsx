@@ -1,6 +1,6 @@
 'use client'
 
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { WalletConnect } from '@/components/wallet-connect'
 import { useAccount } from 'wagmi'
 
 export function SwitchModal() {

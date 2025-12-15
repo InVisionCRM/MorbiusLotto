@@ -22,7 +22,6 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@rainbow-me/rainbowkit": "^2.2.9",
     "@tabler/icons-react": "^3.35.0",
     "@tanstack/react-query": "^5.90.11",
     "class-variance-authority": "^0.7.1",
@@ -55,6 +54,5 @@
     "hardhat": "^2.27.2",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "type": "module"
+  }
 }
