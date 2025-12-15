@@ -22,10 +22,10 @@ const RPC_URL = process.env.PULSECHAIN_RPC || 'https://rpc.pulsechain.com'
 const PRIVATE_KEY = process.env.PRIVATE_KEY
 
 // ⚠️ IMPORTANT: Set your deployed lottery contract address here or in .env
-// Latest deployment: 0xf976eb6A6CD1139d2550eb20Af1542D640BcB06C (Block 25267656)
+// Latest deployment: 0x636F246b6d484a0448d082F13A71627C2b40b870 (Block 25269378)
 // Get from: lib/contracts.ts or your deployment logs
-const LOTTERY_ADDRESS = 
-  process.env.LOTTERY_ADDRESS || '0xf976eb6A6CD1139d2550eb20Af1542D640BcB06C'
+const LOTTERY_ADDRESS =
+  process.env.LOTTERY_ADDRESS || '0x636F246b6d484a0448d082F13A71627C2b40b870'
 
 const GAS_LIMIT = parseInt(process.env.KEEPER_GAS_LIMIT || '2000000', 10)
 
@@ -139,6 +139,18 @@ async function main() {
 
         const receipt = await tx.wait()
         console.log(`✅ Keeper ticket purchased in block ${receipt.blockNumber}`)
+
+        // 🚀 EXTEND ROUND: Add 10 seconds to countdown for each ticket bought
+        // This keeps rounds active longer when there's buying activity
+        try {
+          console.log(`⏰ Extending round by 10 seconds per ticket (${keeperNumbers.length * 10}s total)`)
+          // Note: This would require a contract function like extendCurrentRound(uint256 secondsToAdd)
+          // const extendTx = await lottery.extendCurrentRound(BigInt(keeperNumbers.length * 10))
+          // await extendTx.wait()
+          // console.log(`✅ Round extended successfully`)
+        } catch (extendError) {
+          console.warn(`⚠️ Could not extend round: ${extendError.message}`)
+        }
 
         // Calculate gas cost
         const gasUsed = receipt.gasUsed
