@@ -34,6 +34,11 @@ export function useWalletDetection() {
 
   // Custom gas estimation for problematic wallets
   const getSafeGasEstimate = async (tx: any) => {
+    if (!publicClient) {
+      console.warn('No public client available, using fallback gas estimate')
+      return BigInt(1500000)
+    }
+
     try {
       if (walletInfo.isInternetMoney) {
         // Internet Money needs conservative gas estimation
