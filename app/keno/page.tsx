@@ -742,7 +742,7 @@ export default function KenoPage() {
             <Trophy className="h-4 w-4 mr-2" />
             Prize Pool
           </Button>
-          <ConnectButton />
+          <WalletConnect />
         </div>
       </header>
 
