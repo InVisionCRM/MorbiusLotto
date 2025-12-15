@@ -490,8 +490,8 @@ export function TicketPurchaseBuilder({
       let message = err instanceof Error ? err.message : 'Purchase failed'
 
       // Special handling for Internet Money wallet errors
-      if (isInternetMoney) {
-        if (err?.message?.includes('gas') || err?.message?.includes('estimation')) {
+      if (isInternetMoney && err instanceof Error) {
+        if (err.message.includes('gas') || err.message.includes('estimation')) {
           console.log('🌐 Gas estimation failed for Internet Money - clearing cache')
           message = 'Connection issue detected. Please try again.'
           clearWalletCache()
@@ -500,7 +500,7 @@ export function TicketPurchaseBuilder({
           setTimeout(() => {
             toast.info('Connection refreshed. You can try purchasing again.')
           }, 2000)
-        } else if (err?.message?.includes('network') || err?.message?.includes('chain')) {
+        } else if (err.message.includes('network') || err.message.includes('chain')) {
           message = 'Please ensure Internet Money is connected to PulseChain network.'
         }
       }
