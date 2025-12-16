@@ -10,19 +10,16 @@ interface PreviousRoundsBracketsModalProps {
     matchCount: number
   }>
   isLoading: boolean
-  isMegaMillions: boolean
 }
 
 export function PreviousRoundsBracketsModal({
   brackets,
   isLoading,
-  isMegaMillions,
 }: PreviousRoundsBracketsModalProps) {
   return (
     <BracketDisplay
       brackets={brackets}
       isLoading={isLoading}
-      isMegaMillions={isMegaMillions}
     />
   )
 }

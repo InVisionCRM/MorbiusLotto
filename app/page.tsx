@@ -33,7 +33,7 @@ import {
 import { Copy, Check, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatUnits, parseAbiItem } from 'viem'
-import { LOTTERY_ADDRESS, LOTTERY_DEPLOY_BLOCK, TOKEN_DECIMALS, MEGA_MILLIONS_INTERVAL } from '@/lib/contracts'
+import { LOTTERY_ADDRESS, LOTTERY_DEPLOY_BLOCK, TOKEN_DECIMALS } from '@/lib/contracts'
 import BallDrawSimulator from '@/components/lottery/ball-draw-simulator/BallDrawSimulator'
 import { TicketPurchaseBuilder } from '@/components/lottery/ticket-purchase-builder'
 import { TicketPurchaseAccordion } from '@/components/lottery/ticket-purchase-accordion'
@@ -66,10 +66,10 @@ export default function Home() {
   const [roundsToPlay, setRoundsToPlay] = useState(1)
 
   // Parse round data from getCurrentRoundInfo (memoized to prevent recreating BigInts)
-  // Returns: [roundId, startTime, endTime, totalPssh, totalTickets, uniquePlayers, timeRemaining, isMegaMillionsRound, state]
+  // V2 Returns: [roundId, startTime, endTime, totalMorbius, totalTickets, uniquePlayers, timeRemaining, state]
   const roundData = useMemo(() => {
-    if (Array.isArray(roundDataRaw) && roundDataRaw.length >= 9) {
-      return roundDataRaw as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, boolean, number]
+    if (Array.isArray(roundDataRaw) && roundDataRaw.length >= 8) {
+      return roundDataRaw as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, number]
     }
     return undefined
   }, [roundDataRaw])
@@ -81,8 +81,8 @@ export default function Home() {
   const totalTickets = roundData?.[4] ?? BigInt(0)
   const uniquePlayers = roundData?.[5] ?? BigInt(0)
   const timeRemaining = roundData?.[6] ?? BigInt(0)
-  const isMegaMillionsRound = roundData?.[7] || false
-  const roundState = roundData?.[8] || 0
+  const roundState = roundData?.[7] || 0
+  const isMegaMillionsRound = false // MegaMillions not used in V2
 
   // Debug round state
   console.log('🎰 Round state:', {
@@ -528,31 +528,31 @@ export default function Home() {
                       </div>
 
                       <div>
-                        <h4 className="text-white font-medium mb-3">Winners Pool Breakdown</h4>
+                        <h4 className="text-white font-medium mb-3">Fixed Prize Amounts</h4>
                         <div className="grid gap-2">
                           <div className="flex justify-between items-center p-3 bg-yellow-950/20 rounded border border-yellow-400/10">
-                            <span className="text-yellow-300 font-medium">6 Matches (Jackpot)</span>
-                            <span className="text-white">40%</span>
+                            <span className="text-yellow-300 font-medium">6 Matches</span>
+                            <span className="text-white">15,000 MORBIUS</span>
                           </div>
                           <div className="flex justify-between items-center p-3 bg-white/5 rounded border border-white/5">
                             <span className="text-white font-medium">5 Matches</span>
-                            <span className="text-white/70">25%</span>
+                            <span className="text-white/70">5,000 MORBIUS</span>
                           </div>
                           <div className="flex justify-between items-center p-3 bg-white/5 rounded border border-white/5">
                             <span className="text-white font-medium">4 Matches</span>
-                            <span className="text-white/70">16%</span>
+                            <span className="text-white/70">2,000 MORBIUS</span>
                           </div>
                           <div className="flex justify-between items-center p-3 bg-white/5 rounded border border-white/5">
                             <span className="text-white font-medium">3 Matches</span>
-                            <span className="text-white/70">10%</span>
+                            <span className="text-white/70">750 MORBIUS</span>
                           </div>
                           <div className="flex justify-between items-center p-3 bg-white/5 rounded border border-white/5">
                             <span className="text-white font-medium">2 Matches</span>
-                            <span className="text-white/70">6%</span>
+                            <span className="text-white/70">375 MORBIUS</span>
                           </div>
                           <div className="flex justify-between items-center p-3 bg-white/5 rounded border border-white/5">
                             <span className="text-white font-medium">1 Match</span>
-                            <span className="text-white/70">3%</span>
+                            <span className="text-white/70">125 MORBIUS</span>
                           </div>
                         </div>
                       </div>
@@ -568,27 +568,28 @@ export default function Home() {
                             <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                             </svg>
-                            <span className="text-lg font-semibold text-purple-300">Every 20 Rounds</span>
+                            <span className="text-lg font-semibold text-purple-300">Progressive Jackpot</span>
                           </div>
-                          <p className="text-white/80 text-sm">
-                            The MegaMorbius jackpot explodes with accumulated funds, creating massive prize opportunities and viral excitement.
+                          <p className="text-white/80 text-sm mb-3">
+                            10% from every ticket purchase grows the MegaMorbius jackpot. When someone matches 5 or 6 numbers, the jackpot is distributed on top of fixed prizes!
                           </p>
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-4">
                           <div className="bg-white/5 p-4 rounded-lg border border-white/10">
-                            <h4 className="text-purple-300 font-medium mb-2">Distribution</h4>
+                            <h4 className="text-purple-300 font-medium mb-2">How It Grows</h4>
                             <ul className="text-white/70 text-sm space-y-1">
-                              <li>• 90% → Winners pool (massive prizes)</li>
-                              <li>• 10% → Deployer rewards</li>
+                              <li>• 10% from each ticket purchase</li>
+                              <li>• Donations from the community</li>
+                              <li>• Accumulates until won</li>
                             </ul>
                           </div>
                           <div className="bg-white/5 p-4 rounded-lg border border-white/10">
-                            <h4 className="text-purple-300 font-medium mb-2">Impact</h4>
+                            <h4 className="text-purple-300 font-medium mb-2">Distribution</h4>
                             <ul className="text-white/70 text-sm space-y-1">
-                              <li>• Creates viral moments</li>
-                              <li>• Drives participation cycles</li>
-                              <li>• Builds community excitement</li>
+                              <li>• <strong className="text-yellow-400">6 matches:</strong> 65% of jackpot</li>
+                              <li>• <strong className="text-purple-400">5 matches:</strong> 35% of jackpot</li>
+                              <li>• PLUS their fixed prize amounts</li>
                             </ul>
                           </div>
                         </div>
@@ -739,8 +740,8 @@ export default function Home() {
           {/* Divider */}
           <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent mb-8 sm:mb-12 md:mb-16 lg:mb-20 xl:mb-24" />
 
-          {/* Stats Row - Always 3 columns */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 lg:gap-8 xl:gap-16 max-w-5xl mx-auto">
+          {/* Stats Row - 2 columns */}
+          <div className="grid grid-cols-2 gap-4 sm:gap-8 md:gap-12 lg:gap-16 xl:gap-24 max-w-4xl mx-auto">
             {/* Burned */}
             <div className="text-center">
               <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold text-white/90 mb-1 sm:mb-2 md:mb-3 lg:mb-4 xl:mb-4 funnel-display-bold">
@@ -757,36 +758,6 @@ export default function Home() {
               </div>
               <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-small">
                 Burned
-              </div>
-            </div>
-
-            {/* Player Pool */}
-            <div className="text-center">
-              <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold text-white/90 mb-1 sm:mb-2 md:mb-3 lg:mb-4 xl:mb-4 funnel-display-bold">
-                {(() => {
-                  let pool: bigint
-
-                  // If current round has tickets, show current player pool (70% of collected funds)
-                  if (totalTickets > BigInt(0)) {
-                    pool = (totalPssh * BigInt(7000)) / BigInt(10000)
-                  } else {
-                    // If no current tickets, show previous round's total winners pool
-                    pool = brackets.reduce((sum, bracket) => {
-                      return sum + BigInt(bracket.poolAmount || 0)
-                    }, BigInt(0))
-                  }
-
-                  const poolNum = parseFloat(formatUnits(pool, TOKEN_DECIMALS))
-                  return poolNum >= 1_000_000
-                    ? (poolNum / 1_000_000).toFixed(1) + 'M'
-                    : poolNum >= 1_000
-                    ? (poolNum / 1_000).toFixed(1) + 'K'
-                    : poolNum.toFixed(0)
-                })()}
-              </div>
-              <div className="text-lg text-white/50 tracking-[0.2em] uppercase mitr-small">
-                <div>Player</div>
-                <div>Pool</div>
               </div>
             </div>
 
@@ -821,7 +792,6 @@ export default function Home() {
                 playerTickets={[]}
                 autoStart={false}
                 isBackground
-                isMegaMorbius={Number(roundId) % MEGA_MILLIONS_INTERVAL === 0 && Number(roundId) > 0}
                 onDrawStart={() => setIsDrawing(true)}
                 onDrawEnd={() => setIsDrawing(false)}
                 timeRemaining={Number(timeRemaining)}

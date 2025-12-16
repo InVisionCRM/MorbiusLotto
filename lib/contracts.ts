@@ -15,14 +15,14 @@ export const WPLS_TO_MORBIUS_BUFFER_BPS = 11000 as const // 10% buffer
 // OLD Lottery contract (simple version)
 export const LOTTERY_ADDRESS_OLD = '0xa216b3295685D44d12Aaf12112b9212cE45787eD' as const
 
-// NEW Lottery contract (6-of-55 version V2) - Immediate drawing, 2-min rounds
-export const LOTTERY_ADDRESS = '0x636F246b6d484a0448d082F13A71627C2b40b870' as const
+// NEW Lottery contract (6-of-55 version V2) - Fixed prizes, MegaMorbius progressive jackpot
+export const LOTTERY_ADDRESS = '0x25056D6159F6C7a7812d1B65aca2Ca14E3E0F4c3' as const
 
 // Keno contract
 export const KENO_ADDRESS = '0xb04913A3085993153DaEE58704760BeB67c58705' as const
 
 // Contract deployment info
-export const LOTTERY_DEPLOY_BLOCK = 25269378
+export const LOTTERY_DEPLOY_BLOCK = 25278796
 export const KENO_DEPLOY_BLOCK = 25243758
 // Placeholder - update when deployed
 
@@ -31,4 +31,3 @@ export const TICKET_PRICE = BigInt(100_000_000_000_000_000_000) // 100 tokens (1
 export const NUMBERS_PER_TICKET = 6
 export const MIN_NUMBER = 1
 export const MAX_NUMBER = 55
-export const MEGA_MILLIONS_INTERVAL = 20 // Every 20th round

@@ -78,39 +78,6 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
     })
   }
 
-  const calculateSplit = () => {
-    if (!totalPssh) return null
-    
-    const total = Number(totalPssh)
-    // Distribution percentages (of total pot)
-    const winnersPool = total * 0.60 // 60%
-    const burnAllocation = total * 0.20 // 20% burn
-    const megaBank = total * 0.20 // 20% MegaMorbius
-    
-    // Bracket percentages (of winners pool)
-    const bracket6 = winnersPool * 0.40
-    const bracket5 = winnersPool * 0.25
-    const bracket4 = winnersPool * 0.16
-    const bracket3 = winnersPool * 0.10
-    const bracket2 = winnersPool * 0.06
-    const bracket1 = winnersPool * 0.03
-
-    return {
-      winnersPool,
-      burnAllocation,
-      megaBank,
-      brackets: [
-        { id: 6, percentage: 40, amount: bracket6 },
-        { id: 5, percentage: 25, amount: bracket5 },
-        { id: 4, percentage: 16, amount: bracket4 },
-        { id: 3, percentage: 10, amount: bracket3 },
-        { id: 2, percentage: 6, amount: bracket2 },
-        { id: 1, percentage: 3, amount: bracket1 },
-      ]
-    }
-  }
-
-  const split = calculateSplit()
 
   return (
     <>
@@ -286,17 +253,19 @@ export function PayoutBreakdownDialog({ totalPssh }: PayoutBreakdownDialogProps)
       maximumFractionDigits: 2,
     })
 
-  const winnersPool = total * 0.60
-  const burnAllocation = total * 0.20
-  const megaBank = total * 0.20
+  const winnersPool = total * 0.70
+  const burnAllocation = total * 0.10
+  const megaBank = total * 0.10
+  const keeperFee = total * 0.05
+  const deployerFee = total * 0.05
 
   const brackets = [
-    { id: 6, label: 'Match 6 (40%)', amount: winnersPool * 0.40 },
-    { id: 5, label: 'Match 5 (25%)', amount: winnersPool * 0.25 },
-    { id: 4, label: 'Match 4 (16%)', amount: winnersPool * 0.16 },
-    { id: 3, label: 'Match 3 (10%)', amount: winnersPool * 0.10 },
-    { id: 2, label: 'Match 2 (6%)', amount: winnersPool * 0.06 },
-    { id: 1, label: 'Match 1 (3%)', amount: winnersPool * 0.03 },
+    { id: 6, label: 'Match 6 (15,000 MOR)', amount: 15000, hasMegaBonus: true },
+    { id: 5, label: 'Match 5 (5,000 MOR)', amount: 5000, hasMegaBonus: true },
+    { id: 4, label: 'Match 4 (2,000 MOR)', amount: 2000, hasMegaBonus: false },
+    { id: 3, label: 'Match 3 (750 MOR)', amount: 750, hasMegaBonus: false },
+    { id: 2, label: 'Match 2 (375 MOR)', amount: 375, hasMegaBonus: false },
+    { id: 1, label: 'Match 1 (125 MOR)', amount: 125, hasMegaBonus: false },
   ]
 
   return (
@@ -318,14 +287,17 @@ export function PayoutBreakdownDialog({ totalPssh }: PayoutBreakdownDialogProps)
           <div className="bg-black/40 rounded-lg p-4 border border-white/10">
             <div className="flex items-center justify-between mb-1">
               <span className="font-semibold text-white">Winners Pool</span>
-              <span className="text-white/80">60%</span>
+              <span className="text-white/80">70%</span>
             </div>
             <div className="text-white/60 mb-3">{formatPssh(winnersPool)} Morbius</div>
             <div className="space-y-1.5 pl-2 border-l-2 border-white/10">
               {brackets.map((bracket) => (
                 <div key={bracket.id} className="flex items-center justify-between text-xs">
-                  <span className="text-white/70">{bracket.label}</span>
-                  <span className="text-white/60">{formatPssh(bracket.amount)} Morbius</span>
+                  <span className="text-white/70">
+                    {bracket.label}
+                    {bracket.hasMegaBonus && <span className="text-yellow-400 ml-1">🎰</span>}
+                  </span>
+                  <span className="text-white/60">{bracket.amount.toLocaleString()} Morbius</span>
                 </div>
               ))}
             </div>
@@ -334,7 +306,7 @@ export function PayoutBreakdownDialog({ totalPssh }: PayoutBreakdownDialogProps)
           <div className="bg-black/40 rounded-lg p-4 border border-white/10">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-white">Burn</span>
-              <span className="text-white/80">20%</span>
+              <span className="text-white/80">10%</span>
             </div>
             <div className="text-white/60 mt-1">{formatPssh(burnAllocation)} Morbius</div>
           </div>
@@ -342,9 +314,27 @@ export function PayoutBreakdownDialog({ totalPssh }: PayoutBreakdownDialogProps)
           <div className="bg-black/40 rounded-lg p-4 border border-white/10">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-white">MegaMorbius Bank</span>
-              <span className="text-white/80">20%</span>
+              <span className="text-white/80">10%</span>
             </div>
             <div className="text-white/60 mt-1">{formatPssh(megaBank)} Morbius</div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-black/40 rounded-lg p-3 border border-white/10">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-white text-xs">Keeper</span>
+                <span className="text-white/80 text-xs">5%</span>
+              </div>
+              <div className="text-white/60 mt-1 text-xs">{formatPssh(keeperFee)} Morbius</div>
+            </div>
+
+            <div className="bg-black/40 rounded-lg p-3 border border-white/10">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-white text-xs">Deployer</span>
+                <span className="text-white/80 text-xs">5%</span>
+              </div>
+              <div className="text-white/60 mt-1 text-xs">{formatPssh(deployerFee)} Morbius</div>
+            </div>
           </div>
         </div>
       </DialogContent>

@@ -90,13 +90,13 @@ export function useRound(roundId: number) {
   })
 }
 
-// Read MegaMillions bank balance
+// Read MegaMorbius bank balance (progressive jackpot)
 export function useMegaMillionsBank() {
   const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
     address: LOTTERY_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
-    functionName: 'getMegaMillionsBank',
+    functionName: 'getMegaMorbiusBank',
     query: {
       enabled: isValidAddress,
       refetchInterval: isValidAddress ? 10000 : false, // Refetch every 10 seconds
