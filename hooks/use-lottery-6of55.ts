@@ -13,7 +13,7 @@ export function useCurrentRound() {
     functionName: 'getCurrentRoundInfo',
     query: {
       enabled: isValidAddress,
-      refetchInterval: false, // Disabled to prevent cycling
+      refetchInterval: 10000, // Poll every 10 seconds for auto-refresh
     },
   })
 }

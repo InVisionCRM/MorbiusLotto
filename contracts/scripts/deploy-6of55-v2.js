@@ -17,9 +17,8 @@ async function main() {
   const KEEPER_WALLET = process.env.KEEPER_WALLET || deployer.address; // Defaults to deployer
   const DEPLOYER_WALLET = deployer.address; // Not used anymore, kept for constructor compatibility
 
-  // Round duration and MegaMorbius interval
+  // Round duration
   let ROUND_DURATION;
-  const MEGA_MORBIUS_INTERVAL = 20; // every 20 rounds
   if (hre.network.name === "pulsechainTestnet") {
     ROUND_DURATION = 120; // 2 minutes for testnet
     console.log("Testnet detected - using 2 minute rounds");
@@ -38,7 +37,6 @@ async function main() {
   console.log("KEEPER_WALLET       :", KEEPER_WALLET);
   console.log("DEPLOYER_WALLET     :", DEPLOYER_WALLET);
   console.log("ROUND_DURATION      :", ROUND_DURATION, "seconds");
-  console.log("MEGA_MORBIUS_INTERVAL:", MEGA_MORBIUS_INTERVAL, "rounds");
 
   // Deploy contract (use fully qualified name to avoid ambiguity)
   const MegaMorbiusLottery = await hre.ethers.getContractFactory("contracts/SuperStakeLottery6of55V2.sol:MegaMorbiusLottery");
@@ -54,7 +52,6 @@ async function main() {
     WPLS_TOKEN_ADDRESS,
     PULSEX_ROUTER_ADDRESS,
     ROUND_DURATION,
-    MEGA_MORBIUS_INTERVAL,
     KEEPER_WALLET,
     DEPLOYER_WALLET,
     {
@@ -81,7 +78,7 @@ async function main() {
   const roundInfo = await lottery.getCurrentRoundInfo();
   console.log("Current Round ID:", roundInfo.roundId.toString());
   console.log("Round Duration:", (await lottery.roundDuration()).toString(), "seconds");
-  console.log("MegaMorbius Bank:", (await lottery.getMegaMillionsBank()).toString());
+  console.log("MegaMorbius Bank:", (await lottery.getMegaMorbiusBank()).toString());
 
   // Display important addresses
   console.log("\n📋 Important Addresses:");
@@ -96,25 +93,26 @@ async function main() {
   console.log("- Ticket Price (PLS beats):", (await lottery.ticketPricePls()).toString(), "wei");
   console.log("- Numbers Per Ticket:", await lottery.NUMBERS_PER_TICKET());
   console.log("- Number Range:", await lottery.MIN_NUMBER(), "-", await lottery.MAX_NUMBER());
-  console.log("- MegaMorbius Interval:", (await lottery.megaMillionsInterval()).toString(), "rounds");
-  console.log("- Keeper Fee:", (await lottery.KEEPER_FEE_PCT()).toString(), "bps (10%)");
+  console.log("- Keeper Fee:", (await lottery.KEEPER_FEE_PCT()).toString(), "bps (5%)");
+  console.log("- Deployer Fee:", (await lottery.DEPLOYER_FEE_PCT()).toString(), "bps (5%)");
   console.log("- Winners Pool:", (await lottery.WINNERS_POOL_PCT()).toString(), "bps (70%)");
   console.log("- Burn:", (await lottery.BURN_PCT()).toString(), "bps (10%)");
   console.log("- Mega Bank:", (await lottery.MEGA_BANK_PCT()).toString(), "bps (10%)");
 
-  // Display bracket percentages
-  console.log("\n🎯 Bracket Percentages (REBALANCED):");
+  // Display fixed bracket amounts
+  console.log("\n🎯 Fixed Prize Brackets:");
   for (let i = 0; i < 6; i++) {
-    const pct = await lottery.BRACKET_PERCENTAGES(i);
-    console.log(`- Bracket ${i + 1} (${i + 1} matches): ${pct} bps (${Number(pct) / 100}%)`);
+    const amount = await lottery.BRACKET_AMOUNTS(i);
+    console.log(`- Bracket ${i + 1} (${i + 1} matches): ${amount.toString()} Morbius (${Number(amount) / 1e18} MOR)`);
   }
 
   console.log("\n🔄 Rollover Logic:");
   console.log("- Unclaimed brackets: 100% to next round winners pool");
 
-  console.log("\n🎰 MegaMorbius (Every 20 Rounds):");
-  console.log("- Triggers on round 20, 40, 60, etc.");
-  console.log("- Distribution: 80% to bracket 6, 20% to bracket 5");
+  console.log("\n🎰 MegaMorbius Progressive Jackpot:");
+  console.log("- Accumulates 10% of all ticket purchases");
+  console.log("- Distributes immediately when 5/6 match winners appear");
+  console.log("- Distribution: 35% to 5-match winners, 65% to 6-match winners");
 
   console.log("\n💰 WPLS Payment:");
   console.log("- Auto-swap WPLS → Morbius via PulseX");
@@ -133,8 +131,7 @@ async function main() {
     keeperWallet: KEEPER_WALLET,
     deployerWallet: DEPLOYER_WALLET,
     roundDuration: ROUND_DURATION,
-    megaMorbiusInterval: MEGA_MORBIUS_INTERVAL,
-    version: "V2",
+    version: "V2-FixedPrizes",
     timestamp: new Date().toISOString(),
   };
 
@@ -150,7 +147,7 @@ async function main() {
   console.log("2. ABI already regenerated: abi/lottery6of55-v2.json");
   console.log("");
   console.log("3. Verify contract on PulseScan:");
-  console.log(`   npx hardhat verify --network ${hre.network.name} ${lotteryAddress} "${MORBIUS_TOKEN_ADDRESS}" "${WPLS_TOKEN_ADDRESS}" "${PULSEX_ROUTER_ADDRESS}" ${ROUND_DURATION} ${MEGA_MORBIUS_INTERVAL} "${KEEPER_WALLET}" "${DEPLOYER_WALLET}"`);
+  console.log(`   npx hardhat verify --network ${hre.network.name} ${lotteryAddress} "${MORBIUS_TOKEN_ADDRESS}" "${WPLS_TOKEN_ADDRESS}" "${PULSEX_ROUTER_ADDRESS}" ${ROUND_DURATION} "${KEEPER_WALLET}" "${DEPLOYER_WALLET}"`);
   console.log("");
   console.log("4. Start the keeper bot:");
   console.log(`   node scripts/lottery-keeper.js`);

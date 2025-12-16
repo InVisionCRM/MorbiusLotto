@@ -29,14 +29,16 @@ interface IPulseXRouter {
 
 /**
  * @title MegaMorbiusLottery
- * @notice 6-of-55 lottery with improved bracket allocation, smart rollovers, and WPLS payment support
+ * @notice 6-of-55 lottery with fixed prize brackets, MegaMorbius progressive jackpot, donations, and WPLS payment support
  * @dev Distribution (applied ONLY on ticket purchases, NOT rollovers):
  *      - 5% to Keeper wallet
  *      - 5% to Deployer wallet
  *      - 10% to Burn (dead address)
- *      - 10% to MegaMorbius Bank
+ *      - 10% to MegaMorbius Bank (progressive jackpot)
  *      - 70% to Winners Pool (prize brackets)
- *      - Rebalanced brackets: focus on high brackets (5-6 matches)
+ *      - Fixed prize brackets: 125, 375, 750, 2000, 5000, 15000 Morbius
+ *      - MegaMorbius progressive: 35% to 5-matches, 65% to 6-matches whenever jackpot is won
+ *      - Donations: Direct contributions to prize pool or MegaMorbius jackpot
  *      - Smart rollover: Unclaimed prizes → 100% next round winners pool
  *      - WPLS payment with auto-swap to Morbius (accounts for 5.5% tax + 5% slippage)
  */
@@ -65,10 +67,10 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
     uint256 public constant TOTAL_PCT = 10000; // 100%
     uint256 public constant MAX_FUTURE_ROUND_OFFSET = 100; // allow scheduling up to 100 rounds ahead
 
-    // Bracket percentages (of 70% winners pool, in basis points)
-    // Rebalanced to favor higher matches
-    uint256[6] public BRACKET_PERCENTAGES = [300, 600, 1000, 1600, 2500, 4000];
-    // Bracket 1: 3%, Bracket 2: 6%, Bracket 3: 10%, Bracket 4: 16%, Bracket 5: 25%, Bracket 6: 40% (of Winners Pool)
+    // Fixed bracket amounts in Morbius (18 decimals)
+    // Progressive prizes favoring higher matches
+    uint256[6] public BRACKET_AMOUNTS = [125e18, 375e18, 750e18, 2000e18, 5000e18, 15000e18];
+    // Bracket 1: 125 Morbius, Bracket 2: 375 Morbius, Bracket 3: 750 Morbius, Bracket 4: 2000 Morbius, Bracket 5: 5000 Morbius, Bracket 6: 15000 Morbius
 
     // Rollover rule: unclaimed pools → 100% to next round winners pool
     uint256 public constant ROLLOVER_TO_NEXT_ROUND_PCT = 10000; // 100%
@@ -113,7 +115,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         uint256 uniquePlayers;
         BracketWinners[6] brackets;
         uint256 megaBankContribution;
-        bool isMegaMillionsRound;
         RoundState state;
     }
 
@@ -134,7 +135,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
     // Banks
     uint256 public megaMorbiusBank;
     uint256 public rolloverReserve; // carries 75% of unclaimed bracket pools to next round winners pool
-    uint256 public megaMillionsInterval;
     mapping(uint256 => uint256) public pendingRoundMorbius; // prepaid Morbius for future rounds
     mapping(uint256 => uint256) public pendingRoundTickets; // prepaid ticket counts for future rounds
 
@@ -177,20 +177,21 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
 
     // ============ Events ============
 
-    event RoundStarted(uint256 indexed roundId, uint256 startTime, uint256 endTime, bool isMegaMillionsRound);
+    event RoundStarted(uint256 indexed roundId, uint256 startTime, uint256 endTime);
     event TicketsPurchased(address indexed player, uint256 indexed roundId, uint256 ticketCount, uint256 freeTicketsUsed, uint256 morbiusSpent);
     event TicketsPurchasedForRounds(address indexed player, uint256[] roundIds, uint256[] ticketCounts, uint256 morbiusSpent);
     event WPLSSwappedForTickets(address indexed player, uint256 wplsSpent, uint256 morbiusReceived);
     event NumbersDrawn(uint256 indexed roundId, uint8[6] winningNumbers, uint256 drawBlock);
     event RoundFinalized(uint256 indexed roundId, uint8[6] winningNumbers, uint256 totalMorbius, uint256 totalTickets, uint256 uniquePlayers);
     event BracketResults(uint256 indexed roundId, uint256 bracket, uint256 winnerCount, uint256 poolAmount, uint256 payoutPerWinner);
-    event MegaMillionsTriggered(uint256 indexed roundId, uint256 bankAmount, uint256 toBracket6, uint256 toBracket5);
+    event MegaMorbiusDistributed(uint256 indexed roundId, uint256 bankAmount, uint256 toBracket6, uint256 toBracket5);
     event WinningsClaimed(address indexed player, uint256 indexed roundId, uint256 amount);
     event RoundDurationUpdated(uint256 oldDuration, uint256 newDuration);
     event UnclaimedPrizeRolledOver(uint256 indexed roundId, uint256 bracket, uint256 amount, string destination);
     event TicketPricesUpdated(uint256 morbiusPrice, uint256 plsPrice);
     event BurnExecuted(uint256 amount);
     event PoolDonation(address indexed donor, uint256 amount, uint256 roundId);
+    event MegaMorbiusDonation(address indexed donor, uint256 amount, uint256 roundId);
 
     // ============ Constructor ============
 
@@ -199,7 +200,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         address _wplsTokenAddress,
         address _pulseXRouterAddress,
         uint256 _initialRoundDuration,
-        uint256 _megaMillionsInterval,
         address _keeperWallet,
         address _deployerWallet
     ) Ownable(msg.sender) {
@@ -207,7 +207,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         require(_wplsTokenAddress != address(0), "Invalid WPLS address");
         require(_pulseXRouterAddress != address(0), "Invalid router address");
         require(_initialRoundDuration > 0, "Duration must be positive");
-        require(_megaMillionsInterval > 0, "Mega interval must be positive");
         require(_keeperWallet != address(0), "Invalid keeper address");
         require(_deployerWallet != address(0), "Invalid deployer address");
 
@@ -215,7 +214,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         WPLS_TOKEN = IWrappedPulse(_wplsTokenAddress);
         pulseXRouter = IPulseXRouter(_pulseXRouterAddress);
         roundDuration = _initialRoundDuration;
-        megaMillionsInterval = _megaMillionsInterval;
         keeperWallet = _keeperWallet;
         deployerWallet = _deployerWallet;
 
@@ -676,13 +674,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         emit RoundDurationUpdated(oldDuration, _newDuration);
     }
 
-    /**
-     * @notice Update MegaMorbius interval (owner only)
-     */
-    function updateMegaMillionsInterval(uint256 _newInterval) external onlyOwner {
-        require(_newInterval > 0, "Interval must be positive");
-        megaMillionsInterval = _newInterval;
-    }
 
     /**
      * @notice Update ticket prices for Morbius and PLS payment paths
@@ -715,6 +706,24 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         emit PoolDonation(msg.sender, amount, currentRoundId);
     }
 
+    /**
+     * @notice Donate MORBIUS directly to the MegaMorbius progressive jackpot
+     * @param amount Amount of MORBIUS to donate (in wei, no restrictions)
+     */
+    function donateToMegaMorbius(uint256 amount) external {
+        // Transfer MORBIUS from donor to contract
+        MORBIUS_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
+
+        // Add entire amount to MegaMorbius bank (progressive jackpot)
+        megaMorbiusBank += amount;
+        totalMorbiusEverCollected += amount;
+
+        // Track donor stats
+        playerTotals[msg.sender].totalSpent += amount;
+
+        emit MegaMorbiusDonation(msg.sender, amount, currentRoundId);
+    }
+
     // ============ View Functions ============
 
     function getCurrentRoundInfo() external view returns (
@@ -725,7 +734,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         uint256 totalTickets,
         uint256 uniquePlayers,
         uint256 timeRemaining,
-        bool isMegaMillionsRound,
         RoundState state
     ) {
         roundId = currentRoundId;
@@ -735,7 +743,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         totalTickets = currentRoundTotalTickets;
         uniquePlayers = roundPlayers[currentRoundId].length;
         timeRemaining = block.timestamp >= endTime ? 0 : endTime - block.timestamp;
-        isMegaMillionsRound = (currentRoundId % megaMillionsInterval == 0);
         state = currentRoundState;
     }
 
@@ -759,7 +766,7 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         return rounds[roundId];
     }
 
-    function getMegaMillionsBank() external view returns (uint256) {
+    function getMegaMorbiusBank() external view returns (uint256) {
         return megaMorbiusBank;
     }
 
@@ -796,14 +803,14 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
     }
 
     function getBracketConfig() external view returns (
-        uint256[6] memory bracketPercents,
+        uint256[6] memory bracketAmounts,
         uint256 winnersPoolPercent,
         uint256 burnPercent,
         uint256 megaBankPercent,
         uint256 keeperFeePercent,
         uint256 deployerFeePercent
     ) {
-        bracketPercents = BRACKET_PERCENTAGES;
+        bracketAmounts = BRACKET_AMOUNTS;
         winnersPoolPercent = WINNERS_POOL_PCT;
         burnPercent = BURN_PCT;
         megaBankPercent = MEGA_BANK_PCT;
@@ -999,9 +1006,7 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         pendingRoundMorbius[currentRoundId] = 0;
         pendingRoundTickets[currentRoundId] = 0;
 
-        bool isMegaMillions = (currentRoundId % megaMillionsInterval == 0);
-
-        emit RoundStarted(currentRoundId, currentRoundStartTime, currentRoundStartTime + roundDuration, isMegaMillions);
+        emit RoundStarted(currentRoundId, currentRoundStartTime, currentRoundStartTime + roundDuration);
     }
 
     /**
@@ -1036,9 +1041,9 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
             // Calculate brackets and distribute prizes
             _calculateBrackets(finalizingRoundId, winningNumbers);
 
-            bool isMegaMillions = (finalizingRoundId % megaMillionsInterval == 0);
-            if (isMegaMillions) {
-                _handleMegaMillions(finalizingRoundId);
+            // Distribute MegaMorbius immediately to any 5/6 match winners
+            if (rounds[finalizingRoundId].brackets[4].winnerCount > 0 || rounds[finalizingRoundId].brackets[5].winnerCount > 0) {
+                _handleMegaMorbiusDistribution(finalizingRoundId);
             }
 
             _distributePrizes(finalizingRoundId);
@@ -1063,7 +1068,6 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
             BracketWinners(6, 0, 0, 0, new uint256[](0))
         ];
         rounds[roundId].megaBankContribution = 0;
-        rounds[roundId].isMegaMillionsRound = (roundId % megaMillionsInterval == 0);
 
         // FIX: Roll over the entire prize pool since there are no tickets
         rolloverReserve += currentRoundTotalMorbius;
@@ -1141,8 +1145,9 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         }
 
         for (uint256 bracket = 1; bracket <= 6; bracket++) {
-            // currentRoundTotalMorbius already contains ONLY the winners pool (70% of purchases + rollovers)
-            uint256 bracketPool = (currentRoundTotalMorbius * BRACKET_PERCENTAGES[bracket - 1]) / TOTAL_PCT;
+            // Fixed amount per winner for this bracket
+            uint256 payoutPerWinner = BRACKET_AMOUNTS[bracket - 1];
+            uint256 totalBracketCost = payoutPerWinner * bracketCounts[bracket];
 
             if (bracketCounts[bracket] > 0) {
                 uint256[] memory winningIds = new uint256[](bracketCounts[bracket]);
@@ -1152,15 +1157,13 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
 
                 rounds[roundId].brackets[bracket - 1] = BracketWinners({
                     matchCount: bracket,
-                    poolAmount: bracketPool,
+                    poolAmount: totalBracketCost,
                     winnerCount: bracketCounts[bracket],
-                    payoutPerWinner: bracketPool / bracketCounts[bracket],
+                    payoutPerWinner: payoutPerWinner,
                     winningTicketIds: winningIds
                 });
             } else {
-                // Handle unclaimed prizes with smart rollover
-                _handleUnclaimedBracket(roundId, bracket, bracketPool);
-
+                // No winners - no unclaimed prizes to rollover since prizes are fixed amounts
                 rounds[roundId].brackets[bracket - 1] = BracketWinners({
                     matchCount: bracket,
                     poolAmount: 0,
@@ -1170,7 +1173,7 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
                 });
             }
 
-            emit BracketResults(roundId, bracket, bracketCounts[bracket], bracketPool, rounds[roundId].brackets[bracket - 1].payoutPerWinner);
+            emit BracketResults(roundId, bracket, bracketCounts[bracket], totalBracketCost, payoutPerWinner);
         }
 
         rounds[roundId].winningNumbers = winningNumbers;
@@ -1218,28 +1221,27 @@ contract MegaMorbiusLottery is Ownable, ReentrancyGuard {
         rounds[roundId].megaBankContribution = 0; // Tracked separately at purchase time
     }
 
-    function _handleMegaMillions(uint256 roundId) private {
+    function _handleMegaMorbiusDistribution(uint256 roundId) private {
         if (megaMorbiusBank == 0) return;
 
-        uint256 toBracket6 = (megaMorbiusBank * 80) / 100;
-        uint256 toBracket5 = megaMorbiusBank - toBracket6;
+        // MegaMorbius now only affects 5 and 6 matches (brackets 4 and 5)
+        uint256 toBracket6 = (megaMorbiusBank * 65) / 100; // 65% to 6 matches
+        uint256 toBracket5 = (megaMorbiusBank * 35) / 100; // 35% to 5 matches
 
-        rounds[roundId].brackets[5].poolAmount += toBracket6;
-        rounds[roundId].brackets[4].poolAmount += toBracket5;
-
+        // Add MegaMorbius bonus to winners (each winner gets base prize + their share of MegaMorbius)
         if (rounds[roundId].brackets[5].winnerCount > 0) {
-            rounds[roundId].brackets[5].payoutPerWinner =
-                rounds[roundId].brackets[5].poolAmount / rounds[roundId].brackets[5].winnerCount;
+            uint256 megaBonusPerWinner6 = toBracket6 / rounds[roundId].brackets[5].winnerCount;
+            rounds[roundId].brackets[5].payoutPerWinner += megaBonusPerWinner6;
+            rounds[roundId].brackets[5].poolAmount += toBracket6;
         }
 
         if (rounds[roundId].brackets[4].winnerCount > 0) {
-            rounds[roundId].brackets[4].payoutPerWinner =
-                rounds[roundId].brackets[4].poolAmount / rounds[roundId].brackets[4].winnerCount;
+            uint256 megaBonusPerWinner5 = toBracket5 / rounds[roundId].brackets[4].winnerCount;
+            rounds[roundId].brackets[4].payoutPerWinner += megaBonusPerWinner5;
+            rounds[roundId].brackets[4].poolAmount += toBracket5;
         }
 
-        rounds[roundId].isMegaMillionsRound = true;
-
-        emit MegaMillionsTriggered(roundId, megaMorbiusBank, toBracket6, toBracket5);
+        emit MegaMorbiusDistributed(roundId, megaMorbiusBank, toBracket6, toBracket5);
 
         megaMorbiusBank = 0;
     }
