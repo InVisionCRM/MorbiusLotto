@@ -1,0 +1,1389 @@
+[dotenv@17.2.3] injecting env (16) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+🤖 Lottery Keeper Started
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Keeper Address: 0x2775dD8242C4f589536113475B7C80F42ab4A70A
+Contract: 0x4704C7d7eEF0968d8343E8574bc2865E612D84ED
+RPC: https://rpc.pulsechain.com
+Poll Interval: 15000ms
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Contract verified at address
+
+💰 Initial Balances:
+   PLS: 989911.771244043505801635 PLS
+   Morbius: 1000075.0 MORBIUS
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 74
+   Type: Standard
+   Start: 12/13/2025, 5:13:05 PM
+   End: 12/13/2025, 5:15:05 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:26:03] Round 74 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 74...
+   🔍 Pre-flight check:
+      Block: 25261576
+      Block timestamp: 1765664755 (blockchain time)
+      System time: 1765664763 (local time)
+      Time diff: 8s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765663985
+      Duration: 120s
+      Expires at: 1765664105
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x4bcf1ff62ae4c6bce0114e5c9ecc66cc27e3f466c81502e9d3843eb5645a2e55
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261578
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 119.321329827294662811 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 989792.449914216211138824 PLS
+   📊 Estimated Draws Remaining: 8295 draws
+   
+   🪙 Morbius Balance: 1000075.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 75
+   Type: Standard
+   Start: 12/13/2025, 5:26:15 PM
+   End: 12/13/2025, 5:28:15 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:26:33] Round 75 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[22:26:48] Round 75 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[22:27:04] Round 75 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+[22:27:19] Round 75 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:27:35] Round 75 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+[22:27:50] Round 75 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[22:28:06] Round 75 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[22:28:21] Round 75 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 75...
+   🔍 Pre-flight check:
+      Block: 25261590
+      Block timestamp: 1765664895 (blockchain time)
+      System time: 1765664902 (local time)
+      Time diff: 7s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765664775
+      Duration: 120s
+      Expires at: 1765664895
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xeb188fe118af86c7913251f25ceb5c30d5986abd7e1dc53e579ca5357f488596
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261592
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 104.923069000483097535 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 989792.449914216211138824 PLS
+   📊 Estimated Draws Remaining: 9433 draws
+   
+   🪙 Morbius Balance: 1000075.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 76
+   Type: Standard
+   Start: 12/13/2025, 5:28:35 PM
+   End: 12/13/2025, 5:30:35 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:28:52] Round 76 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[22:29:07] Round 76 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[22:29:23] Round 76 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+[22:29:38] Round 76 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:29:53] Round 76 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+[22:30:09] Round 76 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[22:30:24] Round 76 | OPEN | ⏱️  20s | 🎫 0 tickets | 👥 0 players
+[22:30:40] Round 76 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 76...
+   🔍 Pre-flight check:
+      Block: 25261604
+      Block timestamp: 1765665035 (blockchain time)
+      System time: 1765665041 (local time)
+      Time diff: 6s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765664915
+      Duration: 120s
+      Expires at: 1765665035
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xbf972e03446d686cec103ed30b79de0003038b1917673288361f0a65ca05a543
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261605
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 103.008731611686347018 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 989584.518113604041694271 PLS
+   📊 Estimated Draws Remaining: 9606 draws
+   
+   🪙 Morbius Balance: 1000075.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 77
+   Type: Standard
+   Start: 12/13/2025, 5:30:55 PM
+   End: 12/13/2025, 5:32:55 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:31:15] Round 77 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[22:31:30] Round 77 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[22:31:46] Round 77 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+[22:32:01] Round 77 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:32:16] Round 77 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+[22:32:32] Round 77 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+[22:32:47] Round 77 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[22:33:03] Round 77 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[22:33:18] Round 77 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 77...
+   🔍 Pre-flight check:
+      Block: 25261618
+      Block timestamp: 1765665195 (blockchain time)
+      System time: 1765665199 (local time)
+      Time diff: 4s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765665055
+      Duration: 120s
+      Expires at: 1765665175
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xf43a3e97e278b5631335eb918a3dadae838e543250814b2d41091c520e4cf355
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261619
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 99.802786126224679174 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 989484.715327477817015097 PLS
+   📊 Estimated Draws Remaining: 9914 draws
+   
+   🪙 Morbius Balance: 1000075.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 78
+   Type: Standard
+   Start: 12/13/2025, 5:33:25 PM
+   End: 12/13/2025, 5:35:25 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:33:45] Round 78 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[22:34:00] Round 78 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+
+❌ Contract call failed: server response 504 Gateway Time-out (request={  }, response={  }, error=null, info={ "requestUrl": "https://rpc.pulsechain.com", "responseBody": "<html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n", "responseStatus": "504 Gateway Time-out" }, code=SERVER_ERROR, version=6.16.0)
+   This usually means:
+   1. Wrong contract address
+   2. ABI mismatch with deployed contract
+   3. RPC connection issue
+   Verify the contract address and ABI are correct.
+
+[22:36:46] Round 78 | OPEN | ⏱️  0s | 🎫 1 tickets | 👥 1 players
+
+🎫 Finalizing round 78...
+   🔍 Pre-flight check:
+      Block: 25261639
+      Block timestamp: 1765665405 (blockchain time)
+      System time: 1765665407 (local time)
+      Time diff: 2s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765665205
+      Duration: 120s
+      Expires at: 1765665325
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xdd320c2aa97f1ebb540e933fbbfd551884de3dff326ff96d6a2892ad8b374669
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261643
+   ⛽ Gas Used: 540802 units
+   💸 Gas Cost: 112.746100818723745378 PLS
+
+   🎲 Winning Numbers: 20, 24, 28, 35, 42, 51
+   🎫 Total Tickets: 1
+   👥 Unique Players: 1
+   💰 Total Pool: 100.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 989375.635768296635924128 PLS
+   📊 Estimated Draws Remaining: 8775 draws
+   
+   🪙 Morbius Balance: 1000080.0 MORBIUS
+   ✨ Morbius Earned This Round: +5.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 79
+   Type: Standard
+   Start: 12/13/2025, 5:37:25 PM
+   End: 12/13/2025, 5:39:25 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:37:47] Round 79 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[22:38:02] Round 79 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[22:38:18] Round 79 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+[22:38:33] Round 79 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:38:49] Round 79 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+[22:39:04] Round 79 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[22:39:20] Round 79 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[22:39:35] Round 79 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 79...
+   🔍 Pre-flight check:
+      Block: 25261656
+      Block timestamp: 1765665575 (blockchain time)
+      System time: 1765665576 (local time)
+      Time diff: 1s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765665445
+      Duration: 120s
+      Expires at: 1765665565
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x8242503d32fc5f8af154dad95038ab7d385f53458571bd28675126d9a6aa9b42
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261657
+   ⛽ Gas Used: 397251 units
+   💸 Gas Cost: 89.629892940723686766 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 989279.064286067995265606 PLS
+   📊 Estimated Draws Remaining: 11037 draws
+   
+   🪙 Morbius Balance: 1000080.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 80
+   Type: ⭐ MEGA MORBIUS
+   Start: 12/13/2025, 5:39:45 PM
+   End: 12/13/2025, 5:41:45 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:40:05] Round 80 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[22:40:21] Round 80 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[22:40:36] Round 80 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+[22:40:52] Round 80 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:41:07] Round 80 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+[22:41:23] Round 80 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[22:41:38] Round 80 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[22:41:54] Round 80 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 80...
+   🔍 Pre-flight check:
+      Block: 25261669
+      Block timestamp: 1765665705 (blockchain time)
+      System time: 1765665714 (local time)
+      Time diff: 9s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765665585
+      Duration: 120s
+      Expires at: 1765665705
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x910d7b57fb6d9a557e54af6fffb818f8cec03e3fb1c66ee40544705340f0b847
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261671
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 101.726742774644123634 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 989169.498552362321035328 PLS
+   📊 Estimated Draws Remaining: 9723 draws
+   
+   🪙 Morbius Balance: 1000080.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 81
+   Type: Standard
+   Start: 12/13/2025, 5:42:05 PM
+   End: 12/13/2025, 5:44:05 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:42:24] Round 81 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[22:42:40] Round 81 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[22:42:55] Round 81 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[22:43:10] Round 81 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:43:26] Round 81 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+[22:43:41] Round 81 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[22:43:57] Round 81 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[22:44:12] Round 81 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 81...
+   🔍 Pre-flight check:
+      Block: 25261682
+      Block timestamp: 1765665845 (blockchain time)
+      System time: 1765665853 (local time)
+      Time diff: 8s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765665725
+      Duration: 120s
+      Expires at: 1765665845
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x2ad646e9c6821571e1fc1792624376455a8cd5766b837ee882fb122e73a23b69
+   ⏳ Waiting for confirmation...
+   ❌ Finalize error: transaction execution reverted (action="sendTransaction", data=null, reason=null, invocation=null, revert=null, transaction={ "data": "", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, receipt={ "_type": "TransactionReceipt", "blobGasPrice": null, "blobGasUsed": null, "blockHash": "0x2cca5b16ff900f3de47b3b81eafcd5a4e0e75c6399f351481f578276cf1d1b71", "blockNumber": 25261684, "contractAddress": null, "cumulativeGasUsed": "36580337", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "gasPrice": "229771801230178", "gasUsed": "30766", "hash": "0x2ad646e9c6821571e1fc1792624376455a8cd5766b837ee882fb122e73a23b69", "index": 21, "logs": [  ], "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", "root": null, "status": 0, "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, code=CALL_EXCEPTION, version=6.16.0)
+   Status: 0 | Gas used: 30766
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 82
+   Type: Standard
+   Start: 12/13/2025, 5:44:15 PM
+   End: 12/13/2025, 5:46:15 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:44:42] Round 82 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:44:58] Round 82 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:45:13] Round 82 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:45:29] Round 82 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:45:44] Round 82 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:46:00] Round 82 | OPEN | ⏱️  20s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:46:15] Round 82 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 83
+   Type: Standard
+   Start: 12/13/2025, 5:46:25 PM
+   End: 12/13/2025, 5:48:25 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:46:31] Round 83 | OPEN | ⏱️  120s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:46:46] Round 83 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:47:02] Round 83 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:47:17] Round 83 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:47:33] Round 83 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:47:48] Round 83 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:48:04] Round 83 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:48:19] Round 83 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[22:48:35] Round 83 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 83...
+   🔍 Pre-flight check:
+      Block: 25261707
+      Block timestamp: 1765666105 (blockchain time)
+      System time: 1765666115 (local time)
+      Time diff: 10s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765665985
+      Duration: 120s
+      Expires at: 1765666105
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xc59289944a3f0b358f0951cc852338ad5d6987ca79c05f1babc066f71952b9b9
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261709
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 97.723606271585442597 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 988866.577334538975929028 PLS
+   📊 Estimated Draws Remaining: 10119 draws
+   
+   🪙 Morbius Balance: 1000080.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 84
+   Type: Standard
+   Start: 12/13/2025, 5:48:45 PM
+   End: 12/13/2025, 5:50:45 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:49:05] Round 84 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[22:49:21] Round 84 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[22:49:36] Round 84 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+[22:49:52] Round 84 | OPEN | ⏱️  60s | 🎫 1 tickets | 👥 1 players
+[22:50:07] Round 84 | OPEN | ⏱️  40s | 🎫 1 tickets | 👥 1 players
+[22:50:23] Round 84 | OPEN | ⏱️  30s | 🎫 1 tickets | 👥 1 players
+[22:50:38] Round 84 | OPEN | ⏱️  10s | 🎫 1 tickets | 👥 1 players
+[22:50:54] Round 84 | OPEN | ⏱️  0s | 🎫 1 tickets | 👥 1 players
+
+🎫 Finalizing round 84...
+   🔍 Pre-flight check:
+      Block: 25261721
+      Block timestamp: 1765666245 (blockchain time)
+      System time: 1765666255 (local time)
+      Time diff: 10s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765666125
+      Duration: 120s
+      Expires at: 1765666245
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xdb67deb4408282a8735f91b9c6f895a47243240e3d24509045dced7ab316a5b9
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261723
+   ⛽ Gas Used: 541295 units
+   💸 Gas Cost: 122.91075142397658407 PLS
+
+   🎲 Winning Numbers: 37, 43, 45, 49, 52, 54
+   🎫 Total Tickets: 1
+   👥 Unique Players: 1
+   💰 Total Pool: 100.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 988747.333128687374759111 PLS
+   📊 Estimated Draws Remaining: 8044 draws
+   
+   🪙 Morbius Balance: 1000085.0 MORBIUS
+   ✨ Morbius Earned This Round: +5.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 85
+   Type: Standard
+   Start: 12/13/2025, 5:51:05 PM
+   End: 12/13/2025, 5:53:05 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:51:24] Round 85 | OPEN | ⏱️  120s | 🎫 0 tickets | 👥 0 players
+[22:51:40] Round 85 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[22:51:55] Round 85 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+[22:52:11] Round 85 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:52:26] Round 85 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+[22:52:42] Round 85 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[22:52:57] Round 85 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[22:53:13] Round 85 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 85...
+   🔍 Pre-flight check:
+      Block: 25261734
+      Block timestamp: 1765666385 (blockchain time)
+      System time: 1765666394 (local time)
+      Time diff: 9s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765666265
+      Duration: 120s
+      Expires at: 1765666385
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xf53b8f8c247885ae49c1ee3a35cf27b6abd1dc4b68a3411fea89ae178e9d6286
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261736
+   ⛽ Gas Used: 397251 units
+   💸 Gas Cost: 98.794809473782202622 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 988640.886932286258495037 PLS
+   📊 Estimated Draws Remaining: 10007 draws
+   
+   🪙 Morbius Balance: 1000085.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 86
+   Type: Standard
+   Start: 12/13/2025, 5:53:25 PM
+   End: 12/13/2025, 5:55:25 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:53:44] Round 86 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[22:53:59] Round 86 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[22:54:15] Round 86 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+[22:54:30] Round 86 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:54:46] Round 86 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+[22:55:01] Round 86 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[22:55:17] Round 86 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[22:55:32] Round 86 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 86...
+   🔍 Pre-flight check:
+      Block: 25261747
+      Block timestamp: 1765666525 (blockchain time)
+      System time: 1765666533 (local time)
+      Time diff: 8s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765666405
+      Duration: 120s
+      Expires at: 1765666525
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x09faaec66fb3cc67dfd4137df5ad7a9c796aeb71c81392d6f0bc32485e6b1e08
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261749
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 84.108013165360075258 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 988556.778919120898419779 PLS
+   📊 Estimated Draws Remaining: 11753 draws
+   
+   🪙 Morbius Balance: 1000085.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 87
+   Type: Standard
+   Start: 12/13/2025, 5:55:45 PM
+   End: 12/13/2025, 5:57:45 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:56:03] Round 87 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[22:56:18] Round 87 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[22:56:34] Round 87 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+[22:56:49] Round 87 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:57:05] Round 87 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+[22:57:20] Round 87 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[22:57:36] Round 87 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[22:57:51] Round 87 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 87...
+   🔍 Pre-flight check:
+      Block: 25261761
+      Block timestamp: 1765666665 (blockchain time)
+      System time: 1765666672 (local time)
+      Time diff: 7s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765666545
+      Duration: 120s
+      Expires at: 1765666665
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xebc2b3b62db6ca4787e155ea0cf2ae69ed7089e1eb0615bd71d27e015ff10c48
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261762
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 99.136474828196041236 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 988457.642444292702378543 PLS
+   📊 Estimated Draws Remaining: 9970 draws
+   
+   🪙 Morbius Balance: 1000085.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 88
+   Type: Standard
+   Start: 12/13/2025, 5:57:55 PM
+   End: 12/13/2025, 5:59:55 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[22:58:13] Round 88 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[22:58:29] Round 88 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[22:58:44] Round 88 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[22:59:00] Round 88 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[22:59:15] Round 88 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+[22:59:31] Round 88 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[22:59:46] Round 88 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[23:00:02] Round 88 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 88...
+   🔍 Pre-flight check:
+      Block: 25261772
+      Block timestamp: 1765666795 (blockchain time)
+      System time: 1765666803 (local time)
+      Time diff: 8s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765666675
+      Duration: 120s
+      Expires at: 1765666795
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x45fce0610f76632e60f10c7ca7a60438d7fc230714a894446adfb84f83669fbb
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261774
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 105.209530603595201925 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 988344.325541588473214568 PLS
+   📊 Estimated Draws Remaining: 9394 draws
+   
+   🪙 Morbius Balance: 1000085.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 89
+   Type: Standard
+   Start: 12/13/2025, 6:00:15 PM
+   End: 12/13/2025, 6:02:15 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:00:33] Round 89 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[23:00:48] Round 89 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[23:01:04] Round 89 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+[23:01:19] Round 89 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[23:01:35] Round 89 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[23:01:50] Round 89 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[23:02:05] Round 89 | OPEN | ⏱️  20s | 🎫 0 tickets | 👥 0 players
+[23:02:21] Round 89 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 89...
+   🔍 Pre-flight check:
+      Block: 25261785
+      Block timestamp: 1765666935 (blockchain time)
+      System time: 1765666942 (local time)
+      Time diff: 7s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765666815
+      Duration: 120s
+      Expires at: 1765666935
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x9246cdf1f65b65c9fb2be05891549c1ece86be0047b7a78f6fba95f258a8dada
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261786
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 100.832348843973142475 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 988243.493192744500072093 PLS
+   📊 Estimated Draws Remaining: 9800 draws
+   
+   🪙 Morbius Balance: 1000085.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 90
+   Type: Standard
+   Start: 12/13/2025, 6:02:25 PM
+   End: 12/13/2025, 6:04:25 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:02:43] Round 90 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[23:02:58] Round 90 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[23:03:14] Round 90 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[23:03:29] Round 90 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[23:03:45] Round 90 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+[23:04:00] Round 90 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[23:04:16] Round 90 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[23:04:31] Round 90 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 90...
+   🔍 Pre-flight check:
+      Block: 25261796
+      Block timestamp: 1765667065 (blockchain time)
+      System time: 1765667072 (local time)
+      Time diff: 7s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765666945
+      Duration: 120s
+      Expires at: 1765667065
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x0455e9731dab6f121ec12eee5f12a52e2115395dd48be90e2b8f9b76e254567c
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261798
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 94.687832494474519652 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 988148.805360250025552441 PLS
+   📊 Estimated Draws Remaining: 10435 draws
+   
+   🪙 Morbius Balance: 1000085.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 91
+   Type: Standard
+   Start: 12/13/2025, 6:04:45 PM
+   End: 12/13/2025, 6:06:45 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:05:06] Round 91 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[23:05:21] Round 91 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[23:05:37] Round 91 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+[23:05:52] Round 91 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[23:06:08] Round 91 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+[23:06:23] Round 91 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[23:06:39] Round 91 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[23:06:54] Round 91 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 91...
+   🔍 Pre-flight check:
+      Block: 25261810
+      Block timestamp: 1765667205 (blockchain time)
+      System time: 1765667215 (local time)
+      Time diff: 10s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765667085
+      Duration: 120s
+      Expires at: 1765667205
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x5515b279e12ffbed974a8c4bd49e8e4aaf7f50aeeb8558cb3856430c3177d546
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261812
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 82.348983060516609769 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 988066.456377189508942672 PLS
+   📊 Estimated Draws Remaining: 11998 draws
+   
+   🪙 Morbius Balance: 1000085.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 92
+   Type: Standard
+   Start: 12/13/2025, 6:07:05 PM
+   End: 12/13/2025, 6:09:05 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:07:29] Round 92 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+[23:07:45] Round 92 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+[23:08:00] Round 92 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+[23:08:16] Round 92 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+[23:08:31] Round 92 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+[23:08:47] Round 92 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[23:09:02] Round 92 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[23:09:18] Round 92 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 92...
+   🔍 Pre-flight check:
+      Block: 25261824
+      Block timestamp: 1765667355 (blockchain time)
+      System time: 1765667359 (local time)
+      Time diff: 4s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765667225
+      Duration: 120s
+      Expires at: 1765667345
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x74ef531b059c58c1300d86874e22c41cc9d17486c18a88b0cdd2b72a7e7f35b6
+   ⏳ Waiting for confirmation...
+   ❌ Finalize error: transaction execution reverted (action="sendTransaction", data=null, reason=null, invocation=null, revert=null, transaction={ "data": "", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, receipt={ "_type": "TransactionReceipt", "blobGasPrice": null, "blobGasUsed": null, "blockHash": "0x33f47cc6c0052c75b27a782b8a59df5d0cac0424b1e44a87c0f225184337f86d", "blockNumber": 25261825, "contractAddress": null, "cumulativeGasUsed": "14814653", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "gasPrice": "274175343266517", "gasUsed": "30766", "hash": "0x74ef531b059c58c1300d86874e22c41cc9d17486c18a88b0cdd2b72a7e7f35b6", "index": 16, "logs": [  ], "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", "root": null, "status": 0, "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, code=CALL_EXCEPTION, version=6.16.0)
+   Status: 0 | Gas used: 30766
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 93
+   Type: Standard
+   Start: 12/13/2025, 6:09:25 PM
+   End: 12/13/2025, 6:11:25 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:09:44] Round 93 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:09:59] Round 93 | OPEN | ⏱️  90s | 🎫 1 tickets | 👥 1 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:10:15] Round 93 | OPEN | ⏱️  80s | 🎫 1 tickets | 👥 1 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:10:30] Round 93 | OPEN | ⏱️  60s | 🎫 1 tickets | 👥 1 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:10:45] Round 93 | OPEN | ⏱️  40s | 🎫 1 tickets | 👥 1 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:11:01] Round 93 | OPEN | ⏱️  30s | 🎫 1 tickets | 👥 1 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:11:16] Round 93 | OPEN | ⏱️  10s | 🎫 1 tickets | 👥 1 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:11:32] Round 93 | OPEN | ⏱️  0s | 🎫 1 tickets | 👥 1 players
+
+🎫 Finalizing round 93...
+   🔍 Pre-flight check:
+      Block: 25261836
+      Block timestamp: 1765667485 (blockchain time)
+      System time: 1765667493 (local time)
+      Time diff: 8s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765667365
+      Duration: 120s
+      Expires at: 1765667485
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   ❌ Finalize error: could not coalesce error (error={ "code": -32000, "message": "ALREADY_EXISTS: already known" }, payload={ "id": 968, "jsonrpc": "2.0", "method": "eth_sendRawTransaction", "params": [ "0x02f8778201718205388501211520808701915bc5e98a94831e8480944704c7d7eef0968d8343e8574bc2865e612d84ed80841e820325c001a006a9471d2b2416dedf0f59968854dad85879cfbf844197d019de1789936d649ca030a04bdd091dea5757c4c261ce882e09beef719cc3f2a62d45c2ae1549d7bde0" ] }, code=UNKNOWN_ERROR, version=6.16.0)
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 94
+   Type: Standard
+   Start: 12/13/2025, 6:11:45 PM
+   End: 12/13/2025, 6:13:45 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:12:04] Round 94 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+[23:12:34] Round 94 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+[23:13:05] Round 94 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+[23:13:35] Round 94 | OPEN | ⏱️  20s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 95
+   Type: Standard
+   Start: 12/13/2025, 6:13:55 PM
+   End: 12/13/2025, 6:15:55 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:14:06] Round 95 | OPEN | ⏱️  120s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+[23:14:36] Round 95 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+[23:15:07] Round 95 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+[23:15:37] Round 95 | OPEN | ⏱️  20s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+[23:16:08] Round 95 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 95...
+   🔍 Pre-flight check:
+      Block: 25261864
+      Block timestamp: 1765667765 (blockchain time)
+      System time: 1765667769 (local time)
+      Time diff: 4s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765667635
+      Duration: 120s
+      Expires at: 1765667755
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x6827dc8d31f0d5a8877ef1a19f8b607d7874c48de308a83fdc3a527c4b86283c
+   ⏳ Waiting for confirmation...
+   ❌ Finalize error: transaction execution reverted (action="sendTransaction", data=null, reason=null, invocation=null, revert=null, transaction={ "data": "", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, receipt={ "_type": "TransactionReceipt", "blobGasPrice": null, "blobGasUsed": null, "blockHash": "0xdada6afbcbb2aa247920a1d7732c2098806018da995aa7b8f6b0c6c087cafa46", "blockNumber": 25261865, "contractAddress": null, "cumulativeGasUsed": "31228939", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "gasPrice": "243577879176281", "gasUsed": "30766", "hash": "0x6827dc8d31f0d5a8877ef1a19f8b607d7874c48de308a83fdc3a527c4b86283c", "index": 15, "logs": [  ], "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", "root": null, "status": 0, "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, code=CALL_EXCEPTION, version=6.16.0)
+   Status: 0 | Gas used: 30766
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 96
+   Type: Standard
+   Start: 12/13/2025, 6:16:15 PM
+   End: 12/13/2025, 6:18:15 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:17:04] Round 96 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+[23:17:49] Round 96 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 97
+   Type: Standard
+   Start: 12/13/2025, 6:18:25 PM
+   End: 12/13/2025, 6:20:25 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:18:35] Round 97 | OPEN | ⏱️  120s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+[23:19:20] Round 97 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+[23:20:06] Round 97 | OPEN | ⏱️  20s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 98
+   Type: Standard
+   Start: 12/13/2025, 6:20:45 PM
+   End: 12/13/2025, 6:22:45 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:20:51] Round 98 | OPEN | ⏱️  120s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+[23:21:36] Round 98 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+[23:22:22] Round 98 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 99
+   Type: Standard
+   Start: 12/13/2025, 6:23:05 PM
+   End: 12/13/2025, 6:25:05 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:23:07] Round 99 | OPEN | ⏱️  120s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+[23:23:53] Round 99 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+[23:24:38] Round 99 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 45000ms due to 3 consecutive error(s)
+[23:25:24] Round 99 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 99...
+   🔍 Pre-flight check:
+      Block: 25261916
+      Block timestamp: 1765668315 (blockchain time)
+      System time: 1765668325 (local time)
+      Time diff: 10s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765668185
+      Duration: 120s
+      Expires at: 1765668305
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x185f7992acd0344841d5e2ed6ba58da8b730e96111f7a1e96b016a58643b5612
+   ⏳ Waiting for confirmation...
+   ❌ Finalize error: transaction execution reverted (action="sendTransaction", data=null, reason=null, invocation=null, revert=null, transaction={ "data": "", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, receipt={ "_type": "TransactionReceipt", "blobGasPrice": null, "blobGasUsed": null, "blockHash": "0xb642e279057b5da09e9ac8f2ee7193d996b7fbc0e147db4ce9a64fc74d61007a", "blockNumber": 25261918, "contractAddress": null, "cumulativeGasUsed": "39023401", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "gasPrice": "223688749210664", "gasUsed": "30766", "hash": "0x185f7992acd0344841d5e2ed6ba58da8b730e96111f7a1e96b016a58643b5612", "index": 22, "logs": [  ], "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", "root": null, "status": 0, "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, code=CALL_EXCEPTION, version=6.16.0)
+   Status: 0 | Gas used: 30766
+   ⏳ Backing off for 60000ms due to 4 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 100
+   Type: ⭐ MEGA MORBIUS
+   Start: 12/13/2025, 6:25:25 PM
+   End: 12/13/2025, 6:27:25 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:26:39] Round 100 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 60000ms due to 4 consecutive error(s)
+[23:27:40] Round 100 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 100...
+   🔍 Pre-flight check:
+      Block: 25261930
+      Block timestamp: 1765668455 (blockchain time)
+      System time: 1765668460 (local time)
+      Time diff: 5s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765668325
+      Duration: 120s
+      Expires at: 1765668445
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x062d159ca2bcb52428a2d59101c8064ae5722a4280c59d47ca2d42ae68e9134e
+   ⏳ Waiting for confirmation...
+   ❌ Finalize error: transaction execution reverted (action="sendTransaction", data=null, reason=null, invocation=null, revert=null, transaction={ "data": "", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, receipt={ "_type": "TransactionReceipt", "blobGasPrice": null, "blobGasUsed": null, "blockHash": "0xea59eac81bda1c61b3b2a1be24b0d0bfd5eec0c52b7a0a91980509c8456ebe89", "blockNumber": 25261931, "contractAddress": null, "cumulativeGasUsed": "32073946", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "gasPrice": "248340911849120", "gasUsed": "30766", "hash": "0x062d159ca2bcb52428a2d59101c8064ae5722a4280c59d47ca2d42ae68e9134e", "index": 16, "logs": [  ], "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", "root": null, "status": 0, "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, code=CALL_EXCEPTION, version=6.16.0)
+   Status: 0 | Gas used: 30766
+   ⏳ Backing off for 60000ms due to 5 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 101
+   Type: Standard
+   Start: 12/13/2025, 6:27:45 PM
+   End: 12/13/2025, 6:29:45 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:28:46] Round 101 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 60000ms due to 5 consecutive error(s)
+[23:29:47] Round 101 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 101...
+   🔍 Pre-flight check:
+      Block: 25261943
+      Block timestamp: 1765668585 (blockchain time)
+      System time: 1765668587 (local time)
+      Time diff: 2s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765668465
+      Duration: 120s
+      Expires at: 1765668585
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xe15a44862ee7d81c6f54485b3fadd7776a4e17ad0400135cb0042987426c1548
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261944
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 96.889697042267660261 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 987008.859285431216507125 PLS
+   📊 Estimated Draws Remaining: 10186 draws
+   
+   🪙 Morbius Balance: 1000090.0 MORBIUS
+   ✨ Morbius Earned This Round: +5.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 102
+   Type: Standard
+   Start: 12/13/2025, 6:29:55 PM
+   End: 12/13/2025, 6:31:55 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:30:13] Round 102 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[23:30:28] Round 102 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[23:30:44] Round 102 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+[23:30:59] Round 102 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+[23:31:15] Round 102 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+[23:31:30] Round 102 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[23:31:46] Round 102 | OPEN | ⏱️  20s | 🎫 0 tickets | 👥 0 players
+[23:32:01] Round 102 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 102...
+   🔍 Pre-flight check:
+      Block: 25261955
+      Block timestamp: 1765668715 (blockchain time)
+      System time: 1765668722 (local time)
+      Time diff: 7s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765668595
+      Duration: 120s
+      Expires at: 1765668715
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0xd441091f83a7613ffd2dda24323c18cd199ba5b04416f9594caa07cfedff4f4b
+   ⏳ Waiting for confirmation...
+   ✅ Finalized in block 25261956
+   ⛽ Gas Used: 399251 units
+   💸 Gas Cost: 105.110214641971432319 PLS
+
+   🎲 Winning Numbers: 0, 0, 0, 0, 0, 0
+   🎫 Total Tickets: 0
+   👥 Unique Players: 0
+   💰 Total Pool: 0.0 MORBIUS
+
+   ═══════════════════════════════════════════════
+   💼 KEEPER WALLET STATUS
+   ═══════════════════════════════════════════════
+   💎 PLS Balance: 986896.78550608152825571 PLS
+   📊 Estimated Draws Remaining: 9389 draws
+   
+   🪙 Morbius Balance: 1000090.0 MORBIUS
+   ═══════════════════════════════════════════════
+
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 103
+   Type: Standard
+   Start: 12/13/2025, 6:32:05 PM
+   End: 12/13/2025, 6:34:05 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:32:23] Round 103 | OPEN | ⏱️  110s | 🎫 0 tickets | 👥 0 players
+[23:32:39] Round 103 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+[23:32:54] Round 103 | OPEN | ⏱️  80s | 🎫 0 tickets | 👥 0 players
+[23:33:10] Round 103 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+[23:33:25] Round 103 | OPEN | ⏱️  50s | 🎫 0 tickets | 👥 0 players
+[23:33:40] Round 103 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+[23:33:56] Round 103 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+[23:34:11] Round 103 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 103...
+   🔍 Pre-flight check:
+      Block: 25261968
+      Block timestamp: 1765668845 (blockchain time)
+      System time: 1765668852 (local time)
+      Time diff: 7s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765668725
+      Duration: 120s
+      Expires at: 1765668845
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   📝 Transaction: 0x092521813ea04431c41fb1a81b89a3efae03d65e65e23b7e3acd06d1b4f8aa3d
+   ⏳ Waiting for confirmation...
+   ❌ Finalize error: transaction execution reverted (action="sendTransaction", data=null, reason=null, invocation=null, revert=null, transaction={ "data": "", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, receipt={ "_type": "TransactionReceipt", "blobGasPrice": null, "blobGasUsed": null, "blockHash": "0x8dd407ff4d03b67cde3907f88d9fd7970cd68a7f1643ad184a431347bb3b3496", "blockNumber": 25261970, "contractAddress": null, "cumulativeGasUsed": "27421178", "from": "0x2775dD8242C4f589536113475B7C80F42ab4A70A", "gasPrice": "217981641108244", "gasUsed": "30766", "hash": "0x092521813ea04431c41fb1a81b89a3efae03d65e65e23b7e3acd06d1b4f8aa3d", "index": 35, "logs": [  ], "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", "root": null, "status": 0, "to": "0x4704C7d7eEF0968d8343E8574bc2865E612D84ED" }, code=CALL_EXCEPTION, version=6.16.0)
+   Status: 0 | Gas used: 30766
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 104
+   Type: Standard
+   Start: 12/13/2025, 6:34:25 PM
+   End: 12/13/2025, 6:36:25 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:34:45] Round 104 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:35:01] Round 104 | OPEN | ⏱️  90s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:35:16] Round 104 | OPEN | ⏱️  70s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:35:32] Round 104 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:35:47] Round 104 | OPEN | ⏱️  40s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:36:03] Round 104 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:36:18] Round 104 | OPEN | ⏱️  10s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 15000ms due to 1 consecutive error(s)
+[23:36:33] Round 104 | OPEN | ⏱️  0s | 🎫 0 tickets | 👥 0 players
+
+🎫 Finalizing round 104...
+   🔍 Pre-flight check:
+      Block: 25261981
+      Block timestamp: 1765668985 (blockchain time)
+      System time: 1765668994 (local time)
+      Time diff: 9s
+      Contract state: 0 (0=OPEN, 1=FINALIZED)
+      Round start: 1765668865
+      Duration: 120s
+      Expires at: 1765668985
+      Expired (blockchain time): true
+      Expired (system time): true
+   ✅ Pre-flight passed, proceeding with finalization...
+   ❌ Finalize error: could not coalesce error (error={ "code": -32000, "message": "INTERNAL_ERROR: could not replace existing tx" }, payload={ "id": 1270, "jsonrpc": "2.0", "method": "eth_sendRawTransaction", "params": [ "0x02f87782017182054b85012115208087018e5b58c5c440831e8480944704c7d7eef0968d8343e8574bc2865e612d84ed80841e820325c080a0f8c1a1c6f0a2a21549494dfcae6f72f2996f325e8e560c976378d65ba408638ba0521e4fec2fb014589dcb6e84f89d0fe1d97a647bda1e5c0647d00759d8006348" ] }, code=UNKNOWN_ERROR, version=6.16.0)
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+
+══════════════════════════════════════════════════
+🎰 NEW ROUND STARTED
+══════════════════════════════════════════════════
+   Round ID: 105
+   Type: Standard
+   Start: 12/13/2025, 6:36:35 PM
+   End: 12/13/2025, 6:38:35 PM
+   Duration: 2 minutes
+══════════════════════════════════════════════════
+
+[23:37:06] Round 105 | OPEN | ⏱️  100s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+[23:37:36] Round 105 | OPEN | ⏱️  60s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
+[23:38:06] Round 105 | OPEN | ⏱️  30s | 🎫 0 tickets | 👥 0 players
+   ⏳ Backing off for 30000ms due to 2 consecutive error(s)
