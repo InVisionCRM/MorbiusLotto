@@ -14,30 +14,20 @@ interface BracketInfo {
 interface BracketDisplayProps {
   brackets: BracketInfo[]
   isLoading?: boolean
-  isMegaMillions?: boolean
+  hasMegaMorbiusWinners?: boolean
 }
 
-const BRACKET_ODDS = [
-  { matches: 6, odds: '1 in 28,989,675', color: 'from-yellow-500 to-amber-600' },
-  { matches: 5, odds: '1 in 145,716', color: 'from-purple-500 to-violet-600' },
-  { matches: 4, odds: '1 in 3,387', color: 'from-blue-500 to-cyan-600' },
-  { matches: 3, odds: '1 in 220', color: 'from-green-500 to-emerald-600' },
-  { matches: 2, odds: '1 in 22', color: 'from-orange-500 to-red-600' },
-  { matches: 1, odds: '1 in 5', color: 'from-gray-500 to-slate-600' },
+// Fixed prize amounts (in Morbius)
+const FIXED_PRIZES = [
+  { matches: 6, prize: 15000, odds: '1 in 28,989,675', color: 'from-yellow-500 to-amber-600' },
+  { matches: 5, prize: 5000, odds: '1 in 145,716', color: 'from-purple-500 to-violet-600' },
+  { matches: 4, prize: 2000, odds: '1 in 3,387', color: 'from-blue-500 to-cyan-600' },
+  { matches: 3, prize: 750, odds: '1 in 220', color: 'from-green-500 to-emerald-600' },
+  { matches: 2, prize: 375, odds: '1 in 22', color: 'from-orange-500 to-red-600' },
+  { matches: 1, prize: 125, odds: '1 in 5', color: 'from-gray-500 to-slate-600' },
 ]
 
-export function BracketDisplay({ brackets, isLoading = false, isMegaMillions = false }: BracketDisplayProps) {
-  const formatPssh = (amount: bigint) => {
-    return parseFloat(formatUnits(amount, 9)).toLocaleString(undefined, {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    })
-  }
-
-  const getPayoutPerWinner = (bracket: BracketInfo) => {
-    if (bracket.winnerCount === 0) return '0'
-    return formatPssh(bracket.poolAmount / BigInt(bracket.winnerCount))
-  }
+export function BracketDisplay({ brackets, isLoading = false, hasMegaMorbiusWinners = false }: BracketDisplayProps) {
 
   if (isLoading) {
     return (
@@ -56,19 +46,19 @@ export function BracketDisplay({ brackets, isLoading = false, isMegaMillions = f
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <Trophy className="h-6 w-6 text-primary" />
-          Prize Brackets
+          Fixed Prize Brackets
         </h2>
-        {isMegaMillions && (
+        {hasMegaMorbiusWinners && (
           <div className="px-4 py-2 bg-gradient-to-r from-yellow-500/20 to-amber-600/20 border border-yellow-500/30 rounded-lg">
             <p className="text-sm font-bold text-yellow-500 animate-pulse">
-              🎰 MEGA-MORBIUS JACKPOT ROUND
+              🎰 MEGA-MORBIUS JACKPOT WINNERS!
             </p>
           </div>
         )}
       </div>
 
       <div className="space-y-3">
-        {BRACKET_ODDS.map((bracket, index) => {
+        {FIXED_PRIZES.map((bracket, index) => {
           const bracketData = brackets.find(b => b.matchCount === bracket.matches) || {
             bracketId: 0,
             poolAmount: BigInt(0),
@@ -76,16 +66,15 @@ export function BracketDisplay({ brackets, isLoading = false, isMegaMillions = f
             matchCount: bracket.matches,
           }
 
-          const poolAmount = formatPssh(bracketData.poolAmount)
-          const payoutPerWinner = getPayoutPerWinner(bracketData)
           const hasWinners = bracketData.winnerCount > 0
+          const isJackpotBracket = bracket.matches >= 5 // 5 and 6 matches get MegaMorbius bonuses
 
           return (
             <div
               key={bracket.matches}
               className={`
                 relative overflow-hidden rounded-lg border
-                ${hasWinners ? 'border-primary/50 bg-black/40' : 'border-border bg-black/40'}
+                ${hasWinners ? 'border-primary/50 bg-gradient-to-r from-primary/5 to-primary/10' : 'border-border bg-black/40'}
                 transition-all duration-200 hover:scale-[1.02]
               `}
             >
@@ -123,31 +112,38 @@ export function BracketDisplay({ brackets, isLoading = false, isMegaMillions = f
                     <div>
                       <div className="flex items-center justify-end gap-1.5 text-muted-foreground text-xs mb-1">
                         <Coins className="h-3 w-3" />
-                        <span>Prize Pool</span>
+                        <span>Fixed Prize</span>
                       </div>
                       <div className="font-bold text-lg">
-                        {poolAmount} <span className="text-xs text-muted-foreground">Morbius</span>
+                        {bracket.prize.toLocaleString()} <span className="text-xs text-muted-foreground">Morbius</span>
                       </div>
+                      {isJackpotBracket && (
+                        <div className="text-xs text-yellow-500 font-semibold mt-1">
+                          + MegaMorbius Bonus
+                        </div>
+                      )}
                     </div>
 
                     {hasWinners && (
                       <div className="pt-2 border-t border-border/50">
-                        <div className="text-xs text-muted-foreground mb-1">Per Winner</div>
+                        <div className="text-xs text-muted-foreground mb-1">
+                          {bracketData.winnerCount} Winner{bracketData.winnerCount !== 1 ? 's' : ''} Paid
+                        </div>
                         <div className="font-semibold text-primary">
-                          {payoutPerWinner} <span className="text-xs">Morbius</span>
+                          {(bracket.prize * bracketData.winnerCount).toLocaleString()} <span className="text-xs">Morbius Total</span>
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Special callout for bracket 6 (6 matches) */}
-                {bracket.matches === 6 && bracketData.poolAmount > BigInt(0) && !hasWinners && (
+                {/* Special callout for jackpot brackets (5-6 matches) */}
+                {isJackpotBracket && (
                   <div className="mt-3 pt-3 border-t border-yellow-500/30">
                     <div className="flex items-center gap-2 text-xs">
                       <div className="flex-1 h-1 bg-gradient-to-r from-yellow-500/50 to-transparent rounded-full" />
-                      <span className="text-yellow-500 font-semibold animate-pulse">
-                        JACKPOT WAITING TO BE WON!
+                      <span className="text-yellow-500 font-semibold">
+                        🎰 MEGA-MORBIUS ELIGIBLE
                       </span>
                       <div className="flex-1 h-1 bg-gradient-to-l from-yellow-500/50 to-transparent rounded-full" />
                     </div>
@@ -165,22 +161,22 @@ export function BracketDisplay({ brackets, isLoading = false, isMegaMillions = f
           <div className="flex items-start gap-2">
             <Trophy className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-semibold mb-1">Prize Distribution</p>
-              <p>60% of ticket sales distributed across winning brackets</p>
+              <p className="font-semibold mb-1">Fixed Prize System</p>
+              <p>Guaranteed payouts for every winning bracket match</p>
             </div>
           </div>
           <div className="flex items-start gap-2">
             <Users className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <div>
               <p className="font-semibold mb-1">Winner Payouts</p>
-              <p>Each bracket's pool split equally among winners</p>
+              <p>Each winner receives the full fixed prize amount</p>
             </div>
           </div>
           <div className="flex items-start gap-2">
             <Coins className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-semibold mb-1">Unclaimed Brackets</p>
-              <p>Empty bracket pools roll to MegaMorbius Jackpot</p>
+              <p className="font-semibold mb-1">MegaMorbius Jackpot</p>
+              <p>5-6 matches get base prize + progressive jackpot bonus</p>
             </div>
           </div>
         </div>
