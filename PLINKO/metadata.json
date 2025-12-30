@@ -1,0 +1,5 @@
+{
+  "name": "Neon Plinko Adventure",
+  "description": "A high-stakes 2D Plinko game built with React and Matter.js, featuring realistic physics, glowing peg collisions, and multiplier buckets.",
+  "requestFramePermissions": []
+}

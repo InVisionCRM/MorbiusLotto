@@ -1,0 +1,3 @@
+module.exports=[88947,a=>{"use strict";var b=a.i(59248);function c({children:a}){return(0,b.jsxs)("html",{lang:"en",children:[(0,b.jsx)("head",{children:(0,b.jsx)("link",{rel:"stylesheet",href:"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"})}),(0,b.jsx)("body",{children:a})]})}a.s(["default",()=>c,"metadata",0,{title:"Plinko Classic",description:"Classic Plinko game with physics simulation",viewport:"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"}])}];
+
+//# sourceMappingURL=PLINKO_app_layout_tsx_9dba66f0._.js.map
