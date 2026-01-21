@@ -106,8 +106,21 @@ contract Blackjack is Ownable, ReentrancyGuard, Pausable {
     // Provably fair verification
     mapping(bytes32 => bool) public revealedSeeds; // Track revealed server seeds
 
+    // Pending games (locked bets)
+    mapping(bytes32 => PendingGame) public pendingGames; // gameHash => game data
+    mapping(address => bytes32[]) public playerPendingGames; // player => array of game hashes
+
     // Emergency pause
     bool public emergencyPaused;
+
+    // ============ Structs ============
+
+    struct PendingGame {
+        address player;
+        uint256 betAmount;
+        uint256 timestamp;
+        bool settled;
+    }
 
     // ============ Events ============
 
@@ -136,6 +149,13 @@ contract Blackjack is Ownable, ReentrancyGuard, Pausable {
     event ServerSeedRevealed(
         bytes32 indexed serverSeedHash,
         bytes32 serverSeed
+    );
+
+    event BetPlaced(
+        address indexed player,
+        bytes32 indexed gameHash,
+        uint256 betAmount,
+        uint256 timestamp
     );
 
     event AuthorizedServerUpdated(
@@ -253,10 +273,39 @@ contract Blackjack is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
+     * @notice Place a bet and lock funds for a game
+     * @param gameHash Hash of game data (serverSeedHash + clientSeed + betAmount + nonce)
+     * @param betAmount Amount to bet (must match gameHash)
+     */
+    function placeBet(bytes32 gameHash, uint256 betAmount) external nonReentrant whenNotPaused {
+        require(betAmount > 0, "Bet amount must be greater than 0");
+        require(!emergencyPaused, "Emergency pause active");
+        require(playerReserves[msg.sender] >= betAmount, "Insufficient reserve");
+        require(pendingGames[gameHash].player == address(0), "Game hash already used");
+
+        // Lock the bet amount from player's reserve
+        playerReserves[msg.sender] -= betAmount;
+        totalReserves -= betAmount;
+
+        // Store pending game
+        pendingGames[gameHash] = PendingGame({
+            player: msg.sender,
+            betAmount: betAmount,
+            timestamp: block.timestamp,
+            settled: false
+        });
+
+        // Track pending games for this player
+        playerPendingGames[msg.sender].push(gameHash);
+
+        emit BetPlaced(msg.sender, gameHash, betAmount, block.timestamp);
+    }
+
+    /**
      * @notice Settle game result (only callable by authorized server)
      * @param player Player address
      * @param amount Settlement amount (positive = win, negative = loss)
-     * @param gameHash Game hash for verification
+     * @param gameHash Game hash for verification (must match placed bet)
      * @param gameData Encoded game data for verification
      */
     function settleGame(
@@ -266,27 +315,46 @@ contract Blackjack is Ownable, ReentrancyGuard, Pausable {
         bytes memory gameData
     ) external onlyAuthorizedServer nonReentrant {
         require(!emergencyPaused, "Emergency pause active");
+        
+        // Verify pending game exists and matches
+        PendingGame storage pendingGame = pendingGames[gameHash];
+        require(pendingGame.player == player, "Game hash mismatch");
+        require(!pendingGame.settled, "Game already settled");
+
+        // Mark as settled
+        pendingGame.settled = true;
 
         if (amount > 0) {
-            // Player win - deduct house edge and pay winnings
-            uint256 grossWinnings = uint256(amount);
-            uint256 houseEdge = (grossWinnings * HOUSE_EDGE_BPS) / BPS_DENOMINATOR;
-            uint256 netWinnings = grossWinnings - houseEdge;
+            // Player win - amount represents total payout (bet + profit)
+            // Bet was already locked, so we need to return bet + pay profit
+            uint256 totalPayout = uint256(amount);
+            require(totalPayout >= pendingGame.betAmount, "Payout less than bet");
+            
+            // Calculate profit (payout - bet)
+            uint256 profit = totalPayout - pendingGame.betAmount;
+            
+            // Apply house edge to profit only (not the bet return)
+            uint256 houseEdge = (profit * HOUSE_EDGE_BPS) / BPS_DENOMINATOR;
+            uint256 netProfit = profit - houseEdge;
+            
+            // Total to add: bet back + net profit
+            uint256 totalToAdd = pendingGame.betAmount + netProfit;
 
             // Pay from contract balance (should have enough from deposits)
-            require(MORBIUS_TOKEN.balanceOf(address(this)) >= netWinnings, "Insufficient contract balance");
+            require(MORBIUS_TOKEN.balanceOf(address(this)) >= totalToAdd, "Insufficient contract balance");
 
-            playerReserves[player] += netWinnings;
-            totalReserves += netWinnings;
+            playerReserves[player] += totalToAdd;
+            totalReserves += totalToAdd;
         } else if (amount < 0) {
-            // Player loss - deduct from reserve
+            // Player loss - bet was already locked, no additional deduction needed
+            // The locked bet amount is already deducted from reserves
             uint256 lossAmount = uint256(-amount);
-            require(playerReserves[player] >= lossAmount, "Insufficient player reserve");
-
-            playerReserves[player] -= lossAmount;
-            totalReserves -= lossAmount;
+            require(lossAmount == pendingGame.betAmount, "Loss amount must match locked bet");
+        } else {
+            // amount == 0 is a push - return locked bet
+            playerReserves[player] += pendingGame.betAmount;
+            totalReserves += pendingGame.betAmount;
         }
-        // amount == 0 is a push, no change needed
 
         emit GameSettled(player, amount, gameHash);
     }
@@ -351,6 +419,44 @@ contract Blackjack is Ownable, ReentrancyGuard, Pausable {
      */
     function getPlayerReserve(address player) external view returns (uint256) {
         return playerReserves[player];
+    }
+
+    /**
+     * @notice Get pending game information
+     * @param gameHash Game hash to look up
+     * @return player Player address
+     * @return betAmount Locked bet amount
+     * @return timestamp When bet was placed
+     * @return settled Whether game has been settled
+     */
+    function getPendingGame(bytes32 gameHash) external view returns (
+        address player,
+        uint256 betAmount,
+        uint256 timestamp,
+        bool settled
+    ) {
+        PendingGame memory game = pendingGames[gameHash];
+        return (game.player, game.betAmount, game.timestamp, game.settled);
+    }
+
+    /**
+     * @notice Get count of pending games for a player
+     * @param player Player address
+     * @return count Number of pending games
+     */
+    function getPendingGamesCount(address player) external view returns (uint256) {
+        return playerPendingGames[player].length;
+    }
+
+    /**
+     * @notice Get pending game hash at index for a player
+     * @param player Player address
+     * @param index Index in the pending games array
+     * @return gameHash Game hash
+     */
+    function getPendingGameHash(address player, uint256 index) external view returns (bytes32) {
+        require(index < playerPendingGames[player].length, "Index out of bounds");
+        return playerPendingGames[player][index];
     }
 
     /**

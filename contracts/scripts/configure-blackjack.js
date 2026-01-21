@@ -7,7 +7,7 @@ async function main() {
   console.log("Deployer:", deployer.address);
 
   // Contract address (update this with your deployed address)
-  const CONTRACT_ADDRESS = process.env.BLACKJACK_ADDRESS || "0x0ab9C51d0e8d4C983D5051c8fe89A9e9A7f4BB76";
+  const CONTRACT_ADDRESS = process.env.BLACKJACK_ADDRESS || "0xDe2c7a18de8a9d889E18874EA90A42f84FbaA080";
 
   // Get contract instance
   const blackjack = await hre.ethers.getContractAt("Blackjack", CONTRACT_ADDRESS);

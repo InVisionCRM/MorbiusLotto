@@ -17,6 +17,115 @@ class DatabaseService {
             logger_1.logger.error('Unexpected error on idle client', err);
         });
     }
+    toBigInt(value) {
+        if (typeof value === 'bigint')
+            return value;
+        if (value === null || value === undefined)
+            return 0n;
+        // pg returns NUMERIC/INT8 as string by default
+        return BigInt(String(value));
+    }
+    normalizePlayer(row) {
+        return {
+            ...row,
+            balance: this.toBigInt(row.balance),
+        };
+    }
+    normalizeSession(row) {
+        return {
+            ...row,
+            nonce: Number(row.nonce ?? 0),
+            total_bet: this.toBigInt(row.total_bet),
+            total_win: this.toBigInt(row.total_win),
+            game_count: Number(row.game_count ?? 0),
+        };
+    }
+    normalizeGame(row) {
+        return {
+            ...row,
+            total_bet_amount: this.toBigInt(row.total_bet_amount),
+            total_payout: this.toBigInt(row.total_payout),
+            dealer_cards: row.dealer_cards ?? [],
+            dealer_actions: row.dealer_actions ?? [],
+            actions: row.actions ?? [],
+            game_number: Number(row.game_number ?? 0),
+            hand_count: Number(row.hand_count ?? 1),
+            current_hand_index: Number(row.current_hand_index ?? 0),
+            server_seed_revealed: Boolean(row.server_seed_revealed),
+        };
+    }
+    normalizeGameHand(row) {
+        return {
+            ...row,
+            hand_index: Number(row.hand_index ?? 0),
+            cards: row.cards ?? [],
+            bet_amount: this.toBigInt(row.bet_amount),
+            payout: this.toBigInt(row.payout),
+            actions: row.actions ?? [],
+            has_ace: Boolean(row.has_ace),
+            is_blackjack: Boolean(row.is_blackjack),
+            is_bust: Boolean(row.is_bust),
+        };
+    }
+    normalizePlayerStats(row) {
+        return {
+            ...row,
+            total_games: Number(row.total_games ?? 0),
+            total_bet: this.toBigInt(row.total_bet),
+            total_win: this.toBigInt(row.total_win),
+            win_rate: Number(row.win_rate ?? 0),
+            blackjack_count: Number(row.blackjack_count ?? 0),
+        };
+    }
+    normalizeEnhancedPlayerStats(row) {
+        return {
+            ...row,
+            total_games: Number(row.total_games ?? 0),
+            total_bet: this.toBigInt(row.total_bet),
+            total_win: this.toBigInt(row.total_win),
+            win_rate: Number(row.win_rate ?? 0),
+            blackjack_count: Number(row.blackjack_count ?? 0),
+            current_streak: Number(row.current_streak ?? 0),
+            best_streak: Number(row.best_streak ?? 0),
+            biggest_win: this.toBigInt(row.biggest_win),
+            biggest_loss: this.toBigInt(row.biggest_loss),
+            average_bet: Number(row.average_bet ?? 0),
+            average_payout: Number(row.average_payout ?? 0),
+            profit_loss: this.toBigInt(row.profit_loss),
+            roi: Number(row.roi ?? 0),
+            games_today: Number(row.games_today ?? 0),
+            games_this_week: Number(row.games_this_week ?? 0),
+            favorite_bet_amount: this.toBigInt(row.favorite_bet_amount),
+            rank: Number(row.rank ?? 0),
+        };
+    }
+    normalizeGlobalAnalytics(row) {
+        return {
+            ...row,
+            total_players: Number(row.total_players ?? 0),
+            active_players: Number(row.active_players ?? 0),
+            total_games_played: Number(row.total_games_played ?? 0),
+            total_volume: this.toBigInt(row.total_volume),
+            total_payouts: this.toBigInt(row.total_payouts),
+            house_profit: this.toBigInt(row.house_profit),
+            games_last_hour: Number(row.games_last_hour ?? 0),
+            games_last_24_hours: Number(row.games_last_24_hours ?? 0),
+            volume_last_24_hours: this.toBigInt(row.volume_last_24_hours),
+            profit_last_24_hours: this.toBigInt(row.profit_last_24_hours),
+            average_win_rate: Number(row.average_win_rate ?? 0),
+            average_bet_size: Number(row.average_bet_size ?? 0),
+            house_edge: Number(row.house_edge ?? 0),
+            active_connections: Number(row.active_connections ?? 0),
+            blackjack_rate: Number(row.blackjack_rate ?? 0),
+            split_rate: Number(row.split_rate ?? 0),
+            double_down_rate: Number(row.double_down_rate ?? 0),
+            surrender_rate: Number(row.surrender_rate ?? 0),
+            pending_settlements: Number(row.pending_settlements ?? 0),
+            failed_settlements: Number(row.failed_settlements ?? 0),
+            largest_bet: this.toBigInt(row.largest_bet),
+            largest_payout: this.toBigInt(row.largest_payout),
+        };
+    }
     async connect() {
         try {
             const client = await this.pool.connect();
@@ -42,26 +151,66 @@ class DatabaseService {
       RETURNING *
     `;
         const result = await this.pool.query(query, [walletAddress]);
-        return result.rows[0];
+        return this.normalizePlayer(result.rows[0]);
     }
     async updatePlayerLastSeen(playerId) {
         const query = `UPDATE players SET last_seen = NOW() WHERE id = $1`;
         await this.pool.query(query, [playerId]);
     }
+    // Off-chain balance operations
+    async getPlayerBalance(walletAddress) {
+        const query = `SELECT balance FROM players WHERE wallet_address = $1`;
+        const result = await this.pool.query(query, [walletAddress]);
+        if (result.rows.length === 0) {
+            return 0n;
+        }
+        return BigInt(result.rows[0].balance || '0');
+    }
+    async updatePlayerBalance(walletAddress, amount, operation) {
+        let query;
+        if (operation === 'set') {
+            query = `UPDATE players SET balance = $2::NUMERIC WHERE wallet_address = $1 RETURNING balance`;
+        }
+        else if (operation === 'add') {
+            query = `UPDATE players SET balance = balance + $2::NUMERIC WHERE wallet_address = $1 RETURNING balance`;
+        }
+        else {
+            query = `UPDATE players SET balance = balance - $2::NUMERIC WHERE wallet_address = $1 RETURNING balance`;
+        }
+        const result = await this.pool.query(query, [walletAddress, amount.toString()]);
+        if (result.rows.length === 0) {
+            throw new Error(`Player not found: ${walletAddress}`);
+        }
+        return BigInt(result.rows[0].balance || '0');
+    }
+    async deductPlayerBalance(walletAddress, amount) {
+        // Check balance first
+        const currentBalance = await this.getPlayerBalance(walletAddress);
+        if (currentBalance < amount) {
+            throw new Error(`Insufficient balance: have ${currentBalance.toString()}, need ${amount.toString()}`);
+        }
+        return await this.updatePlayerBalance(walletAddress, amount, 'subtract');
+    }
+    async addPlayerBalance(walletAddress, amount) {
+        return await this.updatePlayerBalance(walletAddress, amount, 'add');
+    }
+    async syncPlayerBalanceWithContract(walletAddress, contractBalance) {
+        await this.updatePlayerBalance(walletAddress, contractBalance, 'set');
+    }
     async getPlayerStats(walletAddress) {
         const query = `SELECT * FROM get_player_stats($1)`;
         const result = await this.pool.query(query, [walletAddress]);
-        return result.rows[0];
+        return this.normalizePlayerStats(result.rows[0] || {});
     }
     async getPlayerStatsEnhanced(walletAddress) {
         const query = `SELECT * FROM get_player_stats_enhanced($1)`;
         const result = await this.pool.query(query, [walletAddress]);
-        return result.rows[0];
+        return this.normalizeEnhancedPlayerStats(result.rows[0] || {});
     }
     async getGlobalAnalytics() {
         const query = `SELECT * FROM get_global_analytics()`;
         const result = await this.pool.query(query);
-        return result.rows[0];
+        return this.normalizeGlobalAnalytics(result.rows[0] || {});
     }
     async getPlayerGames(walletAddress, limit = 50, offset = 0) {
         const query = `
@@ -74,7 +223,7 @@ class DatabaseService {
       LIMIT $2 OFFSET $3
     `;
         const result = await this.pool.query(query, [walletAddress, limit, offset]);
-        return result.rows;
+        return result.rows.map((r) => this.normalizeGame(r));
     }
     async getSettlements(status, limit = 100) {
         let query = `SELECT * FROM settlements`;
@@ -100,7 +249,7 @@ class DatabaseService {
       RETURNING *
     `;
         const result = await this.pool.query(query, [playerId, serverSeedHash]);
-        return result.rows[0];
+        return this.normalizeSession(result.rows[0]);
     }
     async getActiveSession(playerId) {
         const query = `
@@ -110,19 +259,37 @@ class DatabaseService {
       LIMIT 1
     `;
         const result = await this.pool.query(query, [playerId]);
-        return result.rows[0] || null;
+        return result.rows[0] ? this.normalizeSession(result.rows[0]) : null;
+    }
+    async getSessionById(sessionId) {
+        const query = `SELECT * FROM game_sessions WHERE id = $1`;
+        const result = await this.pool.query(query, [sessionId]);
+        return result.rows[0] ? this.normalizeSession(result.rows[0]) : null;
+    }
+    async getPlayerAddressFromSession(sessionId) {
+        const query = `
+      SELECT p.wallet_address
+      FROM players p
+      JOIN game_sessions gs ON p.id = gs.player_id
+      WHERE gs.id = $1
+    `;
+        const result = await this.pool.query(query, [sessionId]);
+        if (result.rows.length === 0) {
+            throw new Error(`Session not found: ${sessionId}`);
+        }
+        return result.rows[0].wallet_address;
     }
     async updateSessionStats(sessionId, betAmount, winAmount) {
         const query = `
       UPDATE game_sessions
       SET
-        total_bet = total_bet + $2,
-        total_win = total_win + $3,
+        total_bet = total_bet + $2::NUMERIC,
+        total_win = total_win + $3::NUMERIC,
         game_count = game_count + 1,
         updated_at = NOW()
       WHERE id = $1
     `;
-        await this.pool.query(query, [sessionId, betAmount, winAmount]);
+        await this.pool.query(query, [sessionId, betAmount.toString(), winAmount.toString()]);
     }
     async endSession(sessionId) {
         const query = `
@@ -134,6 +301,9 @@ class DatabaseService {
     }
     // Game operations
     async createGame(sessionId, gameData) {
+        // If the game isn't immediately settled, it must be persisted as 'ongoing'
+        // so the first player_action isn't rejected as "Game already completed".
+        const persistedResult = (gameData.result ?? 'ongoing');
         const query = `
       INSERT INTO games (
         session_id,
@@ -141,27 +311,35 @@ class DatabaseService {
         total_bet_amount,
         dealer_cards,
         dealer_total,
+        result,
+        total_payout,
+        actions,
+        dealer_actions,
         client_seed_commitment,
         dealer_seed,
         hand_count,
         current_hand_index
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3::NUMERIC, $4, $5, $6, $7::NUMERIC, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `;
         const values = [
             sessionId,
             gameData.game_number || 1,
-            gameData.total_bet_amount || 0n,
+            (gameData.total_bet_amount || 0n).toString(), // Convert BigInt to string, cast to NUMERIC then BIGINT
             JSON.stringify(gameData.dealer_cards || []),
             gameData.dealer_total,
+            persistedResult,
+            (gameData.total_payout || 0n).toString(),
+            JSON.stringify(gameData.actions || []),
+            JSON.stringify(gameData.dealer_actions || []),
             gameData.client_seed_commitment,
             gameData.dealer_seed,
             gameData.hand_count || 1,
             gameData.current_hand_index || 0
         ];
         const result = await this.pool.query(query, values);
-        return result.rows[0];
+        return this.normalizeGame(result.rows[0]);
     }
     // Game hand operations
     async createGameHand(gameId, handData) {
@@ -178,7 +356,7 @@ class DatabaseService {
         result,
         payout
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::NUMERIC, $9, $10::NUMERIC)
       RETURNING *
     `;
         const values = [
@@ -189,12 +367,12 @@ class DatabaseService {
             handData.has_ace || false,
             handData.is_blackjack || false,
             handData.is_bust || false,
-            handData.bet_amount || 0n,
+            (handData.bet_amount || 0n).toString(), // Convert BigInt to string, cast to NUMERIC then BIGINT
             handData.result,
-            handData.payout || 0n
+            (handData.payout || 0n).toString() // Convert BigInt to string, cast to NUMERIC then BIGINT
         ];
         const result = await this.pool.query(query, values);
-        return result.rows[0];
+        return this.normalizeGameHand(result.rows[0]);
     }
     async updateGameHand(handId, updates) {
         const fields = [];
@@ -225,8 +403,8 @@ class DatabaseService {
             values.push(updates.result);
         }
         if (updates.payout !== undefined) {
-            fields.push(`payout = $${paramCount++}`);
-            values.push(updates.payout);
+            fields.push(`payout = $${paramCount++}::NUMERIC`);
+            values.push(updates.payout.toString()); // Convert BigInt to string
         }
         if (updates.actions !== undefined) {
             fields.push(`actions = $${paramCount++}`);
@@ -253,7 +431,7 @@ class DatabaseService {
       ORDER BY hand_index ASC
     `;
         const result = await this.pool.query(query, [gameId]);
-        return result.rows;
+        return result.rows.map((r) => this.normalizeGameHand(r));
     }
     async updateGame(gameId, updates) {
         const fields = [];
@@ -272,8 +450,8 @@ class DatabaseService {
             values.push(updates.result);
         }
         if (updates.total_payout !== undefined) {
-            fields.push(`total_payout = $${paramCount++}`);
-            values.push(updates.total_payout);
+            fields.push(`total_payout = $${paramCount++}::NUMERIC`);
+            values.push(updates.total_payout.toString()); // Convert BigInt to string
         }
         if (updates.actions !== undefined) {
             fields.push(`actions = $${paramCount++}`);
@@ -300,7 +478,7 @@ class DatabaseService {
     async getGame(gameId) {
         const query = `SELECT * FROM games WHERE id = $1`;
         const result = await this.pool.query(query, [gameId]);
-        return result.rows[0] || null;
+        return result.rows[0] ? this.normalizeGame(result.rows[0]) : null;
     }
     async getSessionGames(sessionId) {
         const query = `
@@ -309,7 +487,7 @@ class DatabaseService {
       ORDER BY game_number ASC
     `;
         const result = await this.pool.query(query, [sessionId]);
-        return result.rows;
+        return result.rows.map((r) => this.normalizeGame(r));
     }
     // Seed reveal operations
     async revealServerSeed(gameId, serverSeedHash, serverSeed) {
@@ -325,10 +503,10 @@ class DatabaseService {
     async createSettlement(gameId, playerAddress, amount) {
         const query = `
       INSERT INTO settlements (game_id, player_address, amount)
-      VALUES ($1, $2, $3)
+      VALUES ($1, $2, $3::NUMERIC)
       RETURNING id
     `;
-        const result = await this.pool.query(query, [gameId, playerAddress, amount]);
+        const result = await this.pool.query(query, [gameId, playerAddress, amount.toString()]);
         return result.rows[0].id;
     }
     async updateSettlementStatus(settlementId, transactionHash, status) {

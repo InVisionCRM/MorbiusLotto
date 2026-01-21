@@ -35,6 +35,12 @@ app.use('/api/', limiter);
 // Body parsing
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
+// JSON helper that serializes BigInt values (Express res.json cannot)
+const jsonReplacer = (_key, value) => (typeof value === 'bigint' ? value.toString() : value);
+const sendJson = (res, data) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(data, jsonReplacer));
+};
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -56,7 +62,7 @@ async function initializeServices() {
             try {
                 const { address } = req.params;
                 const stats = await dbService.getPlayerStats(address);
-                res.json(stats);
+                sendJson(res, stats);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching player stats:', error);
@@ -67,7 +73,7 @@ async function initializeServices() {
             try {
                 const { gameId } = req.params;
                 const verification = await gameService.verifyGame(gameId);
-                res.json(verification);
+                sendJson(res, verification);
             }
             catch (error) {
                 logger_1.logger.error('Error verifying game:', error);
@@ -79,7 +85,7 @@ async function initializeServices() {
             try {
                 const { address } = req.params;
                 const stats = await dbService.getPlayerStatsEnhanced(address);
-                res.json(stats);
+                sendJson(res, stats);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching enhanced player stats:', error);
@@ -90,7 +96,7 @@ async function initializeServices() {
         app.get('/api/analytics/global', async (req, res) => {
             try {
                 const analytics = await dbService.getGlobalAnalytics();
-                res.json(analytics);
+                sendJson(res, analytics);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching global analytics:', error);
@@ -104,7 +110,7 @@ async function initializeServices() {
                 const limit = parseInt(req.query.limit) || 50;
                 const offset = parseInt(req.query.offset) || 0;
                 const games = await dbService.getPlayerGames(address, limit, offset);
-                res.json(games);
+                sendJson(res, games);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching player games:', error);
@@ -117,7 +123,7 @@ async function initializeServices() {
                 const status = req.query.status;
                 const limit = parseInt(req.query.limit) || 100;
                 const settlements = await dbService.getSettlements(status, limit);
-                res.json(settlements);
+                sendJson(res, settlements);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching settlements:', error);

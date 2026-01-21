@@ -37,6 +37,13 @@ app.use('/api/', limiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// JSON helper that serializes BigInt values (Express res.json cannot)
+const jsonReplacer = (_key: string, value: any) => (typeof value === 'bigint' ? value.toString() : value);
+const sendJson = (res: any, data: any) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(JSON.stringify(data, jsonReplacer));
+};
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -63,7 +70,7 @@ async function initializeServices() {
       try {
         const { address } = req.params;
         const stats = await dbService.getPlayerStats(address);
-        res.json(stats);
+        sendJson(res, stats);
       } catch (error) {
         logger.error('Error fetching player stats:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -74,7 +81,7 @@ async function initializeServices() {
       try {
         const { gameId } = req.params;
         const verification = await gameService.verifyGame(gameId);
-        res.json(verification);
+        sendJson(res, verification);
       } catch (error) {
         logger.error('Error verifying game:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -86,7 +93,7 @@ async function initializeServices() {
       try {
         const { address } = req.params;
         const stats = await dbService.getPlayerStatsEnhanced(address);
-        res.json(stats);
+        sendJson(res, stats);
       } catch (error) {
         logger.error('Error fetching enhanced player stats:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -97,7 +104,7 @@ async function initializeServices() {
     app.get('/api/analytics/global', async (req, res) => {
       try {
         const analytics = await dbService.getGlobalAnalytics();
-        res.json(analytics);
+        sendJson(res, analytics);
       } catch (error) {
         logger.error('Error fetching global analytics:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -111,7 +118,7 @@ async function initializeServices() {
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
         const games = await dbService.getPlayerGames(address, limit, offset);
-        res.json(games);
+        sendJson(res, games);
       } catch (error) {
         logger.error('Error fetching player games:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -124,7 +131,7 @@ async function initializeServices() {
         const status = req.query.status as string | undefined;
         const limit = parseInt(req.query.limit as string) || 100;
         const settlements = await dbService.getSettlements(status, limit);
-        res.json(settlements);
+        sendJson(res, settlements);
       } catch (error) {
         logger.error('Error fetching settlements:', error);
         res.status(500).json({ error: 'Internal server error' });

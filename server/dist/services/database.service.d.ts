@@ -1,6 +1,7 @@
 export interface Player {
     id: string;
     wallet_address: string;
+    balance: bigint;
     created_at: Date;
     updated_at: Date;
     last_seen: Date;
@@ -102,10 +103,23 @@ export interface GlobalAnalytics {
 export declare class DatabaseService {
     private pool;
     constructor();
+    private toBigInt;
+    private normalizePlayer;
+    private normalizeSession;
+    private normalizeGame;
+    private normalizeGameHand;
+    private normalizePlayerStats;
+    private normalizeEnhancedPlayerStats;
+    private normalizeGlobalAnalytics;
     connect(): Promise<void>;
     disconnect(): Promise<void>;
     getOrCreatePlayer(walletAddress: string): Promise<Player>;
     updatePlayerLastSeen(playerId: string): Promise<void>;
+    getPlayerBalance(walletAddress: string): Promise<bigint>;
+    updatePlayerBalance(walletAddress: string, amount: bigint, operation: 'add' | 'subtract' | 'set'): Promise<bigint>;
+    deductPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
+    addPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
+    syncPlayerBalanceWithContract(walletAddress: string, contractBalance: bigint): Promise<void>;
     getPlayerStats(walletAddress: string): Promise<PlayerStats>;
     getPlayerStatsEnhanced(walletAddress: string): Promise<EnhancedPlayerStats>;
     getGlobalAnalytics(): Promise<GlobalAnalytics>;
@@ -113,6 +127,8 @@ export declare class DatabaseService {
     getSettlements(status?: string, limit?: number): Promise<any[]>;
     createGameSession(playerId: string, serverSeedHash: string): Promise<GameSession>;
     getActiveSession(playerId: string): Promise<GameSession | null>;
+    getSessionById(sessionId: string): Promise<GameSession | null>;
+    getPlayerAddressFromSession(sessionId: string): Promise<string>;
     updateSessionStats(sessionId: string, betAmount: bigint, winAmount: bigint): Promise<void>;
     endSession(sessionId: string): Promise<void>;
     createGame(sessionId: string, gameData: Partial<Game>): Promise<Game>;

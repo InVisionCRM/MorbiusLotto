@@ -1,29 +1,31 @@
 'use client'
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, usePublicClient } from 'wagmi';
 import { toast } from 'sonner';
+import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import BettingPanel from '@/components/BLACKJACK/BettingPanel';
 import MainNav from '@/components/BLACKJACK/MainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
 import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
+import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { GameHistory } from '@/components/BLACKJACK/GameHistory';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalyticsDashboard';
 import { GameVerificationTools } from '@/components/BLACKJACK/GameVerificationTools';
 import HistoryStrip from '@/components/BLACKJACK/HistoryStrip';
-// Note: CustomApprovalModal no longer needed since bets come from reserve
 import { ContractAddress } from '@/components/ui/contract-address';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { ANIMATION_TIMINGS } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
-import { BLACKJACK_ADDRESS } from '@/lib/contracts';
+import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
-import { formatEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 import { usePlayerStatsEnhanced, useGlobalAnalytics } from '@/hooks/use-blackjack-stats';
+import { useTokenApproval } from '@/hooks/use-token-approval';
 
 // Intro screen component
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -189,28 +191,71 @@ const createCard = (value: number, suit: string, hidden = false): Card => ({
 
 export default function BlackjackPage() {
   const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient();
 
   // Intro screen state
   const [showIntro, setShowIntro] = useState(true);
 
-  // Contract hook
+  // Contract hook (for deposits/withdrawals only)
   const {
-    playerReserve,
     deposit,
     depositMORBIUS,
     withdraw,
-    refetchPlayerReserve
+    playerReserve
   } = useBlackjackContract();
+
+  // Off-chain balance state (like Stake.com)
+  const [offChainBalance, setOffChainBalance] = useState<bigint>(BigInt(0));
 
   // Game state
   const [gameState, setGameState] = useState<GameStateUI>({
-    balance: BigInt(0),
+    balance: BigInt(0), // Will be set from offChainBalance
     currentGame: null,
+    playerHands: [],
+    dealerCards: [],
+    dealerTotal: 0,
+    dealerHasAce: false,
     isPlaying: false,
     lastResult: null,
     history: [],
-    clientSeed: ''
+    clientSeed: '',
+    currentHandIndex: 0,
+    canSplit: false
   });
+
+  // WebSocket client (declare before fetchBalance/syncBalance)
+  const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+
+  // Fetch off-chain balance from server
+  const fetchBalance = useCallback(async () => {
+    const client = wsClient;
+    const connected = wsConnected;
+    if (!client || !connected) return;
+    try {
+      const { balance } = await client.getBalance();
+      const balanceBigInt = BigInt(balance);
+      setOffChainBalance(balanceBigInt);
+      setGameState(prev => ({ ...prev, balance: balanceBigInt }));
+    } catch (error) {
+      console.error('Failed to fetch balance:', error);
+    }
+  }, [wsClient, wsConnected]);
+
+  // Sync balance with contract after deposit/withdraw
+  const syncBalance = useCallback(async () => {
+    const client = wsClient;
+    const connected = wsConnected;
+    if (!client || !connected) return;
+    try {
+      const { balance } = await client.syncBalance();
+      const balanceBigInt = BigInt(balance);
+      setOffChainBalance(balanceBigInt);
+      setGameState(prev => ({ ...prev, balance: balanceBigInt }));
+    } catch (error) {
+      console.error('Failed to sync balance:', error);
+    }
+  }, [wsClient, wsConnected]);
 
   // Win notification state
   const [showWinNotification, setShowWinNotification] = useState(false);
@@ -285,129 +330,30 @@ export default function BlackjackPage() {
     largestPayout: globalAnalyticsData.largest_payout || BigInt(0)
   } : null;
 
-  // Mock data for dashboards (fallback/legacy)
-  const mockPlayerStats = {
-    totalGames: 1247,
-    totalBet: 2500000000000000000000n, // 2500 PLS
-    totalWin: 2375000000000000000000n, // 2375 PLS
-    winRate: 48.2,
-    blackjackCount: 87,
-    currentStreak: 3,
-    bestStreak: 12,
-    biggestWin: 50000000000000000000n, // 50 PLS
-    biggestLoss: 100000000000000000000n, // 100 PLS
-    averageBet: 2000000000000000000n, // 2 PLS
-    averagePayout: 1900000000000000000n, // 1.9 PLS
-    profitLoss: -125000000000000000000n, // -125 PLS
-    roi: -5.0,
-    gamesToday: 23,
-    gamesThisWeek: 156,
-    favoriteBetAmount: 1000000000000000000n, // 1 PLS
-    lastGameTimestamp: Date.now() - 3600000, // 1 hour ago
-    rank: 42
-  };
-
-  const mockGlobalAnalytics = {
-    totalPlayers: 15420,
-    activePlayers: 1247,
-    totalGamesPlayed: 892456,
-    totalVolume: 150000000000000000000000n, // 150,000 PLS
-    totalPayouts: 142500000000000000000000n, // 142,500 PLS
-    houseProfit: 7500000000000000000000n, // 7,500 PLS
-    gamesLastHour: 234,
-    gamesLast24Hours: 5678,
-    volumeLast24Hours: 25000000000000000000000n, // 25,000 PLS
-    profitLast24Hours: 1250000000000000000000n, // 1,250 PLS
-    averageWinRate: 48.7,
-    averageBetSize: 168000000000000000n, // 0.168 PLS
-    houseEdge: 5.0,
-    peakConcurrentUsers: 892,
-    serverUptime: 99.7,
-    averageResponseTime: 45,
-    errorRate: 0.02,
-    activeConnections: 756,
-    blackjackRate: 4.8,
-    splitRate: 12.3,
-    doubleDownRate: 23.7,
-    surrenderRate: 0.0,
-    reserveBalance: 50000000000000000000000n, // 50,000 PLS
-    pendingSettlements: 12,
-    failedSettlements: 2,
-    averageSettlementTime: 3.2,
-    highRollerCount: 23,
-    suspiciousActivity: 0,
-    largestBet: 1000000000000000000000n, // 1,000 PLS
-    largestPayout: 1500000000000000000000n, // 1,500 PLS
-  };
-
-  const mockGameHistory = [
-    {
-      id: '1',
-      gameId: 'game_123456',
-      timestamp: Date.now() - 3600000,
-      betAmount: 1000000000000000000n,
-      payout: 2000000000000000000n,
-      result: 'win' as const,
-      playerHands: [{
-        cards: [1, 10],
-        total: 21,
-        result: 'win' as const,
-        payout: 2000000000000000000n
-      }],
-      dealerCards: [7, 9],
-      dealerTotal: 16,
-      verified: true
-    },
-    {
-      id: '2',
-      gameId: 'game_123455',
-      timestamp: Date.now() - 7200000,
-      betAmount: 2000000000000000000n,
-      payout: 4000000000000000000n,
-      result: 'win' as const,
-      playerHands: [{
-        cards: [10, 8],
-        total: 18,
-        result: 'win' as const,
-        payout: 4000000000000000000n
-      }],
-      dealerCards: [9, 6],
-      dealerTotal: 15,
-      verified: true
-    },
-    {
-      id: '3',
-      gameId: 'game_123454',
-      timestamp: Date.now() - 10800000,
-      betAmount: 500000000000000000n,
-      payout: 0n,
-      result: 'loss' as const,
-      playerHands: [{
-        cards: [5, 7],
-        total: 12,
-        result: 'loss' as const,
-        payout: 0n
-      }],
-      dealerCards: [10, 8],
-      dealerTotal: 18,
-      verified: true
-    }
-  ];
-
-  // Note: Approval modal no longer needed since bets come from reserve
-  // Keeping for potential future use
+  // Approval modal state - needed for depositing MORBIUS directly
   const [showApprovalModal, setShowApprovalModal] = useState(false);
-  const [pendingBet, setPendingBet] = useState<{ betAmount: bigint; clientSeed: string } | null>(null);
+  
+  // Token approval hook for MORBIUS -> BLACKJACK_ADDRESS
+  // Using a large default amount (100,000 MORBIUS) for unlimited-like approval
+  const {
+    needsApproval,
+    approve,
+    isApproving,
+    isLoadingAllowance,
+  } = useTokenApproval({
+    tokenAddress: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
+    spenderAddress: BLACKJACK_ADDRESS as `0x${string}`,
+    requiredAmount: parseEther('100000'), // Large default amount
+    userAddress: address,
+    enabled: !!address,
+    defaultToUnlimited: true,
+  });
 
-  // Custom approval handler (placeholder - not currently used)
+  // Custom approval handler
   const handleCustomApproval = useCallback((amount: bigint) => {
-    // Approval not needed for reserve-based system
-    console.log('Approval requested for amount:', amount);
-  }, []);
+    approve(amount);
+  }, [approve]);
 
-  // WebSocket client
-  const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
-  const [wsConnected, setWsConnected] = useState(false);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -436,6 +382,8 @@ export default function BlackjackPage() {
       client.on('game_completed', (data: any) => {
         console.log('Game completed:', data);
         handleGameCompletion(data);
+        // Refresh balance after game completes
+        fetchBalance();
       });
 
       client.on('error', (error: any) => {
@@ -459,6 +407,8 @@ export default function BlackjackPage() {
           setWsConnected(true);
           setWsClient(client);
           console.log('Connected to blackjack server');
+          // Fetch initial balance
+          fetchBalance();
         })
         .catch((error) => {
           // #region agent log
@@ -479,47 +429,155 @@ export default function BlackjackPage() {
     };
   }, [address]);
 
-  // Convert server game state to local format
-  const updateGameStateFromServer = useCallback((serverGameState: ServerGameState) => {
-    const localGame: Game = {
-      id: serverGameState.gameId,
-      player: address!,
-      betAmount: serverGameState.betAmount,
-      state: serverGameState.status === 'player_turn' ? GameState.PLAYER_TURN :
-             serverGameState.status === 'dealer_turn' ? GameState.DEALER_TURN :
-             serverGameState.status === 'completed' ? GameState.COMPLETE : GameState.WAITING,
-      playerHand: {
-        cards: serverGameState.playerCards,
-        total: serverGameState.playerTotal,
-        hasAce: serverGameState.playerHasAce,
-        isBlackjack: serverGameState.isBlackjack,
-        isBust: serverGameState.playerTotal > 21
+  // Fetch balance when WebSocket connects
+  useEffect(() => {
+    if (wsConnected && wsClient) {
+      fetchBalance();
+    }
+  }, [wsConnected, wsClient, fetchBalance]);
+
+  // Convert server game state (off-chain) to local UI format
+  const updateGameStateFromServer = useCallback((serverGameState: any) => {
+    if (!address) return;
+
+    const gameId = String(serverGameState.gameId || serverGameState.id || '');
+    const status = String(serverGameState.status || 'waiting');
+    const currentHandIndex = Number(serverGameState.currentHandIndex ?? 0);
+
+    const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
+    const suitFor = (idx: number) => {
+      // Deterministic suit selection (suits don't matter in blackjack)
+      const salt = gameId.length;
+      return suits[(idx + salt) % suits.length];
+    };
+    const toCard = (value: number, idx: number, hidden = false): Card =>
+      createCard(Number(value), suitFor(idx), hidden);
+
+    const toBigIntSafe = (v: any) => {
+      try {
+        if (typeof v === 'bigint') return v;
+        if (v === null || v === undefined) return BigInt(0);
+        return BigInt(String(v));
+      } catch {
+        return BigInt(0);
+      }
+    };
+
+    const totalBetAmount = toBigIntSafe(serverGameState.totalBetAmount ?? serverGameState.betAmount);
+    const totalPayout = toBigIntSafe(serverGameState.totalPayout ?? serverGameState.payout);
+
+    const rawHands = Array.isArray(serverGameState.playerHands)
+      ? serverGameState.playerHands
+      : [];
+
+    const playerHands: Hand[] = rawHands.map((h: any, handIdx: number) => {
+      const rawCards: number[] = Array.isArray(h.cards) ? h.cards.map((c: any) => Number(c)) : [];
+      const cards = rawCards.map((c, idx) => toCard(c, handIdx * 10 + idx));
+      const totals = calculateHandTotal(cards);
+      return {
+        id: String(h.id || `${gameId}-hand-${handIdx}`),
+        cards,
+        total: Number(h.total ?? totals.total),
+        hasAce: Boolean(h.hasAce ?? totals.hasAce),
+        isBlackjack: Boolean(h.isBlackjack ?? false),
+        isBust: Boolean(h.isBust ?? false),
+        betAmount: toBigIntSafe(h.betAmount ?? totalBetAmount),
+        result: h.result,
+        payout: toBigIntSafe(h.payout),
+        actions: Array.isArray(h.actions) ? h.actions : [],
+        canHit: Boolean(h.canHit ?? true),
+        canStand: Boolean(h.canStand ?? true),
+        canDoubleDown: Boolean(h.canDoubleDown ?? false),
+        canSplit: Boolean(h.canSplit ?? false),
+      };
+    });
+
+    const activePlayerHand = playerHands[currentHandIndex] || playerHands[0];
+
+    // Dealer cards are already "hidden" by the server (usually only 1 card until completion).
+    const rawDealerCards: number[] = Array.isArray(serverGameState.dealerCards)
+      ? serverGameState.dealerCards.map((c: any) => Number(c))
+      : [];
+    const dealerCards = rawDealerCards.map((c, idx) => toCard(c, 100 + idx));
+    const dealerTotals = calculateHandTotal(dealerCards);
+    const dealerHand: Hand = {
+      id: `${gameId}-dealer`,
+      cards: dealerCards,
+      total: Number(serverGameState.dealerTotal ?? dealerTotals.total),
+      hasAce: Boolean(serverGameState.dealerHasAce ?? dealerTotals.hasAce),
+      isBlackjack: false,
+      isBust: Number(serverGameState.dealerTotal ?? dealerTotals.total) > 21,
+      betAmount: BigInt(0),
+      payout: BigInt(0),
+      actions: Array.isArray(serverGameState.dealerActions) ? serverGameState.dealerActions : [],
+      canHit: false,
+      canStand: false,
+      canDoubleDown: false,
+      canSplit: false,
+    };
+
+    const localGame: any = {
+      id: gameId,
+      player: address,
+      betAmount: totalBetAmount,
+      state:
+        status === 'player_turn'
+          ? GameState.PLAYER_TURN
+          : status === 'dealer_turn'
+            ? GameState.DEALER_TURN
+            : status === 'completed'
+              ? GameState.COMPLETE
+              : GameState.WAITING,
+      // Keep the legacy single-hand fields used throughout the page
+      playerHand: activePlayerHand || {
+        id: `${gameId}-hand-0`,
+        cards: [],
+        total: 0,
+        hasAce: false,
+        isBlackjack: false,
+        isBust: false,
+        betAmount: BigInt(0),
+        payout: BigInt(0),
+        actions: [],
+        canHit: false,
+        canStand: false,
+        canDoubleDown: false,
+        canSplit: false,
       },
-      dealerHand: {
-        cards: serverGameState.dealerCards,
-        total: serverGameState.dealerTotal,
-        hasAce: serverGameState.dealerHasAce,
-        isBlackjack: false, // Dealer blackjack is checked differently
-        isBust: serverGameState.dealerTotal > 21
-      },
-      payout: serverGameState.payout,
+      dealerHand,
+      // Also keep multi-hand data for split support
+      playerHands,
+      currentHandIndex,
+      totalBetAmount,
+      totalPayout,
+      canSplit: Boolean(serverGameState.canSplit ?? activePlayerHand?.canSplit ?? false),
+      isBlackjack: Boolean(serverGameState.isBlackjack ?? activePlayerHand?.isBlackjack ?? false),
       timestamp: Date.now(),
-      clientSeed: gameState.clientSeed
+      clientSeed: gameState.clientSeed,
     };
 
     setGameState(prev => ({
       ...prev,
       currentGame: localGame,
-      isPlaying: serverGameState.status !== 'completed'
+      isPlaying: status !== 'completed',
     }));
   }, [address, gameState.clientSeed]);
 
   // Handle game completion
   const handleGameCompletion = useCallback((data: any) => {
-    if (data.result === 'win' || data.result === 'blackjack') {
-      setWinAmount(data.payout - data.betAmount);
-      setIsBlackjackWin(data.result === 'blackjack');
-      setShowWinNotification(true);
+    try {
+      const payout: bigint =
+        typeof data?.payout === 'bigint' ? data.payout : BigInt(String(data?.payout || '0'));
+      const betAmount: bigint =
+        typeof data?.betAmount === 'bigint' ? data.betAmount : BigInt(String(data?.betAmount || '0'));
+      const profit: bigint = payout - betAmount;
+      if (profit > BigInt(0)) {
+        setWinAmount(profit);
+        setIsBlackjackWin(data.result === 'blackjack');
+        setShowWinNotification(true);
+      }
+    } catch {
+      // ignore malformed payload
     }
   }, []);
 
@@ -537,77 +595,85 @@ export default function BlackjackPage() {
   const handleStartGame = useCallback(async (betAmount: bigint, clientSeed: string) => {
     console.log('Main handleStartGame called with:', { betAmount, clientSeed, isConnected, address });
 
-    if (!wsConnected || !address) {
-      console.log('Wallet not connected');
+    // Off-chain betting does NOT require a wagmi publicClient (only deposits/withdrawals do).
+    // We only need a connected wallet address and a connected websocket client.
+    if (!address) {
       toast.error('Please connect your wallet first');
       return;
     }
-
-    // Note: No approval needed since bets come from MORBIUS reserve
-    // In the future, this will call the server to start a game
+    if (!wsConnected || !wsClient) {
+      console.log('Game server not connected yet');
+      toast.error('Connecting to game server… try again in a second');
+      return;
+    }
 
     try {
-      if (!wsClient || !wsConnected) {
-        throw new Error('Not connected to game server');
-      }
-
       setGameState(prev => ({ ...prev, isPlaying: true, clientSeed }));
 
-      // Create game on server
-      const serverGameState = await wsClient.createGame(betAmount, clientSeed);
+      // Step 1: Get server seed hash and nonce from server
+      toast.info('Preparing game...', { description: 'Getting server seed hash' });
+      const { serverSeedHash, nonce } = await wsClient.getServerSeedHash();
+
+      // Step 2: Generate game hash on frontend (for provably fair verification)
+      // Match server format: `${serverSeed}:${clientSeed}:${nonce}:${betAmount}:${timestamp}`
+      const timestamp = Math.floor(Date.now() / 1000);
+      // Remove 0x prefix from serverSeedHash for hash calculation (server uses hex string without 0x)
+      const serverSeedForHash = serverSeedHash.startsWith('0x') ? serverSeedHash.slice(2) : serverSeedHash;
+      const hashInput = `${serverSeedForHash}:${clientSeed}:${nonce}:${betAmount.toString()}:${timestamp}`;
+      
+      // Use Web Crypto API to generate SHA-256 hash (matches server's crypto.createHash('sha256').digest('hex'))
+      const encoder = new TextEncoder();
+      const data = encoder.encode(hashInput);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      const gameHash = ('0x' + hashHex) as `0x${string}`;
+
+      console.log('Generated game hash:', gameHash, { 
+        serverSeedHash, 
+        serverSeedForHash,
+        clientSeed, 
+        betAmount: betAmount.toString(), 
+        nonce, 
+        timestamp,
+        hashInput,
+        hashHex
+      });
+
+      // Step 3: Create game on server (off-chain betting)
+      // Server will validate reserves off-chain and create the game
+      // No on-chain transaction needed until game ends
+      toast.info('Starting game...', { description: 'Creating game (off-chain)' });
+      const serverGameState = await wsClient.createGame(betAmount, clientSeed, gameHash);
       console.log('Game started:', serverGameState);
 
-      // The game state will be updated via WebSocket events
+      toast.success('Game started!', { description: 'Good luck!' });
+      // Apply returned game state immediately (server response includes requestId so it won't emit as a separate event)
+      updateGameStateFromServer(serverGameState);
+      // Refresh balance (bet was deducted off-chain)
+      fetchBalance();
       return;
-
-      // Mock initial game state - in real implementation this would come from contract events
-      const mockPlayerCards = [
-        createCard(10, 'hearts'),
-        createCard(1, 'spades')
-      ];
-      const mockDealerCards = [
-        createCard(7, 'clubs'),
-        createCard(1, 'diamonds', true) // Hidden
-      ];
-
-      const playerHand: Hand = {
-        cards: mockPlayerCards,
-        ...calculateHandTotal(mockPlayerCards),
-        isBlackjack: false,
-        isBust: false
-      };
-
-      const dealerHand: Hand = {
-        cards: mockDealerCards,
-        ...calculateHandTotal([mockDealerCards[0]]), // Don't count hidden card
-        isBlackjack: false,
-        isBust: false
-      };
-
-      const newGame: Game = {
-        id: gameId,
-        player: address,
-        betAmount,
-        state: GameState.PLAYER_TURN,
-        playerHand,
-        dealerHand,
-        payout: BigInt(0),
-        timestamp: Date.now(),
-        clientSeed
-      };
-
-      setGameState(prev => ({
-        ...prev,
-        currentGame: newGame
-      }));
-
-      toast.success('Game started! Good luck!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to start game:', error);
-      toast.error('Failed to start game');
+      
+      // Determine error type for better user feedback
+      let errorMessage = 'An error occurred while starting the game';
+      if (error?.message?.includes('Insufficient reserve')) {
+        errorMessage = 'Insufficient balance in your reserve';
+      } else if (error?.message?.includes('Game hash already used')) {
+        errorMessage = 'Game hash already used. Please try again.';
+      } else if (error?.message?.includes('transaction failed')) {
+        errorMessage = 'Transaction failed. Please try again.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error('Failed to start game', {
+        description: errorMessage
+      });
       setGameState(prev => ({ ...prev, isPlaying: false }));
     }
-  }, [isConnected, address]);
+  }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer]);
 
   // Note: Approval handling no longer needed since bets come from reserve
 
@@ -619,167 +685,17 @@ export default function BlackjackPage() {
       // Send action to server
       const serverGameState = await wsClient.playerAction(gameState.currentGame.id, action);
       console.log('Player action processed:', serverGameState);
-
-      // The game state will be updated via WebSocket events
-      return;
-
-      // Mock game progression - in real implementation this would come from contract events
-      if (action === Action.HIT) {
-        const newCard = createCard(Math.floor(Math.random() * 13) + 1, 'hearts');
-        const newCards = [...gameState.currentGame.playerHand.cards, newCard];
-        const { total, hasAce } = calculateHandTotal(newCards);
-
-        const updatedHand: Hand = {
-          cards: newCards,
-          total,
-          hasAce,
-          isBlackjack: total === 21 && newCards.length === 2,
-          isBust: total > 21
-        };
-
-        setGameState(prev => ({
-          ...prev,
-          currentGame: prev.currentGame ? {
-            ...prev.currentGame,
-            playerHand: updatedHand,
-            state: updatedHand.isBust ? GameState.COMPLETE : GameState.PLAYER_TURN
-          } : null
-        }));
-      } else if (action === Action.SPLIT) {
-        // Split the hand into two separate hands
-        const [card1, card2] = gameState.currentGame.playerHand.cards;
-        const newCard1 = createCard(Math.floor(Math.random() * 13) + 1, 'hearts');
-        const newCard2 = createCard(Math.floor(Math.random() * 13) + 1, 'diamonds');
-
-        // For now, just continue with the first hand (simplified split logic)
-        const firstHand: Hand = {
-          cards: [card1, newCard1],
-          ...calculateHandTotal([card1, newCard1]),
-          isBlackjack: false,
-          isBust: false
-        };
-
-        setGameState(prev => ({
-          ...prev,
-          currentGame: prev.currentGame ? {
-            ...prev.currentGame,
-            playerHand: firstHand,
-            state: GameState.PLAYER_TURN
-          } : null
-        }));
-
-        toast.info('Hand split! Playing with first hand.');
-      } else if (action === Action.DOUBLE_DOWN) {
-        // Double down - double the bet and get exactly one more card
-        const newCard = createCard(Math.floor(Math.random() * 13) + 1, 'hearts');
-        const newCards = [...gameState.currentGame.playerHand.cards, newCard];
-        const { total, hasAce } = calculateHandTotal(newCards);
-
-        const updatedHand: Hand = {
-          cards: newCards,
-          total,
-          hasAce,
-          isBlackjack: false, // Can't be blackjack after doubling
-          isBust: total > 21
-        };
-
-        setGameState(prev => ({
-          ...prev,
-          currentGame: prev.currentGame ? {
-            ...prev.currentGame,
-            playerHand: updatedHand,
-            state: GameState.DEALER_TURN // After doubling, dealer plays immediately
-          } : null
-        }));
-
-        toast.info('Doubled down! Dealer\'s turn.');
-      } else if (action === Action.STAND) {
-        // Dealer turn
-        setGameState(prev => ({
-          ...prev,
-          currentGame: prev.currentGame ? {
-            ...prev.currentGame,
-            state: GameState.DEALER_TURN
-          } : null
-        }));
-
-        // Simulate dealer play
-        setTimeout(() => {
-          const dealerCards = gameState.currentGame!.dealerHand.cards.map(card =>
-            card.hidden ? { ...card, hidden: false } : card
-          );
-
-          // Mock dealer hitting until 17
-          let finalDealerCards = [...dealerCards];
-          while (calculateHandTotal(finalDealerCards).total < 17) {
-            const newCard = createCard(Math.floor(Math.random() * 13) + 1, 'diamonds');
-            finalDealerCards.push(newCard);
-          }
-
-          const { total: dealerTotal, hasAce: dealerHasAce } = calculateHandTotal(finalDealerCards);
-          const dealerHand: Hand = {
-            cards: finalDealerCards,
-            total: dealerTotal,
-            hasAce: dealerHasAce,
-            isBlackjack: dealerTotal === 21 && finalDealerCards.length === 2,
-            isBust: dealerTotal > 21
-          };
-
-          const playerTotal = gameState.currentGame!.playerHand.total;
-          let payout = BigInt(0);
-
-          if (playerTotal > 21) {
-            payout = BigInt(0); // Bust
-          } else if (dealerTotal > 21) {
-            payout = gameState.currentGame!.betAmount * BigInt(2); // Dealer bust
-          } else if (playerTotal > dealerTotal) {
-            payout = gameState.currentGame!.betAmount * BigInt(2); // Win
-          } else if (playerTotal === dealerTotal) {
-            payout = gameState.currentGame!.betAmount; // Push
-          } else {
-            payout = BigInt(0); // Loss
-          }
-
-          const isBlackjack = gameState.currentGame!.playerHand.isBlackjack;
-          const isWin = payout > gameState.currentGame!.betAmount;
-
-          setGameState(prev => ({
-            ...prev,
-            currentGame: prev.currentGame ? {
-              ...prev.currentGame,
-              dealerHand,
-              payout,
-              state: GameState.COMPLETE
-            } : null,
-            isPlaying: false,
-            lastResult: {
-              gameId: prev.currentGame!.id,
-              playerHand: prev.currentGame!.playerHand,
-              dealerHand,
-              payout,
-              isBlackjack,
-              timestamp: Date.now()
-            }
-          }));
-
-          // Show win notification
-          if (isWin) {
-            setWinAmount(payout - gameState.currentGame!.betAmount);
-            setIsBlackjackWin(isBlackjack);
-            setShowWinNotification(true);
-            toast.success(`You won ${formatEther(payout - gameState.currentGame!.betAmount)} MORBIUS!`);
-          } else if (payout === gameState.currentGame!.betAmount) {
-            toast.info('Push - bet returned');
-          } else {
-            toast.error('Dealer wins');
-          }
-        }, ANIMATION_TIMINGS.DEALER_TURN_DELAY);
+      updateGameStateFromServer(serverGameState);
+      // If the server completed the game, refresh balance
+      if (serverGameState?.status === 'completed') {
+        fetchBalance();
       }
+      return;
     } catch (error) {
       console.error('Failed to perform action:', error);
       toast.error('Failed to perform action');
     }
-  }, [gameState.currentGame]);
+  }, [gameState.currentGame, wsClient, wsConnected, updateGameStateFromServer, fetchBalance]);
 
   // Show intro screen
   if (showIntro) {
@@ -805,7 +721,7 @@ export default function BlackjackPage() {
     >
       <MainNav
         onOpenDepositModal={handleOpenDepositModal}
-        reserveBalance={playerReserve}
+        reserveBalance={offChainBalance}
         currentView={currentView}
         onViewChange={setCurrentView}
       />
@@ -905,7 +821,7 @@ export default function BlackjackPage() {
               <BettingPanel
                 onStartGame={handleStartGame}
                 isPlaying={gameState.isPlaying}
-                reserveBalance={playerReserve || BigInt(0)}
+                reserveBalance={offChainBalance}
               />
             )}
           </div>
@@ -920,7 +836,7 @@ export default function BlackjackPage() {
                 canHit={canHit}
                 canStand={canStand}
                 canDoubleDown={canDoubleDown}
-                reserveBalance={playerReserve}
+                reserveBalance={offChainBalance}
                 usePLS={false}
               />
           </div>
@@ -996,15 +912,24 @@ export default function BlackjackPage() {
         <DepositWithdrawModal
           isOpen={showDepositModal}
           onClose={() => setShowDepositModal(false)}
+          onBalanceSync={syncBalance}
+          contractReserve={playerReserve}
         />
           </>
         )}
 
+        {/* Custom Approval Modal */}
+        <CustomApprovalModal
+          open={showApprovalModal}
+          onOpenChange={setShowApprovalModal}
+          onApprove={handleCustomApproval}
+          isApproving={isApproving}
+          tokenSymbol="MORBIUS"
+          spenderName="Blackjack Game"
+        />
+
         {currentView === 'history' && (
-          <GameHistory 
-            games={gameState.history}
-            onBack={() => setCurrentView('game')}
-          />
+          <GameHistory history={gameState.history as any} />
         )}
 
         {currentView === 'stats' && (

@@ -36,6 +36,7 @@ export interface CreateGameRequest {
     playerAddress: string;
     betAmount: bigint;
     clientSeedCommitment?: string;
+    gameHash?: string;
 }
 export interface PlayerActionRequest {
     gameId: string;

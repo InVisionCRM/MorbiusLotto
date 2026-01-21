@@ -10,20 +10,20 @@ export interface Card {
 }
 
 export interface Hand {
-  id: string;
+  id?: string;
   cards: Card[];
   total: number;
   hasAce: boolean;
   isBlackjack: boolean;
   isBust: boolean;
-  betAmount: bigint;
+  betAmount?: bigint;
   result?: 'win' | 'loss' | 'push' | 'blackjack';
-  payout: bigint;
-  actions: any[];
-  canHit: boolean;
-  canStand: boolean;
-  canDoubleDown: boolean;
-  canSplit: boolean;
+  payout?: bigint;
+  actions?: any[];
+  canHit?: boolean;
+  canStand?: boolean;
+  canDoubleDown?: boolean;
+  canSplit?: boolean;
 }
 
 export interface Game {
@@ -40,6 +40,13 @@ export interface Game {
   clientSeed: string;
   currentHandIndex: number;
   canSplit: boolean;
+
+  // Legacy/single-hand fields used in parts of the UI
+  playerHand?: Hand;
+  dealerHand?: Hand;
+  betAmount?: bigint;
+  payout?: bigint;
+  isBlackjack?: boolean;
 }
 
 export enum GameState {
@@ -58,7 +65,7 @@ export enum Action {
 }
 
 export interface GameResult {
-  gameId: number;
+  gameId: string;
   playerHand: Hand;
   dealerHand: Hand;
   payout: bigint;

@@ -6,11 +6,16 @@ export declare class WebSocketService {
     private wss;
     private clients;
     private heartbeatInterval;
+    private publicClient;
+    private contractAddress;
     constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService);
     private handleConnection;
     private handleMessage;
+    private handleGetServerSeedHash;
     private handleCreateGame;
     private handlePlayerAction;
+    private handleSyncBalance;
+    private handleGetBalance;
     private handleGetGameState;
     private sendMessage;
     private sendError;

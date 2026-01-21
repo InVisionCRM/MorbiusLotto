@@ -7,6 +7,7 @@ import { useAccount, useDisconnect } from 'wagmi';
 
 interface MainNavProps {
   onOpenDepositModal?: () => void;
+  onOpenApprovalModal?: () => void;
   reserveBalance?: bigint;
   currentView?: 'game' | 'history' | 'stats' | 'analytics' | 'verify';
   onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics' | 'verify') => void;
@@ -116,7 +117,7 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
             </button>
 
             {isDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-40 border border-gray-800 bg-black/95 backdrop-blur-sm shadow-lg z-50">
+              <div className="absolute right-0 mt-2 w-48 border border-gray-800 bg-black/95 backdrop-blur-sm shadow-lg z-50">
                 {views.map((view) => (
                   <button
                     key={view}
@@ -131,6 +132,20 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
                     {viewLabels[view]}
                   </button>
                 ))}
+                {/* Separator */}
+                <div className="border-t border-gray-800 my-1" />
+                {/* Approval Button */}
+                {onOpenApprovalModal && (
+                  <button
+                    onClick={() => {
+                      onOpenApprovalModal();
+                      setIsDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm transition-colors hover:underline underline-offset-4 text-gray-400 hover:text-white"
+                  >
+                    Approve MORBIUS
+                  </button>
+                )}
               </div>
             )}
           </div>

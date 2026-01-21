@@ -4,6 +4,9 @@ import { DatabaseService } from './database.service';
 import { BlackjackGameService, GameState, CreateGameRequest, PlayerActionRequest } from './blackjack-game.service';
 import { logger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+import { createPublicClient, http } from 'viem';
+import { pulsechain } from 'viem/chains';
+import { blackjackAbi } from '../abi/blackjack';
 
 interface WebSocketMessage {
   type: string;
@@ -21,6 +24,8 @@ export class WebSocketService {
   private wss: WebSocketServer;
   private clients: Map<string, WebSocketClient> = new Map();
   private heartbeatInterval: NodeJS.Timeout;
+  private publicClient: any;
+  private contractAddress: `0x${string}`;
 
   constructor(
     server: any,
@@ -28,6 +33,14 @@ export class WebSocketService {
     private dbService: DatabaseService
   ) {
     this.wss = new WebSocketServer({ server });
+    
+    // Initialize public client for reading contract state
+    this.publicClient = createPublicClient({
+      chain: pulsechain,
+      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com')
+    });
+    
+    this.contractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0xDe2c7a18de8a9d889E18874EA90A42f84FbaA080') as `0x${string}`;
 
     this.wss.on('connection', this.handleConnection.bind(this));
 
@@ -56,15 +69,9 @@ export class WebSocketService {
     const url = new URL(request.url || '', 'http://localhost');
     const playerAddress = url.searchParams.get('address');
 
-    if (playerAddress) {
-      ws.playerAddress = playerAddress;
-      await this.dbService.addActiveConnection(playerAddress, connectionId);
-      logger.info('WebSocket connection established', { connectionId, playerAddress });
-    } else {
-      logger.warn('WebSocket connection without player address', { connectionId });
-    }
-
-    // Handle messages
+    // IMPORTANT: attach handlers immediately. If we await DB calls before registering
+    // ws.on('message'), early client requests (like get_balance right after connect)
+    // can be dropped and will timeout client-side.
     ws.on('message', (data: Buffer) => this.handleMessage(ws, data));
 
     // Handle pong (heartbeat response)
@@ -89,6 +96,21 @@ export class WebSocketService {
       logger.error('WebSocket error', { connectionId: ws.connectionId, error });
     });
 
+    if (playerAddress) {
+      ws.playerAddress = playerAddress;
+      try {
+        // active_connections expects a UUID player_id (players.id), not a wallet address
+        const player = await this.dbService.getOrCreatePlayer(playerAddress);
+        await this.dbService.addActiveConnection(player.id, connectionId);
+        logger.info('WebSocket connection established', { connectionId, playerAddress: player.wallet_address, playerId: player.id });
+      } catch (error) {
+        // Don't crash the server if connection tracking fails
+        logger.error('Failed to track active connection', { connectionId, playerAddress, error });
+      }
+    } else {
+      logger.warn('WebSocket connection without player address', { connectionId });
+    }
+
     // Send welcome message
     this.sendMessage(ws, {
       type: 'connection_established',
@@ -107,6 +129,10 @@ export class WebSocketService {
       });
 
       switch (message.type) {
+        case 'get_server_seed_hash':
+          await this.handleGetServerSeedHash(ws, message);
+          break;
+
         case 'create_game':
           await this.handleCreateGame(ws, message);
           break;
@@ -117,6 +143,14 @@ export class WebSocketService {
 
         case 'get_game_state':
           await this.handleGetGameState(ws, message);
+          break;
+
+        case 'sync_balance':
+          await this.handleSyncBalance(ws, message);
+          break;
+
+        case 'get_balance':
+          await this.handleGetBalance(ws, message);
           break;
 
         case 'ping':
@@ -132,17 +166,99 @@ export class WebSocketService {
     }
   }
 
+  private async handleGetServerSeedHash(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Player address not authenticated', message.requestId);
+      }
+
+      // Get or create player
+      const player = await this.dbService.getOrCreatePlayer(ws.playerAddress);
+
+      // Get or create active session
+      let session = await this.dbService.getActiveSession(player.id);
+      if (!session) {
+        const serverSeed = this.gameService['pfService'].generateServerSeed();
+        const serverSeedHash = this.gameService['pfService'].createServerSeedHash(serverSeed);
+        session = await this.dbService.createGameSession(player.id, serverSeedHash);
+      }
+
+      // Return server seed hash and next nonce
+      const nextNonce = session.game_count + 1;
+
+      // Ensure server seed hash is in hex format (0x prefix for contract)
+      const serverSeedHash = session.server_seed_hash.startsWith('0x') 
+        ? session.server_seed_hash 
+        : '0x' + session.server_seed_hash;
+
+      this.sendMessage(ws, {
+        type: 'server_seed_hash',
+        payload: {
+          serverSeedHash,
+          nonce: nextNonce
+        },
+        requestId: message.requestId
+      });
+
+    } catch (error) {
+      logger.error('Error getting server seed hash:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.sendError(ws, errorMessage, message.requestId);
+    }
+  }
+
   private async handleCreateGame(ws: WebSocketClient, message: WebSocketMessage) {
     try {
       if (!ws.playerAddress) {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
 
-      const payload = message.payload as CreateGameRequest;
+      const payload = message.payload as any;
+      
+      // Convert betAmount from string to bigint if needed
+      let betAmount: bigint;
+      try {
+        if (typeof payload.betAmount === 'string') {
+          betAmount = BigInt(payload.betAmount);
+        } else if (typeof payload.betAmount === 'bigint') {
+          betAmount = payload.betAmount;
+        } else {
+          betAmount = BigInt(payload.betAmount || '0');
+        }
+      } catch (error) {
+        logger.error('Invalid betAmount format', { payload, error });
+        return this.sendError(ws, 'Invalid bet amount format', message.requestId);
+      }
+
+      // Validate player has sufficient off-chain balance
+      try {
+        const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
+        if (balance < betAmount) {
+          return this.sendError(ws, `Insufficient balance. You have ${balance.toString()}, but need ${betAmount.toString()}`, message.requestId);
+        }
+      } catch (error) {
+        logger.error('Error checking player balance:', error);
+        return this.sendError(ws, 'Failed to verify balance. Please try again.', message.requestId);
+      }
+
+      logger.debug('Creating game', {
+        playerAddress: ws.playerAddress,
+        betAmount: betAmount.toString(),
+        clientSeedCommitment: payload.clientSeedCommitment,
+        gameHash: payload.gameHash,
+        requestId: message.requestId
+      });
+
       const gameState = await this.gameService.createGame({
         playerAddress: ws.playerAddress,
-        betAmount: payload.betAmount,
-        clientSeedCommitment: payload.clientSeedCommitment
+        betAmount,
+        clientSeedCommitment: payload.clientSeedCommitment,
+        gameHash: payload.gameHash
+      });
+
+      logger.debug('Game created successfully', {
+        gameId: gameState.gameId,
+        requestId: message.requestId
       });
 
       this.sendMessage(ws, {
@@ -152,8 +268,18 @@ export class WebSocketService {
       });
 
     } catch (error) {
-      logger.error('Error creating game:', error);
-      this.sendError(ws, 'Failed to create game', message.requestId);
+      logger.error('Error creating game:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        playerAddress: ws.playerAddress,
+        requestId: message.requestId,
+        payload: message.payload
+      });
+      const errorMessage = error instanceof Error 
+        ? (error.message || 'Failed to create game') 
+        : (String(error) || 'Unknown error occurred');
+      this.sendError(ws, errorMessage, message.requestId);
     }
   }
 
@@ -198,6 +324,65 @@ export class WebSocketService {
     }
   }
 
+  private async handleSyncBalance(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Player address not authenticated', message.requestId);
+      }
+
+      // Get contract reserve balance
+      const contractBalance = await this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: blackjackAbi,
+        functionName: 'getPlayerReserve',
+        args: [ws.playerAddress as `0x${string}`]
+      }) as bigint;
+
+      // Sync off-chain balance with contract
+      await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, contractBalance);
+
+      logger.debug('Balance synced', {
+        playerAddress: ws.playerAddress,
+        contractBalance: contractBalance.toString()
+      });
+
+      this.sendMessage(ws, {
+        type: 'balance_synced',
+        payload: {
+          balance: contractBalance.toString()
+        },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error syncing balance:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to sync balance';
+      this.sendError(ws, errorMessage, message.requestId);
+    }
+  }
+
+  private async handleGetBalance(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Player address not authenticated', message.requestId);
+      }
+
+      // Get off-chain balance
+      const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
+
+      this.sendMessage(ws, {
+        type: 'balance',
+        payload: {
+          balance: balance.toString()
+        },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error getting balance:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get balance';
+      this.sendError(ws, errorMessage, message.requestId);
+    }
+  }
+
   private async handleGetGameState(ws: WebSocketClient, message: WebSocketMessage) {
     try {
       const { gameId } = message.payload;
@@ -227,17 +412,66 @@ export class WebSocketService {
   private sendMessage(ws: WebSocketClient, message: WebSocketMessage) {
     if (ws.readyState === WebSocket.OPEN) {
       try {
-        ws.send(JSON.stringify(message));
+        // Convert BigInt values to strings for JSON serialization
+        // This replacer handles nested objects and arrays
+        const replacer = (key: string, value: any): any => {
+          if (typeof value === 'bigint') {
+            return value.toString();
+          }
+          // Handle nested objects/arrays that might contain BigInt
+          if (value && typeof value === 'object') {
+            if (Array.isArray(value)) {
+              return value.map(item => typeof item === 'bigint' ? item.toString() : item);
+            }
+            // For objects, recursively process
+            const processed: any = {};
+            for (const k in value) {
+              if (Object.prototype.hasOwnProperty.call(value, k)) {
+                const v = value[k];
+                processed[k] = typeof v === 'bigint' ? v.toString() : v;
+              }
+            }
+            return processed;
+          }
+          return value;
+        };
+        
+        const serialized = JSON.stringify(message, replacer);
+        ws.send(serialized);
       } catch (error) {
-        logger.error('Error sending WebSocket message:', error);
+        logger.error('Error sending WebSocket message:', {
+          error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          messageType: message.type,
+          hasPayload: !!message.payload
+        });
+        // Try to send a simplified error message
+        if (message.requestId) {
+          try {
+            ws.send(JSON.stringify({
+              type: 'error',
+              payload: { 
+                message: 'Failed to serialize message',
+                error: error instanceof Error ? error.message : String(error)
+              },
+              requestId: message.requestId
+            }));
+          } catch (sendError) {
+            logger.error('Failed to send error message to client:', sendError);
+          }
+        }
       }
     }
   }
 
-  private sendError(ws: WebSocketClient, error: string, requestId?: string) {
+  private sendError(ws: WebSocketClient, error: string | Error, requestId?: string) {
+    const errorMessage = error instanceof Error ? error.message : (error || 'Unknown error');
     this.sendMessage(ws, {
       type: 'error',
-      payload: { message: error },
+      payload: { 
+        message: errorMessage,
+        error: errorMessage 
+      },
       requestId
     });
   }

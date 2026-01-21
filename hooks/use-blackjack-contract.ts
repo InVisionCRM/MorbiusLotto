@@ -167,6 +167,25 @@ export function useWatchWithdrawals(onWithdrawal?: (player: string, amount: bigi
 }
 
 /**
+ * Watch for bet placement events
+ */
+export function useWatchBetPlaced(onBetPlaced?: (player: string, gameHash: string, betAmount: bigint) => void) {
+  return useWatchContractEvent({
+    address: BLACKJACK_ADDRESS,
+    abi: blackjackAbi,
+    eventName: 'BetPlaced',
+    onLogs(logs) {
+      for (const log of logs) {
+        const { args } = log
+        if (args && onBetPlaced) {
+          onBetPlaced(args.player, args.gameHash, args.betAmount)
+        }
+      }
+    },
+  })
+}
+
+/**
  * Watch for game settlement events
  */
 export function useWatchGameSettlements(onSettlement?: (player: string, amount: bigint, gameHash: string) => void) {
@@ -204,11 +223,13 @@ export function useBlackjackContract() {
   const depositMORBIUSContract = useDepositMORBIUS()
   const withdrawContract = useWithdraw()
   const revealSeedContract = useRevealServerSeed()
+  const placeBetContract = useWriteContract()
 
   // Event hooks
   useWatchDeposits()
   useWatchDepositsMORBIUS()
   useWatchWithdrawals()
+  useWatchBetPlaced()
   useWatchGameSettlements()
 
   // Helper functions
@@ -256,6 +277,17 @@ export function useBlackjackContract() {
     })
   }
 
+  const placeBet = async (gameHash: `0x${string}`, betAmount: bigint) => {
+    if (!address) throw new Error('Wallet not connected')
+
+    return placeBetContract.writeContractAsync({
+      address: BLACKJACK_ADDRESS,
+      abi: blackjackAbi,
+      functionName: 'placeBet',
+      args: [gameHash, betAmount],
+    })
+  }
+
   return {
     // Data
     playerReserve: playerReserve.data,
@@ -271,12 +303,14 @@ export function useBlackjackContract() {
     depositMORBIUS,
     withdraw,
     revealServerSeed,
+    placeBet,
 
     // Transaction states
     depositTx: depositContract,
     depositMORBIISTx: depositMORBIUSContract,
     withdrawTx: withdrawContract,
     revealSeedTx: revealSeedContract,
+    placeBetTx: placeBetContract,
 
     // Refetch functions
     refetchPlayerReserve: playerReserve.refetch,

@@ -106,13 +106,15 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     }
   };
 
+  const safeReserveBalance = typeof reserveBalance === 'bigint' ? reserveBalance : 0n;
+
   return (
     <div className="w-full max-w-4xl mx-auto bg-gradient-to-b from-green-800 to-green-900 rounded-lg p-8 shadow-2xl">
       {/* Game Status */}
       <div className="text-center mb-6">
         <div className="text-white text-xl font-bold mb-2">{getGameStatus()}</div>
         <div className="text-green-200 text-sm">
-          Balance: {formatEther(reserveBalance)} {usePLS ? 'PLS' : 'MORBIUS'}
+          Balance: {formatEther(safeReserveBalance)} {usePLS ? 'PLS' : 'MORBIUS'}
         </div>
       </div>
 

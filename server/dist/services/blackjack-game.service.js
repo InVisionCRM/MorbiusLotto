@@ -31,6 +31,32 @@ class BlackjackGameService {
                 clientSeed: request.clientSeedCommitment || 'default',
                 nonce: gameNonce
             };
+            // If gameHash is provided, verify it matches
+            if (request.gameHash) {
+                const timestamp = Math.floor(Date.now() / 1000);
+                // Remove 0x prefix if present for comparison (server returns hex without 0x)
+                const receivedHash = request.gameHash.startsWith('0x')
+                    ? request.gameHash.slice(2).toLowerCase()
+                    : request.gameHash.toLowerCase();
+                const expectedHash = this.pfService.generateGameHash(gameSeeds, request.betAmount, timestamp).toLowerCase();
+                // Allow some timestamp variance (within 60 seconds)
+                const hashMatches = expectedHash === receivedHash ||
+                    this.pfService.generateGameHash(gameSeeds, request.betAmount, timestamp - 60).toLowerCase() === receivedHash ||
+                    this.pfService.generateGameHash(gameSeeds, request.betAmount, timestamp + 60).toLowerCase() === receivedHash;
+                if (!hashMatches) {
+                    logger_1.logger.warn('Game hash mismatch', {
+                        expected: expectedHash,
+                        received: receivedHash,
+                        seeds: gameSeeds,
+                        betAmount: request.betAmount.toString(),
+                        timestamp: timestamp
+                    });
+                    // Don't fail, but log warning - hash verification can be done later
+                }
+                else {
+                    logger_1.logger.debug('Game hash verified', { gameHash: receivedHash });
+                }
+            }
             // Generate initial cards using provably fair randomness
             const randoms = this.pfService.generateBlackjackRandoms(gameSeeds, 4);
             // Deal cards: player gets 2 cards, dealer gets 2 cards (1 face down)
@@ -77,6 +103,12 @@ class BlackjackGameService {
                 initialHand.result = 'loss';
                 initialHand.payout = 0n;
             }
+            // Deduct bet amount from off-chain balance
+            await this.dbService.deductPlayerBalance(request.playerAddress, request.betAmount);
+            logger_1.logger.debug('Deducted initial bet from balance', {
+                playerAddress: request.playerAddress,
+                betAmount: request.betAmount.toString()
+            });
             // Create game record
             const game = await this.dbService.createGame(session.id, {
                 game_number: gameNonce,
@@ -106,6 +138,14 @@ class BlackjackGameService {
             // Update session stats
             if (result) {
                 await this.dbService.updateSessionStats(session.id, request.betAmount, initialHand.payout > request.betAmount ? initialHand.payout - request.betAmount : 0n);
+                // Add winnings to off-chain balance (if game completed immediately)
+                if (initialHand.payout > 0n) {
+                    await this.dbService.addPlayerBalance(request.playerAddress, initialHand.payout);
+                    logger_1.logger.debug('Added winnings to balance', {
+                        playerAddress: request.playerAddress,
+                        payout: initialHand.payout.toString()
+                    });
+                }
             }
             const gameState = {
                 gameId: game.id,
@@ -134,7 +174,8 @@ class BlackjackGameService {
         }
         catch (error) {
             logger_1.logger.error('Error creating game:', error);
-            throw new Error('Failed to create game');
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            throw new Error(`Failed to create game: ${errorMessage}`);
         }
     }
     /**
@@ -156,7 +197,8 @@ class BlackjackGameService {
             if (game.result !== 'ongoing') {
                 throw new Error('Game already completed');
             }
-            const session = await this.dbService.getActiveSession(game.session_id);
+            // game.session_id is the session UUID, not a player_id
+            const session = await this.dbService.getSessionById(game.session_id);
             if (!session) {
                 throw new Error('Session not found');
             }
@@ -256,6 +298,13 @@ class BlackjackGameService {
         };
         // Update total bet amount
         const totalBetAmount = game.total_bet_amount + handToSplit.betAmount;
+        // Deduct additional bet for split hand from off-chain balance
+        const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+        await this.dbService.deductPlayerBalance(playerAddress, handToSplit.betAmount);
+        logger_1.logger.debug('Deducted split bet from balance', {
+            playerAddress,
+            splitBetAmount: handToSplit.betAmount.toString()
+        });
         // Create hand records in database
         const gameHand1 = await this.dbService.createGameHand(gameId, {
             hand_index: handIndex,
@@ -368,6 +417,13 @@ class BlackjackGameService {
             currentHand.canDoubleDown = false;
             // Update total bet amount
             const totalBetAmount = game.total_bet_amount + originalBet;
+            // Deduct additional bet for double down from off-chain balance
+            const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+            await this.dbService.deductPlayerBalance(playerAddress, originalBet);
+            logger_1.logger.debug('Deducted double down bet from balance', {
+                playerAddress,
+                doubleDownAmount: originalBet.toString()
+            });
             await this.dbService.updateGame(gameId, { total_bet_amount: totalBetAmount });
             await this.dbService.updateGameHand(currentHand.id, {
                 cards: currentHand.cards,
@@ -472,6 +528,16 @@ class BlackjackGameService {
             dealer_actions: dealerActions,
             completed_at: new Date()
         });
+        // Add winnings to off-chain balance
+        if (totalPayout > 0n) {
+            const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+            await this.dbService.addPlayerBalance(playerAddress, totalPayout);
+            logger_1.logger.debug('Added game winnings to balance', {
+                playerAddress,
+                totalPayout: totalPayout.toString(),
+                gameId
+            });
+        }
         return {
             gameId,
             sessionId: game.session_id,

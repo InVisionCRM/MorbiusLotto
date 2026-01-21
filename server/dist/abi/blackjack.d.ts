@@ -85,6 +85,31 @@ export declare const blackjackAbi: readonly [{
         readonly name: "player";
         readonly type: "address";
     }, {
+        readonly indexed: true;
+        readonly internalType: "bytes32";
+        readonly name: "gameHash";
+        readonly type: "bytes32";
+    }, {
+        readonly indexed: false;
+        readonly internalType: "uint256";
+        readonly name: "betAmount";
+        readonly type: "uint256";
+    }, {
+        readonly indexed: false;
+        readonly internalType: "uint256";
+        readonly name: "timestamp";
+        readonly type: "uint256";
+    }];
+    readonly name: "BetPlaced";
+    readonly type: "event";
+}, {
+    readonly anonymous: false;
+    readonly inputs: readonly [{
+        readonly indexed: true;
+        readonly internalType: "address";
+        readonly name: "player";
+        readonly type: "address";
+    }, {
         readonly indexed: false;
         readonly internalType: "uint256";
         readonly name: "morbiusAmount";
@@ -404,6 +429,64 @@ export declare const blackjackAbi: readonly [{
     readonly type: "function";
 }, {
     readonly inputs: readonly [{
+        readonly internalType: "bytes32";
+        readonly name: "gameHash";
+        readonly type: "bytes32";
+    }];
+    readonly name: "getPendingGame";
+    readonly outputs: readonly [{
+        readonly internalType: "address";
+        readonly name: "player";
+        readonly type: "address";
+    }, {
+        readonly internalType: "uint256";
+        readonly name: "betAmount";
+        readonly type: "uint256";
+    }, {
+        readonly internalType: "uint256";
+        readonly name: "timestamp";
+        readonly type: "uint256";
+    }, {
+        readonly internalType: "bool";
+        readonly name: "settled";
+        readonly type: "bool";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "address";
+        readonly name: "player";
+        readonly type: "address";
+    }, {
+        readonly internalType: "uint256";
+        readonly name: "index";
+        readonly type: "uint256";
+    }];
+    readonly name: "getPendingGameHash";
+    readonly outputs: readonly [{
+        readonly internalType: "bytes32";
+        readonly name: "";
+        readonly type: "bytes32";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "address";
+        readonly name: "player";
+        readonly type: "address";
+    }];
+    readonly name: "getPendingGamesCount";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
         readonly internalType: "address";
         readonly name: "player";
         readonly type: "address";
@@ -453,6 +536,64 @@ export declare const blackjackAbi: readonly [{
         readonly internalType: "bool";
         readonly name: "";
         readonly type: "bool";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "bytes32";
+        readonly name: "";
+        readonly type: "bytes32";
+    }];
+    readonly name: "pendingGames";
+    readonly outputs: readonly [{
+        readonly internalType: "address";
+        readonly name: "player";
+        readonly type: "address";
+    }, {
+        readonly internalType: "uint256";
+        readonly name: "betAmount";
+        readonly type: "uint256";
+    }, {
+        readonly internalType: "uint256";
+        readonly name: "timestamp";
+        readonly type: "uint256";
+    }, {
+        readonly internalType: "bool";
+        readonly name: "settled";
+        readonly type: "bool";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "bytes32";
+        readonly name: "gameHash";
+        readonly type: "bytes32";
+    }, {
+        readonly internalType: "uint256";
+        readonly name: "betAmount";
+        readonly type: "uint256";
+    }];
+    readonly name: "placeBet";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "address";
+        readonly name: "";
+        readonly type: "address";
+    }, {
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly name: "playerPendingGames";
+    readonly outputs: readonly [{
+        readonly internalType: "bytes32";
+        readonly name: "";
+        readonly type: "bytes32";
     }];
     readonly stateMutability: "view";
     readonly type: "function";
