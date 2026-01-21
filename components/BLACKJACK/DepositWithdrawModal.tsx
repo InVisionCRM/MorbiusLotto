@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Plus, Minus, Loader2 } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
-import { useToken } from '@/hooks/use-token'
+import { useTokenBalance } from '@/hooks/use-token'
 import { useNativeBalance } from '@/hooks/use-native-balance'
 import { usePlsQuote } from '@/hooks/use-pls-quote'
 import { useBlackjackContract } from '@/hooks/use-blackjack-contract'
@@ -38,7 +38,7 @@ export function DepositWithdrawModal({ isOpen, onClose }: DepositWithdrawModalPr
   } = useBlackjackContract()
 
   // Balance hooks
-  const { balance: morbiusBalance } = useToken()
+  const { balance: morbiusBalance } = useTokenBalance(address)
   const { balance: plsBalance } = useNativeBalance()
 
   // PLS quote for MORBIUS deposits

@@ -9,10 +9,10 @@ import MainNav from '@/components/BLACKJACK/MainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
 import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
-import GameHistory from '@/components/BLACKJACK/GameHistory';
-import PlayerStatsDashboard from '@/components/BLACKJACK/PlayerStatsDashboard';
-import GlobalAnalyticsDashboard from '@/components/BLACKJACK/GlobalAnalyticsDashboard';
-import GameVerificationTools from '@/components/BLACKJACK/GameVerificationTools';
+import { GameHistory } from '@/components/BLACKJACK/GameHistory';
+import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
+import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalyticsDashboard';
+import { GameVerificationTools } from '@/components/BLACKJACK/GameVerificationTools';
 import HistoryStrip from '@/components/BLACKJACK/HistoryStrip';
 // Note: CustomApprovalModal no longer needed since bets come from reserve
 import { ContractAddress } from '@/components/ui/contract-address';
@@ -761,7 +761,7 @@ export default function BlackjackPage() {
         {currentView === 'game' && (
           <>
             <div className="text-center mb-8">
-              <ContractAddress address="0x444f0714Bd297B17FD717d0824B95cA1E48352dd" label="Blackjack Contract" />
+              <ContractAddress address={BLACKJACK_ADDRESS} label="Blackjack Contract" />
             </div>
 
         {/* Game History */}
