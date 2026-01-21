@@ -72,6 +72,10 @@ export declare class BlackjackGameService {
      */
     private playDealerAndComplete;
     /**
+     * Verify game result (alias for getGameResult for API compatibility)
+     */
+    verifyGame(gameId: string): Promise<any>;
+    /**
      * Get game result for verification
      */
     getGameResult(gameId: string): Promise<any>;

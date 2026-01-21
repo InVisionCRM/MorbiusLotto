@@ -43,7 +43,13 @@ export class BlackjackWebSocketClient {
    */
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:44',message:'connect() called',data:{serverUrl:this.serverUrl,playerAddress:this.playerAddress,existingWsState:this.ws?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       if (this.ws?.readyState === WebSocket.OPEN) {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:47',message:'WebSocket already open',data:{readyState:this.ws.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         resolve();
         return;
       }
@@ -52,9 +58,16 @@ export class BlackjackWebSocketClient {
         ? `${this.serverUrl}?address=${this.playerAddress}`
         : this.serverUrl;
 
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:54',message:'Creating WebSocket with URL',data:{url,serverUrl:this.serverUrl,hasPlayerAddress:!!this.playerAddress},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:60',message:'WebSocket onopen fired',data:{readyState:this.ws?.readyState,url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         logger.info('WebSocket connected');
         this.reconnectAttempts = 0;
         resolve();
@@ -64,14 +77,39 @@ export class BlackjackWebSocketClient {
         this.handleMessage(event.data);
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:70',message:'WebSocket onclose fired',data:{code:event.code,reason:event.reason,wasClean:event.wasClean,readyState:this.ws?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         logger.info('WebSocket disconnected');
         this.attemptReconnect();
       };
 
       this.ws.onerror = (error) => {
+        // #region agent log
+        const errorDetails = {
+          type: error?.type,
+          target: error?.target ? {
+            readyState: (error.target as WebSocket)?.readyState,
+            url: (error.target as WebSocket)?.url,
+            protocol: (error.target as WebSocket)?.protocol,
+            extensions: (error.target as WebSocket)?.extensions
+          } : null,
+          timeStamp: (error as any)?.timeStamp,
+          errorString: String(error),
+          errorKeys: error ? Object.keys(error) : []
+        };
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:75',message:'WebSocket onerror fired',data:errorDetails,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
         logger.error('WebSocket error:', error);
-        reject(error);
+        // Extract meaningful error information
+        const ws = this.ws;
+        const errorMessage = ws?.readyState === WebSocket.CONNECTING 
+          ? `Failed to connect to ${url}. Server may be unavailable.`
+          : ws?.readyState === WebSocket.CLOSING || ws?.readyState === WebSocket.CLOSED
+          ? `Connection closed unexpectedly (state: ${ws.readyState})`
+          : `WebSocket error occurred (state: ${ws?.readyState})`;
+        reject(new Error(errorMessage));
       };
     });
   }

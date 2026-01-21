@@ -5,6 +5,18 @@ const nextConfig: NextConfig = {
     root: __dirname, // ensure correct workspace root
   },
   transpilePackages: ['@rainbow-me/rainbowkit', 'wagmi', 'viem'],
+  webpack: (config, { isServer }) => {
+    // Some wallet/provider SDKs include optional node/react-native deps that
+    // are not needed for the web bundle but can confuse webpack resolution.
+    void isServer;
+    config.resolve = config.resolve ?? {};
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      "@react-native-async-storage/async-storage": false,
+      "pino-pretty": false,
+    };
+    return config;
+  },
   typescript: {
     // Bypass TypeScript errors during build
     ignoreBuildErrors: true,

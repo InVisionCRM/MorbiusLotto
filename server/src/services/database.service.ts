@@ -68,6 +68,47 @@ export interface PlayerStats {
   blackjack_count: number;
 }
 
+export interface EnhancedPlayerStats extends PlayerStats {
+  current_streak: number;
+  best_streak: number;
+  biggest_win: bigint;
+  biggest_loss: bigint;
+  average_bet: number;
+  average_payout: number;
+  profit_loss: bigint;
+  roi: number;
+  games_today: number;
+  games_this_week: number;
+  favorite_bet_amount: bigint;
+  last_game_timestamp?: Date;
+  rank: number;
+}
+
+export interface GlobalAnalytics {
+  total_players: number;
+  active_players: number;
+  total_games_played: number;
+  total_volume: bigint;
+  total_payouts: bigint;
+  house_profit: bigint;
+  games_last_hour: number;
+  games_last_24_hours: number;
+  volume_last_24_hours: bigint;
+  profit_last_24_hours: bigint;
+  average_win_rate: number;
+  average_bet_size: number;
+  house_edge: number;
+  active_connections: number;
+  blackjack_rate: number;
+  split_rate: number;
+  double_down_rate: number;
+  surrender_rate: number;
+  pending_settlements: number;
+  failed_settlements: number;
+  largest_bet: bigint;
+  largest_payout: bigint;
+}
+
 export class DatabaseService {
   private pool: Pool;
 
@@ -124,6 +165,50 @@ export class DatabaseService {
     const query = `SELECT * FROM get_player_stats($1)`;
     const result = await this.pool.query(query, [walletAddress]);
     return result.rows[0];
+  }
+
+  async getPlayerStatsEnhanced(walletAddress: string): Promise<EnhancedPlayerStats> {
+    const query = `SELECT * FROM get_player_stats_enhanced($1)`;
+    const result = await this.pool.query(query, [walletAddress]);
+    return result.rows[0];
+  }
+
+  async getGlobalAnalytics(): Promise<GlobalAnalytics> {
+    const query = `SELECT * FROM get_global_analytics()`;
+    const result = await this.pool.query(query);
+    return result.rows[0];
+  }
+
+  async getPlayerGames(walletAddress: string, limit: number = 50, offset: number = 0): Promise<Game[]> {
+    const query = `
+      SELECT g.*, gs.player_id
+      FROM games g
+      JOIN game_sessions gs ON g.session_id = gs.id
+      JOIN players p ON gs.player_id = p.id
+      WHERE p.wallet_address = $1
+      ORDER BY g.created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+    const result = await this.pool.query(query, [walletAddress, limit, offset]);
+    return result.rows;
+  }
+
+  async getSettlements(status?: string, limit: number = 100): Promise<any[]> {
+    let query = `SELECT * FROM settlements`;
+    const params: any[] = [];
+    
+    if (status) {
+      query += ` WHERE status = $1`;
+      params.push(status);
+      query += ` ORDER BY settled_at DESC LIMIT $2`;
+      params.push(limit);
+    } else {
+      query += ` ORDER BY settled_at DESC LIMIT $1`;
+      params.push(limit);
+    }
+    
+    const result = await this.pool.query(query, params);
+    return result.rows;
   }
 
   // Game session operations
@@ -313,17 +398,9 @@ export class DatabaseService {
     const values = [];
     let paramCount = 1;
 
-    if (updates.player_cards !== undefined) {
-      fields.push(`player_cards = $${paramCount++}`);
-      values.push(JSON.stringify(updates.player_cards));
-    }
     if (updates.dealer_cards !== undefined) {
       fields.push(`dealer_cards = $${paramCount++}`);
       values.push(JSON.stringify(updates.dealer_cards));
-    }
-    if (updates.player_total !== undefined) {
-      fields.push(`player_total = $${paramCount++}`);
-      values.push(updates.player_total);
     }
     if (updates.dealer_total !== undefined) {
       fields.push(`dealer_total = $${paramCount++}`);
@@ -333,9 +410,9 @@ export class DatabaseService {
       fields.push(`result = $${paramCount++}`);
       values.push(updates.result);
     }
-    if (updates.payout !== undefined) {
-      fields.push(`payout = $${paramCount++}`);
-      values.push(updates.payout);
+    if (updates.total_payout !== undefined) {
+      fields.push(`total_payout = $${paramCount++}`);
+      values.push(updates.total_payout);
     }
     if (updates.actions !== undefined) {
       fields.push(`actions = $${paramCount++}`);

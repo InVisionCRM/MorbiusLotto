@@ -89,7 +89,7 @@ class WebSocketService {
                     await this.handleGetGameState(ws, message);
                     break;
                 case 'ping':
-                    this.sendMessage(ws, { type: 'pong', requestId: message.requestId });
+                    this.sendMessage(ws, { type: 'pong', payload: {}, requestId: message.requestId });
                     break;
                 default:
                     this.sendError(ws, 'Unknown message type', message.requestId);
@@ -108,7 +108,8 @@ class WebSocketService {
             const payload = message.payload;
             const gameState = await this.gameService.createGame({
                 playerAddress: ws.playerAddress,
-                ...payload
+                betAmount: payload.betAmount,
+                clientSeedCommitment: payload.clientSeedCommitment
             });
             this.sendMessage(ws, {
                 type: 'game_created',
@@ -135,13 +136,17 @@ class WebSocketService {
             });
             // If game is completed, also send settlement info
             if (gameState.status === 'completed') {
+                // Calculate overall result from hands
+                const hasWin = gameState.playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
+                const allPush = gameState.playerHands.every(h => h.result === 'push');
+                const overallResult = hasWin ? 'win' : allPush ? 'push' : 'loss';
                 this.sendMessage(ws, {
                     type: 'game_completed',
                     payload: {
                         gameId: gameState.gameId,
-                        result: gameState.result,
-                        payout: gameState.payout,
-                        betAmount: gameState.betAmount
+                        result: overallResult,
+                        payout: gameState.totalPayout,
+                        betAmount: gameState.totalBetAmount
                     },
                     requestId: message.requestId
                 });
@@ -149,7 +154,8 @@ class WebSocketService {
         }
         catch (error) {
             logger_1.logger.error('Error handling player action:', error);
-            this.sendError(ws, error.message || 'Failed to process action', message.requestId);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to process action';
+            this.sendError(ws, errorMessage, message.requestId);
         }
     }
     async handleGetGameState(ws, message) {

@@ -60,6 +60,45 @@ export interface PlayerStats {
     win_rate: number;
     blackjack_count: number;
 }
+export interface EnhancedPlayerStats extends PlayerStats {
+    current_streak: number;
+    best_streak: number;
+    biggest_win: bigint;
+    biggest_loss: bigint;
+    average_bet: number;
+    average_payout: number;
+    profit_loss: bigint;
+    roi: number;
+    games_today: number;
+    games_this_week: number;
+    favorite_bet_amount: bigint;
+    last_game_timestamp?: Date;
+    rank: number;
+}
+export interface GlobalAnalytics {
+    total_players: number;
+    active_players: number;
+    total_games_played: number;
+    total_volume: bigint;
+    total_payouts: bigint;
+    house_profit: bigint;
+    games_last_hour: number;
+    games_last_24_hours: number;
+    volume_last_24_hours: bigint;
+    profit_last_24_hours: bigint;
+    average_win_rate: number;
+    average_bet_size: number;
+    house_edge: number;
+    active_connections: number;
+    blackjack_rate: number;
+    split_rate: number;
+    double_down_rate: number;
+    surrender_rate: number;
+    pending_settlements: number;
+    failed_settlements: number;
+    largest_bet: bigint;
+    largest_payout: bigint;
+}
 export declare class DatabaseService {
     private pool;
     constructor();
@@ -68,6 +107,10 @@ export declare class DatabaseService {
     getOrCreatePlayer(walletAddress: string): Promise<Player>;
     updatePlayerLastSeen(playerId: string): Promise<void>;
     getPlayerStats(walletAddress: string): Promise<PlayerStats>;
+    getPlayerStatsEnhanced(walletAddress: string): Promise<EnhancedPlayerStats>;
+    getGlobalAnalytics(): Promise<GlobalAnalytics>;
+    getPlayerGames(walletAddress: string, limit?: number, offset?: number): Promise<Game[]>;
+    getSettlements(status?: string, limit?: number): Promise<any[]>;
     createGameSession(playerId: string, serverSeedHash: string): Promise<GameSession>;
     getActiveSession(playerId: string): Promise<GameSession | null>;
     updateSessionStats(sessionId: string, betAmount: bigint, winAmount: bigint): Promise<void>;

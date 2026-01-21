@@ -23,6 +23,7 @@ import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS } from '@/lib/contracts';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther } from 'viem';
+import { usePlayerStatsEnhanced, useGlobalAnalytics } from '@/hooks/use-blackjack-stats';
 
 // Intro screen component
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -63,6 +64,7 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
       style={{
         background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(10, 15, 20))',
       }}
+      suppressHydrationWarning
     >
       {/* Animated card dealing effect */}
       <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2">
@@ -223,7 +225,67 @@ export default function BlackjackPage() {
   // View state
   const [currentView, setCurrentView] = useState<'game' | 'history' | 'stats' | 'analytics' | 'verify'>('game');
 
-  // Mock data for dashboards
+  // Fetch real analytics data
+  const { data: playerStatsData, isLoading: playerStatsLoading, refetch: refetchPlayerStats } = usePlayerStatsEnhanced();
+  const { data: globalAnalyticsData, isLoading: globalAnalyticsLoading, refetch: refetchGlobalAnalytics } = useGlobalAnalytics();
+
+  // Transform player stats data to match component interface
+  const playerStats = playerStatsData ? {
+    totalGames: playerStatsData.total_games || 0,
+    totalBet: playerStatsData.total_bet || BigInt(0),
+    totalWin: playerStatsData.total_win || BigInt(0),
+    winRate: Number(playerStatsData.win_rate) || 0,
+    blackjackCount: playerStatsData.blackjack_count || 0,
+    currentStreak: playerStatsData.current_streak || 0,
+    bestStreak: playerStatsData.best_streak || 0,
+    biggestWin: playerStatsData.biggest_win || BigInt(0),
+    biggestLoss: playerStatsData.biggest_loss || BigInt(0),
+    averageBet: Number(playerStatsData.average_bet) || 0,
+    averagePayout: Number(playerStatsData.average_payout) || 0,
+    profitLoss: Number(playerStatsData.profit_loss) || 0,
+    roi: Number(playerStatsData.roi) || 0,
+    gamesToday: playerStatsData.games_today || 0,
+    gamesThisWeek: playerStatsData.games_this_week || 0,
+    favoriteBetAmount: Number(playerStatsData.favorite_bet_amount) || 0,
+    lastGameTimestamp: playerStatsData.last_game_timestamp ? new Date(playerStatsData.last_game_timestamp).getTime() : undefined,
+    rank: playerStatsData.rank || 0
+  } : null;
+
+  // Transform global analytics data to match component interface
+  const globalAnalytics = globalAnalyticsData ? {
+    totalPlayers: globalAnalyticsData.total_players || 0,
+    activePlayers: globalAnalyticsData.active_players || 0,
+    totalGamesPlayed: globalAnalyticsData.total_games_played || 0,
+    totalVolume: globalAnalyticsData.total_volume || BigInt(0),
+    totalPayouts: globalAnalyticsData.total_payouts || BigInt(0),
+    houseProfit: globalAnalyticsData.house_profit || BigInt(0),
+    gamesLastHour: globalAnalyticsData.games_last_hour || 0,
+    gamesLast24Hours: globalAnalyticsData.games_last_24_hours || 0,
+    volumeLast24Hours: globalAnalyticsData.volume_last_24_hours || BigInt(0),
+    profitLast24Hours: globalAnalyticsData.profit_last_24_hours || BigInt(0),
+    averageWinRate: Number(globalAnalyticsData.average_win_rate) || 0,
+    averageBetSize: Number(globalAnalyticsData.average_bet_size) || 0,
+    houseEdge: Number(globalAnalyticsData.house_edge) || 0,
+    peakConcurrentUsers: 0, // Not available from database
+    serverUptime: 0, // Not available from database
+    averageResponseTime: 0, // Not available from database
+    errorRate: 0, // Not available from database
+    activeConnections: globalAnalyticsData.active_connections || 0,
+    blackjackRate: Number(globalAnalyticsData.blackjack_rate) || 0,
+    splitRate: Number(globalAnalyticsData.split_rate) || 0,
+    doubleDownRate: Number(globalAnalyticsData.double_down_rate) || 0,
+    surrenderRate: Number(globalAnalyticsData.surrender_rate) || 0,
+    reserveBalance: playerReserve || BigInt(0), // From contract
+    pendingSettlements: globalAnalyticsData.pending_settlements || 0,
+    failedSettlements: globalAnalyticsData.failed_settlements || 0,
+    averageSettlementTime: 0, // Not available from database yet
+    highRollerCount: 0, // Not available from database yet
+    suspiciousActivity: 0, // Not available from database yet
+    largestBet: globalAnalyticsData.largest_bet || BigInt(0),
+    largestPayout: globalAnalyticsData.largest_payout || BigInt(0)
+  } : null;
+
+  // Mock data for dashboards (fallback/legacy)
   const mockPlayerStats = {
     totalGames: 1247,
     totalBet: 2500000000000000000000n, // 2500 PLS
@@ -349,9 +411,13 @@ export default function BlackjackPage() {
 
   // Initialize WebSocket connection
   useEffect(() => {
+    // #region agent log
+    const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:3001';
+    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:351',message:'WebSocket useEffect triggered',data:{address,hasWsClient:!!wsClient,wsUrl,envVarSet:!!process.env.NEXT_PUBLIC_WEBSOCKET_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
     if (address && !wsClient) {
       const client = new BlackjackWebSocketClient(
-        process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:3001',
+        wsUrl,
         address
       );
 
@@ -373,26 +439,42 @@ export default function BlackjackPage() {
       });
 
       client.on('error', (error: any) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:377',message:'WebSocket error event handler',data:{errorMessage:error?.message,errorString:String(error),errorType:typeof error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+        // #endregion
         console.error('WebSocket error:', error);
+        setWsConnected(false);
         toast.error(error.message || 'Connection error');
       });
 
       // Connect
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:381',message:'Calling client.connect()',data:{wsUrl,address},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+      // #endregion
       client.connect()
         .then(() => {
-          setIsConnected(true);
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:383',message:'Connection successful',data:{wsUrl,address},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
+          setWsConnected(true);
           setWsClient(client);
           console.log('Connected to blackjack server');
         })
         .catch((error) => {
-          console.error('Failed to connect to server:', error);
-          toast.error('Failed to connect to game server');
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:388',message:'Connection failed in catch',data:{errorMessage:error?.message,errorString:String(error),errorStack:error?.stack,errorName:error?.name,wsUrl,address},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
+          setWsConnected(false);
+          const errorMessage = error?.message || 'Failed to connect to game server';
+          console.error('Failed to connect to server:', errorMessage, error);
+          toast.error(errorMessage);
         });
     }
 
     return () => {
       if (wsClient) {
         wsClient.disconnect();
+        setWsConnected(false);
       }
     };
   }, [address]);
@@ -465,7 +547,7 @@ export default function BlackjackPage() {
     // In the future, this will call the server to start a game
 
     try {
-      if (!wsClient || !isConnected) {
+      if (!wsClient || !wsConnected) {
         throw new Error('Not connected to game server');
       }
 
@@ -531,7 +613,7 @@ export default function BlackjackPage() {
 
   // Handle player actions
   const handlePlayerAction = useCallback(async (action: Action) => {
-    if (!gameState.currentGame || !wsClient || !isConnected) return;
+    if (!gameState.currentGame || !wsClient || !wsConnected) return;
 
     try {
       // Send action to server
@@ -729,34 +811,6 @@ export default function BlackjackPage() {
       />
 
       <main className="container mx-auto px-4 py-8">
-        {/* Mobile Navigation */}
-        <div className="md:hidden mb-6">
-          <div className="flex justify-center">
-            <div className="bg-gray-800 rounded-lg p-1 flex space-x-1 overflow-x-auto">
-              {[
-                { key: 'game', label: 'Play', icon: '🃏' },
-                { key: 'history', label: 'History', icon: '📊' },
-                { key: 'stats', label: 'Stats', icon: '📈' },
-                { key: 'analytics', label: 'Analytics', icon: '📊' },
-                { key: 'verify', label: 'Verify', icon: '🔍' }
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  onClick={() => setCurrentView(item.key as any)}
-                  className={`px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
-                    currentView === item.key
-                      ? 'bg-cyan-600 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                  }`}
-                >
-                  <span className="mr-1">{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {/* View-specific content */}
         {currentView === 'game' && (
           <>
@@ -944,6 +998,48 @@ export default function BlackjackPage() {
           onClose={() => setShowDepositModal(false)}
         />
           </>
+        )}
+
+        {currentView === 'history' && (
+          <GameHistory 
+            games={gameState.history}
+            onBack={() => setCurrentView('game')}
+          />
+        )}
+
+        {currentView === 'stats' && (
+          <div className="max-w-7xl mx-auto">
+            {playerStatsLoading ? (
+              <div className="text-center py-12 text-cyan-300">Loading player statistics...</div>
+            ) : playerStats ? (
+              <PlayerStatsDashboard stats={playerStats} isLoading={playerStatsLoading} />
+            ) : (
+              <div className="text-center py-12 text-cyan-300">No statistics available. Play some games to see your stats!</div>
+            )}
+          </div>
+        )}
+
+        {currentView === 'analytics' && (
+          <div className="max-w-7xl mx-auto">
+            {globalAnalyticsLoading ? (
+              <div className="text-center py-12 text-cyan-300">Loading global analytics...</div>
+            ) : globalAnalytics ? (
+              <GlobalAnalyticsDashboard 
+                analytics={globalAnalytics} 
+                isLoading={globalAnalyticsLoading}
+                onRefresh={() => {
+                  refetchPlayerStats();
+                  refetchGlobalAnalytics();
+                }}
+              />
+            ) : (
+              <div className="text-center py-12 text-cyan-300">No analytics available yet.</div>
+            )}
+          </div>
+        )}
+
+        {currentView === 'verify' && (
+          <GameVerificationTools />
         )}
       </main>
 

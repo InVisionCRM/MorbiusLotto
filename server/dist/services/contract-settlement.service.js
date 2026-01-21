@@ -109,7 +109,8 @@ class ContractSettlementService {
         }
         catch (error) {
             logger_1.logger.error('Error storing settlement for manual processing:', error);
-            return { success: false, error: error.message };
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return { success: false, error: errorMessage };
         }
     }
     /**
@@ -218,7 +219,8 @@ class ContractSettlementService {
         }
         catch (error) {
             logger_1.logger.error('Error performing emergency withdrawal:', error);
-            return { success: false, error: error.message };
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return { success: false, error: errorMessage };
         }
     }
     /**

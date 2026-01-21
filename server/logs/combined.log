@@ -1,0 +1,15 @@
+{"level":"info","message":"Database connected successfully","service":"blackjack-server","timestamp":"2026-01-21T12:00:54.321Z"}
+{"level":"info","message":"WebSocket service initialized","service":"blackjack-server","timestamp":"2026-01-21T12:00:54.327Z"}
+{"level":"info","message":"Blackjack server running on port 3001","service":"blackjack-server","timestamp":"2026-01-21T12:00:54.330Z"}
+{"level":"info","message":"WebSocket server initialized","service":"blackjack-server","timestamp":"2026-01-21T12:00:54.330Z"}
+{"level":"info","message":"Database connected","service":"blackjack-server","timestamp":"2026-01-21T12:00:54.330Z"}
+{"level":"info","message":"Database connected successfully","service":"blackjack-server","timestamp":"2026-01-21T12:08:48.502Z"}
+{"level":"info","message":"WebSocket service initialized","service":"blackjack-server","timestamp":"2026-01-21T12:08:48.505Z"}
+{"level":"info","message":"Blackjack server running on port 3001","service":"blackjack-server","timestamp":"2026-01-21T12:08:48.508Z"}
+{"level":"info","message":"WebSocket server initialized","service":"blackjack-server","timestamp":"2026-01-21T12:08:48.508Z"}
+{"level":"info","message":"Database connected","service":"blackjack-server","timestamp":"2026-01-21T12:08:48.508Z"}
+{"level":"info","message":"Database connected successfully","service":"blackjack-server","timestamp":"2026-01-21T12:21:17.462Z"}
+{"level":"info","message":"WebSocket service initialized","service":"blackjack-server","timestamp":"2026-01-21T12:21:17.465Z"}
+{"level":"info","message":"Blackjack server running on port 3001","service":"blackjack-server","timestamp":"2026-01-21T12:21:17.467Z"}
+{"level":"info","message":"WebSocket server initialized","service":"blackjack-server","timestamp":"2026-01-21T12:21:17.467Z"}
+{"level":"info","message":"Database connected","service":"blackjack-server","timestamp":"2026-01-21T12:21:17.468Z"}

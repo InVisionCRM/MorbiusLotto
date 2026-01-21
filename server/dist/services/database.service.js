@@ -53,6 +53,45 @@ class DatabaseService {
         const result = await this.pool.query(query, [walletAddress]);
         return result.rows[0];
     }
+    async getPlayerStatsEnhanced(walletAddress) {
+        const query = `SELECT * FROM get_player_stats_enhanced($1)`;
+        const result = await this.pool.query(query, [walletAddress]);
+        return result.rows[0];
+    }
+    async getGlobalAnalytics() {
+        const query = `SELECT * FROM get_global_analytics()`;
+        const result = await this.pool.query(query);
+        return result.rows[0];
+    }
+    async getPlayerGames(walletAddress, limit = 50, offset = 0) {
+        const query = `
+      SELECT g.*, gs.player_id
+      FROM games g
+      JOIN game_sessions gs ON g.session_id = gs.id
+      JOIN players p ON gs.player_id = p.id
+      WHERE p.wallet_address = $1
+      ORDER BY g.created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+        const result = await this.pool.query(query, [walletAddress, limit, offset]);
+        return result.rows;
+    }
+    async getSettlements(status, limit = 100) {
+        let query = `SELECT * FROM settlements`;
+        const params = [];
+        if (status) {
+            query += ` WHERE status = $1`;
+            params.push(status);
+            query += ` ORDER BY settled_at DESC LIMIT $2`;
+            params.push(limit);
+        }
+        else {
+            query += ` ORDER BY settled_at DESC LIMIT $1`;
+            params.push(limit);
+        }
+        const result = await this.pool.query(query, params);
+        return result.rows;
+    }
     // Game session operations
     async createGameSession(playerId, serverSeedHash) {
         const query = `
@@ -220,17 +259,9 @@ class DatabaseService {
         const fields = [];
         const values = [];
         let paramCount = 1;
-        if (updates.player_cards !== undefined) {
-            fields.push(`player_cards = $${paramCount++}`);
-            values.push(JSON.stringify(updates.player_cards));
-        }
         if (updates.dealer_cards !== undefined) {
             fields.push(`dealer_cards = $${paramCount++}`);
             values.push(JSON.stringify(updates.dealer_cards));
-        }
-        if (updates.player_total !== undefined) {
-            fields.push(`player_total = $${paramCount++}`);
-            values.push(updates.player_total);
         }
         if (updates.dealer_total !== undefined) {
             fields.push(`dealer_total = $${paramCount++}`);
@@ -240,9 +271,9 @@ class DatabaseService {
             fields.push(`result = $${paramCount++}`);
             values.push(updates.result);
         }
-        if (updates.payout !== undefined) {
-            fields.push(`payout = $${paramCount++}`);
-            values.push(updates.payout);
+        if (updates.total_payout !== undefined) {
+            fields.push(`total_payout = $${paramCount++}`);
+            values.push(updates.total_payout);
         }
         if (updates.actions !== undefined) {
             fields.push(`actions = $${paramCount++}`);

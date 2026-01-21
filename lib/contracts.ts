@@ -28,14 +28,14 @@ export const PLINKO_ADDRESS = '0x37B1db8F06870BFFeFed862C06535BEFc4383ff8' as co
 export const BIGWHEEL_ADDRESS = '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F' as const
 
 // Blackjack contract (6-deck provably fair blackjack game)
-export const BLACKJACK_ADDRESS = '0x0ab9C51d0e8d4C983D5051c8fe89A9e9A7f4BB76' as const
+export const BLACKJACK_ADDRESS = '0xb0C386Da052951A94A8Cd8fb5dAd3CE5a72A93ED' as const
 
 // Contract deployment info
 export const LOTTERY_DEPLOY_BLOCK = 25329129
 export const KENO_DEPLOY_BLOCK = 25341670 // Deployed Dec 21, 2025
 export const PLINKO_DEPLOY_BLOCK = 25557180 // V8: New deployment block 25,557,180
 export const BIGWHEEL_DEPLOY_BLOCK = 25575736 // Deployed Jan 20, 2026
-export const BLACKJACK_DEPLOY_BLOCK = 25576188 // Deployed Jan 25, 2026
+export const BLACKJACK_DEPLOY_BLOCK = 25585360 // Deployed Jan 25, 2026
 
 // Lottery constants
 export const TICKET_PRICE = BigInt(100_000_000_000_000_000_000) // 100 tokens (18 decimals)

@@ -81,6 +81,56 @@ async function initializeServices() {
       }
     });
 
+    // Enhanced player stats endpoint
+    app.get('/api/player/:address/stats/enhanced', async (req, res) => {
+      try {
+        const { address } = req.params;
+        const stats = await dbService.getPlayerStatsEnhanced(address);
+        res.json(stats);
+      } catch (error) {
+        logger.error('Error fetching enhanced player stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Global analytics endpoint
+    app.get('/api/analytics/global', async (req, res) => {
+      try {
+        const analytics = await dbService.getGlobalAnalytics();
+        res.json(analytics);
+      } catch (error) {
+        logger.error('Error fetching global analytics:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Player game history endpoint
+    app.get('/api/player/:address/games', async (req, res) => {
+      try {
+        const { address } = req.params;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const offset = parseInt(req.query.offset as string) || 0;
+        const games = await dbService.getPlayerGames(address, limit, offset);
+        res.json(games);
+      } catch (error) {
+        logger.error('Error fetching player games:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Settlements monitoring endpoint
+    app.get('/api/settlements', async (req, res) => {
+      try {
+        const status = req.query.status as string | undefined;
+        const limit = parseInt(req.query.limit as string) || 100;
+        const settlements = await dbService.getSettlements(status, limit);
+        res.json(settlements);
+      } catch (error) {
+        logger.error('Error fetching settlements:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Start server
     server.listen(PORT, () => {
       logger.info(`Blackjack server running on port ${PORT}`);

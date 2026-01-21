@@ -111,7 +111,7 @@ export class BlackjackGameService {
 
       // Determine game status
       let status: GameState['status'] = 'player_turn';
-      let result: GameState['result'];
+      let result: Game['result'];
 
       if (initialHand.isBlackjack && dealerBlackjack) {
         status = 'completed';
@@ -140,7 +140,7 @@ export class BlackjackGameService {
         result,
         total_payout: initialHand.payout,
         client_seed_commitment: request.clientSeedCommitment,
-        dealer_seed,
+        dealer_seed: dealerSeed,
         hand_count: 1,
         current_hand_index: 0
       });
@@ -590,11 +590,17 @@ export class BlackjackGameService {
       });
     }
 
+    // Determine overall game result (win if any hand won, loss if all lost, push if all pushed)
+    const hasWin = playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
+    const hasLoss = playerHands.some(h => h.result === 'loss');
+    const allPush = playerHands.every(h => h.result === 'push');
+    const overallResult: Game['result'] = hasWin ? 'win' : allPush ? 'push' : 'loss';
+
     // Update game
     await this.dbService.updateGame(gameId, {
       dealer_cards: dealerCards,
       dealer_total: finalDealerTotal,
-      result: 'completed',
+      result: overallResult,
       total_payout: totalPayout,
       dealer_actions: dealerActions,
       completed_at: new Date()
@@ -616,6 +622,13 @@ export class BlackjackGameService {
       canSplit: false,
       isBlackjack: false
     };
+  }
+
+  /**
+   * Verify game result (alias for getGameResult for API compatibility)
+   */
+  async verifyGame(gameId: string): Promise<any> {
+    return this.getGameResult(gameId);
   }
 
   /**
