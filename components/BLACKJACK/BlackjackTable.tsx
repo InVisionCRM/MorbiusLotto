@@ -16,6 +16,7 @@ interface BlackjackTableProps {
   canSplit?: boolean;
   reserveBalance: bigint;
   usePLS: boolean;
+  newCardIndices?: { player: Set<number>, dealer: Set<number> };
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
