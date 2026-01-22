@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE TABLE IF NOT EXISTS game_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+    -- Provably-fair server seed (secret) + commitment (public)
+    -- server_seed_hash is SHA-256(server_seed) in hex
+    server_seed VARCHAR(64),
     server_seed_hash VARCHAR(64) NOT NULL,
     client_seed VARCHAR(64),
     nonce BIGINT DEFAULT 0,
@@ -44,7 +47,10 @@ CREATE TABLE IF NOT EXISTS games (
     client_seed_commitment VARCHAR(64), -- for strategy commitment
     dealer_seed VARCHAR(64), -- for dealer actions
     hand_count INTEGER DEFAULT 1, -- number of hands (for splits)
-    current_hand_index INTEGER DEFAULT 0 -- current active hand
+    current_hand_index INTEGER DEFAULT 0, -- current active hand
+    -- Number of provably-fair draws already consumed in this game.
+    -- We derive unique nonces as: baseNonce = game_number * 1_000_000; nonce = baseNonce + rng_counter (+ i)
+    rng_counter INTEGER DEFAULT 0
 );
 
 -- Individual hands within a game (for splitting)
@@ -74,17 +80,6 @@ CREATE TABLE IF NOT EXISTS seed_reveals (
     revealed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Settlement records
-CREATE TABLE IF NOT EXISTS settlements (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    game_id UUID REFERENCES games(id) ON DELETE CASCADE,
-    player_address VARCHAR(42) NOT NULL,
-    amount NUMERIC(78, 0) NOT NULL, -- positive = win, negative = loss
-    transaction_hash VARCHAR(66),
-    settled_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'failed'))
-);
-
 -- Active connections for WebSocket management
 CREATE TABLE IF NOT EXISTS active_connections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -100,7 +95,6 @@ CREATE INDEX IF NOT EXISTS idx_games_session_id ON games(session_id);
 CREATE INDEX IF NOT EXISTS idx_games_status ON games(result);
 CREATE INDEX IF NOT EXISTS idx_game_hands_game_id ON game_hands(game_id);
 CREATE INDEX IF NOT EXISTS idx_game_hands_result ON game_hands(result);
-CREATE INDEX IF NOT EXISTS idx_settlements_game_id ON settlements(game_id);
 CREATE INDEX IF NOT EXISTS idx_active_connections_player_id ON active_connections(player_id);
 CREATE INDEX IF NOT EXISTS idx_players_wallet_address ON players(wallet_address);
 
@@ -381,12 +375,6 @@ BEGIN
         FROM players p
         LEFT JOIN game_sessions gs ON p.id = gs.player_id
     ),
-    settlement_stats AS (
-        SELECT 
-            COUNT(*) FILTER (WHERE status = 'pending')::BIGINT as pending,
-            COUNT(*) FILTER (WHERE status = 'failed')::BIGINT as failed
-        FROM settlements
-    ),
     connection_stats AS (
         SELECT COUNT(*)::BIGINT as active_conn
         FROM active_connections
@@ -421,8 +409,8 @@ BEGIN
         CASE WHEN (SELECT total_games FROM game_stats) > 0 THEN
             ROUND(((SELECT surr_count FROM game_stats) / (SELECT total_games FROM game_stats)::DECIMAL) * 100, 2)
         ELSE 0 END as surrender_rate,
-        (SELECT pending FROM settlement_stats) as pending_settlements,
-        (SELECT failed FROM settlement_stats) as failed_settlements,
+        0::BIGINT as pending_settlements,
+        0::BIGINT as failed_settlements,
         (SELECT max_bet FROM game_stats) as largest_bet,
         (SELECT max_payout FROM game_stats) as largest_payout;
 END;

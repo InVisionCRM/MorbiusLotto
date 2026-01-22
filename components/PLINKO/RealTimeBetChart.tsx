@@ -152,17 +152,6 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
         border: '1px inset rgba(60, 60, 60, 0.5)',
       }}
     >
-      {/* History Button */}
-      <div className="mb-1 flex items-center gap-2">
-        <button
-          onClick={() => setHistoryModalOpen(true)}
-          className="flex items-center gap-1 px-2 py-1 bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 rounded text-cyan-300 text-xs font-medium transition-colors"
-          title="View History"
-        >
-          <i className="fas fa-history text-xs"></i>
-          History
-        </button>
-      </div>
 
       {/* Header with Stats */}
       <div className="mb-1">
@@ -192,7 +181,20 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
       </div>
 
       {/* Chart */}
-      <div className="h-full min-h-[200px] w-full flex-1">
+      <div className="h-full min-h-[200px] w-full flex-1 relative">
+        {/* History Button Overlay */}
+        <button
+          onClick={() => setHistoryModalOpen(true)}
+          className="absolute left-4 bottom-4 flex items-center gap-1 px-2 py-1 text-cyan-300 text-xs font-medium transition-colors z-10 rounded"
+          style={{
+            boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.03)',
+          }}
+          title="View History"
+        >
+          <i className="fas fa-history text-xs"></i>
+          History
+        </button>
+
         {betHistory.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center text-cyan-300/60">

@@ -142,7 +142,7 @@ class WebSocketService {
             if (!session) {
                 const serverSeed = this.gameService['pfService'].generateServerSeed();
                 const serverSeedHash = this.gameService['pfService'].createServerSeedHash(serverSeed);
-                session = await this.dbService.createGameSession(player.id, serverSeedHash);
+                session = await this.dbService.createGameSession(player.id, serverSeed, serverSeedHash);
             }
             // Return server seed hash and next nonce
             const nextNonce = session.game_count + 1;

@@ -251,12 +251,6 @@ BEGIN
         FROM players p
         LEFT JOIN game_sessions gs ON p.id = gs.player_id
     ),
-    settlement_stats AS (
-        SELECT 
-            COUNT(*) FILTER (WHERE status = 'pending')::BIGINT as pending,
-            COUNT(*) FILTER (WHERE status = 'failed')::BIGINT as failed
-        FROM settlements
-    ),
     connection_stats AS (
         SELECT COUNT(*)::BIGINT as active_conn
         FROM active_connections
@@ -291,8 +285,8 @@ BEGIN
         CASE WHEN (SELECT total_games FROM game_stats) > 0 THEN
             ROUND(((SELECT surr_count FROM game_stats) / (SELECT total_games FROM game_stats)::DECIMAL) * 100, 2)
         ELSE 0 END as surrender_rate,
-        (SELECT pending FROM settlement_stats) as pending_settlements,
-        (SELECT failed FROM settlement_stats) as failed_settlements,
+        0::BIGINT as pending_settlements,
+        0::BIGINT as failed_settlements,
         (SELECT max_bet FROM game_stats) as largest_bet,
         (SELECT max_payout FROM game_stats) as largest_payout;
 END;

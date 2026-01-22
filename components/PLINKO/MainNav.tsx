@@ -32,9 +32,10 @@ export default function MainNav({ balance, soundEnabled, onSoundToggle, freePlay
       <nav
         className="fixed top-0 left-0 right-0 z-50"
           style={{
-            background: 'linear-gradient(145deg,rgb(70, 118, 153),rgba(0, 0, 0, 0))',
-            borderBottom: '3px rgba(0, 0, 0, 0)',
-            backdropFilter: 'blur(2px)',
+            background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
+            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            border: '1px inset rgba(60, 60, 60, 0.5)',
+            borderBottom: '1px inset rgba(60, 60, 60, 0.5)',
           }}
       >
         <div className="container mx-auto px-2 py-1">

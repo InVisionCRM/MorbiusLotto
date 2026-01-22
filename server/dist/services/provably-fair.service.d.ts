@@ -50,7 +50,7 @@ export declare class ProvablyFairService {
     /**
      * Generate a unique game identifier for verification
      */
-    generateGameHash(seeds: GameSeeds, betAmount: bigint, timestamp: number): string;
+    generateGameHash(serverSeedHash: string, clientSeed: string, nonce: number, betAmount: bigint, timestamp: number): string;
     /**
      * Shuffle a deck using Fisher-Yates algorithm with provably fair randomness
      */

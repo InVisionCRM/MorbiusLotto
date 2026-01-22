@@ -155,8 +155,13 @@ export class ProvablyFairService {
   /**
    * Generate a unique game identifier for verification
    */
-  generateGameHash(seeds: GameSeeds, betAmount: bigint, timestamp: number): string {
-    const data = `${seeds.serverSeed}:${seeds.clientSeed}:${seeds.nonce}:${betAmount}:${timestamp}`;
+  generateGameHash(serverSeedHash: string, clientSeed: string, nonce: number, betAmount: bigint, timestamp: number): string {
+    // IMPORTANT:
+    // - The client only knows the server seed *commitment* (hash) before betting.
+    // - Therefore the gameHash must be derived from serverSeedHash (not serverSeed).
+    // - Frontend and backend both use the exact colon-delimited format.
+    const normalizedServerSeedHash = serverSeedHash.startsWith('0x') ? serverSeedHash.slice(2) : serverSeedHash;
+    const data = `${normalizedServerSeedHash}:${clientSeed}:${nonce}:${betAmount.toString()}:${timestamp}`;
     return crypto.createHash(this.ALGORITHM).update(data).digest(this.DIGEST_FORMAT);
   }
 

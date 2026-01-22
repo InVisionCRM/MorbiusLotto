@@ -103,6 +103,11 @@
   border-color: hsl(var(--color-border));
 }
 
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
 body {
   background-color: #0c0418;
   background-image: 

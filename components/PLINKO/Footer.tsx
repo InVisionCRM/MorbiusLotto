@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import FAQModal from './FAQModal';
+import ContactModal from './ContactModal';
 import { AboutUsModal } from '@/components/footer/about-us';
 import { UserAgreementModal } from '@/components/footer/user-agreement';
 
@@ -9,6 +10,7 @@ export default function Footer() {
   const [faqOpen, setFaqOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [userAgreementOpen, setUserAgreementOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
 
   return (
     <>
@@ -20,12 +22,12 @@ export default function Footer() {
               <h3 className="text-purple-500 font-bold text-xs mb-2 md:mb-1">More From Morbius.io!</h3>
               <ul className="space-y-1 md:space-y-0.5 text-center md:text-left">
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="/lottery" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
                     Lottery
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="/keno" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
                     KENO
                   </a>
                 </li>
@@ -108,7 +110,12 @@ export default function Footer() {
                   </button>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a
+                    href="https://x.com/Morbius_io"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-700 hover:text-green-600 transition-colors text-xs"
+                  >
                     Help Center
                   </a>
                 </li>
@@ -123,9 +130,12 @@ export default function Footer() {
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <button
+                    onClick={() => setContactOpen(true)}
+                    className="text-gray-700 hover:text-green-600 transition-colors text-xs text-left"
+                  >
                     Contact Us
-                  </a>
+                  </button>
                 </li>
               </ul>
             </div>
@@ -188,6 +198,9 @@ export default function Footer() {
 
       {/* User Agreement Modal */}
       <UserAgreementModal open={userAgreementOpen} onOpenChange={setUserAgreementOpen} />
+
+      {/* Contact Modal */}
+      <ContactModal open={contactOpen} onOpenChange={setContactOpen} />
     </>
   );
 }

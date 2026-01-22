@@ -9,6 +9,7 @@ export interface Player {
 export interface GameSession {
     id: string;
     player_id: string;
+    server_seed?: string;
     server_seed_hash: string;
     client_seed?: string;
     nonce: number;
@@ -53,6 +54,7 @@ export interface Game {
     dealer_seed?: string;
     hand_count: number;
     current_hand_index: number;
+    rng_counter?: number;
 }
 export interface PlayerStats {
     total_games: number;
@@ -124,13 +126,13 @@ export declare class DatabaseService {
     getPlayerStatsEnhanced(walletAddress: string): Promise<EnhancedPlayerStats>;
     getGlobalAnalytics(): Promise<GlobalAnalytics>;
     getPlayerGames(walletAddress: string, limit?: number, offset?: number): Promise<Game[]>;
-    getSettlements(status?: string, limit?: number): Promise<any[]>;
-    createGameSession(playerId: string, serverSeedHash: string): Promise<GameSession>;
+    createGameSession(playerId: string, serverSeed: string, serverSeedHash: string): Promise<GameSession>;
     getActiveSession(playerId: string): Promise<GameSession | null>;
     getSessionById(sessionId: string): Promise<GameSession | null>;
     getPlayerAddressFromSession(sessionId: string): Promise<string>;
-    updateSessionStats(sessionId: string, betAmount: bigint, winAmount: bigint): Promise<void>;
+    updateSessionStats(sessionId: string, betAmount: bigint, winAmount: bigint, incrementGameCount?: boolean): Promise<void>;
     endSession(sessionId: string): Promise<void>;
+    setSessionServerSeed(sessionId: string, serverSeed: string, serverSeedHash: string): Promise<void>;
     createGame(sessionId: string, gameData: Partial<Game>): Promise<Game>;
     createGameHand(gameId: string, handData: Partial<GameHand>): Promise<GameHand>;
     updateGameHand(handId: string, updates: Partial<GameHand>): Promise<void>;
@@ -139,8 +141,10 @@ export declare class DatabaseService {
     getGame(gameId: string): Promise<Game | null>;
     getSessionGames(sessionId: string): Promise<Game[]>;
     revealServerSeed(gameId: string, serverSeedHash: string, serverSeed: string): Promise<void>;
-    createSettlement(gameId: string, playerAddress: string, amount: bigint): Promise<string>;
-    updateSettlementStatus(settlementId: string, transactionHash: string, status: 'confirmed' | 'failed'): Promise<void>;
+    getSeedReveal(gameId: string): Promise<{
+        server_seed_hash: string;
+        server_seed: string;
+    } | null>;
     addActiveConnection(playerId: string, connectionId: string): Promise<void>;
     removeActiveConnection(connectionId: string): Promise<void>;
     updateConnectionPing(connectionId: string): Promise<void>;

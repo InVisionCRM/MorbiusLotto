@@ -205,6 +205,7 @@ const Home: React.FC = () => {
   const [autoPlaySettings, setAutoPlaySettings] = useState<AutoPlaySettings | null>(null);
   const [remainingBalls, setRemainingBalls] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [historyCardCount, setHistoryCardCount] = useState(3);
   const [winLossBadge, setWinLossBadge] = useState<{ amount: number; key: number } | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   type DropSpeed = 'normal' | 'fast' | 'burst';
@@ -1010,11 +1011,20 @@ const Home: React.FC = () => {
     };
   }, [isAutoDrop, dropBall, remainingBalls, autoPlaySettings]);
 
+  // Function to determine number of history cards to show based on screen size
+  const getHistoryCardCount = () => {
+    if (typeof window === 'undefined') return 3;
+    if (window.innerWidth >= 1024) return 6; // lg and above
+    if (window.innerWidth >= 768) return 4; // md
+    return 3; // sm and below
+  };
+
   // Detect mobile devices for responsive background and UI
   useEffect(() => {
-    const checkMobile = () => {
+    const checkScreenSize = () => {
       const mobile = window.innerWidth < 768; // Better mobile breakpoint
       setIsMobile(mobile);
+      setHistoryCardCount(getHistoryCardCount());
 
       // Adjust viewport for mobile devices
       if (mobile) {
@@ -1025,10 +1035,10 @@ const Home: React.FC = () => {
       }
     };
 
-    checkMobile(); // Check on mount
-    window.addEventListener('resize', checkMobile);
+    checkScreenSize(); // Check on mount
+    window.addEventListener('resize', checkScreenSize);
 
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
   const adjustWager = (amount: number) => {
@@ -1133,14 +1143,14 @@ const Home: React.FC = () => {
       </div>
 
       {/* RESPONSIVE LAYOUT - Mobile-first approach */}
-      <div className="flex relative pt-16 px-2 gap-2 flex-col lg:flex-row lg:px-3 lg:gap-3 pb-[50px] min-h-[calc(100vh-4rem)]">
+      <div className="flex relative pt-16 px-2 gap-2 flex-col lg:flex-row lg:px-3 lg:gap-3 min-h-[calc(100vh-4rem)]">
         {/* LEFT COLUMN - BUY SECTION + CHART - Mobile-first responsive */}
         <div className="order-2 lg:order-1 lg:flex lg:w-[320px] xl:w-[360px] 2xl:w-[400px] lg:flex-col lg:p-1 lg:overflow-y-auto lg:relative lg:z-20 lg:self-stretch">
           {!freePlayEnabled && (
             <div
               className="relative rounded-2xl overflow-hidden h-full flex flex-col"
               style={{
-                background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                 boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
                 border: '1px inset rgba(60, 60, 60, 0.5)',
               }}
@@ -1153,34 +1163,13 @@ const Home: React.FC = () => {
                 >
                   Risk Tables
                 </button>
-                {/* Drop Speed Toggle */}
-                <div className="absolute top-2 left-3 flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const modes: DropSpeed[] = ['normal', 'fast', 'burst'];
-                      const currentIndex = modes.indexOf(dropSpeed);
-                      const nextIndex = (currentIndex + 1) % modes.length;
-                      setDropSpeed(modes[nextIndex]);
-                    }}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                      dropSpeed === 'normal'
-                        ? 'text-white bg-gray-600/80'
-                        : dropSpeed === 'fast'
-                        ? 'text-cyan-300 bg-cyan-500/20 border border-cyan-500/50'
-                        : 'text-yellow-300 bg-yellow-500/20 border border-yellow-500/50'
-                    }`}
-                    title={`Drop Speed: ${dropSpeed === 'normal' ? 'Normal' : dropSpeed === 'fast' ? 'Fast' : 'Burst'} - Click to cycle`}
-                  >
-                    {dropSpeed === 'normal' ? '🐌 Normal' : dropSpeed === 'fast' ? '⚡ Fast' : '💥 Burst'}
-                  </button>
-                </div>
 
 
                 {/* Grid Layout - Mobile-first responsive */}
                 <div className="grid grid-cols-2 gap-2 mb-2 lg:mb-3">
                   {/* Risk Level Selection */}
                   <div className="col-span-2">
-                    <label className="block text-cyan-300/80 text-center text-xs lg:text-sm font-bold mb-1">Risk Level</label>
+                    <label className="block text-cyan-300 text-center text-sm uppercase font-bold mb-1">Risk Level</label>
                     <RadioGroup
                       value={buyRiskLevel}
                       onValueChange={(value) => setBuyRiskLevel(value as RiskLevel)}
@@ -1297,7 +1286,7 @@ const Home: React.FC = () => {
 
                   {/* Payment Method Toggle */}
                   <div className="col-span-2">
-                    <label className="block text-cyan-300/80 text-center text-sm font-bold mb-1 lg:mb-2">Payment Method</label>
+                    <label className="block text-cyan-300 text-center text-sm uppercase font-bold mb-1 lg:mb-2">Payment Method</label>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => setUsePLS(false)}
@@ -1366,7 +1355,6 @@ const Home: React.FC = () => {
                   </div>
                 )}
 
-
                 {/* Total Cost and Buy Button Grid */}
                 <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
                   {/* Total Cost Display */}
@@ -1423,6 +1411,42 @@ const Home: React.FC = () => {
                     : `Buy & Drop ${buyBallsCount} Ball${buyBallsCount !== 1 ? 's' : ''}`}
                 </button>
                 </div>
+
+                {/* Drop Speed Controls */}
+                <div className="mt-6">
+                  <div className="text-center mb-2">
+                    <div className="text-cyan-300 text-sm font-bold uppercase tracking-wider">Drop Speed</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {[
+                      { speed: 'normal' as DropSpeed, label: 'Normal' },
+                      { speed: 'fast' as DropSpeed, label: 'Fast' },
+                      { speed: 'burst' as DropSpeed, label: 'Burst' }
+                    ].map(({ speed, label }) => (
+                      <button
+                        key={speed}
+                        onClick={() => setDropSpeed(speed)}
+                        disabled={isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance}
+                        className={`h-15 w-full rounded-lg text-xs font-bold transition-all touch-manipulation ${
+                          dropSpeed === speed
+                            ? usePLS
+                              ? 'text-cyan-300'
+                              : 'text-cyan-300'
+                            : 'text-gray-500 hover:text-gray-400'
+                        } ${(isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        style={{
+                          boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.03)',
+                        }}
+                        title={`Drop Speed: ${label}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-center">
+                    <div className="uppercase font-bold text-cyan-300/80 text-[10px]">Control drop speed anytime during game</div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1444,36 +1468,30 @@ const Home: React.FC = () => {
               <div className="absolute top-4 left-4 right-4 flex items-center gap-2 z-50">
                 <button
                   onClick={() => setShowExtendedHistory(true)}
-                  className="w-7 h-7 rounded-full bg-gradient-to-b from-green-500 via-green-600 to-gray-800 border-b-4 border-gray-900 shadow-xl shadow-gray-900/80 hover:from-gray-400 hover:via-gray-500 hover:to-gray-700 hover:shadow-gray-900/90 hover:border-gray-800 active:shadow-inner active:shadow-gray-900/60 active:border-gray-900 active:scale-95 transition-all duration-75 text-white flex items-center justify-center flex-shrink-0"
+                  className="w-7 h-7 rounded-full text-white flex items-center justify-center flex-shrink-0 transition-all duration-75 active:scale-95"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
                   title="View extended history"
                 >
                   <i className="fas fa-history text-[10px]"></i>
                 </button>
                 <div className="flex gap-1 overflow-x-auto scrollbar-thin scrollbar-thumb-cyan-400/30 scrollbar-track-transparent hover:scrollbar-thumb-cyan-400/50 scroll-smooth flex-1">
-                  {history.length > 0 ? history.slice(0, 3).map((item, index) => {
-                    // Determine color based on multiplier (matching bucket colors)
-                    let bgColor = '';
-
-                    if (item.multiplier >= 10) {
-                      // High multiplier - purple gradient (matches high-value buckets)
-                      bgColor = 'bg-gradient-to-r from-purple-600 to-purple-800';
-                    } else if (item.multiplier >= 2) {
-                      // Medium multiplier - cyan/blue gradient (matches medium-value buckets)
-                      bgColor = 'bg-gradient-to-r from-cyan-500 to-blue-600';
-                    } else {
-                      // Low multiplier - blue gradient (matches low-value buckets)
-                      bgColor = 'bg-gradient-to-r from-blue-600 to-cyan-600';
-                    }
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`${index === 0 ? 'history-item-enter' : ''} ${bgColor} px-1.5 py-0.5 md:px-2 md:py-1 lg:px-3 lg:py-1.5 text-[10px] md:text-xs lg:text-sm font-black min-w-fit text-white transition-all duration-300 rounded`}
-                      >
-                        {item.multiplier}x
-                      </div>
-                    );
-                  }) : (
+                  {history.length > 0 ? history.slice(0, historyCardCount).map((item, index) => (
+                    <div
+                      key={item.id}
+                      className={`${index === 0 ? 'history-item-enter' : ''} px-1.5 py-0.5 md:px-2 md:py-1 lg:px-3 lg:py-1.5 text-[10px] md:text-xs lg:text-sm font-black min-w-fit text-white/60 transition-all duration-300 rounded`}
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                        border: '1px inset rgba(60, 60, 60, 0.5)',
+                      }}
+                    >
+                      {item.multiplier}x
+                    </div>
+                  )) : (
                     <div className="text-[12px] md:text-[10px] lg:text-smxsw text-cyan-300/60 font-bold uppercase tracking-wide px-1 italic">Waiting...</div>
                   )}
                 </div>
@@ -1534,8 +1552,8 @@ const Home: React.FC = () => {
       </div>
 
       {/* FULL-WIDTH CHART - Below 2-column layout */}
-      <div className="hidden lg:block px-3 -mt-2">
-        <div className="h-64 xl:h-72 2xl:h-80">
+      <div className="lg:block px-3 mt-4 mb-6">
+        <div className="h-64 md:h-72 lg:h-80">
           <RealTimeBetChart
             ref={chartRef}
             sessionStartTime={chartSessionStartTime.current}

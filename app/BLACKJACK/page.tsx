@@ -1,11 +1,12 @@
 'use client'
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import BettingPanel from '@/components/BLACKJACK/BettingPanel';
+import BettingDrawer from '@/components/BLACKJACK/BettingDrawer';
 import MainNav from '@/components/BLACKJACK/MainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
 import WinNotification from '@/components/BLACKJACK/WinNotification';
@@ -17,6 +18,7 @@ import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalytics
 import { GameVerificationTools } from '@/components/BLACKJACK/GameVerificationTools';
 import HistoryStrip from '@/components/BLACKJACK/HistoryStrip';
 import { ContractAddress } from '@/components/ui/contract-address';
+import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { ANIMATION_TIMINGS } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
@@ -196,6 +198,19 @@ export default function BlackjackPage() {
   // Intro screen state
   const [showIntro, setShowIntro] = useState(true);
 
+  // Provably Fair Advanced state
+  const [clientSeed, setClientSeed] = useState('');
+  const [showProvablyFairAdvanced, setShowProvablyFairAdvanced] = useState(false);
+
+  // Generate random client seed
+  const generateClientSeed = () => {
+    const randomBytes = new Uint8Array(16);
+    crypto.getRandomValues(randomBytes);
+    const seed = Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    setClientSeed(seed);
+    return seed;
+  };
+
   // Contract hook (for deposits/withdrawals only)
   const {
     deposit,
@@ -226,6 +241,20 @@ export default function BlackjackPage() {
   // WebSocket client (declare before fetchBalance/syncBalance)
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+
+  // Real-time P&L chart (Stake-style break-even line)
+  const chartRef = useRef<BlackjackRealTimeBetChartRef>(null);
+  const chartSessionStartTime = useRef<number>(Date.now());
+  
+  // Track previous card counts to detect new cards for animations
+  const prevPlayerCardCount = useRef<number>(0);
+  const prevDealerCardCount = useRef<number>(0);
+  const [newCardIndices, setNewCardIndices] = useState<{ player: Set<number>, dealer: Set<number> }>({ player: new Set(), dealer: new Set() });
+  
+  // Reset chart when switching wallets
+  useEffect(() => {
+    chartSessionStartTime.current = Date.now();
+  }, [address]);
 
   // Fetch off-chain balance from server
   const fetchBalance = useCallback(async () => {
@@ -372,6 +401,19 @@ export default function BlackjackPage() {
         console.log('Game created:', gameState);
         // Update local game state
         updateGameStateFromServer(gameState);
+        // Some games can complete immediately on deal (blackjack/push/dealer blackjack).
+        // The server does not emit a separate game_completed event for create_game, so handle it here.
+        if (String((gameState as any)?.status) === 'completed') {
+          const betAmount = (gameState as any)?.totalBetAmount ?? (gameState as any)?.betAmount;
+          const payout = (gameState as any)?.totalPayout ?? (gameState as any)?.payout;
+          const result = (gameState as any)?.result;
+          handleGameCompletion({
+            gameId: (gameState as any)?.gameId ?? (gameState as any)?.id,
+            betAmount,
+            payout,
+            result,
+          });
+        }
       });
 
       client.on('game_updated', (gameState: ServerGameState) => {
@@ -494,11 +536,13 @@ export default function BlackjackPage() {
 
     const activePlayerHand = playerHands[currentHandIndex] || playerHands[0];
 
-    // Dealer cards are already "hidden" by the server (usually only 1 card until completion).
+    // Dealer cards - server should send both cards, frontend will hide the second one
     const rawDealerCards: number[] = Array.isArray(serverGameState.dealerCards)
       ? serverGameState.dealerCards.map((c: any) => Number(c))
       : [];
+    console.log('Dealer cards received:', rawDealerCards.length, rawDealerCards);
     const dealerCards = rawDealerCards.map((c, idx) => toCard(c, 100 + idx));
+    console.log('Dealer cards after mapping:', dealerCards.length, dealerCards);
     const dealerTotals = calculateHandTotal(dealerCards);
     const dealerHand: Hand = {
       id: `${gameId}-dealer`,
@@ -561,6 +605,45 @@ export default function BlackjackPage() {
       currentGame: localGame,
       isPlaying: status !== 'completed',
     }));
+    
+    // Track new cards for animations
+    const currentPlayerCardCount = activePlayerHand?.cards.length || 0;
+    const currentDealerCardCount = dealerCards.length;
+    
+    if (currentPlayerCardCount > prevPlayerCardCount.current) {
+      const newIndices = new Set<number>();
+      for (let i = prevPlayerCardCount.current; i < currentPlayerCardCount; i++) {
+        newIndices.add(i);
+      }
+      setNewCardIndices(prev => ({ ...prev, player: newIndices }));
+      // Clear animation flags after animation completes
+      setTimeout(() => {
+        setNewCardIndices(prev => {
+          const updated = new Set(prev.player);
+          newIndices.forEach(idx => updated.delete(idx));
+          return { ...prev, player: updated };
+        });
+      }, 1000);
+    }
+    
+    if (currentDealerCardCount > prevDealerCardCount.current) {
+      const newIndices = new Set<number>();
+      for (let i = prevDealerCardCount.current; i < currentDealerCardCount; i++) {
+        newIndices.add(i);
+      }
+      setNewCardIndices(prev => ({ ...prev, dealer: newIndices }));
+      // Clear animation flags after animation completes
+      setTimeout(() => {
+        setNewCardIndices(prev => {
+          const updated = new Set(prev.dealer);
+          newIndices.forEach(idx => updated.delete(idx));
+          return { ...prev, dealer: updated };
+        });
+      }, 1000);
+    }
+    
+    prevPlayerCardCount.current = currentPlayerCardCount;
+    prevDealerCardCount.current = currentDealerCardCount;
   }, [address, gameState.clientSeed]);
 
   // Handle game completion
@@ -571,10 +654,20 @@ export default function BlackjackPage() {
       const betAmount: bigint =
         typeof data?.betAmount === 'bigint' ? data.betAmount : BigInt(String(data?.betAmount || '0'));
       const profit: bigint = payout - betAmount;
+
+      // Add to break-even P&L chart (per completed game)
+      chartRef.current?.addGameResult(betAmount, payout, {
+        gameId: data?.gameId ? String(data.gameId) : undefined,
+        result: data?.result ? String(data.result) : undefined,
+      });
+
       if (profit > BigInt(0)) {
         setWinAmount(profit);
         setIsBlackjackWin(data.result === 'blackjack');
-        setShowWinNotification(true);
+        // Delay win notification to allow card animations to complete
+        setTimeout(() => {
+          setShowWinNotification(true);
+        }, 1500); // 1.5 second delay after game completes
       }
     } catch {
       // ignore malformed payload
@@ -592,8 +685,16 @@ export default function BlackjackPage() {
   }, []);
 
   // Handle starting a new game
-  const handleStartGame = useCallback(async (betAmount: bigint, clientSeed: string) => {
-    console.log('Main handleStartGame called with:', { betAmount, clientSeed, isConnected, address });
+  const handleStartGame = useCallback(async (betAmount: bigint, _clientSeedFromPanel: string) => {
+    // Use the clientSeed from page state (Provably Fair Advanced section)
+    // If empty, auto-generate one
+    const finalClientSeed = clientSeed || generateClientSeed();
+    console.log('Main handleStartGame called with:', { betAmount, clientSeed: finalClientSeed, isConnected, address });
+    
+    // Reset card counts for new game animations
+    prevPlayerCardCount.current = 0;
+    prevDealerCardCount.current = 0;
+    setNewCardIndices({ player: new Set(), dealer: new Set() });
 
     // Off-chain betting does NOT require a wagmi publicClient (only deposits/withdrawals do).
     // We only need a connected wallet address and a connected websocket client.
@@ -619,7 +720,7 @@ export default function BlackjackPage() {
       const timestamp = Math.floor(Date.now() / 1000);
       // Remove 0x prefix from serverSeedHash for hash calculation (server uses hex string without 0x)
       const serverSeedForHash = serverSeedHash.startsWith('0x') ? serverSeedHash.slice(2) : serverSeedHash;
-      const hashInput = `${serverSeedForHash}:${clientSeed}:${nonce}:${betAmount.toString()}:${timestamp}`;
+      const hashInput = `${serverSeedForHash}:${finalClientSeed}:${nonce}:${betAmount.toString()}:${timestamp}`;
       
       // Use Web Crypto API to generate SHA-256 hash (matches server's crypto.createHash('sha256').digest('hex'))
       const encoder = new TextEncoder();
@@ -714,7 +815,7 @@ export default function BlackjackPage() {
     currentGame.playerHand.cards[0].value === currentGame.playerHand.cards[1].value;
 
   return (
-    <div className="min-h-screen"
+    <div className="min-h-screen overflow-x-hidden w-full"
       style={{
         background: 'linear-gradient(145deg, rgb(10, 15, 20), rgb(16, 26, 35))',
       }}
@@ -726,124 +827,36 @@ export default function BlackjackPage() {
         onViewChange={setCurrentView}
       />
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="w-full max-w-full mx-auto px-2 sm:px-4 py-4 sm:py-8 overflow-x-hidden">
         {/* View-specific content */}
         {currentView === 'game' && (
           <>
-            <div className="text-center mb-8">
-              <ContractAddress address={BLACKJACK_ADDRESS} label="Blackjack Contract" />
-            </div>
-
         {/* Game History */}
         {gameState.history.length > 0 && (
           <HistoryStrip history={gameState.history} />
         )}
 
-        <div className="grid lg:grid-cols-3 gap-8 items-start">
-          {/* Left Panel - Betting or Action Controls */}
-          <div className="lg:col-span-1">
-            {currentGame && isPlayerTurn ? (
-              /* Action Controls Panel */
-              <div className="w-full max-w-md mx-auto space-y-4">
-                <div
-                  className="rounded-2xl p-6"
-                  style={{
-                    background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px solid rgba(60, 60, 60, 0.5)',
-                  }}
-                >
-                  <div className="text-center mb-6">
-                    <div className="text-2xl font-bold text-cyan-300 mb-2">Your Turn</div>
-                    <div className="text-cyan-300/60 text-sm">Choose your action</div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {canHit && (
-                      <button
-                        onClick={() => handlePlayerAction(Action.HIT)}
-                        className="w-full py-4 px-6 text-cyan-300 font-bold rounded-lg transition-all hover:scale-105 active:scale-95 text-lg"
-                        style={{
-                          background: 'linear-gradient(145deg, rgba(220, 38, 38, 0.8), rgba(185, 28, 28, 0.8))',
-                          boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.2)',
-                          border: '2px solid rgba(220, 38, 38, 0.5)',
-                        }}
-                      >
-                        HIT
-                      </button>
-                    )}
-
-                    {canStand && (
-                      <button
-                        onClick={() => handlePlayerAction(Action.STAND)}
-                        className="w-full py-4 px-6 text-cyan-300 font-bold rounded-lg transition-all hover:scale-105 active:scale-95 text-lg"
-                        style={{
-                          background: 'linear-gradient(145deg, rgba(6, 182, 212, 0.3), rgba(8, 145, 178, 0.3))',
-                          boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.2)',
-                          border: '2px solid rgba(6, 182, 212, 0.5)',
-                        }}
-                      >
-                        STAND
-                      </button>
-                    )}
-
-                    {canDoubleDown && (
-                      <button
-                        onClick={() => handlePlayerAction(Action.DOUBLE_DOWN)}
-                        className="w-full py-4 px-6 text-cyan-300 font-bold rounded-lg transition-all hover:scale-105 active:scale-95 text-lg"
-                        style={{
-                          background: 'linear-gradient(145deg, rgba(245, 158, 11, 0.8), rgba(217, 119, 6, 0.8))',
-                          boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.2)',
-                          border: '2px solid rgba(245, 158, 11, 0.5)',
-                        }}
-                      >
-                        DOUBLE DOWN
-                      </button>
-                    )}
-
-                    {canSplit && (
-                      <button
-                        onClick={() => handlePlayerAction(Action.SPLIT)}
-                        className="w-full py-4 px-6 text-cyan-300 font-bold rounded-lg transition-all hover:scale-105 active:scale-95 text-lg"
-                        style={{
-                          background: 'linear-gradient(145deg, rgba(16, 185, 129, 0.8), rgba(5, 150, 105, 0.8))',
-                          boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.2)',
-                          border: '2px solid rgba(16, 185, 129, 0.5)',
-                        }}
-                      >
-                        SPLIT
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <BettingPanel
-                onStartGame={handleStartGame}
-                isPlaying={gameState.isPlaying}
-                reserveBalance={offChainBalance}
-              />
-            )}
-          </div>
-
-          {/* Game Table */}
-          <div className="lg:col-span-2 flex">
-              <BlackjackTable
-                playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
-                dealerHand={currentGame?.dealerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
-                gameState={currentGame?.state || GameState.WAITING}
-                onAction={handlePlayerAction}
-                canHit={canHit}
-                canStand={canStand}
-                canDoubleDown={canDoubleDown}
-                reserveBalance={offChainBalance}
-                usePLS={false}
-              />
+        {/* Game Table */}
+        <div className="flex flex-col gap-6 pb-32">
+          <div className="relative w-full">
+            <BlackjackTable
+              playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
+              dealerHand={currentGame?.dealerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
+              gameState={currentGame?.state || GameState.WAITING}
+              onAction={handlePlayerAction}
+              canHit={canHit}
+              canStand={canStand}
+              canDoubleDown={canDoubleDown}
+              canSplit={canSplit}
+              reserveBalance={offChainBalance}
+              usePLS={false}
+              newCardIndices={newCardIndices}
+            />
           </div>
         </div>
 
         {/* Game Stats */}
-        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="mt-6 sm:mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 w-full">
           <div
             className="rounded-2xl p-4 text-center"
             style={{
@@ -899,12 +912,24 @@ export default function BlackjackPage() {
           </div>
         </div>
 
+
         {/* Win Notification */}
         {showWinNotification && (
           <WinNotification
             amount={winAmount}
             isBlackjack={isBlackjackWin}
             onComplete={() => setShowWinNotification(false)}
+          />
+        )}
+
+        {/* Betting Drawer - Only show when no active game or not player's turn */}
+        {(!currentGame || !isPlayerTurn) && (
+          <BettingDrawer
+            onStartGame={handleStartGame}
+            isPlaying={gameState.isPlaying}
+            reserveBalance={offChainBalance}
+            chartRef={chartRef}
+            sessionStartTime={chartSessionStartTime.current}
           />
         )}
 
@@ -966,6 +991,62 @@ export default function BlackjackPage() {
         {currentView === 'verify' && (
           <GameVerificationTools />
         )}
+
+        {/* Provably Fair (Advanced) - Above Contract Addresses */}
+        <div className="mt-12 mb-6 px-1">
+          <div className="max-w-2xl mx-auto">
+            <button
+              type="button"
+              onClick={() => setShowProvablyFairAdvanced(v => !v)}
+              className="w-full flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-wider text-cyan-300/60 hover:text-cyan-300 transition-colors mb-3"
+            >
+              <span>Provably Fair (Advanced)</span>
+              <span aria-hidden className={`transition-transform ${showProvablyFairAdvanced ? 'rotate-180' : ''}`}>▾</span>
+            </button>
+
+            {showProvablyFairAdvanced && (
+              <div className="mt-3">
+                <div className="text-[10px] text-cyan-300/40 text-center mb-2">
+                  Optional. Leave blank to auto-generate a seed on "Deal Cards".
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={clientSeed}
+                    onChange={(e) => setClientSeed(e.target.value)}
+                    className="flex-1 px-3 py-2 text-center font-mono text-cyan-300 rounded border focus:outline-none"
+                    style={{
+                      background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
+                      boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(60, 60, 60, 0.3)',
+                    }}
+                    placeholder="Client seed (optional)"
+                  />
+                  <button
+                    type="button"
+                    onClick={generateClientSeed}
+                    className="w-10 h-10 rounded-lg font-black text-base transition-all active:scale-95"
+                    title="Generate random client seed"
+                    style={{
+                      background: 'linear-gradient(145deg, rgba(6, 182, 212, 0.18), rgba(8, 145, 178, 0.18))',
+                      boxShadow: 'inset 3px 3px 6px rgba(0, 0, 0, 0.3), inset -3px -3px 6px rgba(255, 255, 255, 0.05)',
+                      color: 'rgb(6, 182, 212)',
+                      border: '1px solid rgba(6, 182, 212, 0.35)',
+                    }}
+                  >
+                    ↻
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Contract Addresses - Above Footer */}
+        <div className="mt-6 mb-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+          <ContractAddress address={MORBIUS_TOKEN_ADDRESS} label="MORBIUS Token" />
+          <ContractAddress address={BLACKJACK_ADDRESS} label="Blackjack Contract" />
+        </div>
       </main>
 
       <Footer />

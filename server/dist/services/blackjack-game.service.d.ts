@@ -47,7 +47,10 @@ export interface PlayerActionRequest {
 export declare class BlackjackGameService {
     private dbService;
     private pfService;
+    private static readonly GAME_NONCE_MULTIPLIER;
     constructor(dbService: DatabaseService, pfService: ProvablyFairService);
+    private getGameBaseNonce;
+    private ensureSessionSeed;
     /**
      * Create a new blackjack game
      */

@@ -5,9 +5,23 @@ const logger_1 = require("../utils/logger");
 class BlackjackGameService {
     dbService;
     pfService;
+    static GAME_NONCE_MULTIPLIER = 1_000_000; // avoid collisions within a game
     constructor(dbService, pfService) {
         this.dbService = dbService;
         this.pfService = pfService;
+    }
+    getGameBaseNonce(gameNumber) {
+        return gameNumber * BlackjackGameService.GAME_NONCE_MULTIPLIER;
+    }
+    ensureSessionSeed(session) {
+        // game_sessions now stores server_seed (secret) + server_seed_hash (commitment).
+        // Older rows may have only the hash; we self-heal by generating a new seed and updating the session.
+        if (session?.server_seed && typeof session.server_seed === 'string' && session.server_seed.length > 0) {
+            return { serverSeed: session.server_seed, serverSeedHash: session.server_seed_hash };
+        }
+        const serverSeed = this.pfService.generateServerSeed();
+        const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
+        return { serverSeed, serverSeedHash };
     }
     /**
      * Create a new blackjack game
@@ -21,16 +35,18 @@ class BlackjackGameService {
             if (!session) {
                 const serverSeed = this.pfService.generateServerSeed();
                 const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
-                session = await this.dbService.createGameSession(player.id, serverSeedHash);
+                session = await this.dbService.createGameSession(player.id, serverSeed, serverSeedHash);
             }
-            // Generate game seeds
-            const gameNonce = session.game_count + 1;
-            const dealerSeed = this.pfService.generateServerSeed();
-            const gameSeeds = {
-                serverSeed: session.server_seed_hash, // We'll reveal this later
-                clientSeed: request.clientSeedCommitment || 'default',
-                nonce: gameNonce
-            };
+            // Ensure session has a real server seed (self-heal older DB rows)
+            const ensured = this.ensureSessionSeed(session);
+            if (!session.server_seed) {
+                await this.dbService.setSessionServerSeed(session.id, ensured.serverSeed, ensured.serverSeedHash);
+                session = { ...session, server_seed: ensured.serverSeed, server_seed_hash: ensured.serverSeedHash };
+            }
+            const clientSeed = request.clientSeedCommitment || 'default';
+            // Generate per-game nonce (Stake-style: stable seeds, increment nonce)
+            const gameNumber = session.game_count + 1;
+            const baseNonce = this.getGameBaseNonce(gameNumber);
             // If gameHash is provided, verify it matches
             if (request.gameHash) {
                 const timestamp = Math.floor(Date.now() / 1000);
@@ -38,16 +54,18 @@ class BlackjackGameService {
                 const receivedHash = request.gameHash.startsWith('0x')
                     ? request.gameHash.slice(2).toLowerCase()
                     : request.gameHash.toLowerCase();
-                const expectedHash = this.pfService.generateGameHash(gameSeeds, request.betAmount, timestamp).toLowerCase();
+                const expectedHash = this.pfService.generateGameHash(session.server_seed_hash, clientSeed, gameNumber, request.betAmount, timestamp).toLowerCase();
                 // Allow some timestamp variance (within 60 seconds)
                 const hashMatches = expectedHash === receivedHash ||
-                    this.pfService.generateGameHash(gameSeeds, request.betAmount, timestamp - 60).toLowerCase() === receivedHash ||
-                    this.pfService.generateGameHash(gameSeeds, request.betAmount, timestamp + 60).toLowerCase() === receivedHash;
+                    this.pfService.generateGameHash(session.server_seed_hash, clientSeed, gameNumber, request.betAmount, timestamp - 60).toLowerCase() === receivedHash ||
+                    this.pfService.generateGameHash(session.server_seed_hash, clientSeed, gameNumber, request.betAmount, timestamp + 60).toLowerCase() === receivedHash;
                 if (!hashMatches) {
                     logger_1.logger.warn('Game hash mismatch', {
                         expected: expectedHash,
                         received: receivedHash,
-                        seeds: gameSeeds,
+                        serverSeedHash: session.server_seed_hash,
+                        clientSeed,
+                        gameNumber,
                         betAmount: request.betAmount.toString(),
                         timestamp: timestamp
                     });
@@ -58,7 +76,13 @@ class BlackjackGameService {
                 }
             }
             // Generate initial cards using provably fair randomness
-            const randoms = this.pfService.generateBlackjackRandoms(gameSeeds, 4);
+            const dealingSeeds = {
+                serverSeed: session.server_seed,
+                clientSeed,
+                nonce: baseNonce, // drawIndex starts at 0 for initial deal
+            };
+            const randoms = this.pfService.generateBlackjackRandoms(dealingSeeds, 4);
+            let rngCounter = 4; // we consumed 4 draws
             // Deal cards: player gets 2 cards, dealer gets 2 cards (1 face down)
             const initialPlayerCards = [randoms[0], randoms[2]];
             const dealerCards = [randoms[1], randoms[3]];
@@ -111,16 +135,16 @@ class BlackjackGameService {
             });
             // Create game record
             const game = await this.dbService.createGame(session.id, {
-                game_number: gameNonce,
+                game_number: gameNumber,
                 total_bet_amount: request.betAmount,
                 dealer_cards: dealerCards,
                 dealer_total: this.pfService.calculateHandTotal(dealerCards).total,
                 result,
                 total_payout: initialHand.payout,
-                client_seed_commitment: request.clientSeedCommitment,
-                dealer_seed: dealerSeed,
+                client_seed_commitment: clientSeed,
                 hand_count: 1,
-                current_hand_index: 0
+                current_hand_index: 0,
+                rng_counter: rngCounter,
             });
             // Create initial hand record
             const gameHand = await this.dbService.createGameHand(game.id, {
@@ -135,10 +159,14 @@ class BlackjackGameService {
                 payout: initialHand.payout
             });
             initialHand.id = gameHand.id;
-            // Update session stats
+            // Update session stats for game start (increments game_count)
+            await this.dbService.updateSessionStats(session.id, request.betAmount, 0n, true);
+            // If the game completed immediately, record profit + credit payout + reveal server seed for verification
             if (result) {
-                await this.dbService.updateSessionStats(session.id, request.betAmount, initialHand.payout > request.betAmount ? initialHand.payout - request.betAmount : 0n);
-                // Add winnings to off-chain balance (if game completed immediately)
+                const profit = initialHand.payout > request.betAmount ? initialHand.payout - request.betAmount : 0n;
+                if (profit > 0n) {
+                    await this.dbService.updateSessionStats(session.id, 0n, profit, false);
+                }
                 if (initialHand.payout > 0n) {
                     await this.dbService.addPlayerBalance(request.playerAddress, initialHand.payout);
                     logger_1.logger.debug('Added winnings to balance', {
@@ -146,12 +174,13 @@ class BlackjackGameService {
                         payout: initialHand.payout.toString()
                     });
                 }
+                await this.dbService.revealServerSeed(game.id, session.server_seed_hash, session.server_seed);
             }
             const gameState = {
                 gameId: game.id,
                 sessionId: session.id,
                 playerHands: [initialHand],
-                dealerCards: [dealerCards[0]], // Hide dealer second card initially
+                dealerCards: dealerCards, // Send both cards - frontend will hide the second one
                 dealerTotal: dealerVisibleHand.total,
                 dealerHasAce: dealerVisibleHand.hasAce,
                 status,
@@ -202,6 +231,14 @@ class BlackjackGameService {
             if (!session) {
                 throw new Error('Session not found');
             }
+            // Ensure session seed exists (older rows may not have server_seed populated)
+            if (!session.server_seed) {
+                const serverSeed = this.pfService.generateServerSeed();
+                const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
+                await this.dbService.setSessionServerSeed(session.id, serverSeed, serverSeedHash);
+                session.server_seed = serverSeed;
+                session.server_seed_hash = serverSeedHash;
+            }
             // Get current hands
             const gameHands = await this.dbService.getGameHands(request.gameId);
             const playerHands = gameHands.map(gh => ({
@@ -225,26 +262,16 @@ class BlackjackGameService {
             if (!currentHand) {
                 throw new Error('Hand not found');
             }
-            // If this is the first action, reveal client seed and generate server seed
-            let clientSeed = game.client_seed_commitment;
-            let serverSeed = session.server_seed_hash;
-            if (request.clientSeed && game.client_seed_commitment) {
-                // Verify client seed commitment
-                if (!this.pfService.verifyClientSeedCommitment(game.client_seed_commitment, request.clientSeed)) {
-                    throw new Error('Client seed does not match commitment');
-                }
-                clientSeed = request.clientSeed;
-                // Generate actual server seed for this game
-                serverSeed = this.pfService.generateServerSeed();
-                // Update game with revealed seeds
-                await this.dbService.updateGame(game.id, {
-                    server_seed_revealed: true
-                });
-            }
+            // Stake-style: client seed can remain stable; server seed is committed per session.
+            // For blackjack we use a per-game base nonce and a per-draw rng_counter to ensure each draw is unique.
+            const clientSeed = game.client_seed_commitment || 'default';
+            const serverSeed = session.server_seed;
+            const baseNonce = this.getGameBaseNonce(game.game_number);
+            const rngCounter = Number(game.rng_counter ?? 0);
             const gameSeeds = {
                 serverSeed,
-                clientSeed: clientSeed || 'default',
-                nonce: game.game_number
+                clientSeed,
+                nonce: baseNonce + rngCounter, // next draw nonce
             };
             // Handle different actions
             if (request.action === 'split') {
@@ -274,6 +301,10 @@ class BlackjackGameService {
         const randoms = this.pfService.generateBlackjackRandoms(gameSeeds, 2);
         card1.push(randoms[0]);
         card2.push(randoms[1]);
+        const baseNonce = this.getGameBaseNonce(game.game_number);
+        const splitNonce1 = gameSeeds.nonce;
+        const splitNonce2 = gameSeeds.nonce + 1;
+        const nextRngCounter = (splitNonce2 - baseNonce) + 1; // consumed 2 draws total
         // Create new hands
         const hand1 = {
             id: '',
@@ -284,7 +315,7 @@ class BlackjackGameService {
             isBust: false,
             betAmount: handToSplit.betAmount, // Additional bet required for split
             payout: 0n,
-            actions: [{ type: 'split', timestamp: Date.now() }],
+            actions: [{ type: 'split', timestamp: Date.now(), nonce1: splitNonce1, nonce2: splitNonce2, cards: [randoms[0], randoms[1]] }],
             canHit: true,
             canStand: true,
             canDoubleDown: true,
@@ -305,15 +336,18 @@ class BlackjackGameService {
             playerAddress,
             splitBetAmount: handToSplit.betAmount.toString()
         });
-        // Create hand records in database
-        const gameHand1 = await this.dbService.createGameHand(gameId, {
-            hand_index: handIndex,
+        // Session stats: add extra bet (do NOT increment game_count)
+        await this.dbService.updateSessionStats(game.session_id, handToSplit.betAmount, 0n, false);
+        // Persist split:
+        // - Reuse the existing hand row for hand1 (so we don't create duplicate hand_index entries)
+        // - Create a new row for hand2
+        hand1.id = handToSplit.id;
+        await this.dbService.updateGameHand(handToSplit.id, {
             cards: hand1.cards,
             total: hand1.total,
             has_ace: hand1.hasAce,
             is_blackjack: false,
             is_bust: false,
-            bet_amount: hand1.betAmount,
             actions: hand1.actions
         });
         const gameHand2 = await this.dbService.createGameHand(gameId, {
@@ -326,7 +360,6 @@ class BlackjackGameService {
             bet_amount: hand2.betAmount,
             actions: hand2.actions
         });
-        hand1.id = gameHand1.id;
         hand2.id = gameHand2.id;
         // Replace the original hand with the two new hands
         playerHands.splice(handIndex, 1, hand1, hand2);
@@ -334,13 +367,14 @@ class BlackjackGameService {
         await this.dbService.updateGame(gameId, {
             hand_count: playerHands.length,
             total_bet_amount: totalBetAmount,
-            current_hand_index: handIndex
+            current_hand_index: handIndex,
+            rng_counter: nextRngCounter,
         });
         return {
             gameId,
             sessionId: game.session_id,
             playerHands,
-            dealerCards: game.dealer_cards.slice(0, 1), // Show only first dealer card
+            dealerCards: game.dealer_cards, // Send both cards - frontend will hide the second one
             dealerTotal: this.pfService.calculateHandTotal([game.dealer_cards[0]]).total,
             dealerHasAce: this.pfService.calculateHandTotal([game.dealer_cards[0]]).hasAce,
             status: 'player_turn',
@@ -358,11 +392,18 @@ class BlackjackGameService {
      */
     async handleHandAction(gameId, game, playerHands, handIndex, action, gameSeeds) {
         const currentHand = playerHands[handIndex];
+        const baseNonce = this.getGameBaseNonce(game.game_number);
+        let rngCounter = gameSeeds.nonce - baseNonce;
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/blackjack-game.service.ts:handleHandAction:entry', message: 'handleHandAction entry', data: { action, gameId, currentHandId: currentHand?.id, handIndex, cardsLen: currentHand?.cards?.length, result: currentHand?.result }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
+        // #endregion
         if (action === 'hit') {
             // Deal new card
-            const randoms = this.pfService.generateBlackjackRandoms(gameSeeds, 1);
+            const nonceUsed = baseNonce + rngCounter;
+            const randoms = this.pfService.generateBlackjackRandoms({ ...gameSeeds, nonce: nonceUsed }, 1);
+            rngCounter += 1;
             currentHand.cards.push(randoms[0]);
-            currentHand.actions.push({ type: 'hit', card: randoms[0], timestamp: Date.now() });
+            currentHand.actions.push({ type: 'hit', card: randoms[0], nonce: nonceUsed, timestamp: Date.now() });
             const handTotal = this.pfService.calculateHandTotal(currentHand.cards);
             currentHand.total = handTotal.total;
             currentHand.hasAce = handTotal.hasAce;
@@ -375,6 +416,9 @@ class BlackjackGameService {
                 currentHand.canDoubleDown = false;
             }
             // Update hand in database
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/blackjack-game.service.ts:handleHandAction:beforeUpdateHand', message: 'About to update hand in DB', data: { handId: currentHand.id, updateKeys: ['cards', 'total', 'has_ace', 'is_bust', 'result', 'actions'], cardsLen: currentHand.cards.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
+            // #endregion
             await this.dbService.updateGameHand(currentHand.id, {
                 cards: currentHand.cards,
                 total: currentHand.total,
@@ -383,6 +427,7 @@ class BlackjackGameService {
                 result: currentHand.result,
                 actions: currentHand.actions
             });
+            await this.dbService.updateGame(gameId, { rng_counter: rngCounter });
         }
         else if (action === 'stand') {
             currentHand.actions.push({ type: 'stand', timestamp: Date.now() });
@@ -401,9 +446,11 @@ class BlackjackGameService {
             const originalBet = currentHand.betAmount;
             currentHand.betAmount *= 2n;
             // Deal one more card
-            const randoms = this.pfService.generateBlackjackRandoms(gameSeeds, 1);
+            const nonceUsed = baseNonce + rngCounter;
+            const randoms = this.pfService.generateBlackjackRandoms({ ...gameSeeds, nonce: nonceUsed }, 1);
+            rngCounter += 1;
             currentHand.cards.push(randoms[0]);
-            currentHand.actions.push({ type: 'double_down', card: randoms[0], timestamp: Date.now() });
+            currentHand.actions.push({ type: 'double_down', card: randoms[0], nonce: nonceUsed, timestamp: Date.now() });
             const handTotal = this.pfService.calculateHandTotal(currentHand.cards);
             currentHand.total = handTotal.total;
             currentHand.hasAce = handTotal.hasAce;
@@ -424,7 +471,9 @@ class BlackjackGameService {
                 playerAddress,
                 doubleDownAmount: originalBet.toString()
             });
-            await this.dbService.updateGame(gameId, { total_bet_amount: totalBetAmount });
+            // Session stats: add extra bet (do NOT increment game_count)
+            await this.dbService.updateSessionStats(game.session_id, originalBet, 0n, false);
+            await this.dbService.updateGame(gameId, { total_bet_amount: totalBetAmount, rng_counter: rngCounter });
             await this.dbService.updateGameHand(currentHand.id, {
                 cards: currentHand.cards,
                 total: currentHand.total,
@@ -434,12 +483,15 @@ class BlackjackGameService {
                 result: currentHand.result,
                 actions: currentHand.actions
             });
+            // keep in-memory game totals in sync for response below
+            game.total_bet_amount = totalBetAmount;
         }
         // Check if all hands are completed
         const activeHands = playerHands.filter(hand => hand.canHit || hand.canStand);
         if (activeHands.length === 0) {
             // All hands completed, dealer plays
-            return this.playDealerAndComplete(gameId, game, playerHands, gameSeeds);
+            const nextSeeds = { ...gameSeeds, nonce: baseNonce + rngCounter };
+            return this.playDealerAndComplete(gameId, game, playerHands, nextSeeds);
         }
         // Move to next active hand
         const nextHandIndex = playerHands.findIndex(hand => hand.canHit || hand.canStand);
@@ -447,7 +499,7 @@ class BlackjackGameService {
             gameId,
             sessionId: game.session_id,
             playerHands,
-            dealerCards: game.dealer_cards.slice(0, 1),
+            dealerCards: game.dealer_cards, // Send both cards - frontend will hide the second one
             dealerTotal: this.pfService.calculateHandTotal([game.dealer_cards[0]]).total,
             dealerHasAce: this.pfService.calculateHandTotal([game.dealer_cards[0]]).hasAce,
             status: 'player_turn',
@@ -466,6 +518,8 @@ class BlackjackGameService {
     async playDealerAndComplete(gameId, game, playerHands, gameSeeds) {
         const dealerCards = [...game.dealer_cards];
         const dealerActions = [];
+        const baseNonce = this.getGameBaseNonce(game.game_number);
+        let nextNonce = gameSeeds.nonce; // already includes baseNonce + rng_counter
         // Dealer hits on soft 17
         while (true) {
             const dealerHand = this.pfService.calculateHandTotal(dealerCards);
@@ -473,11 +527,14 @@ class BlackjackGameService {
                 dealerActions.push({ type: 'stand', timestamp: Date.now() });
                 break;
             }
-            const randoms = this.pfService.generateBlackjackRandoms({ ...gameSeeds, nonce: gameSeeds.nonce + 1000 }, 1);
+            const nonceUsed = nextNonce;
+            const randoms = this.pfService.generateBlackjackRandoms({ ...gameSeeds, nonce: nonceUsed }, 1);
+            nextNonce += 1;
             dealerCards.push(randoms[0]);
             dealerActions.push({
                 type: 'hit',
                 card: randoms[0],
+                nonce: nonceUsed,
                 timestamp: Date.now()
             });
         }
@@ -520,12 +577,14 @@ class BlackjackGameService {
         const allPush = playerHands.every(h => h.result === 'push');
         const overallResult = hasWin ? 'win' : allPush ? 'push' : 'loss';
         // Update game
+        const rngCounter = nextNonce - baseNonce;
         await this.dbService.updateGame(gameId, {
             dealer_cards: dealerCards,
             dealer_total: finalDealerTotal,
             result: overallResult,
             total_payout: totalPayout,
             dealer_actions: dealerActions,
+            rng_counter: rngCounter,
             completed_at: new Date()
         });
         // Add winnings to off-chain balance
@@ -537,6 +596,16 @@ class BlackjackGameService {
                 totalPayout: totalPayout.toString(),
                 gameId
             });
+        }
+        // Update session win stats (profit only; do NOT increment game_count)
+        const profit = totalPayout > game.total_bet_amount ? totalPayout - game.total_bet_amount : 0n;
+        if (profit > 0n) {
+            await this.dbService.updateSessionStats(game.session_id, 0n, profit, false);
+        }
+        // Reveal server seed commitment for verification
+        const session = await this.dbService.getSessionById(game.session_id);
+        if (session?.server_seed) {
+            await this.dbService.revealServerSeed(gameId, session.server_seed_hash, session.server_seed);
         }
         return {
             gameId,
@@ -570,6 +639,8 @@ class BlackjackGameService {
             if (!game || !game.result)
                 return null;
             const hands = await this.dbService.getGameHands(gameId);
+            const seedReveal = await this.dbService.getSeedReveal(gameId);
+            const baseNonce = this.getGameBaseNonce(game.game_number);
             return {
                 gameId: game.id,
                 playerHands: hands.map(h => ({
@@ -581,9 +652,16 @@ class BlackjackGameService {
                 dealerCards: game.dealer_cards,
                 dealerTotal: game.dealer_total,
                 totalPayout: game.total_payout,
-                serverSeed: game.dealer_seed, // Revealed
+                serverSeedHash: seedReveal?.server_seed_hash ? `0x${seedReveal.server_seed_hash}` : undefined,
+                serverSeed: seedReveal?.server_seed,
                 clientSeed: game.client_seed_commitment || 'default',
-                nonce: game.game_number,
+                gameNumber: game.game_number,
+                baseNonce,
+                nonceScheme: {
+                    baseNonceMultiplier: BlackjackGameService.GAME_NONCE_MULTIPLIER,
+                    initialDealOrder: ['player', 'dealer', 'player', 'dealer'],
+                    note: 'Each card draw uses nonce = baseNonce + drawIndex; drawIndex increments globally per game.',
+                },
                 actions: game.actions || [],
                 dealerActions: game.dealer_actions || []
             };

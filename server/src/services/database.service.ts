@@ -13,6 +13,7 @@ export interface Player {
 export interface GameSession {
   id: string;
   player_id: string;
+  server_seed?: string; // secret server seed (hex). commitment is server_seed_hash.
   server_seed_hash: string;
   client_seed?: string;
   nonce: number;
@@ -59,6 +60,7 @@ export interface Game {
   dealer_seed?: string;
   hand_count: number;
   current_hand_index: number;
+  rng_counter?: number;
 }
 
 export interface PlayerStats {
@@ -163,6 +165,7 @@ export class DatabaseService {
       hand_count: Number(row.hand_count ?? 1),
       current_hand_index: Number(row.current_hand_index ?? 0),
       server_seed_revealed: Boolean(row.server_seed_revealed),
+      rng_counter: Number(row.rng_counter ?? 0),
     };
   }
 
@@ -353,33 +356,15 @@ export class DatabaseService {
     return result.rows.map((r: any) => this.normalizeGame(r));
   }
 
-  async getSettlements(status?: string, limit: number = 100): Promise<any[]> {
-    let query = `SELECT * FROM settlements`;
-    const params: any[] = [];
-    
-    if (status) {
-      query += ` WHERE status = $1`;
-      params.push(status);
-      query += ` ORDER BY settled_at DESC LIMIT $2`;
-      params.push(limit);
-    } else {
-      query += ` ORDER BY settled_at DESC LIMIT $1`;
-      params.push(limit);
-    }
-    
-    const result = await this.pool.query(query, params);
-    return result.rows;
-  }
-
   // Game session operations
-  async createGameSession(playerId: string, serverSeedHash: string): Promise<GameSession> {
+  async createGameSession(playerId: string, serverSeed: string, serverSeedHash: string): Promise<GameSession> {
     const query = `
-      INSERT INTO game_sessions (player_id, server_seed_hash)
-      VALUES ($1, $2)
+      INSERT INTO game_sessions (player_id, server_seed, server_seed_hash)
+      VALUES ($1, $2, $3)
       RETURNING *
     `;
 
-    const result = await this.pool.query(query, [playerId, serverSeedHash]);
+    const result = await this.pool.query(query, [playerId, serverSeed, serverSeedHash]);
     return this.normalizeSession(result.rows[0]);
   }
 
@@ -415,18 +400,22 @@ export class DatabaseService {
     return result.rows[0].wallet_address;
   }
 
-  async updateSessionStats(sessionId: string, betAmount: bigint, winAmount: bigint): Promise<void> {
+  async updateSessionStats(
+    sessionId: string,
+    betAmount: bigint,
+    winAmount: bigint,
+    incrementGameCount: boolean = true
+  ): Promise<void> {
     const query = `
       UPDATE game_sessions
       SET
         total_bet = total_bet + $2::NUMERIC,
         total_win = total_win + $3::NUMERIC,
-        game_count = game_count + 1,
-        updated_at = NOW()
+        game_count = game_count + CASE WHEN $4::BOOLEAN THEN 1 ELSE 0 END
       WHERE id = $1
     `;
 
-    await this.pool.query(query, [sessionId, betAmount.toString(), winAmount.toString()]);
+    await this.pool.query(query, [sessionId, betAmount.toString(), winAmount.toString(), incrementGameCount]);
   }
 
   async endSession(sessionId: string): Promise<void> {
@@ -437,6 +426,16 @@ export class DatabaseService {
     `;
 
     await this.pool.query(query, [sessionId]);
+  }
+
+  async setSessionServerSeed(sessionId: string, serverSeed: string, serverSeedHash: string): Promise<void> {
+    const query = `
+      UPDATE game_sessions
+      SET server_seed = $2,
+          server_seed_hash = $3
+      WHERE id = $1
+    `;
+    await this.pool.query(query, [sessionId, serverSeed, serverSeedHash]);
   }
 
   // Game operations
@@ -459,9 +458,10 @@ export class DatabaseService {
         client_seed_commitment,
         dealer_seed,
         hand_count,
-        current_hand_index
+        current_hand_index,
+        rng_counter
       )
-      VALUES ($1, $2, $3::NUMERIC, $4, $5, $6, $7::NUMERIC, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3::NUMERIC, $4, $5, $6, $7::NUMERIC, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `;
 
@@ -478,7 +478,8 @@ export class DatabaseService {
       gameData.client_seed_commitment,
       gameData.dealer_seed,
       gameData.hand_count || 1,
-      gameData.current_hand_index || 0
+      gameData.current_hand_index || 0,
+      Number(gameData.rng_counter ?? 0),
     ];
 
     const result = await this.pool.query(query, values);
@@ -522,6 +523,9 @@ export class DatabaseService {
   }
 
   async updateGameHand(handId: string, updates: Partial<GameHand>): Promise<void> {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:updateGameHand:entry',message:'updateGameHand called',data:{handId,updateKeys:Object.keys(updates||{}),hasCards:updates?.cards!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     const fields = [];
     const values = [];
     let paramCount = 1;
@@ -546,6 +550,10 @@ export class DatabaseService {
       fields.push(`is_bust = $${paramCount++}`);
       values.push(updates.is_bust);
     }
+    if (updates.bet_amount !== undefined) {
+      fields.push(`bet_amount = $${paramCount++}::NUMERIC`);
+      values.push(updates.bet_amount.toString());
+    }
     if (updates.result !== undefined) {
       fields.push(`result = $${paramCount++}`);
       values.push(updates.result);
@@ -565,13 +573,17 @@ export class DatabaseService {
 
     if (fields.length === 0) return;
 
+    const idParam = paramCount++;
     const query = `
       UPDATE game_hands
       SET ${fields.join(', ')}
-      WHERE id = $1
+      WHERE id = $${idParam}
     `;
 
     values.push(handId);
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:updateGameHand:beforeQuery',message:'updateGameHand SQL about to run',data:{query,valuesCount:values.length,valueTypes:values.map(v=>typeof v),firstValuePreview:String(values[0]).slice(0,48),lastValuePreview:String(values[values.length-1]).slice(0,48)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     await this.pool.query(query, values);
   }
 
@@ -586,6 +598,9 @@ export class DatabaseService {
   }
 
   async updateGame(gameId: string, updates: Partial<Game>): Promise<void> {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:updateGame:entry',message:'updateGame called',data:{gameId,updateKeys:Object.keys(updates||{}),hasDealerCards:updates?.dealer_cards!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     const fields = [];
     const values = [];
     let paramCount = 1;
@@ -593,6 +608,10 @@ export class DatabaseService {
     if (updates.dealer_cards !== undefined) {
       fields.push(`dealer_cards = $${paramCount++}`);
       values.push(JSON.stringify(updates.dealer_cards));
+    }
+    if (updates.total_bet_amount !== undefined) {
+      fields.push(`total_bet_amount = $${paramCount++}::NUMERIC`);
+      values.push(updates.total_bet_amount.toString());
     }
     if (updates.dealer_total !== undefined) {
       fields.push(`dealer_total = $${paramCount++}`);
@@ -614,6 +633,30 @@ export class DatabaseService {
       fields.push(`dealer_actions = $${paramCount++}`);
       values.push(JSON.stringify(updates.dealer_actions));
     }
+    if (updates.hand_count !== undefined) {
+      fields.push(`hand_count = $${paramCount++}`);
+      values.push(Number(updates.hand_count));
+    }
+    if (updates.current_hand_index !== undefined) {
+      fields.push(`current_hand_index = $${paramCount++}`);
+      values.push(Number(updates.current_hand_index));
+    }
+    if (updates.server_seed_revealed !== undefined) {
+      fields.push(`server_seed_revealed = $${paramCount++}`);
+      values.push(Boolean(updates.server_seed_revealed));
+    }
+    if (updates.client_seed_commitment !== undefined) {
+      fields.push(`client_seed_commitment = $${paramCount++}`);
+      values.push(updates.client_seed_commitment);
+    }
+    if (updates.dealer_seed !== undefined) {
+      fields.push(`dealer_seed = $${paramCount++}`);
+      values.push(updates.dealer_seed);
+    }
+    if (updates.rng_counter !== undefined) {
+      fields.push(`rng_counter = $${paramCount++}`);
+      values.push(Number(updates.rng_counter));
+    }
     if (updates.completed_at !== undefined) {
       fields.push(`completed_at = $${paramCount++}`);
       values.push(updates.completed_at);
@@ -621,13 +664,17 @@ export class DatabaseService {
 
     if (fields.length === 0) return;
 
+    const idParam = paramCount++;
     const query = `
       UPDATE games
       SET ${fields.join(', ')}
-      WHERE id = $1
+      WHERE id = $${idParam}
     `;
 
     values.push(gameId);
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:updateGame:beforeQuery',message:'updateGame SQL about to run',data:{query,valuesCount:values.length,valueTypes:values.map(v=>typeof v),firstValuePreview:String(values[0]).slice(0,48),lastValuePreview:String(values[values.length-1]).slice(0,48)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     await this.pool.query(query, values);
   }
 
@@ -663,25 +710,16 @@ export class DatabaseService {
     );
   }
 
-  // Settlement operations
-  async createSettlement(gameId: string, playerAddress: string, amount: bigint): Promise<string> {
+  async getSeedReveal(gameId: string): Promise<{ server_seed_hash: string; server_seed: string } | null> {
     const query = `
-      INSERT INTO settlements (game_id, player_address, amount)
-      VALUES ($1, $2, $3::NUMERIC)
-      RETURNING id
+      SELECT server_seed_hash, server_seed
+      FROM seed_reveals
+      WHERE game_id = $1
+      ORDER BY revealed_at DESC
+      LIMIT 1
     `;
-    const result = await this.pool.query(query, [gameId, playerAddress, amount.toString()]);
-    return result.rows[0].id;
-  }
-
-  async updateSettlementStatus(settlementId: string, transactionHash: string, status: 'confirmed' | 'failed'): Promise<void> {
-    const query = `
-      UPDATE settlements
-      SET transaction_hash = $2, status = $3, settled_at = NOW()
-      WHERE id = $1
-    `;
-
-    await this.pool.query(query, [settlementId, transactionHash, status]);
+    const result = await this.pool.query(query, [gameId]);
+    return result.rows[0] ? result.rows[0] : null;
   }
 
   // Connection management

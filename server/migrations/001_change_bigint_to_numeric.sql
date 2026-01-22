@@ -18,7 +18,7 @@ ALTER TABLE game_hands
   ALTER COLUMN payout TYPE NUMERIC(78, 0);
 
 -- Change settlements column
-ALTER TABLE settlements 
+ALTER TABLE IF EXISTS settlements 
   ALTER COLUMN amount TYPE NUMERIC(78, 0);
 
 -- NUMERIC(78, 0) can store up to 10^78, which is more than enough for any wei amount

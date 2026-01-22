@@ -125,19 +125,6 @@ async function initializeServices() {
       }
     });
 
-    // Settlements monitoring endpoint
-    app.get('/api/settlements', async (req, res) => {
-      try {
-        const status = req.query.status as string | undefined;
-        const limit = parseInt(req.query.limit as string) || 100;
-        const settlements = await dbService.getSettlements(status, limit);
-        sendJson(res, settlements);
-      } catch (error) {
-        logger.error('Error fetching settlements:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
     // Start server
     server.listen(PORT, () => {
       logger.info(`Blackjack server running on port ${PORT}`);
