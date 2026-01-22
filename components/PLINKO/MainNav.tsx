@@ -77,7 +77,7 @@ export default function MainNav({ balance, soundEnabled, onSoundToggle, freePlay
                   }}
                 >
                   <span className="text-white">{address.slice(-4)}</span>
-                  <i className="fas fa-chevron-down text-white text-xs"></i>
+                  <i className="fas fa-chevron-down text-white text-sm"></i>
                 </button>
               ) : (
                 <ConnectButton.Custom>
