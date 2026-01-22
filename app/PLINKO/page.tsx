@@ -1482,7 +1482,7 @@ const Home: React.FC = () => {
                   {history.length > 0 ? history.slice(0, historyCardCount).map((item, index) => (
                     <div
                       key={item.id}
-                      className={`${index === 0 ? 'history-item-enter' : ''} px-1.5 py-0.5 md:px-2 md:py-1 lg:px-3 lg:py-1.5 text-[10px] md:text-xs lg:text-sm font-black min-w-fit text-white/60 transition-all duration-300 rounded`}
+                      className={`${index === 0 ? 'history-item-enter' : ''} px-2 py-2 text-[10px] md:text-xs lg:text-sm font-black min-w-fit text-white/60 transition-all duration-300 rounded`}
                       style={{
                         background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                         boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
