@@ -73,7 +73,7 @@ export default function MainNav({ balance, soundEnabled, onSoundToggle, freePlay
                   onClick={() => disconnect()}
                   className="flex items-center border-slate-900 gap-2 px-4 py-1 rounded-sm text-white text-sm font-bold transition-all hover:scale-105 active:scale-95"
                   style={{
-                    background: 'linear-gradient(145deg,rgba(58, 158, 165, 0.72),rgba(87, 107, 113, 0))',
+                    background: 'linear-gradient(145deg,rgba(44, 148, 156, 0.72),rgba(87, 107, 113, 0))',
                   }}
                 >
                   <span className="text-white">{address.slice(-4)}</span>
