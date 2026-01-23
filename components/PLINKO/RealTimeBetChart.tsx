@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useImperativeHandle, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
 import {
   AreaChart,
   Area,
@@ -11,6 +11,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { PlinkoHistoryModal } from './PlinkoHistoryModal';
+import { ShareButton } from './ShareButton';
 import { PlinkoDrop, PlinkoPlayerStats } from '@/lib/plinko-types';
 
 interface BetDataPoint {
@@ -62,6 +63,7 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
     totalWon: 0
   });
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const chartRef = useRef<HTMLDivElement>(null);
 
   // Function to add data points from external calls
   const addDataPoint = useCallback((multiplier: number, bucketIndex: number, contractData?: any) => {
@@ -195,6 +197,20 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
           History
         </button>
 
+        {/* Share Button Overlay - Bottom Right */}
+        <div className="absolute right-4 bottom-4 z-10">
+          <ShareButton
+            chartElement={chartRef.current}
+            stats={{
+              totalBets: currentStats.totalBets,
+              totalWagered: currentStats.totalWagered,
+              totalWon: currentStats.totalWon,
+              netPnL: netPnL,
+              roi: roi
+            }}
+          />
+        </div>
+
         {betHistory.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center text-cyan-300/60">
@@ -203,8 +219,9 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
             </div>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={pnlData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+          <div ref={chartRef} className="w-full h-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={pnlData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 {/* Cyan gradient for positive values */}
                 <linearGradient id="positiveGradient" x1="0" y1="0" x2="0" y2="1">
@@ -276,7 +293,8 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
                 activeDot={false}
               />
             </AreaChart>
-          </ResponsiveContainer>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
 
