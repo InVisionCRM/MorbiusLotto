@@ -45,8 +45,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         if (navigator.share) {
           let shareData: any = {
             title: 'My PLINKO Session!',
-            text: 'Check out my PLINKO session! 🎯',
-            url: window.location.origin + '/PLINKO'
+            text: 'Check out my PLINKO session! Play now at Win.Morbius.io/PLINKO #PulseChain #Crypto #CryptoGaming',
+            url: 'https://Win.Morbius.io/PLINKO'
           };
 
           // Try to include file if supported
