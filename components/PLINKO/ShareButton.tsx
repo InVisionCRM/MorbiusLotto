@@ -48,14 +48,13 @@ export const ShareButton: React.FC<ShareButtonProps> = ({
       // Create branding header
       const headerDiv = document.createElement('div');
       headerDiv.style.display = 'flex';
-      headerDiv.style.justifyContent = 'space-between';
+      headerDiv.style.justifyContent = 'center';
       headerDiv.style.alignItems = 'center';
       headerDiv.style.marginBottom = '20px';
       headerDiv.innerHTML = `
-        <div style="color: #0891b2; font-size: 28px; font-weight: bold; font-family: Arial, sans-serif;">PLINKO on PULSECHAIN</div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="color: rgba(34,211,238,0.8); font-size: 16px; font-weight: 500;">Morbius.io</span>
-          <img src="/morbius/MorbiusLogo (3).png" style="width: 40px; height: 40px; object-fit: contain;" crossorigin="anonymous" />
+        <div style="display: flex; align-items: center; gap: 12px; color: #0891b2; font-size: 28px; font-weight: bold; font-family: Arial, sans-serif;">
+          <span>PLINKO on PULSECHAIN</span>
+          <img src="/Pulse Branding/Logo/ball.png" style="width: 32px; height: 32px; object-fit: contain;" crossorigin="anonymous" />
         </div>
       `;
 

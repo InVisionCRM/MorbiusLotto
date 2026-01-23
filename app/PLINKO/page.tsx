@@ -1497,6 +1497,30 @@ const Home: React.FC = () => {
                 </div>
               </div>
             </div>
+            </div>
+
+          {/* BURST Button - Right Side */}
+          <div className="absolute top-1/4 -translate-y-1/4 right-8 z-50">
+            {/* Balls Remaining Display */}
+            {remainingBalls > 0 && (
+              <div className="mb-2 text-center">
+                <div className="text-cyan-300/80 text-md font-russo-one font-normal">
+                  {remainingBalls} balls left
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => setDropSpeed(dropSpeed === 'burst' ? 'normal' : 'burst')}
+              disabled={shouldDisableControls || isAutoDrop}
+              className={`w-16 h-16 md:w-20 md:h-20 rounded-full font-russo-one font-normal text-sm md:text-md transition-all duration-200 flex items-center justify-center ${
+                dropSpeed === 'burst'
+                  ? 'bg-red-600/30 hover:bg-red-700/30 text-white shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.1)] transform translate-y-0.5 animate-[pulse_0.5s_ease-in-out_infinite] border border-red-400/50'
+                  : 'bg-cyan-600/30 hover:bg-cyan-700/30 text-white shadow-[2px_2px_4px_rgba(0,0,0,0.3),-2px_-2px_4px_rgba(255,255,255,0.1)] hover:shadow-[3px_3px_6px_rgba(0,0,0,0.3),-3px_-3px_6px_rgba(255,255,255,0.1)]'
+              } disabled:opacity-50 disabled:cursor-not-allowed active:scale-95`}
+              title={dropSpeed === 'burst' ? 'Switch to Normal Speed' : 'Switch to Burst Speed'}
+            >
+              BURST
+            </button>
           </div>
 
           <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
