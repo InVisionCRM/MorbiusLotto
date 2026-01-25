@@ -32,11 +32,11 @@ export default function MainNav({
     <>
       {/* Top Navigation Bar */}
       <nav
-        className="fixed top-0 left-0 right-0 z-50"
+        className="fixed top-0 left-0 right-0 z-[100]"
         style={{
-          background: 'linear-gradient(145deg,rgb(70, 118, 153),rgba(0, 0, 0, 0))',
-          borderBottom: '3px rgba(0, 0, 0, 0)',
-          backdropFilter: 'blur(2px)',
+          background: 'linear-gradient(to right, #0f172a, #0f172a, rgba(6, 182, 212, 0.5))',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(8px)',
         }}
       >
         <div className="container mx-auto px-2 py-1">
@@ -73,13 +73,13 @@ export default function MainNav({
               {isConnected && address ? (
                 <button
                   onClick={() => disconnect()}
-                  className="flex items-center border-2 border-cyan-500/30 gap-2 px-4 py-1 rounded-sm text-blue-500 text-sm font-bold transition-all hover:scale-105 active:scale-95"
+                  className="flex items-center border-slate-900 gap-2 px-4 py-1 rounded-sm text-white text-sm font-bold transition-all hover:scale-105 active:scale-95"
                   style={{
-                    background: 'linear-gradient(145deg,rgba(111, 14, 132, 0.69),rgba(22, 33, 62, 0.6))',
+                    background: 'linear-gradient(145deg,rgba(44, 148, 156, 0.72),rgba(87, 107, 113, 0))',
                   }}
                 >
                   <span className="text-white">{address.slice(-4)}</span>
-                  <i className="fas fa-chevron-down text-white text-xs"></i>
+                  <i className="fas fa-chevron-down text-white text-sm"></i>
                 </button>
               ) : (
                 <ConnectButton.Custom>
@@ -102,14 +102,14 @@ export default function MainNav({
               <div className="relative">
                 <button
                   onClick={() => setMenuOpen(!menuOpen)}
-                  className="w-8 h-8 flex flex-col items-center justify-center gap-[5px] transition-all active:scale-95 rounded-sm"
+                  className="w-16 h-8 flex flex-col items-center justify-center gap-[5px] transition-all active:scale-95 rounded-sm"
                   style={{
                     background: 'linear-gradient(145deg,rgba(113, 113, 134, 0),rgba(5, 15, 40, 0))',
                   }}
                 >
-                  <div className="w-5 h-[3px] bg-cyan-500/90 rounded-full" />
-                  <div className="w-5 h-[3px] bg-cyan-500/90 rounded-full" />
-                  <div className="w-5 h-[3px] bg-cyan-500/90 rounded-full" />
+                  <div className="w-15 h-[5px] bg-slate-900 rounded-full p-1" />
+                  <div className="w-16 h-[5px] bg-slate-900 rounded-full p-1" />
+                  <div className="w-15 h-[5px] bg-slate-900 rounded-full p-1" />
                 </button>
 
                 {/* Dropdown Menu */}

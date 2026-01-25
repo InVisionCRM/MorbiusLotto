@@ -222,6 +222,94 @@ export default function BlackjackPage() {
   // Off-chain balance state (like Stake.com)
   const [offChainBalance, setOffChainBalance] = useState<bigint>(BigInt(0));
 
+  // Chip stack for individual bet tracking
+  const [chipStack, setChipStack] = useState<number[]>([]);
+
+  // Last bet amount for rebet functionality
+  const [lastBetAmount, setLastBetAmount] = useState<string>('0');
+
+  // Game result for chip animations
+  const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
+
+  // Custom chip stack manager
+  const manageChipStack = useCallback((betAmount?: string, chipValue?: number, clearAll?: boolean) => {
+    if (clearAll) {
+      // Clearing all chips
+      setChipStack([]);
+    } else if (chipValue) {
+      // Adding a chip to the stack
+      setChipStack(prev => [...prev, chipValue]);
+    }
+  }, []);
+
+  // Calculate total bet amount from chip stack
+  const totalBetAmount = chipStack.reduce((sum, chip) => sum + chip, 0);
+  const displayBetAmount = totalBetAmount > 0 ? formatEther(BigInt(totalBetAmount.toString() + '0'.repeat(18))) : '0';
+
+  // Rebet: restore last bet amount
+  const handleRebet = useCallback(() => {
+    const lastBet = parseFloat(lastBetAmount);
+    if (lastBet > 0) {
+      // Convert lastBetAmount to chip stack
+      // Use optimal chip breakdown
+      const chips: number[] = [];
+      let remaining = lastBet;
+      const chipValues = [1000, 100, 25, 10, 5];
+      for (const chipValue of chipValues) {
+        while (remaining >= chipValue) {
+          chips.push(chipValue);
+          remaining -= chipValue;
+        }
+      }
+      setChipStack(chips);
+    }
+  }, [lastBetAmount]);
+
+  // Half bet: reduce current bet by 50%
+  const handleHalfBet = useCallback(() => {
+    if (totalBetAmount > 0) {
+      const halfAmount = Math.floor(totalBetAmount / 2);
+      if (halfAmount > 0) {
+        // Rebuild chip stack for half amount
+        const chips: number[] = [];
+        let remaining = halfAmount;
+        const chipValues = [1000, 100, 25, 10, 5];
+        for (const chipValue of chipValues) {
+          while (remaining >= chipValue) {
+            chips.push(chipValue);
+            remaining -= chipValue;
+          }
+        }
+        setChipStack(chips);
+      } else {
+        setChipStack([]);
+      }
+    }
+  }, [totalBetAmount]);
+
+  // Double bet: double current bet
+  const handleDoubleBet = useCallback(() => {
+    if (totalBetAmount > 0) {
+      const doubleAmount = totalBetAmount * 2;
+      // Rebuild chip stack for double amount
+      const chips: number[] = [];
+      let remaining = doubleAmount;
+      const chipValues = [1000, 100, 25, 10, 5];
+      for (const chipValue of chipValues) {
+        while (remaining >= chipValue) {
+          chips.push(chipValue);
+          remaining -= chipValue;
+        }
+      }
+      setChipStack(chips);
+    }
+  }, [totalBetAmount]);
+
+  // Reset game result after chip animation completes
+  const handleChipAnimationComplete = useCallback(() => {
+    setCurrentGameResult(null);
+  }, []);
+
   // Game state
   const [gameState, setGameState] = useState<GameStateUI>({
     balance: BigInt(0), // Will be set from offChainBalance
@@ -291,6 +379,9 @@ export default function BlackjackPage() {
   const [winAmount, setWinAmount] = useState<bigint>(BigInt(0));
   const [isBlackjackWin, setIsBlackjackWin] = useState(false);
 
+  // Pending win data (waits for dealer reveal to complete)
+  const [pendingWinData, setPendingWinData] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
+
   // Note: Payment method state no longer needed since only MORBIUS from reserve
 
   // Deposit/Withdraw modal state
@@ -321,8 +412,7 @@ export default function BlackjackPage() {
     gamesToday: playerStatsData.games_today || 0,
     gamesThisWeek: playerStatsData.games_this_week || 0,
     favoriteBetAmount: Number(playerStatsData.favorite_bet_amount) || 0,
-    lastGameTimestamp: playerStatsData.last_game_timestamp ? new Date(playerStatsData.last_game_timestamp).getTime() : undefined,
-    rank: playerStatsData.rank || 0
+    lastGameTimestamp: playerStatsData.last_game_timestamp ? new Date(playerStatsData.last_game_timestamp).getTime() : undefined
   } : null;
 
   // Transform global analytics data to match component interface
@@ -655,24 +745,66 @@ export default function BlackjackPage() {
         typeof data?.betAmount === 'bigint' ? data.betAmount : BigInt(String(data?.betAmount || '0'));
       const profit: bigint = payout - betAmount;
 
+      // Save last bet amount (in whole MORBIUS tokens)
+      const betInMorbius = Math.floor(Number(formatEther(betAmount)));
+      setLastBetAmount(betInMorbius.toString());
+
+      // Set game result for chip animations
+      let chipAnimResult: 'win' | 'loss' | 'push' | 'blackjack' | null = null;
+      if (data.result === 'blackjack') {
+        chipAnimResult = 'blackjack';
+      } else if (profit > BigInt(0)) {
+        chipAnimResult = 'win';
+      } else if (profit < BigInt(0)) {
+        chipAnimResult = 'loss';
+      } else {
+        chipAnimResult = 'push';
+      }
+      setCurrentGameResult(chipAnimResult);
+
       // Add to break-even P&L chart (per completed game)
       chartRef.current?.addGameResult(betAmount, payout, {
         gameId: data?.gameId ? String(data.gameId) : undefined,
         result: data?.result ? String(data.result) : undefined,
       });
 
+      // Add to history
+      const gameResult: GameResult = {
+        gameId: data?.gameId ? String(data.gameId) : `game-${Date.now()}`,
+        playerHand: gameState.currentGame?.playerHand || createEmptyHand(),
+        dealerHand: gameState.currentGame?.dealerHand || createEmptyHand(),
+        payout,
+        isBlackjack: data.result === 'blackjack',
+        timestamp: Date.now()
+      };
+
+      setGameState(prev => ({
+        ...prev,
+        history: [gameResult, ...prev.history].slice(0, 50), // Keep last 50 games
+        lastResult: gameResult
+      }));
+
       if (profit > BigInt(0)) {
-        setWinAmount(profit);
-        setIsBlackjackWin(data.result === 'blackjack');
-        // Delay win notification to allow card animations to complete
-        setTimeout(() => {
-          setShowWinNotification(true);
-        }, 1500); // 1.5 second delay after game completes
+        // Store pending win data - will show notification after dealer reveal completes
+        setPendingWinData({
+          amount: profit,
+          isBlackjack: data.result === 'blackjack'
+        });
       }
     } catch {
       // ignore malformed payload
     }
-  }, []);
+  }, [gameState.currentGame]);
+
+  // Handle dealer reveal completion - show win notification
+  const handleDealerRevealComplete = useCallback(() => {
+    if (pendingWinData) {
+      setWinAmount(pendingWinData.amount);
+      setIsBlackjackWin(pendingWinData.isBlackjack);
+      setShowWinNotification(true);
+      setPendingWinData(null);
+    }
+  }, [pendingWinData]);
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {
@@ -712,7 +844,6 @@ export default function BlackjackPage() {
       setGameState(prev => ({ ...prev, isPlaying: true, clientSeed }));
 
       // Step 1: Get server seed hash and nonce from server
-      toast.info('Preparing game...', { description: 'Getting server seed hash' });
       const { serverSeedHash, nonce } = await wsClient.getServerSeedHash();
 
       // Step 2: Generate game hash on frontend (for provably fair verification)
@@ -744,11 +875,9 @@ export default function BlackjackPage() {
       // Step 3: Create game on server (off-chain betting)
       // Server will validate reserves off-chain and create the game
       // No on-chain transaction needed until game ends
-      toast.info('Starting game...', { description: 'Creating game (off-chain)' });
       const serverGameState = await wsClient.createGame(betAmount, clientSeed, gameHash);
       console.log('Game started:', serverGameState);
 
-      toast.success('Game started!', { description: 'Good luck!' });
       // Apply returned game state immediately (server response includes requestId so it won't emit as a separate event)
       updateGameStateFromServer(serverGameState);
       // Refresh balance (bet was deducted off-chain)
@@ -798,6 +927,44 @@ export default function BlackjackPage() {
     }
   }, [gameState.currentGame, wsClient, wsConnected, updateGameStateFromServer, fetchBalance]);
 
+  // Transform GameResult[] to GameHistoryEntry[] for GameHistory component
+  // Must be before any early returns to comply with Rules of Hooks
+  const gameHistoryEntries = useMemo(() => {
+    return gameState.history.map((result) => {
+      // Determine overall result
+      let gameResult: 'win' | 'loss' | 'push' | 'blackjack' = 'loss';
+      if (result.isBlackjack) {
+        gameResult = 'blackjack';
+      } else if (result.payout > BigInt(0)) {
+        gameResult = 'win';
+      } else if (result.payout === BigInt(0) && result.playerHand.total === result.dealerHand.total) {
+        gameResult = 'push';
+      }
+
+      // Convert Card[] to number[] (card value only)
+      const playerCards = result.playerHand.cards.map(c => c.value);
+      const dealerCards = result.dealerHand.cards.map(c => c.value);
+
+      return {
+        id: result.gameId,
+        gameId: result.gameId,
+        timestamp: result.timestamp,
+        betAmount: result.playerHand.betAmount || BigInt(0),
+        payout: result.payout,
+        result: gameResult,
+        playerHands: [{
+          cards: playerCards,
+          total: result.playerHand.total,
+          result: gameResult,
+          payout: result.payout
+        }],
+        dealerCards: dealerCards,
+        dealerTotal: result.dealerHand.total,
+        verified: false
+      };
+    });
+  }, [gameState.history]);
+
   // Show intro screen
   if (showIntro) {
     return <IntroScreen onComplete={handleIntroComplete} />;
@@ -822,6 +989,7 @@ export default function BlackjackPage() {
     >
       <MainNav
         onOpenDepositModal={handleOpenDepositModal}
+        onOpenApprovalModal={() => setShowApprovalModal(true)}
         reserveBalance={offChainBalance}
         currentView={currentView}
         onViewChange={setCurrentView}
@@ -831,13 +999,13 @@ export default function BlackjackPage() {
         {/* View-specific content */}
         {currentView === 'game' && (
           <>
-        {/* Game History */}
+        {/* Game History */} 
         {gameState.history.length > 0 && (
           <HistoryStrip history={gameState.history} />
         )}
 
         {/* Game Table */}
-        <div className="flex flex-col gap-6 pb-32">
+        <div className="flex flex-col gap-6 pb-0">
           <div className="relative w-full">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
@@ -851,64 +1019,71 @@ export default function BlackjackPage() {
               reserveBalance={offChainBalance}
               usePLS={false}
               newCardIndices={newCardIndices}
+              chipStack={chipStack}
+              onClearBet={() => manageChipStack('', undefined, true)}
+              onStartGame={() => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)}
+              isPlaying={gameState.isPlaying}
+              onDealerRevealComplete={handleDealerRevealComplete}
+              gameResult={currentGameResult}
+              onChipAnimationComplete={handleChipAnimationComplete}
             />
           </div>
         </div>
 
         {/* Game Stats */}
-        <div className="mt-6 sm:mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 w-full">
+        <div className="mt-6 sm:mt-6 grid grid-cols-4 md:grid-cols-4 gap-2 sm:gap-2 w-full">
           <div
-            className="rounded-2xl p-4 text-center"
+            className="rounded-md p-6 gap-2 text-center"
             style={{
               background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
               boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
               border: '1px solid rgba(60, 60, 60, 0.5)',
             }}
           >
-            <div className="text-2xl font-bold text-cyan-300">
+            <div className="text-2xl pb-6 font-bold text-purple-500">
               {gameState.history.length}
             </div>
-            <div className="text-cyan-300/60 text-sm font-bold uppercase tracking-wider">Games Played</div>
+            <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Games Played</div>
           </div>
           <div
-            className="rounded-2xl p-4 text-center"
+            className="rounded-md p-6 gap-2 text-center"
             style={{
               background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
               boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
               border: '1px solid rgba(60, 60, 60, 0.5)',
             }}
           >
-            <div className="text-2xl font-bold text-green-400">
+            <div className="text-2xl pb-6 font-bold text-purple-500">
               {gameState.history.filter(r => r.payout > BigInt(0)).length}
             </div>
-            <div className="text-cyan-300/60 text-sm font-bold uppercase tracking-wider">Games Won</div>
+            <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Games Won</div>
           </div>
           <div
-            className="rounded-2xl p-4 text-center"
+            className="rounded-md p-6 gap-2 text-center"
             style={{
               background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
               boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
               border: '1px solid rgba(60, 60, 60, 0.5)',
             }}
           >
-            <div className="text-2xl font-bold text-yellow-400">
+            <div className="text-2xl pb-6 font-bold text-purple-500">
               {gameState.history.filter(r => r.isBlackjack).length}
             </div>
-            <div className="text-cyan-300/60 text-sm font-bold uppercase tracking-wider">Blackjacks</div>
+            <div className="text-white/60 text-md font-bold uppercase tracking-wider">BJs</div>
           </div>
           <div
-            className="rounded-2xl p-4 text-center"
+            className="rounded-md p-6 gap-2 text-center"
             style={{
               background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
               boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
               border: '1px solid rgba(60, 60, 60, 0.5)',
             }}
           >
-            <div className="text-2xl font-bold text-blue-400">
+            <div className="text-2xl pb-6 font-bold text-purple-500">
               {gameState.history.length > 0 ?
                 ((gameState.history.filter(r => r.payout > BigInt(0)).length / gameState.history.length) * 100).toFixed(1) : '0.0'}%
             </div>
-            <div className="text-cyan-300/60 text-sm font-bold uppercase tracking-wider">Win Rate</div>
+            <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Win Rate</div>
           </div>
         </div>
 
@@ -922,16 +1097,22 @@ export default function BlackjackPage() {
           />
         )}
 
-        {/* Betting Drawer - Only show when no active game or not player's turn */}
-        {(!currentGame || !isPlayerTurn) && (
+        {/* Betting Drawer - Always mounted to keep chart ref alive, hidden during player turn */}
+        <div style={{ display: (!currentGame || !isPlayerTurn) ? 'block' : 'none' }}>
           <BettingDrawer
             onStartGame={handleStartGame}
             isPlaying={gameState.isPlaying}
             reserveBalance={offChainBalance}
             chartRef={chartRef}
             sessionStartTime={chartSessionStartTime.current}
+            onBetAmountChange={manageChipStack}
+            currentBetAmount={displayBetAmount}
+            lastBetAmount={lastBetAmount}
+            onRebet={handleRebet}
+            onHalfBet={handleHalfBet}
+            onDoubleBet={handleDoubleBet}
           />
-        )}
+        </div>
 
         {/* Deposit/Withdraw Modal (available on all views) */}
         <DepositWithdrawModal
@@ -954,7 +1135,7 @@ export default function BlackjackPage() {
         />
 
         {currentView === 'history' && (
-          <GameHistory history={gameState.history as any} />
+          <GameHistory history={gameHistoryEntries} />
         )}
 
         {currentView === 'stats' && (

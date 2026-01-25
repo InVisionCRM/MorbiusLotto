@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -15,19 +15,35 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   imageBlob,
   imageUrl
 }) => {
+  const [shareText, setShareText] = useState(
+    'Check out my PLINKO session! Play now at Win.Morbius.io/PLINKO #PulseChain #Crypto #CryptoGaming'
+  );
   if (!isOpen || !imageUrl) return null;
 
   const shareToPlatform = async (platform: string) => {
     switch (platform) {
       case 'copy':
         try {
+          // Copy the share text to clipboard first (more universally supported)
+          await navigator.clipboard.writeText(shareText);
+
+          // Then try to copy the image
           await navigator.clipboard.write([
             new ClipboardItem({ 'image/png': imageBlob! })
           ]);
-          alert('Image copied to clipboard!');
+
+          alert('✅ Both text and image copied to clipboard!\n\nText: "' + shareText + '"\nImage: PLINKO session screenshot');
         } catch (error) {
-          console.error('Failed to copy image:', error);
-          alert('Failed to copy image. Try saving instead.');
+          console.error('Copy operations failed:', error);
+
+          // Fallback: Try to copy at least the text
+          try {
+            await navigator.clipboard.writeText(shareText);
+            alert('✅ Share text copied to clipboard!\n\n"' + shareText + '"\n\n(Image copy failed - try saving the image instead)');
+          } catch (textError) {
+            console.error('Text copy also failed:', textError);
+            alert('❌ Failed to copy. Try saving the image instead.');
+          }
         }
         break;
 
@@ -41,36 +57,67 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         break;
 
       case 'share':
-        // Use Web Share API with file support (opens native share menu)
-        if (navigator.share) {
-          let shareData: any = {
-            title: 'My PLINKO Session!',
-            text: 'Check out my PLINKO session! Play now at Win.Morbius.io/PLINKO #PulseChain #Crypto #CryptoGaming',
-            url: 'https://Win.Morbius.io/PLINKO'
-          };
-
-          // Try to include file if supported
+        // Check if Web Share API is available and supported
+        if (!navigator.share) {
+          // Fallback: Copy image and show instructions
           if (imageBlob) {
+            try {
+              await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': imageBlob })
+              ]);
+              alert('Native sharing not supported. Image copied to clipboard - you can now paste it anywhere to share!');
+            } catch (error) {
+              console.error('Clipboard copy failed:', error);
+              alert('Sharing not supported on this device. Try saving the image instead.');
+            }
+          } else {
+            alert('No image available to share. Try generating the share image again.');
+          }
+          return;
+        }
+
+        // Use Web Share API
+        let shareData: any = {
+          title: 'My PLINKO Session!',
+          text: shareText,
+          url: 'https://Win.Morbius.io/PLINKO'
+        };
+
+        // Try to include file if supported and blob exists
+        let canShareWithFiles = false;
+        if (imageBlob && navigator.canShare) {
+          try {
             const file = new File([imageBlob], 'plinko-session.png', { type: 'image/png' });
             shareData.files = [file];
+            canShareWithFiles = navigator.canShare(shareData);
+          } catch (error) {
+            console.log('File sharing not supported:', error);
+            // Remove files from share data if creating File failed
+            delete shareData.files;
           }
+        }
 
-          // Check if sharing is supported
-          const canShareWithFiles = navigator.canShare && navigator.canShare(shareData);
-
-          if (canShareWithFiles || (!imageBlob && navigator.share)) {
-            try {
-              await navigator.share(shareData);
-              return; // Success!
-            } catch (error) {
-              if (error.name !== 'AbortError') {
-                console.log('Native share failed:', error);
-              }
+        // Try to share (with or without files)
+        if (canShareWithFiles || (!shareData.files && navigator.share)) {
+          try {
+            await navigator.share(shareData);
+            return; // Success!
+          } catch (error: any) {
+            // Handle specific error types
+            if (error.name === 'AbortError') {
+              // User cancelled the share - do nothing
+              return;
+            } else if (error.name === 'NotAllowedError') {
+              console.log('Share not allowed:', error);
+              alert('Sharing was blocked by the browser. Try copying the image instead.');
+            } else {
+              console.log('Share failed:', error);
+              alert('Native sharing failed. Try copying the image instead.');
             }
           }
         }
 
-        // Fallback: Copy image and show instructions
+        // Final fallback: Copy image to clipboard
         if (imageBlob) {
           try {
             await navigator.clipboard.write([
@@ -78,6 +125,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             ]);
             alert('Native sharing not available. Image copied to clipboard - you can now paste it anywhere to share!');
           } catch (error) {
+            console.error('Final fallback copy failed:', error);
             alert('Sharing not supported on this device. Try saving the image instead.');
           }
         } else {
@@ -108,6 +156,19 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               src={imageUrl}
               alt="PLINKO Session"
               className="w-full h-auto rounded border border-cyan-500/20"
+            />
+          </div>
+
+          {/* Share Text */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-cyan-300 mb-2">
+              Share Message
+            </label>
+            <textarea
+              value={shareText}
+              onChange={(e) => setShareText(e.target.value)}
+              className="w-full h-20 px-3 py-2 bg-slate-800/50 border border-cyan-500/30 rounded-lg text-white text-sm resize-none focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+              placeholder="Enter your share message..."
             />
           </div>
 

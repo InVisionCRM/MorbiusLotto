@@ -24,11 +24,11 @@ const WinNotification: React.FC<WinNotificationProps> = ({
   return (
     <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-40">
       <div
-        className="win-banner px-8 py-6 rounded-2xl text-center animate-pulse"
+        className="win-banner px-8 py-6 rounded-md text-center animate-pulse"
         style={{
           background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
           boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 4px 30px rgba(6, 182, 212, 0.4)',
-          border: '2px solid rgba(6, 182, 212, 0.5)',
+          border: '1px solid rgba(112, 6, 212, 0.83)',
           animation: 'winBanner 0.6s ease-out',
         }}
       >

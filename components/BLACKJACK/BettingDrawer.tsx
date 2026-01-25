@@ -11,6 +11,12 @@ interface BettingDrawerProps {
   reserveBalance: bigint;
   chartRef: React.RefObject<BlackjackRealTimeBetChartRef>;
   sessionStartTime: number;
+  onBetAmountChange?: (betAmount: string, chipValue?: number, clearAll?: boolean) => void;
+  currentBetAmount?: string;
+  lastBetAmount?: string;
+  onRebet?: () => void;
+  onHalfBet?: () => void;
+  onDoubleBet?: () => void;
 }
 
 const BettingDrawer: React.FC<BettingDrawerProps> = ({
@@ -19,6 +25,12 @@ const BettingDrawer: React.FC<BettingDrawerProps> = ({
   reserveBalance,
   chartRef,
   sessionStartTime,
+  onBetAmountChange,
+  currentBetAmount,
+  lastBetAmount,
+  onRebet,
+  onHalfBet,
+  onDoubleBet,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -66,6 +78,12 @@ const BettingDrawer: React.FC<BettingDrawerProps> = ({
               onStartGame={onStartGame}
               isPlaying={isPlaying}
               reserveBalance={reserveBalance}
+              onBetAmountChange={onBetAmountChange}
+              currentBetAmount={currentBetAmount}
+              lastBetAmount={lastBetAmount}
+              onRebet={onRebet}
+              onHalfBet={onHalfBet}
+              onDoubleBet={onDoubleBet}
             />
           </div>
 

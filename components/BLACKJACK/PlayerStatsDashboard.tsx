@@ -17,7 +17,6 @@ import {
 import { formatEther } from 'viem'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { Badge } from '@/components/ui/badge'
 
 export interface PlayerStats {
   totalGames: number
@@ -37,7 +36,6 @@ export interface PlayerStats {
   gamesThisWeek: number
   favoriteBetAmount: number
   lastGameTimestamp?: number
-  rank?: number
 }
 
 interface PlayerStatsDashboardProps {
@@ -65,8 +63,15 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
   }
 
   const formatCurrency = (amount: bigint | number) => {
-    const num = typeof amount === 'bigint' ? Number(formatEther(amount)) : amount
-    return num.toFixed(4)
+    let num: number
+    if (typeof amount === 'bigint') {
+      // Convert from 18 decimals to whole number
+      num = Math.floor(Number(formatEther(amount)))
+    } else {
+      // If it's a number, assume it's already in wei (18 decimals) and convert
+      num = Math.floor(amount / 1e18)
+    }
+    return num.toLocaleString()
   }
 
   const getProfitColor = (amount: number) => {
@@ -91,7 +96,7 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
     },
     {
       title: 'Win Rate',
-      value: `${stats.winRate.toFixed(1)}%`,
+      value: `${Math.round(stats.winRate)}%`,
       icon: Target,
       subtitle: `${stats.blackjackCount} blackjacks`,
       color: getWinRateColor(stats.winRate),
@@ -101,7 +106,7 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
       title: 'Profit/Loss',
       value: `${stats.profitLoss > 0 ? '+' : ''}${formatCurrency(stats.profitLoss)} MORBIUS`,
       icon: stats.profitLoss >= 0 ? TrendingUp : TrendingDown,
-      subtitle: `${stats.roi > 0 ? '+' : ''}${stats.roi.toFixed(2)}% ROI`,
+      subtitle: `${stats.roi > 0 ? '+' : ''}${Math.round(stats.roi)}% ROI`,
       color: getProfitColor(stats.profitLoss)
     },
     {
@@ -145,12 +150,6 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
       value: `${formatCurrency(stats.favoriteBetAmount)} MORBIUS`,
       icon: Target,
       color: 'text-blue-400'
-    },
-    {
-      label: 'Rank',
-      value: stats.rank ? `#${stats.rank}` : 'Unranked',
-      icon: Trophy,
-      color: 'text-yellow-400'
     }
   ]
 
@@ -254,26 +253,6 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
                 </span>
               </div>
             )}
-
-            {/* Performance Indicator */}
-            <div className="p-3 bg-gray-800/50 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-300">Performance</span>
-                <Badge
-                  className={`${
-                    stats.roi > 10 ? 'bg-green-900/50 text-green-400 border-green-500/50' :
-                    stats.roi > 0 ? 'bg-yellow-900/50 text-yellow-400 border-yellow-500/50' :
-                    'bg-red-900/50 text-red-400 border-red-500/50'
-                  } border`}
-                >
-                  {stats.roi > 10 ? 'Excellent' : stats.roi > 0 ? 'Good' : 'Needs Work'}
-                </Badge>
-              </div>
-              <Progress
-                value={Math.min(Math.max(stats.roi + 50, 0), 100)}
-                className="h-2"
-              />
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -290,13 +269,13 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
               <div className="text-lg font-bold text-indigo-400 mb-1">
-                {stats.totalGames > 0 ? ((stats.blackjackCount / stats.totalGames) * 100).toFixed(1) : '0.0'}%
+                {stats.totalGames > 0 ? Math.round((stats.blackjackCount / stats.totalGames) * 100) : 0}%
               </div>
               <div className="text-xs text-gray-400">Blackjack Rate</div>
             </div>
             <div className="text-center">
               <div className="text-lg font-bold text-cyan-400 mb-1">
-                {stats.averageBet > 0 ? (stats.averagePayout / stats.averageBet).toFixed(2) : '0.00'}
+                {stats.averageBet > 0 ? Math.round((stats.averagePayout / stats.averageBet) * 100) / 100 : 0}x
               </div>
               <div className="text-xs text-gray-400">Avg Payout Ratio</div>
             </div>

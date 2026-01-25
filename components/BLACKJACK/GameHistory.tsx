@@ -75,7 +75,11 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
   }
 
   const getProfit = (entry: GameHistoryEntry) => {
-    return Number(formatEther(entry.payout)) - Number(formatEther(entry.betAmount))
+    return Math.floor(Number(formatEther(entry.payout))) - Math.floor(Number(formatEther(entry.betAmount)))
+  }
+
+  const formatAmount = (amount: bigint) => {
+    return Math.floor(Number(formatEther(amount))).toLocaleString()
   }
 
   const formatCards = (cards: number[]) => {
@@ -202,14 +206,14 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                       <div className="flex items-center gap-1 text-sm">
                         <Target className="w-4 h-4 text-gray-400" />
                         <span className="text-gray-300">
-                          {formatEther(entry.betAmount)} MORBIUS
+                          {formatAmount(entry.betAmount)} MORBIUS
                         </span>
                       </div>
                       <div className={`text-sm font-medium ${
                         getProfit(entry) > 0 ? 'text-green-400' :
                         getProfit(entry) < 0 ? 'text-red-400' : 'text-yellow-400'
                       }`}>
-                        {getProfit(entry) > 0 ? '+' : ''}{getProfit(entry).toFixed(4)} MORBIUS
+                        {getProfit(entry) > 0 ? '+' : ''}{getProfit(entry).toLocaleString()} MORBIUS
                       </div>
                     </div>
 
@@ -255,13 +259,13 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                             </div>
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-gray-400">
-                                Bet: {formatEther(entry.betAmount / BigInt(entry.playerHands.length))} MORBIUS
+                                Bet: {formatAmount(entry.betAmount / BigInt(entry.playerHands.length))} MORBIUS
                               </span>
                               <span className={`font-medium ${
                                 Number(formatEther(hand.payout)) > Number(formatEther(entry.betAmount / BigInt(entry.playerHands.length))) ? 'text-green-400' :
                                 Number(formatEther(hand.payout)) < Number(formatEther(entry.betAmount / BigInt(entry.playerHands.length))) ? 'text-red-400' : 'text-yellow-400'
                               }`}>
-                                Payout: {formatEther(hand.payout)} MORBIUS
+                                Payout: {formatAmount(hand.payout)} MORBIUS
                               </span>
                             </div>
                           </div>
