@@ -11,9 +11,10 @@ interface PlayingCardProps {
   className?: string;
   index?: number;
   isNewCard?: boolean;
+  size?: 'normal' | 'small';
 }
 
-const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, className = '', index = 0, isNewCard = false }) => {
+const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, className = '', index = 0, isNewCard = false, size = 'normal' }) => {
   const isDealer = owner === 'dealer';
 
   const ownerClass = isDealer ? 'blackjack-card-dealer' : 'blackjack-card-player';
@@ -55,10 +56,10 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
   const getCardTransform = () => {
     if (isDealer) {
       // Dealer cards: tilt back more (further from viewer), slight rotation for natural look
-      return 'rotateX(20deg)';
+      return 'rotateX(35deg)';
     } else {
       // Player cards: tilt back less (closer to viewer)
-      return 'rotateX(15deg)';
+      return 'rotateX(35deg)';
     }
   };
 
@@ -71,10 +72,14 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
     }
   };
 
+  // Size classes: normal = w-20 h-28 (80x112), small = w-14 h-20 (56x80) for mobile split
+  const sizeClasses = size === 'small' ? 'w-14 h-20' : 'w-20 h-28';
+  const imageSize = size === 'small' ? { width: 56, height: 80 } : { width: 80, height: 112 };
+
   if (hidden) {
     return (
       <div
-        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative w-20 h-28 overflow-hidden`}
+        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden`}
         style={{
           borderRadius: '4px',
           boxShadow: getCardShadow(),
@@ -84,11 +89,11 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
         }}
       >
         <Image
-          src="/BlackJack/CardBack1.png"
+          src="/Pulse Branding/Logo/ball.png"
           alt="Card back"
-          width={80}
-          height={112}
-          className="w-full h-full object-cover rounded-sm"
+          width={imageSize.width}
+          height={imageSize.height}
+          className="w-full h-full bg-slate-900 border border-4 border-white object-contain rounded-sm"
           priority
         />
       </div>
@@ -97,7 +102,7 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
 
   return (
     <div
-      className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative w-20 h-28 overflow-hidden`}
+      className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden`}
       style={{
         borderRadius: '1px',
         boxShadow: getCardShadow(),
@@ -109,8 +114,8 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
       <Image
         src={getCardImagePath()}
         alt={`${getValueString(card.value)} of ${card.suit}`}
-        width={80}
-        height={112}
+        width={imageSize.width}
+        height={imageSize.height}
         className="w-full h-full object-cover rounded-xs"
         priority
       />

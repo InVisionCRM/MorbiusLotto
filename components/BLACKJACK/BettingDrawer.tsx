@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import BettingPanel from './BettingPanel';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from './RealTimeBetChart';
+import { NumberTicker } from '@/components/ui/number-ticker';
 
 interface BettingDrawerProps {
   onStartGame: (betAmount: bigint, clientSeed: string) => void;
@@ -51,24 +53,47 @@ const BettingDrawer: React.FC<BettingDrawerProps> = ({
           maxWidth: '1200px',
         }}
       >
-        {/* Toggle Button */}
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 hover:bg-black/20 transition-colors"
+        {/* Toggle Button with Reserve Balance */}
+        <div
+          className="w-full flex items-center justify-between py-3 px-4"
           style={{
             borderBottom: isExpanded ? '1px solid rgba(60, 60, 60, 0.5)' : 'none',
           }}
         >
-          <div className="h-1 w-12 rounded-full bg-cyan-500/30" />
-          <span className="text-cyan-300/60 text-xs font-bold uppercase tracking-wider">
-            {isExpanded ? 'Hide Chart' : 'Show Chart'}
-          </span>
-          {isExpanded ? (
-            <ChevronDown className="w-4 h-4 text-cyan-300/60" />
-          ) : (
-            <ChevronUp className="w-4 h-4 text-cyan-300/60" />
-          )}
-        </button>
+          {/* Left spacer for centering */}
+          <div className="w-24" />
+
+          {/* Center: Toggle Button */}
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center justify-center gap-2 hover:bg-black/20 transition-colors px-4 py-1 rounded-lg"
+          >
+            <div className="h-1 w-12 rounded-full bg-cyan-500/30" />
+            <span className="text-cyan-300/60 text-xs font-bold uppercase tracking-wider">
+              {isExpanded ? 'Hide Chart' : 'Show Chart'}
+            </span>
+            {isExpanded ? (
+              <ChevronDown className="w-4 h-4 text-cyan-300/60" />
+            ) : (
+              <ChevronUp className="w-4 h-4 text-cyan-300/60" />
+            )}
+          </button>
+
+          {/* Right: Reserve Balance */}
+          <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-cyan-500/20">
+            <NumberTicker
+              value={Math.floor(Number(reserveBalance) / 1e18)}
+              className="text-white text-md font-bold"
+            />
+            <Image
+              src="/morbius/MorbiusLogo (3).png"
+              alt="Morbius"
+              width={16}
+              height={16}
+              className="object-contain"
+            />
+          </div>
+        </div>
 
         {/* Content Container */}
         <div className="flex flex-col">
@@ -89,14 +114,14 @@ const BettingDrawer: React.FC<BettingDrawerProps> = ({
 
           {/* Chart - Expandable */}
           <div
-            className="overflow-hidden transition-all duration-300 ease-in-out"
+            className="overflow-visible transition-all duration-300 ease-in-out"
             style={{
-              maxHeight: isExpanded ? '500px' : '0',
+              maxHeight: isExpanded ? '800px' : '0',
               opacity: isExpanded ? 1 : 0,
             }}
           >
             <div className="px-3 pb-2">
-              <div className="h-64">
+              <div className="h-96">
                 <BlackjackRealTimeBetChart
                   ref={chartRef}
                   sessionStartTime={sessionStartTime}

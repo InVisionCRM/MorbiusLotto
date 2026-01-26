@@ -1,12 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useAccount, useDisconnect } from 'wagmi'
 import { useAuth } from '@/hooks/use-auth'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { Button } from '@/components/ui/button'
 import { Shield, LogOut } from 'lucide-react'
+import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay'
+import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay'
 
 interface HomeHeaderProps {
   showBackArrow?: boolean
@@ -16,16 +19,41 @@ interface HomeHeaderProps {
 
 export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArrowLabel = 'Back' }: HomeHeaderProps = {}) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [gamesSubmenuOpen, setGamesSubmenuOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const { isAuthenticated, signIn, signOut, isSigning, address } = useAuth()
+  const { isConnected } = useAccount()
+  const { disconnect } = useDisconnect()
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [menuOpen])
 
   return (
-    <header className="border-b border-white/30 bg-gradient-to-r from-purple-500/30 to-cyan-500/30 backdrop-blur-sm sticky top-0 z-50">
-      <div className="container mx-auto px-3 py-3 relative">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          {/* Left: Back Arrow + Morbius Logo */}
+    <nav
+      className="fixed top-0 left-0 right-0 z-[100]"
+      style={{
+        background: 'linear-gradient(to right, #0f172a, #0f172a, rgba(6, 182, 212, 0.5))',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(8px)',
+      }}
+    >
+      <div className="container mx-auto px-2 py-1">
+        <div className="flex items-center justify-between gap-2 overflow-x-hidden">
+          {/* Left: Back Arrow + Logo */}
           <div className="flex items-center gap-3">
             {showBackArrow && backArrowHref && (
               <Link
@@ -36,16 +64,17 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                <span className="text-sm font-medium">{backArrowLabel}</span>
               </Link>
             )}
-            <Link href="/home" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <h1 className="text-xl font-russo-one font-normal text-white leading-none">Morbius.io</h1>
+            <Link href="/" className="flex items-center">
+              <span className="text-lg font-medium text-white">
+                MORBIUS.IO
+              </span>
             </Link>
           </div>
 
-          {/* Right: Auth + Wallet + Hamburger */}
-          <div className="flex items-center gap-2 ml-auto">
+          {/* Right Side Actions */}
+          <div className="flex items-center gap-1 flex-shrink-0 min-w-0">
             {/* Authentication Button */}
             {address && (
               <div className="scale-75 origin-right">
@@ -73,122 +102,149 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
               </div>
             )}
 
-            {/* Wallet Connect Button */}
-            <div className="scale-75 origin-right">
-              <ConnectButton
-                chainStatus="none"
-                showBalance={false}
-                accountStatus={{
-                  smallScreen: 'avatar',
-                  largeScreen: 'full',
-                }}
-              />
+            {/* Wallet Connection */}
+            <div className="flex items-center flex-shrink-0">
+              {isConnected && address ? (
+                <button
+                  onClick={() => disconnect()}
+                  className="flex items-center gap-2 px-4 py-1 rounded-sm text-white text-sm font-bold transition-all hover:scale-105 active:scale-95"
+                  style={{
+                    background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))',
+                  }}
+                >
+                  <span className="text-white">{address.slice(-4)}</span>
+                  <i className="fas fa-chevron-down text-white text-sm"></i>
+                </button>
+              ) : (
+                <ConnectButton.Custom>
+                  {({ openConnectModal }) => (
+                    <button
+                      onClick={openConnectModal}
+                      className="flex items-center gap-2 px-3 py-1 rounded-sm text-white/50 text-sm font-bold transition-all hover:scale-105 active:scale-95"
+                      style={{
+                        background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))',
+                      }}
+                    >
+                      <span className="text-cyan-400">Connect</span>
+                      <i className="fas fa-chevron-down text-cyan-400 text-xs"></i>
+                    </button>
+                  )}
+                </ConnectButton.Custom>
+              )}
             </div>
 
             {/* Hamburger Menu */}
-            <div className="relative">
+            <div className="relative z-50" ref={menuRef}>
               <button
+                type="button"
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="w-9 h-9 flex flex-col items-center justify-center gap-[5px] transition-all active:scale-95"
-                title="Menu"
-                aria-label="Toggle navigation menu"
+                className="w-10 h-10 flex flex-col items-center justify-center gap-[7px] transition-all active:scale-95 rounded-md hover:bg-white/10"
               >
-                <div className="w-5 h-[3px] bg-white rounded-full shadow-[0_2px_6px_rgba(147,51,234,0.8),0_0_8px_rgba(147,51,234,0.6)]" />
-                <div className="w-5 h-[3px] bg-white rounded-full shadow-[0_2px_6px_rgba(147,51,234,0.8),0_0_8px_rgba(147,51,234,0.6)]" />
-                <div className="w-5 h-[3px] bg-white rounded-full shadow-[0_2px_6px_rgba(147,51,234,0.8),0_0_8px_rgba(147,51,234,0.6)]" />
+                <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
+                <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
+                <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
               </button>
 
               {/* Dropdown Menu */}
               {menuOpen && (
-                <>
-                  {/* Backdrop */}
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      setGamesSubmenuOpen(false)
-                    }}
-                  />
-
-                  {/* Menu Panel */}
-                  <div className="absolute right-0 top-12 w-48 bg-black/75 backdrop-blur-xl rounded-lg border border-white/50 shadow-lg shadow-purple-950/50 inset-shadow-lg z-50">
-                    {/* Title */}
-                    <div className="px-3 py-2 border-b border-white/10">
-                      <span className="text-white/50 font-bold text-sm">MENU</span>
-                    </div>
-
-                    {/* Menu Items */}
-                    <div className="py-1">
-                      <Link
-                        href="/home"
-                        onClick={() => setMenuOpen(false)}
-                        className="block w-full px-3 py-2 text-left text-white/90 hover:bg-white/10 hover:text-white transition-colors text-sm font-medium"
-                      >
-                        Home
-                      </Link>
-                      <Link
-                        href="/swap"
-                        onClick={() => setMenuOpen(false)}
-                        className="block w-full px-3 py-2 text-left text-white/90 hover:bg-white/10 hover:text-white transition-colors text-sm font-medium"
-                      >
-                        Buy Morbius
-                      </Link>
-                      <Link
-                        href="/lottery-purchase-showcase"
-                        onClick={() => setMenuOpen(false)}
-                        className="block w-full px-3 py-2 text-left text-white/90 hover:bg-white/10 hover:text-white transition-colors text-sm font-medium"
-                      >
-                        My History
-                      </Link>
-
-                      {/* All Games with Submenu */}
-                      <div className="relative">
-                        <button
-                          onClick={() => setGamesSubmenuOpen(!gamesSubmenuOpen)}
-                          className="w-full px-3 py-2 text-left text-white/90 hover:bg-white/10 hover:text-white transition-colors text-sm font-medium flex items-center justify-between"
-                        >
-                          All Games
-                          <i className={`fas fa-chevron-${gamesSubmenuOpen ? 'down' : 'right'} text-xs`}></i>
-                        </button>
-
-                        {gamesSubmenuOpen && (
-                          <div className="bg-black/20 border-t border-white/10">
-                            <Link
-                              href="/lottery"
-                              onClick={() => {
-                                setMenuOpen(false)
-                                setGamesSubmenuOpen(false)
-                              }}
-                              className="block w-full px-5 py-2 text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors text-xs font-medium"
-                            >
-                              Mega Morbius Lotto
-                            </Link>
-                            <Link
-                              href="/keno"
-                              onClick={() => {
-                                setMenuOpen(false)
-                                setGamesSubmenuOpen(false)
-                              }}
-                              className="block w-full px-5 py-2 text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors text-xs font-medium"
-                            >
-                              Crypto Keno
-                            </Link>
-                            <Link
-                              href="/PLINKO"
-                              onClick={() => {
-                                setMenuOpen(false)
-                                setGamesSubmenuOpen(false)
-                              }}
-                              className="block w-full px-5 py-2 text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors text-xs font-medium"
-                            >
-                              PLINKO
-                            </Link>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                <div
+                  className="fixed right-2 top-14 w-64 rounded-lg overflow-hidden shadow-xl z-[200] max-h-[80vh] overflow-y-auto"
+                  style={{
+                    background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
+                    border: '1px solid rgba(6, 182, 212, 0.3)',
+                    boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
+                  }}
+                >
+                  {/* Quick Links Section */}
+                  <div className="p-2 border-b border-gray-700/50">
+                    <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Quick Links</div>
+                    <Link
+                      href="/swap"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-exchange-alt w-4 text-center"></i>
+                      <span className="text-sm font-medium">Buy Morbius</span>
+                    </Link>
+                    <Link
+                      href="/lottery-purchase-showcase"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-history w-4 text-center"></i>
+                      <span className="text-sm font-medium">My History</span>
+                    </Link>
                   </div>
-                </>
+
+                  {/* Games Section */}
+                  <div className="p-2 border-b border-gray-700/50">
+                    <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Games</div>
+                    <Link
+                      href="/PLINKO"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-circle w-4 text-center"></i>
+                      <span className="text-sm font-medium">Plinko</span>
+                    </Link>
+                    <Link
+                      href="/BLACKJACK"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-cards w-4 text-center"></i>
+                      <span className="text-sm font-medium">Blackjack</span>
+                    </Link>
+                    <Link
+                      href="/BIG-WHEEL"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-dharmachakra w-4 text-center"></i>
+                      <span className="text-sm font-medium">Big Wheel</span>
+                    </Link>
+                    <Link
+                      href="/lottery"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-ticket-alt w-4 text-center"></i>
+                      <span className="text-sm font-medium">Lottery</span>
+                    </Link>
+                    <Link
+                      href="/keno"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-th w-4 text-center"></i>
+                      <span className="text-sm font-medium">Keno</span>
+                    </Link>
+                  </div>
+
+                  {/* Account Section */}
+                  {isConnected && (
+                    <div className="p-2 border-b border-gray-700/50">
+                      <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Account</div>
+                      <button
+                        onClick={() => {
+                          disconnect()
+                          setMenuOpen(false)
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <i className="fas fa-sign-out-alt w-4 text-center"></i>
+                        <span className="text-sm font-medium">Disconnect</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Morbius Stats Section */}
+                  <div className="p-2">
+                    <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Morbius Stats</div>
+                    <MorbiusBurnedDisplay variant="inline" className="px-3 py-2" />
+                    <MorbiusPriceDisplay className="px-3 py-2" />
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -203,6 +259,6 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
         isSigning={isSigning}
         address={address}
       />
-    </header>
+    </nav>
   )
 }

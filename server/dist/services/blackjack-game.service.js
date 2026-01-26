@@ -374,7 +374,7 @@ class BlackjackGameService {
             gameId,
             sessionId: game.session_id,
             playerHands,
-            dealerCards: game.dealer_cards, // Send both cards - frontend will hide the second one
+            dealerCards: game.dealer_cards.slice(0, 1), // Show only first dealer card
             dealerTotal: this.pfService.calculateHandTotal([game.dealer_cards[0]]).total,
             dealerHasAce: this.pfService.calculateHandTotal([game.dealer_cards[0]]).hasAce,
             status: 'player_turn',
@@ -495,6 +495,10 @@ class BlackjackGameService {
         }
         // Move to next active hand
         const nextHandIndex = playerHands.findIndex(hand => hand.canHit || hand.canStand);
+        // Persist current_hand_index to database so next action uses correct hand
+        if (nextHandIndex !== handIndex) {
+            await this.dbService.updateGame(gameId, { current_hand_index: nextHandIndex });
+        }
         return {
             gameId,
             sessionId: game.session_id,

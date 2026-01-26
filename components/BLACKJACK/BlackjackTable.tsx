@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { Hand, GameState, Action } from '@/app/BLACKJACK/types';
+import { Hand, GameState, Action, GameResult } from '@/app/BLACKJACK/types';
 import { formatEther } from 'viem';
 import PlayingCard from './PlayingCard';
+import { Dock, DockIcon } from '@/components/ui/dock';
+import HistoryStrip from './HistoryStrip';
 
 interface BlackjackTableProps {
   playerHand: Hand;
@@ -27,6 +29,13 @@ interface BlackjackTableProps {
   onDealerRevealComplete?: () => void;
   gameResult?: 'win' | 'loss' | 'push' | 'blackjack' | null;
   onChipAnimationComplete?: () => void;
+  history?: GameResult[];
+  onDoubleDownChips?: () => void;
+  onSplitChips?: () => void;
+  onRebet?: () => void;
+  onHalfBet?: () => void;
+  onDoubleBet?: () => void;
+  canDeal?: boolean;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -49,7 +58,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   isPlaying = false,
   onDealerRevealComplete,
   gameResult = null,
-  onChipAnimationComplete
+  onChipAnimationComplete,
+  history = [],
+  onDoubleDownChips,
+  onSplitChips,
+  onRebet,
+  onHalfBet,
+  onDoubleBet,
+  canDeal = false
 }) => {
   // State for progressive dealer card reveal
   const [visibleDealerCards, setVisibleDealerCards] = useState(dealerHand.cards.length);
@@ -210,7 +226,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     <div
       className="relative w-full max-w-4xl mx-auto rounded-3xl overflow-hidden p-4 sm:p-6 lg:p-8 blackjack-table"
       style={{
-        backgroundImage: "url('/BlackJack/TableBackground.png')",
+        backgroundImage: "url('/BlackJack/tableBG.png')",
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         minHeight: '500px',
@@ -226,7 +242,22 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             'linear-gradient(145deg, rgba(0,0,0,0.45), rgba(0,0,0,0.25))',
         }}
       />
-      
+
+      {/* Recent Win/Loss History - Top Left Overlay */}
+      {history.length > 0 && (
+        <div
+          className="absolute top-2 left-2 z-20 rounded-lg"
+          style={{
+            background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.85))',
+            backdropFilter: 'blur(4px)',
+            border: '1px solid rgba(6, 182, 212, 0.2)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+          }}
+        >
+          <HistoryStrip history={history} />
+        </div>
+      )}
+
       <div className="relative z-10 flex flex-col" style={{ height: '100%', minHeight: '600px' }}>
         {/* Play Area */}
         <div className="flex-1 relative w-full z-10" style={{ minHeight: '400px' }}>
@@ -263,206 +294,317 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
           {/* Player Area */}
           <div className="absolute bottom-48 left-1/2 -translate-x-1/2 flex flex-col gap-4 items-center">
-            {/* Player Scores */}
-            <div className="flex items-center gap-4 mb-2">
-              {displayHands.map((hand, handIndex) => (
-                <div key={`hand-score-${handIndex}`} className="flex items-center gap-2">
-                  <span className="text-white font-black text-4xl">{hand.total}</span>
-                  {hand.isBlackjack && <span className="text-yellow-400 font-black text-2xl">BLACKJACK!</span>}
-                  {hand.isBust && <span className="text-red-400 font-black text-sm">BUST</span>}
-                  {hasSplit && <span className="text-cyan-400/60 font-bold text-sm">Hand {handIndex + 1}</span>}
-                </div>
-              ))}
-            </div>
+            {/* Player Hands - Side by Side for Split */}
+            <div className={`flex ${hasSplit ? 'gap-2 sm:gap-8' : 'gap-4'} items-end`}>
+              {displayHands.map((hand, handIndex) => {
+                const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
+                const isCompletedHand = hasSplit && (hand.isBust || (handIndex < currentHandIndex));
 
-            {/* Player Hands */}
-            <div className="flex gap-4">
-              {displayHands.map((hand, handIndex) => (
-                <div
-                  key={`hand-${handIndex}`}
-                  className="flex"
-                  style={{
-                    perspective: '600px',
-                    perspectiveOrigin: 'center bottom'
-                  }}
-                >
-                  {hand.cards.map((card, cardIndex) => {
-                    // Calculate position for split hands
-                    let cardOffset = 0;
-                    if (hasSplit && cardIndex >= 2) {
-                      // Hit cards after split: stagger 50px from original
-                      cardOffset = (cardIndex - 1) * 50;
-                    }
-
-                    // Determine if card is new
-                    let isNewCard = false;
-                    if (Array.isArray(newCardIndices.player)) {
-                      // Multiple hands case
-                      isNewCard = handIndex < newCardIndices.player.length && newCardIndices.player[handIndex].has(cardIndex);
-                    } else {
-                      // Single hand case (backward compatibility)
-                      isNewCard = newCardIndices.player.has(cardIndex);
-                    }
-
-                    return (
-                      <div
-                        key={`player-${handIndex}-${cardIndex}`}
-                        style={{
-                          transform: `translateX(${cardOffset}px)`,
-                          zIndex: cardIndex
-                        }}
-                      >
-                        <PlayingCard
-                          card={card}
-                          owner="player"
-                          className=""
-                          index={cardIndex}
-                  isNewCard={isNewCard}
-                />
+                return (
+                  <div
+                    key={`hand-container-${handIndex}`}
+                    className={`flex flex-col items-center transition-all duration-300 ${
+                      hasSplit ? 'px-2 py-1 sm:px-4 sm:py-2 rounded-xl' : ''
+                    }`}
+                    style={hasSplit ? {
+                      background: isActiveHand
+                        ? 'linear-gradient(145deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05))'
+                        : isCompletedHand
+                        ? 'linear-gradient(145deg, rgba(100, 100, 100, 0.1), rgba(50, 50, 50, 0.05))'
+                        : 'transparent',
+                      border: isActiveHand
+                        ? '2px solid rgba(6, 182, 212, 0.5)'
+                        : isCompletedHand
+                        ? '1px solid rgba(100, 100, 100, 0.3)'
+                        : '1px solid transparent',
+                      boxShadow: isActiveHand
+                        ? '0 0 20px rgba(6, 182, 212, 0.3), inset 0 0 10px rgba(6, 182, 212, 0.1)'
+                        : 'none',
+                      opacity: isCompletedHand ? 0.7 : 1,
+                      transform: isActiveHand ? 'scale(1.02)' : 'scale(1)',
+                    } : {}}
+                  >
+                    {/* Hand Label for Split */}
+                    {hasSplit && (
+                      <div className="mb-0 flex items-center gap-1 sm:gap-2">
+                        <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
+                          isActiveHand ? 'text-cyan-400' : 'text-white/40'
+                        }`}>
+                          Hand {handIndex + 1}
+                        </span>
+                        {isActiveHand && (
+                          <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-cyan-400 rounded-full animate-pulse"></span>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+                    )}
 
-        {/* Actions Area - Left side of player area */}
-        {(canHit || canStand || canDoubleDown || canSplit) && (
-          <div className="absolute bottom-20 left-8 flex flex-col gap-3 z-20">
-            {canHit && (
-              <button
-                onClick={() => onAction(Action.HIT)}
-                className="blackjack-action-btn blackjack-btn-hit group"
-              >
-                <div className="blackjack-btn-inner">HIT</div>
-              </button>
-            )}
-            {canStand && (
-              <button
-                onClick={() => onAction(Action.STAND)}
-                className={`blackjack-action-btn blackjack-btn-stand group ${!canStand ? 'blackjack-action-btn-disabled' : ''}`}
-                disabled={!canStand}
-              >
-                <div className="blackjack-btn-inner">STAND</div>
-              </button>
-            )}
-            {canDoubleDown && (
-              <button
-                onClick={() => onAction(Action.DOUBLE_DOWN)}
-                className="blackjack-action-btn blackjack-btn-double group"
-              >
-                <div className="blackjack-btn-inner">DOUBLE</div>
-              </button>
-            )}
-            {canSplit && (
-              <button
-                onClick={() => onAction(Action.SPLIT)}
-                className={`blackjack-action-btn blackjack-btn-split group ${!canSplit ? 'blackjack-action-btn-disabled' : ''}`}
-                disabled={!canSplit}
-              >
-                <div className="blackjack-btn-inner">SPLIT</div>
-              </button>
-            )}
-          </div>
-        )}
+                    {/* Hand Score */}
+                    <div className="flex items-center gap-1 sm:gap-2 mb-0">
+                      <span className={`font-black ${hasSplit ? 'text-lg sm:text-2xl' : 'text-4xl'} ${
+                        isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
+                      }`}>
+                        {hand.total}
+                      </span>
+                      {hand.isBlackjack && <span className="text-yellow-400 font-black text-sm sm:text-lg">BJ!</span>}
+                      {hand.isBust && <span className="text-red-400 font-black text-xs sm:text-sm">BUST</span>}
+                    </div>
 
-        {/* Stacked Chip Display - Bottom Center */}
-        {chipStack.length > 0 && (
-          <div
-            className={`absolute bottom-25 left-1/2 transform -translate-x-1/2 z-15 ${
-              chipAnimationState === 'loss' ? 'chip-stack-lose' :
-              chipAnimationState === 'win' ? 'chip-stack-win' : ''
-            }`}
-          >
-            {chipStack.map((chipValue, index) => {
-              const chipImage = getChipImage(chipValue);
-              const stackOffset = index * 3; // 3px offset per chip for stacking
-
-              return (
-                <div
-                  key={`${chipValue}-${index}`}
-                  className={`absolute w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden ${
-                    chipAnimationState === 'loss' ? 'chip-lose' :
-                    chipAnimationState === 'win' ? 'chip-win' : ''
-                  }`}
-                  style={{
-                    background: `url('${chipImage}') center/contain no-repeat`,
-                    border: '2px solid rgba(0, 0, 0, 0)',
-                    bottom: `${stackOffset}px`,
-                    left: '50%',
-                    transform: 'translateX(-55%)',
-                    zIndex: 10 + index,
-                    animationDelay: `${index * 0.05}s`,
-                  }}
-                >
-                  <div className="relative z-10 flex flex-col items-center gap-4">
-                    <span
-                      className="font-bold text-white text-shadow"
+                    {/* Cards - Use smaller cards on mobile when split */}
+                    <div
+                      className="flex"
                       style={{
-                        textShadow: '2px 2px 4px rgba(0, 0, 0, 0.9), -1px -1px 2px rgba(0, 0, 0, 0.5)',
-                        fontSize: '10px',
+                        perspective: '800px',
+                        perspectiveOrigin: 'center top'
                       }}
                     >
-                      {chipValue}
-                    </span>
+                      {hand.cards.map((card, cardIndex) => {
+                        // Determine if card is new
+                        let isNewCard = false;
+                        if (Array.isArray(newCardIndices.player)) {
+                          isNewCard = handIndex < newCardIndices.player.length && newCardIndices.player[handIndex].has(cardIndex);
+                        } else {
+                          isNewCard = newCardIndices.player.has(cardIndex);
+                        }
+
+                        return (
+                          <div
+                            key={`player-${handIndex}-${cardIndex}`}
+                            style={{
+                              marginLeft: cardIndex > 0 ? (hasSplit ? '5px' : '10px') : '0',
+                              zIndex: cardIndex
+                            }}
+                          >
+                            {/* Show small cards on mobile (< sm) when split, normal otherwise */}
+                            <div className={hasSplit ? 'sm:hidden' : 'hidden'}>
+                              <PlayingCard
+                                card={card}
+                                owner="player"
+                                className=""
+                                index={cardIndex}
+                                isNewCard={isNewCard}
+                                size="small"
+                              />
+                            </div>
+                            <div className={hasSplit ? 'hidden sm:block' : 'block'}>
+                              <PlayingCard
+                                card={card}
+                                owner="player"
+                                className=""
+                                index={cardIndex}
+                                isNewCard={isNewCard}
+                                size="normal"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-            {/* Total Bet Amount Display */}
-            <div
-              className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
-                chipAnimationState !== 'none' ? 'opacity-0' : ''
-              }`}
-              style={{
-                bottom: `${chipStack.length * 3 + 10}px`,
-                transition: 'opacity 0.3s ease-out',
-              }}
-            >
-              <span
-                className="font-black text-2xl text-white"
-                style={{
-                  textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.5)',
-                }}
-              >
-                {chipStack.reduce((sum, chip) => sum + chip, 0)}
-              </span>
+                );
+              })}
             </div>
+          </div>
+        </div>
+
+        {/* Actions Area - Dock at bottom left */}
+        {(canHit || canStand || canDoubleDown || canSplit) && (
+          <div className="absolute bottom-0 right-[30px] z-20">
+            <Dock
+              iconSize={65}
+              iconMagnification={80}
+              iconDistance={80}
+              direction="bottom"
+              className="!h-auto !gap-2 !p-2 !mt-0 !rounded-2xl"
+              style={{
+                background: 'linear-gradient(145deg, rgba(62, 17, 98, 0.95), rgba(6, 12, 21, 0.6))',
+                border: '1px solid rgba(50, 9, 125, 0.81)',
+                boxShadow: '0 8px 32px rgba(38, 38, 38, 0.5), inset 0 1px 0 rgba(84, 33, 162, 0.1)',
+              } as React.CSSProperties}
+            >
+              {canHit && (
+                <DockIcon
+                  onClick={() => onAction(Action.HIT)}
+                  className="dock-icon-hit !p-0"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg">
+                    <span className="text-white font-black text-sm tracking-wider">HIT</span>
+                  </div>
+                </DockIcon>
+              )}
+              {canStand && (
+                <DockIcon
+                  onClick={() => onAction(Action.STAND)}
+                  className="dock-icon-stand !p-0"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg">
+                    <span className="text-white font-black text-sm tracking-wider">STAND</span>
+                  </div>
+                </DockIcon>
+              )}
+              {canDoubleDown && (
+                <DockIcon
+                  onClick={() => {
+                    onDoubleDownChips?.();
+                    onAction(Action.DOUBLE_DOWN);
+                  }}
+                  className="dock-icon-double !p-0"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-400/50 shadow-lg">
+                    <span className="text-white font-black text-xs tracking-wider">DOUBLE</span>
+                  </div>
+                </DockIcon>
+              )}
+              {canSplit && (
+                <DockIcon
+                  onClick={() => {
+                    onSplitChips?.();
+                    onAction(Action.SPLIT);
+                  }}
+                  className="dock-icon-split !p-0"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-emerald-400/50 shadow-lg">
+                    <span className="text-white font-black text-sm tracking-wider">SPLIT</span>
+                  </div>
+                </DockIcon>
+              )}
+            </Dock>
           </div>
         )}
 
-        {/* Bet Control Buttons - Right side (mobile only) */}
-        <div className="md:hidden absolute right-10 bottom-25 z-20 grid grid-cols-1 gap-2">
-          <button
-            onClick={onStartGame}
-            disabled={isPlaying}
-            className="px-4 py-2 rounded font-bold text-sm uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white"
-            style={{
-              background: isPlaying
-                ? 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))'
-                : 'linear-gradient(145deg, rgba(6, 182, 212, 0.4), rgba(8, 145, 178, 0.4))',
-              boxShadow: isPlaying
-                ? 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)'
-                : 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.3)',
-            }}
-          >
-            DEAL
-          </button>
-          <button
-            onClick={onClearBet}
-            disabled={isPlaying}
-            className="px-4 py-2 rounded font-bold text-sm uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/70"
-            style={{
-              background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
-              boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(60, 60, 60, 0.3)',
-            }}
-          >
-            CLEAR
-          </button>
+        {/* Stacked Chip Display with Betting Controls - Bottom Center */}
+        <div className="absolute bottom-27 left-1/2 transform -translate-x-1/2 z-15 flex items-end gap-4">
+          {/* Chip Stack */}
+          {chipStack.length > 0 && (
+            <div
+              className={`relative ${
+                chipAnimationState === 'loss' ? 'chip-stack-lose' :
+                chipAnimationState === 'win' ? 'chip-stack-win' : ''
+              }`}
+              style={{ width: '64px', height: `${Math.max(64, chipStack.length * 3 + 64)}px` }}
+            >
+              {chipStack.map((chipValue, index) => {
+                const chipImage = getChipImage(chipValue);
+                const stackOffset = index * 3; // 3px offset per chip for stacking
+
+                return (
+                  <div
+                    key={`${chipValue}-${index}`}
+                    className={`absolute w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden ${
+                      chipAnimationState === 'loss' ? 'chip-lose' :
+                      chipAnimationState === 'win' ? 'chip-win' : ''
+                    }`}
+                    style={{
+                      background: `url('${chipImage}') center/contain no-repeat`,
+                      border: '2px solid rgba(0, 0, 0, 0)',
+                      bottom: `${stackOffset}px`,
+                      left: '0',
+                      zIndex: 10 + index,
+                      animationDelay: `${index * 0.05}s`,
+                    }}
+                  >
+                    <div className="relative z-10 flex flex-col items-center gap-4">
+                      <span
+                        className="font-bold text-white text-shadow"
+                        style={{
+                          textShadow: '2px 2px 4px rgba(0, 0, 0, 0), -1px -1px 2px rgba(0, 0, 0, 0)',
+                          fontSize: '10px',
+                        }}
+                      >
+                        {chipValue}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Total Bet Amount Display */}
+              <div
+                className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
+                  chipAnimationState !== 'none' ? 'opacity-0' : ''
+                }`}
+                style={{
+                  bottom: `${chipStack.length * 3 + 10}px`,
+                  transition: 'opacity 0.3s ease-out',
+                }}
+              >
+                <span
+                  className="font-black text-2xl text-white"
+                  style={{
+                    textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.5)',
+                  }}
+                >
+                  {chipStack.reduce((sum, chip) => sum + chip, 0)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Betting Controls - Right side of chips */}
+          {!isPlaying && (
+            <div className="relative bottom-[-55px] right-[-130px] z-20 gap-02 mb-2">
+              {/* REBET Button */}
+              <button
+                onClick={onRebet}
+                className="px-3 py-1.5 pb-1 pt-3 rounded-sm font-bold text-2xl uppercase tracking-wider transition-all hover:scale-105 active:scale-95 text-green-700/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  background: 'linear-gradient(145deg, rgba(15, 23, 42, 0), rgba(30, 41, 59, 0))',
+                  boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0), inset -2px -2px 4px rgba(255, 255, 255, 0), 0 2px 8px rgba(0, 0, 0, 0)',
+                  border: '1px solid rgba(6, 181, 212, 0)',
+                }}
+              >
+                REBET
+              </button>
+
+              {/* 1/2 and 2x Buttons Row */}
+              <div className="flex gap-0.5">
+                <button
+                  onClick={onHalfBet}
+                  disabled={chipStack.length === 0}
+                  className="flex-1 px-2 py-1.5 rounded-sm font-bold text-2xl transition-all hover:scale-105 active:scale-95 text-green-700/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(15, 23, 42, 0), rgba(30, 41, 59, 0))',
+                    boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0), inset -2px -2px 4px rgba(255, 255, 255, 0), 0 2px 8px rgba(0, 0, 0, 0)',
+                    border: '1px solid rgba(245, 159, 11, 0)',
+                  }}
+                >
+                  1/2
+                </button>
+                <button
+                  onClick={onDoubleBet}
+                  disabled={chipStack.length === 0}
+                  className="flex-1 px-2 py-1.5 rounded-sm font-bold text-2xl transition-all hover:scale-105 active:scale-95 text-green-700/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(15, 23, 42, 0), rgba(30, 41, 59, 0.04))',
+                    boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0), inset -2px -2px 4px rgba(255, 255, 255, 0), 0 2px 8px rgba(0, 0, 0, 0)',
+                    border: '1px solid rgba(34, 197, 94, 0)',
+                  }}
+                >
+                  2x
+                </button>
+              </div>
+
+              {/* DEAL Button */}
+              <button
+                onClick={onStartGame}
+                disabled={!canDeal || chipStack.length === 0}
+                className="px-3 py-2 rounded-sm font-bold text-3xl uppercase tracking-wider transition-all hover:scale-105 active:scale-95 text-green-700/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  background: canDeal && chipStack.length > 0
+                    ? 'linear-gradient(145deg, rgba(6, 181, 212, 0), rgba(8, 144, 178, 0))'
+                    : 'linear-gradient(145deg, rgba(35, 45, 55, 0.9), rgba(25, 35, 45, 0.9))',
+                  boxShadow: canDeal && chipStack.length > 0
+                    ? 'inset 2px 2px 4px rgba(255, 255, 255, 0), inset -2px -2px 4px rgba(0, 0, 0, 0), 0 4px 12px rgba(6, 181, 212, 0)'
+                    : 'inset 2px 2px 4px rgba(0, 0, 0, 0), inset -2px -2px 4px rgba(255, 255, 255, 0)',
+                  border: canDeal && chipStack.length > 0
+                    ? '1px solid rgba(6, 181, 212, 0)'
+                    : '1px solid rgba(60, 60, 60, 0)',
+                }}
+              >
+                DEAL
+              </button>
+            </div>
+          )}
         </div>
+
       </div>
 
       <style jsx global>{`
@@ -525,70 +667,38 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           pointer-events: none;
         }
 
-        .blackjack-action-btn-disabled {
-          box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), inset 0 -2px 4px rgba(255, 255, 255, 0.1);
-          background: linear-gradient(145deg, rgba(35, 45, 55, 0.8), rgba(25, 35, 45, 0.6));
-          cursor: not-allowed;
+        /* Dock icon styles - make inner wrapper relative for absolute children */
+        .dock-icon-hit > div,
+        .dock-icon-stand > div,
+        .dock-icon-double > div,
+        .dock-icon-split > div {
+          position: relative;
+          width: 100%;
+          height: 100%;
         }
-        .blackjack-action-btn-disabled .blackjack-btn-inner {
-          background: linear-gradient(145deg, rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.05));
-          border-color: rgba(255, 255, 255, 0.1);
-          color: rgba(255, 255, 255, 0.3);
+        .dock-icon-hit > div > div,
+        .dock-icon-stand > div > div,
+        .dock-icon-double > div > div,
+        .dock-icon-split > div > div {
+          transition: all 0.2s ease-out;
         }
-
-        .blackjack-action-btn {
-          @apply relative rounded-xl transition-all duration-300 ease-out;
-          min-width: 100px;
-          box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.2),
-            0 4px 8px rgba(0, 0, 0, 0.3),
-            0 1px 3px rgba(0, 0, 0, 0.4);
+        .dock-icon-hit:hover > div > div {
+          box-shadow: 0 0 20px rgba(239, 68, 68, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
         }
-        .blackjack-action-btn:hover {
-          box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.3),
-            0 6px 12px rgba(0, 0, 0, 0.4),
-            0 2px 4px rgba(0, 0, 0, 0.5);
-          transform: translateY(-2px);
+        .dock-icon-stand:hover > div > div {
+          box-shadow: 0 0 20px rgba(59, 130, 246, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
         }
-        .blackjack-action-btn:active {
-          box-shadow:
-            inset 0 2px 4px rgba(0, 0, 0, 0.3),
-            inset 0 -1px 0 rgba(255, 255, 255, 0.1),
-            0 2px 4px rgba(0, 0, 0, 0.4);
-          transform: translateY(1px);
+        .dock-icon-double:hover > div > div {
+          box-shadow: 0 0 20px rgba(245, 158, 11, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
         }
-        .blackjack-btn-inner {
-          @apply px-6 py-4 rounded-xl text-white font-black text-sm tracking-widest border;
-          background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.2));
-          border-color: rgba(255, 255, 255, 0.2);
-          box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.3),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+        .dock-icon-split:hover > div > div {
+          box-shadow: 0 0 20px rgba(16, 185, 129, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
         }
-        .blackjack-btn-hit {
-          background: linear-gradient(145deg, #ef4444, #b91c1c);
-        }
-        .blackjack-btn-hit .blackjack-btn-inner {
-          background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(0, 0, 0, 0.25));
-        }
-        .blackjack-btn-stand {
-          background: linear-gradient(145deg, #3b82f6, #1d4ed8);
-        }
-        .blackjack-btn-stand .blackjack-btn-inner {
-          background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(0, 0, 0, 0.25));
-        }
-        .blackjack-btn-double {
-          background: linear-gradient(145deg, #f59e0b, #b45309);
-        }
-        .blackjack-btn-double .blackjack-btn-inner {
-          background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(0, 0, 0, 0.25));
-        }
-        .blackjack-btn-split {
-          background: linear-gradient(145deg, #10b981, #047857);
-        }
-        .blackjack-btn-split .blackjack-btn-inner {
-          background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(0, 0, 0, 0.25));
+        .dock-icon-hit:active > div > div,
+        .dock-icon-stand:active > div > div,
+        .dock-icon-double:active > div > div,
+        .dock-icon-split:active > div > div {
+          transform: scale(0.95);
         }
         .blackjack-card {
           @apply relative;

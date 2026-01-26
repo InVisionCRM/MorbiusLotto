@@ -623,6 +623,11 @@ export class BlackjackGameService {
     // Move to next active hand
     const nextHandIndex = playerHands.findIndex(hand => hand.canHit || hand.canStand);
 
+    // Persist current_hand_index to database so next action uses correct hand
+    if (nextHandIndex !== handIndex) {
+      await this.dbService.updateGame(gameId, { current_hand_index: nextHandIndex });
+    }
+
     return {
       gameId,
       sessionId: game.session_id,

@@ -1,9 +1,12 @@
 'use client'
 
+import { useRef } from 'react'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 import { CometCard } from '@/components/ui/comet-card'
+import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay'
+import { AnimatedBeam } from '@/components/ui/animated-beam'
 
 const fadeIn = {
   hidden: { opacity: 0, y: 30 },
@@ -12,6 +15,79 @@ const fadeIn = {
 
 const stagger = {
   visible: { transition: { staggerChildren: 0.1 } }
+}
+
+function TokenConversionCard() {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const plsRef = useRef<HTMLDivElement>(null)
+  const morbiusRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <motion.div
+      className="mb-16"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+      variants={fadeIn}
+    >
+      <CometCard>
+        <div
+          ref={containerRef}
+          className="relative p-6 md:p-8 bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10"
+        >
+          <h3 className="text-xl md:text-2xl font-russo-one font-normal text-white mb-6 text-center">
+            Don't have any MORBIUS yet? No problem! You can just use PLS to bet! All bets made with PLS are converted to Morbius so it's a win-win for everyone.
+          </h3>
+          <div className="flex flex-row items-center justify-between">
+            {/* PLS - Far Left */}
+            <div ref={plsRef} className="flex flex-col items-center z-10">
+              <div className="w-36 h-36 md:w-36 md:h-36 relative">
+                <Image
+                  src="/Pulse Branding/Logo/ball.png"
+                  alt="PLS"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+              <span className="text-lg md:text-xl font-bold text-white font-poppins ">PLS</span>
+              <span className="text-md md:text-lg text-blue-500 font-bold font-prosto-one">PulseChain</span>
+            </div>
+
+            {/* MORBIUS - Far Right */}
+            <div ref={morbiusRef} className="flex flex-col items-center z-10">
+              <div className="w-24 h-24 md:w-32 md:h-32 relative mb-2">
+                <Image
+                  src="/morbius/MorbiusLogo (3).png"
+                  alt="MORBIUS"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+              <span className="text-lg md:text-xl font-bold text-white font-bold font-prosto-one">MORBIUS</span>
+              <span className="text-md md:text-md text-purple-500 font-bold font-prosto-one">Gaming Token</span>
+            </div>
+          </div>
+
+          {/* Animated Beam */}
+          <AnimatedBeam
+            containerRef={containerRef}
+            fromRef={plsRef}
+            toRef={morbiusRef}
+            pathColor="rgb(166, 0, 255)"
+            pathWidth={5}
+            gradientStartColor="rgb(155, 4, 243)"
+            gradientStopColor="rgb(243, 4, 179)"
+            duration={1}
+            curvature={100}
+          />
+
+          <p className="relative text-center bottom-25 text-white text-lg font-bold font-prosto-one mt-0">
+            Instant swap via PulseX DEX
+          </p>
+        </div>
+      </CometCard>
+    </motion.div>
+  )
 }
 
 export function TokenomicsSection() {
@@ -32,6 +108,7 @@ export function TokenomicsSection() {
           <h2 className="text-5xl md:text-6xl font-russo-one font-normal text-white mb-4">
             Tokenomics
           </h2>
+          <MorbiusBurnedDisplay variant="card" className="mt-6" />
         </motion.div>
 
         {/* Every Game Burns Morbius */}
@@ -44,7 +121,7 @@ export function TokenomicsSection() {
         >
           <div className="text-center mb-8">
             <h3 className="text-3xl md:text-4xl font-russo-one font-normal text-white mb-2">
-              Every Game Burns Morbius
+              Every Game Burns Morbius!
             </h3>
           </div>
         </motion.div>
@@ -65,8 +142,8 @@ export function TokenomicsSection() {
             <motion.div key={game.name} variants={fadeIn}>
               <Link href={game.href}>
                 <CometCard className="h-full">
-                  <div className="p-2 text-center bg-black/60 backdrop-blur-sm rounded-2xl border border-gradient-to-r from-purple-500 to-cyan-500 hover:border-purple-500/50 transition-colors">
-                    <div className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60 mb-2">
+                  <div className="p-2 text-center bg-black/60 backdrop-blur-sm rounded-2xl border-3 border-gradient-to-r from-purple-500 to-cyan-500 hover:border-purple-500/50 transition-colors">
+                    <div className="text-4xl font-black border-3 border-white rounded-2xl bg-gradient-to-l from-purple-700 to-purple-1-0 via-purple-500/10 mb-2">
                       10%
                     </div>
                     <div className="text-lg font-medium text-white mb-1">{game.name}</div>
@@ -79,77 +156,17 @@ export function TokenomicsSection() {
         </motion.div>
 
         {/* Token Conversion */}
-        <motion.div
-          className="mb-16"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-          variants={fadeIn}
-        >
-          <div className="text-center mb-8">
-              <h3 className="text-3xl md:text-4xl font-russo-one font-normal text-white mb-2">
-                All bets in PLS are converted to Morbius
-              </h3>
-          </div>
-          <CometCard>
-            <div className="p-4 md:p-4 bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10">
-              <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-2">
-                {/* PLS */}
-                <div className="flex flex-col items-center">
-                  <div className="w-40 h-40 md:w-40 md:h-40 relative mb-0">
-                    <Image
-                      src="/Pulse Branding/Logo/ball.png"
-                      alt="PLS"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                  <span className="text-xl font-bold text-white">PLS</span>
-                  <span className="text-sm text-white/40">PulseChain</span>
-                </div>
-
-                {/* Arrow */}
-                <motion.div
-                  animate={{ x: [0, 8, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                  className="text-purple-400"
-                >
-                  <svg className="w-8 h-8 md:w-10 md:h-10 rotate-90 md:rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </motion.div>
-
-                {/* MORBIUS */}
-                <div className="flex flex-col items-center">
-                  <div className="w-40 h-40 md:w-40 md:h-40 relative mb-1">
-                    <Image
-                      src="/morbius/MorbiusLogo (3).png"
-                      alt="MORBIUS"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                  <span className="text-xl font-bold text-white">MORBIUS</span>
-                  <span className="text-sm text-white/40">Gaming Token</span>
-                </div>
-              </div>
-
-              <p className="text-center text-white/30 text-sm mt-8">
-                Instant swap via PulseX DEX
-              </p>
-            </div>
-          </CometCard>
-        </motion.div>
+        <TokenConversionCard />
 
         {/* Bottom Statement */}
         <motion.p
-          className="text-center text-white/50 mt-16 text-lg max-w-2xl mx-auto"
+          className="text-center text-white mt-16 text-lg max-w-2xl mx-auto"
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ delay: 0.3 }}
         >
-          Not just a GAME. A <span className="text-purple-400 font-medium">tokenomics engine</span>.
+          Not just a GAME. A <span className="text-purple-500 font-medium">tokenomics engine</span>.
         </motion.p>
       </div>
     </section>

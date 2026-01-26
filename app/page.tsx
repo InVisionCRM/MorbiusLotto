@@ -3,8 +3,10 @@
 import { HomeHeader } from '@/components/home/header'
 import { HeroSection } from '@/components/home/hero-section'
 import { GamesSection } from '@/components/home/games-section'
+import { LatestWins } from '@/components/home/latest-wins'
 import { SocialsSection } from '@/components/home/socials-section'
 import { TokenomicsSection } from '@/components/home/tokenomics-section'
+import { MorbItSection } from '@/components/home/morbit-section'
 import Footer from '@/components/PLINKO/Footer'
 
 export default function HomePage() {
@@ -38,8 +40,14 @@ export default function HomePage() {
       {/* Games Section */}
       <GamesSection />
 
+      {/* Latest Wins Section */}
+      <LatestWins />
+
       {/* Tokenomics Section */}
       <TokenomicsSection />
+
+      {/* Morb-It Section */}
+      <MorbItSection />
 
       {/* Socials Section */}
       <SocialsSection />

@@ -15,65 +15,63 @@ const WinNotification: React.FC<WinNotificationProps> = ({
   onComplete
 }) => {
   useEffect(() => {
-    const timer = setTimeout(onComplete, 3000);
+    const timer = setTimeout(onComplete, 2500);
     return () => clearTimeout(timer);
   }, [onComplete]);
 
   if (amount <= 0n) return null;
 
+  // Format amount to whole number for cleaner display
+  const formattedAmount = Math.floor(Number(formatEther(amount))).toLocaleString();
+
   return (
-    <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-40">
-      <div
-        className="win-banner px-8 py-6 rounded-md text-center animate-pulse"
-        style={{
-          background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 4px 30px rgba(6, 182, 212, 0.4)',
-          border: '1px solid rgba(112, 6, 212, 0.83)',
-          animation: 'winBanner 0.6s ease-out',
-        }}
-      >
+    <div className="absolute top-2 right-2 z-30 pointer-events-none">
+      <div className="win-notification flex items-center gap-2 px-3 py-2">
         {isBlackjack ? (
           <>
-            <div className="text-4xl mb-2">♠♥♦♣</div>
-            <div className="text-3xl font-bold text-yellow-400 mb-2 animate-bounce">
-              BLACKJACK!
-            </div>
-            <div className="text-xl font-bold text-cyan-300">
-              +{formatEther(amount)} MORBIUS
+            <span className="text-yellow-400 text-lg">♠</span>
+            <div className="flex flex-col">
+              <span className="text-yellow-400 font-black text-sm tracking-wide">BLACKJACK!</span>
+              <span className="text-green-400 font-bold text-xs">+{formattedAmount}</span>
             </div>
           </>
         ) : (
           <>
-            <div className="text-4xl mb-2">🎉</div>
-            <div className="text-2xl font-bold text-green-400 mb-2">
-              YOU WIN!
-            </div>
-            <div className="text-xl font-bold text-cyan-300">
-              +{formatEther(amount)} MORBIUS
+            <span className="text-green-400 text-lg">✓</span>
+            <div className="flex flex-col">
+              <span className="text-green-400 font-bold text-sm">WIN</span>
+              <span className="text-green-300 font-bold text-xs">+{formattedAmount}</span>
             </div>
           </>
         )}
-
-        <style jsx>{`
-          @keyframes winBanner {
-            0% {
-              transform: scale(0.8);
-              opacity: 0;
-            }
-            50% {
-              transform: scale(1.1);
-            }
-            100% {
-              transform: scale(1);
-              opacity: 1;
-            }
-          }
-
-          .win-banner {
-            animation: winBanner 0.6s ease-out;
-          }
-        `}</style>
       </div>
+
+      <style jsx>{`
+        @keyframes slideIn {
+          0% {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          100% {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+
+        @keyframes fadeOut {
+          0% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+          }
+        }
+
+        .win-notification {
+          animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 2s forwards;
+          text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 20px rgba(34, 197, 94, 0.5);
+        }
+      `}</style>
     </div>
   );
 };

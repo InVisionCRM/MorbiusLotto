@@ -1,12 +1,15 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useDisconnect } from 'wagmi';
 import HowToPlayModal from './HowToPlayModal';
 import SwapModal from './SwapModal';
 import { RiskLevel } from '@/app/PLINKO/types';
+import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
+import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
 
 interface MainNavProps {
   balance: number;
@@ -25,6 +28,23 @@ export default function MainNav({ balance, soundEnabled, onSoundToggle, freePlay
   const [menuOpen, setMenuOpen] = useState(false);
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
 
   return (
     <>
@@ -98,149 +118,174 @@ export default function MainNav({ balance, soundEnabled, onSoundToggle, freePlay
 
 
               {/* Hamburger Menu */}
-              <div className="relative">
+              <div className="relative z-50" ref={menuRef}>
                 <button
+                  type="button"
                   onClick={() => setMenuOpen(!menuOpen)}
-                  className="w-16 h-8 flex flex-col items-center justify-center gap-[5px] transition-all active:scale-95 rounded-sm"
-                  style={{
-                    background: 'linear-gradient(145deg,rgba(113, 113, 134, 0),rgba(5, 15, 40, 0))',
-                  }}
+                  className="w-10 h-10 flex flex-col items-center justify-center gap-[7px] transition-all active:scale-95 rounded-md hover:bg-white/10"
                 >
-                  <div className="w-15 h-[5px] bg-slate-900 rounded-full p-1" />
-                  <div className="w-16 h-[5px] bg-slate-900 rounded-full p-1" />
-                  <div className="w-15 h-[5px] bg-slate-900 rounded-full p-1" />
+                  <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
+                  <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
+                  <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
                 </button>
 
                 {/* Dropdown Menu */}
                 {menuOpen && (
-                  <>
-                    {/* Backdrop */}
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setMenuOpen(false)}
-                    />
-
-                    {/* Menu Panel */}
-                    <div
-                      className="absolute right-0 top-12 w-48 rounded-lg z-50"
-                      style={{
-                        background: 'linear-gradient(145deg, rgba(50, 50, 59, 0.9), rgba(26, 29, 34, 0.9))',
-                        border: '2px inset rgba(0, 0, 0, 0.5)',
-                        backdropFilter: 'blur(2px)',
-                      }}
-                    >
-                      {/* Title */}
-                      <div
-                        className="px-3 py-2"
-                        style={{
-                          borderBottom: '1px inset rgba(0, 0, 0, 0.3)',
+                  <div
+                    className="fixed right-2 top-14 w-64 rounded-lg overflow-hidden shadow-xl z-[200] max-h-[80vh] overflow-y-auto"
+                    style={{
+                      background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
+                      border: '1px solid rgba(6, 182, 212, 0.3)',
+                      boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
+                    }}
+                  >
+                    {/* Plinko Section */}
+                    <div className="p-2 border-b border-gray-700/50">
+                      <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Plinko</div>
+                      <button
+                        onClick={() => {
+                          setHowToPlayOpen(true);
+                          setMenuOpen(false);
                         }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                       >
-                        <span
-                          className="font-bold text-sm"
-                          style={{
-                            color: 'rgba(226, 212, 243, 0.74)',
-                          }}
-                        >
-                          PLINKO
-                        </span>
-                      </div>
+                        <i className="fas fa-question-circle w-4 text-center"></i>
+                        <span className="text-sm font-medium">How to Play</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (onShowHistory) onShowHistory();
+                          setMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      >
+                        <i className="fas fa-history w-4 text-center"></i>
+                        <span className="text-sm font-medium">My History</span>
+                      </button>
+                      <Link
+                        href="/plinko-dashboard"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <i className="fas fa-chart-bar w-4 text-center"></i>
+                        <span className="text-sm font-medium">Dashboard</span>
+                      </Link>
+                      <Link
+                        href="/plinko-verifier"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <i className="fas fa-check-circle w-4 text-center"></i>
+                        <span className="text-sm font-medium">Verifier</span>
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setSwapOpen(true);
+                          setMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      >
+                        <i className="fas fa-exchange-alt w-4 text-center"></i>
+                        <span className="text-sm font-medium">Buy Morbius</span>
+                      </button>
+                    </div>
 
-                      {/* Menu Items */}
-                      <div className="py-1">
-                        <a
-                          href="/home"
-                          onClick={() => {
-                            setMenuOpen(false);
-                          }}
-                          className="block w-full px-3 py-2 text-left text-cyan-400/70 hover:bg-cyan-400/10 hover:text-cyan-300 transition-colors text-sm font-medium"
-                        >
-                          Home
-                        </a>
-                        <button
-                          onClick={() => {
-                            setHowToPlayOpen(true);
-                            setMenuOpen(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-cyan-400/70 hover:bg-cyan-400/10 hover:text-cyan-300 transition-colors text-sm font-medium"
-                        >
-                          How to Play
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (onShowHistory) onShowHistory();
-                            setMenuOpen(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-cyan-400/70 hover:bg-cyan-400/10 hover:text-cyan-300 transition-colors text-sm font-medium"
-                        >
-                          My History
-                        </button>
-                        <button
-                          onClick={() => {
-                            window.location.href = '/plinko-dashboard';
-                            setMenuOpen(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-cyan-400/70 hover:bg-cyan-400/10 hover:text-cyan-300 transition-colors text-sm font-medium"
-                        >
-                          Dashboard
-                        </button>
-                        <button
-                          onClick={() => {
-                            window.location.href = '/plinko-verifier';
-                            setMenuOpen(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-cyan-400/70 hover:bg-cyan-400/10 hover:text-cyan-300 transition-colors text-sm font-medium"
-                        >
-                          Verifier
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSwapOpen(true);
-                            setMenuOpen(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-cyan-400/70 hover:bg-cyan-400/10 hover:text-cyan-300 transition-colors text-sm font-medium"
-                        >
-                          Buy Morbius
-                        </button>
+                    {/* Other Games Section */}
+                    <div className="p-2 border-b border-gray-700/50">
+                      <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Other Games</div>
+                      <Link
+                        href="/BLACKJACK"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <i className="fas fa-cards w-4 text-center"></i>
+                        <span className="text-sm font-medium">Blackjack</span>
+                      </Link>
+                      <Link
+                        href="/BIG-WHEEL"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <i className="fas fa-dharmachakra w-4 text-center"></i>
+                        <span className="text-sm font-medium">Big Wheel</span>
+                      </Link>
+                      <Link
+                        href="/lottery"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <i className="fas fa-ticket-alt w-4 text-center"></i>
+                        <span className="text-sm font-medium">Lottery</span>
+                      </Link>
+                      <Link
+                        href="/keno"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <i className="fas fa-th w-4 text-center"></i>
+                        <span className="text-sm font-medium">Keno</span>
+                      </Link>
+                      <Link
+                        href="/Morb-It"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <i className="fas fa-image w-4 text-center"></i>
+                        <span className="text-sm font-medium">Meme Generator</span>
+                      </Link>
+                    </div>
 
-                        {/* Sound Toggle */}
-                        <div
-                          className="px-3 py-2 mt-1"
-                          style={{
-                            borderTop: '1px inset rgba(0, 0, 0, 0.3)',
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span
-                              className="text-xs font-medium"
-                              style={{
-                                color: 'rgba(226, 212, 243, 0.74)',
-                              }}
-                            >
-                              Sound
-                            </span>
-                            <button
-                              onClick={onSoundToggle}
-                              className={`relative w-10 h-5 rounded-full transition-all duration-300 ${
-                                soundEnabled
-                                  ? 'bg-gradient-to-r from-green-500 to-green-600'
-                                  : 'bg-gradient-to-r from-gray-600 to-gray-700'
-                              } shadow-lg`}
-                            >
-                              <div
-                                className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-all duration-300 flex items-center justify-center ${
-                                  soundEnabled ? 'left-[22px]' : 'left-0.5'
-                                }`}
-                              >
-                                <i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} text-[7px] ${soundEnabled ? 'text-green-600' : 'text-gray-600'}`}></i>
-                              </div>
-                            </button>
-                          </div>
+                    {/* Settings Section */}
+                    <div className="p-2 border-b border-gray-700/50">
+                      <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Settings</div>
+                      <div className="flex items-center justify-between px-3 py-2">
+                        <div className="flex items-center gap-3 text-gray-300">
+                          <i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-4 text-center`}></i>
+                          <span className="text-sm font-medium">Sound</span>
                         </div>
-
+                        <button
+                          onClick={onSoundToggle}
+                          className={`relative w-10 h-5 rounded-full transition-all duration-300 ${
+                            soundEnabled
+                              ? 'bg-gradient-to-r from-green-500 to-green-600'
+                              : 'bg-gradient-to-r from-gray-600 to-gray-700'
+                          } shadow-lg`}
+                        >
+                          <div
+                            className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-all duration-300 flex items-center justify-center ${
+                              soundEnabled ? 'left-[22px]' : 'left-0.5'
+                            }`}
+                          >
+                            <i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} text-[7px] ${soundEnabled ? 'text-green-600' : 'text-gray-600'}`}></i>
+                          </div>
+                        </button>
                       </div>
                     </div>
-                  </>
+
+                    {/* Account Section */}
+                    {isConnected && (
+                      <div className="p-2 border-b border-gray-700/50">
+                        <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Account</div>
+                        <button
+                          onClick={() => {
+                            disconnect();
+                            setMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          <i className="fas fa-sign-out-alt w-4 text-center"></i>
+                          <span className="text-sm font-medium">Disconnect</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Morbius Stats Section */}
+                    <div className="p-2">
+                      <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Morbius Stats</div>
+                      <MorbiusBurnedDisplay variant="inline" className="px-3 py-2" />
+                      <MorbiusPriceDisplay className="px-3 py-2" />
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

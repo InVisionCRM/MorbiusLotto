@@ -116,14 +116,14 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
         {/* Header with Stats (matches Plinko layout) */}
         <div className="mb-1">
           <div className="grid grid-cols-3 items-center justify-center text-center">
-            <div className="bg-gray-800/50 w-full px-1 py-1 rounded-tl-lg border-t border-b border-gray-700/50">
-              <div className="text-cyan-300/80 text-[8px] uppercase tracking-wider">Games</div>
-              <div className="text-white font-bold text-sm text-center">{history.length}</div>
+            <div className="bg-slate-00/50 w-full px-1 py-1 rounded-tl-lg">
+              <div className="text-cyan-300/80 text-[16px] uppercase font-bold font-prosto-one tracking-wider">Games</div>
+              <div className="text-white font-bold text-2xl text-center">{history.length}</div>
             </div>
-            <div className="bg-gray-800/50 w-full px-1 py-1 border-t border-b border-gray-700/50">
-              <div className="text-cyan-300/80 text-[8px] uppercase tracking-wider">Net P&amp;L</div>
+            <div className="bg-slate-00/50 w-full px-1 py-1">
+              <div className="text-cyan-300/80 text-[16px] uppercase font-bold font-prosto-one tracking-wider">Net P&amp;L</div>
               <div
-                className={`font-bold text-sm flex text-center justify-center items-center gap-0.5 ${
+                className={`font-bold text-2xl flex text-center justify-center items-center gap-0.5 ${
                   netPnL >= 0 ? "text-green-400" : "text-red-400"
                 }`}
               >
@@ -132,13 +132,13 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
                 <img
                   src="/morbius/MorbiusLogo (3).png"
                   alt="Morbius"
-                  className="w-4 h-4 object-contain"
+                  className="w-16 h-16 object-contain"
                 />
               </div>
             </div>
-            <div className="bg-gray-800/50 w-full px-1 py-1 border-t border-b border-gray-700/50">
-              <div className="text-cyan-300/80 text-[8px] uppercase tracking-wider">ROI</div>
-              <div className={`font-bold text-sm ${Number.parseFloat(roi) >= 0 ? "text-green-400" : "text-red-400"}`}>
+            <div className="bg-slate-000/50 w-full px-1 py-1 rounded-tl-lg">
+              <div className="text-cyan-300/80 text-[16px] uppercase font-bold font-prosto-one tracking-wider">ROI</div>
+              <div className={`font-bold font-prosto-one text-2xl ${Number.parseFloat(roi) >= 0 ? "text-green-400" : "text-red-400"}`}>
                 {Number.parseFloat(roi) >= 0 ? "+" : ""}
                 {roi}%
               </div>
@@ -147,12 +147,12 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
         </div>
 
         {/* Chart */}
-        <div className="h-full min-h-[200px] w-full flex-1">
+        <div className="h-full min-h-[300px] w-full flex-1">
           {history.length === 0 ? (
             <div className="h-full flex items-center justify-center">
-              <div className="text-center text-cyan-300/60">
-                <p className="text-lg">P&amp;L chart will appear</p>
-                <p className="text-sm">after your first game</p>
+              <div className="text-center text-purple-500">
+                <p className="text-lg font-bold font-prosto-one">P&amp;L chart will appear</p>
+                <p className="text-sm font-bold font-prosto-one">after your first game</p>
               </div>
             </div>
           ) : (

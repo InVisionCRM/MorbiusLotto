@@ -4,7 +4,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useDisconnect } from 'wagmi';
+import { useAccount, useDisconnect, useBalance } from 'wagmi';
+import { NumberTicker } from '@/components/ui/number-ticker';
+import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
+import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
+import { formatEther } from 'viem';
 
 interface MainNavProps {
   onOpenDepositModal?: () => void;
@@ -37,6 +41,11 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Get native PLS balance
+  const { data: plsBalance } = useBalance({
+    address: address,
+  });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -80,27 +89,42 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-1 flex-shrink-0 min-w-0">
-            {/* Reserve Balance */}
-            {isConnected && reserveBalance !== undefined && (
-              <button
-                onClick={onOpenDepositModal}
-                className="relative flex items-center justify-start bg-slate-900/30 rounded-lg py-1.5 px-10 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.1)] gap-1 text-xs sm:text-sm flex-shrink min-w-0 hover:bg-slate-900/50 transition-colors cursor-pointer"
-              >
-                <span className="text-gray-400 hidden xs:inline">Reserve:</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-white/80 font-bold whitespace-nowrap">
-                    {Math.floor(Number(reserveBalance) / 1e18)}
-                  </span>
-                  <Image
-                    src="/morbius/MorbiusLogo (3).png"
-                    alt="Morbius Logo"
-                    width={20}
-                    height={20}
-                    className="object-contain"
-                  />
-                </div>
-                <i className="fas fa-chevron-down text-white text-md absolute right-3 top-1/2 transform -translate-y-1/2"></i>
-              </button>
+            {/* Balances Display */}
+            {isConnected && (
+              <div className="flex items-center gap-2">
+                {/* PLS Balance - Always visible */}
+                {plsBalance && (
+                  <div className="flex items-center gap-1 bg-slate-900/30 rounded-lg py-1.5 px-3 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.1)] text-xs">
+                    <span className="text-white/80 font-bold">
+                      {Number(formatEther(plsBalance.value)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </span>
+                    <span className="text-cyan-400 font-bold">PLS</span>
+                  </div>
+                )}
+
+                {/* Morbius Reserve Balance - Hidden on mobile */}
+                {reserveBalance !== undefined && (
+                  <button
+                    onClick={onOpenDepositModal}
+                    className="hidden sm:flex relative items-center justify-start bg-slate-900/30 rounded-lg py-1.5 px-3 pr-8 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.1)] gap-1 text-xs flex-shrink min-w-0 hover:bg-slate-900/50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1">
+                      <NumberTicker
+                        value={Math.floor(Number(reserveBalance) / 1e18)}
+                        className="text-white/80 font-bold whitespace-nowrap"
+                      />
+                      <Image
+                        src="/morbius/MorbiusLogo (3).png"
+                        alt="Morbius Logo"
+                        width={16}
+                        height={16}
+                        className="object-contain"
+                      />
+                    </div>
+                    <i className="fas fa-chevron-down text-white/60 text-xs absolute right-2 top-1/2 transform -translate-y-1/2"></i>
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Wallet Connection */}
@@ -152,7 +176,7 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
               {/* Dropdown Menu */}
               {isMobileMenuOpen && (
                 <div
-                  className="fixed right-2 top-14 w-64 rounded-lg overflow-hidden shadow-xl z-[200]"
+                  className="fixed right-2 top-14 w-64 rounded-lg overflow-hidden shadow-xl z-[200] max-h-[80vh] overflow-y-auto"
                   style={{
                     background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
                     border: '1px solid rgba(6, 182, 212, 0.3)',
@@ -188,14 +212,6 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                   <div className="p-2 border-b border-gray-700/50">
                     <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Other Games</div>
                     <Link
-                      href="/"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-home w-4 text-center"></i>
-                      <span className="text-sm font-medium">Home</span>
-                    </Link>
-                    <Link
                       href="/PLINKO"
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                       onClick={() => setIsMobileMenuOpen(false)}
@@ -227,11 +243,19 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                       <i className="fas fa-th w-4 text-center"></i>
                       <span className="text-sm font-medium">Keno</span>
                     </Link>
+                    <Link
+                      href="/Morb-It"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <i className="fas fa-image w-4 text-center"></i>
+                      <span className="text-sm font-medium">Meme Generator</span>
+                    </Link>
                   </div>
 
                   {/* Account Section */}
                   {isConnected && (
-                    <div className="p-2">
+                    <div className="p-2 border-b border-gray-700/50">
                       <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Account</div>
                       {onOpenDepositModal && (
                         <button
@@ -275,6 +299,13 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                       </button>
                     </div>
                   )}
+
+                  {/* Morbius Stats Section */}
+                  <div className="p-2">
+                    <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Morbius Stats</div>
+                    <MorbiusBurnedDisplay variant="inline" className="px-3 py-2" />
+                    <MorbiusPriceDisplay className="px-3 py-2" />
+                  </div>
                 </div>
               )}
             </div>

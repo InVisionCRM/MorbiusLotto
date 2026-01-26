@@ -1,12 +1,12 @@
 export function SocialsSection() {
   return (
-    <section className="py-16 px-4">
+    <section className="py-4 px-4">
       <div className="container mx-auto max-w-4xl">
-        <div className="text-center mb-12">
-          <h2 className="text-4xl md:text-5xl font-russo-one font-normal text-white mb-4">
+        <div className="text-center mb-12 text-cyan-500/80">
+          <h2 className="text-4xl md:text-5xl font-russo-one font-normal mb-4">
             Join the Community
           </h2>
-          <p className="text-xl text-white/70 max-w-2xl mx-auto">
+            <p className="text-xl text-white/80 font-bold font-prosto-one max-w-2xl mx-auto">
             Follow Morbius on social media for the latest updates and announcements
           </p>
         </div>
@@ -19,7 +19,7 @@ export function SocialsSection() {
             rel="noopener noreferrer"
             className="group flex flex-col items-center gap-4 hover:scale-105 transition-transform duration-300"
           >
-            <div className="text-6xl md:text-7xl text-white group-hover:text-cyan-400 transition-colors duration-300">
+            <div className="text-6xl md:text-7xl text-purple-500 group-hover:text-cyan-400 transition-colors duration-300">
               <svg className="w-16 h-16 md:w-20 md:h-20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
               </svg>
@@ -36,7 +36,7 @@ export function SocialsSection() {
             rel="noopener noreferrer"
             className="group flex flex-col items-center gap-4 hover:scale-105 transition-transform duration-300"
           >
-            <div className="text-6xl md:text-7xl text-white group-hover:text-cyan-400 transition-colors duration-300">
+            <div className="text-6xl md:text-7xl text-purple-500 group-hover:text-cyan-400 transition-colors duration-300">
               <i className="fab fa-telegram"></i>
             </div>
             <span className="text-lg font-medium text-white group-hover:text-cyan-400 transition-colors duration-300">
