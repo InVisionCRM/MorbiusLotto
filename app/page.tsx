@@ -4,6 +4,7 @@ import { HomeHeader } from '@/components/home/header'
 import { HeroSection } from '@/components/home/hero-section'
 import { GamesSection } from '@/components/home/games-section'
 import { LatestWins } from '@/components/home/latest-wins'
+import { LatestBurns } from '@/components/home/latest-burns'
 import { SocialsSection } from '@/components/home/socials-section'
 import { TokenomicsSection } from '@/components/home/tokenomics-section'
 import { MorbItSection } from '@/components/home/morbit-section'
@@ -40,17 +41,24 @@ export default function HomePage() {
       {/* Games Section */}
       <GamesSection />
 
-      {/* Latest Wins Section */}
-      <LatestWins />
-
       {/* Tokenomics Section */}
       <TokenomicsSection />
 
-      {/* Morb-It Section */}
-      <MorbItSection />
+      {/* Latest Wins and Burns Section - 2 Column Grid */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto max-w-7xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <LatestWins />
+            <LatestBurns />
+          </div>
+        </div>
+      </section>
 
       {/* Socials Section */}
       <SocialsSection />
+
+      {/* Morb-It Section */}
+      <MorbItSection />
 
       {/* Footer */}
       <Footer />

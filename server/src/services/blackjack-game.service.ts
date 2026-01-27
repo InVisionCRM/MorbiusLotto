@@ -248,7 +248,9 @@ export class BlackjackGameService {
         gameId: game.id,
         sessionId: session.id,
         playerHands: [initialHand],
-        dealerCards: dealerCards, // Send both cards - frontend will hide the second one
+        // SECURITY: Only send visible dealer card during player turn to prevent cheating
+        // If game completed immediately (natural blackjack), send all cards
+        dealerCards: status === 'completed' ? dealerCards : dealerCards.slice(0, 1),
         dealerTotal: dealerVisibleHand.total,
         dealerHasAce: dealerVisibleHand.hasAce,
         status,
@@ -700,7 +702,8 @@ export class BlackjackGameService {
       gameId,
       sessionId: game.session_id,
       playerHands,
-      dealerCards: game.dealer_cards, // Send both cards - frontend will hide the second one
+      // SECURITY: Only send visible dealer card during player turn to prevent cheating
+      dealerCards: game.dealer_cards.slice(0, 1),
       dealerTotal: this.pfService.calculateHandTotal([game.dealer_cards[0]]).total,
       dealerHasAce: this.pfService.calculateHandTotal([game.dealer_cards[0]]).hasAce,
       status: 'player_turn',

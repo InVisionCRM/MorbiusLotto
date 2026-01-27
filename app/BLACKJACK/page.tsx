@@ -231,52 +231,6 @@ export default function BlackjackPage() {
   // Game result for chip animations
   const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
 
-  // Displayed game result (persists until new game starts)
-  const [displayedGameResult, setDisplayedGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
-
-  // Persistent session stats (stored in localStorage)
-  interface SessionStats {
-    gamesPlayed: number;
-    gamesWon: number;
-    blackjacks: number;
-  }
-
-  const [sessionStats, setSessionStats] = useState<SessionStats>({
-    gamesPlayed: 0,
-    gamesWon: 0,
-    blackjacks: 0,
-  });
-
-  // Load session stats from localStorage on mount
-  useEffect(() => {
-    const savedStats = localStorage.getItem('blackjack_session_stats');
-    if (savedStats) {
-      try {
-        const parsed = JSON.parse(savedStats);
-        setSessionStats({
-          gamesPlayed: parsed.gamesPlayed || 0,
-          gamesWon: parsed.gamesWon || 0,
-          blackjacks: parsed.blackjacks || 0,
-        });
-      } catch (e) {
-        console.error('Failed to parse saved stats:', e);
-      }
-    }
-  }, []);
-
-  // Save session stats to localStorage whenever they change
-  useEffect(() => {
-    if (sessionStats.gamesPlayed > 0) {
-      localStorage.setItem('blackjack_session_stats', JSON.stringify(sessionStats));
-    }
-  }, [sessionStats]);
-
-  // Reset session stats
-  const resetSessionStats = useCallback(() => {
-    setSessionStats({ gamesPlayed: 0, gamesWon: 0, blackjacks: 0 });
-    localStorage.removeItem('blackjack_session_stats');
-  }, []);
-
   // Custom chip stack manager
   const manageChipStack = useCallback((betAmount?: string, chipValue?: number, clearAll?: boolean) => {
     if (clearAll) {
@@ -620,14 +574,12 @@ export default function BlackjackPage() {
     };
   }, [address]);
 
-  // Sync balance from blockchain when WebSocket connects
-  // This ensures the server's off-chain ledger matches the on-chain contract balance
+  // Fetch balance when WebSocket connects
   useEffect(() => {
     if (wsConnected && wsClient) {
-      // Use syncBalance instead of fetchBalance to ensure server syncs with blockchain
-      syncBalance();
+      fetchBalance();
     }
-  }, [wsConnected, wsClient, syncBalance]);
+  }, [wsConnected, wsClient, fetchBalance]);
 
   // Convert server game state (off-chain) to local UI format
   const updateGameStateFromServer = useCallback((serverGameState: any) => {
@@ -687,7 +639,8 @@ export default function BlackjackPage() {
 
     const activePlayerHand = playerHands[currentHandIndex] || playerHands[0];
 
-    // Dealer cards - server should send both cards, frontend will hide the second one
+    // Dealer cards - server sends only visible card(s) during player turn for security
+    // When game completes, server sends all dealer cards for reveal animation
     const rawDealerCards: number[] = Array.isArray(serverGameState.dealerCards)
       ? serverGameState.dealerCards.map((c: any) => Number(c))
       : [];
@@ -846,13 +799,6 @@ export default function BlackjackPage() {
         lastResult: gameResult
       }));
 
-      // Update persistent session stats
-      setSessionStats(prev => ({
-        gamesPlayed: prev.gamesPlayed + 1,
-        gamesWon: prev.gamesWon + (profit > BigInt(0) ? 1 : 0),
-        blackjacks: prev.blackjacks + (data.result === 'blackjack' ? 1 : 0),
-      }));
-
       if (profit > BigInt(0)) {
         // Store pending win data - will show notification after dealer reveal completes
         setPendingWinData({
@@ -870,8 +816,6 @@ export default function BlackjackPage() {
     // Trigger chip animation now that dealer reveal is complete
     if (pendingChipResult) {
       setCurrentGameResult(pendingChipResult);
-      // Also set displayed result (this persists until new game)
-      setDisplayedGameResult(pendingChipResult);
       setPendingChipResult(null);
     }
 
@@ -906,9 +850,6 @@ export default function BlackjackPage() {
     prevDealerCardCount.current = 0;
     setNewCardIndices({ player: new Set(), dealer: new Set() });
 
-    // Clear displayed game result from previous game
-    setDisplayedGameResult(null);
-
     // Off-chain betting does NOT require a wagmi publicClient (only deposits/withdrawals do).
     // We only need a connected wallet address and a connected websocket client.
     if (!address) {
@@ -923,13 +864,6 @@ export default function BlackjackPage() {
 
     try {
       setGameState(prev => ({ ...prev, isPlaying: true, clientSeed }));
-
-      // Sync balance with blockchain before starting game if off-chain balance is 0
-      // This catches cases where user deposited but server hasn't synced yet
-      if (offChainBalance <= BigInt(0)) {
-        console.log('Off-chain balance is 0, syncing with blockchain...');
-        await syncBalance();
-      }
 
       // Step 1: Get server seed hash and nonce from server
       const { serverSeedHash, nonce } = await wsClient.getServerSeedHash();
@@ -976,11 +910,8 @@ export default function BlackjackPage() {
       
       // Determine error type for better user feedback
       let errorMessage = 'An error occurred while starting the game';
-      let shouldAutoSync = false;
-
-      if (error?.message?.includes('Insufficient balance') || error?.message?.includes('Insufficient reserve')) {
-        errorMessage = 'Balance sync issue. Syncing with blockchain...';
-        shouldAutoSync = true;
+      if (error?.message?.includes('Insufficient reserve')) {
+        errorMessage = 'Insufficient balance in your reserve';
       } else if (error?.message?.includes('Game hash already used')) {
         errorMessage = 'Game hash already used. Please try again.';
       } else if (error?.message?.includes('transaction failed')) {
@@ -988,25 +919,13 @@ export default function BlackjackPage() {
       } else if (error?.message) {
         errorMessage = error.message;
       }
-
+      
       toast.error('Failed to start game', {
         description: errorMessage
       });
-
-      // Auto-sync balance if it was an insufficient balance error
-      if (shouldAutoSync) {
-        try {
-          await syncBalance();
-          toast.success('Balance synced', {
-            description: 'Your balance has been synced with the blockchain. Please try again.'
-          });
-        } catch (syncError) {
-          console.error('Failed to sync balance:', syncError);
-        }
-      }
       setGameState(prev => ({ ...prev, isPlaying: false }));
     }
-  }, [isConnected, address, wsConnected, wsClient, fetchBalance, syncBalance, offChainBalance, updateGameStateFromServer]);
+  }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer]);
 
   // Note: Approval handling no longer needed since bets come from reserve
 
@@ -1096,13 +1015,12 @@ export default function BlackjackPage() {
     <div className="min-h-screen overflow-x-hidden w-full"
       style={{
         background: 'linear-gradient(145deg, rgb(10, 15, 20), rgb(16, 26, 35))',
-        zoom: 0.75,
       }}
     >
       <MainNav
         onOpenDepositModal={handleOpenDepositModal}
         onOpenApprovalModal={() => setShowApprovalModal(true)}
-        reserveBalance={offChainBalance > BigInt(0) ? offChainBalance : (playerReserve || BigInt(0))}
+        reserveBalance={offChainBalance}
         currentView={currentView}
         onViewChange={setCurrentView}
       />
@@ -1112,7 +1030,7 @@ export default function BlackjackPage() {
         {currentView === 'game' && (
           <>
         {/* Game Table */}
-        <div className="flex w-full gap-1 pb-0">
+        <div className="flex gap-1 pb-0">
           <div className="relative w-full">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
@@ -1125,7 +1043,7 @@ export default function BlackjackPage() {
               canStand={canStand}
               canDoubleDown={canDoubleDown}
               canSplit={canSplit}
-              reserveBalance={offChainBalance > BigInt(0) ? offChainBalance : (playerReserve || BigInt(0))}
+              reserveBalance={offChainBalance}
               usePLS={false}
               newCardIndices={newCardIndices}
               chipStack={chipStack}
@@ -1134,7 +1052,6 @@ export default function BlackjackPage() {
               isPlaying={gameState.isPlaying}
               onDealerRevealComplete={handleDealerRevealComplete}
               gameResult={currentGameResult}
-              displayedResult={displayedGameResult}
               onChipAnimationComplete={handleChipAnimationComplete}
               history={gameState.history}
               onDoubleDownChips={handleDoubleDownChips}
@@ -1144,83 +1061,63 @@ export default function BlackjackPage() {
               onDoubleBet={handleDoubleBet}
               canDeal={!gameState.isPlaying && totalBetAmount > 0}
             />
-            {/* Win Notification - positioned inside table container */}
-            {showWinNotification && (
-              <WinNotification
-                amount={winAmount}
-                isBlackjack={isBlackjackWin}
-                onComplete={() => setShowWinNotification(false)}
-              />
-            )}
           </div>
         </div>
 
-        {/* Game Stats - Persistent */}
-        <div className="mt-6 sm:mt-6 relative">
-          {/* Reset Button */}
-          <button
-            onClick={resetSessionStats}
-            className="absolute -top-1 right-0 px-2 py-1 text-xs text-white/40 hover:text-white/80 hover:bg-white/10 rounded transition-colors"
-            title="Reset Stats"
+        {/* Game Stats */}
+        <div className="mt-6 sm:mt-6 grid grid-cols-4 md:grid-cols-4 gap-2 sm:gap-2 w-full">
+          <div
+            className="rounded-md p-6 gap-2 text-center"
+            style={{
+              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(60, 60, 60, 0.5)',
+            }}
           >
-            <i className="fas fa-redo-alt mr-1"></i>
-            Reset
-          </button>
-
-          <div className="grid grid-cols-4 md:grid-cols-4 gap-2 sm:gap-2 w-full">
-            <div
-              className="rounded-md p-6 gap-2 text-center"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px solid rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              <div className="text-2xl pb-6 font-bold text-purple-500">
-                {sessionStats.gamesPlayed}
-              </div>
-              <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Games Played</div>
+            <div className="text-2xl pb-6 font-bold text-purple-500">
+              {gameState.history.length}
             </div>
-            <div
-              className="rounded-md p-6 gap-2 text-center"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px solid rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              <div className="text-2xl pb-6 font-bold text-purple-500">
-                {sessionStats.gamesWon}
-              </div>
-              <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Games Won</div>
+            <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Games Played</div>
+          </div>
+          <div
+            className="rounded-md p-6 gap-2 text-center"
+            style={{
+              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(60, 60, 60, 0.5)',
+            }}
+          >
+            <div className="text-2xl pb-6 font-bold text-purple-500">
+              {gameState.history.filter(r => r.payout > BigInt(0)).length}
             </div>
-            <div
-              className="rounded-md p-6 gap-2 text-center"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px solid rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              <div className="text-2xl pb-6 font-bold text-purple-500">
-                {sessionStats.blackjacks}
-              </div>
-              <div className="text-white/60 text-md font-bold uppercase tracking-wider">BJs</div>
+            <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Games Won</div>
+          </div>
+          <div
+            className="rounded-md p-6 gap-2 text-center"
+            style={{
+              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(60, 60, 60, 0.5)',
+            }}
+          >
+            <div className="text-2xl pb-6 font-bold text-purple-500">
+              {gameState.history.filter(r => r.isBlackjack).length}
             </div>
-            <div
-              className="rounded-md p-6 gap-2 text-center"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px solid rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              <div className="text-2xl pb-6 font-bold text-purple-500">
-                {sessionStats.gamesPlayed > 0 ?
-                  ((sessionStats.gamesWon / sessionStats.gamesPlayed) * 100).toFixed(1) : '0.0'}%
-              </div>
-              <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Win Rate</div>
+            <div className="text-white/60 text-md font-bold uppercase tracking-wider">BJs</div>
+          </div>
+          <div
+            className="rounded-md p-6 gap-2 text-center"
+            style={{
+              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(60, 60, 60, 0.5)',
+            }}
+          >
+            <div className="text-2xl pb-6 font-bold text-purple-500">
+              {gameState.history.length > 0 ?
+                ((gameState.history.filter(r => r.payout > BigInt(0)).length / gameState.history.length) * 100).toFixed(1) : '0.0'}%
             </div>
+            <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Win Rate</div>
           </div>
         </div>
 
@@ -1244,7 +1141,7 @@ export default function BlackjackPage() {
           <BettingDrawer
             onStartGame={handleStartGame}
             isPlaying={gameState.isPlaying}
-            reserveBalance={offChainBalance > BigInt(0) ? offChainBalance : (playerReserve || BigInt(0))}
+            reserveBalance={offChainBalance}
             chartRef={chartRef}
             sessionStartTime={chartSessionStartTime.current}
             onBetAmountChange={manageChipStack}
@@ -1262,7 +1159,6 @@ export default function BlackjackPage() {
           onClose={() => setShowDepositModal(false)}
           onBalanceSync={syncBalance}
           contractReserve={playerReserve}
-          offChainBalance={offChainBalance}
         />
           </>
         )}

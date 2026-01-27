@@ -228,7 +228,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     <div
       className="relative w-full max-w-4xl mx-auto rounded-3xl overflow-hidden p-4 sm:p-6 lg:p-8 blackjack-table"
       style={{
-        backgroundImage: "url('/BlackJack/tableBG.png')",
+        backgroundImage: "url('/BlackJack/TableBG.png')",
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         minHeight: '500px',
