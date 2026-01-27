@@ -499,9 +499,10 @@ export class DatabaseService {
         is_bust,
         bet_amount,
         result,
-        payout
+        payout,
+        actions
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::NUMERIC, $9, $10::NUMERIC)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::NUMERIC, $9, $10::NUMERIC, $11)
       RETURNING *
     `;
 
@@ -515,7 +516,8 @@ export class DatabaseService {
       handData.is_bust || false,
       (handData.bet_amount || 0n).toString(), // Convert BigInt to string, cast to NUMERIC then BIGINT
       handData.result,
-      (handData.payout || 0n).toString() // Convert BigInt to string, cast to NUMERIC then BIGINT
+      (handData.payout || 0n).toString(), // Convert BigInt to string, cast to NUMERIC then BIGINT
+      JSON.stringify(handData.actions || [])
     ];
 
     const result = await this.pool.query(query, values);

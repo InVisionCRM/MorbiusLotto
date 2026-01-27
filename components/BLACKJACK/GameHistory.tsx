@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { History, ChevronDown, ChevronUp, Trophy, Target, DollarSign, Clock } from 'lucide-react'
+import Image from 'next/image'
+import { History, ChevronDown, ChevronUp, Trophy, Target, Clock } from 'lucide-react'
 import { formatEther } from 'viem'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,12 +35,46 @@ interface GameHistoryProps {
   isLoading?: boolean
 }
 
-const CARD_SYMBOLS = {
+// Card value to rank mapping
+const VALUE_TO_RANK: Record<number, string> = {
   1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6',
   7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K'
 }
 
-const SUITS = ['♠', '♥', '♦', '♣']
+// Suits for deterministic assignment
+const SUITS = ['S', 'H', 'D', 'C'] // Spades, Hearts, Diamonds, Clubs
+
+// Get card image path from value and index
+const getCardImagePath = (value: number, index: number, salt: number = 0): string => {
+  const rank = VALUE_TO_RANK[value] || '2'
+  const suitIndex = (index + salt) % 4
+  const suit = SUITS[suitIndex]
+  return `/BlackJack/Cards/PNG/${rank}${suit}.png`
+}
+
+// Card component that displays the actual card image
+const CardImage = ({ value, index, salt = 0 }: { value: number; index: number; salt?: number }) => {
+  const imagePath = getCardImagePath(value, index, salt)
+
+  return (
+    <div
+      className="relative flex-shrink-0 rounded-md overflow-hidden shadow-lg"
+      style={{
+        width: '45px',
+        height: '63px',
+        marginLeft: index > 0 ? '-15px' : '0',
+      }}
+    >
+      <Image
+        src={imagePath}
+        alt={`Card ${VALUE_TO_RANK[value]}`}
+        fill
+        className="object-contain"
+        sizes="45px"
+      />
+    </div>
+  )
+}
 
 export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryProps) {
   const [expandedGame, setExpandedGame] = useState<string | null>(null)
@@ -80,21 +115,6 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
 
   const formatAmount = (amount: bigint) => {
     return Math.floor(Number(formatEther(amount))).toLocaleString()
-  }
-
-  const formatCards = (cards: number[]) => {
-    return cards.map((card, index) => {
-      const suitIndex = Math.floor((card - 1) / 13)
-      const rank = ((card - 1) % 13) + 1
-      return (
-        <span key={index} className="inline-flex items-center mx-0.5">
-          <span className="text-xs font-bold">{CARD_SYMBOLS[rank as keyof typeof CARD_SYMBOLS]}</span>
-          <span className="text-xs ml-0.5" style={{ color: suitIndex % 2 === 0 ? '#fff' : '#ff6b6b' }}>
-            {SUITS[suitIndex]}
-          </span>
-        </span>
-      )
-    })
   }
 
   const formatTimestamp = (timestamp: number) => {
@@ -176,7 +196,7 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
       </CardHeader>
       <CardContent className="space-y-3">
         <AnimatePresence>
-          {sortedHistory.map((entry) => (
+          {sortedHistory.map((entry, entryIndex) => (
             <motion.div
               key={entry.id}
               initial={{ opacity: 0, y: 10 }}
@@ -226,6 +246,57 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                     </div>
                   </div>
                 </div>
+
+                {/* Preview Cards Row - Always visible */}
+                <div className="mt-3 flex items-center gap-6">
+                  {/* Player Cards Preview */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 uppercase tracking-wider">You:</span>
+                    <div className="flex">
+                      {entry.playerHands[0]?.cards.slice(0, 3).map((cardValue, idx) => (
+                        <CardImage
+                          key={`preview-player-${idx}`}
+                          value={cardValue}
+                          index={idx}
+                          salt={entryIndex}
+                        />
+                      ))}
+                      {entry.playerHands[0]?.cards.length > 3 && (
+                        <span className="text-xs text-gray-500 ml-1 self-center">
+                          +{entry.playerHands[0].cards.length - 3}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm font-bold text-white ml-1">
+                      {entry.playerHands[0]?.total}
+                    </span>
+                  </div>
+
+                  <span className="text-gray-600">vs</span>
+
+                  {/* Dealer Cards Preview */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 uppercase tracking-wider">Dealer:</span>
+                    <div className="flex">
+                      {entry.dealerCards.slice(0, 3).map((cardValue, idx) => (
+                        <CardImage
+                          key={`preview-dealer-${idx}`}
+                          value={cardValue}
+                          index={idx}
+                          salt={entryIndex + 100}
+                        />
+                      ))}
+                      {entry.dealerCards.length > 3 && (
+                        <span className="text-xs text-gray-500 ml-1 self-center">
+                          +{entry.dealerCards.length - 3}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm font-bold text-white ml-1">
+                      {entry.dealerTotal}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Expanded Details */}
@@ -238,26 +309,47 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                     className="border-t border-gray-700 bg-gray-900/30"
                   >
                     <div className="p-4 space-y-4">
-                      {/* Hands Details */}
+                      {/* Player Hands Details */}
                       <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-gray-300">Hands Played</h4>
-                        {entry.playerHands.map((hand, index) => (
-                          <div key={index} className="bg-gray-800/50 rounded p-3">
-                            <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium text-gray-300">Your Hands</h4>
+                        {entry.playerHands.map((hand, handIndex) => (
+                          <div
+                            key={handIndex}
+                            className="bg-gray-800/50 rounded-lg p-4"
+                            style={{
+                              border: hand.result === 'blackjack' ? '1px solid rgba(168, 85, 247, 0.5)' :
+                                     hand.result === 'win' ? '1px solid rgba(34, 197, 94, 0.3)' :
+                                     hand.result === 'loss' ? '1px solid rgba(239, 68, 68, 0.3)' :
+                                     '1px solid rgba(234, 179, 8, 0.3)'
+                            }}
+                          >
+                            <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-400">Hand {index + 1}:</span>
-                                <div className="flex items-center gap-1">
-                                  {formatCards(hand.cards)}
-                                  <span className="text-sm text-gray-500 ml-2">
-                                    (Total: {hand.total})
-                                  </span>
-                                </div>
+                                {entry.playerHands.length > 1 && (
+                                  <span className="text-sm text-gray-400">Hand {handIndex + 1}</span>
+                                )}
+                                <Badge className={`${getResultColor(hand.result)} border-0 text-xs`}>
+                                  {hand.result.toUpperCase()}
+                                </Badge>
                               </div>
-                              <Badge className={`${getResultColor(hand.result)} border-0 text-xs`}>
-                                {hand.result.toUpperCase()}
-                              </Badge>
+                              <span className="text-lg font-bold text-white">
+                                Total: {hand.total}
+                              </span>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
+
+                            {/* Full Cards Display */}
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {hand.cards.map((cardValue, cardIdx) => (
+                                <CardImage
+                                  key={`hand-${handIndex}-card-${cardIdx}`}
+                                  value={cardValue}
+                                  index={cardIdx}
+                                  salt={entryIndex + handIndex * 10}
+                                />
+                              ))}
+                            </div>
+
+                            <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-700/50">
                               <span className="text-gray-400">
                                 Bet: {formatAmount(entry.betAmount / BigInt(entry.playerHands.length))} MORBIUS
                               </span>
@@ -275,13 +367,25 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                       <Separator className="bg-gray-700" />
 
                       {/* Dealer Cards */}
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-300 mb-2">Dealer</h4>
-                        <div className="flex items-center gap-2">
-                          {formatCards(entry.dealerCards)}
-                          <span className="text-sm text-gray-500 ml-2">
-                            (Total: {entry.dealerTotal})
+                      <div className="bg-gray-800/30 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-sm font-medium text-gray-300">Dealer's Hand</h4>
+                          <span className="text-lg font-bold text-white">
+                            Total: {entry.dealerTotal}
+                            {entry.dealerTotal > 21 && (
+                              <span className="text-red-400 ml-2 text-sm">BUST</span>
+                            )}
                           </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {entry.dealerCards.map((cardValue, cardIdx) => (
+                            <CardImage
+                              key={`dealer-card-${cardIdx}`}
+                              value={cardValue}
+                              index={cardIdx}
+                              salt={entryIndex + 100}
+                            />
+                          ))}
                         </div>
                       </div>
 

@@ -24,9 +24,14 @@ interface DepositWithdrawModalProps {
   onClose: () => void
   onBalanceSync?: () => Promise<void> // Callback to sync balance after deposit/withdraw
   contractReserve?: bigint // Contract reserve for withdrawals (still needed for withdraw limits)
+  offChainBalance?: bigint // Off-chain balance from server (for display)
 }
 
-export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractReserve }: DepositWithdrawModalProps) {
+export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractReserve, offChainBalance }: DepositWithdrawModalProps) {
+  // Display balance: prefer off-chain balance, fallback to contract reserve
+  const displayBalance = offChainBalance !== undefined && offChainBalance > 0n
+    ? offChainBalance
+    : contractReserve;
   const { address } = useAccount()
   const publicClient = usePublicClient()
   const [depositAmount, setDepositAmount] = useState('')
@@ -243,10 +248,16 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
                 <CardContent className="space-y-6">
                   {/* Current Reserve Balance */}
                   <div className="text-center p-4 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg border border-blue-500/20">
-                    <div className="text-sm text-gray-400 mb-1">Current Reserve</div>
+                    <div className="text-sm text-gray-400 mb-1">Current Balance</div>
                     <div className="text-2xl font-bold text-white">
-                      {contractReserve ? Math.floor(Number(formatEther(contractReserve))) : 0} MORBIUS
+                      {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0} MORBIUS
                     </div>
+                    {/* Show contract reserve if different from display balance */}
+                    {contractReserve && displayBalance && contractReserve !== displayBalance && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        (On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()} MORBIUS)
+                      </div>
+                    )}
                   </div>
 
                   <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'deposit' | 'withdraw')}>

@@ -28,6 +28,7 @@ interface BlackjackTableProps {
   isPlaying?: boolean;
   onDealerRevealComplete?: () => void;
   gameResult?: 'win' | 'loss' | 'push' | 'blackjack' | null;
+  displayedResult?: 'win' | 'loss' | 'push' | 'blackjack' | null;
   onChipAnimationComplete?: () => void;
   history?: GameResult[];
   onDoubleDownChips?: () => void;
@@ -58,6 +59,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   isPlaying = false,
   onDealerRevealComplete,
   gameResult = null,
+  displayedResult = null,
   onChipAnimationComplete,
   history = [],
   onDoubleDownChips,
@@ -243,6 +245,75 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         }}
       />
 
+      {/* Game Result Banner - Shows when game is complete until next deal */}
+      {gameState === GameState.COMPLETE && displayedResult && (
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex justify-center pointer-events-none">
+          <div
+            className={`
+              px-8 py-4 rounded-2xl backdrop-blur-md
+              transform transition-all duration-500 ease-out
+              animate-result-banner
+              ${displayedResult === 'blackjack' ? 'bg-gradient-to-r from-yellow-500/90 via-amber-400/90 to-yellow-500/90 border-2 border-yellow-300' :
+                displayedResult === 'win' ? 'bg-gradient-to-r from-green-600/90 via-emerald-500/90 to-green-600/90 border-2 border-green-400' :
+                displayedResult === 'loss' ? 'bg-gradient-to-r from-red-600/90 via-red-500/90 to-red-600/90 border-2 border-red-400' :
+                'bg-gradient-to-r from-gray-500/90 via-gray-400/90 to-gray-500/90 border-2 border-gray-300'}
+            `}
+            style={{
+              boxShadow: displayedResult === 'blackjack'
+                ? '0 0 40px rgba(251, 191, 36, 0.6), 0 0 80px rgba(251, 191, 36, 0.3), inset 0 2px 4px rgba(255,255,255,0.3)'
+                : displayedResult === 'win'
+                ? '0 0 40px rgba(34, 197, 94, 0.5), 0 0 80px rgba(34, 197, 94, 0.2), inset 0 2px 4px rgba(255,255,255,0.3)'
+                : displayedResult === 'loss'
+                ? '0 0 40px rgba(239, 68, 68, 0.5), 0 0 80px rgba(239, 68, 68, 0.2), inset 0 2px 4px rgba(255,255,255,0.2)'
+                : '0 0 30px rgba(156, 163, 175, 0.4), inset 0 2px 4px rgba(255,255,255,0.2)',
+            }}
+          >
+            <div className="flex flex-col items-center gap-1">
+              {/* Result Icon */}
+              <div className="text-4xl mb-1">
+                {displayedResult === 'blackjack' && '🃏✨'}
+                {displayedResult === 'win' && '🎉'}
+                {displayedResult === 'loss' && '😔'}
+                {displayedResult === 'push' && '🤝'}
+              </div>
+
+              {/* Result Text */}
+              <h2
+                className={`text-4xl font-black uppercase tracking-wider
+                  ${displayedResult === 'blackjack' ? 'text-yellow-900' :
+                    displayedResult === 'win' ? 'text-white' :
+                    displayedResult === 'loss' ? 'text-white' :
+                    'text-gray-800'}
+                `}
+                style={{
+                  textShadow: displayedResult === 'blackjack'
+                    ? '2px 2px 0 rgba(255,255,255,0.5)'
+                    : '2px 2px 4px rgba(0,0,0,0.3)',
+                }}
+              >
+                {displayedResult === 'blackjack' ? 'BLACKJACK!' :
+                 displayedResult === 'win' ? 'YOU WIN!' :
+                 displayedResult === 'loss' ? 'DEALER WINS' :
+                 'PUSH'}
+              </h2>
+
+              {/* Subtitle */}
+              <p className={`text-sm font-medium mt-1 opacity-80
+                ${displayedResult === 'blackjack' ? 'text-yellow-800' :
+                  displayedResult === 'win' ? 'text-green-100' :
+                  displayedResult === 'loss' ? 'text-red-100' :
+                  'text-gray-600'}
+              `}>
+                {displayedResult === 'blackjack' ? 'Natural 21 - 3:2 Payout!' :
+                 displayedResult === 'win' ? 'Congratulations!' :
+                 displayedResult === 'loss' ? 'Better luck next time' :
+                 'Bet returned'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Recent Win/Loss History - Top Left Overlay */}
       {history.length > 0 && (
         <div
@@ -345,8 +416,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                       }`}>
                         {hand.total}
                       </span>
-                      {hand.isBlackjack && <span className="text-yellow-400 font-black text-sm sm:text-lg">BJ!</span>}
-                      {hand.isBust && <span className="text-red-400 font-black text-xs sm:text-sm">BUST</span>}
+                      {hand.isBlackjack && <span className="text-yellow-400 font-black text-2xl sm:text-2xl">BJ!</span>}
+                      {hand.isBust && <span className="text-red-400 font-black text-2xl sm:text-2xl">BUST</span>}
                     </div>
 
                     {/* Cards - Use smaller cards on mobile when split */}
@@ -399,6 +470,58 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                         );
                       })}
                     </div>
+
+                    {/* Chip Stack Under Each Split Hand */}
+                    {hasSplit && chipStack.length > 0 && (
+                      <div className="mt-2 flex flex-col items-center">
+                        {/* Chips for this hand - show half the total chips */}
+                        <div
+                          className="relative"
+                          style={{
+                            width: '40px',
+                            height: `${Math.max(40, Math.ceil(chipStack.length / 2) * 2 + 40)}px`
+                          }}
+                        >
+                          {/* Split chips evenly between hands */}
+                          {chipStack
+                            .slice(
+                              handIndex === 0 ? 0 : Math.ceil(chipStack.length / 2),
+                              handIndex === 0 ? Math.ceil(chipStack.length / 2) : chipStack.length
+                            )
+                            .map((chipValue, index) => {
+                              const chipImage = getChipImage(chipValue);
+                              const stackOffset = index * 2;
+
+                              return (
+                                <div
+                                  key={`split-chip-${handIndex}-${index}`}
+                                  className="absolute w-10 h-10 rounded-full"
+                                  style={{
+                                    background: `url('${chipImage}') center/contain no-repeat`,
+                                    bottom: `${stackOffset}px`,
+                                    left: '0',
+                                    zIndex: 10 + index,
+                                  }}
+                                />
+                              );
+                            })}
+                        </div>
+                        {/* Bet amount for this hand */}
+                        <span
+                          className="text-white font-bold text-sm mt-1"
+                          style={{
+                            textShadow: '1px 1px 3px rgba(0, 0, 0, 0.8)',
+                          }}
+                        >
+                          {chipStack
+                            .slice(
+                              handIndex === 0 ? 0 : Math.ceil(chipStack.length / 2),
+                              handIndex === 0 ? Math.ceil(chipStack.length / 2) : chipStack.length
+                            )
+                            .reduce((sum, chip) => sum + chip, 0)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -472,9 +595,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         )}
 
         {/* Stacked Chip Display with Betting Controls - Bottom Center */}
-        <div className="absolute bottom-27 left-1/2 transform -translate-x-1/2 z-15 flex items-end gap-4">
-          {/* Chip Stack */}
-          {chipStack.length > 0 && (
+        {/* Only show center chips when NOT split - split hands show chips under each hand */}
+        <div className="absolute bottom-27 left-1/2 transform -translate-x-1/2 z-15 flex items-end">
+          {/* Chip Stack - hide when split (chips are shown under each hand) */}
+          {chipStack.length > 0 && !hasSplit && (
             <div
               className={`relative ${
                 chipAnimationState === 'loss' ? 'chip-stack-lose' :
@@ -540,7 +664,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
           {/* Betting Controls - Right side of chips */}
           {!isPlaying && (
-            <div className="relative bottom-[-55px] right-[-130px] z-20 gap-02 mb-2">
+            <div className="relative bottom-[-55px] right-[-150px] z-20 gap-02 mb-2">
               {/* REBET Button */}
               <button
                 onClick={onRebet}
@@ -608,6 +732,25 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       </div>
 
       <style jsx global>{`
+        /* Result banner animation */
+        @keyframes resultBannerIn {
+          0% {
+            opacity: 0;
+            transform: scale(0.5) translateY(-20px);
+          }
+          50% {
+            transform: scale(1.1) translateY(0);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+
+        .animate-result-banner {
+          animation: resultBannerIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
         /* Simple slide-in animation from top-right */
         @keyframes cardSlideIn {
           0% {

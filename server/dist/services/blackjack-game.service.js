@@ -241,26 +241,74 @@ class BlackjackGameService {
             }
             // Get current hands
             const gameHands = await this.dbService.getGameHands(request.gameId);
-            const playerHands = gameHands.map(gh => ({
-                id: gh.id,
-                cards: gh.cards,
-                total: gh.total || 0,
-                hasAce: gh.has_ace,
-                isBlackjack: gh.is_blackjack,
-                isBust: gh.is_bust,
-                betAmount: gh.bet_amount,
-                result: gh.result,
-                payout: gh.payout,
-                actions: gh.actions || [],
-                canHit: true,
-                canStand: true,
-                canDoubleDown: gh.cards.length === 2,
-                canSplit: this.canSplit(gh.cards)
-            }));
-            const handIndex = request.handIndex || game.current_hand_index;
+            logger_1.logger.info('Loaded game hands from DB', {
+                gameId: request.gameId,
+                handCount: gameHands.length,
+                hands: gameHands.map((gh, idx) => ({
+                    idx,
+                    id: gh.id,
+                    actions: gh.actions,
+                    is_bust: gh.is_bust
+                }))
+            });
+            const playerHands = gameHands.map(gh => {
+                const actions = gh.actions || [];
+                // Derive canHit/canStand from action history and hand state
+                // Hand is inactive if: bust, or has a 'stand' action, or has a 'double_down' action
+                const hasStandAction = actions.some((a) => a.type === 'stand');
+                const hasDoubleDownAction = actions.some((a) => a.type === 'double_down');
+                const isHandComplete = gh.is_bust || hasStandAction || hasDoubleDownAction;
+                logger_1.logger.info('Processing hand from DB', {
+                    handId: gh.id,
+                    actionsTypes: actions.map((a) => a.type),
+                    hasStandAction,
+                    hasDoubleDownAction,
+                    is_bust: gh.is_bust,
+                    isHandComplete,
+                    canHit: !isHandComplete
+                });
+                return {
+                    id: gh.id,
+                    cards: gh.cards,
+                    total: gh.total || 0,
+                    hasAce: gh.has_ace,
+                    isBlackjack: gh.is_blackjack,
+                    isBust: gh.is_bust,
+                    betAmount: gh.bet_amount,
+                    result: gh.result,
+                    payout: gh.payout,
+                    actions,
+                    canHit: !isHandComplete,
+                    canStand: !isHandComplete,
+                    canDoubleDown: !isHandComplete && gh.cards.length === 2,
+                    canSplit: !isHandComplete && this.canSplit(gh.cards)
+                };
+            });
+            // Use nullish coalescing to handle handIndex=0 correctly
+            const handIndex = request.handIndex ?? game.current_hand_index ?? 0;
             const currentHand = playerHands[handIndex];
+            logger_1.logger.info('Selected hand for action', {
+                gameId: request.gameId,
+                action: request.action,
+                requestHandIndex: request.handIndex,
+                gameCurrentHandIndex: game.current_hand_index,
+                resolvedHandIndex: handIndex,
+                handFound: !!currentHand,
+                handCanHit: currentHand?.canHit,
+                handCanStand: currentHand?.canStand
+            });
             if (!currentHand) {
                 throw new Error('Hand not found');
+            }
+            // Validate that the hand can still be acted upon
+            if (!currentHand.canHit && !currentHand.canStand) {
+                logger_1.logger.warn('Attempted action on completed hand', {
+                    gameId: request.gameId,
+                    action: request.action,
+                    handIndex,
+                    handId: currentHand.id
+                });
+                throw new Error('This hand has already been completed');
             }
             // Stake-style: client seed can remain stable; server seed is committed per session.
             // For blackjack we use a per-game base nonce and a per-draw rng_counter to ensure each draw is unique.
@@ -487,14 +535,31 @@ class BlackjackGameService {
             game.total_bet_amount = totalBetAmount;
         }
         // Check if all hands are completed
+        logger_1.logger.info('Checking for active hands', {
+            gameId,
+            playerHands: playerHands.map((h, idx) => ({
+                idx,
+                id: h.id,
+                canHit: h.canHit,
+                canStand: h.canStand,
+                actionsTypes: h.actions?.map((a) => a.type) || []
+            }))
+        });
         const activeHands = playerHands.filter(hand => hand.canHit || hand.canStand);
+        logger_1.logger.info('Active hands result', {
+            gameId,
+            activeCount: activeHands.length,
+            activeHandIds: activeHands.map(h => h.id)
+        });
         if (activeHands.length === 0) {
             // All hands completed, dealer plays
+            logger_1.logger.info('All hands completed, triggering dealer play', { gameId });
             const nextSeeds = { ...gameSeeds, nonce: baseNonce + rngCounter };
             return this.playDealerAndComplete(gameId, game, playerHands, nextSeeds);
         }
         // Move to next active hand
         const nextHandIndex = playerHands.findIndex(hand => hand.canHit || hand.canStand);
+        logger_1.logger.info('Moving to next active hand', { gameId, nextHandIndex, currentHandIndex: handIndex });
         // Persist current_hand_index to database so next action uses correct hand
         if (nextHandIndex !== handIndex) {
             await this.dbService.updateGame(gameId, { current_hand_index: nextHandIndex });

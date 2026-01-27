@@ -75,9 +75,9 @@ function TokenConversionCard() {
             toRef={morbiusRef}
             pathColor="rgb(166, 0, 255)"
             pathWidth={5}
-            gradientStartColor="rgb(155, 4, 243)"
-            gradientStopColor="rgb(243, 4, 179)"
-            duration={1}
+            gradientStartColor="rgb(4, 211, 243)"
+            gradientStopColor="rgb(155, 4, 243)"
+            duration={2.5}
             curvature={100}
           />
 

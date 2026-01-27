@@ -231,6 +231,9 @@ export default function BlackjackPage() {
   // Game result for chip animations
   const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
 
+  // Displayed game result (persists until new game starts)
+  const [displayedGameResult, setDisplayedGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
+
   // Persistent session stats (stored in localStorage)
   interface SessionStats {
     gamesPlayed: number;
@@ -867,6 +870,8 @@ export default function BlackjackPage() {
     // Trigger chip animation now that dealer reveal is complete
     if (pendingChipResult) {
       setCurrentGameResult(pendingChipResult);
+      // Also set displayed result (this persists until new game)
+      setDisplayedGameResult(pendingChipResult);
       setPendingChipResult(null);
     }
 
@@ -900,6 +905,9 @@ export default function BlackjackPage() {
     prevPlayerCardCount.current = 0;
     prevDealerCardCount.current = 0;
     setNewCardIndices({ player: new Set(), dealer: new Set() });
+
+    // Clear displayed game result from previous game
+    setDisplayedGameResult(null);
 
     // Off-chain betting does NOT require a wagmi publicClient (only deposits/withdrawals do).
     // We only need a connected wallet address and a connected websocket client.
@@ -1088,6 +1096,7 @@ export default function BlackjackPage() {
     <div className="min-h-screen overflow-x-hidden w-full"
       style={{
         background: 'linear-gradient(145deg, rgb(10, 15, 20), rgb(16, 26, 35))',
+        zoom: 0.75,
       }}
     >
       <MainNav
@@ -1125,6 +1134,7 @@ export default function BlackjackPage() {
               isPlaying={gameState.isPlaying}
               onDealerRevealComplete={handleDealerRevealComplete}
               gameResult={currentGameResult}
+              displayedResult={displayedGameResult}
               onChipAnimationComplete={handleChipAnimationComplete}
               history={gameState.history}
               onDoubleDownChips={handleDoubleDownChips}
@@ -1252,6 +1262,7 @@ export default function BlackjackPage() {
           onClose={() => setShowDepositModal(false)}
           onBalanceSync={syncBalance}
           contractReserve={playerReserve}
+          offChainBalance={offChainBalance}
         />
           </>
         )}

@@ -112,6 +112,7 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                       <NumberTicker
                         value={Math.floor(Number(reserveBalance) / 1e18)}
                         className="text-white/80 font-bold whitespace-nowrap"
+                        animateOnChange={true}
                       />
                       <Image
                         src="/morbius/MorbiusLogo (3).png"
