@@ -222,11 +222,33 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
   }
 
   return (
-    <div className={`relative w-full max-w-xl min-h-[610px] min-w-[280px] ${isBackground ? 'bg-transparent' : 'bg-gradient-to-b from-gray-950 via-gray-900 to-black'} text-white font-sans flex flex-col items-center justify-center px-5 py-5 overflow-hidden rounded-2xl mx-auto`}>
+    <div
+      className={`relative w-full max-w-xl min-h-[610px] min-w-[280px] text-white font-sans flex flex-col items-center justify-center px-5 py-5 overflow-hidden rounded-2xl mx-auto`}
+      style={!isBackground ? {
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        border: '1px inset rgba(60, 60, 60, 0.5)',
+      } : {}}
+    >
+      {/* Radial gradient overlay matching ticket-purchase-builder */}
+      {!isBackground && (
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
+      )}
+
       {/* Round Number - Top Center */}
       {!isBackground && roundId !== undefined && (
         <div className="absolute inset-x-0 z-20 top-3 z-30 text-center pointer-events-none">
-          <div className={`inline-block px-3 py-1 rounded-full ${isMegaMORBIUS ? 'bg-gradient-to-r from-yellow-500/20 via-pink-500/20 to-purple-500/20 border-2 border-yellow-400/40 shadow-[0_0_20px_rgba(251,191,36,0.4)]' : 'bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10'} shadow-lg`}>
+          <div
+            className={`inline-block px-3 py-1 rounded-full ${isMegaMORBIUS ? 'border-2 border-yellow-400/40 shadow-[0_0_20px_rgba(251,191,36,0.4)]' : ''}`}
+            style={isMegaMORBIUS ? {
+              background: 'linear-gradient(to right, rgba(251, 191, 36, 0.2), rgba(236, 72, 153, 0.2), rgba(168, 85, 247, 0.2))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 20px rgba(251,191,36,0.4)',
+            } : {
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+            }}
+          >
             {isMegaMORBIUS && (
               <span className="text-xs font-bold bg-gradient-to-r from-yellow-300 via-pink-400 to-purple-400 bg-clip-text text-transparent mr-1.5 tracking-wider">
                 ⭐ MEGA
@@ -245,7 +267,18 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
         <div className="relative">
           <button
             onClick={() => setShowReceipt(!showReceipt)}
-            className="flex items-center gap-2 px-3 pr-4 py-1.5 bg-slate-900 border border-white/10 rounded-lg hover:bg-gradient-to-br from-slate-950 to-slate-900/60 transition-colors text-xs"
+            className="flex items-center gap-2 px-3 pr-4 py-1.5 rounded-lg transition-colors text-xs"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(325deg, rgba(30, 30, 30, 0.9), rgba(50, 50, 50, 0.7))';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))';
+            }}
           >
             <Receipt className="w-4 h-4" />
             <span>View Receipt</span>
@@ -258,7 +291,14 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
               
           {/* Receipt Dropdown */}
           {showReceipt && (
-            <div className="absolute right-0 top-full mt-2 w-80 max-w-[85vw] bg-slate-900/95 border border-white/20 rounded-lg shadow-2xl z-50 p-5 max-h-[65vh] overflow-y-auto">
+            <div
+              className="absolute right-0 top-full mt-2 w-80 max-w-[85vw] rounded-lg shadow-2xl z-50 p-5 max-h-[65vh] overflow-y-auto"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 10px 40px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
                   <div className="space-y-3">
                     <div className="border-b border-white/10 pb-3">
                       <h3 className="text-base font-bold">Purchase Receipt</h3>
@@ -288,18 +328,37 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
                             return (
                               <div
                                 key={idx}
-                                className="p-2.5 bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10 rounded-lg"
+                                className="p-2.5 rounded-lg"
+                                style={{
+                                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                                }}
                               >
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <span className="text-xs font-semibold">Ticket #{ticketId}</span>
                                     {isFree && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30">
+                                      <span
+                                        className="text-[10px] px-1.5 py-0.5 rounded text-green-400 font-bold"
+                                        style={{
+                                          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                          boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 -2px 4px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.4)',
+                                          border: '1px inset rgba(34, 197, 94, 0.5)',
+                                        }}
+                                      >
                                         FREE
                                       </span>
                                     )}
                                     {roundRangeText && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold">
+                                      <span
+                                        className="text-[10px] px-1.5 py-0.5 rounded text-purple-400 font-bold"
+                                        style={{
+                                          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                          boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 -2px 4px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.4)',
+                                          border: '1px inset rgba(168, 85, 247, 0.5)',
+                                        }}
+                                      >
                                         {roundRangeText}
                                       </span>
                                     )}
@@ -312,7 +371,12 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
                                   {ticketNumbers.map((num) => (
                                     <div
                                       key={num}
-                                      className="flex items-center justify-center w-6 h-6 rounded bg-white/10 text-white text-[11px] font-bold"
+                                      className="flex items-center justify-center w-6 h-6 rounded text-white text-[11px] font-bold"
+                                      style={{
+                                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                        boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 -2px 4px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.4)',
+                                        border: '1px inset rgba(60, 60, 60, 0.5)',
+                                      }}
                                     >
                                       {num}
                                     </div>
@@ -364,7 +428,14 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
                 {drawnNumbers[i] ? (
                   <BallResult number={drawnNumbers[i]} type="white" animate={true} />
                 ) : (
-                  <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-ful border-2 border-white border-dashed flex items-center justify-center">
+                  <div
+                    className="w-8 h-8 sm:w-12 sm:h-12 rounded-full flex items-center justify-center"
+                    style={{
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    }}
+                  >
                     {/* Empty placeholder - no numbers */}
                   </div>
                 )}

@@ -56,6 +56,10 @@ const getCardImagePath = (value: number, index: number, salt: number = 0): strin
 const CardImage = ({ value, index, salt = 0 }: { value: number; index: number; salt?: number }) => {
   const imagePath = getCardImagePath(value, index, salt)
 
+  if (!value || value < 1 || value > 13) {
+    return null
+  }
+
   return (
     <div
       className="relative flex-shrink-0 rounded-md overflow-hidden shadow-lg"
@@ -63,14 +67,17 @@ const CardImage = ({ value, index, salt = 0 }: { value: number; index: number; s
         width: '45px',
         height: '63px',
         marginLeft: index > 0 ? '-15px' : '0',
+        position: 'relative',
       }}
     >
       <Image
         src={imagePath}
-        alt={`Card ${VALUE_TO_RANK[value]}`}
-        fill
+        alt={`Card ${VALUE_TO_RANK[value] || value}`}
+        width={45}
+        height={63}
         className="object-contain"
-        sizes="45px"
+        style={{ width: '100%', height: '100%' }}
+        unoptimized
       />
     </div>
   )
@@ -252,23 +259,29 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                   {/* Player Cards Preview */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 uppercase tracking-wider">You:</span>
-                    <div className="flex">
-                      {entry.playerHands[0]?.cards.slice(0, 3).map((cardValue, idx) => (
-                        <CardImage
-                          key={`preview-player-${idx}`}
-                          value={cardValue}
-                          index={idx}
-                          salt={entryIndex}
-                        />
-                      ))}
-                      {entry.playerHands[0]?.cards.length > 3 && (
-                        <span className="text-xs text-gray-500 ml-1 self-center">
-                          +{entry.playerHands[0].cards.length - 3}
-                        </span>
+                    <div className="flex items-center">
+                      {entry.playerHands && entry.playerHands.length > 0 && entry.playerHands[0].cards && entry.playerHands[0].cards.length > 0 ? (
+                        <>
+                          {entry.playerHands[0].cards.slice(0, 3).map((cardValue, idx) => (
+                            <CardImage
+                              key={`preview-player-${idx}`}
+                              value={cardValue}
+                              index={idx}
+                              salt={entryIndex}
+                            />
+                          ))}
+                          {entry.playerHands[0].cards.length > 3 && (
+                            <span className="text-xs text-gray-500 ml-1 self-center">
+                              +{entry.playerHands[0].cards.length - 3}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-gray-500">No cards</span>
                       )}
                     </div>
                     <span className="text-sm font-bold text-white ml-1">
-                      {entry.playerHands[0]?.total}
+                      {entry.playerHands && entry.playerHands.length > 0 ? entry.playerHands[0].total : '0'}
                     </span>
                   </div>
 
@@ -277,23 +290,29 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                   {/* Dealer Cards Preview */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 uppercase tracking-wider">Dealer:</span>
-                    <div className="flex">
-                      {entry.dealerCards.slice(0, 3).map((cardValue, idx) => (
-                        <CardImage
-                          key={`preview-dealer-${idx}`}
-                          value={cardValue}
-                          index={idx}
-                          salt={entryIndex + 100}
-                        />
-                      ))}
-                      {entry.dealerCards.length > 3 && (
-                        <span className="text-xs text-gray-500 ml-1 self-center">
-                          +{entry.dealerCards.length - 3}
-                        </span>
+                    <div className="flex items-center">
+                      {entry.dealerCards && entry.dealerCards.length > 0 ? (
+                        <>
+                          {entry.dealerCards.slice(0, 3).map((cardValue, idx) => (
+                            <CardImage
+                              key={`preview-dealer-${idx}`}
+                              value={cardValue}
+                              index={idx}
+                              salt={entryIndex + 100}
+                            />
+                          ))}
+                          {entry.dealerCards.length > 3 && (
+                            <span className="text-xs text-gray-500 ml-1 self-center">
+                              +{entry.dealerCards.length - 3}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-gray-500">No cards</span>
                       )}
                     </div>
                     <span className="text-sm font-bold text-white ml-1">
-                      {entry.dealerTotal}
+                      {entry.dealerTotal || 0}
                     </span>
                   </div>
                 </div>
@@ -339,14 +358,18 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
 
                             {/* Full Cards Display */}
                             <div className="flex flex-wrap gap-1 mb-3">
-                              {hand.cards.map((cardValue, cardIdx) => (
-                                <CardImage
-                                  key={`hand-${handIndex}-card-${cardIdx}`}
-                                  value={cardValue}
-                                  index={cardIdx}
-                                  salt={entryIndex + handIndex * 10}
-                                />
-                              ))}
+                              {hand.cards && hand.cards.length > 0 ? (
+                                hand.cards.map((cardValue, cardIdx) => (
+                                  <CardImage
+                                    key={`hand-${handIndex}-card-${cardIdx}`}
+                                    value={cardValue}
+                                    index={cardIdx}
+                                    salt={entryIndex + handIndex * 10}
+                                  />
+                                ))
+                              ) : (
+                                <span className="text-xs text-gray-500">No cards available</span>
+                              )}
                             </div>
 
                             <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-700/50">
@@ -378,14 +401,18 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1">
-                          {entry.dealerCards.map((cardValue, cardIdx) => (
-                            <CardImage
-                              key={`dealer-card-${cardIdx}`}
-                              value={cardValue}
-                              index={cardIdx}
-                              salt={entryIndex + 100}
-                            />
-                          ))}
+                          {entry.dealerCards && entry.dealerCards.length > 0 ? (
+                            entry.dealerCards.map((cardValue, cardIdx) => (
+                              <CardImage
+                                key={`dealer-card-${cardIdx}`}
+                                value={cardValue}
+                                index={cardIdx}
+                                salt={entryIndex + 100}
+                              />
+                            ))
+                          ) : (
+                            <span className="text-xs text-gray-500">No cards available</span>
+                          )}
                         </div>
                       </div>
 

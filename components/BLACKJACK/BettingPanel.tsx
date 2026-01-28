@@ -78,10 +78,10 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
 
   return (
     <div className="w-full">
-      {/* Single Row: Quick Bets + Deal Button + Clear */}
-      <div className="flex items-center justify-center gap-4">
+      {/* Single Row: Quick Bets */}
+      <div className="flex items-center justify-center">
         {/* Quick Bet Buttons */}
-        <div className="flex gap-1">
+        <div className="flex gap-0.5">
           {quickBetAmounts.map(amount => {
             // Map chip values to PNG images
             const getChipImage = (value: number) => {
@@ -108,7 +108,7 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
                   onBetAmountChange?.(newAmount, amount);
                 }}
                 disabled={isPlaying || !affordable}
-                className={`relative w-15 h-15 rounded-full flex items-center justify-center font-bold text-xs transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md overflow-hidden ${
+                className={`relative w-10 h-10 md:w-12 md:h-12 lg:w-12 lg:h-12 rounded-full flex items-center justify-center font-bold text-xs transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md overflow-hidden ${
                   !affordable ? 'opacity-50' : ''
                 }`}
                 style={{
@@ -117,12 +117,12 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
                 }}
               >
                 {/* Optional overlay for better text visibility */}
-                <div className="absolute inset-0 bg-black/20 rounded-full" />
+                <div className="absolute inset-0 rounded-full" />
                 <span
-                  className="relative z-10 font-bold text-white text-shadow"
+                  className="relative z-10 font-bold text-white text-shadow md:text-sm lg:text-base"
                   style={{
                     textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
-                    fontSize: '16px',
+                    fontSize: '12px',
                   }}
                 >
                   {amount}
@@ -130,44 +130,6 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
               </button>
             );
           })}
-        </div>
-
-        {/* Desktop Buttons - Show on md+ screens */}
-        <div className="hidden md:flex gap-2">
-          <button
-            onClick={() => onBetAmountChange?.('', undefined, true)}
-            disabled={isPlaying}
-            className="px-3 py-2 rounded font-bold text-lg uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/70"
-            style={{
-              background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
-              boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(60, 60, 60, 0.3)',
-            }}
-          >
-            Clear
-          </button>
-          <button
-            onClick={() => {
-              const betAmountBigInt = parseEther(currentBetAmount || '0');
-              onStartGame(betAmountBigInt, ''); // Use current bet amount
-            }}
-            disabled={isPlaying || currentBetAmountBigInt > reserveBalance || parseFloat(currentBetAmount || '0') === 0}
-            className={`px-4 py-2 rounded font-bold text-lg uppercase tracking-wider transition-all transform
-              ${isPlaying || currentBetAmountBigInt > reserveBalance || parseFloat(currentBetAmount || '0') === 0
-                ? 'opacity-50 cursor-not-allowed text-cyan-300/30 scale-95'
-                : 'text-cyan-300 hover:scale-105 active:scale-95'}
-            `}
-            style={{
-              background: isPlaying || currentBetAmountBigInt > reserveBalance || parseFloat(currentBetAmount || '0') === 0
-                ? 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))'
-                : 'linear-gradient(145deg, rgba(6, 182, 212, 0.4), rgba(8, 145, 178, 0.4))',
-              boxShadow: isPlaying || currentBetAmountBigInt > reserveBalance || parseFloat(currentBetAmount || '0') === 0
-                ? 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)'
-                : 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.3)',
-            }}
-          >
-            {isPlaying ? 'PLAYING...' : 'DEAL'}
-          </button>
         </div>
       </div>
 

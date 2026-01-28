@@ -178,7 +178,16 @@ export function PlayerTicketsModal({ roundId, playerTickets = [] }: PlayerTicket
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-white bg-slate-900 border-white/10 hover:bg-gradient-to-br from-slate-950 to-slate-900/60 w-full h-10 p-0 text-xs sm:text-sm" title="Your Tickets">
+        <Button
+          variant="outline"
+          className="text-white w-full h-10 p-0 text-xs sm:text-sm hover:opacity-80"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            border: '1px inset rgba(60, 60, 60, 0.5)',
+          }}
+          title="Your Tickets"
+        >
           Tickets
         </Button>
       </DialogTrigger>

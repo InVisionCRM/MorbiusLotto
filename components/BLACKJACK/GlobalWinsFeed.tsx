@@ -155,12 +155,7 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
   }, []);
 
   if (entries.length === 0) {
-    return (
-      <div className={`text-center py-4 text-white/40 text-sm ${className}`}>
-        <i className="fas fa-trophy mr-2"></i>
-        Waiting for game results...
-      </div>
-    );
+    return null;
   }
 
   return (

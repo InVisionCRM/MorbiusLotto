@@ -221,7 +221,16 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
   return (
     <>
-      <Card className={`px-4 py-0 sm:px-6 sm:py-0 md:px-8 md:py-0 border-white/10 relative min-h-[680px] sm:min-h-[680px] md:min-h-[690px] max-w-3xl w-full mx-auto bg-gradient-to-br from-slate-950 to-slate-900/10 backdrop-blur-md ${cardDisabledClass}`}>
+      <Card
+        className={`px-4 py-0 sm:px-6 sm:py-0 md:px-8 md:py-0 relative min-h-[680px] sm:min-h-[680px] md:min-h-[690px] max-w-3xl w-full mx-auto ${cardDisabledClass}`}
+        style={{
+          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+          border: '1px inset rgba(60, 60, 60, 0.5)',
+        }}
+      >
+        {/* Radial gradient overlay matching ticket-purchase-builder */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
       {/* House Ticket Numbers - Vertical on left */}
       <div className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 flex flex-col gap-1 sm:gap-2">
         {houseTicketNumbers && houseTicketNumbers.length === 6 ? (
@@ -399,7 +408,12 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
           <Button
             variant="outline"
             onClick={onShowDashboard}
-            className="text-white bg-slate-900 hover:bg-blue-500/60 flex-1 h-10 p-0 text-xs sm:text-sm"
+            className="text-white flex-1 h-10 p-0 text-xs sm:text-sm hover:opacity-80"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+            }}
             title="Round History"
           >
             History
@@ -415,7 +429,12 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
             <Button
               variant="outline"
               onClick={onShowDashboard}
-              className="text-white bg-slate-900 border-yellow-500/50 hover:bg-yellow-500/60 flex-1 h-10 p-0 text-xs sm:text-sm"
+              className="text-white flex-1 h-10 p-0 text-xs sm:text-sm hover:opacity-80"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
               title="Dashboard"
             >
               Dashboard
@@ -485,7 +504,16 @@ export function PayoutBreakdownDialog({ totalMORBIUS }: PayoutBreakdownDialogPro
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-white z-10 w-full h-10 p-0 bg-slate-900/50 backdrop-blur-sm border-white/20 hover:bg-red-500/60 text-xs sm:text-sm" title="Payouts">
+        <Button
+          variant="outline"
+          className="text-white z-10 w-full h-10 p-0 text-xs sm:text-sm hover:opacity-80"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            border: '1px inset rgba(60, 60, 60, 0.5)',
+          }}
+          title="Payouts"
+        >
           Payouts
         </Button>
       </DialogTrigger>

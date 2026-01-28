@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image'
 import { Card } from '@/components/ui/card'
 import { RippleButton } from '@/components/ui/ripple-button'
@@ -39,7 +39,7 @@ import { formatUnits, formatEther } from 'viem'
 import { toast } from 'sonner'
 import { LoaderOne } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
-import { Trash2, Edit2, Plus, Minus, ChevronDown } from 'lucide-react'
+import { Plus, Minus } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { SignaturePrompt } from '@/components/auth/SignaturePrompt'
 
@@ -69,11 +69,8 @@ export function TicketPurchaseBuilder({
   } = useWalletDetection()
   const { isOnPulseChain, switchToPulseChain } = useNetworkValidation()
 
-  const [tickets, setTickets] = useState<number[][]>([])
-  const [roundsByTicket, setRoundsByTicket] = useState<number[]>([])
   const [workingTicket, setWorkingTicket] = useState<number[]>([])
   const [workingRounds, setWorkingRounds] = useState(1)
-  const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'MORBIUS' | 'PLS'>('MORBIUS')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [uiState, setUiState] = useState<'idle' | 'approving' | 'buying' | 'success' | 'error'>('idle')
@@ -93,7 +90,7 @@ export function TicketPurchaseBuilder({
         ? `${formatEther(totalCost)} PLS`
         : `${formatUnits(totalCost, TOKEN_DECIMALS)} MORBIUS`
 
-      const transactionMessage = `Confirm Lottery Purchase\n\nAmount: ${amount}\nTickets: ${ticketCount}\nRounds: ${roundsByTicket[0] || 1}\n\nThis action cannot be undone.`
+      const transactionMessage = `Confirm Lottery Purchase\n\nAmount: ${amount}\nTickets: 1\nRounds: ${workingRounds}\n\nThis action cannot be undone.`
 
       await signMessageAsync({ message: transactionMessage })
 
@@ -115,25 +112,28 @@ export function TicketPurchaseBuilder({
         console.log('🌐 Preparing transaction for Internet Money wallet...')
       }
 
+      if (workingTicket.length !== NUMBERS_PER_TICKET) {
+        throw new Error(`Select ${NUMBERS_PER_TICKET} numbers`)
+      }
+
+      const ticket = [workingTicket]
+      const boundedRounds = Math.max(1, Math.min(100, workingRounds))
+
       if (paymentMethod === 'PLS') {
         const valueWei = plsValueWei
         if (valueWei === BigInt(0)) {
           throw new Error('PLS amount is zero')
         }
 
-        const boundedRounds = roundsByTicket.map((r) => Math.max(1, Math.min(100, r || 1)))
-        const highest = boundedRounds.length ? Math.max(...boundedRounds) : 1
-        console.log('💰 Buying with PLS:', { tickets, boundedRounds, highest, valueWei: valueWei.toString() })
+        console.log('💰 Buying with PLS:', { ticket, rounds: boundedRounds, valueWei: valueWei.toString() })
 
-        if (highest > 1) {
+        if (boundedRounds > 1) {
           // Multi-round purchase with PLS
-          const offsets = Array.from({ length: highest }, (_, i) => i)
-          const groups = offsets.map((offset) =>
-            tickets.filter((_, idx) => boundedRounds[idx] > offset)
-          )
-          console.error('🚨 MULTI-ROUND PLS PURCHASE:', {
-            totalTickets: tickets.length,
-            rounds: highest,
+          const offsets = Array.from({ length: boundedRounds }, (_, i) => i)
+          const groups = offsets.map(() => ticket)
+          console.log('🚨 MULTI-ROUND PLS PURCHASE:', {
+            totalTickets: 1,
+            rounds: boundedRounds,
             groups: groups.map(g => g.length),
             offsets,
             plsValue: valueWei.toString(),
@@ -142,24 +142,20 @@ export function TicketPurchaseBuilder({
           buyTicketsWithPLSForRounds(groups, offsets, valueWei)
         } else {
           // Single round purchase with PLS
-          console.log('🎫 Buying for current round with PLS:', tickets)
-          buyTicketsWithPLS(tickets, valueWei)
+          console.log('🎫 Buying for current round with PLS:', ticket)
+          buyTicketsWithPLS(ticket, valueWei)
         }
       } else {
-        const boundedRounds = roundsByTicket.map((r) => Math.max(1, Math.min(100, r || 1)))
-        const highest = boundedRounds.length ? Math.max(...boundedRounds) : 1
-        console.log('🎫 Buying with MORBIUS:', { tickets, boundedRounds, highest })
+        console.log('🎫 Buying with MORBIUS:', { ticket, rounds: boundedRounds })
 
-        if (highest > 1) {
-          const offsets = Array.from({ length: highest }, (_, i) => i)
-          const groups = offsets.map((offset) =>
-            tickets.filter((_, idx) => boundedRounds[idx] > offset)
-          )
+        if (boundedRounds > 1) {
+          const offsets = Array.from({ length: boundedRounds }, (_, i) => i)
+          const groups = offsets.map(() => ticket)
           console.log('📅 Buying for multiple rounds:', { groups, offsets })
           buyTicketsForRounds(groups, offsets)
         } else {
-          console.log('🎫 Buying for current round:', tickets)
-          buyTickets(tickets)
+          console.log('🎫 Buying for current round:', ticket)
+          buyTickets(ticket)
         }
       }
     } catch (err) {
@@ -200,8 +196,9 @@ export function TicketPurchaseBuilder({
 
   // Notify parent on state change
   useEffect(() => {
-    onStateChangeRef.current?.(tickets, roundsByTicket[0] ?? initialRounds)
-  }, [tickets, roundsByTicket, initialRounds])
+    onStateChangeRef.current?.([workingTicket], workingRounds)
+  }, [workingTicket, workingRounds])
+
 
   const { data: MORBIUSBalance, isLoading: isLoadingBalance, error: balanceError } = useReadContract({
     address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
@@ -236,12 +233,12 @@ export function TicketPurchaseBuilder({
   }, [MORBIUSBalance, address, isLoadingBalance, balanceError])
 
   // Calculate costs first (needed for hooks)
-  const ticketCount = tickets.length
+  const ticketCount = workingTicket.length === NUMBERS_PER_TICKET ? 1 : 0
   const totalEntries = useMemo(
-    () => roundsByTicket.reduce((acc, r) => acc + Math.max(1, Math.min(100, r || 1)), 0),
-    [roundsByTicket]
+    () => (workingTicket.length === NUMBERS_PER_TICKET ? Math.max(1, Math.min(100, workingRounds)) : 0),
+    [workingTicket.length, workingRounds]
   )
-  const maxRounds = useMemo(() => (roundsByTicket.length ? Math.max(...roundsByTicket) : 1), [roundsByTicket])
+  const maxRounds = workingRounds
 
   const { data: ticketPriceMORBIUSData } = useReadContract({
     address: LOTTERY_ADDRESS as `0x${string}`,
@@ -308,8 +305,8 @@ export function TicketPurchaseBuilder({
   } = useBuyTicketsWithPLSForRounds()
 
   const buyHash = paymentMethod === 'PLS'
-    ? (roundsByTicket.some((r) => r > 1) ? buyPlsMultiHash : buyPlsHash)
-    : (roundsByTicket.some((r) => r > 1) ? buyMultiHash : buyMORBIUSHash)
+    ? (workingRounds > 1 ? buyPlsMultiHash : buyPlsHash)
+    : (workingRounds > 1 ? buyMultiHash : buyMORBIUSHash)
   const { isLoading: isBuyLoading, isSuccess: isBuySuccess } = useWaitForTransactionReceipt({
     hash: buyHash,
   })
@@ -321,9 +318,10 @@ export function TicketPurchaseBuilder({
   const isProcessing = isApproving || isBuyMORBIUSPending || isBuyMultiPending || isBuyPlsPending || isBuyPlsMultiPending
 
   const canBuy =
-    paymentMethod === 'MORBIUS'
-      ? ticketCount > 0 && hasEnoughBalance && !needsApproval
-      : ticketCount > 0 && hasEnoughBalance
+    workingTicket.length === NUMBERS_PER_TICKET &&
+    (paymentMethod === 'MORBIUS'
+      ? hasEnoughBalance && !needsApproval
+      : hasEnoughBalance)
   const isApproveLoadingState = uiState === 'approving' || isApproving
   const isBuyLoadingState = uiState === 'buying' || isBuyLoading || isBuyMORBIUSPending || isBuyMultiPending || isBuyPlsPending
 
@@ -378,8 +376,8 @@ export function TicketPurchaseBuilder({
         setShowSuccessModal(true)
       }
 
-      setTickets([])
-      setRoundsByTicket([])
+      setWorkingTicket([])
+      setWorkingRounds(1)
       setWorkingTicket([])
       setWorkingRounds(1)
       onSuccessRef.current?.()
@@ -427,11 +425,10 @@ export function TicketPurchaseBuilder({
   const handleBuy = async () => {
     console.log('🛒 handleBuy called with:', {
       address,
-      ticketCount,
+      workingTicket,
+      workingRounds,
       paymentMethod,
       hasEnoughBalance,
-      tickets,
-      roundsByTicket
     })
 
     if (!address) {
@@ -439,8 +436,8 @@ export function TicketPurchaseBuilder({
       setUiState('error')
       return
     }
-    if (ticketCount < 1) {
-      setErrorMessage('Add a ticket')
+    if (workingTicket.length !== NUMBERS_PER_TICKET) {
+      setErrorMessage(`Select ${NUMBERS_PER_TICKET} numbers`)
       setUiState('error')
       return
     }
@@ -514,77 +511,22 @@ export function TicketPurchaseBuilder({
     setWorkingTicket(nums.sort((a, b) => a - b))
   }
 
-  const handleAddToCart = () => {
-    if (workingTicket.length !== NUMBERS_PER_TICKET) {
-      toast.error(`Select ${NUMBERS_PER_TICKET} numbers`)
-      return
-    }
-    if (tickets.length >= 10) {
-      toast.error('Maximum 10 tickets')
-      return
-    }
-
-    if (editingIndex !== null) {
-      // Update existing ticket
-      setTickets((prev) => {
-        const next = [...prev]
-        next[editingIndex] = workingTicket
-        return next
-      })
-      setRoundsByTicket((prev) => {
-        const next = [...prev]
-        next[editingIndex] = workingRounds
-        return next
-      })
-      toast.success('Ticket updated')
-      setEditingIndex(null)
-    } else {
-      // Add new ticket
-      setTickets((prev) => [...prev, workingTicket])
-      setRoundsByTicket((prev) => [...prev, workingRounds])
-      toast.success('Ticket added')
-    }
-
-    setWorkingTicket([])
-    setWorkingRounds(1)
-  }
-
-  const handleEditTicket = (index: number) => {
-    setWorkingTicket(tickets[index])
-    setWorkingRounds(roundsByTicket[index] || 1)
-    setEditingIndex(index)
-    toast.info('Editing ticket')
-  }
-
-  const handleRemoveTicket = (index: number) => {
-    setTickets((prev) => prev.filter((_, i) => i !== index))
-    setRoundsByTicket((prev) => prev.filter((_, i) => i !== index))
-    if (editingIndex === index) {
-      setEditingIndex(null)
-      setWorkingTicket([])
-      setWorkingRounds(1)
-    }
-    toast.success('Ticket removed')
-  }
-
-  const handleCancelEdit = () => {
-    setEditingIndex(null)
-    setWorkingTicket([])
-    setWorkingRounds(1)
-  }
-
-  const canAddToCart = workingTicket.length === NUMBERS_PER_TICKET
 
   return (
     <>
-    <Card className="relative overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900/70 border-white/10 shadow-2xl p-0 w-full max-w-full">
+    <Card
+      className="relative overflow-hidden p-0 w-full max-w-full min-h-[610px]"
+      style={{
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        border: '1px inset rgba(60, 60, 60, 0.5)',
+      }}
+    >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
 
-      <div className="relative flex flex-col lg:flex-row gap-4 p-4 min-h-0 overflow-x-hidden w-full">
-        {/* LEFT PANEL - Builder */}
-        <div className="flex-1 lg:flex-[3] space-y-4 min-w-0 w-full overflow-x-hidden">
-          <h2 className="text-xl font-bold text-white">GET TICKETS</h2>
-
+      <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
+        {/* Builder Panel */}
+        <div className="flex-1 space-y-4 min-w-0 w-full overflow-x-hidden">
           {/* Number Grid */}
           <div className="w-full overflow-x-hidden">
             <div className="grid grid-cols-6 xs:grid-cols-7 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-11 gap-1.5 mb-3 w-full">
@@ -609,7 +551,14 @@ export function TicketPurchaseBuilder({
             </div>
 
             {/* Selected Numbers Display */}
-            <div className="bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10 rounded-lg p-2 mb-2">
+            <div
+              className="rounded-lg p-2 mb-2"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
               <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center mb-2">
                 {workingTicket.length > 0 ? (
                   workingTicket.map((n) => (
@@ -698,48 +647,15 @@ export function TicketPurchaseBuilder({
             </div>
           </div> */}
 
-          {/* Add to Cart Button */}
-          <div className="flex gap-2">
-            {editingIndex !== null && (
-              <RippleButton
-                variant="outline"
-                className="border-white/30 text-white"
-                onClick={handleCancelEdit}
-              >
-                Cancel
-              </RippleButton>
-            )}
-            <RippleButton
-              className={cn(
-                'flex-1 h-12 font-semibold',
-                canAddToCart
-                  ? 'bg-green-500 text-white hover:bg-green-600'
-                  : 'bg-white/10 text-white/50 cursor-not-allowed'
-              )}
-              disabled={!canAddToCart}
-              onClick={handleAddToCart}
-            >
-              {editingIndex !== null ? 'Update Ticket' : '+ Add to Cart'}
-            </RippleButton>
-          </div>
-
-          {/* Scroll Down Arrow - Mobile Only */}
-          {ticketCount > 0 && (
-            <div className="flex justify-center py-4 lg:hidden">
-              <div className="flex flex-col items-center gap-2 animate-bounce">
-                <span className="text-white/70 text-xs font-medium">View Cart</span>
-                <ChevronDown className="w-6 h-6 text-white/80" />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT PANEL - Cart */}
-        <div className="lg:flex-[2] lg:max-w-sm bg-gradient-to-br from-slate-950 to-slate-900/40 rounded-lg p-4 flex flex-col min-w-0 w-full overflow-x-hidden">
-          <h2 className="text-lg font-bold text-white mb-3">CONFIRM</h2>
-
           {/* Payment Method Selection - Text Labels */}
-          <div className="mb-4 p-3 bg-white/5 rounded-lg">
+          <div
+            className="mb-4 p-3 rounded-lg"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+            }}
+          >
             <div className="text-xs text-white/70 mb-2 font-medium text-center">Pay In...</div>
             <div className="flex items-center justify-center gap-4">
               <span
@@ -775,64 +691,11 @@ export function TicketPurchaseBuilder({
             </div>
           </div>
 
-          {/* Cart Items */}
-          <div className="flex-1 space-y-2 mb-4 overflow-y-auto max-h-[300px]">
-            {tickets.length === 0 ? (
-              <div className="text-center py-12 text-white/50">
-                <p className="text-sm">No tickets yet</p>
-                <p className="text-xs mt-2">Add tickets to get started</p>
-              </div>
-            ) : (
-              tickets.map((ticket, idx) => (
-                <div
-                  key={idx}
-                  className={cn(
-                    'p-2 rounded border transition-all',
-                    editingIndex === idx
-                      ? 'border-green-500/50 bg-green-500/10'
-                      : 'border-white/10 bg-white/5'
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-white/60 text-xs font-semibold">Ticket #{idx + 1}</span>
-                    <div className="flex gap-0.5">
-                      <button
-                        onClick={() => handleEditTicket(idx)}
-                        className="p-1 hover:bg-white/10 rounded text-white/60 hover:text-white transition-colors"
-                      >
-                        <Edit2 className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={() => handleRemoveTicket(idx)}
-                        className="p-1 hover:bg-white/10 rounded text-white/60 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1 mb-1">
-                    {ticket.map((num) => (
-                      <span
-                        key={num}
-                        className="h-5 min-w-5 px-1 flex items-center justify-center rounded bg-white/10 text-white text-xs font-semibold"
-                      >
-                        {num}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="text-white/60 text-xs">
-                    {roundsByTicket[idx] || 1} round{(roundsByTicket[idx] || 1) > 1 ? 's' : ''}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Cart Summary */}
+          {/* Purchase Summary */}
           <div className="space-y-2 border-t border-white/10 pt-3">
             <div className="flex justify-between text-xs">
-              <span className="text-white/70">Tickets</span>
-              <span className="text-white font-semibold">{ticketCount}</span>
+              <span className="text-white/70">Rounds</span>
+              <span className="text-white font-semibold">{workingRounds}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-white/70">Total Entries</span>
@@ -904,7 +767,7 @@ export function TicketPurchaseBuilder({
                 </AlertDescription>
               </Alert>
             )}
-            {paymentMethod === 'PLS' && isLoadingPlsQuote && ticketCount > 0 && (
+            {paymentMethod === 'PLS' && isLoadingPlsQuote && workingTicket.length === NUMBERS_PER_TICKET && (
               <Alert className="border-blue-400/40 bg-blue-500/10">
                 <AlertDescription className="text-blue-200 text-sm">Loading PLS price...</AlertDescription>
               </Alert>
@@ -917,7 +780,7 @@ export function TicketPurchaseBuilder({
                   'w-full h-12 font-semibold',
                   isProcessing ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold' : 'bg-green-600 text-white hover:bg-green-600'
                 )}
-                disabled={isProcessing || ticketCount === 0}
+                disabled={isProcessing || workingTicket.length !== NUMBERS_PER_TICKET}
                 onClick={handleApprove}
               >
                 {isApproveLoadingState ? (
@@ -968,7 +831,14 @@ export function TicketPurchaseBuilder({
 
           <div className="space-y-4 py-4">
             {/* Rounds Purchased */}
-            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+            <div
+              className="rounded-lg p-4"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
               <div className="text-sm text-white/60 mb-1">Rounds Purchased</div>
               <div className="text-3xl font-black text-emerald-400">
                 {successRoundsCount} {successRoundsCount === 1 ? 'Round' : 'Rounds'}
@@ -976,7 +846,14 @@ export function TicketPurchaseBuilder({
             </div>
 
             {/* Transaction Hash */}
-            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+            <div
+              className="rounded-lg p-4"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
               <div className="text-sm text-white/60 mb-2">Transaction Hash</div>
               <div className="font-mono text-xs text-white/80 break-all">
                 {successTxHash}

@@ -148,96 +148,103 @@ export function KenoTicket({
   const payoutTable = PAYTABLE[spotSize] || {}
   const payoutEntries = Object.entries(payoutTable).sort((a, b) => Number(b[0]) - Number(a[0]))
   const ticketBackground = {
-    backgroundImage: "url('/MORBIUS/c718c298-363d-45d3-82bd-e51837b459cb.png')",
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
+    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95))',
   }
 
   return (
     <div
       className="relative w-80 mx-auto my-4"
-      style={{ perspective: '1000px' }}
+      style={{
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        border: '1px inset rgba(60, 60, 60, 0.5)',
+        borderRadius: '0.5rem',
+        padding: '0.5rem',
+      }}
     >
-      <div
-        className={cn(
-          "relative w-full transition-all duration-1000 ease-out cursor-pointer",
-          isRevealed
-            ? "opacity-100 translate-y-0 scale-100"
-            : "opacity-0 translate-y-8 scale-95"
-        )}
-        style={{
-          transformStyle: 'preserve-3d',
-          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-          transitionDuration: '500ms',
-        }}
-        onClick={() => setIsFlipped(!isFlipped)}
-      >
-      {/* Front of ticket */}
-      <div
-        className="keno-ticket relative w-80 border border-black overflow-hidden"
-        style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', ...ticketBackground }}
-      >
-      {/* Left edge vertical text */}
-      <div className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center">
+      {/* Radial gradient overlay */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+      <div className="relative" style={{ perspective: '1000px' }}>
+        <div
+          className={cn(
+            "relative w-full transition-all duration-1000 ease-out cursor-pointer",
+            isRevealed
+              ? "opacity-100 translate-y-0 scale-100"
+              : "opacity-0 translate-y-8 scale-95"
+          )}
+          style={{
+            transformStyle: 'preserve-3d',
+            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+            transitionDuration: '500ms',
+          }}
+          onClick={() => setIsFlipped(!isFlipped)}
+        >
+        {/* Front of ticket */}
+        <div
+          className="keno-ticket relative w-80 border border-black overflow-hidden"
+          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', ...ticketBackground }}
+        >
+        {/* Left edge vertical text */}
+        <div className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center">
         <div 
-          className="text-[10px] font-bold text-black writing-vertical-rl transform rotate-180"
+          className="text-[10px] font-bold text-white writing-vertical-rl transform rotate-180"
           style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
           cryptokeno
         </div>
-      </div>
+        </div>
 
-      {/* Main content */}
-      <div className="ml-6 mr-2 py-3 px-3 flex flex-col min-h-full">
+        {/* Main content */}
+        <div className="ml-6 mr-2 py-3 px-3 flex flex-col min-h-full">
         {/* Top Section - P/L badge and Print Info */}
         <div className="text-center mb-2 relative">
           {pl !== 0 && (
             <>
               <div className="absolute left-1/2 -translate-x-1/2 -top-1 text-center whitespace-nowrap">
-                <div className="text-sm font-black text-slate-900/50">Profit and Loss</div>
+                <div className="text-sm font-black text-white/70">Profit and Loss</div>
                 <div
                   className={cn(
                     "text-sm font-black whitespace-nowrap",
-                    isPositive ? "text-green-700" : isNegative ? "text-red-700" : "text-black"
+                    isPositive ? "text-green-400" : isNegative ? "text-red-400" : "text-white"
                   )}
                 >
                   {pl.toFixed(0)} Morbius
                 </div>
               </div>
-              <div className="w-full border-b border-black/30 my-4" />
+              <div className="w-full border-b border-white/30 my-4" />
             </>
           )}
           {/* Crypto Keno Logo */}
           <div className="mb-2">
-            <h1 className="text-2xl font-black text-black tracking-tight">
+            <h1 className="text-2xl font-black text-white tracking-tight">
               CRYPTO KENO
             </h1>
           </div>
           
           {/* Print Timestamp */}
-          <div className="text-[10px] font-bold text-black">
+          <div className="text-[10px] font-bold text-white">
             PRINTED {dateInfo.month}{dateInfo.date.toString().padStart(2, '0')} {dateInfo.year} {printTime}
           </div>
         </div>
 
         {/* Promotional Text */}
-        <div className="text-[9px] font-bold text-black text-center mb-2 leading-tight">
+        <div className="text-[9px] font-bold text-white text-center mb-2 leading-tight">
           <div>PLAYING FROM ALL 50 STATES</div>
           <div>PULSECHAIN - #1 BLOCKCHAIN FOR DEFI GAMING!</div>
         </div>
 
         {/* Dashed separator */}
-        <div className="border-t border-dashed border-black my-2" />
+        <div className="border-t border-dashed border-white my-2" />
 
         {/* Game Section - Club Keno */}
         <div className="mb-2">
           {/* Game Type and Numbers */}
           <div className="flex items-start justify-between mb-1 gap-2">
             <div className="flex-1">
-              <div className="text-sm font-bold text-black mb-1">
+              <div className="text-sm font-bold text-white mb-1">
                 {spotSize}-SPOT
               </div>
-              <div className="text-sm font-bold text-black font-mono flex flex-wrap gap-1">
+              <div className="text-sm font-bold text-white font-mono flex flex-wrap gap-1">
                 {numbers.map((num, idx) => {
                   const isHit = drawnNumbers.includes(num)
                   const isBullsEye = bullsEyeNumber === num
@@ -263,12 +270,12 @@ export function KenoTicket({
                 })}
               </div>
             </div>
-            <span className="text-[10px] font-bold text-black">EP</span>
+            <span className="text-[10px] font-bold text-white">EP</span>
           </div>
 
           {/* Add-ons */}
           {addonLabels.length > 0 && (
-            <div className="text-sm font-bold text-black mb-1">
+            <div className="text-sm font-bold text-white mb-1">
               {addonLabels.map((label, idx) => (
                 <div key={idx}>{label} - YES</div>
               ))}
@@ -278,27 +285,27 @@ export function KenoTicket({
 
 
         {/* Cost Details - Reduced font size */}
-        <div className="flex justify-between items-center text-xs font-bold text-black mb-2">
+        <div className="flex justify-between items-center text-xs font-bold text-white mb-2">
           <span>{draws} DRAWS</span>
           <span>{Number(wager).toFixed(0)} Morbius/DRAW</span>
           <span>{totalCost.toFixed(0)} Morbius</span>
         </div>
 
         {/* Bottom Section - Totals and Info */}
-        <div className="space-y-1 text-[10px] text-black">
+        <div className="space-y-1 text-[10px] text-white">
           {/* Total Cost */}
-          <div className="flex justify-between font-bold text-sm">
+          <div className="flex justify-between font-bold text-sm text-white">
             <span>TOTAL</span>
             <span>{totalCost.toFixed(0)} Morbius</span>
           </div>
 
           {/* Draw Numbers */}
-          <div className="text-[10px]">
+          <div className="text-[10px] text-white">
             DRAW NUMBER {Number(firstRoundId)} - {Number(roundTo)}
           </div>
 
           {/* Timestamp/Serial */}
-          <div className="text-[9px] font-mono">
+          <div className="text-[9px] font-mono text-white">
             {shortId}{secondaryId.slice(0, 2)} {dateInfo.month}{dateInfo.date.toString().padStart(2, '0')} {dateInfo.year} {printTime} {secondaryId}
           </div>
 
@@ -309,7 +316,7 @@ export function KenoTicket({
                 href={`https://scan.pulsechain.box/tx/${transactionHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[9px] font-bold text-black/70 hover:text-purple-700 underline"
+                className="inline-flex items-center gap-1 text-[9px] font-bold text-white/70 hover:text-purple-400 underline"
                 onClick={(e) => e.stopPropagation()}
               >
                 <span>TX: {transactionHash.slice(0, 6)}...{transactionHash.slice(-4)}</span>
@@ -325,74 +332,74 @@ export function KenoTicket({
         <div className="mt-auto pt-2 border-t border-black">
           <KenoTicketBarcode value={ticketIdStr} />
         </div>
-      </div>
+        </div>
 
-      {/* Right edge vertical text */}
-      <div className="absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center">
+        {/* Right edge vertical text */}
+        <div className="absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center">
         <div
           className="text-[8px] font-semibold text-black writing-vertical-rl"
           style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
           cryptokeno.win
         </div>
-      </div>
+        </div>
 
-      {/* Flip hint - Bottom Right */}
-      <div className="absolute bottom-4 right-4 text-black/40 text-xs flex items-center gap-1">
+        {/* Flip hint - Bottom Right */}
+        <div className="absolute bottom-4 right-4 text-black/40 text-xs flex items-center gap-1">
         <RotateCcw className="h-3 w-3" />
         <span className="font-bold">FLIP</span>
-      </div>
+        </div>
 
-      {/* Status overlay for expired tickets */}
-      {!isActive && (
-        <div className="absolute inset-0 bg-amber-50/80 flex items-center justify-center">
+        {/* Status overlay for expired tickets */}
+        {!isActive && (
+          <div className="absolute inset-0 bg-amber-50/80 flex items-center justify-center">
           <div className="transform -rotate-12 bg-gradient-to-br from-slate-950 to-slate-900 text-white px-8 py-2 font-black text-xl tracking-wider">
             EXPIRED
+            </div>
           </div>
+        )}
         </div>
-      )}
-      </div>
 
-      {/* Back of ticket */}
-      <div
-        className="absolute inset-0 w-80 border border-black overflow-hidden"
-        style={{
-          backfaceVisibility: 'hidden',
-          WebkitBackfaceVisibility: 'hidden',
-          transform: 'rotateY(180deg)',
-          ...ticketBackground,
-        }}
-      >
+        {/* Back of ticket */}
+        <div
+          className="absolute inset-0 w-80 border border-white overflow-hidden"
+          style={{
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
+            transform: 'rotateY(180deg)',
+            ...ticketBackground,
+          }}
+        >
         <div className="p-4 h-full overflow-y-auto">
           {/* Header */}
           <div className="text-center mb-3">
-            <h2 className="text-lg font-black text-black mb-1">TICKET HISTORY</h2>
-            <p className="text-xs font-bold text-black">{spotSize}-SPOT GAME</p>
+            <h2 className="text-lg font-black text-white mb-1">TICKET HISTORY</h2>
+            <p className="text-xs font-bold text-white">{spotSize}-SPOT GAME</p>
           </div>
 
           {/* Round History Table */}
           {roundHistory && roundHistory.length > 0 ? (
             <div className="space-y-1 mb-4">
-              <div className="grid grid-cols-4 gap-1 text-[10px] font-bold text-black border-b-2 border-black pb-1">
+              <div className="grid grid-cols-4 gap-1 text-[10px] font-bold text-white border-b-2 border-white pb-1">
                 <div>ROUND</div>
                 <div>HITS</div>
                 <div className="text-right">P/L (Morbius)</div>
                 <div className="text-right">NUMBERS</div>
               </div>
               {roundHistory.map((round) => (
-                <div key={round.roundId} className="grid grid-cols-4 gap-1 text-[10px] text-black border-b border-black/20 py-1">
+                <div key={round.roundId} className="grid grid-cols-4 gap-1 text-[10px] text-white border-b border-white/20 py-1">
                   <div className="font-mono font-bold">#{round.roundId}</div>
                   <div
                     className={cn(
                       "font-bold",
-                      round.matchCount > 0 ? "text-green-700" : "text-red-700"
+                      round.matchCount > 0 ? "text-green-400" : "text-red-400"
                     )}
                   >
                     {round.matchCount} of {spotSize}
                   </div>
                   <div className={cn(
                     "text-right font-mono",
-                    (round.roundPL ?? 0) > 0 ? "text-green-700" : (round.roundPL ?? 0) < 0 ? "text-red-700" : "text-black"
+                    (round.roundPL ?? 0) > 0 ? "text-green-400" : (round.roundPL ?? 0) < 0 ? "text-red-400" : "text-white"
                   )}>
                     {(round.roundPL ?? 0).toFixed(0)}
                   </div>
@@ -400,21 +407,21 @@ export function KenoTicket({
                     {round.matchedNumbers.length > 0 ? (
                       round.matchedNumbers.map(n => n.toString().padStart(2, '0')).join(' ')
                     ) : (
-                      <span className="text-black/40">NONE</span>
+                      <span className="text-white/40">NONE</span>
                     )}
                   </div>
                 </div>
               ))}
-              <div className="grid grid-cols-4 gap-1 text-[10px] font-bold text-black border-t-2 border-black pt-1">
+              <div className="grid grid-cols-4 gap-1 text-[10px] font-bold text-white border-t-2 border-white pt-1">
                 <div>Total</div>
                 <div />
                 <div className={cn(
                   "text-right font-mono",
                   roundHistory.reduce((acc, r) => acc + (r.roundPL ?? 0), 0) > 0
-                    ? "text-green-700"
+                    ? "text-green-400"
                     : roundHistory.reduce((acc, r) => acc + (r.roundPL ?? 0), 0) < 0
-                      ? "text-red-700"
-                      : "text-black"
+                      ? "text-red-400"
+                      : "text-white"
                 )}>
                   {roundHistory.reduce((acc, r) => acc + (r.roundPL ?? 0), 0).toFixed(0)}
                 </div>
@@ -423,19 +430,19 @@ export function KenoTicket({
             </div>
           ) : (
             <div className="text-center py-6">
-              <p className="text-sm text-black/60 mb-2">No rounds completed yet</p>
+              <p className="text-sm text-white/60 mb-2">No rounds completed yet</p>
             </div>
           )}
 
           {/* Payout Table */}
-          <div className="border-t-2 border-black pt-3 mt-3 space-y-3">
+          <div className="border-t-2 border-white pt-3 mt-3 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-black">PAYOUT TABLE</h3>
-              <span className="text-[10px] font-bold text-black">Spot {spotSize}</span>
+              <h3 className="text-sm font-black text-white">PAYOUT TABLE</h3>
+              <span className="text-[10px] font-bold text-white">Spot {spotSize}</span>
             </div>
             <div className="space-y-1">
               {payoutEntries.map(([matches, payout]) => (
-                <div key={matches} className="grid grid-cols-2 gap-2 text-[10px] text-black">
+                <div key={matches} className="grid grid-cols-2 gap-2 text-[10px] text-white">
                   <div className="font-mono">{matches} of {spotSize}</div>
                   <div className="text-right font-bold">{payout}x</div>
                 </div>
@@ -443,16 +450,16 @@ export function KenoTicket({
             </div>
             {paytableRow && paytableRow.length > 0 && (
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-black">Contract Base Paytable</p>
-                <p className="text-[9px] font-mono text-black break-words">
+                <p className="text-[10px] font-bold text-white">Contract Base Paytable</p>
+                <p className="text-[9px] font-mono text-white break-words">
                   {paytableRow.join(', ')}
                 </p>
               </div>
             )}
             {bullsEyeRow && bullsEyeRow.length > 0 && (
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-black">Contract Bulls-Eye Paytable</p>
-                <p className="text-[9px] font-mono text-black break-words">
+                <p className="text-[10px] font-bold text-white">Contract Bulls-Eye Paytable</p>
+                <p className="text-[9px] font-mono text-white break-words">
                   {bullsEyeRow.join(', ')}
                 </p>
               </div>
@@ -460,31 +467,32 @@ export function KenoTicket({
           </div>
 
           {/* Add-on cost per draw */}
-          <div className="border-t-2 border-black pt-3 mt-3">
-            <h3 className="text-sm font-black text-black mb-1">ADD-ON COST</h3>
-            <p className="text-[10px] font-mono text-black">
+          <div className="border-t-2 border-white pt-3 mt-3">
+            <h3 className="text-sm font-black text-white mb-1">ADD-ON COST</h3>
+            <p className="text-[10px] font-mono text-white">
               {addonCostPerDraw.toFixed(0)} Morbius per draw
             </p>
           </div>
 
           {/* Current Win Display */}
           {currentWinNum > 0 && (
-            <div className="border-t-2 border-black pt-3 mt-3">
+            <div className="border-t-2 border-white pt-3 mt-3">
               <div className="text-center">
-                <p className="text-xs font-bold text-black mb-1">CURRENT WIN</p>
-                <p className="text-xl font-black text-black">{currentWinNum.toFixed(0)} Morbius</p>
+                <p className="text-xs font-bold text-white mb-1">CURRENT WIN</p>
+                <p className="text-xl font-black text-white">{currentWinNum.toFixed(0)} Morbius</p>
               </div>
             </div>
           )}
 
           {/* Flip hint */}
-          <div className="absolute bottom-4 right-4 text-black/40 text-xs flex items-center gap-1">
+          <div className="absolute bottom-4 right-4 text-white/40 text-xs flex items-center gap-1">
             <RotateCcw className="h-3 w-3" />
             <span className="font-bold">FLIP</span>
           </div>
         </div>
+        </div>
+        </div>
       </div>
-    </div>
     </div>
   )
 }

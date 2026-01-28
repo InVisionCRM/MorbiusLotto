@@ -26,21 +26,34 @@ const WinNotification: React.FC<WinNotificationProps> = ({
 
   return (
     <div className="absolute top-2 right-2 z-30 pointer-events-none">
-      <div className="win-notification flex items-center gap-2 px-3 py-2">
+      <div 
+        className="win-notification flex items-center gap-2 px-3 py-2 rounded-xl"
+        style={{
+          background: isBlackjack
+            ? 'linear-gradient(145deg, rgba(251, 191, 36, 0.95), rgba(234, 179, 8, 0.95))'
+            : 'linear-gradient(145deg, rgba(16, 26, 35, 0.95), rgba(35, 36, 41, 0.95))',
+          boxShadow: isBlackjack
+            ? 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 4px 30px rgba(251, 191, 36, 0.4)'
+            : 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 4px 30px rgba(34, 197, 94, 0.4)',
+          border: isBlackjack
+            ? '2px solid rgba(251, 191, 36, 0.5)'
+            : '2px solid rgba(34, 197, 94, 0.5)',
+        }}
+      >
         {isBlackjack ? (
           <>
-            <span className="text-yellow-400 text-lg">♠</span>
+            <span className="text-yellow-900 text-lg font-black">♠</span>
             <div className="flex flex-col">
-              <span className="text-yellow-400 font-black text-sm tracking-wide">BLACKJACK!</span>
-              <span className="text-green-400 font-bold text-xs">+{formattedAmount}</span>
+              <span className="text-yellow-900 font-black text-sm tracking-wide">BLACKJACK!</span>
+              <span className="text-green-700 font-bold text-xs">+{formattedAmount} MORBIUS</span>
             </div>
           </>
         ) : (
           <>
-            <span className="text-green-400 text-lg">✓</span>
+            <span className="text-green-400 text-lg font-black">✓</span>
             <div className="flex flex-col">
               <span className="text-green-400 font-bold text-sm">WIN</span>
-              <span className="text-green-300 font-bold text-xs">+{formattedAmount}</span>
+              <span className="text-green-300 font-bold text-xs">+{formattedAmount} MORBIUS</span>
             </div>
           </>
         )}

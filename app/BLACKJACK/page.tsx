@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import BettingPanel from '@/components/BLACKJACK/BettingPanel';
-import BettingDrawer from '@/components/BLACKJACK/BettingDrawer';
 import MainNav from '@/components/BLACKJACK/MainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
 import WinNotification from '@/components/BLACKJACK/WinNotification';
@@ -19,6 +18,7 @@ import { GameVerificationTools } from '@/components/BLACKJACK/GameVerificationTo
 import { GlobalWinsFeed } from '@/components/BLACKJACK/GlobalWinsFeed';
 import { ContractAddress } from '@/components/ui/contract-address';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
+import QuickHistory from '@/components/BLACKJACK/QuickHistory';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { ANIMATION_TIMINGS } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
@@ -26,7 +26,7 @@ import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
-import { usePlayerStatsEnhanced, useGlobalAnalytics } from '@/hooks/use-blackjack-stats';
+import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
 import { useTokenApproval } from '@/hooks/use-token-approval';
 
 // Intro screen component
@@ -306,9 +306,16 @@ export default function BlackjackPage() {
   }, [totalBetAmount]);
 
   // Reset game result after chip animation completes
+  // Clear chips on loss AFTER animation completes (chips stay on win/blackjack/push)
   const handleChipAnimationComplete = useCallback(() => {
+    // Clear chips on loss after animation completes
+    // Use ref to avoid stale closure issues
+    if (chipResultRef.current === 'loss') {
+      manageChipStack('', undefined, true);
+      chipResultRef.current = null; // Reset ref
+    }
     setCurrentGameResult(null);
-  }, []);
+  }, [manageChipStack]);
 
   // Double down chips: duplicate the current chip stack
   const handleDoubleDownChips = useCallback(() => {
@@ -394,6 +401,8 @@ export default function BlackjackPage() {
 
   // Pending game result for chip animation (waits for dealer reveal to complete)
   const [pendingChipResult, setPendingChipResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
+  // Ref to track result for chip clearing after animation
+  const chipResultRef = useRef<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
 
   // Note: Payment method state no longer needed since only MORBIUS from reserve
 
@@ -406,6 +415,9 @@ export default function BlackjackPage() {
   // Fetch real analytics data
   const { data: playerStatsData, isLoading: playerStatsLoading, refetch: refetchPlayerStats } = usePlayerStatsEnhanced();
   const { data: globalAnalyticsData, isLoading: globalAnalyticsLoading, refetch: refetchGlobalAnalytics } = useGlobalAnalytics();
+  
+  // Fetch player game history from database
+  const { data: playerGamesData, isLoading: playerGamesLoading } = usePlayerGames(50, 0);
 
   // Transform player stats data to match component interface
   const playerStats = playerStatsData ? {
@@ -489,10 +501,7 @@ export default function BlackjackPage() {
 
   // Initialize WebSocket connection
   useEffect(() => {
-    // #region agent log
     const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:3001';
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:351',message:'WebSocket useEffect triggered',data:{address,hasWsClient:!!wsClient,wsUrl,envVarSet:!!process.env.NEXT_PUBLIC_WEBSOCKET_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-    // #endregion
     if (address && !wsClient) {
       const client = new BlackjackWebSocketClient(
         wsUrl,
@@ -502,53 +511,84 @@ export default function BlackjackPage() {
       // Set up event handlers
       client.on('game_created', (gameState: ServerGameState) => {
         console.log('Game created:', gameState);
-        // Update local game state
-        updateGameStateFromServer(gameState);
+        // Update local game state and get the processed game
+        const processedGame = updateGameStateFromServer(gameState);
         // Some games can complete immediately on deal (blackjack/push/dealer blackjack).
         // The server does not emit a separate game_completed event for create_game, so handle it here.
-        if (String((gameState as any)?.status) === 'completed') {
-          const betAmount = (gameState as any)?.totalBetAmount ?? (gameState as any)?.betAmount;
-          const payout = (gameState as any)?.totalPayout ?? (gameState as any)?.payout;
-          const result = (gameState as any)?.result;
+        if (String((gameState as any)?.status) === 'completed' && processedGame) {
+          const betAmount = processedGame.totalBetAmount ?? BigInt(0);
+          const payout = processedGame.totalPayout ?? BigInt(0);
+          const hasWin = Array.isArray(processedGame.playerHands) && 
+            processedGame.playerHands.some((h: any) => h.result === 'win' || h.result === 'blackjack');
+          const allPush = Array.isArray(processedGame.playerHands) && 
+            processedGame.playerHands.every((h: any) => h.result === 'push');
+          const isBlackjack = Array.isArray(processedGame.playerHands) && 
+            processedGame.playerHands.some((h: any) => h.result === 'blackjack');
+          const overallResult = isBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
+          
           handleGameCompletion({
-            gameId: (gameState as any)?.gameId ?? (gameState as any)?.id,
+            gameId: processedGame.id,
             betAmount,
             payout,
-            result,
+            result: overallResult,
+            processedGame: processedGame // Pass the processed game with cards already extracted
           });
         }
       });
 
       client.on('game_updated', (gameState: ServerGameState) => {
-        console.log('Game updated:', gameState);
-        updateGameStateFromServer(gameState);
+        // Update game state and get the processed localGame
+        const processedGame = updateGameStateFromServer(gameState);
+        
+        // If game is completed, handle completion with the processed game data
+        if ((gameState as any)?.status === 'completed' && processedGame) {
+          const betAmount = processedGame.totalBetAmount ?? BigInt(0);
+          const payout = processedGame.totalPayout ?? BigInt(0);
+          const hasWin = Array.isArray(processedGame.playerHands) && 
+            processedGame.playerHands.some((h: any) => h.result === 'win' || h.result === 'blackjack');
+          const allPush = Array.isArray(processedGame.playerHands) && 
+            processedGame.playerHands.every((h: any) => h.result === 'push');
+          const overallResult = hasWin ? 'win' : allPush ? 'push' : 'loss';
+          const isBlackjack = Array.isArray(processedGame.playerHands) && 
+            processedGame.playerHands.some((h: any) => h.result === 'blackjack');
+          
+          console.log('Game completed in game_updated handler:', {
+            gameId: processedGame.id,
+            playerHands: processedGame.playerHands,
+            dealerHand: processedGame.dealerHand,
+            betAmount: betAmount.toString(),
+            payout: payout.toString()
+          });
+          
+          handleGameCompletion({
+            gameId: processedGame.id,
+            betAmount,
+            payout,
+            result: isBlackjack ? 'blackjack' : overallResult,
+            processedGame: processedGame // Pass the processed game with cards already extracted
+          });
+          // Refresh balance after game completes
+          fetchBalance();
+        }
       });
 
       client.on('game_completed', (data: any) => {
-        console.log('Game completed:', data);
-        handleGameCompletion(data);
+        console.log('Game completed event received:', data);
+        // Don't handle here - we already handle it in game_updated when status is 'completed'
+        // This event is just for notification purposes, the actual data comes from game_updated
         // Refresh balance after game completes
         fetchBalance();
       });
 
       client.on('error', (error: any) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:377',message:'WebSocket error event handler',data:{errorMessage:error?.message,errorString:String(error),errorType:typeof error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-        // #endregion
         console.error('WebSocket error:', error);
         setWsConnected(false);
         toast.error(error.message || 'Connection error');
       });
 
       // Connect
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:381',message:'Calling client.connect()',data:{wsUrl,address},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-      // #endregion
       client.connect()
         .then(() => {
-          // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:383',message:'Connection successful',data:{wsUrl,address},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-          // #endregion
           setWsConnected(true);
           setWsClient(client);
           console.log('Connected to blackjack server');
@@ -556,9 +596,6 @@ export default function BlackjackPage() {
           fetchBalance();
         })
         .catch((error) => {
-          // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:388',message:'Connection failed in catch',data:{errorMessage:error?.message,errorString:String(error),errorStack:error?.stack,errorName:error?.name,wsUrl,address},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-          // #endregion
           setWsConnected(false);
           const errorMessage = error?.message || 'Failed to connect to game server';
           console.error('Failed to connect to server:', errorMessage, error);
@@ -580,6 +617,255 @@ export default function BlackjackPage() {
       fetchBalance();
     }
   }, [wsConnected, wsClient, fetchBalance]);
+
+  // Load game history from database when wallet connects
+  useEffect(() => {
+    if (!address || !playerGamesData || !Array.isArray(playerGamesData)) return;
+
+    // Convert database Game[] to GameResult[] format
+    const loadHistoryFromDatabase = async () => {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      
+      // Fetch game hands for all games in parallel
+      const gamesWithHands = await Promise.all(
+        playerGamesData
+          .filter((game: any) => game.result && game.result !== 'ongoing' && game.completed_at)
+          .map(async (game: any) => {
+            try {
+              // Fetch game hands for this game
+              const handsResponse = await fetch(`${API_BASE_URL}/api/game/${game.id}/hands`);
+              const handsData = handsResponse.ok ? await handsResponse.json() : [];
+              
+              return { game, hands: Array.isArray(handsData) ? handsData : [] };
+            } catch (error) {
+              console.error(`Failed to fetch hands for game ${game.id}:`, error);
+              return { game, hands: [] };
+            }
+          })
+      );
+
+      const databaseHistory: GameResult[] = gamesWithHands
+        .map(({ game, hands }) => {
+          const gameId = game.id;
+          const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
+          const suitFor = (idx: number) => {
+            const salt = gameId.length;
+            return suits[(idx + salt) % suits.length];
+          };
+          const toCard = (value: number, idx: number): Card =>
+            createCard(Number(value), suitFor(idx), false);
+
+          // Dealer cards
+          const dealerCards: Card[] = Array.isArray(game.dealer_cards)
+            ? game.dealer_cards.map((c: any, idx: number) => toCard(Number(c), 100 + idx))
+            : [];
+          const dealerTotals = calculateHandTotal(dealerCards);
+          const dealerHand: Hand = {
+            id: `${gameId}-dealer`,
+            cards: dealerCards,
+            total: game.dealer_total ?? dealerTotals.total,
+            hasAce: dealerTotals.hasAce,
+            isBlackjack: false,
+            isBust: (game.dealer_total ?? dealerTotals.total) > 21,
+            betAmount: BigInt(0),
+            payout: BigInt(0),
+            actions: Array.isArray(game.dealer_actions) ? game.dealer_actions : [],
+            canHit: false,
+            canStand: false,
+            canDoubleDown: false,
+            canSplit: false,
+          };
+
+          // Use first hand from game_hands if available, otherwise create placeholder
+          const firstHand = hands.length > 0 ? hands[0] : null;
+          const playerCards: Card[] = firstHand && Array.isArray(firstHand.cards)
+            ? firstHand.cards.map((c: any, idx: number) => toCard(Number(c), idx))
+            : [];
+          const playerTotals = calculateHandTotal(playerCards);
+          
+          const playerHand: Hand = {
+            id: firstHand?.id || `${gameId}-hand-0`,
+            cards: playerCards,
+            total: firstHand?.total ?? playerTotals.total ?? 0,
+            hasAce: firstHand?.has_ace ?? playerTotals.hasAce ?? false,
+            isBlackjack: firstHand?.is_blackjack ?? game.result === 'blackjack',
+            isBust: firstHand?.is_bust ?? false,
+            betAmount: firstHand ? BigInt(String(firstHand.bet_amount || '0')) : BigInt(String(game.total_bet_amount || '0')),
+            payout: firstHand ? BigInt(String(firstHand.payout || '0')) : BigInt(String(game.total_payout || '0')),
+            result: firstHand?.result || 
+                    (game.result === 'blackjack' ? 'blackjack' : 
+                     game.result === 'win' ? 'win' :
+                     game.result === 'push' ? 'push' : 'loss'),
+            actions: Array.isArray(firstHand?.actions) ? firstHand.actions : Array.isArray(game.actions) ? game.actions : [],
+            canHit: false,
+            canStand: false,
+            canDoubleDown: false,
+            canSplit: false,
+          };
+
+          return {
+            gameId,
+            playerHand,
+            dealerHand,
+            payout: BigInt(String(game.total_payout || '0')),
+            isBlackjack: game.result === 'blackjack',
+            timestamp: game.completed_at ? new Date(game.completed_at).getTime() : Date.now(),
+          };
+        })
+        .sort((a, b) => b.timestamp - a.timestamp); // Most recent first
+
+      // Merge with existing in-memory history, avoiding duplicates
+      setGameState(prev => {
+        const existingGameIds = new Set(prev.history.map(h => h.gameId));
+        const newHistory = databaseHistory.filter(h => !existingGameIds.has(h.gameId));
+        
+        // Combine: new from database + existing in-memory, sorted by timestamp
+        const combined = [...newHistory, ...prev.history]
+          .sort((a, b) => b.timestamp - a.timestamp)
+          .slice(0, 50); // Keep last 50 games
+
+        // Persist to localStorage as backup (keyed by wallet address)
+        if (address && typeof window !== 'undefined') {
+          try {
+            const storageKey = `blackjack_history_${address.toLowerCase()}`;
+            const historyToStore = combined.map(result => ({
+              gameId: result.gameId,
+              playerHand: {
+                id: result.playerHand.id,
+                cards: result.playerHand.cards.map(c => ({ value: c.value, suit: c.suit })),
+                total: result.playerHand.total,
+                hasAce: result.playerHand.hasAce,
+                isBlackjack: result.playerHand.isBlackjack,
+                isBust: result.playerHand.isBust,
+                betAmount: result.playerHand.betAmount.toString(),
+                payout: result.playerHand.payout.toString(),
+                result: result.playerHand.result,
+                actions: result.playerHand.actions,
+              },
+              dealerHand: {
+                id: result.dealerHand.id,
+                cards: result.dealerHand.cards.map(c => ({ value: c.value, suit: c.suit })),
+                total: result.dealerHand.total,
+                hasAce: result.dealerHand.hasAce,
+                isBlackjack: result.dealerHand.isBlackjack,
+                isBust: result.dealerHand.isBust,
+                betAmount: result.dealerHand.betAmount.toString(),
+                payout: result.dealerHand.payout.toString(),
+                actions: result.dealerHand.actions,
+              },
+              payout: result.payout.toString(),
+              isBlackjack: result.isBlackjack,
+              timestamp: result.timestamp,
+            }));
+            localStorage.setItem(storageKey, JSON.stringify(historyToStore));
+          } catch (error) {
+            console.error('Failed to save history to localStorage:', error);
+          }
+        }
+
+        return {
+          ...prev,
+          history: combined,
+        };
+      });
+    };
+
+    loadHistoryFromDatabase();
+  }, [address, playerGamesData]);
+
+  // Load history from localStorage on mount (as backup/fallback)
+  useEffect(() => {
+    if (!address || typeof window === 'undefined') return;
+
+    try {
+      const storageKey = `blackjack_history_${address.toLowerCase()}`;
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const parsedHistory: GameResult[] = parsed.map((result: any) => {
+          const gameId = result.gameId;
+          const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
+          const suitFor = (idx: number) => {
+            const salt = gameId.length;
+            return suits[(idx + salt) % suits.length];
+          };
+          
+          // Convert stored card data back to Card objects
+          const playerCards: Card[] = Array.isArray(result.playerHand?.cards)
+            ? result.playerHand.cards.map((c: any, idx: number) => {
+                if (typeof c === 'object' && 'value' in c) {
+                  return createCard(c.value, c.suit || suitFor(idx), false);
+                }
+                return createCard(Number(c), suitFor(idx), false);
+              })
+            : [];
+          
+          const dealerCards: Card[] = Array.isArray(result.dealerHand?.cards)
+            ? result.dealerHand.cards.map((c: any, idx: number) => {
+                if (typeof c === 'object' && 'value' in c) {
+                  return createCard(c.value, c.suit || suitFor(100 + idx), false);
+                }
+                return createCard(Number(c), suitFor(100 + idx), false);
+              })
+            : [];
+          
+          const playerTotals = calculateHandTotal(playerCards);
+          const dealerTotals = calculateHandTotal(dealerCards);
+          
+          return {
+            gameId: result.gameId,
+            playerHand: {
+              id: result.playerHand?.id || `${gameId}-hand-0`,
+              cards: playerCards,
+              total: result.playerHand?.total ?? playerTotals.total ?? 0,
+              hasAce: result.playerHand?.hasAce ?? playerTotals.hasAce ?? false,
+              isBlackjack: result.playerHand?.isBlackjack ?? result.isBlackjack ?? false,
+              isBust: result.playerHand?.isBust ?? false,
+              betAmount: BigInt(result.playerHand?.betAmount || '0'),
+              payout: BigInt(result.playerHand?.payout || '0'),
+              result: result.playerHand?.result,
+              actions: Array.isArray(result.playerHand?.actions) ? result.playerHand.actions : [],
+              canHit: false,
+              canStand: false,
+              canDoubleDown: false,
+              canSplit: false,
+            },
+            dealerHand: {
+              id: result.dealerHand?.id || `${gameId}-dealer`,
+              cards: dealerCards,
+              total: result.dealerHand?.total ?? dealerTotals.total ?? 0,
+              hasAce: result.dealerHand?.hasAce ?? dealerTotals.hasAce ?? false,
+              isBlackjack: false,
+              isBust: (result.dealerHand?.total ?? dealerTotals.total ?? 0) > 21,
+              betAmount: BigInt(result.dealerHand?.betAmount || '0'),
+              payout: BigInt(result.dealerHand?.payout || '0'),
+              actions: Array.isArray(result.dealerHand?.actions) ? result.dealerHand.actions : [],
+              canHit: false,
+              canStand: false,
+              canDoubleDown: false,
+              canSplit: false,
+            },
+            payout: BigInt(result.payout || '0'),
+            isBlackjack: result.isBlackjack ?? false,
+            timestamp: result.timestamp ?? Date.now(),
+          };
+        });
+
+        // Only load if we don't have history yet (don't overwrite database-loaded history)
+        setGameState(prev => {
+          if (prev.history.length === 0 && parsedHistory.length > 0) {
+            return {
+              ...prev,
+              history: parsedHistory.slice(0, 50),
+            };
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load history from localStorage:', error);
+    }
+  }, [address]);
 
   // Convert server game state (off-chain) to local UI format
   const updateGameStateFromServer = useCallback((serverGameState: any) => {
@@ -644,9 +930,8 @@ export default function BlackjackPage() {
     const rawDealerCards: number[] = Array.isArray(serverGameState.dealerCards)
       ? serverGameState.dealerCards.map((c: any) => Number(c))
       : [];
-    console.log('Dealer cards received:', rawDealerCards.length, rawDealerCards);
+    
     const dealerCards = rawDealerCards.map((c, idx) => toCard(c, 100 + idx));
-    console.log('Dealer cards after mapping:', dealerCards.length, dealerCards);
     const dealerTotals = calculateHandTotal(dealerCards);
     const dealerHand: Hand = {
       id: `${gameId}-dealer`,
@@ -664,18 +949,19 @@ export default function BlackjackPage() {
       canSplit: false,
     };
 
+    const mappedState = status === 'player_turn'
+      ? GameState.PLAYER_TURN
+      : status === 'dealer_turn'
+        ? GameState.DEALER_TURN
+        : status === 'completed'
+          ? GameState.COMPLETE
+          : GameState.WAITING;
+    
     const localGame: any = {
       id: gameId,
       player: address,
       betAmount: totalBetAmount,
-      state:
-        status === 'player_turn'
-          ? GameState.PLAYER_TURN
-          : status === 'dealer_turn'
-            ? GameState.DEALER_TURN
-            : status === 'completed'
-              ? GameState.COMPLETE
-              : GameState.WAITING,
+      state: mappedState,
       // Keep the legacy single-hand fields used throughout the page
       playerHand: activePlayerHand || {
         id: `${gameId}-hand-0`,
@@ -748,6 +1034,9 @@ export default function BlackjackPage() {
     
     prevPlayerCardCount.current = currentPlayerCardCount;
     prevDealerCardCount.current = currentDealerCardCount;
+    
+    // Return the processed localGame so it can be used immediately
+    return localGame;
   }, [address, gameState.clientSeed]);
 
   // Handle game completion
@@ -767,6 +1056,9 @@ export default function BlackjackPage() {
       let chipAnimResult: 'win' | 'loss' | 'push' | 'blackjack' | null = null;
       if (data.result === 'blackjack') {
         chipAnimResult = 'blackjack';
+      } else if (data.result === 'loss' || (payout === BigInt(0) && betAmount > BigInt(0))) {
+        // Explicitly check for loss result OR payout = 0 with bet > 0 (dealer blackjack case)
+        chipAnimResult = 'loss';
       } else if (profit > BigInt(0)) {
         chipAnimResult = 'win';
       } else if (profit < BigInt(0)) {
@@ -774,6 +1066,8 @@ export default function BlackjackPage() {
       } else {
         chipAnimResult = 'push';
       }
+      
+      // Don't clear chips here - wait until after animation completes
       // Store as pending - will be applied after dealer reveal completes
       setPendingChipResult(chipAnimResult);
 
@@ -783,21 +1077,316 @@ export default function BlackjackPage() {
         result: data?.result ? String(data.result) : undefined,
       });
 
+      // Extract player and dealer hands from the provided processedGame or gameState or use currentGame
+      let playerHand: Hand = createEmptyHand();
+      let dealerHand: Hand = createEmptyHand();
+      
+      // Prefer processedGame (from updateGameStateFromServer) as it has cards already extracted
+      if (data.processedGame) {
+        console.log('handleGameCompletion: Using processedGame', {
+          gameId: data.processedGame.id,
+          playerHand: data.processedGame.playerHand,
+          dealerHand: data.processedGame.dealerHand,
+          playerHandCards: data.processedGame.playerHand?.cards.map(c => c.value),
+          dealerHandCards: data.processedGame.dealerHand?.cards.map(c => c.value)
+        });
+        
+        if (data.processedGame.playerHand && data.processedGame.playerHand.cards.length > 0) {
+          playerHand = {
+            ...data.processedGame.playerHand,
+            betAmount: data.processedGame.playerHand.betAmount || betAmount
+          };
+        }
+        if (data.processedGame.dealerHand && data.processedGame.dealerHand.cards.length > 0) {
+          dealerHand = data.processedGame.dealerHand;
+        }
+      } else if (data.gameState) {
+        // Try to get cards from gameState first, then fallback to currentGame
+        // Use a ref to get the latest currentGame state since React state updates are async
+        let extractedPlayerHand: Hand | null = null;
+        let extractedDealerHand: Hand | null = null;
+        // Use the fresh gameState data passed from game_updated event
+        const serverGameState = data.gameState;
+        const gameId = String(serverGameState.gameId || serverGameState.id || '');
+        const currentHandIndex = Number(serverGameState.currentHandIndex ?? 0);
+        
+        console.log('handleGameCompletion: Extracting cards from gameState', {
+          gameId,
+          playerHands: serverGameState.playerHands,
+          dealerCards: serverGameState.dealerCards,
+          hasPlayerHands: Array.isArray(serverGameState.playerHands),
+          hasDealerCards: Array.isArray(serverGameState.dealerCards),
+          playerHandsLength: Array.isArray(serverGameState.playerHands) ? serverGameState.playerHands.length : 0,
+          dealerCardsLength: Array.isArray(serverGameState.dealerCards) ? serverGameState.dealerCards.length : 0
+        });
+        
+        const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
+        const suitFor = (idx: number) => {
+          const salt = gameId.length;
+          return suits[(idx + salt) % suits.length];
+        };
+        const toCard = (value: number, idx: number, hidden = false): Card =>
+          createCard(Number(value), suitFor(idx), hidden);
+        
+        const toBigIntSafe = (v: any) => {
+          try {
+            if (typeof v === 'bigint') return v;
+            if (v === null || v === undefined) return BigInt(0);
+            return BigInt(String(v));
+          } catch {
+            return BigInt(0);
+          }
+        };
+        
+        const rawHands = Array.isArray(serverGameState.playerHands) ? serverGameState.playerHands : [];
+        console.log('handleGameCompletion: Processing playerHands', {
+          rawHandsLength: rawHands.length,
+          rawHands: rawHands.map((h: any) => ({
+            cards: h.cards,
+            cardsLength: Array.isArray(h.cards) ? h.cards.length : 0,
+            cardsType: Array.isArray(h.cards) && h.cards.length > 0 ? typeof h.cards[0] : 'none'
+          }))
+        });
+        
+        if (rawHands.length > 0) {
+          const playerHands: Hand[] = rawHands.map((h: any, handIdx: number) => {
+            const rawCards: number[] = Array.isArray(h.cards) ? h.cards.map((c: any) => Number(c)) : [];
+            const cards = rawCards.map((c, idx) => toCard(c, handIdx * 10 + idx));
+            const totals = calculateHandTotal(cards);
+            return {
+              id: String(h.id || `${gameId}-hand-${handIdx}`),
+              cards,
+              total: Number(h.total ?? totals.total),
+              hasAce: Boolean(h.hasAce ?? totals.hasAce),
+              isBlackjack: Boolean(h.isBlackjack ?? false),
+              isBust: Boolean(h.isBust ?? false),
+              betAmount: toBigIntSafe(h.betAmount ?? betAmount),
+              result: h.result,
+              payout: toBigIntSafe(h.payout),
+              actions: Array.isArray(h.actions) ? h.actions : [],
+              canHit: false,
+              canStand: false,
+              canDoubleDown: false,
+              canSplit: false,
+            };
+          });
+          
+          const activePlayerHand = playerHands[currentHandIndex] || playerHands[0];
+          if (activePlayerHand && activePlayerHand.cards.length > 0) {
+            extractedPlayerHand = {
+              ...activePlayerHand,
+              betAmount: activePlayerHand.betAmount || betAmount
+            };
+          }
+        }
+        
+        // Dealer cards
+        const rawDealerCards: number[] = Array.isArray(serverGameState.dealerCards)
+          ? serverGameState.dealerCards.map((c: any) => Number(c))
+          : [];
+        
+        if (rawDealerCards.length > 0) {
+          const dealerCards = rawDealerCards.map((c, idx) => toCard(c, 100 + idx));
+          const dealerTotals = calculateHandTotal(dealerCards);
+          extractedDealerHand = {
+            id: `${gameId}-dealer`,
+            cards: dealerCards,
+            total: Number(serverGameState.dealerTotal ?? dealerTotals.total),
+            hasAce: Boolean(serverGameState.dealerHasAce ?? dealerTotals.hasAce),
+            isBlackjack: false,
+            isBust: Number(serverGameState.dealerTotal ?? dealerTotals.total) > 21,
+            betAmount: BigInt(0),
+            payout: BigInt(0),
+            actions: Array.isArray(serverGameState.dealerActions) ? serverGameState.dealerActions : [],
+            canHit: false,
+            canStand: false,
+            canDoubleDown: false,
+            canSplit: false,
+          };
+        }
+        
+        // Use extracted hands if available, otherwise fallback to currentGame
+        if (extractedPlayerHand && extractedPlayerHand.cards.length > 0) {
+          playerHand = extractedPlayerHand;
+          console.log('handleGameCompletion: Using extracted playerHand from gameState', {
+            cards: playerHand.cards.map(c => c.value),
+            total: playerHand.total
+          });
+        } else {
+          // Fallback: use currentGame (which should be updated by updateGameStateFromServer)
+          const currentPlayerHand = gameState.currentGame?.playerHand || createEmptyHand();
+          playerHand = {
+            ...currentPlayerHand,
+            betAmount: currentPlayerHand.betAmount || betAmount
+          };
+          console.log('handleGameCompletion: Using currentGame playerHand (fallback)', {
+            cards: playerHand.cards.map(c => c.value),
+            cardsLength: playerHand.cards.length,
+            hasCurrentGame: !!gameState.currentGame
+          });
+        }
+        
+        if (extractedDealerHand && extractedDealerHand.cards.length > 0) {
+          dealerHand = extractedDealerHand;
+        } else {
+          dealerHand = gameState.currentGame?.dealerHand || createEmptyHand();
+        }
+      } else {
+        // Final fallback: use currentGame
+        const currentPlayerHand = gameState.currentGame?.playerHand || createEmptyHand();
+        playerHand = {
+          ...currentPlayerHand,
+          betAmount: currentPlayerHand.betAmount || betAmount
+        };
+        dealerHand = gameState.currentGame?.dealerHand || createEmptyHand();
+        console.log('handleGameCompletion: Using currentGame (final fallback)', {
+          playerCards: playerHand.cards.map(c => c.value),
+          dealerCards: dealerHand.cards.map(c => c.value)
+        });
+      }
+      
+      // If we still don't have cards, schedule an update after state settles
+      if ((playerHand.cards.length === 0 || dealerHand.cards.length === 0) && gameState.currentGame) {
+        // Use requestAnimationFrame to wait for React state to update
+        requestAnimationFrame(() => {
+          setGameState(prev => {
+            const currentGame = prev.currentGame;
+            if (!currentGame) return prev;
+            
+            const existingIndex = prev.history.findIndex(h => h.gameId === String(data?.gameId));
+            if (existingIndex >= 0) {
+              const existingEntry = prev.history[existingIndex];
+              const needsUpdate = 
+                (existingEntry.playerHand.cards.length === 0 && currentGame.playerHand?.cards.length > 0) ||
+                (existingEntry.dealerHand.cards.length === 0 && currentGame.dealerHand?.cards.length > 0);
+              
+              if (needsUpdate) {
+                console.log('handleGameCompletion: Updating history entry with cards from currentGame', {
+                  gameId: data?.gameId,
+                  playerCards: currentGame.playerHand?.cards.map(c => c.value),
+                  dealerCards: currentGame.dealerHand?.cards.map(c => c.value)
+                });
+                
+                const updatedHistory = [...prev.history];
+                updatedHistory[existingIndex] = {
+                  ...existingEntry,
+                  playerHand: currentGame.playerHand || existingEntry.playerHand,
+                  dealerHand: currentGame.dealerHand || existingEntry.dealerHand
+                };
+                return {
+                  ...prev,
+                  history: updatedHistory
+                };
+              }
+            }
+            return prev;
+          });
+        });
+      }
+      
+      console.log('handleGameCompletion: Final hands before creating GameResult', {
+        playerHandCards: playerHand.cards.map(c => c.value),
+        dealerHandCards: dealerHand.cards.map(c => c.value),
+        playerHandTotal: playerHand.total,
+        dealerHandTotal: dealerHand.total,
+        playerHandCardsLength: playerHand.cards.length,
+        dealerHandCardsLength: dealerHand.cards.length
+      });
+
       // Add to history
       const gameResult: GameResult = {
         gameId: data?.gameId ? String(data.gameId) : `game-${Date.now()}`,
-        playerHand: gameState.currentGame?.playerHand || createEmptyHand(),
-        dealerHand: gameState.currentGame?.dealerHand || createEmptyHand(),
+        playerHand,
+        dealerHand,
         payout,
         isBlackjack: data.result === 'blackjack',
         timestamp: Date.now()
       };
 
-      setGameState(prev => ({
-        ...prev,
-        history: [gameResult, ...prev.history].slice(0, 50), // Keep last 50 games
-        lastResult: gameResult
-      }));
+      console.log('handleGameCompletion: Adding to history', {
+        gameId: gameResult.gameId,
+        playerHandCards: gameResult.playerHand.cards.map(c => c.value),
+        dealerHandCards: gameResult.dealerHand.cards.map(c => c.value),
+        playerHandTotal: gameResult.playerHand.total,
+        dealerHandTotal: gameResult.dealerHand.total,
+        betAmount: gameResult.playerHand.betAmount?.toString(),
+        payout: gameResult.payout.toString()
+      });
+      
+      setGameState(prev => {
+        // Prevent duplicate entries by checking if gameId already exists
+        const existingIndex = prev.history.findIndex(h => h.gameId === gameResult.gameId);
+        if (existingIndex >= 0) {
+          // Update existing entry instead of adding duplicate
+          // Only update if the new entry has cards (to avoid overwriting with empty cards)
+          const shouldUpdate = gameResult.playerHand.cards.length > 0 || gameResult.dealerHand.cards.length > 0;
+          if (shouldUpdate) {
+            console.log('handleGameCompletion: Updating existing history entry', {
+              existingIndex,
+              oldPlayerCards: prev.history[existingIndex].playerHand.cards.map(c => c.value),
+              newPlayerCards: gameResult.playerHand.cards.map(c => c.value)
+            });
+            const updatedHistory = [...prev.history];
+            updatedHistory[existingIndex] = gameResult;
+            return {
+              ...prev,
+              history: updatedHistory,
+              lastResult: gameResult
+            };
+          } else {
+            // Don't update if new entry has no cards (keep existing)
+            console.log('handleGameCompletion: Skipping update - new entry has no cards');
+            return prev;
+          }
+        }
+        console.log('handleGameCompletion: Adding new history entry');
+        const newHistory = [gameResult, ...prev.history].slice(0, 50);
+        
+        // Persist to localStorage as backup (keyed by wallet address)
+        if (address && typeof window !== 'undefined') {
+          try {
+            const storageKey = `blackjack_history_${address.toLowerCase()}`;
+            const historyToStore = newHistory.map(result => ({
+              gameId: result.gameId,
+              playerHand: {
+                id: result.playerHand.id,
+                cards: result.playerHand.cards.map(c => ({ value: c.value, suit: c.suit })),
+                total: result.playerHand.total,
+                hasAce: result.playerHand.hasAce,
+                isBlackjack: result.playerHand.isBlackjack,
+                isBust: result.playerHand.isBust,
+                betAmount: result.playerHand.betAmount.toString(),
+                payout: result.playerHand.payout.toString(),
+                result: result.playerHand.result,
+                actions: result.playerHand.actions,
+              },
+              dealerHand: {
+                id: result.dealerHand.id,
+                cards: result.dealerHand.cards.map(c => ({ value: c.value, suit: c.suit })),
+                total: result.dealerHand.total,
+                hasAce: result.dealerHand.hasAce,
+                isBlackjack: result.dealerHand.isBlackjack,
+                isBust: result.dealerHand.isBust,
+                betAmount: result.dealerHand.betAmount.toString(),
+                payout: result.dealerHand.payout.toString(),
+                actions: result.dealerHand.actions,
+              },
+              payout: result.payout.toString(),
+              isBlackjack: result.isBlackjack,
+              timestamp: result.timestamp,
+            }));
+            localStorage.setItem(storageKey, JSON.stringify(historyToStore));
+          } catch (error) {
+            console.error('Failed to save history to localStorage:', error);
+          }
+        }
+        
+        return {
+          ...prev,
+          history: newHistory,
+          lastResult: gameResult
+        };
+      });
 
       if (profit > BigInt(0)) {
         // Store pending win data - will show notification after dealer reveal completes
@@ -806,15 +1395,17 @@ export default function BlackjackPage() {
           isBlackjack: data.result === 'blackjack'
         });
       }
-    } catch {
+    } catch (error) {
+      console.error('Error in handleGameCompletion:', error);
       // ignore malformed payload
     }
-  }, [gameState.currentGame]);
+  }, [gameState.currentGame, manageChipStack]);
 
   // Handle dealer reveal completion - show win notification and trigger chip animation
   const handleDealerRevealComplete = useCallback(() => {
     // Trigger chip animation now that dealer reveal is complete
     if (pendingChipResult) {
+      chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
       setCurrentGameResult(pendingChipResult);
       setPendingChipResult(null);
     }
@@ -964,8 +1555,23 @@ export default function BlackjackPage() {
       }
 
       // Convert Card[] to number[] (card value only)
-      const playerCards = result.playerHand.cards.map(c => c.value);
-      const dealerCards = result.dealerHand.cards.map(c => c.value);
+      // Ensure cards exist and are valid
+      const playerCards = Array.isArray(result.playerHand.cards) 
+        ? result.playerHand.cards.map(c => typeof c === 'object' && 'value' in c ? c.value : Number(c))
+        : [];
+      const dealerCards = Array.isArray(result.dealerHand.cards)
+        ? result.dealerHand.cards.map(c => typeof c === 'object' && 'value' in c ? c.value : Number(c))
+        : [];
+      
+      console.log('gameHistoryEntries: Transforming history entry', {
+        gameId: result.gameId,
+        playerCards,
+        dealerCards,
+        playerCardsLength: playerCards.length,
+        dealerCardsLength: dealerCards.length,
+        playerHandCardsType: result.playerHand.cards?.[0] ? typeof result.playerHand.cards[0] : 'undefined',
+        dealerHandCardsType: result.dealerHand.cards?.[0] ? typeof result.dealerHand.cards[0] : 'undefined'
+      });
 
       return {
         id: result.gameId,
@@ -1030,7 +1636,7 @@ export default function BlackjackPage() {
         {currentView === 'game' && (
           <>
         {/* Game Table */}
-        <div className="flex gap-1 pb-0">
+        <div className="flex gap-1 pb-0 -mx-2 sm:mx-0">
           <div className="relative w-full">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
@@ -1054,70 +1660,25 @@ export default function BlackjackPage() {
               gameResult={currentGameResult}
               onChipAnimationComplete={handleChipAnimationComplete}
               history={gameState.history}
+              totalPayout={currentGame?.totalPayout || BigInt(0)}
               onDoubleDownChips={handleDoubleDownChips}
               onSplitChips={handleSplitChips}
               onRebet={handleRebet}
               onHalfBet={handleHalfBet}
               onDoubleBet={handleDoubleBet}
               canDeal={!gameState.isPlaying && totalBetAmount > 0}
+              onBetAmountChange={manageChipStack}
+              currentBetAmount={displayBetAmount}
+              lastBetAmount={lastBetAmount}
             />
-          </div>
-        </div>
-
-        {/* Game Stats */}
-        <div className="mt-6 sm:mt-6 grid grid-cols-4 md:grid-cols-4 gap-2 sm:gap-2 w-full">
-          <div
-            className="rounded-md p-6 gap-2 text-center"
-            style={{
-              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-              border: '1px solid rgba(60, 60, 60, 0.5)',
-            }}
-          >
-            <div className="text-2xl pb-6 font-bold text-purple-500">
-              {gameState.history.length}
-            </div>
-            <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Games Played</div>
-          </div>
-          <div
-            className="rounded-md p-6 gap-2 text-center"
-            style={{
-              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-              border: '1px solid rgba(60, 60, 60, 0.5)',
-            }}
-          >
-            <div className="text-2xl pb-6 font-bold text-purple-500">
-              {gameState.history.filter(r => r.payout > BigInt(0)).length}
-            </div>
-            <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Games Won</div>
-          </div>
-          <div
-            className="rounded-md p-6 gap-2 text-center"
-            style={{
-              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-              border: '1px solid rgba(60, 60, 60, 0.5)',
-            }}
-          >
-            <div className="text-2xl pb-6 font-bold text-purple-500">
-              {gameState.history.filter(r => r.isBlackjack).length}
-            </div>
-            <div className="text-white/60 text-md font-bold uppercase tracking-wider">BJs</div>
-          </div>
-          <div
-            className="rounded-md p-6 gap-2 text-center"
-            style={{
-              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-              border: '1px solid rgba(60, 60, 60, 0.5)',
-            }}
-          >
-            <div className="text-2xl pb-6 font-bold text-purple-500">
-              {gameState.history.length > 0 ?
-                ((gameState.history.filter(r => r.payout > BigInt(0)).length / gameState.history.length) * 100).toFixed(1) : '0.0'}%
-            </div>
-            <div className="text-white/60 text-sm font-bold uppercase tracking-wider">Win Rate</div>
+            {/* Win Notification */}
+            {showWinNotification && (
+              <WinNotification
+                amount={winAmount}
+                isBlackjack={isBlackjackWin}
+                onComplete={() => setShowWinNotification(false)}
+              />
+            )}
           </div>
         </div>
 
@@ -1136,22 +1697,33 @@ export default function BlackjackPage() {
           />
         </div>
 
-        {/* Betting Drawer - Always mounted to keep chart ref alive, hidden during player turn */}
-        <div style={{ display: (!currentGame || !isPlayerTurn) ? 'block' : 'none' }}>
-          <BettingDrawer
-            onStartGame={handleStartGame}
-            isPlaying={gameState.isPlaying}
-            reserveBalance={offChainBalance}
-            chartRef={chartRef}
-            sessionStartTime={chartSessionStartTime.current}
-            onBetAmountChange={manageChipStack}
-            currentBetAmount={displayBetAmount}
-            lastBetAmount={lastBetAmount}
-            onRebet={handleRebet}
-            onHalfBet={handleHalfBet}
-            onDoubleBet={handleDoubleBet}
-          />
-        </div>
+        {/* Real-Time Bet Chart - Above Recent Games */}
+        {currentView === 'game' && (
+          <div className="mt-8">
+            <div
+              className="rounded-xl p-4"
+              style={{
+                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
+                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(6, 182, 212, 0.2)',
+              }}
+            >
+              <div className="h-96 w-full" style={{ minWidth: 0, minHeight: '384px' }}>
+                <BlackjackRealTimeBetChart
+                  ref={chartRef}
+                  sessionStartTime={chartSessionStartTime.current}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quick History - Last 20 Hands */}
+        {currentView === 'game' && gameState.history.length > 0 && (
+          <div className="mt-8">
+            <QuickHistory history={gameState.history} />
+          </div>
+        )}
 
         {/* Deposit/Withdraw Modal (available on all views) */}
         <DepositWithdrawModal
@@ -1162,6 +1734,7 @@ export default function BlackjackPage() {
         />
           </>
         )}
+
 
         {/* Custom Approval Modal */}
         <CustomApprovalModal
@@ -1174,7 +1747,9 @@ export default function BlackjackPage() {
         />
 
         {currentView === 'history' && (
-          <GameHistory history={gameHistoryEntries} />
+          <div className="max-w-7xl mx-auto">
+            <GameHistory history={gameHistoryEntries} />
+          </div>
         )}
 
         {currentView === 'stats' && (

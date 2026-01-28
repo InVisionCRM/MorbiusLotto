@@ -22,17 +22,28 @@ export function KenoTicketBarcode({ value }: KenoTicketBarcodeProps) {
   const bars = generateBars()
 
   return (
-    <div className="flex items-center justify-center gap-[1px] h-12 bg-white p-1">
+    <div
+      className="flex items-center justify-center gap-[1px] h-12 p-1 relative"
+      style={{
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        border: '1px inset rgba(60, 60, 60, 0.5)',
+      }}
+    >
+      {/* Radial gradient overlay */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
+      <div className="relative z-10 flex items-center justify-center gap-[1px] h-full w-full">
       {bars.map((width, idx) => (
         <div
           key={idx}
-          className="bg-gradient-to-br from-slate-950 to-slate-900 h-full"
+          className="bg-white h-full"
           style={{
             width: `${width}px`,
             minWidth: '1px',
           }}
         />
       ))}
+      </div>
     </div>
   )
 }

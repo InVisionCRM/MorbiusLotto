@@ -54,13 +54,8 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
 
   // 3D perspective transform - cards lie flat on table viewed from player's angle
   const getCardTransform = () => {
-    if (isDealer) {
-      // Dealer cards: tilt back more (further from viewer), slight rotation for natural look
-      return 'rotateX(35deg)';
-    } else {
-      // Player cards: tilt back less (closer to viewer)
-      return 'rotateX(35deg)';
-    }
+    // Both dealer and player cards use the same perspective origin now, so same angle
+    return 'rotateX(35deg)';
   };
 
   // Shadow that enhances the 3D effect - card lifting off table
@@ -79,7 +74,7 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
   if (hidden) {
     return (
       <div
-        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden`}
+        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative ${sizeClasses}`}
         style={{
           borderRadius: '4px',
           boxShadow: getCardShadow(),
@@ -88,37 +83,41 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
           animationDelay: isNewCard ? `${animationDelay}s` : '1s',
         }}
       >
-        <Image
-          src="/Pulse Branding/Logo/ball.png"
-          alt="Card back"
-          width={imageSize.width}
-          height={imageSize.height}
-          className="w-full h-full bg-slate-900 border border-4 border-white object-contain rounded-sm"
-          priority
-        />
+        <div className="w-full h-full bg-slate-900 border-2 border-white rounded-sm overflow-hidden" style={{ boxSizing: 'border-box' }}>
+          <Image
+            src="/Pulse Branding/Logo/ball.png"
+            alt="Card back"
+            width={imageSize.width}
+            height={imageSize.height}
+            className="w-full h-full object-contain"
+            priority
+          />
+        </div>
       </div>
     );
   }
 
   return (
     <div
-      className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden`}
+      className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative ${sizeClasses}`}
       style={{
-        borderRadius: '1px',
+        borderRadius: '4px',
         boxShadow: getCardShadow(),
         transform: getCardTransform(),
         transformStyle: 'preserve-3d',
         animationDelay: isNewCard ? `${animationDelay}s` : '1s',
       }}
     >
-      <Image
-        src={getCardImagePath()}
-        alt={`${getValueString(card.value)} of ${card.suit}`}
-        width={imageSize.width}
-        height={imageSize.height}
-        className="w-full h-full object-cover rounded-xs"
-        priority
-      />
+      <div className="w-full h-full rounded-sm overflow-hidden bg-white" style={{ boxSizing: 'border-box' }}>
+        <Image
+          src={getCardImagePath()}
+          alt={`${getValueString(card.value)} of ${card.suit}`}
+          width={imageSize.width}
+          height={imageSize.height}
+          className="w-full h-full object-contain"
+          priority
+        />
+      </div>
     </div>
   );
 };

@@ -34,6 +34,7 @@ import { useKenoTicketRoundHistory } from '@/hooks/use-keno-ticket-round-history
 import { ContractAddress } from '@/components/ui/contract-address'
 import Footer from '@/components/PLINKO/Footer'
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text'
+import KenoMainNav from '@/components/CryptoKeno/KenoMainNav'
 
 const ALL_NUMBERS = Array.from({ length: 80 }, (_, i) => i + 1)
 
@@ -670,99 +671,516 @@ export default function KenoPage() {
   }, [buyConfirmError])
 
   return (
-    <div className="min-h-screen text-white">
-      <header className="flex items-center justify-between px-6 py-4 gap-4">
-        <div className="flex-1" />
-        <div className="flex items-center gap-3">
-          <Link href="/keno-dashboard">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-purple-400/60 text-purple-100"
+    <div 
+      className="min-h-screen text-white"
+      style={{
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95))',
+      }}
+    >
+      <KenoMainNav 
+        onShowPrizePool={() => setShowPrizePool(true)}
+      />
+
+
+      <main className="px-2 sm:px-4 md:px-6 pb-16 pt-16 w-full max-w-full overflow-x-hidden">
+        <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6">
+          {/* LEFT COLUMN */}
+          <div className="flex flex-col gap-6">
+            {lastDraw && showLiveBoard && (
+              <div id="live-keno-board">
+                <LiveKenoBoard
+                  roundId={lastDraw.roundId}
+                  winningNumbers={lastDraw.winningNumbers}
+                  plus3Numbers={lastDraw.plus3Numbers}
+                  multiplier={lastDraw.multiplier}
+                  bullsEyeNumber={lastDraw.bullsEyeNumber}
+                  active={showLiveBoard}
+                  onClose={() => setShowLiveBoard(false)}
+                  nextDrawTime={nextDrawTime ? Math.floor(nextDrawTime / 1000) : undefined}
+                  tickets={ticketsWithHistory}
+                  insertAfterYourNumbers={
+                    <div className="lg:hidden -mt-4">
+                      <Card
+                        className="relative overflow-hidden p-0 w-full max-w-full"
+                        style={{
+                          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                          border: '1px inset rgba(60, 60, 60, 0.5)',
+                        }}
+                      >
+                        {/* Radial gradient overlay */}
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
+                        <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
+                          {/* LEFT PANEL - Builder */}
+                          <div className="space-y-4 min-w-0 w-full overflow-x-hidden">
+                            <h2 className="text-xl font-bold text-white">BUILD YOUR KENO TICKET</h2>
+
+                            {/* Spot Selection & Payout Table - 2 Column */}
+                            <div className="grid grid-cols-2 gap-4">
+                              {/* Spot Size Selection */}
+                              <div
+                                className="space-y-1 p-3 rounded-lg relative"
+                                style={{
+                                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                                }}
+                              >
+                                {/* Radial gradient overlay */}
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                                <div className="relative z-10 space-y-1">
+                                <label className="text-white/70 text-sm">How many spots? (1-10)</label>
+                                <div className="grid grid-cols-4 gap-1">
+                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                    <button
+                                      key={num}
+                                      onClick={() => setSpotSize(num)}
+                                      className={cn(
+                                        "w-full h-8 rounded-lg font-semibold text-sm transition-all hover:opacity-80",
+                                        spotSize === num ? "text-green-400" : "text-gray-300"
+                                      )}
+                                      style={
+                                        spotSize === num
+                                          ? {
+                                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 12px rgba(34, 197, 94, 0.3)',
+                                              border: '1px inset rgba(60, 60, 60, 0.5)',
+                                            }
+                                          : {
+                                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                              border: '1px inset rgba(60, 60, 60, 0.5)',
+                                            }
+                                      }
+                                    >
+                                      {num}
+                                    </button>
+                                  ))}
+                                </div>
+                                </div>
+                              </div>
+
+                              {/* Payout Table for Selected Spot Size */}
+                              <div
+                                className="rounded-lg p-3 relative"
+                                style={{
+                                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                                }}
+                              >
+                                {/* Radial gradient overlay */}
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                                <div className="relative">
+                                <h3 className="text-sm font-bold text-emerald-400 mb-2 text-center">{spotSize}-Spot Payouts</h3>
+                                <div className="space-y-1">
+                                  {Object.entries(PAYTABLE[spotSize] || {}).map(([matches, payout]) => (
+                                    <div key={matches} className="flex justify-between items-center text-xs">
+                                      <span className="text-white/70">
+                                        {matches === '0' ? 'No Match' : `Match ${matches}${spotSize > 1 ? ` of ${spotSize}` : ''}`}
+                                      </span>
+                                      <span className="text-emerald-400 font-semibold">
+                                        {payout}x
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Wager */}
+                            <div className="space-y-2 mb-4">
+                              <label className="block text-sm font-medium text-gray-300">Wager per Draw</label>
+                              <Input
+                                type="number"
+                                step="1"
+                                min="1"
+                                max="1000"
+                                value={wager}
+                                onChange={(e) => setWager(parseFloat(e.target.value) || 0)}
+                                className="text-white relative"
+                                style={{
+                                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                                }}
+                              />
+                              <div className="grid grid-cols-3 gap-1">
+                                {[1, 5, 10, 25, 50, 100].map((preset) => (
+                                  <button
+                                    key={preset}
+                                    onClick={() => setWager(preset)}
+                                    className={cn(
+                                      "w-full py-1 text-xs rounded transition-all hover:opacity-80",
+                                      wager === preset ? "text-emerald-400" : "text-white/70"
+                                    )}
+                                    style={
+                                      wager === preset
+                                        ? {
+                                            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(16, 185, 129, 0.2)',
+                                            border: '1px inset rgba(60, 60, 60, 0.5)',
+                                          }
+                                        : {
+                                            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                            border: '1px inset rgba(60, 60, 60, 0.5)',
+                                          }
+                                    }
+                                  >
+                                    {preset}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Quick Actions - Always Visible */}
+                            <div className="space-y-3">
+                              <h3 className="text-lg font-semibold text-white">Pick your numbers</h3>
+                              <div className="grid grid-cols-2 gap-3">
+                                <button
+                                  onClick={quickPick}
+                                  className="h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all relative"
+                                  style={{
+                                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                                  }}
+                                >
+                                  {/* Radial gradient overlay */}
+                                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                                  <span className="relative z-10">Quick Pick</span>
+                                </button>
+                                <button
+                                  onClick={() => setSelectedNumbers([])}
+                                  className="h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all relative"
+                                  style={{
+                                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                                  }}
+                                >
+                                  {/* Radial gradient overlay */}
+                                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                                  <span className="relative z-10">Clear</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Number Selection Section - Collapsible */}
+                            <div className="space-y-2">
+                              {isNumberPickerCollapsed ? (
+                                <button
+                                  onClick={() => setIsNumberPickerCollapsed(false)}
+                                  className="w-full h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all"
+                                  style={{
+                                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                                  }}
+                                >
+                                  Pick Your Own Numbers
+                                </button>
+                              ) : (
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <h4 className="text-sm font-medium text-white/70">Select {spotSize} number{spotSize !== 1 ? 's' : ''} from 1-80</h4>
+                                    <button
+                                      onClick={() => setIsNumberPickerCollapsed(true)}
+                                      className="text-white/70 hover:text-white text-sm underline"
+                                    >
+                                      Collapse
+                                    </button>
+                                  </div>
+                                <div className="w-full overflow-x-hidden">
+                                  <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5 mb-3 w-full">
+                                {ALL_NUMBERS.map((n) => {
+                                  const active = selectedNumbers.includes(n)
+                                  return (
+                                    <button
+                                      key={n}
+                                      onClick={() => handleToggleNumber(n)}
+                                      disabled={!active && selectedNumbers.length >= spotSize}
+                                      className={cn(
+                                        'h-8 rounded text-xs font-semibold transition-all cursor-pointer',
+                                        active
+                                          ? 'bg-white text-black border-white text-md scale-115'
+                                          : 'text-white hover:opacity-80'
+                                      )}
+                                      style={
+                                        !active
+                                          ? {
+                                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                              border: '1px inset rgba(60, 60, 60, 0.5)',
+                                            }
+                                          : undefined
+                                      }
+                                    >
+                                      {n}
+                                    </button>
+                                  )
+                                })}
+                                  </div>
+                                </div>
+                                </div>
+                              )}
+
+                            </div>
+
+                          </div>
+
+                          {/* RIGHT PANEL - Confirm */}
+                          <div
+                            className="rounded-lg p-4 flex flex-col min-w-0 w-full overflow-x-hidden relative"
+                            style={{
+                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                              border: '1px inset rgba(60, 60, 60, 0.5)',
+                            }}
+                          >
+                            {/* Radial gradient overlay */}
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                            <div className="relative z-10">
+
+                            {/* Selected Numbers Display */}
+                            <div className="mb-4">
+                              <h2 className="text-lg font-bold text-white text-center mb-3">CONFIRM</h2>
+                              <div
+                                className="rounded-lg p-3 relative"
+                                style={{
+                                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                                }}
+                              >
+                                {/* Radial gradient overlay */}
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                                <div className="relative">
+                                <div className="text-sm text-white/70 mb-2 text-center">Numbers selected</div>
+                                <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center mb-2">
+                                  {selectedNumbers.length > 0 ? (
+                                    selectedNumbers.map((n) => (
+                                      <span
+                                        key={n}
+                                        className="h-7 min-w-7 px-2 flex items-center justify-center rounded-full bg-white text-black font-bold text-sm"
+                                      >
+                                        {n}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-white/50 text-sm">Select {spotSize} numbers</span>
+                                  )}
+                                </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Payment Method Selection */}
+                            <div
+                              className="mb-4 p-3 rounded-lg relative"
+                              style={{
+                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                border: '1px inset rgba(60, 60, 60, 0.5)',
+                              }}
+                            >
+                              {/* Radial gradient overlay */}
+                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                              <div className="relative">
+                              <div className="text-xs text-white/70 mb-2 font-medium text-center">Pay In...</div>
+                              <div className="flex items-center justify-center gap-4">
+                                <span
+                                  className={cn(
+                                    'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
+                                    paymentMethod === 'MORBIUS'
+                                      ? 'mitr-semibold bg-gradient-to-r from-green-400 to-green-600 bg-clip-text text-purple-500'
+                                      : 'mitr-regular text-white hover:text-white'
+                                  )}
+                                  onClick={() => setPaymentMethod('MORBIUS')}
+                                >
+                                  MORBIUS
+                                </span>
+                                <span className="text-white/50 text-xl">/</span>
+                                <span
+                                  className={cn(
+                                    'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
+                                    paymentMethod === 'PLS'
+                                      ? 'mitr-semibold bg-gradient-to-r from-pink-400 via-red-400 to-green-500 bg-clip-text text-purple-500'
+                                      : 'mitr-regular text-white/70 hover:text-white'
+                                  )}
+                                  onClick={() => setPaymentMethod('PLS')}
+                                >
+                                  PLS
+                                </span>
+                              </div>
+                              </div>
+                            </div>
+
+                            {/* Summary */}
+                            <div
+                              className="space-y-2 border-t border-white/10 pt-3 mb-4 relative"
+                              style={{
+                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                border: '1px inset rgba(60, 60, 60, 0.5)',
+                                borderRadius: '0.5rem',
+                                padding: '0.75rem',
+                              }}
+                            >
+                              {/* Radial gradient overlay */}
+                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                              <div className="relative">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-white/70">Spot Size</span>
+                                <span className="text-white font-semibold">{spotSize}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-white/70">Numbers Selected</span>
+                                <span className="text-white font-semibold">{selectedNumbers.length}/{spotSize}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-white/70">Wager per Draw</span>
+                                <span className="text-white font-semibold">{wager} MORBIUS</span>
+                              </div>
+                              <div className="flex justify-between text-xs pt-2 border-t border-white/10">
+                                <span className="text-white/70">Total Cost</span>
+                                <span className="text-white font-semibold">
+                                  {paymentMethod === 'PLS' ? (
+                                    `~${Number(formatEther(wplsRequiredWei)).toFixed(0)} PLS`
+                                  ) : (
+                                    `${wager} MORBIUS`
+                                  )}
+                                </span>
+                              </div>
+                              </div>
+                            </div>
+
+                            {/* Buy Button */}
+                            {!isConnected ? (
+                              <ConnectButton />
+                            ) : (
+                              <Button
+                                className={cn(
+                                  'w-full h-12 font-semibold hover:opacity-80',
+                                  (isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize)
+                                    ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold'
+                                    : 'text-white'
+                                )}
+                                style={
+                                  !(isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize)
+                                    ? {
+                                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                        border: '1px inset rgba(60, 60, 60, 0.5)',
+                                      }
+                                    : undefined
+                                }
+                                disabled={isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize}
+                                onClick={handleBuy}
+                              >
+                                {isApprovePending || isApproveConfirming ? (
+                                  <AnimatedShinyText className="text-white/40 [-webkit-text-stroke:0.1px_black] font-bold">Approving...</AnimatedShinyText>
+                                ) : isBuyPending || isBuyConfirming ? (
+                                  <AnimatedShinyText className="text-white/40 [-webkit-text-stroke:0.1px_black] font-bold">Processing...</AnimatedShinyText>
+                                ) : selectedNumbers.length !== spotSize ? (
+                                  `Select ${spotSize - selectedNumbers.length} more number${spotSize - selectedNumbers.length !== 1 ? 's' : ''}`
+                                ) : (
+                                  <AnimatedShinyText className="text-white [-webkit-text-stroke:0.1px_black] font-bold">
+                                    {paymentMethod === 'PLS' ? 'Buy with PLS' : 'Buy Ticket'}
+                                  </AnimatedShinyText>
+                                )}
+                              </Button>
+                            )}
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    </div>
+                  }
+                />
+              </div>
+            )}
+
+            {/* Round Status */}
+            <Card
+              className="p-4 relative order-3 lg:order-none"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
             >
-              <LayoutGrid className="h-4 w-4 mr-2" />
-              Dashboard
-            </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowPrizePool(true)}
-            className="border-emerald-400/60 text-emerald-100"
-          >
-            <Trophy className="h-4 w-4 mr-2" />
-            Prize Pool
-          </Button>
-          <ConnectButton />
-        </div>
-      </header>
-
-
-      <main className="px-6 pb-16">
-        {lastDraw && showLiveBoard && (
-          <div className="mb-6" id="live-keno-board">
-            <LiveKenoBoard
-              roundId={lastDraw.roundId}
-              winningNumbers={lastDraw.winningNumbers}
-              plus3Numbers={lastDraw.plus3Numbers}
-              multiplier={lastDraw.multiplier}
-              bullsEyeNumber={lastDraw.bullsEyeNumber}
-              active={showLiveBoard}
-              onClose={() => setShowLiveBoard(false)}
-              nextDrawTime={nextDrawTime ? Math.floor(nextDrawTime / 1000) : undefined}
-              tickets={ticketsWithHistory}
-            />
-          </div>
-        )}
-
-        {/* Round Status */}
-        <div className="mb-6">
-          <Card className="bg-white/5 border-white/10 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-3 h-3 rounded-full",
-                  roundState === 1 ? "bg-green-500" :
-                  roundState === 2 ? "bg-blue-500" :
-                  "bg-yellow-500"
-                )} />
-                <div>
-                  <p className="text-white font-semibold">
-                    Round {activeRoundId}
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    {roundState === 0 ? 'Round will start when purchased' :
-                     roundState === 1 ? 'Accepting tickets' :
-                     roundState === 2 ? 'Finalized (next round available)' :
-                     'Unknown state'}
-                  </p>
+              {/* Radial gradient overlay */}
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
+              <div className="relative">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-3 h-3 rounded-full",
+                      roundState === 1 ? "bg-green-500" :
+                      roundState === 2 ? "bg-blue-500" :
+                      "bg-yellow-500"
+                    )} />
+                    <div>
+                      <p className="text-white font-semibold">
+                        Round {activeRoundId}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        {roundState === 0 ? 'Round will start when purchased' :
+                         roundState === 1 ? 'Accepting tickets' :
+                         roundState === 2 ? 'Finalized (next round available)' :
+                         'Unknown state'}
+                      </p>
+                    </div>
+                  </div>
+                  {nextDrawTime && (
+                    <div className="text-right">
+                      <p className="text-white font-semibold">
+                        {formatCountdown(nextDrawTime)}
+                      </p>
+                      <p className="text-sm text-gray-400">until draw</p>
+                    </div>
+                  )}
                 </div>
               </div>
-              {nextDrawTime && (
-                <div className="text-right">
-                  <p className="text-white font-semibold">
-                    {formatCountdown(nextDrawTime)}
-                  </p>
-                  <p className="text-sm text-gray-400">until draw</p>
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
+            </Card>
+          </div>
 
-        {/* 2-Column Ticket Builder */}
-        <Card className="relative overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900/70 border-white/10 shadow-2xl p-0 w-full max-w-full mb-6">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16, 185, 129, 0.1),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(52,211,153,0.08),transparent_30%)]" />
+          {/* RIGHT COLUMN - Ticket Builder */}
+          {/* Mobile: appears after LiveKenoBoard (which contains "Your Numbers" as 2nd item) */}
+          <div className="hidden lg:block order-2 lg:order-none">
+            <Card
+              className="relative overflow-hidden p-0 w-full max-w-full"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
+          {/* Radial gradient overlay */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
 
-          <div className="relative flex flex-col md:flex-row gap-4 p-4 min-h-0 overflow-x-hidden w-full">
+          <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
             {/* LEFT PANEL - Builder */}
-            <div className="flex-1 md:flex-[3] space-y-4 min-w-0 w-full overflow-x-hidden">
+            <div className="space-y-4 min-w-0 w-full overflow-x-hidden">
               <h2 className="text-xl font-bold text-white">BUILD YOUR KENO TICKET</h2>
 
               {/* Spot Selection & Payout Table - 2 Column */}
               <div className="grid grid-cols-2 gap-4">
                 {/* Spot Size Selection */}
-                <div className="space-y-1">
+                <div
+                  className="space-y-1 p-3 rounded-lg relative"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
+                >
+                  {/* Radial gradient overlay */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                  <div className="relative z-10 space-y-1">
                   <label className="text-white/70 text-sm">How many spots? (1-10)</label>
                   <div className="grid grid-cols-4 gap-1">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
@@ -770,20 +1188,42 @@ export default function KenoPage() {
                         key={num}
                         onClick={() => setSpotSize(num)}
                         className={cn(
-                          "w-full h-8 rounded-lg border-2 font-semibold text-sm transition-all",
-                          spotSize === num
-                            ? "bg-green-500/20 border-green-500 text-green-400 shadow-lg shadow-green-500/20"
-                            : "bg-white/5 border-white/10 text-gray-300 hover:border-green-500/50 hover:bg-green-500/10"
+                          "w-full h-8 rounded-lg font-semibold text-sm transition-all hover:opacity-80",
+                          spotSize === num ? "text-green-400" : "text-gray-300"
                         )}
+                        style={
+                          spotSize === num
+                            ? {
+                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 12px rgba(34, 197, 94, 0.3)',
+                                border: '1px inset rgba(60, 60, 60, 0.5)',
+                              }
+                            : {
+                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                border: '1px inset rgba(60, 60, 60, 0.5)',
+                              }
+                        }
                       >
                         {num}
                       </button>
                     ))}
                   </div>
+                  </div>
                 </div>
 
                 {/* Payout Table for Selected Spot Size */}
-                <div className="bg-transparent">
+                <div
+                  className="rounded-lg p-3 relative"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
+                >
+                  {/* Radial gradient overlay */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                  <div className="relative">
                   <h3 className="text-sm font-bold text-emerald-400 mb-2 text-center">{spotSize}-Spot Payouts</h3>
                   <div className="space-y-1">
                     {Object.entries(PAYTABLE[spotSize] || {}).map(([matches, payout]) => (
@@ -797,6 +1237,53 @@ export default function KenoPage() {
                       </div>
                     ))}
                   </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Wager */}
+              <div className="space-y-2 mb-4">
+                <label className="block text-sm font-medium text-gray-300">Wager per Draw</label>
+                <Input
+                  type="number"
+                  step="1"
+                  min="1"
+                  max="1000"
+                  value={wager}
+                  onChange={(e) => setWager(parseFloat(e.target.value) || 0)}
+                  className="text-white relative"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
+                />
+                <div className="grid grid-cols-3 gap-1">
+                  {[1, 5, 10, 25, 50, 100].map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => setWager(preset)}
+                      className={cn(
+                        "w-full py-1 text-xs rounded transition-all hover:opacity-80",
+                        wager === preset ? "text-emerald-400" : "text-white/70"
+                      )}
+                      style={
+                        wager === preset
+                          ? {
+                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(16, 185, 129, 0.2)',
+                              border: '1px inset rgba(60, 60, 60, 0.5)',
+                            }
+                          : {
+                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                              border: '1px inset rgba(60, 60, 60, 0.5)',
+                            }
+                      }
+                    >
+                      {preset}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -806,15 +1293,29 @@ export default function KenoPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={quickPick}
-                    className="h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold rounded-lg border-2 border-blue-400 hover:border-purple-400 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25 transform hover:scale-105"
+                    className="h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all relative"
+                    style={{
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    }}
                   >
-                    Quick Pick
+                    {/* Radial gradient overlay */}
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                    <span className="relative z-10">Quick Pick</span>
                   </button>
                   <button
                     onClick={() => setSelectedNumbers([])}
-                    className="h-12 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white font-semibold rounded-lg border-2 border-red-400 hover:border-orange-400 transition-all duration-300 hover:shadow-lg hover:shadow-red-500/25 transform hover:scale-105"
+                    className="h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all relative"
+                    style={{
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    }}
                   >
-                    Clear
+                    {/* Radial gradient overlay */}
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                    <span className="relative z-10">Clear</span>
                   </button>
                 </div>
               </div>
@@ -824,7 +1325,12 @@ export default function KenoPage() {
                 {isNumberPickerCollapsed ? (
                   <button
                     onClick={() => setIsNumberPickerCollapsed(false)}
-                    className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-semibold rounded-lg border-2 border-purple-400 hover:border-pink-400 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/25 transform hover:scale-105"
+                    className="w-full h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all"
+                    style={{
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    }}
                   >
                     Pick Your Own Numbers
                   </button>
@@ -849,11 +1355,20 @@ export default function KenoPage() {
                         onClick={() => handleToggleNumber(n)}
                         disabled={!active && selectedNumbers.length >= spotSize}
                         className={cn(
-                          'h-8 rounded border text-xs font-semibold transition-all cursor-pointer hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]',
+                          'h-8 rounded text-xs font-semibold transition-all cursor-pointer',
                           active
                             ? 'bg-white text-black border-white text-md scale-115'
-                            : 'bg-gradient-to-br from-slate-950 to-slate-900/40 border-white/20 text-white hover:border-white/40 hover:bg-white/5'
+                            : 'text-white hover:opacity-80'
                         )}
+                        style={
+                          !active
+                            ? {
+                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                                border: '1px inset rgba(60, 60, 60, 0.5)',
+                              }
+                            : undefined
+                        }
                       >
                         {n}
                       </button>
@@ -869,72 +1384,32 @@ export default function KenoPage() {
             </div>
 
             {/* RIGHT PANEL - Confirm */}
-            <div className="md:flex-[2] md:max-w-sm bg-gradient-to-br from-slate-950 to-slate-900/40 rounded-lg p-4 flex flex-col min-w-0 w-full overflow-x-hidden">
-
-              {/* Wager & Draws */}
-              <div className="mb-4 grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-300">Wager per Draw</label>
-                  <Input
-                    type="number"
-                    step="1"
-                    min="1"
-                    max="1000"
-                    value={wager}
-                    onChange={(e) => setWager(parseFloat(e.target.value) || 0)}
-                    className="bg-white/10 border-white/20 text-white"
-                  />
-                  <div className="grid grid-cols-3 gap-1">
-                    {[1, 5, 10, 25, 50, 100].map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => setWager(preset)}
-                        className={cn(
-                          "w-full py-1 text-xs rounded border transition-colors",
-                          wager === preset
-                            ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
-                            : "bg-white/5 border-white/20 text-white/70 hover:border-white/40 hover:bg-white/10"
-                        )}
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-300">Number of Draws</label>
-                  <Input
-                    type="number"
-                    step="1"
-                    min="1"
-                    max="60"
-                    value={draws}
-                    onChange={(e) => setDraws(parseInt(e.target.value) || 1)}
-                    className="bg-white/10 border-white/20 text-white"
-                  />
-                  <div className="grid grid-cols-3 gap-1">
-                    {[1, 5, 10, 20, 30, 60].map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => setDraws(preset)}
-                        className={cn(
-                          "px-2 py-1 text-xs rounded border transition-colors",
-                          draws === preset
-                            ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
-                            : "bg-white/5 border-white/20 text-white/70 hover:border-white/40 hover:bg-white/10"
-                        )}
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div
+              className="rounded-lg p-4 flex flex-col min-w-0 w-full overflow-x-hidden relative"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
+              {/* Radial gradient overlay */}
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+              <div className="relative z-10">
 
               {/* Selected Numbers Display */}
               <div className="mb-4">
                 <h2 className="text-lg font-bold text-white text-center mb-3">CONFIRM</h2>
-                <div className="bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10 rounded-lg p-3">
+                <div
+                  className="rounded-lg p-3 relative"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
+                >
+                  {/* Radial gradient overlay */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                  <div className="relative">
                   <div className="text-sm text-white/70 mb-2 text-center">Numbers selected</div>
                   <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center mb-2">
                     {selectedNumbers.length > 0 ? (
@@ -950,11 +1425,22 @@ export default function KenoPage() {
                       <span className="text-white/50 text-sm">Select {spotSize} numbers</span>
                     )}
                   </div>
+                  </div>
                 </div>
               </div>
 
               {/* Payment Method Selection */}
-              <div className="mb-4 p-3 bg-white/5 rounded-lg">
+              <div
+                className="mb-4 p-3 rounded-lg relative"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                }}
+              >
+                {/* Radial gradient overlay */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                <div className="relative">
                 <div className="text-xs text-white/70 mb-2 font-medium text-center">Pay In...</div>
                 <div className="flex items-center justify-center gap-4">
                   <span
@@ -981,10 +1467,23 @@ export default function KenoPage() {
                     PLS
                   </span>
                 </div>
+                </div>
               </div>
 
               {/* Summary */}
-              <div className="space-y-2 border-t border-white/10 pt-3 mb-4">
+              <div
+                className="space-y-2 border-t border-white/10 pt-3 mb-4 relative"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                  borderRadius: '0.5rem',
+                  padding: '0.75rem',
+                }}
+              >
+                {/* Radial gradient overlay */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+                <div className="relative">
                 <div className="flex justify-between text-xs">
                   <span className="text-white/70">Spot Size</span>
                   <span className="text-white font-semibold">{spotSize}</span>
@@ -997,19 +1496,16 @@ export default function KenoPage() {
                   <span className="text-white/70">Wager per Draw</span>
                   <span className="text-white font-semibold">{wager} MORBIUS</span>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/70">Number of Draws</span>
-                  <span className="text-white font-semibold">{draws}</span>
-                </div>
                 <div className="flex justify-between text-xs pt-2 border-t border-white/10">
                   <span className="text-white/70">Total Cost</span>
                   <span className="text-white font-semibold">
                     {paymentMethod === 'PLS' ? (
                       `~${Number(formatEther(wplsRequiredWei)).toFixed(0)} PLS`
                     ) : (
-                      `${wager * draws} MORBIUS`
+                      `${wager} MORBIUS`
                     )}
                   </span>
+                </div>
                 </div>
               </div>
 
@@ -1019,11 +1515,20 @@ export default function KenoPage() {
               ) : (
                 <Button
                   className={cn(
-                    'w-full h-12 font-semibold',
+                    'w-full h-12 font-semibold hover:opacity-80',
                     (isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize)
                       ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold'
-                      : 'bg-green-500 text-white hover:bg-green-600'
+                      : 'text-white'
                   )}
+                  style={
+                    !(isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize)
+                      ? {
+                          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                          border: '1px inset rgba(60, 60, 60, 0.5)',
+                        }
+                      : undefined
+                  }
                   disabled={isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize}
                   onClick={handleBuy}
                 >
@@ -1040,15 +1545,27 @@ export default function KenoPage() {
                   )}
                 </Button>
               )}
+              </div>
             </div>
           </div>
-        </Card>
+            </Card>
+          </div>
+        </div>
 
       </main>
 
       {/* Empty tickets dialog */}
       <Dialog open={showNoTicketsDialog} onOpenChange={setShowNoTicketsDialog}>
-        <DialogContent className="max-w-lg overflow-hidden border-purple-500/40 bg-transparent p-0 text-white">
+        <DialogContent
+          className="max-w-lg overflow-hidden p-0 text-white"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            border: '1px inset rgba(60, 60, 60, 0.5)',
+          }}
+        >
+          {/* Radial gradient overlay */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="relative h-72">
             <Image
               src="/MORBIUS/821eff6f-8815-47ac-b93d-61d09d859de6.png"
@@ -1065,7 +1582,12 @@ export default function KenoPage() {
                 Build your first ticket to join the next draw. It only takes a minute.
               </p>
               <Button
-                className="w-full bg-purple-950/80 text-md font-bold text-white hover:bg-purple-900/80"
+                className="w-full text-md font-bold text-white hover:opacity-80"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                }}
                 onClick={handleStartTicketBuild}
               >
                 Get Tickets Now!

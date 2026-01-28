@@ -125,6 +125,18 @@ async function initializeServices() {
       }
     });
 
+    // Game hands endpoint (for fetching player hands for a specific game)
+    app.get('/api/game/:gameId/hands', async (req, res) => {
+      try {
+        const { gameId } = req.params;
+        const hands = await dbService.getGameHands(gameId);
+        sendJson(res, hands);
+      } catch (error) {
+        logger.error('Error fetching game hands:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Start server
     server.listen(PORT, () => {
       logger.info(`Blackjack server running on port ${PORT}`);

@@ -298,13 +298,14 @@ export class WebSocketService {
         requestId: message.requestId
       });
 
-      // If game is completed, also send settlement info
+      // If game is completed, also send settlement info as an event (not a response)
       if (gameState.status === 'completed') {
         // Calculate overall result from hands
         const hasWin = gameState.playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
         const allPush = gameState.playerHands.every(h => h.result === 'push');
         const overallResult = hasWin ? 'win' : allPush ? 'push' : 'loss';
         
+        // Send as event (no requestId) - client will handle via event listener
         this.sendMessage(ws, {
           type: 'game_completed',
           payload: {
@@ -312,8 +313,8 @@ export class WebSocketService {
             result: overallResult,
             payout: gameState.totalPayout,
             betAmount: gameState.totalBetAmount
-          },
-          requestId: message.requestId
+          }
+          // No requestId - this is an event, not a response
         });
       }
 

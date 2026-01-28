@@ -11,12 +11,22 @@ interface KenoPrizePoolModalProps {
 export function KenoPrizePoolModal({ open, onOpenChange }: KenoPrizePoolModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto bg-gray-800 border-gray-950">
-        <DialogHeader>
+      <DialogContent
+        className="max-w-6xl max-h-[90vh] overflow-y-auto relative text-white"
+        style={{
+          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95))',
+          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+          border: '1px inset rgba(60, 60, 60, 0.5)',
+        }}
+      >
+        {/* Radial gradient overlay */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
+        <div className="relative z-10 p-6">
+        <DialogHeader className="mb-6">
           <DialogTitle className="text-2xl font-bold text-white text-center">
-            KENO! PRIZE PAYOUTS - PRIZES WON (PER 1000 MORBIUS PLAY)
+            KENO PRIZE PAYOUTS
           </DialogTitle>
-          <DialogDescription className="text-gray-300 text-center">
+          <DialogDescription className="text-gray-300 text-center mt-2">
             Prize amounts shown are multipliers. Multiply by your wager to get total payout.
           </DialogDescription>
         </DialogHeader>
@@ -122,7 +132,18 @@ export function KenoPrizePoolModal({ open, onOpenChange }: KenoPrizePoolModalPro
               odds: "1 in 4.00"
             },
           ].map(({ spot, rows, odds }) => (
-            <div key={spot} className="border border-white/10 rounded-lg overflow-hidden">
+            <div
+              key={spot}
+              className="rounded-lg overflow-hidden relative"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
+              {/* Radial gradient overlay */}
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+              <div className="relative z-10">
               <div className="bg-lime-600/70 px-4 py-2 border-b border-white/10">
                 <h3 className="text-lg font-bold text-white">{spot} SPOT</h3>
               </div>
@@ -155,17 +176,30 @@ export function KenoPrizePoolModal({ open, onOpenChange }: KenoPrizePoolModalPro
                   </tfoot>
                 </table>
               </div>
+              </div>
             </div>
           ))}
         </div>
 
-        <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+        <div
+          className="mt-6 p-4 rounded-lg relative"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            border: '1px inset rgba(60, 60, 60, 0.5)',
+          }}
+        >
+          {/* Radial gradient overlay */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
+          <div className="relative z-10">
           <p className="text-xs text-amber-200 mb-2">
             <strong>*</strong> Subject to contract rules, prize amounts may vary. The total liability for 10 of 10 prize is limited.
           </p>
           <p className="text-xs text-amber-200">
             <strong>**</strong> Subject to contract rules, prize amounts may vary. The total KENO! MULTIPLIER prize liability is limited.
           </p>
+          </div>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

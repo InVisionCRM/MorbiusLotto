@@ -48,6 +48,7 @@ interface LiveKenoBoardProps {
       roundPL?: number
     }[]
   }[]
+  insertAfterYourNumbers?: React.ReactNode
 }
 
 const ALL_NUMBERS = Array.from({ length: 80 }, (_, i) => i + 1)
@@ -62,6 +63,7 @@ export function LiveKenoBoard({
   onClose,
   nextDrawTime,
   tickets = [],
+  insertAfterYourNumbers,
 }: LiveKenoBoardProps) {
   const gridRef = useRef<HTMLDivElement>(null)
   const cellRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -212,32 +214,23 @@ export function LiveKenoBoard({
   }, [nextDrawTime])
 
   return (
-    <Card className="relative overflow-hidden bg-transparent">
-      <div className="absolute inset-0 bg-transparent" />
-      <div className="absolute inset-0 bg-transparent" />
+    <Card
+      className="relative overflow-hidden"
+      style={{
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        border: '1px inset rgba(60, 60, 60, 0.5)',
+      }}
+    >
+      {/* Radial gradient overlay */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
 
-      {/* Compact round + close controls */}
-      <div className="pointer-events-none absolute inset-0 z-50">
-        {onClose && (
-          <div className="pointer-events-auto absolute top-2 right-2 flex items-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full bg-gradient-to-br from-slate-950 to-slate-900/30 text-white hover:bg-gradient-to-br from-slate-950 to-slate-900/50"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              ×
-            </Button>
-          </div>
-        )}
-      </div>
 
       <div className="relative z-10 px-4 py-3">
         <BentoGrid className="max-w-none">
           <BentoGridItem
             title="Live Draw Board"
-            className="md:col-start-1 md:row-start-1"
+            className="md:row-start-1 md:col-span-2"
             header={
               <>
                 {stage !== 'complete' && (
@@ -276,9 +269,14 @@ export function LiveKenoBoard({
             <div
               ref={gridRef}
               className={cn(
-                "relative z-0 grid grid-cols-10 gap-2 rounded-xl border border-white/8 bg-white/5 p-3 pb-20 backdrop-blur transition-opacity",
+                "relative z-0 grid grid-cols-10 gap-2 rounded-xl p-3 pb-20 backdrop-blur transition-opacity",
                 'opacity-100'
               )}
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
             >
               {ALL_NUMBERS.map((n) => {
                 const isHit = drawnNumbers.includes(n)
@@ -323,7 +321,17 @@ export function LiveKenoBoard({
                     exit={{ opacity: 0 }}
                     className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center"
                   >
-                    <div className="w-full h-full rounded-2xl border border-slate-200/50 backdrop-blur-md p-3 text-white shadow-2xl overflow-hidden bg-gradient-to-br from-slate-900 to-slate-700">
+                    <div
+                      className="w-full h-full rounded-2xl backdrop-blur-md p-3 text-white overflow-hidden"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                        border: '1px inset rgba(60, 60, 60, 0.5)',
+                      }}
+                    >
+                      {/* Radial gradient overlay */}
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-2xl" />
+                      <div className="relative">
                       <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-white">
                         <span />
                         <span>Drawing: <span className="text-white">{roundId ?? '-'}</span></span>
@@ -380,6 +388,7 @@ export function LiveKenoBoard({
                         <div className="text-sm font-semibold text-white/70">Awaiting Next Draw</div>
                         <div className="text-4xl font-semibold text-green-500">Next in {timeLabel}</div>
                       </div>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -389,7 +398,7 @@ export function LiveKenoBoard({
 
           <BentoGridItem
             title="Your Numbers"
-            className="md:col-start-2 md:row-start-2 md:mx-18"
+            className="md:row-start-2 md:col-span-2"
             description={`${currentTicket?.drawsRemaining ?? 0} draws remaining`}
           >
             {filteredTickets && filteredTickets.length > 0 ? (
@@ -452,11 +461,25 @@ export function LiveKenoBoard({
             )}
           </BentoGridItem>
 
+          {/* Insert content after "Your Numbers" (e.g., ticket builder on mobile) */}
+          {insertAfterYourNumbers && (
+            <div className="lg:hidden md:col-span-2 md:row-start-3">
+              {insertAfterYourNumbers}
+            </div>
+          )}
+
           <BentoGridItem
-            className="md:col-start-2 md:row-start-1 md:mx-18 relative"
+            className="relative md:row-start-3 md:col-span-2"
           >
             {/* Expired Tickets Toggle - Top Right of Ticket Card */}
-            <div className="absolute top-2 right-2 z-50 flex items-center gap-2 bg-gradient-to-br from-slate-950/90 to-slate-900/80 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/10 shadow-lg">
+            <div
+              className="absolute top-2 right-2 z-50 flex items-center gap-2 backdrop-blur-sm rounded-lg px-3 py-1.5"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
               <Switch
                 id="show-expired"
                 checked={showExpiredTickets}
@@ -503,7 +526,7 @@ export function LiveKenoBoard({
           {/* Player Statistics */}
           <BentoGridItem
             title="Your Statistics"
-            className="md:col-start-1 md:row-start-2 relative"
+            className="relative md:row-start-4 md:col-span-2"
             description={address ? 'Live player performance metrics' : 'Connect wallet to view stats'}
           >
             {!address ? (
@@ -518,7 +541,16 @@ export function LiveKenoBoard({
             ) : (
               <div className="grid grid-cols-2 gap-px bg-white/10 p-px rounded-lg">
                 {/* Total Wagered */}
-                <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-purple-900/40 to-purple-950/30 p-4">
+                <Card
+                  className="relative overflow-hidden border-0 p-4"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
+                >
+                  {/* Radial gradient overlay */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
                   <div className="absolute top-0 right-0 opacity-10">
                     <DollarSign className="h-16 w-16 text-purple-400" />
                   </div>
@@ -535,7 +567,14 @@ export function LiveKenoBoard({
                 </Card>
 
                 {/* Claimed */}
-                <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-900/40 to-emerald-950/30 p-4">
+                <Card
+                  className="relative overflow-hidden border-0 p-4"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
+                >
                   <div className="absolute top-0 right-0 opacity-10">
                     <Trophy className="h-16 w-16 text-emerald-400" />
                   </div>
@@ -553,13 +592,15 @@ export function LiveKenoBoard({
 
                 {/* Net P/L */}
                 <Card
-                  className={cn(
-                    'relative overflow-hidden border-0 p-4',
-                    playerStats.isProfit
-                      ? 'bg-gradient-to-br from-green-900/40 to-green-950/30'
-                      : 'bg-gradient-to-br from-red-900/40 to-red-950/30'
-                  )}
+                  className="relative overflow-hidden border-0 p-4"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
                 >
+                  {/* Radial gradient overlay */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
                   <div className="absolute top-0 right-0 opacity-10">
                     {playerStats.isProfit ? (
                       <TrendingUp className="h-16 w-16 text-green-400" />
@@ -599,7 +640,14 @@ export function LiveKenoBoard({
                 </Card>
 
                 {/* Unclaimed */}
-                <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-900/40 to-blue-950/30 p-4">
+                <Card
+                  className="relative overflow-hidden border-0 p-4"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
+                >
                   <div className="absolute top-0 right-0 opacity-10">
                     <Target className="h-16 w-16 text-blue-300" />
                   </div>

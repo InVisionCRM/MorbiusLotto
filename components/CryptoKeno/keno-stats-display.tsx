@@ -12,20 +12,34 @@ export function KenoStatsDisplay() {
   const { address } = useAccount()
   const { playerStats, globalStats, unclaimedWinnings, isLoading } = useKenoStats()
 
+  const cardStyle = {
+    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+    border: '1px inset rgba(60, 60, 60, 0.5)',
+  }
+
   if (!address) {
     return (
-      <Card className="border border-white/10 bg-gradient-to-br from-slate-900/50 to-slate-950/50 p-6">
-        <p className="text-center text-gray-400">Connect your wallet to view statistics</p>
+      <Card className="p-6 relative" style={cardStyle}>
+        {/* Radial gradient overlay */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
+        <div className="relative z-10">
+          <p className="text-center text-gray-400">Connect your wallet to view statistics</p>
+        </div>
       </Card>
     )
   }
 
   if (isLoading) {
     return (
-      <Card className="border border-white/10 bg-gradient-to-br from-slate-900/50 to-slate-950/50 p-6">
-        <div className="flex items-center justify-center gap-2">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-          <p className="text-gray-400">Loading statistics...</p>
+      <Card className="p-6 relative" style={cardStyle}>
+        {/* Radial gradient overlay */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
+        <div className="relative z-10">
+          <div className="flex items-center justify-center gap-2">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <p className="text-gray-400">Loading statistics...</p>
+          </div>
         </div>
       </Card>
     )
@@ -33,8 +47,12 @@ export function KenoStatsDisplay() {
 
   if (!playerStats) {
     return (
-      <Card className="border border-white/10 bg-gradient-to-br from-slate-900/50 to-slate-950/50 p-6">
-        <p className="text-center text-gray-400">No statistics available</p>
+      <Card className="p-6 relative" style={cardStyle}>
+        {/* Radial gradient overlay */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
+        <div className="relative z-10">
+          <p className="text-center text-gray-400">No statistics available</p>
+        </div>
       </Card>
     )
   }
@@ -58,7 +76,12 @@ export function KenoStatsDisplay() {
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Wagered */}
-        <Card className="relative overflow-hidden border border-purple-500/30 bg-gradient-to-br from-purple-900/40 to-purple-950/30 p-6">
+        <Card
+          className="relative overflow-hidden p-6"
+          style={cardStyle}
+        >
+          {/* Radial gradient overlay */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="absolute top-0 right-0 opacity-10">
             <DollarSign className="h-24 w-24 text-purple-400" />
           </div>
@@ -75,7 +98,12 @@ export function KenoStatsDisplay() {
         </Card>
 
         {/* Claimed */}
-        <Card className="relative overflow-hidden border border-emerald-500/30 bg-gradient-to-br from-emerald-900/40 to-emerald-950/30 p-6">
+        <Card
+          className="relative overflow-hidden p-6"
+          style={cardStyle}
+        >
+          {/* Radial gradient overlay */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="absolute top-0 right-0 opacity-10">
             <Trophy className="h-24 w-24 text-emerald-400" />
           </div>
@@ -93,13 +121,11 @@ export function KenoStatsDisplay() {
 
         {/* Net P/L */}
         <Card
-          className={cn(
-            'relative overflow-hidden border p-6',
-            playerStats.isProfit
-              ? 'border-green-500/30 bg-gradient-to-br from-green-900/40 to-green-950/30'
-              : 'border-red-500/30 bg-gradient-to-br from-red-900/40 to-red-950/30'
-          )}
+          className="relative overflow-hidden p-6"
+          style={cardStyle}
         >
+          {/* Radial gradient overlay */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="absolute top-0 right-0 opacity-10">
             {playerStats.isProfit ? (
               <TrendingUp className="h-24 w-24 text-green-400" />
@@ -139,7 +165,12 @@ export function KenoStatsDisplay() {
         </Card>
 
         {/* Unclaimed */}
-        <Card className="relative overflow-hidden border border-blue-500/40 bg-gradient-to-br from-blue-900/40 to-blue-950/30 p-6">
+        <Card
+          className="relative overflow-hidden p-6"
+          style={cardStyle}
+        >
+          {/* Radial gradient overlay */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="absolute top-0 right-0 opacity-10">
             <Target className="h-24 w-24 text-blue-300" />
           </div>

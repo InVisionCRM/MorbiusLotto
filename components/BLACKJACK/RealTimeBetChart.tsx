@@ -147,7 +147,7 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
         </div>
 
         {/* Chart */}
-        <div className="h-full min-h-[300px] w-full flex-1">
+        <div className="h-full min-h-[300px] w-full flex-1" style={{ minWidth: 0, minHeight: '300px' }}>
           {history.length === 0 ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center text-purple-500">
@@ -156,7 +156,7 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
               </div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={300}>
               <AreaChart data={pnlData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                 <defs>
                   {/* Cyan gradient for positive values */}

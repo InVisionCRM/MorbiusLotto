@@ -17,6 +17,11 @@ const geistMono = {
 export const metadata: Metadata = {
   title: "MORBIUS Lotto",
   description: "MORBIUS 6-of-55 Lottery",
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+  },
 };
 
 export default function RootLayout({
@@ -27,6 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         {/* Google Fonts */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -38,10 +44,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
-        <Providers>
-          {children}
-          <Toaster position="top-right" theme="dark" richColors />
-        </Providers>
+        <div id="app-wrapper" className="app-content-wrapper">
+          <Providers>
+            {children}
+            <Toaster position="top-right" theme="dark" richColors />
+          </Providers>
+        </div>
       </body>
     </html>
   );

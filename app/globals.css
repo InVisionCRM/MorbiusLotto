@@ -110,9 +110,8 @@ html {
 body {
   overflow-x: hidden;
   max-width: 100vw;
-  transform: scale(0.85);
-  transform-origin: top center;
-  min-height: 117.65vh; /* 100 / 0.85 to compensate for scale */
+  /* Remove transform from body - moved to wrapper to avoid affecting modals */
+  min-height: 100vh;
   background-color: #0c0418;
   background-image:
     linear-gradient(rgba(21, 40, 62, 0.69), rgba(2, 12, 27, 0.74));
@@ -122,6 +121,22 @@ body {
   background-attachment: fixed;
   color: hsl(var(--color-foreground));
   font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Apply transform to content wrapper instead of body */
+/* This prevents modals (which render to body) from being affected */
+.app-content-wrapper {
+  transform: scale(0.85);
+  transform-origin: top center;
+  min-height: 117.65vh; /* 100 / 0.85 to compensate for scale */
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .app-content-wrapper {
+    transform: scale(1);
+    min-height: 100vh;
+  }
 }
 
 /* Ball Draw Simulator Styles */
@@ -393,3 +408,6 @@ body {
 .font-russo-one {
   font-family: "Russo One", sans-serif;
 }
+
+/* RainbowKit Modal Fix - No longer needed since transform moved to wrapper */
+/* Modals render to body, which is now untransformed, so they center correctly */

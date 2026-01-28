@@ -3,8 +3,8 @@
 import { HomeHeader } from '@/components/home/header'
 import { HeroSection } from '@/components/home/hero-section'
 import { GamesSection } from '@/components/home/games-section'
-import { LatestWins } from '@/components/home/latest-wins'
-import { LatestBurns } from '@/components/home/latest-burns'
+// import { LatestWins } from '@/components/home/latest-wins'
+// import { LatestBurns } from '@/components/home/latest-burns'
 import { SocialsSection } from '@/components/home/socials-section'
 import { TokenomicsSection } from '@/components/home/tokenomics-section'
 import { MorbItSection } from '@/components/home/morbit-section'
@@ -45,14 +45,14 @@ export default function HomePage() {
       <TokenomicsSection />
 
       {/* Latest Wins and Burns Section - 2 Column Grid */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto max-w-7xl">
+      {/* <section className="py-16 px-2 sm:px-4 w-full max-w-full overflow-x-hidden">
+        <div className="w-full max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <LatestWins />
             <LatestBurns />
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Socials Section */}
       <SocialsSection />

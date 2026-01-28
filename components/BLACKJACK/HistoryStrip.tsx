@@ -1,19 +1,30 @@
 'use client'
 
 import React from 'react';
-import { GameResult } from '@/app/BLACKJACK/types';
+import { GameResult, GameState } from '@/app/BLACKJACK/types';
 
 interface HistoryStripProps {
   history: GameResult[];
+  gameState?: GameState;
 }
 
-const HistoryStrip: React.FC<HistoryStripProps> = ({ history }) => {
+const HistoryStrip: React.FC<HistoryStripProps> = ({ history, gameState }) => {
   if (history.length === 0) return null;
+
+  // Only show the most recent result when we're in WAITING state (next game hasn't started yet)
+  // Hide it during COMPLETE, DEALING, PLAYER_TURN, DEALER_TURN (while current game is active or showing results)
+  const displayHistory = gameState === GameState.WAITING && history.length > 0
+    ? history // Show all including latest when waiting for next game
+    : history.length > 0
+    ? history.slice(0, -1) // Exclude last item during active game or result display
+    : history;
+
+  if (displayHistory.length === 0) return null;
 
   return (
     <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-4">
       <span className="text-xs text-cyan-300/40 flex-shrink-0">Recent:</span>
-      {history.slice(0, 10).map((result, index) => {
+      {displayHistory.slice(0, 10).map((result, index) => {
         const isWin = result.payout > 0n;
         const isBlackjack = result.isBlackjack;
 

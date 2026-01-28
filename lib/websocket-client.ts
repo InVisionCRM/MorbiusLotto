@@ -243,7 +243,12 @@ export class BlackjackWebSocketClient {
           }
           return;
         } else {
-          logger.warn('Received response for unknown request', { requestId: message.requestId, type: message.type });
+          // Only warn if it's not an event type that shouldn't have requestId
+          // Some events might incorrectly include requestId - handle gracefully
+          if (message.type !== 'game_completed' && message.type !== 'game_updated') {
+            logger.warn('Received response for unknown request', { requestId: message.requestId, type: message.type });
+          }
+          // Fall through to event handling even if requestId exists but no promise found
         }
       }
 
