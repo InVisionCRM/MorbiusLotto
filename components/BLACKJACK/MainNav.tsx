@@ -16,6 +16,8 @@ interface MainNavProps {
   reserveBalance?: bigint;
   currentView?: 'game' | 'history' | 'stats' | 'analytics' | 'verify';
   onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics' | 'verify') => void;
+  useVideoBackground?: boolean;
+  onBackgroundChange?: (useVideo: boolean) => void;
 }
 
 const viewLabels: Record<string, string> = {
@@ -34,7 +36,7 @@ const viewIcons: Record<string, string> = {
   verify: 'fa-check-circle'
 };
 
-export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reserveBalance, currentView = 'game', onViewChange }: MainNavProps) {
+export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reserveBalance, currentView = 'game', onViewChange, useVideoBackground = true, onBackgroundChange }: MainNavProps) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -207,6 +209,23 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                         )}
                       </button>
                     ))}
+                    {/* Background Toggle */}
+                    {onBackgroundChange && (
+                      <button
+                        onClick={() => {
+                          onBackgroundChange(!useVideoBackground);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      >
+                        <i className={`fas ${useVideoBackground ? 'fa-video' : 'fa-image'} w-4 text-center`}></i>
+                        <span className="text-sm font-medium">
+                          {useVideoBackground ? 'Video Background' : 'Image Background'}
+                        </span>
+                        {useVideoBackground && (
+                          <i className="fas fa-check ml-auto text-cyan-400 text-xs"></i>
+                        )}
+                      </button>
+                    )}
                   </div>
 
                   {/* Other Games Section */}

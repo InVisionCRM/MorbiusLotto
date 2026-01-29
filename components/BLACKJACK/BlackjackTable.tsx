@@ -43,6 +43,7 @@ interface BlackjackTableProps {
   onBetAmountChange?: (betAmount: string, chipValue?: number, clearAll?: boolean) => void;
   currentBetAmount?: string;
   lastBetAmount?: string;
+  useVideoBackground?: boolean;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -77,7 +78,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   totalPayout = BigInt(0),
   onBetAmountChange,
   currentBetAmount = '0',
-  lastBetAmount = '0'
+  lastBetAmount = '0',
+  useVideoBackground = true
 }) => {
   // State for progressive dealer card reveal
   // Industry standard: Show only first card during play, reveal all when game completes
@@ -537,38 +539,49 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       }}
     >
       {/* Looping video background (glowingTable.mp4) — loops over 24 hours */}
-      <video
-        ref={tableVideoRef}
-        autoPlay
-        muted
-        loop
-        playsInline
-        className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-        style={{ zIndex: 0 }}
-        onLoadedMetadata={(e) => {
-          const el = e.currentTarget;
-          // Sync to 24-hour loop
-          syncVideoTo24HourLoop(el);
-          // Ensure it plays
-          el.play().catch(() => {
-            // Autoplay may be blocked, but that's okay - user interaction will start it
-          });
-        }}
-        onCanPlay={(e) => {
-          const el = e.currentTarget;
-          // Sync to 24-hour loop
-          syncVideoTo24HourLoop(el);
-          // Ensure it plays
-          el.play().catch(() => {
-            // Autoplay may be blocked, but that's okay - user interaction will start it
-          });
-        }}
-        onError={(e) => {
-          console.error('Video failed to load:', e.currentTarget.error);
-        }}
-      >
-        <source src="/BlackJack/video%20table/glowingTable.mp4" type="video/mp4" />
-      </video>
+      {useVideoBackground ? (
+        <video
+          ref={tableVideoRef}
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+          style={{ zIndex: 0 }}
+          onLoadedMetadata={(e) => {
+            const el = e.currentTarget;
+            // Sync to 24-hour loop
+            syncVideoTo24HourLoop(el);
+            // Ensure it plays
+            el.play().catch(() => {
+              // Autoplay may be blocked, but that's okay - user interaction will start it
+            });
+          }}
+          onCanPlay={(e) => {
+            const el = e.currentTarget;
+            // Sync to 24-hour loop
+            syncVideoTo24HourLoop(el);
+            // Ensure it plays
+            el.play().catch(() => {
+              // Autoplay may be blocked, but that's okay - user interaction will start it
+            });
+          }}
+          onError={(e) => {
+            console.error('Video failed to load:', e.currentTarget.error);
+          }}
+        >
+          <source src="/BlackJack/video%20table/glowingTable.mp4" type="video/mp4" />
+        </video>
+      ) : (
+        <Image
+          src="/BlackJack/TableBG.png"
+          alt="Table Background"
+          fill
+          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+          style={{ zIndex: 0 }}
+          priority
+        />
+      )}
 
       {/* Subtle dark overlay to keep text readable */}
       <div

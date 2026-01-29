@@ -202,6 +202,9 @@ export default function BlackjackPage() {
   const [clientSeed, setClientSeed] = useState('');
   const [showProvablyFairAdvanced, setShowProvablyFairAdvanced] = useState(false);
 
+  // Background preference state
+  const [useVideoBackground, setUseVideoBackground] = useState(true);
+
   // Generate random client seed
   const generateClientSeed = () => {
     const randomBytes = new Uint8Array(16);
@@ -1598,6 +1601,92 @@ export default function BlackjackPage() {
     return <IntroScreen onComplete={handleIntroComplete} />;
   }
 
+  // Check if user has no reserve balance (less than 1 MORBIUS)
+  const hasNoReserve = offChainBalance < BigInt('1000000000000000000'); // Less than 1 MORBIUS (1e18)
+
+  // Show splash screen if no reserve balance
+  if (hasNoReserve && isConnected) {
+    return (
+      <div className="min-h-screen overflow-x-hidden w-full bg-black">
+        <MainNav
+          onOpenDepositModal={handleOpenDepositModal}
+          onOpenApprovalModal={() => setShowApprovalModal(true)}
+          reserveBalance={offChainBalance}
+          currentView={currentView}
+          onViewChange={setCurrentView}
+          useVideoBackground={useVideoBackground}
+          onBackgroundChange={setUseVideoBackground}
+        />
+        <div className="min-h-screen flex items-center justify-center px-4 pt-20">
+          <div className="max-w-2xl w-full text-center space-y-8">
+            {/* Beta Badge */}
+            <div className="inline-block px-4 py-2 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
+              <span className="text-yellow-400 font-bold text-sm uppercase tracking-wider">BETA</span>
+            </div>
+
+            {/* Main Heading */}
+            <h1 className="text-4xl sm:text-5xl font-bold text-white">
+              Welcome to Blackjack
+            </h1>
+
+            {/* Instructions */}
+            <div className="space-y-4 text-white/90 text-lg leading-relaxed">
+              <p>
+                Blackjack is currently in <span className="font-semibold text-yellow-400">BETA</span>. 
+                Please play responsibly and follow these guidelines:
+              </p>
+              <div className="bg-white/5 border border-white/10 rounded-lg p-6 text-left space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-white/60 mt-1">•</span>
+                  <p className="flex-1">Bet only the <span className="font-semibold text-white">minimum amount</span> while testing</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="text-white/60 mt-1">•</span>
+                  <p className="flex-1">Always <span className="font-semibold text-white">withdraw your entire balance</span> when done playing</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="text-white/60 mt-1">•</span>
+                  <p className="flex-1">Withdrawals can be made through the <span className="font-semibold text-white">game menu</span> or by <span className="font-semibold text-white">clicking your reserve balance</span> at the top of the screen</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Deposit Button */}
+            <button
+              onClick={handleOpenDepositModal}
+              className="px-8 py-4 bg-white text-black font-bold text-lg rounded-lg hover:bg-white/90 transition-colors shadow-lg"
+            >
+              Deposit MORBIUS to Play
+            </button>
+
+            {/* Footer Note */}
+            <p className="text-white/60 text-sm">
+              Deposit MORBIUS to your reserve to start playing
+            </p>
+          </div>
+        </div>
+
+        {/* Deposit/Withdraw Modal */}
+        <DepositWithdrawModal
+          isOpen={showDepositModal}
+          onClose={() => setShowDepositModal(false)}
+          onBalanceSync={syncBalance}
+          contractReserve={playerReserve}
+        />
+
+        {/* Custom Approval Modal */}
+        <CustomApprovalModal
+          open={showApprovalModal}
+          onOpenChange={setShowApprovalModal}
+          onApprove={handleCustomApproval}
+          isApproving={isApproving}
+          tokenSymbol="MORBIUS"
+          spenderName="Blackjack Game"
+        />
+      </div>
+    );
+  }
+
   const currentGame = gameState.currentGame;
   const isPlayerTurn = currentGame?.state === GameState.PLAYER_TURN;
 
@@ -1629,6 +1718,8 @@ export default function BlackjackPage() {
         reserveBalance={offChainBalance}
         currentView={currentView}
         onViewChange={setCurrentView}
+        useVideoBackground={useVideoBackground}
+        onBackgroundChange={setUseVideoBackground}
       />
 
       <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-16 pb-4 sm:pt-20 sm:pb-8 overflow-x-hidden">
@@ -1670,6 +1761,7 @@ export default function BlackjackPage() {
               onBetAmountChange={manageChipStack}
               currentBetAmount={displayBetAmount}
               lastBetAmount={lastBetAmount}
+              useVideoBackground={useVideoBackground}
             />
             {/* Win Notification */}
             {showWinNotification && (
