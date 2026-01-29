@@ -1211,7 +1211,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         {!isPlaying && (
           <>
             {/* Right Side Controls - DEAL */}
-            <div className="absolute bottom-[100px] right-[10px] z-20 lg:hidden">
+            <div className="absolute bottom-[140px] right-[70px] z-20 lg:hidden">
               {/* DEAL Button */}
               <button
                 onClick={onStartGame}
