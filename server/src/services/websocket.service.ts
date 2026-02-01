@@ -1,7 +1,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { DatabaseService } from './database.service';
-import { BlackjackGameService, GameState, CreateGameRequest, PlayerActionRequest } from './blackjack-game.service';
+import { BlackjackGameService, GameState, CreateGameRequest, PlayerActionRequest, TournamentGameState } from './blackjack-game.service';
+import { TournamentService, TournamentState, LeaderboardEntry, TOURNAMENT_CONFIG } from './tournament.service';
 import { logger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { createPublicClient, http } from 'viem';
@@ -18,20 +19,54 @@ interface WebSocketClient extends WebSocket {
   playerAddress?: string;
   connectionId?: string;
   isAlive?: boolean;
+  currentRoom?: string;
+  lastChatMessageAt?: number;
 }
+
+// Allowed chat rooms: main (home) + per-game
+const ALLOWED_CHAT_ROOMS = new Set([
+  'main',
+  'blackjack',
+  'plinko',
+  'keno',
+  'lottery',
+  'bigwheel',
+  'morb-it'
+]);
+
+const CHAT_MAX_LENGTH = 500;
+const CHAT_RATE_LIMIT_MS = 2000; // min 2s between messages per connection
+const CHAT_RECENT_MESSAGES_LIMIT = 50;
+const CHAT_PER_ADDRESS_MAX = 20; // max messages per wallet per window
+const CHAT_PER_ADDRESS_WINDOW_MS = 60_000; // 1 minute
+const CHAT_PER_ADDRESS_CLEANUP_MS = 120_000; // prune stale entries every 2 min
+const CHAT_DISPLAY_NAME_MIN_LEN = 3;
+const CHAT_DISPLAY_NAME_MAX_LEN = 32;
+
+// Bet limits (in MORBIUS, 18 decimals)
+const BET_LIMITS = {
+  MIN_BET: BigInt('1000000000000000000'),         // 1 MORBIUS
+  MAX_BET: BigInt('100000000000000000000000'),    // 100,000 MORBIUS
+};
 
 export class WebSocketService {
   private wss: WebSocketServer;
   private clients: Map<string, WebSocketClient> = new Map();
+  private roomToClients: Map<string, Set<string>> = new Map(); // roomId -> Set<connectionId>
+  private chatMessageTimestampsByAddress: Map<string, number[]> = new Map(); // per-address rate limit
   private heartbeatInterval: NodeJS.Timeout;
+  private chatRateLimitCleanupInterval: NodeJS.Timeout;
   private publicClient: any;
   private contractAddress: `0x${string}`;
+  private tournamentService?: TournamentService;
 
   constructor(
     server: any,
     private gameService: BlackjackGameService,
-    private dbService: DatabaseService
+    private dbService: DatabaseService,
+    tournamentService?: TournamentService
   ) {
+    this.tournamentService = tournamentService;
     this.wss = new WebSocketServer({ server });
     
     // Initialize public client for reading contract state
@@ -57,7 +92,40 @@ export class WebSocketService {
       });
     }, 30000);
 
+    // Periodic cleanup of per-address chat rate limit (prune stale entries)
+    this.chatRateLimitCleanupInterval = setInterval(() => {
+      this.cleanupChatRateLimitMap();
+    }, CHAT_PER_ADDRESS_CLEANUP_MS);
+
     logger.info('WebSocket service initialized');
+  }
+
+  /** Prune addresses with no timestamps in the current window to avoid unbounded map growth. */
+  private cleanupChatRateLimitMap(): void {
+    const now = Date.now();
+    const cutoff = now - CHAT_PER_ADDRESS_WINDOW_MS;
+    for (const [address, timestamps] of this.chatMessageTimestampsByAddress.entries()) {
+      const kept = timestamps.filter(t => t > cutoff);
+      if (kept.length === 0) {
+        this.chatMessageTimestampsByAddress.delete(address);
+      } else {
+        this.chatMessageTimestampsByAddress.set(address, kept);
+      }
+    }
+  }
+
+  /** Returns false if over per-address limit; otherwise records the message and returns true. */
+  private checkPerAddressChatLimit(address: string, now: number): boolean {
+    const key = address.toLowerCase();
+    let timestamps = this.chatMessageTimestampsByAddress.get(key) ?? [];
+    const cutoff = now - CHAT_PER_ADDRESS_WINDOW_MS;
+    timestamps = timestamps.filter(t => t > cutoff);
+    if (timestamps.length >= CHAT_PER_ADDRESS_MAX) {
+      return false;
+    }
+    timestamps.push(now);
+    this.chatMessageTimestampsByAddress.set(key, timestamps);
+    return true;
   }
 
   private async handleConnection(ws: WebSocketClient, request: IncomingMessage) {
@@ -65,9 +133,9 @@ export class WebSocketService {
     ws.connectionId = connectionId;
     ws.isAlive = true;
 
-    // Extract player address from query parameters
+    // Extract player address from query parameters and normalize to lowercase
     const url = new URL(request.url || '', 'http://localhost');
-    const playerAddress = url.searchParams.get('address');
+    const playerAddress = url.searchParams.get('address')?.toLowerCase();
 
     // IMPORTANT: attach handlers immediately. If we await DB calls before registering
     // ws.on('message'), early client requests (like get_balance right after connect)
@@ -85,6 +153,13 @@ export class WebSocketService {
     // Handle disconnection
     ws.on('close', () => {
       if (ws.connectionId) {
+        if (ws.currentRoom) {
+          const set = this.roomToClients.get(ws.currentRoom);
+          if (set) {
+            set.delete(ws.connectionId);
+            if (set.size === 0) this.roomToClients.delete(ws.currentRoom);
+          }
+        }
         this.clients.delete(ws.connectionId);
         this.dbService.removeActiveConnection(ws.connectionId);
         logger.info('WebSocket connection closed', { connectionId: ws.connectionId });
@@ -110,6 +185,8 @@ export class WebSocketService {
     } else {
       logger.warn('WebSocket connection without player address', { connectionId });
     }
+
+    this.clients.set(connectionId, ws);
 
     // Send welcome message
     this.sendMessage(ws, {
@@ -155,6 +232,64 @@ export class WebSocketService {
 
         case 'ping':
           this.sendMessage(ws, { type: 'pong', payload: {}, requestId: message.requestId });
+          break;
+
+        case 'join_room':
+          await this.handleJoinRoom(ws, message);
+          break;
+
+        case 'chat_message':
+          await this.handleChatMessage(ws, message);
+          break;
+
+        case 'set_display_name':
+          await this.handleSetDisplayName(ws, message);
+          break;
+
+        case 'get_chat_history':
+          await this.handleGetChatHistory(ws, message);
+          break;
+
+        // Responsible Gaming / Self-Exclusion
+        case 'check_exclusion_status':
+          await this.handleCheckExclusionStatus(ws, message);
+          break;
+
+        case 'set_exclusion':
+          await this.handleSetExclusion(ws, message);
+          break;
+
+        case 'get_exclusion_history':
+          await this.handleGetExclusionHistory(ws, message);
+          break;
+
+        // Tournament Mode
+        case 'tournament_enter':
+          await this.handleTournamentEnter(ws, message);
+          break;
+
+        case 'tournament_leave':
+          await this.handleTournamentLeave(ws, message);
+          break;
+
+        case 'tournament_state':
+          await this.handleGetTournamentState(ws, message);
+          break;
+
+        case 'tournament_game_start':
+          await this.handleTournamentGameStart(ws, message);
+          break;
+
+        case 'tournament_player_action':
+          await this.handleTournamentPlayerAction(ws, message);
+          break;
+
+        case 'tournament_leaderboard':
+          await this.handleTournamentLeaderboard(ws, message);
+          break;
+
+        case 'tournament_info':
+          await this.handleGetTournamentInfo(ws, message);
           break;
 
         default:
@@ -213,6 +348,15 @@ export class WebSocketService {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
 
+      // Check if player is self-excluded
+      const exclusionStatus = await this.dbService.checkExclusionStatus(ws.playerAddress);
+      if (exclusionStatus.isExcluded) {
+        const expiryMsg = exclusionStatus.expiresAt
+          ? ` until ${exclusionStatus.expiresAt.toISOString()}`
+          : ' (permanent)';
+        return this.sendError(ws, `Account is self-excluded${expiryMsg}. Gaming is disabled during this period.`, message.requestId);
+      }
+
       const payload = message.payload as any;
       
       // Convert betAmount from string to bigint if needed
@@ -228,6 +372,14 @@ export class WebSocketService {
       } catch (error) {
         logger.error('Invalid betAmount format', { payload, error });
         return this.sendError(ws, 'Invalid bet amount format', message.requestId);
+      }
+
+      // Validate bet amount is within limits
+      if (betAmount < BET_LIMITS.MIN_BET) {
+        return this.sendError(ws, `Bet amount too small. Minimum bet is ${BET_LIMITS.MIN_BET.toString()} (1 MORBIUS)`, message.requestId);
+      }
+      if (betAmount > BET_LIMITS.MAX_BET) {
+        return this.sendError(ws, `Bet amount too large. Maximum bet is ${BET_LIMITS.MAX_BET.toString()} (100,000 MORBIUS)`, message.requestId);
       }
 
       // Validate player has sufficient off-chain balance
@@ -316,6 +468,19 @@ export class WebSocketService {
           }
           // No requestId - this is an event, not a response
         });
+
+        // Broadcast global_game_completed to all clients for GlobalWinsFeed
+        const globalMessage: WebSocketMessage = {
+          type: 'global_game_completed',
+          payload: {
+            gameId: gameState.gameId,
+            playerAddress: ws.playerAddress || '',
+            result: overallResult,
+            payout: gameState.totalPayout.toString(),
+            betAmount: gameState.totalBetAmount.toString()
+          }
+        };
+        this.broadcastToAll(globalMessage);
       }
 
     } catch (error) {
@@ -410,6 +575,199 @@ export class WebSocketService {
     }
   }
 
+  private async handleJoinRoom(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      const { roomId } = message.payload as { roomId?: string };
+      if (!roomId || typeof roomId !== 'string') {
+        return this.sendError(ws, 'roomId required', message.requestId);
+      }
+      const normalized = roomId.toLowerCase().trim();
+      if (!ALLOWED_CHAT_ROOMS.has(normalized)) {
+        return this.sendError(ws, 'Invalid room', message.requestId);
+      }
+
+      if (ws.currentRoom && ws.connectionId) {
+        const prevSet = this.roomToClients.get(ws.currentRoom);
+        if (prevSet) {
+          prevSet.delete(ws.connectionId);
+          if (prevSet.size === 0) this.roomToClients.delete(ws.currentRoom);
+        }
+      }
+
+      ws.currentRoom = normalized;
+      if (!this.roomToClients.has(normalized)) {
+        this.roomToClients.set(normalized, new Set());
+      }
+      this.roomToClients.get(normalized)!.add(ws.connectionId!);
+
+      const recent = await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
+      const addresses = [...new Set(recent.map(m => m.sender_address).filter(Boolean) as string[])];
+      const displayNames = await this.dbService.getDisplayNames(addresses);
+
+      this.sendMessage(ws, {
+        type: 'room_joined',
+        payload: {
+          roomId: normalized,
+          recentMessages: recent.map(m => ({
+            id: m.id,
+            roomId: m.room_id,
+            senderAddress: m.sender_address,
+            displayName: m.sender_address ? displayNames.get(m.sender_address.toLowerCase()) ?? null : null,
+            text: m.text,
+            timestamp: m.created_at
+          }))
+        },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error joining room:', error);
+      this.sendError(ws, 'Failed to join room', message.requestId);
+    }
+  }
+
+  private async handleGetChatHistory(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      const payload = message.payload as { roomId?: string; beforeId?: string; limit?: number };
+      const { roomId, beforeId, limit } = payload ?? {};
+      if (!roomId || typeof roomId !== 'string') {
+        return this.sendError(ws, 'roomId required', message.requestId);
+      }
+      if (!beforeId || typeof beforeId !== 'string') {
+        return this.sendError(ws, 'beforeId required', message.requestId);
+      }
+      const normalized = roomId.toLowerCase().trim();
+      if (!ALLOWED_CHAT_ROOMS.has(normalized)) {
+        return this.sendError(ws, 'Invalid room', message.requestId);
+      }
+      const limitNum = typeof limit === 'number' && limit > 0 && limit <= CHAT_RECENT_MESSAGES_LIMIT
+        ? limit
+        : 50;
+      const older = await this.dbService.getChatMessagesBefore(normalized, beforeId, limitNum);
+      const addresses = [...new Set(older.map(m => m.sender_address).filter(Boolean) as string[])];
+      const displayNames = await this.dbService.getDisplayNames(addresses);
+      const messages = older.map(m => ({
+        id: m.id,
+        roomId: m.room_id,
+        senderAddress: m.sender_address,
+        displayName: m.sender_address ? displayNames.get(m.sender_address.toLowerCase()) ?? null : null,
+        text: m.text,
+        timestamp: m.created_at
+      }));
+      this.sendMessage(ws, {
+        type: 'chat_history',
+        payload: { messages },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error getting chat history:', error);
+      this.sendError(ws, 'Failed to load older messages', message.requestId);
+    }
+  }
+
+  private async handleSetDisplayName(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required to set display name', message.requestId);
+      }
+
+      const payload = message.payload as { displayName?: string };
+      const raw = payload?.displayName;
+      if (raw === undefined || raw === null || typeof raw !== 'string') {
+        return this.sendError(ws, 'displayName required', message.requestId);
+      }
+
+      const trimmed = raw.trim();
+      if (trimmed.length < CHAT_DISPLAY_NAME_MIN_LEN) {
+        return this.sendError(ws, `Display name must be at least ${CHAT_DISPLAY_NAME_MIN_LEN} characters`, message.requestId);
+      }
+      if (trimmed.length > CHAT_DISPLAY_NAME_MAX_LEN) {
+        return this.sendError(ws, `Display name must be at most ${CHAT_DISPLAY_NAME_MAX_LEN} characters`, message.requestId);
+      }
+
+      // Allow letters, numbers, spaces, hyphens, underscores
+      const sanitized = trimmed.replace(/[^\w\s-]/gi, '').replace(/\s+/g, ' ').trim();
+      if (sanitized.length < CHAT_DISPLAY_NAME_MIN_LEN) {
+        return this.sendError(ws, 'Display name contains invalid characters', message.requestId);
+      }
+
+      const displayName = sanitized.slice(0, CHAT_DISPLAY_NAME_MAX_LEN);
+      await this.dbService.setDisplayName(ws.playerAddress, displayName);
+
+      this.sendMessage(ws, {
+        type: 'display_name_set',
+        payload: { displayName },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error setting display name:', error);
+      this.sendError(ws, 'Failed to set display name', message.requestId);
+    }
+  }
+
+  private async handleChatMessage(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      const payload = message.payload as { roomId?: string; text?: string };
+      const { roomId, text } = payload ?? {};
+      if (!roomId || typeof roomId !== 'string') {
+        return this.sendError(ws, 'roomId required', message.requestId);
+      }
+      if (text === undefined || text === null || typeof text !== 'string') {
+        return this.sendError(ws, 'text required', message.requestId);
+      }
+      const trimmed = text.trim();
+      if (trimmed.length === 0) {
+        return this.sendError(ws, 'Message cannot be empty', message.requestId);
+      }
+      if (trimmed.length > CHAT_MAX_LENGTH) {
+        return this.sendError(ws, `Message too long (max ${CHAT_MAX_LENGTH})`, message.requestId);
+      }
+
+      const normalizedRoom = roomId.toLowerCase().trim();
+      if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom)) {
+        return this.sendError(ws, 'Invalid room', message.requestId);
+      }
+      if (ws.currentRoom !== normalizedRoom) {
+        return this.sendError(ws, 'Not in this room', message.requestId);
+      }
+
+      const now = Date.now();
+      if (ws.lastChatMessageAt != null && now - ws.lastChatMessageAt < CHAT_RATE_LIMIT_MS) {
+        return this.sendError(ws, 'Please wait before sending another message', message.requestId);
+      }
+      ws.lastChatMessageAt = now;
+
+      const senderAddress = ws.playerAddress ?? null;
+      // Per-address limit (across all tabs/connections) so one wallet can't spam
+      if (senderAddress) {
+        if (!this.checkPerAddressChatLimit(senderAddress, now)) {
+          return this.sendError(ws, 'Too many messages. Try again in a minute.', message.requestId);
+        }
+      }
+
+      const row = await this.dbService.insertChatMessage(normalizedRoom, senderAddress, trimmed);
+
+      const displayName = row.sender_address
+        ? await this.dbService.getDisplayName(row.sender_address)
+        : null;
+
+      const broadcastPayload = {
+        id: row.id,
+        roomId: row.room_id,
+        senderAddress: row.sender_address,
+        displayName,
+        text: row.text,
+        timestamp: row.created_at
+      };
+      this.broadcastToRoom(normalizedRoom, {
+        type: 'chat_message',
+        payload: broadcastPayload
+      });
+    } catch (error) {
+      logger.error('Error sending chat message:', error);
+      this.sendError(ws, 'Failed to send message', message.requestId);
+    }
+  }
+
   private sendMessage(ws: WebSocketClient, message: WebSocketMessage) {
     if (ws.readyState === WebSocket.OPEN) {
       try {
@@ -486,6 +844,27 @@ export class WebSocketService {
     });
   }
 
+  // Broadcast to all connected clients
+  private broadcastToAll(message: WebSocketMessage) {
+    this.wss.clients.forEach((client: WebSocketClient) => {
+      if (client.readyState === WebSocket.OPEN) {
+        this.sendMessage(client, message);
+      }
+    });
+  }
+
+  // Broadcast to all clients in a chat room
+  private broadcastToRoom(roomId: string, message: WebSocketMessage) {
+    const connectionIds = this.roomToClients.get(roomId);
+    if (!connectionIds) return;
+    connectionIds.forEach((connectionId) => {
+      const client = this.clients.get(connectionId);
+      if (client?.readyState === WebSocket.OPEN) {
+        this.sendMessage(client, message);
+      }
+    });
+  }
+
   // Get connection count
   public getConnectionCount(): number {
     return this.wss.clients.size;
@@ -497,10 +876,548 @@ export class WebSocketService {
     return this.wss.clients.size;
   }
 
+  // ============================================
+  // Responsible Gaming / Self-Exclusion Handlers
+  // ============================================
+
+  private async handleCheckExclusionStatus(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+
+      const status = await this.dbService.checkExclusionStatus(ws.playerAddress);
+
+      this.sendMessage(ws, {
+        type: 'exclusion_status',
+        payload: status,
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error checking exclusion status:', error);
+      this.sendError(ws, 'Failed to check exclusion status', message.requestId);
+    }
+  }
+
+  private async handleSetExclusion(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+
+      const payload = message.payload as {
+        durationType: '24h' | '7d' | '30d' | '6m' | '1y' | 'permanent';
+        reason?: string;
+      };
+
+      if (!payload?.durationType) {
+        return this.sendError(ws, 'Duration type required', message.requestId);
+      }
+
+      const validDurations = ['24h', '7d', '30d', '6m', '1y', 'permanent'];
+      if (!validDurations.includes(payload.durationType)) {
+        return this.sendError(ws, 'Invalid duration type', message.requestId);
+      }
+
+      // Check if already permanently excluded
+      const currentStatus = await this.dbService.checkExclusionStatus(ws.playerAddress);
+      if (currentStatus.isExcluded && currentStatus.exclusionType === 'permanent') {
+        return this.sendError(ws, 'Account is permanently self-excluded', message.requestId);
+      }
+
+      // Calculate expiry date
+      let expiresAt: Date | null = null;
+      let exclusionType: 'timeout' | 'permanent' = 'timeout';
+
+      const now = new Date();
+      switch (payload.durationType) {
+        case '24h':
+          expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+          break;
+        case '7d':
+          expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '6m':
+          expiresAt = new Date(now.getTime() + 180 * 24 * 60 * 60 * 1000);
+          break;
+        case '1y':
+          expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'permanent':
+          expiresAt = null;
+          exclusionType = 'permanent';
+          break;
+      }
+
+      await this.dbService.setExclusion(
+        ws.playerAddress,
+        exclusionType,
+        payload.durationType,
+        expiresAt,
+        payload.reason
+      );
+
+      const newStatus = await this.dbService.checkExclusionStatus(ws.playerAddress);
+
+      this.sendMessage(ws, {
+        type: 'exclusion_set',
+        payload: {
+          success: true,
+          ...newStatus
+        },
+        requestId: message.requestId
+      });
+
+      logger.info('Player self-excluded', {
+        playerAddress: ws.playerAddress,
+        exclusionType,
+        durationType: payload.durationType,
+        expiresAt
+      });
+    } catch (error) {
+      logger.error('Error setting exclusion:', error);
+      this.sendError(ws, 'Failed to set exclusion', message.requestId);
+    }
+  }
+
+  private async handleGetExclusionHistory(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+
+      const history = await this.dbService.getExclusionHistory(ws.playerAddress);
+
+      this.sendMessage(ws, {
+        type: 'exclusion_history',
+        payload: { history },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error getting exclusion history:', error);
+      this.sendError(ws, 'Failed to get exclusion history', message.requestId);
+    }
+  }
+
+  // Helper to check if a player is excluded (call before allowing game actions)
+  public async isPlayerExcluded(playerAddress: string): Promise<boolean> {
+    const status = await this.dbService.checkExclusionStatus(playerAddress);
+    return status.isExcluded;
+  }
+
+  // ============================================
+  // Tournament Mode Handlers
+  // ============================================
+
+  private async handleTournamentEnter(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      // Check if player is self-excluded
+      const exclusionStatus = await this.dbService.checkExclusionStatus(ws.playerAddress);
+      if (exclusionStatus.isExcluded) {
+        return this.sendError(ws, 'Account is self-excluded. Gaming is disabled.', message.requestId);
+      }
+
+      const entry = await this.tournamentService.enterTournament(ws.playerAddress);
+      const tournament = await this.tournamentService.getActiveTournament();
+      const leaderboard = await this.tournamentService.getLeaderboard(tournament.id, 10);
+
+      // Get initial rank
+      const playerRank = leaderboard.find(e => e.entry_id === entry.id)?.current_rank ?? 1;
+
+      this.sendMessage(ws, {
+        type: 'tournament_entered',
+        payload: {
+          entryId: entry.id,
+          tournamentId: entry.tournament_id,
+          chips: entry.chips_remaining,
+          handsPlayed: entry.hands_played,
+          handsRemaining: tournament.max_hands - entry.hands_played,
+          currentRank: playerRank,
+          maxHands: tournament.max_hands,
+          startingChips: tournament.starting_chips,
+          buyInAmount: tournament.buy_in_amount.toString(),
+          prizePool: tournament.prize_pool.toString(),
+        },
+        requestId: message.requestId
+      });
+
+      // Broadcast leaderboard update
+      this.broadcastTournamentLeaderboardUpdate(tournament.id);
+
+      logger.info('Player entered tournament', {
+        playerAddress: ws.playerAddress,
+        entryId: entry.id,
+        tournamentId: entry.tournament_id,
+      });
+    } catch (error) {
+      logger.error('Error entering tournament:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to enter tournament';
+      this.sendError(ws, errorMessage, message.requestId);
+    }
+  }
+
+  private async handleTournamentLeave(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const entry = await this.tournamentService.leaveTournament(ws.playerAddress);
+
+      if (!entry) {
+        return this.sendError(ws, 'No active tournament entry found', message.requestId);
+      }
+
+      this.sendMessage(ws, {
+        type: 'tournament_left',
+        payload: {
+          entryId: entry.id,
+          finalChips: entry.chips_remaining,
+          handsPlayed: entry.hands_played,
+        },
+        requestId: message.requestId
+      });
+
+      // Broadcast leaderboard update
+      this.broadcastTournamentLeaderboardUpdate(entry.tournament_id);
+    } catch (error) {
+      logger.error('Error leaving tournament:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to leave tournament';
+      this.sendError(ws, errorMessage, message.requestId);
+    }
+  }
+
+  private async handleGetTournamentState(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const state = await this.tournamentService.getTournamentState(ws.playerAddress);
+
+      if (!state) {
+        this.sendMessage(ws, {
+          type: 'tournament_state',
+          payload: { inTournament: false },
+          requestId: message.requestId
+        });
+        return;
+      }
+
+      this.sendMessage(ws, {
+        type: 'tournament_state',
+        payload: {
+          inTournament: true,
+          entryId: state.entryId,
+          tournamentId: state.tournamentId,
+          chips: state.chips,
+          handsPlayed: state.handsPlayed,
+          handsRemaining: state.handsRemaining,
+          highestChips: state.highestChips,
+          currentRank: state.currentRank,
+          status: state.status,
+          maxHands: state.maxHands,
+          startingChips: state.startingChips,
+        },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error getting tournament state:', error);
+      this.sendError(ws, 'Failed to get tournament state', message.requestId);
+    }
+  }
+
+  private async handleTournamentGameStart(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const payload = message.payload as { betAmount: number; clientSeedCommitment?: string };
+
+      if (!payload.betAmount || typeof payload.betAmount !== 'number') {
+        return this.sendError(ws, 'Bet amount required', message.requestId);
+      }
+
+      // Get tournament entry
+      const state = await this.tournamentService.getTournamentState(ws.playerAddress);
+      if (!state) {
+        return this.sendError(ws, 'No active tournament entry', message.requestId);
+      }
+
+      if (state.status !== 'playing') {
+        return this.sendError(ws, 'Tournament entry is not active', message.requestId);
+      }
+
+      // Validate bet
+      const validation = this.tournamentService.validateTournamentBet(state.chips, payload.betAmount);
+      if (!validation.valid) {
+        return this.sendError(ws, validation.error!, message.requestId);
+      }
+
+      // Create tournament game
+      const gameState = await this.gameService.createTournamentGame({
+        playerAddress: ws.playerAddress,
+        betAmount: payload.betAmount,
+        entryId: state.entryId,
+        clientSeedCommitment: payload.clientSeedCommitment,
+      });
+
+      this.sendMessage(ws, {
+        type: 'tournament_game_created',
+        payload: gameState,
+        requestId: message.requestId
+      });
+
+      // If game completed immediately (blackjack), broadcast leaderboard update
+      if (gameState.status === 'completed') {
+        this.broadcastTournamentLeaderboardUpdate(state.tournamentId);
+
+        // Check if player busted or completed
+        if (gameState.tournamentChips <= 0) {
+          this.sendMessage(ws, {
+            type: 'tournament_busted',
+            payload: {
+              entryId: state.entryId,
+              handsPlayed: gameState.handsPlayed,
+              highestChips: state.highestChips,
+            }
+          });
+        } else if (gameState.handsRemaining <= 0) {
+          this.sendMessage(ws, {
+            type: 'tournament_completed',
+            payload: {
+              entryId: state.entryId,
+              finalChips: gameState.tournamentChips,
+              handsPlayed: gameState.handsPlayed,
+              currentRank: gameState.currentRank,
+            }
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('Error starting tournament game:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start tournament game';
+      this.sendError(ws, errorMessage, message.requestId);
+    }
+  }
+
+  private async handleTournamentPlayerAction(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const payload = message.payload as {
+        gameId: string;
+        action: 'hit' | 'stand' | 'double_down' | 'split';
+        handIndex?: number;
+      };
+
+      if (!payload.gameId || !payload.action) {
+        return this.sendError(ws, 'Game ID and action required', message.requestId);
+      }
+
+      // Get tournament entry
+      const state = await this.tournamentService.getTournamentState(ws.playerAddress);
+      if (!state) {
+        return this.sendError(ws, 'No active tournament entry', message.requestId);
+      }
+
+      const gameState = await this.gameService.handleTournamentPlayerAction(
+        payload.gameId,
+        payload.action,
+        state.entryId,
+        payload.handIndex
+      );
+
+      this.sendMessage(ws, {
+        type: 'tournament_game_updated',
+        payload: gameState,
+        requestId: message.requestId
+      });
+
+      // If game completed, send additional notifications
+      if (gameState.status === 'completed') {
+        this.broadcastTournamentLeaderboardUpdate(state.tournamentId);
+
+        // Check for bust or completion
+        if (gameState.tournamentChips <= 0) {
+          this.sendMessage(ws, {
+            type: 'tournament_busted',
+            payload: {
+              entryId: state.entryId,
+              handsPlayed: gameState.handsPlayed,
+              highestChips: state.highestChips,
+            }
+          });
+
+          // Broadcast bust to all clients
+          this.broadcastToAll({
+            type: 'tournament_player_busted',
+            payload: {
+              playerAddress: ws.playerAddress,
+              handsPlayed: gameState.handsPlayed,
+            }
+          });
+        } else if (gameState.handsRemaining <= 0) {
+          this.sendMessage(ws, {
+            type: 'tournament_completed',
+            payload: {
+              entryId: state.entryId,
+              finalChips: gameState.tournamentChips,
+              handsPlayed: gameState.handsPlayed,
+              currentRank: gameState.currentRank,
+            }
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('Error handling tournament player action:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process action';
+      this.sendError(ws, errorMessage, message.requestId);
+    }
+  }
+
+  private async handleTournamentLeaderboard(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const payload = message.payload as { tournamentId?: string; limit?: number };
+
+      let tournamentId = payload?.tournamentId;
+      if (!tournamentId) {
+        const tournament = await this.tournamentService.getActiveTournament();
+        tournamentId = tournament.id;
+      }
+
+      const limit = payload?.limit ?? 50;
+      const leaderboard = await this.tournamentService.getLeaderboard(tournamentId, limit);
+
+      // Get player's entry if connected
+      let playerEntry: LeaderboardEntry | undefined;
+      if (ws.playerAddress) {
+        const state = await this.tournamentService.getTournamentState(ws.playerAddress);
+        if (state && state.tournamentId === tournamentId) {
+          playerEntry = leaderboard.find(e => e.entry_id === state.entryId);
+          if (!playerEntry) {
+            // Player might not be in top N, fetch their entry separately
+            playerEntry = {
+              entry_id: state.entryId,
+              player_address: ws.playerAddress,
+              chips_remaining: state.chips,
+              hands_played: state.handsPlayed,
+              highest_chip_count: state.highestChips,
+              status: state.status,
+              current_rank: state.currentRank,
+            };
+          }
+        }
+      }
+
+      this.sendMessage(ws, {
+        type: 'tournament_leaderboard',
+        payload: {
+          tournamentId,
+          leaderboard,
+          playerEntry,
+        },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error getting tournament leaderboard:', error);
+      this.sendError(ws, 'Failed to get leaderboard', message.requestId);
+    }
+  }
+
+  private async handleGetTournamentInfo(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const tournament = await this.tournamentService.getActiveTournament();
+      const entryCount = await this.tournamentService.getTournamentEntryCount(tournament.id);
+
+      this.sendMessage(ws, {
+        type: 'tournament_info',
+        payload: {
+          tournamentId: tournament.id,
+          name: tournament.name,
+          status: tournament.status,
+          buyInAmount: tournament.buy_in_amount.toString(),
+          startingChips: tournament.starting_chips,
+          maxHands: tournament.max_hands,
+          prizePool: tournament.prize_pool.toString(),
+          entryCount,
+          config: {
+            minBet: TOURNAMENT_CONFIG.MIN_BET,
+            maxBet: TOURNAMENT_CONFIG.MAX_BET,
+            prizePercentages: TOURNAMENT_CONFIG.PRIZE_PERCENTAGES,
+          }
+        },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error getting tournament info:', error);
+      this.sendError(ws, 'Failed to get tournament info', message.requestId);
+    }
+  }
+
+  private async broadcastTournamentLeaderboardUpdate(tournamentId: string) {
+    if (!this.tournamentService) return;
+
+    try {
+      const leaderboard = await this.tournamentService.getLeaderboard(tournamentId, 10);
+
+      this.broadcastToAll({
+        type: 'tournament_leaderboard_update',
+        payload: {
+          tournamentId,
+          leaderboard,
+        }
+      });
+    } catch (error) {
+      logger.error('Error broadcasting tournament leaderboard:', error);
+    }
+  }
+
   // Clean shutdown
   public shutdown() {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
+    }
+    if (this.chatRateLimitCleanupInterval) {
+      clearInterval(this.chatRateLimitCleanupInterval);
     }
 
     this.wss.clients.forEach((client: WebSocketClient) => {

@@ -188,6 +188,7 @@ export default function LotteryMainNav({ onShowHistory, onShowDashboard }: Lotte
                         <i className="fas fa-cards w-4 text-center"></i>
                         <span className="text-sm font-medium">Blackjack</span>
                       </Link>
+                      {/* Big Wheel - commented out
                       <Link
                         href="/BIG-WHEEL"
                         className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
@@ -196,6 +197,7 @@ export default function LotteryMainNav({ onShowHistory, onShowDashboard }: Lotte
                         <i className="fas fa-dharmachakra w-4 text-center"></i>
                         <span className="text-sm font-medium">Big Wheel</span>
                       </Link>
+                      */}
                       <Link
                         href="/keno"
                         className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"

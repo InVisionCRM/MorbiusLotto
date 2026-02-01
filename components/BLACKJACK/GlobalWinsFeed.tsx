@@ -128,6 +128,8 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
         };
 
         setEntries(prev => {
+          // Avoid duplicates
+          if (prev.some(e => e.id === entry.id)) return prev;
           // Add new entry at the beginning, keep last 20
           const updated = [entry, ...prev].slice(0, 20);
           return updated;

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import {
   TrendingUp,
@@ -15,6 +15,15 @@ import {
   Clock
 } from 'lucide-react'
 import { formatEther } from 'viem'
+import {
+  Bar,
+  BarChart,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 
@@ -132,6 +141,26 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
     }
   ]
 
+  // Top 6 stats for Recharts bar chart (normalized 0–100 for comparable bar height)
+  const topSixChartData = useMemo(() => {
+    const totalBetNum = Math.max(1, Math.floor(Number(formatEther(stats.totalBet))))
+    const totalWinNum = Math.floor(Number(formatEther(stats.totalWin)))
+    const profitLossAbs = Math.abs(stats.profitLoss)
+    const raw = [
+      { key: 'Games', name: 'Games', value: stats.totalGames, display: stats.totalGames.toLocaleString(), color: '#60a5fa' },
+      { key: 'Win%', name: 'Win %', value: stats.winRate, display: `${Math.round(stats.winRate)}%`, color: '#34d399' },
+      { key: 'P/L', name: 'P/L', value: profitLossAbs, display: `${stats.profitLoss >= 0 ? '+' : ''}${formatCurrency(stats.profitLoss)} M`, color: stats.profitLoss >= 0 ? '#34d399' : '#f87171' },
+      { key: 'Wagered', name: 'Wagered', value: totalBetNum, display: `${formatCurrency(stats.totalBet)} M`, color: '#a78bfa' },
+      { key: 'Won', name: 'Won', value: totalWinNum, display: `${formatCurrency(stats.totalWin)} M`, color: '#34d399' },
+      { key: 'Streak', name: 'Streak', value: Math.abs(stats.currentStreak), display: `${stats.currentStreak >= 0 ? '+' : ''}${stats.currentStreak}`, color: stats.currentStreak >= 0 ? '#34d399' : '#f87171' },
+    ]
+    const maxVal = Math.max(1, ...raw.map((d) => (d.key === 'Win%' ? d.value : Number(d.value))))
+    return raw.map((d) => ({
+      ...d,
+      normalized: d.key === 'Win%' ? d.value : (Number(d.value) / maxVal) * 100,
+    }))
+  }, [stats])
+
   const recordStats = [
     {
       label: 'Biggest Win',
@@ -192,6 +221,57 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
           </motion.div>
         ))}
       </div>
+
+      {/* Top 6 Stats Chart */}
+      <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-cyan-400" />
+            Top 6 Stats at a Glance
+          </CardTitle>
+          <p className="text-xs text-gray-500 mt-1">
+            Bar height = relative scale (tooltip shows actual value)
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[280px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={topSixChartData}
+                margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
+                layout="vertical"
+              >
+                <XAxis type="number" domain={[0, 100]} hide />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={72}
+                  tick={{ fill: 'rgb(156, 163, 175)', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'rgba(17, 24, 39, 0.95)',
+                    border: '1px solid rgba(75, 85, 99, 0.5)',
+                    borderRadius: '8px',
+                  }}
+                  labelStyle={{ color: 'rgb(209, 213, 219)' }}
+                  formatter={(value: number, _name: string, props: { payload?: Array<{ payload: { display: string } }> }) =>
+                    [props.payload?.[0]?.payload?.display ?? String(value), '']
+                  }
+                  labelFormatter={(_, payload: Array<{ payload: { name: string } }>) => payload?.[0]?.payload?.name ?? ''}
+                />
+                <Bar dataKey="normalized" radius={[0, 4, 4, 0]} maxBarSize={28} isAnimationActive>
+                  {topSixChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Records and Additional Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

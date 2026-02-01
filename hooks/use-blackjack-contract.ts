@@ -101,6 +101,13 @@ export function useWithdraw() {
 }
 
 /**
+ * Withdraw MORBIUS with server signature (for off-chain balance verification)
+ */
+export function useWithdrawWithSignature() {
+  return useWriteContract()
+}
+
+/**
  * Reveal server seed for verification
  */
 export function useRevealServerSeed() {
@@ -222,6 +229,7 @@ export function useBlackjackContract() {
   const depositContract = useDeposit()
   const depositMORBIUSContract = useDepositMORBIUS()
   const withdrawContract = useWithdraw()
+  const withdrawWithSignatureContract = useWithdrawWithSignature()
   const revealSeedContract = useRevealServerSeed()
   const placeBetContract = useWriteContract()
 
@@ -266,6 +274,23 @@ export function useBlackjackContract() {
     })
   }
 
+  const withdrawWithSignature = async (
+    amount: bigint,
+    nonce: bigint,
+    v: number,
+    r: `0x${string}`,
+    s: `0x${string}`
+  ) => {
+    if (!address) throw new Error('Wallet not connected')
+
+    return withdrawWithSignatureContract.writeContractAsync({
+      address: BLACKJACK_ADDRESS,
+      abi: blackjackAbi,
+      functionName: 'withdrawWithSignature',
+      args: [amount, nonce, v, r, s],
+    })
+  }
+
   const revealServerSeed = async (serverSeed: string) => {
     if (!address) throw new Error('Wallet not connected')
 
@@ -302,6 +327,7 @@ export function useBlackjackContract() {
     deposit,
     depositMORBIUS,
     withdraw,
+    withdrawWithSignature,
     revealServerSeed,
     placeBet,
 
@@ -309,6 +335,7 @@ export function useBlackjackContract() {
     depositTx: depositContract,
     depositMORBIISTx: depositMORBIUSContract,
     withdrawTx: withdrawContract,
+    withdrawWithSignatureTx: withdrawWithSignatureContract,
     revealSeedTx: revealSeedContract,
     placeBetTx: placeBetContract,
 

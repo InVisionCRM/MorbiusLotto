@@ -88,6 +88,24 @@ export function GlobalAnalyticsDashboard({
 }: GlobalAnalyticsDashboardProps) {
   const [selectedMetric, setSelectedMetric] = useState<string | null>(null)
 
+  // Guard against missing analytics
+  if (!analytics) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-gray-400 mb-2">No analytics data available</div>
+        <div className="text-sm text-gray-500">Make sure the backend server is running</div>
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            className="mt-4 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white"
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    )
+  }
+
   const formatCurrency = (amount: bigint) => {
     const num = Number(formatEther(amount))
     if (num >= 1000000) {

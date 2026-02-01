@@ -141,20 +141,25 @@ BEGIN
         ORDER BY freq DESC
         LIMIT 1
     ),
-    player_rank AS (
-        SELECT COUNT(DISTINCT p2.id) + 1 as rank_pos
+    player_total AS (
+        SELECT COALESCE(SUM(g3.total_bet_amount), 0) as player_total_bet
+        FROM game_sessions gs3
+        JOIN games g3 ON gs3.id = g3.session_id
+        WHERE gs3.player_id = player_id_val
+        AND g3.result IS NOT NULL
+    ),
+    players_with_higher_total AS (
+        SELECT DISTINCT p2.id
         FROM players p2
         JOIN game_sessions gs2 ON p2.id = gs2.player_id
         JOIN games g2 ON gs2.id = g2.session_id
         WHERE g2.result IS NOT NULL
         GROUP BY p2.id
-        HAVING COALESCE(SUM(g2.total_bet_amount), 0) > (
-            SELECT COALESCE(SUM(g3.total_bet_amount), 0)
-            FROM game_sessions gs3
-            JOIN games g3 ON gs3.id = g3.session_id
-            WHERE gs3.player_id = player_id_val
-            AND g3.result IS NOT NULL
-        )
+        HAVING COALESCE(SUM(g2.total_bet_amount), 0) > (SELECT player_total_bet FROM player_total)
+    ),
+    player_rank AS (
+        SELECT COUNT(*) + 1 as rank_pos
+        FROM players_with_higher_total
     )
     SELECT
         COUNT(*)::BIGINT as total_games,

@@ -7,6 +7,8 @@ import { GamesSection } from '@/components/home/games-section'
 // import { LatestBurns } from '@/components/home/latest-burns'
 import { SocialsSection } from '@/components/home/socials-section'
 import { TokenomicsSection } from '@/components/home/tokenomics-section'
+import { ResponsibleGamingSection } from '@/components/home/responsible-gaming-section'
+import { PulseChainSection } from '@/components/home/pulsechain-section'
 import { MorbItSection } from '@/components/home/morbit-section'
 import Footer from '@/components/PLINKO/Footer'
 
@@ -53,6 +55,12 @@ export default function HomePage() {
           </div>
         </div>
       </section> */}
+
+      {/* Responsible Gaming Section */}
+      <ResponsibleGamingSection />
+
+      {/* We Support PulseChain! Section */}
+      <PulseChainSection />
 
       {/* Socials Section */}
       <SocialsSection />

@@ -89,6 +89,22 @@ CREATE TABLE IF NOT EXISTS active_connections (
     last_ping TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Chat messages for main lobby and per-game rooms (persistent history)
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id VARCHAR(64) NOT NULL,
+    sender_address VARCHAR(42),
+    text TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Editable display names for chat (per wallet address)
+CREATE TABLE IF NOT EXISTS chat_display_names (
+    wallet_address VARCHAR(42) PRIMARY KEY,
+    display_name VARCHAR(32) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_game_sessions_player_id ON game_sessions(player_id);
 CREATE INDEX IF NOT EXISTS idx_games_session_id ON games(session_id);
@@ -97,6 +113,8 @@ CREATE INDEX IF NOT EXISTS idx_game_hands_game_id ON game_hands(game_id);
 CREATE INDEX IF NOT EXISTS idx_game_hands_result ON game_hands(result);
 CREATE INDEX IF NOT EXISTS idx_active_connections_player_id ON active_connections(player_id);
 CREATE INDEX IF NOT EXISTS idx_players_wallet_address ON players(wallet_address);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created ON chat_messages(room_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_display_names_wallet ON chat_display_names(wallet_address);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -266,22 +284,27 @@ BEGIN
         ORDER BY freq DESC
         LIMIT 1
     ),
-    player_rank AS (
-        SELECT COUNT(DISTINCT p2.id) + 1 as rank_pos
+    player_total AS (
+        SELECT COALESCE(SUM(g3.total_bet_amount), 0) as player_total_bet
+        FROM game_sessions gs3
+        JOIN games g3 ON gs3.id = g3.session_id
+        WHERE gs3.player_id = player_id_val
+        AND g3.result IS NOT NULL
+        AND g3.result != 'ongoing'
+    ),
+    players_with_higher_total AS (
+        SELECT DISTINCT p2.id
         FROM players p2
         JOIN game_sessions gs2 ON p2.id = gs2.player_id
         JOIN games g2 ON gs2.id = g2.session_id
         WHERE g2.result IS NOT NULL
         AND g2.result != 'ongoing'
         GROUP BY p2.id
-        HAVING COALESCE(SUM(g2.total_bet_amount), 0) > (
-            SELECT COALESCE(SUM(g3.total_bet_amount), 0)
-            FROM game_sessions gs3
-            JOIN games g3 ON gs3.id = g3.session_id
-            WHERE gs3.player_id = player_id_val
-            AND g3.result IS NOT NULL
-            AND g3.result != 'ongoing'
-        )
+        HAVING COALESCE(SUM(g2.total_bet_amount), 0) > (SELECT player_total_bet FROM player_total)
+    ),
+    player_rank AS (
+        SELECT COUNT(*) + 1 as rank_pos
+        FROM players_with_higher_total
     )
     SELECT
         COUNT(*)::BIGINT as total_games,

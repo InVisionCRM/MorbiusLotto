@@ -20,6 +20,7 @@ import { usePlayerLifetime, usePlayerRoundHistory, useWatchTicketsPurchased } fr
 import { usePlinkoHistory } from '@/hooks/use-plinko-history'
 import Footer from '@/components/PLINKO/Footer'
 import { PlinkoHistoryModal } from '@/components/PLINKO/PlinkoHistoryModal'
+import QuickHistory from '@/components/BLACKJACK/QuickHistory'
 import { usePublicClient as useLotteryPublicClient } from 'wagmi'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 import { batchAnalyzeTransactions } from '@/lib/transaction-analyzer'
@@ -899,7 +900,7 @@ export default function LotteryPurchaseShowcase() {
   }, [publicClient, address])
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'lottery' | 'keno' | 'plinko'>('lottery')
+  const [activeTab, setActiveTab] = useState<'lottery' | 'keno' | 'plinko' | 'blackjack'>('lottery')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [showPlinkoHistory, setShowPlinkoHistory] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -962,7 +963,7 @@ export default function LotteryPurchaseShowcase() {
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="bg-slate-800/50 text-white border border-white/10 hover:bg-slate-700/50 px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
             >
-              Select Game: {activeTab === 'lottery' ? 'Lottery' : activeTab === 'keno' ? 'Keno' : 'Plinko'}
+              Select Game: {activeTab === 'lottery' ? 'Lottery' : activeTab === 'keno' ? 'Keno' : activeTab === 'plinko' ? 'Plinko' : 'Blackjack'}
               <svg
                 className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
                 fill="none"
@@ -1012,6 +1013,19 @@ export default function LotteryPurchaseShowcase() {
                   }`}
                 >
                   Plinko
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab('blackjack')
+                    setDropdownOpen(false)
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'blackjack'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
+                      : 'text-white hover:bg-slate-700/50'
+                  }`}
+                >
+                  Blackjack
                 </button>
               </div>
             )}
@@ -1116,6 +1130,25 @@ export default function LotteryPurchaseShowcase() {
                   <div className="text-white/60">No drops found</div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'blackjack' && (
+          <div className="space-y-6">
+            <QuickHistory history={[]} />
+            <div className="bg-slate-800/50 rounded-xl p-6 border border-white/10">
+              <p className="text-white/80 mb-4">
+                Play Blackjack to see your recent games here. Full history and stats are on the Blackjack page.
+              </p>
+              <Link
+                href="/BLACKJACK"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 transition-colors text-sm font-medium"
+              >
+                Play Blackjack
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </Link>
             </div>
           </div>
         )}

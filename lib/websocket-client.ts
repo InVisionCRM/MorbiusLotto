@@ -25,6 +25,29 @@ export interface GameState {
   isBlackjack: boolean;
 }
 
+/** Single chat message (server → client). Use on('chat_message', handler) to receive. */
+export interface ChatMessagePayload {
+  id: string;
+  roomId: string;
+  senderAddress: string | null;
+  displayName?: string | null;
+  text: string;
+  timestamp: string; // ISO
+}
+
+/** Response from join_room. Use on('room_joined', handler) for events. */
+export interface RoomJoinedPayload {
+  roomId: string;
+  recentMessages: Array<{
+    id: string;
+    roomId: string;
+    senderAddress: string | null;
+    displayName?: string | null;
+    text: string;
+    timestamp: string;
+  }>;
+}
+
 export class BlackjackWebSocketClient {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -32,6 +55,7 @@ export class BlackjackWebSocketClient {
   private reconnectDelay = 1000;
   private messageHandlers: Map<string, (payload: any) => void> = new Map();
   private requestPromises: Map<string, { resolve: Function; reject: Function }> = new Map();
+  private intentionalClose = false;
 
   constructor(
     private serverUrl: string = 'ws://localhost:3001',
@@ -43,13 +67,10 @@ export class BlackjackWebSocketClient {
    */
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:44',message:'connect() called',data:{serverUrl:this.serverUrl,playerAddress:this.playerAddress,existingWsState:this.ws?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
+      // Reset intentional close flag for new connection
+      this.intentionalClose = false;
+
       if (this.ws?.readyState === WebSocket.OPEN) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:47',message:'WebSocket already open',data:{readyState:this.ws.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         resolve();
         return;
       }
@@ -58,16 +79,9 @@ export class BlackjackWebSocketClient {
         ? `${this.serverUrl}?address=${this.playerAddress}`
         : this.serverUrl;
 
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:54',message:'Creating WebSocket with URL',data:{url,serverUrl:this.serverUrl,hasPlayerAddress:!!this.playerAddress},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
-
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:60',message:'WebSocket onopen fired',data:{readyState:this.ws?.readyState,url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
         logger.info('WebSocket connected');
         this.reconnectAttempts = 0;
         resolve();
@@ -77,47 +91,37 @@ export class BlackjackWebSocketClient {
         this.handleMessage(event.data);
       };
 
-      this.ws.onclose = (event) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:70',message:'WebSocket onclose fired',data:{code:event.code,reason:event.reason,wasClean:event.wasClean,readyState:this.ws?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
+      this.ws.onclose = () => {
+        // Skip reconnect attempts if this was an intentional close
+        if (this.intentionalClose) {
+          return;
+        }
         logger.info('WebSocket disconnected');
         this.attemptReconnect();
       };
 
       this.ws.onerror = (error) => {
-        // #region agent log
-        const errorDetails = {
-          type: error?.type,
-          target: error?.target ? {
-            readyState: (error.target as WebSocket)?.readyState,
-            url: (error.target as WebSocket)?.url,
-            protocol: (error.target as WebSocket)?.protocol,
-            extensions: (error.target as WebSocket)?.extensions
-          } : null,
-          timeStamp: (error as any)?.timeStamp,
-          errorString: String(error),
-          errorKeys: error ? Object.keys(error) : []
-        };
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket-client.ts:75',message:'WebSocket onerror fired',data:errorDetails,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
+        // Skip logging if this was an intentional close (e.g., during component cleanup)
+        if (this.intentionalClose) {
+          return;
+        }
+
         const ws = this.ws;
         const errorMessage =
           ws?.readyState === WebSocket.CONNECTING
             ? `Failed to connect to ${url}. Server may be unavailable.`
             : ws?.readyState === WebSocket.CLOSING || ws?.readyState === WebSocket.CLOSED
-              ? `Connection closed unexpectedly (state: ${ws.readyState})`
+              ? `Connection closed unexpectedly (state: ${ws?.readyState})`
               : `WebSocket error occurred (state: ${ws?.readyState})`;
 
-        // Log a plain object so the console doesn't show {}
+        // Log only serializable fields (Event objects stringify as {})
         logger.error('WebSocket error', {
           message: errorMessage,
           readyState: ws?.readyState,
           url,
-          event: error,
+          eventType: (error as Event)?.type ?? 'error',
         });
 
-        // Extract meaningful error information
         reject(new Error(errorMessage));
       };
     });
@@ -127,6 +131,7 @@ export class BlackjackWebSocketClient {
    * Disconnect from the server
    */
   disconnect() {
+    this.intentionalClose = true;
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -147,7 +152,7 @@ export class BlackjackWebSocketClient {
   /**
    * Send a request and wait for response
    */
-  private async sendRequest(type: string, payload: any): Promise<any> {
+  async sendRequest(type: string, payload: any): Promise<any> {
     // Use a collision-resistant id. Short Math.random() ids can collide under load and
     // cause "Request timeout" even when the server responded.
     const requestId =
@@ -177,7 +182,8 @@ export class BlackjackWebSocketClient {
         },
         reject: (error: any) => {
           clearTimeout(timeout);
-          logger.error('Request rejected', { type, requestId, error });
+          const errMessage = error?.message ?? (typeof error === 'string' ? error : String(error));
+          logger.error(`Request rejected (${type}, ${requestId}): ${errMessage}`);
           reject(error);
         }
       });
@@ -223,13 +229,11 @@ export class BlackjackWebSocketClient {
                 errorMessage = JSON.stringify(message.payload);
               }
             }
-            
-            logger.error('Server returned error', { 
-              requestId: message.requestId, 
-              error: errorMessage,
-              payload: message.payload,
-              payloadType: typeof message.payload,
-              payloadKeys: message.payload ? Object.keys(message.payload) : []
+            // Log only serializable primitives so console never shows {}
+            logger.error('Server returned error', {
+              requestId: message.requestId,
+              message: errorMessage,
+              requestType: message.type,
             });
             promise.reject(new Error(errorMessage));
           } else {
@@ -349,6 +353,40 @@ export class BlackjackWebSocketClient {
     return this.sendRequest('get_game_state', { gameId });
   }
 
+  // === Chat API (main + per-game rooms) ===
+
+  /**
+   * Join a chat room (e.g. 'main' for home, 'blackjack', 'plinko', etc.).
+   * Returns recent messages for that room. Subscribe to 'chat_message' for live messages.
+   */
+  async joinRoom(roomId: string): Promise<RoomJoinedPayload> {
+    return this.sendRequest('join_room', { roomId });
+  }
+
+  /**
+   * Send a chat message to the current room. Must have called joinRoom(roomId) first.
+   * Server broadcasts to room; use on('chat_message', handler) to receive messages.
+   */
+  sendChatMessage(roomId: string, text: string): void {
+    this.send({ type: 'chat_message', payload: { roomId, text } });
+  }
+
+  /**
+   * Set your display name for chat (3–32 chars, letters/numbers/spaces/hyphens/underscores).
+   * Requires connected wallet. Use on('display_name_set', handler) for the response.
+   */
+  async setDisplayName(displayName: string): Promise<{ displayName: string }> {
+    return this.sendRequest('set_display_name', { displayName });
+  }
+
+  /**
+   * Load older messages before the given message id (for "Load more").
+   * Returns messages in chronological order (oldest first).
+   */
+  async getChatHistory(roomId: string, beforeId: string, limit: number = 50): Promise<{ messages: ChatMessagePayload[] }> {
+    return this.sendRequest('get_chat_history', { roomId, beforeId, limit });
+  }
+
   /**
    * Send ping to keep connection alive
    */
@@ -361,5 +399,54 @@ export class BlackjackWebSocketClient {
    */
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  // === Responsible Gaming / Self-Exclusion API ===
+
+  /**
+   * Check current exclusion status for the connected wallet.
+   */
+  async checkExclusionStatus(): Promise<{
+    isExcluded: boolean;
+    exclusionType: 'timeout' | 'permanent' | null;
+    expiresAt: string | null;
+    durationLabel: string | null;
+    createdAt: string | null;
+  }> {
+    return this.sendRequest('check_exclusion_status', {});
+  }
+
+  /**
+   * Set self-exclusion (cooling-off period or permanent).
+   * @param durationType - '24h' | '7d' | '30d' | '6m' | '1y' | 'permanent'
+   * @param reason - Optional reason for self-exclusion
+   */
+  async setExclusion(
+    durationType: '24h' | '7d' | '30d' | '6m' | '1y' | 'permanent',
+    reason?: string
+  ): Promise<{
+    success: boolean;
+    isExcluded: boolean;
+    exclusionType: 'timeout' | 'permanent' | null;
+    expiresAt: string | null;
+    durationLabel: string | null;
+  }> {
+    return this.sendRequest('set_exclusion', { durationType, reason });
+  }
+
+  /**
+   * Get exclusion history for the connected wallet.
+   */
+  async getExclusionHistory(): Promise<{
+    history: Array<{
+      id: string;
+      exclusionType: 'timeout' | 'permanent';
+      durationLabel: string;
+      expiresAt: string | null;
+      createdAt: string;
+      isActive: boolean;
+    }>;
+  }> {
+    return this.sendRequest('get_exclusion_history', {});
   }
 }

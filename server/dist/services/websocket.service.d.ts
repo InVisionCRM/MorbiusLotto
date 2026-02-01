@@ -1,14 +1,23 @@
 import { DatabaseService } from './database.service';
 import { BlackjackGameService } from './blackjack-game.service';
+import { TournamentService } from './tournament.service';
 export declare class WebSocketService {
     private gameService;
     private dbService;
     private wss;
     private clients;
+    private roomToClients;
+    private chatMessageTimestampsByAddress;
     private heartbeatInterval;
+    private chatRateLimitCleanupInterval;
     private publicClient;
     private contractAddress;
-    constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService);
+    private tournamentService?;
+    constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService, tournamentService?: TournamentService);
+    /** Prune addresses with no timestamps in the current window to avoid unbounded map growth. */
+    private cleanupChatRateLimitMap;
+    /** Returns false if over per-address limit; otherwise records the message and returns true. */
+    private checkPerAddressChatLimit;
     private handleConnection;
     private handleMessage;
     private handleGetServerSeedHash;
@@ -17,11 +26,29 @@ export declare class WebSocketService {
     private handleSyncBalance;
     private handleGetBalance;
     private handleGetGameState;
+    private handleJoinRoom;
+    private handleGetChatHistory;
+    private handleSetDisplayName;
+    private handleChatMessage;
     private sendMessage;
     private sendError;
     private broadcastToPlayer;
+    private broadcastToAll;
+    private broadcastToRoom;
     getConnectionCount(): number;
     getActivePlayersCount(): Promise<number>;
+    private handleCheckExclusionStatus;
+    private handleSetExclusion;
+    private handleGetExclusionHistory;
+    isPlayerExcluded(playerAddress: string): Promise<boolean>;
+    private handleTournamentEnter;
+    private handleTournamentLeave;
+    private handleGetTournamentState;
+    private handleTournamentGameStart;
+    private handleTournamentPlayerAction;
+    private handleTournamentLeaderboard;
+    private handleGetTournamentInfo;
+    private broadcastTournamentLeaderboardUpdate;
     shutdown(): void;
 }
 //# sourceMappingURL=websocket.service.d.ts.map

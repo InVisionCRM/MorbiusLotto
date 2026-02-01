@@ -28,10 +28,11 @@ interface DepositWithdrawModalProps {
 }
 
 export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractReserve, offChainBalance }: DepositWithdrawModalProps) {
-  // Display balance: prefer off-chain balance, fallback to contract reserve
-  const displayBalance = offChainBalance !== undefined && offChainBalance > 0n
+  // Display balance: prefer off-chain balance (most up-to-date), fallback to contract reserve
+  // Use offChainBalance if available and > 0, otherwise use contractReserve
+  const displayBalance = (offChainBalance !== undefined && offChainBalance !== null && offChainBalance > 0n)
     ? offChainBalance
-    : contractReserve;
+    : (contractReserve !== undefined && contractReserve !== null ? contractReserve : BigInt(0));
   const { address } = useAccount()
   const publicClient = usePublicClient()
   const [depositAmount, setDepositAmount] = useState('')
@@ -39,6 +40,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit')
   const [depositMethod, setDepositMethod] = useState<'pls' | 'morbius'>('pls')
   const [showApprovalModal, setShowApprovalModal] = useState(false)
+  const [isPreparingWithdraw, setIsPreparingWithdraw] = useState(false)
 
   // Contract hooks
   const {
@@ -47,7 +49,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
     deposit,
     depositMORBIUS,
     withdraw,
-    withdrawTx
+    withdrawTx,
+    withdrawWithSignature,
+    withdrawWithSignatureTx,
   } = useBlackjackContract()
 
   // Balance hooks
@@ -86,38 +90,72 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
     if (isApprovalSuccess) {
       toast.success('Approval successful', {
         description: 'You can now deposit MORBIUS',
+        duration: 5000,
       })
       setShowApprovalModal(false)
     }
   }, [isApprovalSuccess])
 
+  // Auto-sync when modal opens and there's a balance mismatch
+  useEffect(() => {
+    if (isOpen && onBalanceSync && contractReserve !== undefined && contractReserve !== null) {
+      // If on-chain is significantly higher than off-chain, auto-sync
+      const onChain = contractReserve
+      const offChain = offChainBalance ?? 0n
+      if (onChain > offChain) {
+        console.log('Balance mismatch detected, auto-syncing...', {
+          onChain: onChain.toString(),
+          offChain: offChain.toString()
+        })
+        onBalanceSync().catch(err => {
+          console.error('Auto-sync failed:', err)
+        })
+      }
+    }
+  }, [isOpen, contractReserve, offChainBalance, onBalanceSync])
+
   // Handle deposit PLS
   const handleDepositPLS = async () => {
     if (!depositAmount || !plsEquivalent || !publicClient) return
 
+    // Show persistent loading toast
+    const toastId = toast.loading('Confirm in wallet...', {
+      description: `Depositing ${depositAmount} MORBIUS worth of PLS`,
+    })
+
     try {
       const txHash = await deposit(plsEquivalent)
 
-      toast.info('Deposit initiated', {
-        description: 'Your PLS deposit is being processed...',
+      // Update toast to show transaction is processing
+      toast.loading('Transaction processing...', {
+        id: toastId,
+        description: 'Waiting for blockchain confirmation...',
       })
 
       // Wait for transaction receipt
       await publicClient.waitForTransactionReceipt({ hash: txHash })
 
+      // Dismiss loading and show success
       toast.success('Deposit successful', {
+        id: toastId,
         description: `Deposited ${depositAmount} MORBIUS worth of PLS`,
+        duration: 5000,
       })
+
+      // Wait a brief moment for contract state to update, then sync balance
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
       // Sync off-chain balance with contract
       if (onBalanceSync) {
         await onBalanceSync()
       }
       setDepositAmount('')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Deposit failed:', error)
-      toast.error('Deposit failed', {
-        description: 'There was an error processing your deposit',
+      const isUserRejection = error?.message?.includes('rejected') || error?.message?.includes('denied')
+      toast.error(isUserRejection ? 'Transaction cancelled' : 'Deposit failed', {
+        id: toastId,
+        description: isUserRejection ? 'You cancelled the transaction' : 'There was an error processing your deposit',
       })
     }
   }
@@ -132,18 +170,28 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
       return
     }
 
+    // Show persistent loading toast
+    const toastId = toast.loading('Confirm in wallet...', {
+      description: `Depositing ${depositAmount} MORBIUS`,
+    })
+
     try {
       const txHash = await depositMORBIUS(parseEther(depositAmount))
 
-      toast.info('Deposit initiated', {
-        description: 'Your MORBIUS deposit is being processed...',
+      // Update toast to show transaction is processing
+      toast.loading('Transaction processing...', {
+        id: toastId,
+        description: 'Waiting for blockchain confirmation...',
       })
 
       // Wait for transaction receipt
       await publicClient.waitForTransactionReceipt({ hash: txHash })
 
+      // Show success
       toast.success('Deposit successful', {
+        id: toastId,
         description: `Deposited ${depositAmount} MORBIUS`,
+        duration: 5000,
       })
 
       // Sync off-chain balance with contract
@@ -153,16 +201,19 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
       setDepositAmount('')
     } catch (error: any) {
       console.error('Deposit failed:', error)
-      
+
       // Check if error is due to insufficient allowance
       if (error?.message?.includes('allowance') || error?.message?.includes('ERC20')) {
         toast.error('Approval required', {
+          id: toastId,
           description: 'Please approve MORBIUS spending first',
         })
         setShowApprovalModal(true)
       } else {
-        toast.error('Deposit failed', {
-          description: error?.message || 'There was an error processing your deposit',
+        const isUserRejection = error?.message?.includes('rejected') || error?.message?.includes('denied')
+        toast.error(isUserRejection ? 'Transaction cancelled' : 'Deposit failed', {
+          id: toastId,
+          description: isUserRejection ? 'You cancelled the transaction' : (error?.message || 'There was an error processing your deposit'),
         })
       }
     }
@@ -173,43 +224,146 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
     approve(amount)
   }
 
-  // Handle withdrawal
+  // Handle withdrawal - uses server-signed withdrawWithSignature for off-chain balance support
   const handleWithdraw = async () => {
-    if (!withdrawAmount || !publicClient) return
+    if (!withdrawAmount || !publicClient || !address) return
+
+    const amountWei = parseEther(withdrawAmount)
+
+    // Validate amount is positive
+    if (amountWei <= 0n) {
+      toast.error('Invalid amount', {
+        description: 'Please enter a positive amount to withdraw',
+      })
+      return
+    }
+
+    // Validate against off-chain balance (source of truth for game winnings)
+    if (offChainBalance !== undefined && offChainBalance !== null && amountWei > offChainBalance) {
+      toast.error('Insufficient balance', {
+        description: `Your withdrawable balance is ${Math.floor(Number(formatEther(offChainBalance))).toLocaleString()} MORBIUS`,
+      })
+      return
+    }
+
+    setIsPreparingWithdraw(true)
+
+    // Show persistent loading toast
+    const toastId = toast.loading('Preparing withdrawal...', {
+      description: 'Getting server authorization...',
+    })
 
     try {
-      const txHash = await withdraw(parseEther(withdrawAmount))
-
-      toast.info('Withdrawal initiated', {
-        description: 'Your MORBIUS withdrawal is being processed...',
+      // Step 1: Get server signature for the withdrawal
+      const serverUrl = process.env.NEXT_PUBLIC_BLACKJACK_SERVER_URL || 'http://localhost:3001'
+      const response = await fetch(`${serverUrl}/api/withdraw/prepare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: address,
+          requestedAmount: amountWei.toString(),
+        }),
       })
 
-      // Wait for transaction receipt
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Server error: ${response.status}`)
+      }
+
+      const { amount, nonce, v, r, s } = await response.json()
+
+      // Server authorization complete, wallet tx state will take over
+      setIsPreparingWithdraw(false)
+
+      // Update toast for wallet confirmation
+      toast.loading('Confirm in wallet...', {
+        id: toastId,
+        description: `Withdrawing ${Math.floor(Number(formatEther(BigInt(amount)))).toLocaleString()} MORBIUS`,
+      })
+
+      // Step 2: Call the contract with the server signature
+      const txHash = await withdrawWithSignature(
+        BigInt(amount),
+        BigInt(nonce),
+        v,
+        r as `0x${string}`,
+        s as `0x${string}`
+      )
+
+      // Update toast for blockchain confirmation
+      toast.loading('Transaction processing...', {
+        id: toastId,
+        description: 'Waiting for blockchain confirmation...',
+      })
+
       await publicClient.waitForTransactionReceipt({ hash: txHash })
 
+      // Show success
       toast.success('Withdrawal successful', {
-        description: `Withdrew ${withdrawAmount} MORBIUS`,
+        id: toastId,
+        description: `Withdrew ${Math.floor(Number(formatEther(BigInt(amount)))).toLocaleString()} MORBIUS`,
+        duration: 5000,
       })
 
-      // Sync off-chain balance with contract
+      await new Promise(resolve => setTimeout(resolve, 1000))
       if (onBalanceSync) {
         await onBalanceSync()
       }
       setWithdrawAmount('')
-    } catch (error) {
+    } catch (error: any) {
+      setIsPreparingWithdraw(false)
       console.error('Withdrawal failed:', error)
-      toast.error('Withdrawal failed', {
-        description: 'There was an error processing your withdrawal',
-      })
+
+      // Parse specific error types for better user feedback
+      const errorMessage = error?.message || ''
+
+      if (errorMessage.includes('rejected') || errorMessage.includes('denied') || errorMessage.includes('cancelled')) {
+        toast.error('Transaction cancelled', {
+          id: toastId,
+          description: 'You cancelled the transaction',
+        })
+      } else if (errorMessage.includes('Insufficient') || errorMessage.includes('insufficient')) {
+        toast.error('Insufficient balance', {
+          id: toastId,
+          description: errorMessage,
+        })
+      } else if (errorMessage.includes('gas')) {
+        toast.error('Gas estimation failed', {
+          id: toastId,
+          description: 'Unable to estimate gas. The transaction may fail.',
+        })
+      } else if (errorMessage.includes('Server error') || errorMessage.includes('fetch')) {
+        toast.error('Server error', {
+          id: toastId,
+          description: 'Could not connect to the game server. Please try again.',
+        })
+      } else {
+        toast.error('Withdrawal failed', {
+          id: toastId,
+          description: errorMessage.slice(0, 100) || 'There was an error processing your withdrawal',
+        })
+      }
     }
   }
 
   const maxDepositPLS = plsBalance ? Math.floor(Number(formatEther(plsBalance))) : 0
   const maxDepositMORBIUS = morbiusBalance ? Math.floor(Number(formatEther(morbiusBalance))) : 0
-  const maxWithdraw = contractReserve ? Math.floor(Number(formatEther(contractReserve))) : 0
+  // Cap by off-chain balance (source of truth) so user cannot withdraw more than they have
+  const maxWithdraw =
+    contractReserve !== undefined &&
+    contractReserve !== null &&
+    offChainBalance !== undefined &&
+    offChainBalance !== null
+      ? Math.min(
+          Math.floor(Number(formatEther(contractReserve))),
+          Math.floor(Number(formatEther(offChainBalance)))
+        )
+      : contractReserve
+        ? Math.floor(Number(formatEther(contractReserve)))
+        : 0
 
   const isDepositLoading = depositTx.isPending || depositMORBIISTx.isPending
-  const isWithdrawLoading = withdrawTx.isPending
+  const isWithdrawLoading = isPreparingWithdraw || withdrawWithSignatureTx.isPending
 
   return (
     <>
@@ -230,7 +384,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed inset-4 md:inset-8 lg:inset-16 flex items-center justify-center z-50 pointer-events-none"
+              className="fixed top-[50px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-4"
             >
               <Card className="w-full max-w-md bg-gradient-to-br from-gray-900 to-black border-gray-700 shadow-2xl pointer-events-auto">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
@@ -246,6 +400,16 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
                 </CardHeader>
 
                 <CardContent className="space-y-6">
+                  {/* Transaction Status Indicator */}
+                  {(isDepositLoading || isWithdrawLoading) && (
+                    <div className="flex items-center justify-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                      <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
+                      <span className="text-sm text-yellow-400 font-medium">
+                        Waiting for blockchain confirmation...
+                      </span>
+                    </div>
+                  )}
+
                   {/* Current Reserve Balance */}
                   <div className="text-center p-4 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg border border-blue-500/20">
                     <div className="text-sm text-gray-400 mb-1">Current Balance</div>
@@ -253,9 +417,30 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
                       {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0} MORBIUS
                     </div>
                     {/* Show contract reserve if different from display balance */}
-                    {contractReserve && displayBalance && contractReserve !== displayBalance && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        (On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()} MORBIUS)
+                    {contractReserve && contractReserve !== displayBalance && (
+                      <div className="flex items-center justify-center gap-2 mt-2">
+                        <div className="text-xs text-yellow-400">
+                          On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()} MORBIUS
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            if (onBalanceSync) {
+                              toast.info('Syncing balance...')
+                              try {
+                                await onBalanceSync()
+                                toast.success('Balance synced!', { duration: 5000 })
+                              } catch (error) {
+                                console.error('Sync failed:', error)
+                                toast.error('Sync failed. Please try again.')
+                              }
+                            }
+                          }}
+                          className="h-6 px-2 text-xs bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
+                        >
+                          Sync Now
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -340,14 +525,20 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
                           !depositAmount || 
                           isDepositLoading || 
                           plsQuoteLoading || 
-                          (depositMethod === 'morbius' && isLoadingAllowance)
+                          (depositMethod === 'morbius' && isLoadingAllowance) ||
+                          (depositMethod === 'morbius' && isApproving)
                         }
                         className="w-full bg-green-600 hover:bg-green-700"
                       >
                         {isDepositLoading ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Processing...
+                            Processing Transaction...
+                          </>
+                        ) : depositMethod === 'morbius' && isApproving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Waiting for Approval...
                           </>
                         ) : depositMethod === 'morbius' && needsApproval ? (
                           'Approve Required'
@@ -390,7 +581,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
                         {isWithdrawLoading ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Processing...
+                            Processing Transaction...
                           </>
                         ) : (
                           'Withdraw MORBIUS'

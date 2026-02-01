@@ -1,3 +1,4 @@
+import { Pool } from 'pg';
 export interface Player {
     id: string;
     wallet_address: string;
@@ -102,8 +103,19 @@ export interface GlobalAnalytics {
     largest_bet: bigint;
     largest_payout: bigint;
 }
+export interface ChatMessage {
+    id: string;
+    room_id: string;
+    sender_address: string | null;
+    text: string;
+    created_at: Date;
+}
 export declare class DatabaseService {
     private pool;
+    /**
+     * Get the underlying connection pool (for use by other services)
+     */
+    getPool(): Pool;
     constructor();
     private toBigInt;
     private normalizePlayer;
@@ -115,6 +127,7 @@ export declare class DatabaseService {
     private normalizeGlobalAnalytics;
     connect(): Promise<void>;
     disconnect(): Promise<void>;
+    private normalizeAddress;
     getOrCreatePlayer(walletAddress: string): Promise<Player>;
     updatePlayerLastSeen(playerId: string): Promise<void>;
     getPlayerBalance(walletAddress: string): Promise<bigint>;
@@ -149,6 +162,31 @@ export declare class DatabaseService {
     removeActiveConnection(connectionId: string): Promise<void>;
     updateConnectionPing(connectionId: string): Promise<void>;
     cleanupOldConnections(): Promise<number>;
+    insertChatMessage(roomId: string, senderAddress: string | null, text: string): Promise<ChatMessage>;
+    getRecentChatMessages(roomId: string, limit?: number): Promise<ChatMessage[]>;
+    /** Messages older than the message with id beforeId, in chronological order (oldest first). */
+    getChatMessagesBefore(roomId: string, beforeId: string, limit?: number): Promise<ChatMessage[]>;
+    getDisplayName(walletAddress: string): Promise<string | null>;
+    setDisplayName(walletAddress: string, displayName: string): Promise<void>;
+    getDisplayNames(walletAddresses: string[]): Promise<Map<string, string>>;
     withTransaction<T>(callback: (client: any) => Promise<T>): Promise<T>;
+    checkExclusionStatus(walletAddress: string): Promise<{
+        isExcluded: boolean;
+        exclusionType: 'timeout' | 'permanent' | null;
+        expiresAt: Date | null;
+        durationLabel: string | null;
+        createdAt: Date | null;
+    }>;
+    setExclusion(walletAddress: string, exclusionType: 'timeout' | 'permanent', durationLabel: string, expiresAt: Date | null, reason?: string): Promise<void>;
+    getExclusionHistory(walletAddress: string): Promise<Array<{
+        id: string;
+        exclusionType: 'timeout' | 'permanent';
+        durationLabel: string;
+        expiresAt: Date | null;
+        createdAt: Date;
+        isActive: boolean;
+        deactivatedAt: Date | null;
+        deactivatedReason: string | null;
+    }>>;
 }
 //# sourceMappingURL=database.service.d.ts.map

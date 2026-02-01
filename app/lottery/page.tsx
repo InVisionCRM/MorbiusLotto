@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import {
   useCurrentRound,
+  useCurrentRoundTotals,
   useRound,
-  useMegaMillionsBank,
   usePlayerTickets,
   useHouseTicket,
   useWatchRoundFinalized,
@@ -70,7 +70,8 @@ export default function LotteryPage() {
 
   // Fetch current round data
   const { data: roundDataRaw, isLoading: isLoadingRound, refetch: refetchRound, error: roundError } = useCurrentRound()
-  const { data: megaBankRaw, refetch: refetchMegaBank } = useMegaMillionsBank()
+  // Use getCurrentRoundTotals to get megaMORBIUSBalance (index 5) since getMegaMORBIUSBank reverts on deployed contract
+  const { data: roundTotalsRaw, refetch: refetchRoundTotals } = useCurrentRoundTotals()
 
   const [roundsToPlay, setRoundsToPlay] = useState(1)
 
@@ -102,7 +103,14 @@ export default function LotteryPage() {
     roundData
   })
 
-  const megaBank = (megaBankRaw ?? BigInt(0)) as bigint
+  // Extract megaMORBIUSBalance from getCurrentRoundTotals (index 5)
+  // Returns: [roundId, totalMORBIUS, totalTickets, uniquePlayers, rolloverBalance, megaMORBIUSBalance, state]
+  const megaBank = useMemo(() => {
+    if (Array.isArray(roundTotalsRaw) && roundTotalsRaw.length >= 6) {
+      return BigInt(roundTotalsRaw[5]?.toString() ?? '0')
+    }
+    return BigInt(0)
+  }, [roundTotalsRaw])
 
   // Fetch number heatmap data for last 25 rounds
   const { getHeatLevel, isLoading: isLoadingHeatmap, hotNumbers, coldNumbers } = useNumberHeatmap(Number(roundId), 25)
@@ -299,7 +307,7 @@ export default function LotteryPage() {
     refetchRoundDetails();
     refetchTicketsCurrent();
     refetchTicketsFinal();
-    refetchMegaBank();
+    refetchRoundTotals();
     // refetchHexJackpot not exposed by hook
   });
 
@@ -309,7 +317,7 @@ export default function LotteryPage() {
       duration: 5000,
     });
     refetchRound();
-    refetchMegaBank();
+    refetchRoundTotals();
   });
 
   const handlePurchaseSuccess = () => {

@@ -99,6 +99,21 @@
   }
 }
 
+/* Infinite moving cards scroll animation (content is duplicated, so -50% loops) */
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.scroller .animate-scroll {
+  animation: scroll var(--animation-duration, 40s) linear infinite;
+  animation-direction: var(--animation-direction, forwards);
+}
+
 * {
   border-color: hsl(var(--color-border));
 }

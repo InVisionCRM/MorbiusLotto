@@ -27,6 +27,8 @@ export interface GameHistoryEntry {
   dealerTotal: number
   serverSeedHash?: string
   verified?: boolean
+  wasSplit?: boolean
+  wasDoubleDown?: boolean
 }
 
 interface GameHistoryProps {
@@ -211,55 +213,58 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
               exit={{ opacity: 0, y: -10 }}
               className="border border-gray-700 rounded-lg overflow-hidden"
             >
-              {/* Game Summary */}
+              {/* Game Summary - grid: even columns, text left */}
               <div
                 className="p-4 cursor-pointer hover:bg-gray-800/50 transition-colors"
                 onClick={() => setExpandedGame(expandedGame === entry.id ? null : entry.id)}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
+                <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-center text-left">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
                     <Badge className={`${getResultColor(entry.result)} border-0`}>
                       {entry.result === 'blackjack' && <Trophy className="w-3 h-3 mr-1" />}
                       {entry.result.toUpperCase()}
                     </Badge>
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                      <Clock className="w-4 h-4" />
-                      {formatTimestamp(entry.timestamp)}
+                    {entry.wasSplit && (
+                      <Badge className="bg-cyan-900/30 text-cyan-300 border border-cyan-500/30 text-xs">
+                        SPLIT
+                      </Badge>
+                    )}
+                    {entry.wasDoubleDown && (
+                      <Badge className="bg-amber-900/30 text-amber-300 border border-amber-500/30 text-xs">
+                        2x
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-400 min-w-0">
+                    <Clock className="w-4 h-4 flex-shrink-0" />
+                    <span>{formatTimestamp(entry.timestamp)}</span>
+                  </div>
+                  <div className="text-sm min-w-0">
+                    <div className="flex items-center gap-1 text-gray-300">
+                      <Target className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <span>{formatAmount(entry.betAmount)} MORBIUS</span>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="flex items-center gap-1 text-sm">
-                        <Target className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-300">
-                          {formatAmount(entry.betAmount)} MORBIUS
-                        </span>
-                      </div>
-                      <div className={`text-sm font-medium ${
-                        getProfit(entry) > 0 ? 'text-green-400' :
-                        getProfit(entry) < 0 ? 'text-red-400' : 'text-yellow-400'
-                      }`}>
-                        {getProfit(entry) > 0 ? '+' : ''}{getProfit(entry).toLocaleString()} MORBIUS
-                      </div>
-                    </div>
-
-                    <div className="flex items-center">
-                      {expandedGame === entry.id ? (
-                        <ChevronUp className="w-5 h-5 text-gray-400" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-gray-400" />
-                      )}
-                    </div>
+                  <div className={`text-sm font-medium min-w-0 ${
+                    getProfit(entry) > 0 ? 'text-green-400' :
+                    getProfit(entry) < 0 ? 'text-red-400' : 'text-yellow-400'
+                  }`}>
+                    {getProfit(entry) > 0 ? '+' : ''}{getProfit(entry).toLocaleString()} MORBIUS
+                  </div>
+                  <div className="flex items-center justify-end">
+                    {expandedGame === entry.id ? (
+                      <ChevronUp className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    )}
                   </div>
                 </div>
 
-                {/* Preview Cards Row - Always visible */}
-                <div className="mt-3 flex items-center gap-6">
-                  {/* Player Cards Preview */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider">You:</span>
-                    <div className="flex items-center">
+                {/* Preview Cards Row - grid: even columns, text left */}
+                <div className="mt-3 grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-4 items-center text-left">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-gray-500 uppercase tracking-wider flex-shrink-0">You:</span>
+                    <div className="flex items-center min-w-0">
                       {entry.playerHands && entry.playerHands.length > 0 && entry.playerHands[0].cards && entry.playerHands[0].cards.length > 0 ? (
                         <>
                           {entry.playerHands[0].cards.slice(0, 3).map((cardValue, idx) => (
@@ -280,17 +285,14 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                         <span className="text-xs text-gray-500">No cards</span>
                       )}
                     </div>
-                    <span className="text-sm font-bold text-white ml-1">
-                      {entry.playerHands && entry.playerHands.length > 0 ? entry.playerHands[0].total : '0'}
-                    </span>
                   </div>
-
-                  <span className="text-gray-600">vs</span>
-
-                  {/* Dealer Cards Preview */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider">Dealer:</span>
-                    <div className="flex items-center">
+                  <span className="text-sm font-bold text-white text-left">
+                    {entry.playerHands && entry.playerHands.length > 0 ? entry.playerHands[0].total : '0'}
+                  </span>
+                  <span className="text-gray-600 text-center">vs</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-gray-500 uppercase tracking-wider flex-shrink-0">Dealer:</span>
+                    <div className="flex items-center min-w-0">
                       {entry.dealerCards && entry.dealerCards.length > 0 ? (
                         <>
                           {entry.dealerCards.slice(0, 3).map((cardValue, idx) => (
@@ -311,10 +313,10 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                         <span className="text-xs text-gray-500">No cards</span>
                       )}
                     </div>
-                    <span className="text-sm font-bold text-white ml-1">
-                      {entry.dealerTotal || 0}
-                    </span>
                   </div>
+                  <span className="text-sm font-bold text-white text-left">
+                    {entry.dealerTotal || 0}
+                  </span>
                 </div>
               </div>
 
@@ -342,7 +344,7 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                                      '1px solid rgba(234, 179, 8, 0.3)'
                             }}
                           >
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="grid grid-cols-[1fr_1fr] gap-4 items-center mb-3 text-left">
                               <div className="flex items-center gap-2">
                                 {entry.playerHands.length > 1 && (
                                   <span className="text-sm text-gray-400">Hand {handIndex + 1}</span>
@@ -351,7 +353,7 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                                   {hand.result.toUpperCase()}
                                 </Badge>
                               </div>
-                              <span className="text-lg font-bold text-white">
+                              <span className="text-lg font-bold text-white text-left">
                                 Total: {hand.total}
                               </span>
                             </div>
@@ -372,11 +374,11 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                               )}
                             </div>
 
-                            <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-700/50">
+                            <div className="grid grid-cols-[1fr_1fr] gap-4 items-center text-sm pt-2 border-t border-gray-700/50 text-left">
                               <span className="text-gray-400">
                                 Bet: {formatAmount(entry.betAmount / BigInt(entry.playerHands.length))} MORBIUS
                               </span>
-                              <span className={`font-medium ${
+                              <span className={`font-medium text-left ${
                                 Number(formatEther(hand.payout)) > Number(formatEther(entry.betAmount / BigInt(entry.playerHands.length))) ? 'text-green-400' :
                                 Number(formatEther(hand.payout)) < Number(formatEther(entry.betAmount / BigInt(entry.playerHands.length))) ? 'text-red-400' : 'text-yellow-400'
                               }`}>
@@ -391,9 +393,9 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
 
                       {/* Dealer Cards */}
                       <div className="bg-gray-800/30 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="grid grid-cols-[1fr_1fr] gap-4 items-center mb-3 text-left">
                           <h4 className="text-sm font-medium text-gray-300">Dealer's Hand</h4>
-                          <span className="text-lg font-bold text-white">
+                          <span className="text-lg font-bold text-white text-left">
                             Total: {entry.dealerTotal}
                             {entry.dealerTotal > 21 && (
                               <span className="text-red-400 ml-2 text-sm">BUST</span>
@@ -418,28 +420,33 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
 
                       {/* Verification */}
                       {onVerifyGame && (
-                        <div className="flex items-center justify-between pt-2 border-t border-gray-700">
+                        <div className="grid grid-cols-[1fr_1fr] gap-4 items-center pt-2 border-t border-gray-700 text-left">
                           <div className="flex items-center gap-2">
                             {entry.verified ? (
                               <>
-                                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                <div className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></div>
                                 <span className="text-sm text-green-400">Verified</span>
                               </>
                             ) : (
                               <>
-                                <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                                <div className="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0"></div>
                                 <span className="text-sm text-yellow-400">Unverified</span>
                               </>
                             )}
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onVerifyGame(entry.gameId)}
-                            className="text-xs"
-                          >
-                            Verify Game
-                          </Button>
+                          <div className="text-left">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onVerifyGame(entry.gameId);
+                              }}
+                              className="text-xs"
+                            >
+                              Verify Game
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>

@@ -11,7 +11,7 @@ interface PlayingCardProps {
   className?: string;
   index?: number;
   isNewCard?: boolean;
-  size?: 'normal' | 'small';
+  size?: 'large' | 'normal' | 'small';
 }
 
 const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, className = '', index = 0, isNewCard = false, size = 'normal' }) => {
@@ -52,44 +52,31 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
     return `/BlackJack/Cards/PNG/${valueStr}${suitLetter}.png`;
   };
 
-  // 3D perspective transform - cards lie flat on table viewed from player's angle
-  const getCardTransform = () => {
-    // Both dealer and player cards use the same perspective origin now, so same angle
-    return 'rotateX(35deg)';
-  };
-
-  // Shadow that enhances the 3D effect - card lifting off table
+  // Simple shadow for card depth
   const getCardShadow = () => {
-    if (isDealer) {
-      return '0 2px 2px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 2px rgba(0, 0, 0, 0.2)';
-    } else {
-      return '0 2px 2px rgba(0, 0, 0, 0.5), 0 2px 2px rgba(0, 0, 0, 0.3), 0 2px 2px rgba(0, 0, 0, 0.25)';
-    }
+    return '0 2px 4px rgba(0, 0, 0, 0.2)';
   };
 
-  // Size classes: normal = w-20 h-28 (80x112), small = w-14 h-20 (56x80) for mobile split
-  const sizeClasses = size === 'small' ? 'w-14 h-20' : 'w-20 h-28';
-  const imageSize = size === 'small' ? { width: 56, height: 80 } : { width: 80, height: 112 };
+  // Size classes: large = w-28 h-40 (112x160), normal = w-20 h-28 (80x112), small = w-14 h-20 (56x80)
+  const sizeClasses = size === 'large' ? 'w-28 h-40' : size === 'small' ? 'w-14 h-20' : 'w-20 h-28';
+  const imageSize = size === 'large' ? { width: 112, height: 160 } : size === 'small' ? { width: 56, height: 80 } : { width: 80, height: 112 };
 
   if (hidden) {
     return (
       <div
-        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative ${sizeClasses}`}
+        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden rounded-lg`}
         style={{
-          borderRadius: '4px',
           boxShadow: getCardShadow(),
-          transform: getCardTransform(),
-          transformStyle: 'preserve-3d',
           animationDelay: isNewCard ? `${animationDelay}s` : '1s',
         }}
       >
-        <div className="w-full h-full bg-slate-900 border-2 border-white rounded-sm overflow-hidden" style={{ boxSizing: 'border-box' }}>
+        <div className="w-full h-full bg-slate-900 overflow-hidden">
           <Image
             src="/Pulse Branding/Logo/ball.png"
             alt="Card back"
             width={imageSize.width}
             height={imageSize.height}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-cover"
             priority
           />
         </div>
@@ -99,25 +86,20 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
 
   return (
     <div
-      className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative ${sizeClasses}`}
+      className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden rounded-lg bg-white`}
       style={{
-        borderRadius: '4px',
         boxShadow: getCardShadow(),
-        transform: getCardTransform(),
-        transformStyle: 'preserve-3d',
         animationDelay: isNewCard ? `${animationDelay}s` : '1s',
       }}
     >
-      <div className="w-full h-full rounded-sm overflow-hidden bg-white" style={{ boxSizing: 'border-box' }}>
-        <Image
-          src={getCardImagePath()}
-          alt={`${getValueString(card.value)} of ${card.suit}`}
-          width={imageSize.width}
-          height={imageSize.height}
-          className="w-full h-full object-contain"
-          priority
-        />
-      </div>
+      <Image
+        src={getCardImagePath()}
+        alt={`${getValueString(card.value)} of ${card.suit}`}
+        width={imageSize.width}
+        height={imageSize.height}
+        className="w-full h-full object-cover"
+        priority
+      />
     </div>
   );
 };

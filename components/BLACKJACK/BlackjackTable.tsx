@@ -8,6 +8,8 @@ import PlayingCard from './PlayingCard';
 import { SystemTime } from '@/components/ui/system-time';
 import BettingPanel from './BettingPanel';
 import { NumberTicker } from '@/components/ui/number-ticker';
+import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS } from '@/app/BLACKJACK/constants';
+import type { BlackjackImageId, BlackjackVideoId } from '@/app/BLACKJACK/constants';
 
 interface BlackjackTableProps {
   playerHand: Hand;
@@ -44,6 +46,11 @@ interface BlackjackTableProps {
   currentBetAmount?: string;
   lastBetAmount?: string;
   useVideoBackground?: boolean;
+  imageSource?: BlackjackImageId;
+  videoSource?: BlackjackVideoId;
+  videoSyncToClock?: boolean;
+  videoPosition?: number;
+  onOpenDepositModal?: () => void;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -79,8 +86,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onBetAmountChange,
   currentBetAmount = '0',
   lastBetAmount = '0',
-  useVideoBackground = true
+  useVideoBackground = true,
+  imageSource = BLACKJACK_IMAGE_BACKGROUNDS[0].id,
+  videoSource = 'glowingTable',
+  videoSyncToClock = true,
+  videoPosition = 50,
+  onOpenDepositModal,
+  soundEnabled = true
 }) => {
+  const videoSrc = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
+  const imageSrc = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
   // State for progressive dealer card reveal
   // Industry standard: Show only first card during play, reveal all when game completes
   const [visibleDealerCards, setVisibleDealerCards] = useState(() => {
@@ -293,42 +308,57 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     }
   }, [isDragging, dragStart, widgetPosition, isHorizontal]);
 
-  // Sync glowingTable.mp4 to loop over 24 hours
-  // Noon (12:00 PM) = 0% video, Midnight (12:00 AM) = 50% video
-  const syncVideoTo24HourLoop = (video: HTMLVideoElement | null) => {
+  // Sync video to clock: 24-hour loop for table videos, 10-minute loop for glowingLogo
+  const syncVideoToClock = (video: HTMLVideoElement | null) => {
     if (!video || !Number.isFinite(video.duration)) return;
     const now = new Date();
     const hours = now.getHours();
     const minutes = now.getMinutes();
     const seconds = now.getSeconds();
     const milliseconds = now.getMilliseconds();
-    
-    // Calculate seconds since noon (12:00 PM)
-    // Noon = 0 seconds, Midnight = 43200 seconds (12 hours)
-    let secondsSinceNoon = (hours - 12) * 3600 + minutes * 60 + seconds + milliseconds / 1000;
-    
-    // Handle wrap-around: if before noon, add 24 hours
-    if (secondsSinceNoon < 0) {
-      secondsSinceNoon += 86400;
+    const totalSeconds = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+
+    let progress: number;
+    if (videoSource === 'glowingLogo') {
+      // 10-minute cycle: full video loop every 10 minutes
+      const tenMinutes = 10 * 60;
+      progress = (totalSeconds % tenMinutes) / tenMinutes;
+    } else {
+      // 24-hour cycle: Noon = 0%, Midnight = 50%, next Noon = 100%
+      let secondsSinceNoon = (hours - 12) * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+      if (secondsSinceNoon < 0) secondsSinceNoon += 86400;
+      progress = secondsSinceNoon / 86400;
     }
-    
-    // Map to video duration:
-    // 0 seconds (noon) = 0% video
-    // 43200 seconds (midnight) = 50% video
-    // 86400 seconds (next noon) = 100% video
-    const progress = secondsSinceNoon / 86400;
     video.currentTime = progress * video.duration;
   };
 
-  // Re-sync video position every 60s to stay aligned with 24-hour loop
+  // Apply manual video position (when sync to clock is off)
+  const applyManualVideoPosition = (video: HTMLVideoElement | null) => {
+    if (!video || !Number.isFinite(video.duration)) return;
+    const pos = Math.max(0, Math.min(100, videoPosition ?? 50)) / 100;
+    video.currentTime = pos * video.duration;
+  };
+
+  // Re-sync video: when sync to clock, run clock sync (24h or 10min by video); when manual, apply position
   useEffect(() => {
-    // Initial sync
-    if (tableVideoRef.current) {
-      syncVideoTo24HourLoop(tableVideoRef.current);
+    const video = tableVideoRef.current;
+    if (!video) return;
+    if (videoSyncToClock) {
+      syncVideoToClock(video);
+    } else {
+      applyManualVideoPosition(video);
     }
-    const interval = setInterval(() => syncVideoTo24HourLoop(tableVideoRef.current), 60_000);
+  }, [videoSyncToClock, videoPosition, videoSource]);
+
+  // Re-sync video position every 60s when sync to clock is on (10min video still correct; 24h needs periodic sync)
+  useEffect(() => {
+    if (!videoSyncToClock) return;
+    if (tableVideoRef.current) {
+      syncVideoToClock(tableVideoRef.current);
+    }
+    const interval = setInterval(() => syncVideoToClock(tableVideoRef.current), 60_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [videoSyncToClock, videoSource]);
 
   // Handle chip animations when game result changes
   useEffect(() => {
@@ -426,13 +456,22 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     else if (gameState !== GameState.COMPLETE && !isRevealing) {
       // Industry standard: Always show only first card during play
       // Hole card (second card) stays hidden until game completes
-      // Force reset to 1 card if we're showing more than we should
-      if (totalCards >= 2 && visibleDealerCards > 1) {
-        setVisibleDealerCards(1);
-      } else if (totalCards === 1 && visibleDealerCards > 1) {
-        setVisibleDealerCards(1);
+      // Ensure at least 1 card is visible when cards are available
+      if (totalCards >= 2) {
+        // Two or more cards: show only first card (hole card hidden)
+        if (visibleDealerCards !== 1) {
+          setVisibleDealerCards(1);
+        }
+      } else if (totalCards === 1) {
+        // Only one card: show it
+        if (visibleDealerCards !== 1) {
+          setVisibleDealerCards(1);
+        }
       } else if (totalCards === 0) {
-        setVisibleDealerCards(0);
+        // No cards: hide all
+        if (visibleDealerCards !== 0) {
+          setVisibleDealerCards(0);
+        }
       }
       setIsRevealing(false);
     }
@@ -514,14 +553,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   };
 
   // Map chip values to PNG images for table display
-  // Color mapping: Green=5, Blue=10, Red=25, Black=100/1000
+  // Color mapping: Green=500, Blue=1000, Red=2500, Black=10000, Cyan=100000
   const getChipImage = (value: number) => {
     switch (value) {
-      case 5: return '/PokerChips/tablepokerchip006-ezgif.com-gif-maker.png'; // Green chip
-      case 10: return '/PokerChips/tablepokerchip011-ezgif.com-gif-maker.png'; // Blue chip
-      case 25: return '/PokerChips/tablepokerchip016-ezgif.com-gif-maker.png'; // Red chip
-      case 100: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Black chip
-      case 1000: return '/PokerChips/tablepokerchip021-ezgif.com-rotate.png'; // Black chip for 1000
+      case 500: return '/PokerChips/tablepokerchip006-ezgif.com-gif-maker.png'; // Green chip
+      case 1000: return '/PokerChips/tablepokerchip011-ezgif.com-gif-maker.png'; // Blue chip
+      case 2500: return '/PokerChips/tablepokerchip016-ezgif.com-gif-maker.png'; // Red chip
+      case 10000: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Black chip
+      case 100000: return '/PokerChips/tablepokerchip021-ezgif.com-rotate.png'; // Cyan chip for 100000
       default: return '/PokerChips/tablepokerchip011-ezgif.com-gif-maker.png';
     }
   };
@@ -538,9 +577,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         border: '1px inset rgba(60, 60, 60, 0.5)',
       }}
     >
-      {/* Looping video background (glowingTable.mp4) — loops over 24 hours */}
+      {/* Looping video background — key forces remount when src changes */}
       {useVideoBackground ? (
         <video
+          key={videoSrc}
           ref={tableVideoRef}
           autoPlay
           muted
@@ -550,31 +590,25 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           style={{ zIndex: 0 }}
           onLoadedMetadata={(e) => {
             const el = e.currentTarget;
-            // Sync to 24-hour loop
-            syncVideoTo24HourLoop(el);
-            // Ensure it plays
-            el.play().catch(() => {
-              // Autoplay may be blocked, but that's okay - user interaction will start it
-            });
+            if (videoSyncToClock) syncVideoToClock(el);
+            else applyManualVideoPosition(el);
+            el.play().catch(() => {});
           }}
           onCanPlay={(e) => {
             const el = e.currentTarget;
-            // Sync to 24-hour loop
-            syncVideoTo24HourLoop(el);
-            // Ensure it plays
-            el.play().catch(() => {
-              // Autoplay may be blocked, but that's okay - user interaction will start it
-            });
+            if (videoSyncToClock) syncVideoToClock(el);
+            else applyManualVideoPosition(el);
+            el.play().catch(() => {});
           }}
           onError={(e) => {
             console.error('Video failed to load:', e.currentTarget.error);
           }}
         >
-          <source src="/BlackJack/video%20table/glowingTable.mp4" type="video/mp4" />
+          <source src={videoSrc} type="video/mp4" />
         </video>
       ) : (
         <Image
-          src="/BlackJack/TableBG.png"
+          src={imageSrc}
           alt="Table Background"
           fill
           className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
@@ -670,13 +704,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         <div className="flex-1 relative w-full z-10" style={{ minHeight: '600px' }}>
           {/* Dealer Area */}
           <div className="absolute top-35 left-1/2 -translate-x-1/2 flex flex-col items-center">
-            <div
-              className="flex gap-2"
-              style={{
-                perspective: '800px',
-                perspectiveOrigin: 'center center'
-              }}
-            >
+            <div className="flex">
               {/* Industry standard dealer card display:
                   - During play: Show first card face-up, second card (hole card) face-down
                   - When complete: Show all cards face-up */}
@@ -684,20 +712,27 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 // Only render cards up to visibleDealerCards
                 // This ensures cards don't appear prematurely
                 if (index >= visibleDealerCards) return null;
-                
+
                 // Determine if this card should be hidden (hole card during play)
                 const isHoleCard = hideHoleCard && index === 1;
-                
+
                 return (
-                  <PlayingCard
+                  <div
                     key={`dealer-${card.id || `card-${index}`}`}
-                    card={card}
-                    owner="dealer"
-                    hidden={isHoleCard}
-                    className=""
-                    index={index}
-                    isNewCard={index >= 2 && index === visibleDealerCards - 1}
-                  />
+                    style={{
+                      marginLeft: index > 0 ? '-15px' : '0',
+                      zIndex: index
+                    }}
+                  >
+                    <PlayingCard
+                      card={card}
+                      owner="dealer"
+                      hidden={isHoleCard}
+                      className=""
+                      index={index}
+                      isNewCard={index >= 2 && index === visibleDealerCards - 1}
+                    />
+                  </div>
                 );
               })}
             </div>
@@ -770,14 +805,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                       {hand.isBust && <span className="text-red-400 font-black text-2xl sm:text-2xl">BUST</span>}
                     </div>
 
-                    {/* Cards - Use smaller cards on mobile when split */}
-                    <div
-                      className="flex"
-                      style={{
-                        perspective: '800px',
-                        perspectiveOrigin: 'center center'
-                      }}
-                    >
+                    {/* Cards */}
+                    <div className="flex">
                       {hand.cards.map((card, cardIndex) => {
                         // Determine if card is new
                         let isNewCard = false;
@@ -787,35 +816,26 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                           isNewCard = newCardIndices.player.has(cardIndex);
                         }
 
+                        // Determine card size: large for single hand, normal for split
+                        const cardSize = hasSplit ? 'normal' : 'large';
+                        const cardMargin = hasSplit ? '5px' : '-25px';
+
                         return (
                           <div
                             key={`player-${handIndex}-${cardIndex}`}
                             style={{
-                              marginLeft: cardIndex > 0 ? (hasSplit ? '5px' : '10px') : '0',
+                              marginLeft: cardIndex > 0 ? cardMargin : '0',
                               zIndex: cardIndex
                             }}
                           >
-                            {/* Show small cards on mobile (< sm) when split, normal otherwise */}
-                            <div className={hasSplit ? 'sm:hidden' : 'hidden'}>
-                              <PlayingCard
-                                card={card}
-                                owner="player"
-                                className=""
-                                index={cardIndex}
-                                isNewCard={isNewCard}
-                                size="small"
-                              />
-                            </div>
-                            <div className={hasSplit ? 'hidden sm:block' : 'block'}>
-                              <PlayingCard
-                                card={card}
-                                owner="player"
-                                className=""
-                                index={cardIndex}
-                                isNewCard={isNewCard}
-                                size="normal"
-                              />
-                            </div>
+                            <PlayingCard
+                              card={card}
+                              owner="player"
+                              className=""
+                              index={cardIndex}
+                              isNewCard={isNewCard}
+                              size={cardSize}
+                            />
                           </div>
                         );
                       })}
@@ -876,31 +896,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 );
               })}
             </div>
-          </div>
-        </div>
-
-        {/* Reserve Balance - Top Center */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
-          <div 
-            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-cyan-500/20 backdrop-blur-sm"
-            style={{
-              background: 'linear-gradient(145deg, rgba(16, 26, 35, 0.9), rgba(35, 36, 41, 0.9))',
-              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-              border: '1px inset rgba(60, 60, 60, 0.5)',
-            }}
-          >
-            <span className="text-cyan-400/80 text-xs font-semibold mr-1">Reserve:</span>
-            <NumberTicker
-              value={Math.floor(Number(reserveBalance) / 1e18)}
-              className="text-white text-sm font-bold"
-            />
-            <Image
-              src="/morbius/MorbiusLogo (3).png"
-              alt="Morbius"
-              width={16}
-              height={16}
-              className="object-contain ml-1"
-            />
           </div>
         </div>
 
@@ -981,7 +976,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (canHit) onAction(Action.HIT);
+                if (canHit) {
+                  if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
+                  onAction(Action.HIT);
+                }
               }}
               disabled={!canHit}
               className={`relative w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`}
@@ -1133,7 +1131,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 // Convert payout to chip stack representation
                 const winningChips: number[] = [];
                 let remaining = payoutInTokens;
-                const chipValues = [1000, 100, 25, 10, 5];
+                const chipValues = [100000, 10000, 2500, 1000, 500];
                 
                 for (const chipValue of chipValues) {
                   while (remaining >= chipValue) {
@@ -1263,12 +1261,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           />
         </div>
 
-        {/* Clear Button - Own row under betting panel */}
-        <div className="mt-0.5 w-full flex justify-center">
+        {/* Clear Button + Reserve - Own row under betting panel */}
+        <div className="mt-0.5 w-full flex justify-center items-center gap-3">
           <button
             onClick={() => onBetAmountChange?.('', undefined, true)}
             disabled={isPlaying}
-            className="px-1.5 py-0.5 md:px-2 md:py-1 lg:px-3 lg:py-1 rounded font-bold text-xs md:text-sm lg:text-lg uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/70"
+            className="px-1.5 py-0.5 md:px-2 md:py-1 lg:px-3 lg:py-1 rounded font-bold text-base md:text-lg lg:text-xl uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/70"
             style={{
               background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
               boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
@@ -1276,6 +1274,33 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             }}
           >
             Clear
+          </button>
+          <button
+            type="button"
+            onClick={onOpenDepositModal}
+            aria-label={`Reserve balance: ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS. Open deposit and withdraw.`}
+            className="flex relative items-center justify-start rounded-lg py-2 px-4 pr-10 gap-1 text-xl flex-shrink min-w-0 hover:brightness-110 transition-all cursor-pointer"
+            style={{
+              background: 'linear-gradient(145deg, rgb(30, 40, 50), rgb(20, 30, 40))',
+              boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.4), inset -2px -2px 4px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.3)',
+              border: '1px solid rgba(80, 90, 100, 0.3)',
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <NumberTicker
+                value={Math.floor(Number(reserveBalance) / 1e18)}
+                className="text-white/80 font-bold whitespace-nowrap text-xl"
+                animateOnChange={true}
+              />
+              <Image
+                src="/morbius/MorbiusLogo (3).png"
+                alt="Morbius Logo"
+                width={16}
+                height={16}
+                className="object-contain"
+              />
+            </div>
+            <i className="fas fa-chevron-down text-white/60 text-xs absolute right-2 top-1/2 transform -translate-y-1/2" />
           </button>
         </div>
 
@@ -1304,15 +1329,17 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         /* Simple slide-in animation from top-right */
         @keyframes cardSlideIn {
           0% {
-            transform: translate(200px, -150px);
+            transform: translateX(100px) translateY(-80px);
+            opacity: 0;
           }
           100% {
-            transform: translate(0, 0);
+            transform: translateX(0) translateY(0);
+            opacity: 1;
           }
         }
 
         .card-slide-in {
-          animation: cardSlideIn 0.7s ease-out both;
+          animation: cardSlideIn 0.4s ease-out both;
         }
 
         /* Chip lose animation - slides up and fades out */

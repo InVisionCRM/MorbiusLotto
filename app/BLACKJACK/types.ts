@@ -71,6 +71,12 @@ export interface GameResult {
   payout: bigint;
   isBlackjack: boolean;
   timestamp: number;
+  /** All player hands (for split games). When present, use this for display; otherwise use playerHand. */
+  playerHands?: Hand[];
+  /** True if this game involved a split. */
+  wasSplit?: boolean;
+  /** True if any hand was doubled down. */
+  wasDoubleDown?: boolean;
 }
 
 export interface GameStateUI {

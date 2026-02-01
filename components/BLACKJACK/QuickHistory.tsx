@@ -1,211 +1,280 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import Image from 'next/image'
 import { formatEther } from 'viem'
 import { GameResult } from '@/app/BLACKJACK/types'
+import { ChevronLeft, ChevronRight, History } from 'lucide-react'
+
+const PAGE_SIZE = 10
+const MAX_HISTORY_ITEMS = 50
+
+const PANEL_CLASS =
+  'rounded-xl border border-white/10 bg-gradient-to-br from-slate-900/95 to-slate-800/90 shadow-[inset_0_3px_6px_rgba(0,0,0,0.8),inset_0_-3px_6px_rgba(255,255,255,0.06)]'
+
+const RESULT_CONFIG: Record<'win' | 'loss' | 'push' | 'blackjack', { label: string; className: string }> = {
+  blackjack: { label: 'BJ', className: 'bg-amber-500/20 text-amber-300 border-amber-400/40' },
+  win: { label: 'WIN', className: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40' },
+  loss: { label: 'LOSS', className: 'bg-red-500/20 text-red-300 border-red-400/40' },
+  push: { label: 'PUSH', className: 'bg-slate-500/20 text-slate-300 border-slate-400/40' },
+}
+
+const SUIT_LETTER: Record<string, string> = { hearts: 'H', diamonds: 'D', clubs: 'C', spades: 'S' }
+
+function cardValueStr(value: number): string {
+  if (value === 1) return 'A'
+  if (value >= 11 && value <= 13) return ['', 'J', 'Q', 'K'][value - 10]
+  return String(value)
+}
+
+function cardImagePath(card: { value: number; suit: string }): string {
+  const suit = SUIT_LETTER[card.suit] ?? 'S'
+  return `/BlackJack/Cards/PNG/${cardValueStr(card.value)}${suit}.png`
+}
+
+function getResultType(result: GameResult): 'win' | 'loss' | 'push' | 'blackjack' {
+  if (result.isBlackjack) return 'blackjack'
+  if (result.payout > BigInt(0)) return 'win'
+  if (result.payout === BigInt(0) && result.playerHand.total === result.dealerHand.total) return 'push'
+  return 'loss'
+}
+
+function getTotalBet(result: GameResult): bigint {
+  if (result.playerHands?.length) {
+    return result.playerHands.reduce((sum, h) => sum + (h.betAmount || BigInt(0)), BigInt(0))
+  }
+  return result.playerHand.betAmount || BigInt(0)
+}
+
+function getWinLossAmount(result: GameResult): bigint {
+  return result.payout - getTotalBet(result)
+}
+
+function formatMorbius(wei: bigint): string {
+  return Math.floor(Number(formatEther(wei))).toLocaleString()
+}
 
 interface QuickHistoryProps {
   history: GameResult[]
+  reserveBalance?: bigint
 }
 
-const QuickHistory: React.FC<QuickHistoryProps> = ({ history }) => {
-  // Get last 20 hands
-  const recentHistory = history.slice(0, 20)
+export default function QuickHistory({ history, reserveBalance }: QuickHistoryProps) {
+  const [page, setPage] = useState(0)
 
-  // Get suit letter for image filename
-  const getSuitLetter = (suit: string) => {
-    switch (suit) {
-      case 'hearts': return 'H'
-      case 'diamonds': return 'D'
-      case 'clubs': return 'C'
-      case 'spades': return 'S'
-      default: return 'S'
+  const recentHistory = useMemo(() => history.slice(0, MAX_HISTORY_ITEMS), [history])
+  const totalPages = Math.max(1, Math.ceil(recentHistory.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages - 1)
+  const paginatedHistory = useMemo(
+    () => recentHistory.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [recentHistory, currentPage]
+  )
+
+  useEffect(() => {
+    if (totalPages > 0 && page >= totalPages) setPage(totalPages - 1)
+  }, [totalPages, page])
+
+  const balanceAtBetByIndex = useMemo(() => {
+    if (reserveBalance === undefined) return null
+    const balances: bigint[] = []
+    let balanceAfter = reserveBalance
+    for (let i = 0; i < recentHistory.length; i++) {
+      const profit = getWinLossAmount(recentHistory[i])
+      balances.push(balanceAfter - profit)
+      balanceAfter = balanceAfter - profit
     }
-  }
+    return balances
+  }, [recentHistory, reserveBalance])
 
-  // Get value string for image filename
-  const getValueString = (value: number) => {
-    if (value === 1) return 'A'
-    if (value === 11) return 'J'
-    if (value === 12) return 'Q'
-    if (value === 13) return 'K'
-    return value.toString()
-  }
-
-  // Get card image path
-  const getCardImagePath = (card: { value: number; suit: string }) => {
-    const valueStr = getValueString(card.value)
-    const suitLetter = getSuitLetter(card.suit)
-    return `/BlackJack/Cards/PNG/${valueStr}${suitLetter}.png`
-  }
-
-  // Determine result type
-  const getResultType = (result: GameResult): 'win' | 'loss' | 'push' | 'blackjack' => {
-    if (result.isBlackjack) return 'blackjack'
-    if (result.payout > BigInt(0)) return 'win'
-    if (result.payout === BigInt(0) && result.playerHand.total === result.dealerHand.total) return 'push'
-    return 'loss'
-  }
-
-  // Calculate win/loss amount
-  const getWinLossAmount = (result: GameResult): bigint => {
-    const betAmount = result.playerHand.betAmount || BigInt(0)
-    return result.payout - betAmount
-  }
+  const showBalance = balanceAtBetByIndex !== null
+  const gridCols = showBalance
+    ? 'grid-cols-[auto_minmax(4rem,1fr)_minmax(4rem,1fr)_minmax(5rem,1fr)_1fr_1fr]'
+    : 'grid-cols-[auto_minmax(4rem,1fr)_minmax(4rem,1fr)_1fr_1fr]'
 
   if (recentHistory.length === 0) {
     return (
-      <div className="w-full max-w-4xl mx-auto px-4 py-6">
-        <div
-          className="rounded-xl p-8 text-center"
-          style={{
-            background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
-          }}
-        >
-          <p className="text-white/50 text-sm">No game history yet. Play some games to see your results!</p>
+      <div className="w-full max-w-5xl mx-auto px-4 py-6 min-w-0">
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <History className="w-5 h-5 text-cyan-400/80" />
+            Recent Games
+          </h2>
+          {reserveBalance !== undefined && (
+            <div className="text-sm text-white/70">
+              Reserve: <span className="font-semibold text-white">{formatMorbius(reserveBalance)} MORBIUS</span>
+            </div>
+          )}
+        </header>
+        <div className={`${PANEL_CLASS} p-8 text-center`}>
+          <p className="text-white/50 text-sm">No games yet. Place a bet to see your history here.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-6">
-      <h2 className="text-2xl font-bold text-white mb-4 text-center">Recent Games</h2>
-      <div className="space-y-2">
-        {recentHistory.map((result, index) => {
+    <div className="w-full max-w-5xl mx-auto px-4 py-6 min-w-0">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <History className="w-5 h-5 text-cyan-400/80" />
+          Recent Games
+        </h2>
+        {reserveBalance !== undefined && (
+          <div className="text-sm text-white/70">
+            Reserve: <span className="font-semibold text-white">{formatMorbius(reserveBalance)} MORBIUS</span>
+          </div>
+        )}
+      </header>
+
+      {/* Table header — visible on larger screens */}
+      <div
+        className={`hidden sm:grid ${gridCols} gap-3 px-4 py-2.5 text-xs font-medium text-white/50 uppercase tracking-wider border-b border-white/10 mb-1`}
+      >
+        <span>Result</span>
+        <span>Bet</span>
+        <span>P/L</span>
+        {showBalance && <span>Balance</span>}
+        <span>Player</span>
+        <span>Dealer</span>
+      </div>
+
+      <div className="space-y-1.5 overflow-x-auto min-w-0">
+        {paginatedHistory.map((result, index) => {
+          const globalIndex = currentPage * PAGE_SIZE + index
           const resultType = getResultType(result)
-          const winLossAmount = getWinLossAmount(result)
-          const betAmount = result.playerHand.betAmount || BigInt(0)
-
-          // Result badge styling
-          const getResultBadgeStyle = () => {
-            switch (resultType) {
-              case 'blackjack':
-                return 'bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-300 border-yellow-400/30'
-              case 'win':
-                return 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-300 border-green-400/30'
-              case 'loss':
-                return 'bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-300 border-red-400/30'
-              case 'push':
-                return 'bg-gradient-to-r from-gray-500/20 to-gray-600/20 text-gray-300 border-gray-400/30'
-            }
-          }
-
-          const getResultText = () => {
-            switch (resultType) {
-              case 'blackjack': return 'BJ'
-              case 'win': return 'WIN'
-              case 'loss': return 'LOSS'
-              case 'push': return 'PUSH'
-            }
-          }
+          const winLoss = getWinLossAmount(result)
+          const betAmount = getTotalBet(result)
+          const hands = result.playerHands?.length ? result.playerHands : [result.playerHand]
+          const wasSplit = result.wasSplit ?? hands.length > 1
+          const wasDouble = result.wasDoubleDown ?? hands.some((h) => (h.actions as any[])?.some((a: any) => a.type === 'double_down'))
+          const config = RESULT_CONFIG[resultType]
+          const isWin = resultType === 'win' || resultType === 'blackjack'
 
           return (
             <div
-              key={result.gameId || index}
-              className="rounded-lg p-3 transition-all hover:scale-[1.02]"
-              style={{
-                background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px inset rgba(60, 60, 60, 0.5)',
-              }}
+              key={result.gameId ?? `qh-${globalIndex}`}
+              className={`${PANEL_CLASS} p-3 sm:px-4 transition-all hover:border-cyan-500/20`}
             >
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-                {/* Left Section: Result Badge and Amounts */}
-                <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-                  {/* Result Badge */}
-                  <div className={`px-3 py-1 rounded-md font-bold text-xs uppercase border ${getResultBadgeStyle()}`}>
-                    {getResultText()}
-                  </div>
-
-                  {/* Bet Amount */}
-                  <div className="flex flex-col items-center min-w-[60px] sm:min-w-[80px]">
-                    <span className="text-white/50 text-xs">Bet</span>
-                    <span className="text-white font-bold text-sm">{formatEther(betAmount)}</span>
-                  </div>
-
-                  {/* Win/Loss Amount */}
-                  <div className="flex flex-col items-center min-w-[60px] sm:min-w-[80px]">
-                    <span className="text-white/50 text-xs">
-                      {resultType === 'win' || resultType === 'blackjack' ? 'Won' : resultType === 'push' ? 'Returned' : 'Lost'}
+              <div className={`grid ${gridCols} gap-3 sm:gap-4 items-center text-left`}>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${config.className}`}>
+                    {config.label}
+                  </span>
+                  {wasSplit && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                      SPLIT
                     </span>
-                    <span
-                      className={`font-bold text-sm ${
-                        resultType === 'win' || resultType === 'blackjack'
-                          ? 'text-green-400'
-                          : resultType === 'loss'
-                          ? 'text-red-400'
-                          : 'text-gray-400'
-                      }`}
-                    >
-                      {resultType === 'loss' ? '-' : '+'}
-                      {formatEther(winLossAmount < BigInt(0) ? -winLossAmount : winLossAmount)}
+                  )}
+                  {wasDouble && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      2×
                     </span>
-                  </div>
+                  )}
                 </div>
 
-                {/* Right Section: Cards */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 flex-1 min-w-0">
-                  {/* Player Cards */}
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span className="text-white/50 text-xs mr-1 sm:mr-2 flex-shrink-0">Player:</span>
-                    <div className="flex gap-0.5 flex-1 min-w-0">
-                      {result.playerHand.cards.map((card, cardIndex) => (
-                        <div
-                          key={`player-${cardIndex}`}
-                          className="w-6 h-8 sm:w-8 sm:h-11 rounded-sm overflow-hidden flex-shrink-0"
-                          style={{
-                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
-                          }}
-                        >
-                          <Image
-                            src={getCardImagePath(card)}
-                            alt={`${getValueString(card.value)} of ${card.suit}`}
-                            width={32}
-                            height={44}
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <span className="text-white/70 text-xs ml-1 sm:ml-2 font-bold flex-shrink-0">{result.playerHand.total}</span>
-                  </div>
+                <div className="min-w-0">
+                  <span className="text-white/60 text-xs sm:hidden">Bet </span>
+                  <span className="text-white font-semibold text-sm">{formatEther(betAmount)}</span>
+                </div>
 
-                  {/* Dealer Cards */}
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span className="text-white/50 text-xs mr-1 sm:mr-2 flex-shrink-0">Dealer:</span>
-                    <div className="flex gap-0.5 flex-1 min-w-0">
-                      {result.dealerHand.cards.map((card, cardIndex) => (
-                        <div
-                          key={`dealer-${cardIndex}`}
-                          className="w-6 h-8 sm:w-8 sm:h-11 rounded-sm overflow-hidden flex-shrink-0"
-                          style={{
-                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
-                          }}
-                        >
-                          <Image
-                            src={getCardImagePath(card)}
-                            alt={`${getValueString(card.value)} of ${card.suit}`}
-                            width={32}
-                            height={44}
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <span className="text-white/70 text-xs ml-1 sm:ml-2 font-bold flex-shrink-0">{result.dealerHand.total}</span>
+                <div className="min-w-0">
+                  <span className="text-white/60 text-xs sm:hidden">
+                    {isWin ? 'Won ' : resultType === 'push' ? 'Returned ' : 'Lost '}
+                  </span>
+                  <span
+                    className={`font-semibold text-sm ${
+                      isWin ? 'text-emerald-400' : resultType === 'loss' ? 'text-red-400' : 'text-slate-400'
+                    }`}
+                  >
+                    {resultType === 'loss' ? '−' : '+'}
+                    {formatEther(winLoss < BigInt(0) ? -winLoss : winLoss)}
+                  </span>
+                </div>
+
+                {showBalance && (
+                  <div className="min-w-0">
+                    <span className="text-white/60 text-xs sm:hidden">Balance </span>
+                    <span className="text-white font-semibold text-sm">{formatMorbius(balanceAtBetByIndex![globalIndex])} M</span>
                   </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                  {hands.map((hand, handIdx) => (
+                    <div key={handIdx} className="flex items-center gap-1">
+                      {hands.length > 1 && <span className="text-white/40 text-[10px]">H{handIdx + 1}</span>}
+                      {handIdx > 0 && <span className="text-white/30">|</span>}
+                      <div className="flex -space-x-1">
+                        {hand.cards.map((card, ci) => (
+                          <div
+                            key={`p-${handIdx}-${ci}`}
+                            className="w-7 h-9 sm:w-8 sm:h-11 rounded overflow-hidden flex-shrink-0 shadow-md ring-1 ring-black/20"
+                          >
+                            <Image
+                              src={cardImagePath(card)}
+                              alt={`${cardValueStr(card.value)} ${card.suit}`}
+                              width={32}
+                              height={44}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <span className="text-white/90 font-bold text-sm ml-0.5">{hand.total}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-white/50 text-[10px] sm:text-xs flex-shrink-0">vs</span>
+                  <div className="flex -space-x-1 min-w-0">
+                    {result.dealerHand.cards.map((card, ci) => (
+                      <div
+                        key={`d-${ci}`}
+                        className="w-7 h-9 sm:w-8 sm:h-11 rounded overflow-hidden flex-shrink-0 shadow-md ring-1 ring-black/20"
+                      >
+                        <Image
+                          src={cardImagePath(card)}
+                          alt={`${cardValueStr(card.value)} ${card.suit}`}
+                          width={32}
+                          height={44}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-white/90 font-bold text-sm ml-0.5">{result.dealerHand.total}</span>
                 </div>
               </div>
             </div>
           )
         })}
       </div>
+
+      {totalPages > 1 && (
+        <div className={`mt-4 flex items-center justify-center gap-3 ${PANEL_CLASS} p-3`}>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={currentPage === 0}
+            className="p-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-cyan-500/20 transition-colors"
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm text-white/80 tabular-nums">
+            {currentPage + 1} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={currentPage >= totalPages - 1}
+            className="p-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-cyan-500/20 transition-colors"
+            aria-label="Next page"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
-
-export default QuickHistory

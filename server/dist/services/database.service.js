@@ -5,13 +5,23 @@ const pg_1 = require("pg");
 const logger_1 = require("../utils/logger");
 class DatabaseService {
     pool;
+    /**
+     * Get the underlying connection pool (for use by other services)
+     */
+    getPool() {
+        return this.pool;
+    }
     constructor() {
+        // Neon PostgreSQL requires SSL, so enable it for all environments
+        const sslConfig = process.env.DATABASE_URL?.includes('neon.tech')
+            ? { rejectUnauthorized: false }
+            : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false);
         this.pool = new pg_1.Pool({
             connectionString: process.env.DATABASE_URL,
-            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+            ssl: sslConfig,
             max: 20,
             idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 2000,
+            connectionTimeoutMillis: 10000, // Increased from 2000ms to 10 seconds for Neon connections
         });
         this.pool.on('error', (err) => {
             logger_1.logger.error('Unexpected error on idle client', err);
@@ -142,8 +152,13 @@ class DatabaseService {
         await this.pool.end();
         logger_1.logger.info('Database disconnected');
     }
+    // Helper to normalize Ethereum addresses to lowercase
+    normalizeAddress(address) {
+        return address?.toLowerCase() || address;
+    }
     // Player operations
     async getOrCreatePlayer(walletAddress) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
         const query = `
       INSERT INTO players (wallet_address)
       VALUES ($1)
@@ -151,7 +166,7 @@ class DatabaseService {
       DO UPDATE SET last_seen = NOW()
       RETURNING *
     `;
-        const result = await this.pool.query(query, [walletAddress]);
+        const result = await this.pool.query(query, [normalizedAddress]);
         return this.normalizePlayer(result.rows[0]);
     }
     async updatePlayerLastSeen(playerId) {
@@ -160,25 +175,27 @@ class DatabaseService {
     }
     // Off-chain balance operations
     async getPlayerBalance(walletAddress) {
-        const query = `SELECT balance FROM players WHERE wallet_address = $1`;
-        const result = await this.pool.query(query, [walletAddress]);
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const query = `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`;
+        const result = await this.pool.query(query, [normalizedAddress]);
         if (result.rows.length === 0) {
             return 0n;
         }
         return BigInt(result.rows[0].balance || '0');
     }
     async updatePlayerBalance(walletAddress, amount, operation) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
         let query;
         if (operation === 'set') {
-            query = `UPDATE players SET balance = $2::NUMERIC WHERE wallet_address = $1 RETURNING balance`;
+            query = `UPDATE players SET balance = $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1) RETURNING balance`;
         }
         else if (operation === 'add') {
-            query = `UPDATE players SET balance = balance + $2::NUMERIC WHERE wallet_address = $1 RETURNING balance`;
+            query = `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1) RETURNING balance`;
         }
         else {
-            query = `UPDATE players SET balance = balance - $2::NUMERIC WHERE wallet_address = $1 RETURNING balance`;
+            query = `UPDATE players SET balance = balance - $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1) RETURNING balance`;
         }
-        const result = await this.pool.query(query, [walletAddress, amount.toString()]);
+        const result = await this.pool.query(query, [normalizedAddress, amount.toString()]);
         if (result.rows.length === 0) {
             throw new Error(`Player not found: ${walletAddress}`);
         }
@@ -196,16 +213,19 @@ class DatabaseService {
         return await this.updatePlayerBalance(walletAddress, amount, 'add');
     }
     async syncPlayerBalanceWithContract(walletAddress, contractBalance) {
-        await this.updatePlayerBalance(walletAddress, contractBalance, 'set');
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        await this.updatePlayerBalance(normalizedAddress, contractBalance, 'set');
     }
     async getPlayerStats(walletAddress) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
         const query = `SELECT * FROM get_player_stats($1)`;
-        const result = await this.pool.query(query, [walletAddress]);
+        const result = await this.pool.query(query, [normalizedAddress]);
         return this.normalizePlayerStats(result.rows[0] || {});
     }
     async getPlayerStatsEnhanced(walletAddress) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
         const query = `SELECT * FROM get_player_stats_enhanced($1)`;
-        const result = await this.pool.query(query, [walletAddress]);
+        const result = await this.pool.query(query, [normalizedAddress]);
         return this.normalizeEnhancedPlayerStats(result.rows[0] || {});
     }
     async getGlobalAnalytics() {
@@ -214,17 +234,26 @@ class DatabaseService {
         return this.normalizeGlobalAnalytics(result.rows[0] || {});
     }
     async getPlayerGames(walletAddress, limit = 50, offset = 0) {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:getPlayerGames:entry', message: 'getPlayerGames called', data: { walletAddress: walletAddress?.slice(0, 12) + '…', limit, offset }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H1' }) }).catch(() => { });
+        // #endregion
+        const normalizedAddress = this.normalizeAddress(walletAddress);
         const query = `
       SELECT g.*, gs.player_id
       FROM games g
       JOIN game_sessions gs ON g.session_id = gs.id
       JOIN players p ON gs.player_id = p.id
-      WHERE p.wallet_address = $1
+      WHERE LOWER(p.wallet_address) = LOWER($1)
       ORDER BY g.created_at DESC
       LIMIT $2 OFFSET $3
     `;
-        const result = await this.pool.query(query, [walletAddress, limit, offset]);
-        return result.rows.map((r) => this.normalizeGame(r));
+        const result = await this.pool.query(query, [normalizedAddress, limit, offset]);
+        const games = result.rows.map((r) => this.normalizeGame(r));
+        // #region agent log
+        const completedCount = games.filter((g) => g.result && g.result !== 'ongoing').length;
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:getPlayerGames:exit', message: 'getPlayerGames result', data: { totalGames: games.length, completedCount, sampleGameIds: games.slice(0, 3).map((g) => g.id), sampleResults: games.slice(0, 3).map((g) => g.result) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H1' }) }).catch(() => { });
+        // #endregion
+        return games;
     }
     // Game session operations
     async createGameSession(playerId, serverSeed, serverSeedHash) {
@@ -433,13 +462,20 @@ class DatabaseService {
         await this.pool.query(query, values);
     }
     async getGameHands(gameId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:getGameHands:entry', message: 'getGameHands called', data: { gameId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' }) }).catch(() => { });
+        // #endregion
         const query = `
       SELECT * FROM game_hands
       WHERE game_id = $1
       ORDER BY hand_index ASC
     `;
         const result = await this.pool.query(query, [gameId]);
-        return result.rows.map((r) => this.normalizeGameHand(r));
+        const hands = result.rows.map((r) => this.normalizeGameHand(r));
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:getGameHands:exit', message: 'getGameHands result', data: { gameId, handsCount: hands.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' }) }).catch(() => { });
+        // #endregion
+        return hands;
     }
     async updateGame(gameId, updates) {
         // #region agent log
@@ -576,6 +612,92 @@ class DatabaseService {
         const result = await this.pool.query(query);
         return result.rows[0].cleanup_old_connections;
     }
+    // Chat (main + per-game rooms)
+    async insertChatMessage(roomId, senderAddress, text) {
+        const query = `
+      INSERT INTO chat_messages (room_id, sender_address, text)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `;
+        const result = await this.pool.query(query, [
+            roomId,
+            senderAddress ? this.normalizeAddress(senderAddress) : null,
+            text
+        ]);
+        const row = result.rows[0];
+        return {
+            id: row.id,
+            room_id: row.room_id,
+            sender_address: row.sender_address,
+            text: row.text,
+            created_at: row.created_at
+        };
+    }
+    async getRecentChatMessages(roomId, limit = 50) {
+        const query = `
+      SELECT id, room_id, sender_address, text, created_at
+      FROM chat_messages
+      WHERE room_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2
+    `;
+        const result = await this.pool.query(query, [roomId, limit]);
+        return result.rows.map((row) => ({
+            id: row.id,
+            room_id: row.room_id,
+            sender_address: row.sender_address,
+            text: row.text,
+            created_at: row.created_at
+        })).reverse(); // chronological order for display
+    }
+    /** Messages older than the message with id beforeId, in chronological order (oldest first). */
+    async getChatMessagesBefore(roomId, beforeId, limit = 50) {
+        const query = `
+      SELECT id, room_id, sender_address, text, created_at
+      FROM chat_messages
+      WHERE room_id = $1
+        AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2 LIMIT 1)
+      ORDER BY created_at DESC
+      LIMIT $3
+    `;
+        const result = await this.pool.query(query, [roomId, beforeId, limit]);
+        return result.rows.map((row) => ({
+            id: row.id,
+            room_id: row.room_id,
+            sender_address: row.sender_address,
+            text: row.text,
+            created_at: row.created_at
+        })).reverse(); // chronological order for display
+    }
+    // Chat display names (editable per wallet)
+    async getDisplayName(walletAddress) {
+        const normalized = this.normalizeAddress(walletAddress);
+        const query = `SELECT display_name FROM chat_display_names WHERE wallet_address = $1`;
+        const result = await this.pool.query(query, [normalized]);
+        return result.rows[0]?.display_name ?? null;
+    }
+    async setDisplayName(walletAddress, displayName) {
+        const normalized = this.normalizeAddress(walletAddress);
+        const query = `
+      INSERT INTO chat_display_names (wallet_address, display_name)
+      VALUES ($1, $2)
+      ON CONFLICT (wallet_address)
+      DO UPDATE SET display_name = $2, updated_at = NOW()
+    `;
+        await this.pool.query(query, [normalized, displayName]);
+    }
+    async getDisplayNames(walletAddresses) {
+        if (walletAddresses.length === 0)
+            return new Map();
+        const normalized = [...new Set(walletAddresses.map(a => this.normalizeAddress(a)))];
+        const query = `SELECT wallet_address, display_name FROM chat_display_names WHERE wallet_address = ANY($1)`;
+        const result = await this.pool.query(query, [normalized]);
+        const map = new Map();
+        for (const row of result.rows) {
+            map.set(row.wallet_address, row.display_name);
+        }
+        return map;
+    }
     // Utility methods
     async withTransaction(callback) {
         const client = await this.pool.connect();
@@ -592,6 +714,93 @@ class DatabaseService {
         finally {
             client.release();
         }
+    }
+    // ============================================
+    // Self-Exclusion / Responsible Gaming Methods
+    // ============================================
+    async checkExclusionStatus(walletAddress) {
+        const normalized = this.normalizeAddress(walletAddress);
+        // First, cleanup any expired timeouts
+        await this.pool.query(`SELECT cleanup_expired_exclusions()`);
+        const query = `
+      SELECT
+        exclusion_type,
+        expires_at,
+        duration_label,
+        created_at
+      FROM player_exclusions
+      WHERE wallet_address = $1
+        AND is_active = TRUE
+        AND (expires_at IS NULL OR expires_at > NOW())
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+        const result = await this.pool.query(query, [normalized]);
+        if (result.rows.length === 0) {
+            return {
+                isExcluded: false,
+                exclusionType: null,
+                expiresAt: null,
+                durationLabel: null,
+                createdAt: null
+            };
+        }
+        const row = result.rows[0];
+        return {
+            isExcluded: true,
+            exclusionType: row.exclusion_type,
+            expiresAt: row.expires_at ? new Date(row.expires_at) : null,
+            durationLabel: row.duration_label,
+            createdAt: new Date(row.created_at)
+        };
+    }
+    async setExclusion(walletAddress, exclusionType, durationLabel, expiresAt, reason) {
+        const normalized = this.normalizeAddress(walletAddress);
+        // Get or create player
+        const player = await this.getOrCreatePlayer(walletAddress);
+        // Deactivate any existing active exclusions first
+        await this.pool.query(`UPDATE player_exclusions
+       SET is_active = FALSE,
+           deactivated_at = NOW(),
+           deactivated_reason = 'Replaced by new exclusion'
+       WHERE wallet_address = $1 AND is_active = TRUE`, [normalized]);
+        // Insert new exclusion
+        const query = `
+      INSERT INTO player_exclusions (
+        player_id, wallet_address, exclusion_type, expires_at, reason, duration_label
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+    `;
+        await this.pool.query(query, [
+            player.id,
+            normalized,
+            exclusionType,
+            expiresAt,
+            reason || null,
+            durationLabel
+        ]);
+    }
+    async getExclusionHistory(walletAddress) {
+        const normalized = this.normalizeAddress(walletAddress);
+        const query = `
+      SELECT
+        id, exclusion_type, duration_label, expires_at,
+        created_at, is_active, deactivated_at, deactivated_reason
+      FROM player_exclusions
+      WHERE wallet_address = $1
+      ORDER BY created_at DESC
+      LIMIT 20
+    `;
+        const result = await this.pool.query(query, [normalized]);
+        return result.rows.map((row) => ({
+            id: row.id,
+            exclusionType: row.exclusion_type,
+            durationLabel: row.duration_label,
+            expiresAt: row.expires_at ? new Date(row.expires_at) : null,
+            createdAt: new Date(row.created_at),
+            isActive: row.is_active,
+            deactivatedAt: row.deactivated_at ? new Date(row.deactivated_at) : null,
+            deactivatedReason: row.deactivated_reason
+        }));
     }
 }
 exports.DatabaseService = DatabaseService;

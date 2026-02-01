@@ -32,7 +32,7 @@ export function GamesSection() {
         viewport={{ once: true, margin: "-100px" }}
         variants={fadeInUp}
       >
-        <h2 className="text-4xl md:text-5xl font-russo-one font-normal text-white">
+        <h2 className="text-4xl md:text-5xl font-russo-one font-normal text-cyan-500/80">
           Games
         </h2>
       </motion.div>

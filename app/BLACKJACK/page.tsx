@@ -20,9 +20,17 @@ import { ContractAddress } from '@/components/ui/contract-address';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
 import QuickHistory from '@/components/BLACKJACK/QuickHistory';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
-import { ANIMATION_TIMINGS } from './constants';
+import { useTournament, TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
+import {
+  TournamentEntry,
+  TournamentHUD,
+  TournamentLeaderboard,
+  TournamentComplete,
+  TournamentBetPanel,
+} from '@/components/BLACKJACK/Tournament';
+import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
-import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
+import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
@@ -202,8 +210,61 @@ export default function BlackjackPage() {
   const [clientSeed, setClientSeed] = useState('');
   const [showProvablyFairAdvanced, setShowProvablyFairAdvanced] = useState(false);
 
-  // Background preference state
-  const [useVideoBackground, setUseVideoBackground] = useState(true);
+  // Background preference state (persisted per wallet)
+  const [theme, setTheme] = useState<BlackjackThemeKind>('video');
+  const [imageSource, setImageSource] = useState<BlackjackImageId>(BLACKJACK_IMAGE_BACKGROUNDS[0].id);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [videoSource, setVideoSource] = useState<BlackjackVideoId>('glowingTable');
+  const [videoSyncToClock, setVideoSyncToClock] = useState(true);
+  const [videoPosition, setVideoPosition] = useState(50); // 0-100, used when sync to clock is off
+
+  const useVideoBackground = theme === 'video';
+
+  const TABLE_PREFS_KEY = 'morb_blackjack_table';
+  const validImageIds = useMemo(() => new Set(BLACKJACK_IMAGE_BACKGROUNDS.map((x) => x.id)), []);
+  const validVideoIds = useMemo(() => new Set(BLACKJACK_VIDEO_BACKGROUNDS.map((x) => x.id)), []);
+
+  // Load table background preference for this wallet
+  useEffect(() => {
+    if (!address || typeof window === 'undefined') return;
+    const key = `${TABLE_PREFS_KEY}_${address.toLowerCase()}`;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const prefs = JSON.parse(raw) as { theme?: string; imageSource?: string; videoSource?: string };
+      if (prefs.theme === 'image' || prefs.theme === 'video') setTheme(prefs.theme);
+      if (prefs.imageSource && validImageIds.has(prefs.imageSource as BlackjackImageId)) {
+        setImageSource(prefs.imageSource as BlackjackImageId);
+      }
+      if (prefs.videoSource && validVideoIds.has(prefs.videoSource as BlackjackVideoId)) {
+        setVideoSource(prefs.videoSource as BlackjackVideoId);
+      }
+    } catch {
+      // ignore invalid stored prefs
+    }
+  }, [address, validImageIds, validVideoIds]);
+
+  // Persist table background preference when it changes
+  useEffect(() => {
+    if (!address || typeof window === 'undefined') return;
+    const key = `${TABLE_PREFS_KEY}_${address.toLowerCase()}`;
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify({ theme, imageSource, videoSource })
+      );
+    } catch {
+      // ignore quota / private mode
+    }
+  }, [address, theme, imageSource, videoSource]);
+
+  const handleVideoSourceChange = useCallback((id: BlackjackVideoId) => {
+    setVideoSource(id);
+    toast.info('Video background updated.');
+  }, []);
+
+  // Splash screen dismissal state
+  const [splashDismissed, setSplashDismissed] = useState(false);
 
   // Generate random client seed
   const generateClientSeed = () => {
@@ -219,7 +280,8 @@ export default function BlackjackPage() {
     deposit,
     depositMORBIUS,
     withdraw,
-    playerReserve
+    playerReserve,
+    refetchPlayerReserve
   } = useBlackjackContract();
 
   // Off-chain balance state (like Stake.com)
@@ -240,8 +302,25 @@ export default function BlackjackPage() {
       // Clearing all chips
       setChipStack([]);
     } else if (chipValue) {
-      // Adding a chip to the stack
-      setChipStack(prev => [...prev, chipValue]);
+      // Check if adding this chip would exceed MAX_BET
+      setChipStack(prev => {
+        const currentTotal = prev.reduce((sum, chip) => sum + chip, 0);
+        const newTotal = currentTotal + chipValue;
+        // Convert to wei: chip values are in MORBIUS, need to add 18 decimals
+        const newTotalWei = BigInt(newTotal.toString() + '0'.repeat(18));
+        
+        if (newTotalWei > BET_LIMITS.MAX_BET) {
+          const currentTotalWei = BigInt(currentTotal.toString() + '0'.repeat(18));
+          const currentMorbius = Number(formatEther(currentTotalWei));
+          toast.error('Bet limit exceeded', {
+            description: `Maximum bet is 100,000 MORBIUS. Current bet: ${currentMorbius.toFixed(0)} MORBIUS`
+          });
+          return prev; // Don't add the chip
+        }
+        
+        // Adding a chip to the stack
+        return [...prev, chipValue];
+      });
     }
   }, []);
 
@@ -253,11 +332,20 @@ export default function BlackjackPage() {
   const handleRebet = useCallback(() => {
     const lastBet = parseFloat(lastBetAmount);
     if (lastBet > 0) {
+      // Check if rebet would exceed MAX_BET
+      const lastBetWei = BigInt(lastBet.toString() + '0'.repeat(18));
+      if (lastBetWei > BET_LIMITS.MAX_BET) {
+        toast.error('Bet limit exceeded', {
+          description: `Maximum bet is 100,000 MORBIUS. Cannot rebet ${lastBet} MORBIUS`
+        });
+        return;
+      }
+      
       // Convert lastBetAmount to chip stack
       // Use optimal chip breakdown
       const chips: number[] = [];
       let remaining = lastBet;
-      const chipValues = [1000, 100, 25, 10, 5];
+      const chipValues = [100000, 10000, 2500, 1000, 500];
       for (const chipValue of chipValues) {
         while (remaining >= chipValue) {
           chips.push(chipValue);
@@ -276,7 +364,7 @@ export default function BlackjackPage() {
         // Rebuild chip stack for half amount
         const chips: number[] = [];
         let remaining = halfAmount;
-        const chipValues = [1000, 100, 25, 10, 5];
+        const chipValues = [100000, 10000, 2500, 1000, 500];
         for (const chipValue of chipValues) {
           while (remaining >= chipValue) {
             chips.push(chipValue);
@@ -294,10 +382,21 @@ export default function BlackjackPage() {
   const handleDoubleBet = useCallback(() => {
     if (totalBetAmount > 0) {
       const doubleAmount = totalBetAmount * 2;
+      const doubleAmountWei = BigInt(doubleAmount.toString() + '0'.repeat(18));
+      
+      // Check if doubling would exceed MAX_BET
+      if (doubleAmountWei > BET_LIMITS.MAX_BET) {
+        const currentMorbius = Number(formatEther(BigInt(totalBetAmount.toString() + '0'.repeat(18))));
+        toast.error('Bet limit exceeded', {
+          description: `Maximum bet is 100,000 MORBIUS. Cannot double bet of ${currentMorbius.toFixed(0)} MORBIUS`
+        });
+        return;
+      }
+      
       // Rebuild chip stack for double amount
       const chips: number[] = [];
       let remaining = doubleAmount;
-      const chipValues = [1000, 100, 25, 10, 5];
+      const chipValues = [100000, 10000, 2500, 1000, 500];
       for (const chipValue of chipValues) {
         while (remaining >= chipValue) {
           chips.push(chipValue);
@@ -322,12 +421,42 @@ export default function BlackjackPage() {
 
   // Double down chips: duplicate the current chip stack
   const handleDoubleDownChips = useCallback(() => {
-    setChipStack(prev => [...prev, ...prev]);
+    setChipStack(prev => {
+      const currentTotal = prev.reduce((sum, chip) => sum + chip, 0);
+      const doubleAmount = currentTotal * 2;
+      const doubleAmountWei = BigInt(doubleAmount.toString() + '0'.repeat(18));
+      
+      // Check if doubling would exceed MAX_BET
+      if (doubleAmountWei > BET_LIMITS.MAX_BET) {
+        const currentMorbius = Number(formatEther(BigInt(currentTotal.toString() + '0'.repeat(18))));
+        toast.error('Bet limit exceeded', {
+          description: `Maximum bet is 100,000 MORBIUS. Cannot double down bet of ${currentMorbius.toFixed(0)} MORBIUS`
+        });
+        return prev; // Don't double
+      }
+      
+      return [...prev, ...prev];
+    });
   }, []);
 
   // Split chips: duplicate the chip stack for the second hand
   const handleSplitChips = useCallback(() => {
-    setChipStack(prev => [...prev, ...prev]);
+    setChipStack(prev => {
+      const currentTotal = prev.reduce((sum, chip) => sum + chip, 0);
+      const doubleAmount = currentTotal * 2;
+      const doubleAmountWei = BigInt(doubleAmount.toString() + '0'.repeat(18));
+      
+      // Check if splitting would exceed MAX_BET
+      if (doubleAmountWei > BET_LIMITS.MAX_BET) {
+        const currentMorbius = Number(formatEther(BigInt(currentTotal.toString() + '0'.repeat(18))));
+        toast.error('Bet limit exceeded', {
+          description: `Maximum bet is 100,000 MORBIUS. Cannot split bet of ${currentMorbius.toFixed(0)} MORBIUS`
+        });
+        return prev; // Don't split
+      }
+      
+      return [...prev, ...prev];
+    });
   }, []);
 
   // Game state
@@ -349,6 +478,27 @@ export default function BlackjackPage() {
   // WebSocket client (declare before fetchBalance/syncBalance)
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+
+  // Tournament mode state
+  const [isTournamentMode, setIsTournamentMode] = useState(false);
+  const [showTournamentEntry, setShowTournamentEntry] = useState(false);
+  const [showTournamentComplete, setShowTournamentComplete] = useState(false);
+
+  // Tournament hook
+  const tournament = useTournament({
+    wsClient,
+    onBusted: () => {
+      setShowTournamentComplete(true);
+      toast.error('Tournament Busted! Your chips ran out.');
+    },
+    onCompleted: (finalChips, rank) => {
+      setShowTournamentComplete(true);
+      toast.success(`Tournament Complete! Final rank: #${rank}`);
+    },
+    onLeaderboardUpdate: (leaderboard) => {
+      console.log('Leaderboard updated:', leaderboard);
+    },
+  });
 
   // Real-time P&L chart (Stake-style break-even line)
   const chartRef = useRef<BlackjackRealTimeBetChartRef>(null);
@@ -389,10 +539,15 @@ export default function BlackjackPage() {
       const balanceBigInt = BigInt(balance);
       setOffChainBalance(balanceBigInt);
       setGameState(prev => ({ ...prev, balance: balanceBigInt }));
+      
+      // Also refetch contract reserve to ensure it's in sync
+      if (refetchPlayerReserve) {
+        await refetchPlayerReserve();
+      }
     } catch (error) {
       console.error('Failed to sync balance:', error);
     }
-  }, [wsClient, wsConnected]);
+  }, [wsClient, wsConnected, refetchPlayerReserve]);
 
   // Win notification state
   const [showWinNotification, setShowWinNotification] = useState(false);
@@ -415,44 +570,55 @@ export default function BlackjackPage() {
   // View state
   const [currentView, setCurrentView] = useState<'game' | 'history' | 'stats' | 'analytics' | 'verify'>('game');
 
+  const isDeployer = Boolean(
+    address && BLACKJACK_DEPLOYER_WALLET && address.toLowerCase() === BLACKJACK_DEPLOYER_WALLET
+  );
+
+  // If non-deployer has analytics view open (e.g. from before), switch to game
+  useEffect(() => {
+    if (currentView === 'analytics' && !isDeployer) {
+      setCurrentView('game');
+    }
+  }, [currentView, isDeployer]);
+
   // Fetch real analytics data
-  const { data: playerStatsData, isLoading: playerStatsLoading, refetch: refetchPlayerStats } = usePlayerStatsEnhanced();
-  const { data: globalAnalyticsData, isLoading: globalAnalyticsLoading, refetch: refetchGlobalAnalytics } = useGlobalAnalytics();
+  const { data: playerStatsData, isLoading: playerStatsLoading, refetch: refetchPlayerStats, error: playerStatsError } = usePlayerStatsEnhanced();
+  const { data: globalAnalyticsData, isLoading: globalAnalyticsLoading, refetch: refetchGlobalAnalytics, error: globalAnalyticsError } = useGlobalAnalytics();
   
   // Fetch player game history from database
   const { data: playerGamesData, isLoading: playerGamesLoading } = usePlayerGames(50, 0);
 
   // Transform player stats data to match component interface
   const playerStats = playerStatsData ? {
-    totalGames: playerStatsData.total_games || 0,
+    totalGames: Number(playerStatsData.total_games) || 0,
     totalBet: playerStatsData.total_bet || BigInt(0),
     totalWin: playerStatsData.total_win || BigInt(0),
     winRate: Number(playerStatsData.win_rate) || 0,
-    blackjackCount: playerStatsData.blackjack_count || 0,
-    currentStreak: playerStatsData.current_streak || 0,
-    bestStreak: playerStatsData.best_streak || 0,
+    blackjackCount: Number(playerStatsData.blackjack_count) || 0,
+    currentStreak: Number(playerStatsData.current_streak) || 0,
+    bestStreak: Number(playerStatsData.best_streak) || 0,
     biggestWin: playerStatsData.biggest_win || BigInt(0),
     biggestLoss: playerStatsData.biggest_loss || BigInt(0),
     averageBet: Number(playerStatsData.average_bet) || 0,
     averagePayout: Number(playerStatsData.average_payout) || 0,
-    profitLoss: Number(playerStatsData.profit_loss) || 0,
+    profitLoss: Number(formatEther(playerStatsData.profit_loss || BigInt(0))),
     roi: Number(playerStatsData.roi) || 0,
-    gamesToday: playerStatsData.games_today || 0,
-    gamesThisWeek: playerStatsData.games_this_week || 0,
-    favoriteBetAmount: Number(playerStatsData.favorite_bet_amount) || 0,
+    gamesToday: Number(playerStatsData.games_today) || 0,
+    gamesThisWeek: Number(playerStatsData.games_this_week) || 0,
+    favoriteBetAmount: Number(formatEther(playerStatsData.favorite_bet_amount || BigInt(0))),
     lastGameTimestamp: playerStatsData.last_game_timestamp ? new Date(playerStatsData.last_game_timestamp).getTime() : undefined
   } : null;
 
   // Transform global analytics data to match component interface
   const globalAnalytics = globalAnalyticsData ? {
-    totalPlayers: globalAnalyticsData.total_players || 0,
-    activePlayers: globalAnalyticsData.active_players || 0,
-    totalGamesPlayed: globalAnalyticsData.total_games_played || 0,
+    totalPlayers: Number(globalAnalyticsData.total_players) || 0,
+    activePlayers: Number(globalAnalyticsData.active_players) || 0,
+    totalGamesPlayed: Number(globalAnalyticsData.total_games_played) || 0,
     totalVolume: globalAnalyticsData.total_volume || BigInt(0),
     totalPayouts: globalAnalyticsData.total_payouts || BigInt(0),
     houseProfit: globalAnalyticsData.house_profit || BigInt(0),
-    gamesLastHour: globalAnalyticsData.games_last_hour || 0,
-    gamesLast24Hours: globalAnalyticsData.games_last_24_hours || 0,
+    gamesLastHour: Number(globalAnalyticsData.games_last_hour) || 0,
+    gamesLast24Hours: Number(globalAnalyticsData.games_last_24_hours) || 0,
     volumeLast24Hours: globalAnalyticsData.volume_last_24_hours || BigInt(0),
     profitLast24Hours: globalAnalyticsData.profit_last_24_hours || BigInt(0),
     averageWinRate: Number(globalAnalyticsData.average_win_rate) || 0,
@@ -462,20 +628,36 @@ export default function BlackjackPage() {
     serverUptime: 0, // Not available from database
     averageResponseTime: 0, // Not available from database
     errorRate: 0, // Not available from database
-    activeConnections: globalAnalyticsData.active_connections || 0,
+    activeConnections: Number(globalAnalyticsData.active_connections) || 0,
     blackjackRate: Number(globalAnalyticsData.blackjack_rate) || 0,
     splitRate: Number(globalAnalyticsData.split_rate) || 0,
     doubleDownRate: Number(globalAnalyticsData.double_down_rate) || 0,
     surrenderRate: Number(globalAnalyticsData.surrender_rate) || 0,
     reserveBalance: playerReserve || BigInt(0), // From contract
-    pendingSettlements: globalAnalyticsData.pending_settlements || 0,
-    failedSettlements: globalAnalyticsData.failed_settlements || 0,
+    pendingSettlements: Number(globalAnalyticsData.pending_settlements) || 0,
+    failedSettlements: Number(globalAnalyticsData.failed_settlements) || 0,
     averageSettlementTime: 0, // Not available from database yet
     highRollerCount: 0, // Not available from database yet
     suspiciousActivity: 0, // Not available from database yet
     largestBet: globalAnalyticsData.largest_bet || BigInt(0),
     largestPayout: globalAnalyticsData.largest_payout || BigInt(0)
   } : null;
+
+  // Debug: Log errors and data (moved after variable declarations)
+  useEffect(() => {
+    if (playerStatsError) {
+      console.error('Player stats error:', playerStatsError);
+    }
+    if (globalAnalyticsError) {
+      console.error('Global analytics error:', globalAnalyticsError);
+    }
+    if (globalAnalyticsData) {
+      console.log('Global analytics data received:', globalAnalyticsData);
+    }
+    if (globalAnalytics) {
+      console.log('Global analytics transformed:', globalAnalytics);
+    }
+  }, [playerStatsError, globalAnalyticsError, globalAnalyticsData, globalAnalytics]);
 
   // Approval modal state - needed for depositing MORBIUS directly
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -501,14 +683,71 @@ export default function BlackjackPage() {
     approve(amount);
   }, [approve]);
 
+  // Watch for deposit/withdrawal events to update balance immediately
+  // Callbacks must be wrapped in useCallback to maintain hook order
+  const handleDepositEvent = useCallback((player: string, morbiusAmount: bigint, plsAmount: bigint) => {
+    if (player.toLowerCase() === address?.toLowerCase()) {
+      console.log('Deposit event detected, syncing balance...', { player, morbiusAmount });
+      // Immediately sync balance after deposit
+      syncBalance();
+    }
+  }, [address, syncBalance]);
+
+  const handleDepositMORBIUSEvent = useCallback((player: string, amount: bigint) => {
+    if (player.toLowerCase() === address?.toLowerCase()) {
+      console.log('MORBIUS deposit event detected, syncing balance...', { player, amount });
+      // Immediately sync balance after deposit
+      syncBalance();
+    }
+  }, [address, syncBalance]);
+
+  const handleWithdrawalEvent = useCallback((player: string, amount: bigint) => {
+    if (player.toLowerCase() === address?.toLowerCase()) {
+      console.log('Withdrawal event detected, syncing balance...', { player, amount });
+      // Immediately sync balance after withdrawal
+      syncBalance();
+    }
+  }, [address, syncBalance]);
+
+  // Listen for deposit events (PLS deposits)
+  useWatchDeposits(handleDepositEvent);
+
+  // Listen for MORBIUS deposit events
+  useWatchDepositsMORBIUS(handleDepositMORBIUSEvent);
+
+  // Listen for withdrawal events
+  useWatchWithdrawals(handleWithdrawalEvent);
+
 
   // Initialize WebSocket connection
+  // Track the address the current WebSocket is connected with
+  const wsAddressRef = useRef<string | null>(null);
+
   useEffect(() => {
     const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:3001';
+
+    // If address changed and we have an existing client, disconnect it first
+    if (wsClient && address && wsAddressRef.current !== address.toLowerCase()) {
+      console.log('Wallet changed, disconnecting old WebSocket...', {
+        oldAddress: wsAddressRef.current,
+        newAddress: address.toLowerCase()
+      });
+      wsClient.disconnect();
+      setWsClient(null);
+      setWsConnected(false);
+      setOffChainBalance(BigInt(0)); // Reset balance when switching wallets
+      wsAddressRef.current = null;
+      // Return early - the next render will create a new client since wsClient will be null
+      return;
+    }
+
     if (address && !wsClient) {
+      // Normalize address to lowercase for consistency
+      const normalizedAddress = address.toLowerCase();
+      wsAddressRef.current = normalizedAddress;
       const client = new BlackjackWebSocketClient(
         wsUrl,
-        address
+        normalizedAddress
       );
 
       // Set up event handlers
@@ -612,7 +851,7 @@ export default function BlackjackPage() {
         setWsConnected(false);
       }
     };
-  }, [address]);
+  }, [address, wsClient]);
 
   // Fetch balance when WebSocket connects
   useEffect(() => {
@@ -628,20 +867,30 @@ export default function BlackjackPage() {
     // Convert database Game[] to GameResult[] format
     const loadHistoryFromDatabase = async () => {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:start',message:'loadHistoryFromDatabase',data:{playerGamesDataLength:playerGamesData.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
+      const completedGames = playerGamesData.filter((game: any) => game.result && game.result !== 'ongoing' && game.completed_at);
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:filter',message:'completed games count',data:{completedCount:completedGames.length,totalGames:playerGamesData.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
       // Fetch game hands for all games in parallel
       const gamesWithHands = await Promise.all(
-        playerGamesData
-          .filter((game: any) => game.result && game.result !== 'ongoing' && game.completed_at)
+        completedGames
           .map(async (game: any) => {
             try {
               // Fetch game hands for this game
               const handsResponse = await fetch(`${API_BASE_URL}/api/game/${game.id}/hands`);
               const handsData = handsResponse.ok ? await handsResponse.json() : [];
-              
+              // #region agent log
+              fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:handsFetch',message:'hands fetch per game',data:{gameId:game.id,ok:handsResponse.ok,handsCount:Array.isArray(handsData)?handsData.length:0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
+              // #endregion
               return { game, hands: Array.isArray(handsData) ? handsData : [] };
             } catch (error) {
               console.error(`Failed to fetch hands for game ${game.id}:`, error);
+              // #region agent log
+              fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:handsFetchError',message:'hands fetch failed',data:{gameId:game.id,error:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
+              // #endregion
               return { game, hands: [] };
             }
           })
@@ -679,32 +928,66 @@ export default function BlackjackPage() {
             canSplit: false,
           };
 
-          // Use first hand from game_hands if available, otherwise create placeholder
-          const firstHand = hands.length > 0 ? hands[0] : null;
-          const playerCards: Card[] = firstHand && Array.isArray(firstHand.cards)
-            ? firstHand.cards.map((c: any, idx: number) => toCard(Number(c), idx))
-            : [];
-          const playerTotals = calculateHandTotal(playerCards);
-          
-          const playerHand: Hand = {
-            id: firstHand?.id || `${gameId}-hand-0`,
-            cards: playerCards,
-            total: firstHand?.total ?? playerTotals.total ?? 0,
-            hasAce: firstHand?.has_ace ?? playerTotals.hasAce ?? false,
-            isBlackjack: firstHand?.is_blackjack ?? game.result === 'blackjack',
-            isBust: firstHand?.is_bust ?? false,
-            betAmount: firstHand ? BigInt(String(firstHand.bet_amount || '0')) : BigInt(String(game.total_bet_amount || '0')),
-            payout: firstHand ? BigInt(String(firstHand.payout || '0')) : BigInt(String(game.total_payout || '0')),
-            result: firstHand?.result || 
-                    (game.result === 'blackjack' ? 'blackjack' : 
+          // Build all player hands (for split support)
+          const playerHandsFromDb: Hand[] = hands.length > 0
+            ? hands.map((firstHand: any, handIdx: number) => {
+                const playerCards: Card[] = Array.isArray(firstHand.cards)
+                  ? firstHand.cards.map((c: any, idx: number) => toCard(Number(c), handIdx * 10 + idx))
+                  : [];
+                const playerTotals = calculateHandTotal(playerCards);
+                return {
+                  id: firstHand?.id || `${gameId}-hand-${handIdx}`,
+                  cards: playerCards,
+                  total: firstHand?.total ?? playerTotals.total ?? 0,
+                  hasAce: firstHand?.has_ace ?? playerTotals.hasAce ?? false,
+                  isBlackjack: firstHand?.is_blackjack ?? (game.result === 'blackjack' && handIdx === 0),
+                  isBust: firstHand?.is_bust ?? false,
+                  betAmount: BigInt(String(firstHand?.bet_amount || game.total_bet_amount || '0')),
+                  payout: BigInt(String(firstHand?.payout || '0')),
+                  result: firstHand?.result ||
+                    (game.result === 'blackjack' ? 'blackjack' :
                      game.result === 'win' ? 'win' :
                      game.result === 'push' ? 'push' : 'loss'),
-            actions: Array.isArray(firstHand?.actions) ? firstHand.actions : Array.isArray(game.actions) ? game.actions : [],
-            canHit: false,
-            canStand: false,
-            canDoubleDown: false,
-            canSplit: false,
-          };
+                  actions: Array.isArray(firstHand?.actions) ? firstHand.actions : [],
+                  canHit: false,
+                  canStand: false,
+                  canDoubleDown: false,
+                  canSplit: false,
+                };
+              })
+            : [];
+
+          const wasSplit = playerHandsFromDb.length > 1;
+          const wasDoubleDown = playerHandsFromDb.some((h: Hand) =>
+            Array.isArray(h.actions) && h.actions.some((a: any) => a.type === 'double_down'));
+
+          // First hand for backward compat (playerHand)
+          const firstHand = hands.length > 0 ? hands[0] : null;
+          const singleHandCards: Card[] = firstHand && Array.isArray(firstHand.cards)
+            ? firstHand.cards.map((c: any, idx: number) => toCard(Number(c), idx))
+            : [];
+          const singleHandTotals = calculateHandTotal(singleHandCards);
+          const playerHand: Hand = playerHandsFromDb.length > 0
+            ? playerHandsFromDb[0]
+            : {
+                id: firstHand?.id || `${gameId}-hand-0`,
+                cards: singleHandCards,
+                total: firstHand?.total ?? singleHandTotals.total ?? 0,
+                hasAce: firstHand?.has_ace ?? singleHandTotals.hasAce ?? false,
+                isBlackjack: firstHand?.is_blackjack ?? game.result === 'blackjack',
+                isBust: firstHand?.is_bust ?? false,
+                betAmount: firstHand ? BigInt(String(firstHand.bet_amount || '0')) : BigInt(String(game.total_bet_amount || '0')),
+                payout: firstHand ? BigInt(String(firstHand.payout || '0')) : BigInt(String(game.total_payout || '0')),
+                result: firstHand?.result ||
+                  (game.result === 'blackjack' ? 'blackjack' :
+                   game.result === 'win' ? 'win' :
+                   game.result === 'push' ? 'push' : 'loss'),
+                actions: Array.isArray(firstHand?.actions) ? firstHand.actions : Array.isArray(game.actions) ? game.actions : [],
+                canHit: false,
+                canStand: false,
+                canDoubleDown: false,
+                canSplit: false,
+              };
 
           return {
             gameId,
@@ -713,9 +996,16 @@ export default function BlackjackPage() {
             payout: BigInt(String(game.total_payout || '0')),
             isBlackjack: game.result === 'blackjack',
             timestamp: game.completed_at ? new Date(game.completed_at).getTime() : Date.now(),
+            ...(playerHandsFromDb.length > 0 && { playerHands: playerHandsFromDb }),
+            ...(wasSplit && { wasSplit: true }),
+            ...(wasDoubleDown && { wasDoubleDown: true }),
           };
         })
         .sort((a, b) => b.timestamp - a.timestamp); // Most recent first
+
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:done',message:'databaseHistory built',data:{databaseHistoryLength:databaseHistory.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
 
       // Merge with existing in-memory history, avoiding duplicates
       setGameState(prev => {
@@ -759,6 +1049,20 @@ export default function BlackjackPage() {
               payout: result.payout.toString(),
               isBlackjack: result.isBlackjack,
               timestamp: result.timestamp,
+              ...(result.playerHands && { playerHands: result.playerHands.map((h: Hand) => ({
+                id: h.id,
+                cards: h.cards.map(c => ({ value: c.value, suit: c.suit })),
+                total: h.total,
+                hasAce: h.hasAce,
+                isBlackjack: h.isBlackjack,
+                isBust: h.isBust,
+                betAmount: h.betAmount.toString(),
+                payout: h.payout.toString(),
+                result: h.result,
+                actions: h.actions,
+              })) }),
+              ...(result.wasSplit && { wasSplit: true }),
+              ...(result.wasDoubleDown && { wasDoubleDown: true }),
             }));
             localStorage.setItem(storageKey, JSON.stringify(historyToStore));
           } catch (error) {
@@ -851,6 +1155,35 @@ export default function BlackjackPage() {
             payout: BigInt(result.payout || '0'),
             isBlackjack: result.isBlackjack ?? false,
             timestamp: result.timestamp ?? Date.now(),
+            ...(Array.isArray(result.playerHands) && result.playerHands.length > 0 && {
+              playerHands: result.playerHands.map((h: any, handIdx: number) => {
+                const cards: Card[] = Array.isArray(h.cards)
+                  ? h.cards.map((c: any, idx: number) =>
+                      typeof c === 'object' && 'value' in c
+                        ? createCard(c.value, c.suit || suitFor(handIdx * 10 + idx), false)
+                        : createCard(Number(c), suitFor(handIdx * 10 + idx), false))
+                  : [];
+                const totals = calculateHandTotal(cards);
+                return {
+                  id: h.id || `${gameId}-hand-${handIdx}`,
+                  cards,
+                  total: h.total ?? totals.total ?? 0,
+                  hasAce: h.hasAce ?? totals.hasAce ?? false,
+                  isBlackjack: h.isBlackjack ?? false,
+                  isBust: h.isBust ?? false,
+                  betAmount: BigInt(h.betAmount || '0'),
+                  payout: BigInt(h.payout || '0'),
+                  result: h.result,
+                  actions: Array.isArray(h.actions) ? h.actions : [],
+                  canHit: false,
+                  canStand: false,
+                  canDoubleDown: false,
+                  canSplit: false,
+                };
+              }),
+            }),
+            ...(result.wasSplit && { wasSplit: true }),
+            ...(result.wasDoubleDown && { wasDoubleDown: true }),
           };
         });
 
@@ -1008,6 +1341,7 @@ export default function BlackjackPage() {
       for (let i = prevPlayerCardCount.current; i < currentPlayerCardCount; i++) {
         newIndices.add(i);
       }
+      if (soundEnabled) new Audio('/BlackJack/sounds/cards.wav').play().catch(() => {});
       setNewCardIndices(prev => ({ ...prev, player: newIndices }));
       // Clear animation flags after animation completes
       setTimeout(() => {
@@ -1024,6 +1358,7 @@ export default function BlackjackPage() {
       for (let i = prevDealerCardCount.current; i < currentDealerCardCount; i++) {
         newIndices.add(i);
       }
+      if (soundEnabled) new Audio('/BlackJack/sounds/cards.wav').play().catch(() => {});
       setNewCardIndices(prev => ({ ...prev, dealer: newIndices }));
       // Clear animation flags after animation completes
       setTimeout(() => {
@@ -1040,11 +1375,14 @@ export default function BlackjackPage() {
     
     // Return the processed localGame so it can be used immediately
     return localGame;
-  }, [address, gameState.clientSeed]);
+  }, [address, gameState.clientSeed, soundEnabled]);
 
   // Handle game completion
   const handleGameCompletion = useCallback((data: any) => {
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:handleGameCompletion:entry',message:'handleGameCompletion',data:{gameId:data?.gameId,payloadKeys:data?Object.keys(data):[],hasProcessedGame:!!data?.processedGame,hasGameState:!!data?.gameState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
       const payout: bigint =
         typeof data?.payout === 'bigint' ? data.payout : BigInt(String(data?.payout || '0'));
       const betAmount: bigint =
@@ -1296,14 +1634,26 @@ export default function BlackjackPage() {
         dealerHandCardsLength: dealerHand.cards.length
       });
 
+      // Detect split/double from currentGame or from gameState
+      const currentGame = gameState.currentGame;
+      const allPlayerHands = currentGame?.playerHands && currentGame.playerHands.length > 0
+        ? currentGame.playerHands
+        : [playerHand];
+      const wasSplit = allPlayerHands.length > 1;
+      const wasDoubleDown = allPlayerHands.some((h: Hand) =>
+        Array.isArray(h.actions) && h.actions.some((a: any) => a.type === 'double_down'));
+
       // Add to history
       const gameResult: GameResult = {
         gameId: data?.gameId ? String(data.gameId) : `game-${Date.now()}`,
         playerHand,
         dealerHand,
-        payout,
+        payout: currentGame?.totalPayout ?? payout,
         isBlackjack: data.result === 'blackjack',
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ...(allPlayerHands.length > 0 && { playerHands: allPlayerHands }),
+        ...(wasSplit && { wasSplit: true }),
+        ...(wasDoubleDown && { wasDoubleDown: true }),
       };
 
       console.log('handleGameCompletion: Adding to history', {
@@ -1324,6 +1674,9 @@ export default function BlackjackPage() {
           // Only update if the new entry has cards (to avoid overwriting with empty cards)
           const shouldUpdate = gameResult.playerHand.cards.length > 0 || gameResult.dealerHand.cards.length > 0;
           if (shouldUpdate) {
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:handleGameCompletion:updateExisting',message:'updating existing history entry',data:{gameId:gameResult.gameId,existingIndex},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+            // #endregion
             console.log('handleGameCompletion: Updating existing history entry', {
               existingIndex,
               oldPlayerCards: prev.history[existingIndex].playerHand.cards.map(c => c.value),
@@ -1342,6 +1695,9 @@ export default function BlackjackPage() {
             return prev;
           }
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:handleGameCompletion:addNew',message:'adding new history entry',data:{gameId:gameResult.gameId,prevHistoryLength:prev.history.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
         console.log('handleGameCompletion: Adding new history entry');
         const newHistory = [gameResult, ...prev.history].slice(0, 50);
         
@@ -1377,6 +1733,20 @@ export default function BlackjackPage() {
               payout: result.payout.toString(),
               isBlackjack: result.isBlackjack,
               timestamp: result.timestamp,
+              ...(result.playerHands && { playerHands: result.playerHands.map(h => ({
+                id: h.id,
+                cards: h.cards.map(c => ({ value: c.value, suit: c.suit })),
+                total: h.total,
+                hasAce: h.hasAce,
+                isBlackjack: h.isBlackjack,
+                isBust: h.isBust,
+                betAmount: h.betAmount.toString(),
+                payout: h.payout.toString(),
+                result: h.result,
+                actions: h.actions,
+              })) }),
+              ...(result.wasSplit && { wasSplit: true }),
+              ...(result.wasDoubleDown && { wasDoubleDown: true }),
             }));
             localStorage.setItem(storageKey, JSON.stringify(historyToStore));
           } catch (error) {
@@ -1411,6 +1781,21 @@ export default function BlackjackPage() {
       chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
       setCurrentGameResult(pendingChipResult);
       setPendingChipResult(null);
+      // Play sound when dealer wins
+      if (soundEnabled && pendingChipResult === 'loss') {
+        const audio = new Audio('/BlackJack/sounds/DealerWins.mp3');
+        audio.play().catch(() => {});
+      }
+      // Play sound when player gets blackjack
+      if (soundEnabled && pendingChipResult === 'blackjack') {
+        const audio = new Audio('/BlackJack/sounds/Blackjack.mp3');
+        audio.play().catch(() => {});
+      }
+      // Play sound when player wins (regular win, not blackjack)
+      if (soundEnabled && pendingChipResult === 'win') {
+        const audio = new Audio('/BlackJack/sounds/PlayerWins.mp3');
+        audio.play().catch(() => {});
+      }
     }
 
     // Show win notification
@@ -1420,7 +1805,7 @@ export default function BlackjackPage() {
       setShowWinNotification(true);
       setPendingWinData(null);
     }
-  }, [pendingWinData, pendingChipResult]);
+  }, [pendingWinData, pendingChipResult, soundEnabled]);
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {
@@ -1432,8 +1817,76 @@ export default function BlackjackPage() {
     setShowDepositModal(true);
   }, []);
 
+  // Handle starting a tournament game
+  const handleStartTournamentGame = useCallback(async (betAmount: number) => {
+    if (!tournament.tournamentState.inTournament) {
+      toast.error('Not in tournament');
+      return;
+    }
+
+    // Reset card counts for new game animations
+    prevPlayerCardCount.current = 0;
+    prevDealerCardCount.current = 0;
+    setNewCardIndices({ player: new Set(), dealer: new Set() });
+
+    setGameState(prev => ({ ...prev, isPlaying: true }));
+
+    try {
+      const gameState = await tournament.startTournamentGame(betAmount);
+      if (gameState) {
+        // Convert tournament game state to local game state format
+        updateGameStateFromServer(gameState);
+
+        // Check if game completed immediately (blackjack)
+        if (gameState.status === 'completed') {
+          setGameState(prev => ({ ...prev, isPlaying: false }));
+        }
+      } else {
+        setGameState(prev => ({ ...prev, isPlaying: false }));
+      }
+    } catch (error: any) {
+      console.error('Failed to start tournament game:', error);
+      toast.error(error.message || 'Failed to start game');
+      setGameState(prev => ({ ...prev, isPlaying: false }));
+    }
+  }, [tournament, updateGameStateFromServer]);
+
+  // Handle tournament player action
+  const handleTournamentPlayerAction = useCallback(async (action: Action) => {
+    if (!gameState.currentGame || !tournament.tournamentState.inTournament) return;
+
+    try {
+      const gameStateResult = await tournament.performAction(action);
+      if (gameStateResult) {
+        updateGameStateFromServer(gameStateResult);
+
+        // If game completed, update playing state
+        if (gameStateResult.status === 'completed') {
+          setGameState(prev => ({ ...prev, isPlaying: false }));
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to perform tournament action:', error);
+      toast.error(error.message || 'Failed to perform action');
+    }
+  }, [gameState.currentGame, tournament, updateGameStateFromServer]);
+
   // Handle starting a new game
   const handleStartGame = useCallback(async (betAmount: bigint, _clientSeedFromPanel: string) => {
+    // Validate bet amount is within limits
+    if (betAmount < BET_LIMITS.MIN_BET) {
+      toast.error('Bet too small', {
+        description: `Minimum bet is 1 MORBIUS`
+      });
+      return;
+    }
+    if (betAmount > BET_LIMITS.MAX_BET) {
+      toast.error('Bet too large', {
+        description: `Maximum bet is 100,000 MORBIUS`
+      });
+      return;
+    }
+    
     // Use the clientSeed from page state (Provably Fair Advanced section)
     // If empty, auto-generate one
     const finalClientSeed = clientSeed || generateClientSeed();
@@ -1539,7 +1992,12 @@ export default function BlackjackPage() {
       return;
     } catch (error) {
       console.error('Failed to perform action:', error);
-      toast.error('Failed to perform action');
+      // Show the actual error message from the server (e.g., "Insufficient balance...")
+      const errorMessage = error instanceof Error ? error.message : 'Failed to perform action';
+      toast.error(errorMessage);
+
+      // Refresh balance in case it's a balance-related error
+      fetchBalance();
     }
   }, [gameState.currentGame, wsClient, wsConnected, updateGameStateFromServer, fetchBalance]);
 
@@ -1557,41 +2015,48 @@ export default function BlackjackPage() {
         gameResult = 'push';
       }
 
-      // Convert Card[] to number[] (card value only)
-      // Ensure cards exist and are valid
-      const playerCards = Array.isArray(result.playerHand.cards) 
-        ? result.playerHand.cards.map(c => typeof c === 'object' && 'value' in c ? c.value : Number(c))
-        : [];
+      // Use all player hands when present (split), otherwise single hand
+      const handsToMap = result.playerHands && result.playerHands.length > 0
+        ? result.playerHands
+        : [result.playerHand];
+
+      const playerHands = handsToMap.map((hand) => {
+        const cards = Array.isArray(hand.cards)
+          ? hand.cards.map(c => typeof c === 'object' && 'value' in c ? c.value : Number(c))
+          : [];
+        const handResult: 'win' | 'loss' | 'push' | 'blackjack' =
+          hand.result === 'blackjack' ? 'blackjack' :
+          hand.result === 'win' ? 'win' :
+          hand.result === 'push' ? 'push' : 'loss';
+        return {
+          cards,
+          total: hand.total,
+          result: handResult,
+          payout: hand.payout ?? result.payout
+        };
+      });
+
       const dealerCards = Array.isArray(result.dealerHand.cards)
         ? result.dealerHand.cards.map(c => typeof c === 'object' && 'value' in c ? c.value : Number(c))
         : [];
-      
-      console.log('gameHistoryEntries: Transforming history entry', {
-        gameId: result.gameId,
-        playerCards,
-        dealerCards,
-        playerCardsLength: playerCards.length,
-        dealerCardsLength: dealerCards.length,
-        playerHandCardsType: result.playerHand.cards?.[0] ? typeof result.playerHand.cards[0] : 'undefined',
-        dealerHandCardsType: result.dealerHand.cards?.[0] ? typeof result.dealerHand.cards[0] : 'undefined'
-      });
+
+      const totalBet = result.playerHands && result.playerHands.length > 0
+        ? result.playerHands.reduce((sum, h) => sum + (h.betAmount || BigInt(0)), BigInt(0))
+        : (result.playerHand.betAmount || BigInt(0));
 
       return {
         id: result.gameId,
         gameId: result.gameId,
         timestamp: result.timestamp,
-        betAmount: result.playerHand.betAmount || BigInt(0),
+        betAmount: totalBet,
         payout: result.payout,
         result: gameResult,
-        playerHands: [{
-          cards: playerCards,
-          total: result.playerHand.total,
-          result: gameResult,
-          payout: result.payout
-        }],
-        dealerCards: dealerCards,
+        playerHands,
+        dealerCards,
         dealerTotal: result.dealerHand.total,
-        verified: false
+        verified: false,
+        ...(result.wasSplit && { wasSplit: true }),
+        ...(result.wasDoubleDown && { wasDoubleDown: true }),
       };
     });
   }, [gameState.history]);
@@ -1603,89 +2068,7 @@ export default function BlackjackPage() {
 
   // Check if user has no reserve balance (less than 1 MORBIUS)
   const hasNoReserve = offChainBalance < BigInt('1000000000000000000'); // Less than 1 MORBIUS (1e18)
-
-  // Show splash screen if no reserve balance
-  if (hasNoReserve && isConnected) {
-    return (
-      <div className="min-h-screen overflow-x-hidden w-full bg-black">
-        <MainNav
-          onOpenDepositModal={handleOpenDepositModal}
-          onOpenApprovalModal={() => setShowApprovalModal(true)}
-          reserveBalance={offChainBalance}
-          currentView={currentView}
-          onViewChange={setCurrentView}
-          useVideoBackground={useVideoBackground}
-          onBackgroundChange={setUseVideoBackground}
-        />
-        <div className="min-h-screen flex items-center justify-center px-4 pt-20">
-          <div className="max-w-2xl w-full text-center space-y-8">
-            {/* Beta Badge */}
-            <div className="inline-block px-4 py-2 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
-              <span className="text-yellow-400 font-bold text-sm uppercase tracking-wider">BETA</span>
-            </div>
-
-            {/* Main Heading */}
-            <h1 className="text-4xl sm:text-5xl font-bold text-white">
-              Welcome to Blackjack
-            </h1>
-
-            {/* Instructions */}
-            <div className="space-y-4 text-white/90 text-lg leading-relaxed">
-              <p>
-                Blackjack is currently in <span className="font-semibold text-yellow-400">BETA</span>. 
-                Please play responsibly and follow these guidelines:
-              </p>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6 text-left space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="text-white/60 mt-1">•</span>
-                  <p className="flex-1">Bet only the <span className="font-semibold text-white">minimum amount</span> while testing</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-white/60 mt-1">•</span>
-                  <p className="flex-1">Always <span className="font-semibold text-white">withdraw your entire balance</span> when done playing</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-white/60 mt-1">•</span>
-                  <p className="flex-1">Withdrawals can be made through the <span className="font-semibold text-white">game menu</span> or by <span className="font-semibold text-white">clicking your reserve balance</span> at the top of the screen</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Deposit Button */}
-            <button
-              onClick={handleOpenDepositModal}
-              className="px-8 py-4 bg-white text-black font-bold text-lg rounded-lg hover:bg-white/90 transition-colors shadow-lg"
-            >
-              Deposit MORBIUS to Play
-            </button>
-
-            {/* Footer Note */}
-            <p className="text-white/60 text-sm">
-              Deposit MORBIUS to your reserve to start playing
-            </p>
-          </div>
-        </div>
-
-        {/* Deposit/Withdraw Modal */}
-        <DepositWithdrawModal
-          isOpen={showDepositModal}
-          onClose={() => setShowDepositModal(false)}
-          onBalanceSync={syncBalance}
-          contractReserve={playerReserve}
-        />
-
-        {/* Custom Approval Modal */}
-        <CustomApprovalModal
-          open={showApprovalModal}
-          onOpenChange={setShowApprovalModal}
-          onApprove={handleCustomApproval}
-          isApproving={isApproving}
-          tokenSymbol="MORBIUS"
-          spenderName="Blackjack Game"
-        />
-      </div>
-    );
-  }
+  const showSplash = hasNoReserve && isConnected && !splashDismissed;
 
   const currentGame = gameState.currentGame;
   const isPlayerTurn = currentGame?.state === GameState.PLAYER_TURN;
@@ -1697,14 +2080,27 @@ export default function BlackjackPage() {
 
   const canHit = currentGame?.state === GameState.PLAYER_TURN && activeHand && !activeHand.isBust;
   const canStand = currentGame?.state === GameState.PLAYER_TURN && activeHand && !activeHand.isBust;
-  const canDoubleDown = currentGame?.state === GameState.PLAYER_TURN && activeHand && activeHand.cards.length === 2;
+  
+  // Check if doubling down would exceed MAX_BET
+  const handBetAmount = activeHand?.betAmount || currentGame?.totalBetAmount || BigInt(0);
+  const doubleBetAmount = handBetAmount * BigInt(2);
+  const canDoubleDownByBetLimit = doubleBetAmount <= BET_LIMITS.MAX_BET;
+  
+  const canDoubleDown = currentGame?.state === GameState.PLAYER_TURN && 
+    activeHand && 
+    activeHand.cards.length === 2 &&
+    canDoubleDownByBetLimit; // Also check bet limit
 
   // Can split when player has exactly 2 cards of the same value (only on first hand, not after split)
+  // Also check if splitting would exceed MAX_BET (split requires 2x bet)
+  const canSplitByBetLimit = doubleBetAmount <= BET_LIMITS.MAX_BET;
+  
   const canSplit = currentGame?.state === GameState.PLAYER_TURN &&
     activeHand &&
     activeHand.cards.length === 2 &&
     activeHand.cards[0].value === activeHand.cards[1].value &&
-    (!currentGame.playerHands || currentGame.playerHands.length <= 1); // Can't split again if already split
+    (!currentGame.playerHands || currentGame.playerHands.length <= 1) && // Can't split again if already split
+    canSplitByBetLimit; // Also check bet limit
 
   return (
     <div className="min-h-screen overflow-x-hidden w-full"
@@ -1718,9 +2114,84 @@ export default function BlackjackPage() {
         reserveBalance={offChainBalance}
         currentView={currentView}
         onViewChange={setCurrentView}
-        useVideoBackground={useVideoBackground}
-        onBackgroundChange={setUseVideoBackground}
+        theme={theme}
+        onThemeChange={setTheme}
+        imageSource={imageSource}
+        onImageSourceChange={setImageSource}
+        videoSource={videoSource}
+        onVideoSourceChange={handleVideoSourceChange}
+        videoSyncToClock={videoSyncToClock}
+        onVideoSyncToClockChange={setVideoSyncToClock}
+        videoPosition={videoPosition}
+        onVideoPositionChange={setVideoPosition}
+        soundEnabled={soundEnabled}
+        onSoundChange={setSoundEnabled}
       />
+
+      {/* Splash Screen Overlay - Dismissible */}
+      {showSplash && (
+        <div className="fixed inset-0 z-[150] p-4 bg-black/80 backdrop-blur-sm">
+          <div className="absolute top-[50px] left-1/2 -translate-x-1/2 bg-black border border-white/20 rounded-xl p-6 max-w-md w-full shadow-2xl relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setSplashDismissed(true)}
+              className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+              aria-label="Close"
+            >
+              <i className="fas fa-times text-xl"></i>
+            </button>
+
+            <div className="text-center space-y-4">
+              {/* Beta Badge */}
+              <div className="inline-block px-3 py-1 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
+                <span className="text-yellow-400 font-bold text-xs uppercase tracking-wider">BETA</span>
+              </div>
+
+              {/* Main Heading */}
+              <h2 className="text-2xl font-bold text-white">
+                Welcome to Blackjack
+              </h2>
+
+              {/* Instructions */}
+              <div className="text-white/90 text-sm leading-relaxed space-y-2 text-left">
+                <p className="text-center">
+                  Blackjack is currently in <span className="font-semibold text-yellow-400">BETA</span>.
+                </p>
+                <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-white/60 mt-0.5 text-xs">•</span>
+                    <p className="flex-1 text-xs">Bet only the <span className="font-semibold text-white">minimum amount</span> while testing</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-white/60 mt-0.5 text-xs">•</span>
+                    <p className="flex-1 text-xs">Always <span className="font-semibold text-white">withdraw your entire balance</span> when done playing</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-white/60 mt-0.5 text-xs">•</span>
+                    <p className="flex-1 text-xs">Withdrawals via <span className="font-semibold text-white">game menu</span> or <span className="font-semibold text-white">clicking reserve balance</span> at top</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Deposit Button */}
+              <button
+                onClick={() => {
+                  handleOpenDepositModal();
+                  setSplashDismissed(true);
+                }}
+                className="w-full px-6 py-3 bg-white text-black font-bold text-sm rounded-lg hover:bg-white/90 transition-colors shadow-lg"
+              >
+                Deposit MORBIUS to Play
+              </button>
+
+              {/* Footer Note */}
+              <p className="text-white/60 text-xs">
+                Deposit MORBIUS to your reserve to start playing
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-16 pb-4 sm:pt-20 sm:pb-8 overflow-x-hidden">
         {/* View-specific content */}
@@ -1735,34 +2206,58 @@ export default function BlackjackPage() {
               currentHandIndex={currentGame?.currentHandIndex || 0}
               dealerHand={currentGame?.dealerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
               gameState={currentGame?.state || GameState.WAITING}
-              onAction={handlePlayerAction}
+              onAction={tournament.tournamentState.inTournament ? handleTournamentPlayerAction : handlePlayerAction}
               canHit={canHit}
               canStand={canStand}
-              canDoubleDown={canDoubleDown}
-              canSplit={canSplit}
-              reserveBalance={offChainBalance}
+              canDoubleDown={canDoubleDown && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
+              canSplit={canSplit && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
+              reserveBalance={tournament.tournamentState.inTournament ? BigInt(tournament.tournamentState.chips) : offChainBalance}
               usePLS={false}
               newCardIndices={newCardIndices}
-              chipStack={chipStack}
-              onClearBet={() => manageChipStack('', undefined, true)}
-              onStartGame={() => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)}
+              chipStack={tournament.tournamentState.inTournament ? [] : chipStack}
+              onClearBet={tournament.tournamentState.inTournament ? () => {} : () => manageChipStack('', undefined, true)}
+              onStartGame={tournament.tournamentState.inTournament
+                ? () => handleStartTournamentGame(TOURNAMENT_CONFIG.MIN_BET)
+                : () => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)}
               isPlaying={gameState.isPlaying}
               onDealerRevealComplete={handleDealerRevealComplete}
               gameResult={currentGameResult}
               onChipAnimationComplete={handleChipAnimationComplete}
               history={gameState.history}
               totalPayout={currentGame?.totalPayout || BigInt(0)}
-              onDoubleDownChips={handleDoubleDownChips}
-              onSplitChips={handleSplitChips}
-              onRebet={handleRebet}
-              onHalfBet={handleHalfBet}
-              onDoubleBet={handleDoubleBet}
-              canDeal={!gameState.isPlaying && totalBetAmount > 0}
-              onBetAmountChange={manageChipStack}
-              currentBetAmount={displayBetAmount}
+              onDoubleDownChips={tournament.tournamentState.inTournament ? () => {} : handleDoubleDownChips}
+              onSplitChips={tournament.tournamentState.inTournament ? () => {} : handleSplitChips}
+              onRebet={tournament.tournamentState.inTournament ? () => {} : handleRebet}
+              onHalfBet={tournament.tournamentState.inTournament ? () => {} : handleHalfBet}
+              onDoubleBet={tournament.tournamentState.inTournament ? () => {} : handleDoubleBet}
+              canDeal={tournament.tournamentState.inTournament
+                ? !gameState.isPlaying && tournament.tournamentState.handsRemaining > 0
+                : !gameState.isPlaying && totalBetAmount > 0}
+              onBetAmountChange={tournament.tournamentState.inTournament ? () => {} : manageChipStack}
+              currentBetAmount={tournament.tournamentState.inTournament ? String(TOURNAMENT_CONFIG.MIN_BET) : displayBetAmount}
               lastBetAmount={lastBetAmount}
               useVideoBackground={useVideoBackground}
+              imageSource={imageSource}
+              videoSource={videoSource}
+              videoSyncToClock={videoSyncToClock}
+              videoPosition={videoPosition}
+              onOpenDepositModal={handleOpenDepositModal}
+              soundEnabled={soundEnabled}
             />
+
+            {/* Tournament Bet Panel (shown when in tournament mode) */}
+            {tournament.tournamentState.inTournament && (
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
+                <TournamentBetPanel
+                  chips={tournament.tournamentState.chips}
+                  onStartGame={handleStartTournamentGame}
+                  isPlaying={gameState.isPlaying}
+                  isLoading={tournament.isLoading}
+                  handsRemaining={tournament.tournamentState.handsRemaining}
+                  gameResult={currentGameResult}
+                />
+              </div>
+            )}
             {/* Win Notification */}
             {showWinNotification && (
               <WinNotification
@@ -1771,29 +2266,93 @@ export default function BlackjackPage() {
                 onComplete={() => setShowWinNotification(false)}
               />
             )}
+
+            {/* Tournament HUD (overlay on top of table when in tournament mode) */}
+            {tournament.tournamentState.inTournament && (
+              <div className="absolute top-4 right-4 z-30">
+                <TournamentHUD
+                  state={tournament.tournamentState}
+                  onLeave={() => {
+                    if (confirm('Are you sure you want to leave the tournament? You will forfeit your remaining chips.')) {
+                      tournament.leaveTournament();
+                      setIsTournamentMode(false);
+                    }
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Global Wins Feed */}
-        <div
-          className="mt-6 rounded-xl p-4 max-w-md mx-auto"
-          style={{
-            background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-            boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
-            border: '1px solid rgba(6, 182, 212, 0.2)',
-          }}
-        >
-          <GlobalWinsFeed
-            wsClient={wsClient}
-            wsConnected={wsConnected}
-          />
-        </div>
+        {/* Tournament Mode Toggle Button */}
+        {!tournament.tournamentState.inTournament && !gameState.isPlaying && (
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => setShowTournamentEntry(true)}
+              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/30 transition-all transform hover:scale-105"
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+                Enter Tournament Mode
+              </span>
+            </button>
+            <p className="text-gray-500 text-xs mt-2">
+              100,000 MORBIUS buy-in | 5,000 starting chips | 50 hands
+            </p>
+          </div>
+        )}
 
-        {/* Real-Time Bet Chart - Above Recent Games */}
+        {/* Tournament Leaderboard (shown when in tournament) */}
+        {tournament.tournamentState.inTournament && (
+          <div className="mt-4">
+            <TournamentLeaderboard
+              leaderboard={tournament.leaderboard}
+              playerAddress={address}
+              playerEntry={tournament.leaderboard.find(e =>
+                e.player_address.toLowerCase() === address?.toLowerCase()
+              )}
+              onRefresh={() => tournament.fetchLeaderboard()}
+            />
+          </div>
+        )}
+
+        {/* How-To Play + Real-Time Bet Chart: 2-col grid (above) */}
         {currentView === 'game' && (
-          <div className="mt-8">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div
-              className="rounded-xl p-4"
+              className="rounded-xl p-4 min-w-0"
+              style={{
+                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
+                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(6, 182, 212, 0.2)',
+              }}
+            >
+              <h2 className="text-lg font-semibold text-cyan-300/95 mb-3">How to Play</h2>
+              <div className="text-sm text-white/85 space-y-3">
+                <div>
+                  <span className="font-medium text-cyan-300/90">Deposit & Withdraw</span>
+                  <ul className="mt-1 space-y-1 list-disc list-inside">
+                    <li><strong>Deposit:</strong> Open the game menu (top right) and choose &quot;Deposit&quot; to send MORBIUS to your reserve. You can also click your reserve balance to open the deposit/withdraw modal.</li>
+                    <li><strong>Withdraw:</strong> Withdraw anytime from the game menu or by clicking your reserve balance. Your full reserve is yours; withdraw when you want to cash out.</li>
+                    <li>Bets are taken from your reserve. Winnings are added back to it.</li>
+                  </ul>
+                </div>
+                <div>
+                  <span className="font-medium text-cyan-300/90">Game Rules</span>
+                  <ul className="mt-1 space-y-1 list-disc list-inside">
+                    <li>Get as close to 21 as possible without going over. Beat the dealer.</li>
+                    <li><strong>Hit</strong> — take another card. <strong>Stand</strong> — keep your hand.</li>
+                    <li><strong>Double Down</strong> — double your bet, receive one more card.</li>
+                    <li><strong>Split</strong> — on a pair, split into two hands (double bet).</li>
+                    <li>Blackjack (Ace + 10-value) pays 3:2. Dealer stands on 17.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div
+              className="rounded-xl p-4 min-w-0"
               style={{
                 background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
                 boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
@@ -1810,10 +2369,32 @@ export default function BlackjackPage() {
           </div>
         )}
 
-        {/* Quick History - Last 20 Hands */}
-        {currentView === 'game' && gameState.history.length > 0 && (
-          <div className="mt-8">
-            <QuickHistory history={gameState.history} />
+        {/* Quick History + Global Wins Feed: 2-col grid (below) */}
+        {currentView === 'game' && (
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div
+              className="rounded-xl p-4 min-w-0"
+              style={{
+                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
+                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(6, 182, 212, 0.2)',
+              }}
+            >
+              <QuickHistory history={gameState.history} reserveBalance={offChainBalance} />
+            </div>
+            <div
+              className="rounded-xl p-4 min-w-0"
+              style={{
+                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
+                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(6, 182, 212, 0.2)',
+              }}
+            >
+              <GlobalWinsFeed
+                wsClient={wsClient}
+                wsConnected={wsConnected}
+              />
+            </div>
           </div>
         )}
 
@@ -1823,6 +2404,7 @@ export default function BlackjackPage() {
           onClose={() => setShowDepositModal(false)}
           onBalanceSync={syncBalance}
           contractReserve={playerReserve}
+          offChainBalance={offChainBalance}
         />
           </>
         )}
@@ -1838,6 +2420,44 @@ export default function BlackjackPage() {
           spenderName="Blackjack Game"
         />
 
+        {/* Tournament Entry Modal */}
+        <TournamentEntry
+          isOpen={showTournamentEntry}
+          onClose={() => setShowTournamentEntry(false)}
+          onEnter={async () => {
+            const success = await tournament.enterTournament();
+            if (success) {
+              setShowTournamentEntry(false);
+              setIsTournamentMode(true);
+              toast.success('Welcome to the tournament!');
+              // Sync balance after buy-in
+              fetchBalance();
+            }
+          }}
+          isLoading={tournament.isLoading}
+          playerBalance={offChainBalance}
+          prizePool={tournament.tournamentInfo?.prizePool}
+          entryCount={tournament.tournamentInfo?.entryCount}
+        />
+
+        {/* Tournament Complete Modal */}
+        <TournamentComplete
+          isOpen={showTournamentComplete}
+          onClose={() => {
+            setShowTournamentComplete(false);
+            setIsTournamentMode(false);
+            fetchBalance(); // Refresh balance after tournament ends
+          }}
+          onPlayAgain={() => {
+            setShowTournamentComplete(false);
+            setShowTournamentEntry(true);
+          }}
+          state={tournament.tournamentState}
+          prizeWon={tournament.tournamentState.status === 'completed' && tournament.tournamentState.currentRank <= 10
+            ? tournament.getPrizeForRank(tournament.tournamentState.currentRank, BigInt(tournament.tournamentInfo?.prizePool || '0'))
+            : 0n}
+        />
+
         {currentView === 'history' && (
           <div className="max-w-7xl mx-auto">
             <GameHistory history={gameHistoryEntries} />
@@ -1848,6 +2468,17 @@ export default function BlackjackPage() {
           <div className="max-w-7xl mx-auto">
             {playerStatsLoading ? (
               <div className="text-center py-12 text-cyan-300">Loading player statistics...</div>
+            ) : playerStatsError ? (
+              <div className="text-center py-12">
+                <div className="text-red-400 mb-2">Error loading statistics</div>
+                <div className="text-gray-400 text-sm">{playerStatsError instanceof Error ? playerStatsError.message : 'Unknown error'}</div>
+                <button
+                  onClick={() => refetchPlayerStats()}
+                  className="mt-4 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white"
+                >
+                  Retry
+                </button>
+              </div>
             ) : playerStats ? (
               <PlayerStatsDashboard stats={playerStats} isLoading={playerStatsLoading} />
             ) : (
@@ -1856,10 +2487,21 @@ export default function BlackjackPage() {
           </div>
         )}
 
-        {currentView === 'analytics' && (
+        {currentView === 'analytics' && isDeployer && (
           <div className="max-w-7xl mx-auto">
             {globalAnalyticsLoading ? (
               <div className="text-center py-12 text-cyan-300">Loading global analytics...</div>
+            ) : globalAnalyticsError ? (
+              <div className="text-center py-12">
+                <div className="text-red-400 mb-2">Error loading analytics</div>
+                <div className="text-gray-400 text-sm">{globalAnalyticsError instanceof Error ? globalAnalyticsError.message : 'Unknown error'}</div>
+                <button
+                  onClick={() => refetchGlobalAnalytics()}
+                  className="mt-4 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white"
+                >
+                  Retry
+                </button>
+              </div>
             ) : globalAnalytics ? (
               <GlobalAnalyticsDashboard 
                 analytics={globalAnalytics} 

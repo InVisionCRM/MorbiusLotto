@@ -6,9 +6,16 @@ class BlackjackGameService {
     dbService;
     pfService;
     static GAME_NONCE_MULTIPLIER = 1_000_000; // avoid collisions within a game
+    tournamentService;
     constructor(dbService, pfService) {
         this.dbService = dbService;
         this.pfService = pfService;
+    }
+    /**
+     * Set the tournament service (optional, for tournament mode support)
+     */
+    setTournamentService(tournamentService) {
+        this.tournamentService = tournamentService;
     }
     getGameBaseNonce(gameNumber) {
         return gameNumber * BlackjackGameService.GAME_NONCE_MULTIPLIER;
@@ -118,8 +125,8 @@ class BlackjackGameService {
                 status = 'completed';
                 result = 'blackjack';
                 initialHand.result = 'blackjack';
-                // 3:2 payout for natural blackjack
-                initialHand.payout = (request.betAmount * 3n) / 2n;
+                // 3:2 payout for natural blackjack: original bet + 1.5x winnings = 2.5x total
+                initialHand.payout = request.betAmount + (request.betAmount * 3n) / 2n;
             }
             else if (dealerBlackjack) {
                 status = 'completed';
@@ -180,7 +187,9 @@ class BlackjackGameService {
                 gameId: game.id,
                 sessionId: session.id,
                 playerHands: [initialHand],
-                dealerCards: dealerCards, // Send both cards - frontend will hide the second one
+                // SECURITY: Only send visible dealer card during player turn to prevent cheating
+                // If game completed immediately (natural blackjack), send all cards
+                dealerCards: status === 'completed' ? dealerCards : dealerCards.slice(0, 1),
                 dealerTotal: dealerVisibleHand.total,
                 dealerHasAce: dealerVisibleHand.hasAce,
                 status,
@@ -342,6 +351,12 @@ class BlackjackGameService {
         if (!this.canSplit(handToSplit.cards)) {
             throw new Error('Cannot split this hand');
         }
+        // Check balance FIRST before making any state changes
+        const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+        const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
+        if (currentBalance < handToSplit.betAmount) {
+            throw new Error(`Insufficient balance to split. Need ${handToSplit.betAmount.toString()}, have ${currentBalance.toString()}`);
+        }
         // Create two new hands from the split
         const card1 = [handToSplit.cards[0]];
         const card2 = [handToSplit.cards[1]];
@@ -377,8 +392,7 @@ class BlackjackGameService {
         };
         // Update total bet amount
         const totalBetAmount = game.total_bet_amount + handToSplit.betAmount;
-        // Deduct additional bet for split hand from off-chain balance
-        const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+        // Deduct additional bet for split hand from off-chain balance (balance already validated above)
         await this.dbService.deductPlayerBalance(playerAddress, handToSplit.betAmount);
         logger_1.logger.debug('Deducted split bet from balance', {
             playerAddress,
@@ -490,8 +504,14 @@ class BlackjackGameService {
             if (currentHand.cards.length !== 2) {
                 throw new Error('Can only double down on first two cards');
             }
-            // Double the bet
+            // Check balance FIRST before making any state changes
             const originalBet = currentHand.betAmount;
+            const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+            const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
+            if (currentBalance < originalBet) {
+                throw new Error(`Insufficient balance to double down. Need ${originalBet.toString()}, have ${currentBalance.toString()}`);
+            }
+            // Double the bet (only after balance check passes)
             currentHand.betAmount *= 2n;
             // Deal one more card
             const nonceUsed = baseNonce + rngCounter;
@@ -512,8 +532,7 @@ class BlackjackGameService {
             currentHand.canDoubleDown = false;
             // Update total bet amount
             const totalBetAmount = game.total_bet_amount + originalBet;
-            // Deduct additional bet for double down from off-chain balance
-            const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+            // Deduct additional bet for double down from off-chain balance (balance already validated above)
             await this.dbService.deductPlayerBalance(playerAddress, originalBet);
             logger_1.logger.debug('Deducted double down bet from balance', {
                 playerAddress,
@@ -568,7 +587,8 @@ class BlackjackGameService {
             gameId,
             sessionId: game.session_id,
             playerHands,
-            dealerCards: game.dealer_cards, // Send both cards - frontend will hide the second one
+            // SECURITY: Only send visible dealer card during player turn to prevent cheating
+            dealerCards: game.dealer_cards.slice(0, 1),
             dealerTotal: this.pfService.calculateHandTotal([game.dealer_cards[0]]).total,
             dealerHasAce: this.pfService.calculateHandTotal([game.dealer_cards[0]]).hasAce,
             status: 'player_turn',
@@ -585,6 +605,9 @@ class BlackjackGameService {
      * Play dealer turn and complete the game
      */
     async playDealerAndComplete(gameId, game, playerHands, gameSeeds) {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/blackjack-game.service.ts:playDealerAndComplete:entry', message: 'playDealerAndComplete', data: { gameId, handCount: playerHands.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H2' }) }).catch(() => { });
+        // #endregion
         const dealerCards = [...game.dealer_cards];
         const dealerActions = [];
         const baseNonce = this.getGameBaseNonce(game.game_number);
@@ -656,6 +679,9 @@ class BlackjackGameService {
             rng_counter: rngCounter,
             completed_at: new Date()
         });
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/blackjack-game.service.ts:playDealerAndComplete:afterUpdateGame', message: 'game completed and persisted', data: { gameId, result: overallResult, totalPayout: totalPayout.toString() }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H2' }) }).catch(() => { });
+        // #endregion
         // Add winnings to off-chain balance
         if (totalPayout > 0n) {
             const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
@@ -738,6 +764,250 @@ class BlackjackGameService {
         catch (error) {
             logger_1.logger.error('Error getting game result:', error);
             return null;
+        }
+    }
+    // ============================================
+    // Tournament Mode Methods
+    // ============================================
+    /**
+     * Create a tournament game using tournament chips
+     */
+    async createTournamentGame(request) {
+        if (!this.tournamentService) {
+            throw new Error('Tournament service not configured');
+        }
+        try {
+            // Get tournament state
+            const tournamentState = await this.tournamentService.getTournamentState(request.playerAddress);
+            if (!tournamentState) {
+                throw new Error('No active tournament entry found');
+            }
+            if (tournamentState.status !== 'playing') {
+                throw new Error('Tournament entry is not active');
+            }
+            if (tournamentState.handsRemaining <= 0) {
+                throw new Error('No hands remaining in tournament');
+            }
+            // Validate bet amount
+            const validation = this.tournamentService.validateTournamentBet(tournamentState.chips, request.betAmount);
+            if (!validation.valid) {
+                throw new Error(validation.error);
+            }
+            // Get or create player and session (same as regular game)
+            const player = await this.dbService.getOrCreatePlayer(request.playerAddress);
+            let session = await this.dbService.getActiveSession(player.id);
+            if (!session) {
+                const serverSeed = this.pfService.generateServerSeed();
+                const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
+                session = await this.dbService.createGameSession(player.id, serverSeed, serverSeedHash);
+            }
+            // Ensure session has a real server seed
+            const ensured = this.ensureSessionSeed(session);
+            if (!session.server_seed) {
+                await this.dbService.setSessionServerSeed(session.id, ensured.serverSeed, ensured.serverSeedHash);
+                session = { ...session, server_seed: ensured.serverSeed, server_seed_hash: ensured.serverSeedHash };
+            }
+            const clientSeed = request.clientSeedCommitment || 'default';
+            const gameNumber = session.game_count + 1;
+            const baseNonce = this.getGameBaseNonce(gameNumber);
+            // Generate initial cards
+            const dealingSeeds = {
+                serverSeed: session.server_seed,
+                clientSeed,
+                nonce: baseNonce,
+            };
+            const randoms = this.pfService.generateBlackjackRandoms(dealingSeeds, 4);
+            let rngCounter = 4;
+            const initialPlayerCards = [randoms[0], randoms[2]];
+            const dealerCards = [randoms[1], randoms[3]];
+            // Create initial hand
+            const initialHand = {
+                id: '',
+                cards: initialPlayerCards,
+                total: this.pfService.calculateHandTotal(initialPlayerCards).total,
+                hasAce: this.pfService.calculateHandTotal(initialPlayerCards).hasAce,
+                isBlackjack: this.pfService.isNaturalBlackjack(initialPlayerCards),
+                isBust: false,
+                betAmount: BigInt(request.betAmount), // Store as bigint for compatibility
+                payout: 0n,
+                actions: [],
+                canHit: true,
+                canStand: true,
+                canDoubleDown: tournamentState.chips >= request.betAmount * 2,
+                canSplit: this.canSplit(initialPlayerCards) && tournamentState.chips >= request.betAmount * 2
+            };
+            const dealerVisibleHand = this.pfService.calculateHandTotal([dealerCards[0]]);
+            const dealerBlackjack = this.pfService.isNaturalBlackjack(dealerCards);
+            let status = 'player_turn';
+            let result;
+            let chipDelta = 0;
+            if (initialHand.isBlackjack && dealerBlackjack) {
+                status = 'completed';
+                result = 'push';
+                initialHand.result = 'push';
+                initialHand.payout = BigInt(request.betAmount);
+                chipDelta = 0; // Push - no change
+            }
+            else if (initialHand.isBlackjack) {
+                status = 'completed';
+                result = 'blackjack';
+                initialHand.result = 'blackjack';
+                // 3:2 payout in chips
+                const winnings = Math.floor(request.betAmount * 1.5);
+                initialHand.payout = BigInt(request.betAmount + winnings);
+                chipDelta = winnings;
+            }
+            else if (dealerBlackjack) {
+                status = 'completed';
+                result = 'loss';
+                initialHand.result = 'loss';
+                initialHand.payout = 0n;
+                chipDelta = -request.betAmount;
+            }
+            // Create game record (use 0 for bet amount since this is tournament mode)
+            const game = await this.dbService.createGame(session.id, {
+                game_number: gameNumber,
+                total_bet_amount: 0n, // Tournament games don't use real MORBIUS
+                dealer_cards: dealerCards,
+                dealer_total: this.pfService.calculateHandTotal(dealerCards).total,
+                result,
+                total_payout: 0n,
+                client_seed_commitment: clientSeed,
+                hand_count: 1,
+                current_hand_index: 0,
+                rng_counter: rngCounter,
+            });
+            // Create initial hand record
+            const gameHand = await this.dbService.createGameHand(game.id, {
+                hand_index: 0,
+                cards: initialHand.cards,
+                total: initialHand.total,
+                has_ace: initialHand.hasAce,
+                is_blackjack: initialHand.isBlackjack,
+                is_bust: initialHand.isBust,
+                bet_amount: BigInt(request.betAmount),
+                result: initialHand.result,
+                payout: initialHand.payout
+            });
+            initialHand.id = gameHand.id;
+            // Update session stats (increment game_count)
+            await this.dbService.updateSessionStats(session.id, 0n, 0n, true);
+            // Calculate new chip count
+            const newChips = tournamentState.chips + chipDelta;
+            // Record tournament hand if game completed immediately
+            if (result) {
+                await this.tournamentService.recordTournamentHand(request.entryId, game.id, request.betAmount, tournamentState.chips, newChips, result);
+                // Check for bust or completion
+                if (newChips <= 0) {
+                    await this.tournamentService.bustOut(request.entryId);
+                }
+                else if (tournamentState.handsPlayed + 1 >= tournamentState.maxHands) {
+                    await this.tournamentService.completeTournamentEntry(request.entryId);
+                }
+                // Reveal server seed for verification
+                await this.dbService.revealServerSeed(game.id, session.server_seed_hash, session.server_seed);
+            }
+            // Get updated tournament state
+            const updatedState = await this.tournamentService.getTournamentState(request.playerAddress);
+            const gameState = {
+                gameId: game.id,
+                sessionId: session.id,
+                playerHands: [initialHand],
+                dealerCards: status === 'completed' ? dealerCards : dealerCards.slice(0, 1),
+                dealerTotal: dealerVisibleHand.total,
+                dealerHasAce: dealerVisibleHand.hasAce,
+                status,
+                totalBetAmount: BigInt(request.betAmount),
+                totalPayout: initialHand.payout,
+                actions: [],
+                dealerActions: [],
+                currentHandIndex: 0,
+                canSplit: initialHand.canSplit && status === 'player_turn',
+                isBlackjack: initialHand.isBlackjack,
+                tournamentEntryId: request.entryId,
+                tournamentChips: updatedState?.chips ?? newChips,
+                handsPlayed: updatedState?.handsPlayed ?? tournamentState.handsPlayed + (result ? 1 : 0),
+                handsRemaining: updatedState?.handsRemaining ?? tournamentState.handsRemaining - (result ? 1 : 0),
+                currentRank: updatedState?.currentRank ?? tournamentState.currentRank,
+            };
+            logger_1.logger.info('Tournament game created', {
+                gameId: game.id,
+                entryId: request.entryId,
+                betAmount: request.betAmount,
+                chips: gameState.tournamentChips,
+                handsRemaining: gameState.handsRemaining,
+                status: gameState.status
+            });
+            return gameState;
+        }
+        catch (error) {
+            logger_1.logger.error('Error creating tournament game:', error);
+            throw error;
+        }
+    }
+    /**
+     * Handle player action in tournament mode
+     */
+    async handleTournamentPlayerAction(gameId, action, entryId, handIndex) {
+        if (!this.tournamentService) {
+            throw new Error('Tournament service not configured');
+        }
+        try {
+            // Get the regular game state first
+            const gameState = await this.handlePlayerAction({
+                gameId,
+                action,
+                handIndex,
+            });
+            // Get tournament entry
+            const game = await this.dbService.getGame(gameId);
+            if (!game) {
+                throw new Error('Game not found');
+            }
+            const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+            const tournamentState = await this.tournamentService.getTournamentState(playerAddress);
+            if (!tournamentState) {
+                throw new Error('Tournament entry not found');
+            }
+            // If game is completed, update tournament
+            if (gameState.status === 'completed') {
+                // Calculate chip delta from all hands
+                let totalBet = 0;
+                let totalPayout = 0;
+                for (const hand of gameState.playerHands) {
+                    totalBet += Number(hand.betAmount);
+                    totalPayout += Number(hand.payout);
+                }
+                const chipDelta = totalPayout - totalBet;
+                const newChips = tournamentState.chips + chipDelta;
+                // Get overall result
+                const hasWin = gameState.playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
+                const allPush = gameState.playerHands.every(h => h.result === 'push');
+                const overallResult = hasWin ? 'win' : allPush ? 'push' : 'loss';
+                // Record the tournament hand
+                await this.tournamentService.recordTournamentHand(entryId, gameId, totalBet, tournamentState.chips, Math.max(0, newChips), overallResult);
+                // Check for bust or completion
+                if (newChips <= 0) {
+                    await this.tournamentService.bustOut(entryId);
+                }
+                else if (tournamentState.handsPlayed + 1 >= tournamentState.maxHands) {
+                    await this.tournamentService.completeTournamentEntry(entryId);
+                }
+            }
+            // Get updated tournament state
+            const updatedState = await this.tournamentService.getTournamentState(playerAddress);
+            return {
+                ...gameState,
+                tournamentEntryId: entryId,
+                tournamentChips: updatedState?.chips ?? tournamentState.chips,
+                handsPlayed: updatedState?.handsPlayed ?? tournamentState.handsPlayed,
+                handsRemaining: updatedState?.handsRemaining ?? tournamentState.handsRemaining,
+                currentRank: updatedState?.currentRank ?? tournamentState.currentRank,
+            };
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling tournament player action:', error);
+            throw error;
         }
     }
 }

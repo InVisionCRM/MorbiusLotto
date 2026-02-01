@@ -9,11 +9,16 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const viem_1 = require("viem");
+const chains_1 = require("viem/chains");
 const database_service_1 = require("./services/database.service");
 const provably_fair_service_1 = require("./services/provably-fair.service");
 const blackjack_game_service_1 = require("./services/blackjack-game.service");
+const tournament_service_1 = require("./services/tournament.service");
 const websocket_service_1 = require("./services/websocket.service");
 const logger_1 = require("./utils/logger");
+const withdraw_sign_1 = require("./utils/withdraw-sign");
+const blackjack_1 = require("./abi/blackjack");
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -25,10 +30,10 @@ app.use((0, cors_1.default)({
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true
 }));
-// Rate limiting
+// Rate limiting (relaxed for development - 1000 requests per minute)
 const limiter = (0, express_rate_limit_1.default)({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 1000, // limit each IP to 1000 requests per minute
     message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
@@ -55,8 +60,11 @@ async function initializeServices() {
         const pfService = new provably_fair_service_1.ProvablyFairService();
         // Initialize blackjack game service
         const gameService = new blackjack_game_service_1.BlackjackGameService(dbService, pfService);
+        // Initialize tournament service
+        const tournamentService = new tournament_service_1.TournamentService(dbService.getPool());
+        gameService.setTournamentService(tournamentService);
         // Initialize WebSocket service
-        const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService);
+        const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService, tournamentService);
         // API routes
         app.get('/api/player/:address/stats', async (req, res) => {
             try {
@@ -109,11 +117,138 @@ async function initializeServices() {
                 const { address } = req.params;
                 const limit = parseInt(req.query.limit) || 50;
                 const offset = parseInt(req.query.offset) || 0;
+                // #region agent log
+                fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/server.ts:GET /api/player/:address/games', message: 'player games request', data: { address: address?.slice(0, 12) + '…', limit, offset }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H1' }) }).catch(() => { });
+                // #endregion
                 const games = await dbService.getPlayerGames(address, limit, offset);
+                // #region agent log
+                fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/server.ts:GET /api/player/:address/games:response', message: 'player games response', data: { gamesCount: games.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H1' }) }).catch(() => { });
+                // #endregion
                 sendJson(res, games);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching player games:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Game hands endpoint (for fetching player hands for a specific game)
+        app.get('/api/game/:gameId/hands', async (req, res) => {
+            try {
+                const { gameId } = req.params;
+                // #region agent log
+                fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/server.ts:GET /api/game/:gameId/hands', message: 'game hands request', data: { gameId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' }) }).catch(() => { });
+                // #endregion
+                const hands = await dbService.getGameHands(gameId);
+                // #region agent log
+                fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/server.ts:GET /api/game/:gameId/hands:response', message: 'game hands response', data: { gameId, handsCount: hands.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' }) }).catch(() => { });
+                // #endregion
+                sendJson(res, hands);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching game hands:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Tournament API endpoints
+        app.get('/api/tournament/active', async (req, res) => {
+            try {
+                const tournament = await tournamentService.getActiveTournament();
+                const entryCount = await tournamentService.getTournamentEntryCount(tournament.id);
+                sendJson(res, {
+                    ...tournament,
+                    buy_in_amount: tournament.buy_in_amount.toString(),
+                    prize_pool: tournament.prize_pool.toString(),
+                    entryCount,
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching active tournament:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/tournament/:tournamentId/leaderboard', async (req, res) => {
+            try {
+                const { tournamentId } = req.params;
+                const limit = parseInt(req.query.limit) || 50;
+                const leaderboard = await tournamentService.getLeaderboard(tournamentId, limit);
+                sendJson(res, leaderboard);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching tournament leaderboard:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/tournament/player/:address/state', async (req, res) => {
+            try {
+                const { address } = req.params;
+                const state = await tournamentService.getTournamentState(address);
+                if (!state) {
+                    return res.json({ inTournament: false });
+                }
+                sendJson(res, { inTournament: true, ...state });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching player tournament state:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Withdraw prepare: server signs withdrawal approval (amount = min(DB balance, contract reserve))
+        const withdrawPublicClient = (0, viem_1.createPublicClient)({
+            chain: chains_1.pulsechain,
+            transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+        });
+        const blackjackContractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0xDe2c7a18de8a9d889E18874EA90A42f84FbaA080');
+        const chainId = Number(process.env.BLACKJACK_CHAIN_ID || 369);
+        app.post('/api/withdraw/prepare', async (req, res) => {
+            try {
+                const { address, requestedAmount } = req.body;
+                if (!address || typeof address !== 'string') {
+                    return res.status(400).json({ error: 'Address required' });
+                }
+                const normalizedAddress = address.toLowerCase().startsWith('0x')
+                    ? address.toLowerCase()
+                    : `0x${address.toLowerCase()}`;
+                if (normalizedAddress.length !== 42) {
+                    return res.status(400).json({ error: 'Invalid address' });
+                }
+                // Get database balance for this specific wallet
+                const dbBalance = await dbService.getPlayerBalance(normalizedAddress);
+                // Get contract reserve for this specific wallet
+                const contractReserve = await withdrawPublicClient.readContract({
+                    address: blackjackContractAddress,
+                    abi: blackjack_1.blackjackAbi,
+                    functionName: 'getPlayerReserve',
+                    args: [normalizedAddress],
+                });
+                // Cap withdrawal to minimum of: requested amount, DB balance, contract reserve
+                const requested = requestedAmount != null ? BigInt(String(requestedAmount)) : dbBalance;
+                const cap = dbBalance < contractReserve ? dbBalance : contractReserve;
+                const amount = requested < cap ? requested : cap;
+                if (amount < withdraw_sign_1.MIN_WITHDRAWAL_WEI) {
+                    return res.status(400).json({
+                        error: 'Insufficient withdrawable balance',
+                        dbBalance: dbBalance.toString(),
+                        contractReserve: contractReserve.toString(),
+                    });
+                }
+                const privateKey = process.env.SETTLEMENT_PRIVATE_KEY;
+                if (!privateKey) {
+                    logger_1.logger.error('SETTLEMENT_PRIVATE_KEY not set');
+                    return res.status(500).json({ error: 'Server configuration error' });
+                }
+                // Generate unique nonce using timestamp + random
+                const nonce = BigInt(Date.now()) * BigInt(1e6) + BigInt(Math.floor(Math.random() * 1e6));
+                const payload = await (0, withdraw_sign_1.signWithdrawApproval)(normalizedAddress, amount, nonce, blackjackContractAddress, chainId, privateKey);
+                logger_1.logger.info('Withdrawal prepared', {
+                    address: normalizedAddress,
+                    amount: amount.toString(),
+                    dbBalance: dbBalance.toString(),
+                    contractReserve: contractReserve.toString(),
+                });
+                sendJson(res, payload);
+            }
+            catch (error) {
+                logger_1.logger.error('Error preparing withdrawal:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });

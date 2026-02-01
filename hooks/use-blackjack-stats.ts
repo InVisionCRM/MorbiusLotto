@@ -60,25 +60,42 @@ export function usePlayerStatsEnhanced() {
     queryFn: async () => {
       if (!address) throw new Error('Wallet not connected');
       
-      const response = await fetch(`${API_BASE_URL}/api/player/${address}/stats/enhanced`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch player stats');
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/player/${address}/stats/enhanced`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage = 'Failed to fetch player stats';
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = errorText || errorMessage;
+          }
+          console.error('Player stats API error:', response.status, errorMessage);
+          throw new Error(errorMessage);
+        }
+        const data = await response.json();
+        
+        // Convert string bigints to BigInt
+        return {
+          ...data,
+          total_bet: BigInt(data.total_bet || 0),
+          total_win: BigInt(data.total_win || 0),
+          biggest_win: BigInt(data.biggest_win || 0),
+          biggest_loss: BigInt(data.biggest_loss || 0),
+          profit_loss: BigInt(data.profit_loss || 0),
+          favorite_bet_amount: BigInt(data.favorite_bet_amount || 0),
+        };
+      } catch (error) {
+        if (error instanceof TypeError && error.message === 'Failed to fetch') {
+          throw new Error(`Cannot connect to backend server at ${API_BASE_URL}. Make sure the server is running (cd server && npm run dev)`);
+        }
+        throw error;
       }
-      const data = await response.json();
-      
-      // Convert string bigints to BigInt
-      return {
-        ...data,
-        total_bet: BigInt(data.total_bet || 0),
-        total_win: BigInt(data.total_win || 0),
-        biggest_win: BigInt(data.biggest_win || 0),
-        biggest_loss: BigInt(data.biggest_loss || 0),
-        profit_loss: BigInt(data.profit_loss || 0),
-        favorite_bet_amount: BigInt(data.favorite_bet_amount || 0),
-      };
     },
     enabled: !!address,
     refetchInterval: 30000, // Refetch every 30 seconds
+    retry: 1, // Only retry once
   });
 }
 
@@ -89,25 +106,42 @@ export function useGlobalAnalytics() {
   return useQuery<GlobalAnalytics>({
     queryKey: ['globalAnalytics'],
     queryFn: async () => {
-      const response = await fetch(`${API_BASE_URL}/api/analytics/global`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch global analytics');
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/analytics/global`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage = 'Failed to fetch global analytics';
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = errorText || errorMessage;
+          }
+          console.error('Global analytics API error:', response.status, errorMessage);
+          throw new Error(errorMessage);
+        }
+        const data = await response.json();
+        
+        // Convert string bigints to BigInt
+        return {
+          ...data,
+          total_volume: BigInt(data.total_volume || 0),
+          total_payouts: BigInt(data.total_payouts || 0),
+          house_profit: BigInt(data.house_profit || 0),
+          volume_last_24_hours: BigInt(data.volume_last_24_hours || 0),
+          profit_last_24_hours: BigInt(data.profit_last_24_hours || 0),
+          largest_bet: BigInt(data.largest_bet || 0),
+          largest_payout: BigInt(data.largest_payout || 0),
+        };
+      } catch (error) {
+        if (error instanceof TypeError && error.message === 'Failed to fetch') {
+          throw new Error(`Cannot connect to backend server at ${API_BASE_URL}. Make sure the server is running (cd server && npm run dev)`);
+        }
+        throw error;
       }
-      const data = await response.json();
-      
-      // Convert string bigints to BigInt
-      return {
-        ...data,
-        total_volume: BigInt(data.total_volume || 0),
-        total_payouts: BigInt(data.total_payouts || 0),
-        house_profit: BigInt(data.house_profit || 0),
-        volume_last_24_hours: BigInt(data.volume_last_24_hours || 0),
-        profit_last_24_hours: BigInt(data.profit_last_24_hours || 0),
-        largest_bet: BigInt(data.largest_bet || 0),
-        largest_payout: BigInt(data.largest_payout || 0),
-      };
     },
     refetchInterval: 60000, // Refetch every minute
+    retry: 1, // Only retry once
   });
 }
 

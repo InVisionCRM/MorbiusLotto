@@ -12,7 +12,7 @@ async function main() {
   const args = process.argv.slice(2);
   const amountArg = args.find(arg => arg.startsWith('--amount='));
 
-  const BLACKJACK_ADDRESS = "0x444f0714Bd297B17FD717d0824B95cA1E48352dd"; // Deployed Blackjack contract
+  const BLACKJACK_ADDRESS = process.env.BLACKJACK_ADDRESS || "0x9A6A0f1DccF7CC4d98E2d690588e52Bb8F0A86ED"; // Deployed Blackjack contract
   const MORBIUS_TOKEN = "0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1";
   const FUNDING_AMOUNT = amountArg
     ? hre.ethers.parseEther(amountArg.split('=')[1])

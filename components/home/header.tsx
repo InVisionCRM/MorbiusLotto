@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Shield, LogOut } from 'lucide-react'
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay'
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay'
+import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal'
 
 interface HomeHeaderProps {
   showBackArrow?: boolean
@@ -20,6 +21,7 @@ interface HomeHeaderProps {
 export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArrowLabel = 'Back' }: HomeHeaderProps = {}) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
+  const [responsibleGamingOpen, setResponsibleGamingOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const { isAuthenticated, signIn, signOut, isSigning, address } = useAuth()
@@ -174,6 +176,67 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
                       <i className="fas fa-history w-4 text-center"></i>
                       <span className="text-sm font-medium">My History</span>
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResponsibleGamingOpen(true)
+                        setMenuOpen(false)
+                      }}
+                      className="flex w-full items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors text-left"
+                    >
+                      <i className="fas fa-shield-alt w-4 text-center"></i>
+                      <span className="text-sm font-medium">Responsible Gaming</span>
+                    </button>
+                  </div>
+
+                  {/* Socials Section */}
+                  <div className="p-2 border-b border-gray-700/50">
+                    <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Socials</div>
+                    <a
+                      href="https://x.com/morbiusfinance"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231z" />
+                      </svg>
+                      <span className="text-sm font-medium">X.com</span>
+                    </a>
+                    <a
+                      href="https://t.me/morbiusfinance"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fab fa-telegram w-4 text-center" aria-hidden />
+                      <span className="text-sm font-medium">Telegram</span>
+                    </a>
+                    <Link
+                      href="/Morb-It"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-image w-4 text-center" aria-hidden />
+                      <span className="text-sm font-medium">Meme Generator</span>
+                    </Link>
+                  </div>
+
+                  {/* Farm Morbius Section */}
+                  <div className="p-2 border-b border-gray-700/50">
+                    <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Farm Morbius</div>
+                    <a
+                      href="https://emit.farm/farms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-seedling w-4 text-center"></i>
+                      <span className="text-sm font-medium">EMIT</span>
+                    </a>
                   </div>
 
                   {/* Games Section */}
@@ -195,6 +258,7 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
                       <i className="fas fa-cards w-4 text-center"></i>
                       <span className="text-sm font-medium">Blackjack</span>
                     </Link>
+                    {/* Big Wheel - commented out
                     <Link
                       href="/BIG-WHEEL"
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
@@ -203,6 +267,7 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
                       <i className="fas fa-dharmachakra w-4 text-center"></i>
                       <span className="text-sm font-medium">Big Wheel</span>
                     </Link>
+                    */}
                     <Link
                       href="/lottery"
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
@@ -258,6 +323,12 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
         onSignIn={signIn}
         isSigning={isSigning}
         address={address}
+      />
+
+      {/* Responsible Gaming / Self-Exclusion Modal */}
+      <SelfExclusionModal
+        isOpen={responsibleGamingOpen}
+        onClose={() => setResponsibleGamingOpen(false)}
       />
     </nav>
   )

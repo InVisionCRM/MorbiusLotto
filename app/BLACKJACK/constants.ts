@@ -55,8 +55,8 @@ export const TOTAL_CARDS = DECKS * CARDS_PER_DECK;
 
 // Bet limits (in MORBIUS, 18 decimals)
 export const BET_LIMITS = {
-  MIN_BET: BigInt(1_000_000_000_000_000_000),     // 1 MORBIUS
-  MAX_BET: BigInt(1_000_000_000_000_000_000_000), // 1000 MORBIUS
+  MIN_BET: BigInt(1_000_000_000_000_000_000),           // 1 MORBIUS
+  MAX_BET: BigInt(100_000_000_000_000_000_000_000),    // 100,000 MORBIUS
 };
 
 // Animation timings (in milliseconds)
@@ -88,3 +88,42 @@ export const PROVABLY_FAIR = {
   CLIENT_SEED_MIN_LENGTH: 10,
   NONCE_START: 0
 };
+
+// Deployer wallet: only this address sees the Global Analytics nav/view (set via NEXT_PUBLIC_BLACKJACK_DEPLOYER_WALLET)
+export const BLACKJACK_DEPLOYER_WALLET = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BLACKJACK_DEPLOYER_WALLET
+    ? process.env.NEXT_PUBLIC_BLACKJACK_DEPLOYER_WALLET
+    : ''
+).toLowerCase();
+
+// Table background theme: Image (branded images) or Video
+export type BlackjackThemeKind = 'image' | 'video';
+
+// Branded table images (files in /public/BlackJack/BrandedTable/) – keep in sync with folder
+export const BLACKJACK_IMAGE_BACKGROUNDS = [
+  { id: 'BigRich', label: 'Big Rich', src: '/BlackJack/BrandedTable/BigRich.png' },
+  { id: 'CRVE', label: 'CRVE', src: '/BlackJack/BrandedTable/CRVE.png' },
+  { id: 'DrDoge', label: 'Dr. Doge', src: '/BlackJack/BrandedTable/Dr.Doge.png' },
+  { id: 'EMIT', label: 'EMIT', src: '/BlackJack/BrandedTable/EMIT.png' },
+  { id: 'GreenWick', label: 'Green Wick', src: '/BlackJack/BrandedTable/GreenWick.png' },
+  { id: 'H9gh-Roller-2', label: 'H9gh Roller 2', src: '/BlackJack/BrandedTable/H9gh-Roller-2.png' },
+  { id: 'high-roller-3', label: 'High Roller 3', src: '/BlackJack/BrandedTable/high-roller-3.png' },
+  { id: 'High-Roller', label: 'High Roller', src: '/BlackJack/BrandedTable/High-Roller.png' },
+  { id: 'InternetMoney', label: 'Internet Money', src: '/BlackJack/BrandedTable/InternetMoney.png' },
+  { id: 'Liberty', label: 'Liberty', src: '/BlackJack/BrandedTable/Liberty.png' },
+  { id: 'moonlight', label: 'Moonlight', src: '/BlackJack/BrandedTable/moonlight.png' },
+  { id: 'PewPew', label: 'PewPew', src: '/BlackJack/BrandedTable/PewPew.png' },
+  { id: 'pTGC', label: 'pTGC', src: '/BlackJack/BrandedTable/pTGC.png' },
+  { id: 'pTiger', label: 'pTiger', src: '/BlackJack/BrandedTable/pTiger.png' },
+  { id: 'SuperStake', label: 'SuperStake', src: '/BlackJack/BrandedTable/SuperStake.png' },
+  { id: 'WhaleBay', label: 'Whale Bay', src: '/BlackJack/BrandedTable/WhaleBay.png' },
+] as const;
+export type BlackjackImageId = (typeof BLACKJACK_IMAGE_BACKGROUNDS)[number]['id'];
+
+// Table background videos (files in /public/BlackJack/video table/)
+export const BLACKJACK_VIDEO_BACKGROUNDS = [
+  { id: 'glowingTable', label: 'Glowing Table', src: '/BlackJack/video%20table/glowingTable.mp4' },
+  { id: 'glowingTable1', label: 'Glowing Table 1', src: '/BlackJack/video%20table/glowingTable1.mp4' },
+  { id: 'glowingLogo', label: 'Glowing Logo', src: '/BlackJack/video%20table/glowingLogo.mp4' },
+] as const;
+export type BlackjackVideoId = (typeof BLACKJACK_VIDEO_BACKGROUNDS)[number]['id'];

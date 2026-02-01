@@ -1,0 +1,13 @@
+# Railway config-as-code for the Blackjack server
+# https://docs.railway.com/guides/config-as-code
+# In Railway: set Service "Root Directory" to `server` and "Config File" to `server/railway.toml`
+
+[build]
+builder = "nixpacks"
+buildCommand = "npm install && npm run build"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"

@@ -9,6 +9,9 @@ import { NumberTicker } from '@/components/ui/number-ticker';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
 import { formatEther } from 'viem';
+import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_DEPLOYER_WALLET } from '@/app/BLACKJACK/constants';
+import type { BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from '@/app/BLACKJACK/constants';
+import ThemeSelectionModal from '@/components/BLACKJACK/ThemeSelectionModal';
 
 interface MainNavProps {
   onOpenDepositModal?: () => void;
@@ -16,8 +19,18 @@ interface MainNavProps {
   reserveBalance?: bigint;
   currentView?: 'game' | 'history' | 'stats' | 'analytics' | 'verify';
   onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics' | 'verify') => void;
-  useVideoBackground?: boolean;
-  onBackgroundChange?: (useVideo: boolean) => void;
+  theme?: BlackjackThemeKind;
+  onThemeChange?: (theme: BlackjackThemeKind) => void;
+  imageSource?: BlackjackImageId;
+  onImageSourceChange?: (id: BlackjackImageId) => void;
+  videoSource?: BlackjackVideoId;
+  onVideoSourceChange?: (id: BlackjackVideoId) => void;
+  videoSyncToClock?: boolean;
+  onVideoSyncToClockChange?: (sync: boolean) => void;
+  videoPosition?: number;
+  onVideoPositionChange?: (position: number) => void;
+  soundEnabled?: boolean;
+  onSoundChange?: (enabled: boolean) => void;
 }
 
 const viewLabels: Record<string, string> = {
@@ -36,11 +49,12 @@ const viewIcons: Record<string, string> = {
   verify: 'fa-check-circle'
 };
 
-export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reserveBalance, currentView = 'game', onViewChange, useVideoBackground = true, onBackgroundChange }: MainNavProps) {
+export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = BLACKJACK_IMAGE_BACKGROUNDS[0].id, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange }: MainNavProps) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -68,7 +82,12 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
     };
   }, [isDropdownOpen, isMobileMenuOpen]);
 
-  const views: Array<'game' | 'history' | 'stats' | 'analytics' | 'verify'> = ['game', 'history', 'stats', 'analytics', 'verify'];
+  const isDeployer = Boolean(
+    address && BLACKJACK_DEPLOYER_WALLET && address.toLowerCase() === BLACKJACK_DEPLOYER_WALLET
+  );
+  const views: Array<'game' | 'history' | 'stats' | 'analytics' | 'verify'> = isDeployer
+    ? ['game', 'history', 'stats', 'analytics', 'verify']
+    : ['game', 'history', 'stats', 'verify'];
 
   return (
     <nav
@@ -165,10 +184,8 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
             <div className="relative z-50" ref={mobileMenuRef}>
               <button
                 type="button"
-                onClick={() => {
-                  console.log('Hamburger clicked, current state:', isMobileMenuOpen);
-                  setIsMobileMenuOpen(!isMobileMenuOpen);
-                }}
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
                 className="w-10 h-10 flex flex-col items-center justify-center gap-[7px] transition-all active:scale-95 rounded-md hover:bg-white/10"
               >
                 <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
@@ -209,20 +226,35 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                         )}
                       </button>
                     ))}
-                    {/* Background Toggle */}
-                    {onBackgroundChange && (
+                    {/* Table theme – opens modal */}
+                    {onThemeChange && (
                       <button
+                        type="button"
                         onClick={() => {
-                          onBackgroundChange(!useVideoBackground);
+                          setThemeModalOpen(true);
                         }}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-t border-gray-700/50 mt-2 pt-2"
+                        aria-label="Open table theme picker"
                       >
-                        <i className={`fas ${useVideoBackground ? 'fa-video' : 'fa-image'} w-4 text-center`}></i>
+                        <i className="fas fa-palette w-4 text-center" aria-hidden />
+                        <span className="text-sm font-medium">Table theme</span>
+                        <i className="fas fa-chevron-right ml-auto text-white/50 text-xs" aria-hidden />
+                      </button>
+                    )}
+                    {/* Sound Toggle */}
+                    {onSoundChange !== undefined && (
+                      <button
+                        type="button"
+                        onClick={() => onSoundChange(!soundEnabled)}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        aria-label={soundEnabled ? 'Mute game sound' : 'Unmute game sound'}
+                      >
+                        <i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-4 text-center`} aria-hidden />
                         <span className="text-sm font-medium">
-                          {useVideoBackground ? 'Video Background' : 'Image Background'}
+                          {soundEnabled ? 'Sound On' : 'Sound Off'}
                         </span>
-                        {useVideoBackground && (
-                          <i className="fas fa-check ml-auto text-cyan-400 text-xs"></i>
+                        {soundEnabled && (
+                          <i className="fas fa-check ml-auto text-cyan-400 text-xs" aria-hidden />
                         )}
                       </button>
                     )}
@@ -239,6 +271,7 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                       <i className="fas fa-circle w-4 text-center"></i>
                       <span className="text-sm font-medium">Plinko</span>
                     </Link>
+                    {/* Big Wheel - commented out
                     <Link
                       href="/BIG-WHEEL"
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
@@ -247,6 +280,7 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                       <i className="fas fa-dharmachakra w-4 text-center"></i>
                       <span className="text-sm font-medium">Big Wheel</span>
                     </Link>
+                    */}
                     <Link
                       href="/lottery"
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
@@ -262,14 +296,6 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                     >
                       <i className="fas fa-th w-4 text-center"></i>
                       <span className="text-sm font-medium">Keno</span>
-                    </Link>
-                    <Link
-                      href="/Morb-It"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-image w-4 text-center"></i>
-                      <span className="text-sm font-medium">Meme Generator</span>
                     </Link>
                   </div>
 
@@ -332,6 +358,21 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
           </div>
         </div>
       </div>
+
+      <ThemeSelectionModal
+        open={themeModalOpen}
+        onClose={() => setThemeModalOpen(false)}
+        theme={theme}
+        imageSource={imageSource}
+        videoSource={videoSource}
+        onThemeChange={onThemeChange ?? (() => {})}
+        onImageSourceChange={onImageSourceChange ?? (() => {})}
+        onVideoSourceChange={onVideoSourceChange ?? (() => {})}
+        videoSyncToClock={videoSyncToClock}
+        onVideoSyncToClockChange={onVideoSyncToClockChange}
+        videoPosition={videoPosition}
+        onVideoPositionChange={onVideoPositionChange}
+      />
     </nav>
   );
 }

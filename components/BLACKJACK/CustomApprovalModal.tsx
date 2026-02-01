@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Loader2 } from 'lucide-react'
 import { parseEther } from 'viem'
 
 interface CustomApprovalModalProps {
@@ -175,12 +176,12 @@ export function CustomApprovalModal({
           <Button
             onClick={handleApprove}
             disabled={isApproving || (approvalType === 'custom' && !customAmount)}
-            className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
+            className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 disabled:opacity-50"
           >
             {isApproving ? (
               <>
-                <i className="fas fa-spinner fa-spin mr-2"></i>
-                Approving...
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Waiting for Confirmation...
               </>
             ) : (
               <>

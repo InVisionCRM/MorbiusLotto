@@ -68,7 +68,7 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
     onStartGame(currentBetAmountBigInt, '');
   };
 
-  const quickBetAmounts = [5, 10, 25, 100, 1000];
+  const quickBetAmounts = [500, 1000, 2500, 10000, 100000];
 
   // Check if a chip value is affordable with remaining balance
   const isChipAffordable = (chipValue: number) => {
@@ -86,11 +86,11 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
             // Map chip values to PNG images
             const getChipImage = (value: number) => {
               switch (value) {
-                case 5: return '/PokerChips/greenpokerchip005.png'; // Green for 5
-                case 10: return '/PokerChips/bluepokerchip010.png'; // Blue for 10
-                case 25: return '/PokerChips/redpokerchip015.png'; // Red for 25
-                case 100: return '/PokerChips/blackpokerchip000.png'; // Black for 100
-                case 1000: return '/PokerChips/cyanpokerchip020.png'; // Black for 1000
+                case 500: return '/PokerChips/greenpokerchip005.png'; // Green for 500
+                case 1000: return '/PokerChips/bluepokerchip010.png'; // Blue for 1000
+                case 2500: return '/PokerChips/redpokerchip015.png'; // Red for 2500
+                case 10000: return '/PokerChips/blackpokerchip000.png'; // Black for 10000
+                case 100000: return '/PokerChips/cyanpokerchip020.png'; // Cyan for 100000
                 default: return '/PokerChips/greenpokerchip005.png';
               }
             };

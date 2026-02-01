@@ -1,5 +1,6 @@
 import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
+import { TournamentService } from './tournament.service';
 export interface Hand {
     id: string;
     cards: number[];
@@ -38,6 +39,19 @@ export interface CreateGameRequest {
     clientSeedCommitment?: string;
     gameHash?: string;
 }
+export interface CreateTournamentGameRequest {
+    playerAddress: string;
+    betAmount: number;
+    entryId: string;
+    clientSeedCommitment?: string;
+}
+export interface TournamentGameState extends GameState {
+    tournamentEntryId: string;
+    tournamentChips: number;
+    handsPlayed: number;
+    handsRemaining: number;
+    currentRank: number;
+}
 export interface PlayerActionRequest {
     gameId: string;
     action: 'hit' | 'stand' | 'double_down' | 'split';
@@ -48,7 +62,12 @@ export declare class BlackjackGameService {
     private dbService;
     private pfService;
     private static readonly GAME_NONCE_MULTIPLIER;
+    private tournamentService?;
     constructor(dbService: DatabaseService, pfService: ProvablyFairService);
+    /**
+     * Set the tournament service (optional, for tournament mode support)
+     */
+    setTournamentService(tournamentService: TournamentService): void;
     private getGameBaseNonce;
     private ensureSessionSeed;
     /**
@@ -83,5 +102,13 @@ export declare class BlackjackGameService {
      * Get game result for verification
      */
     getGameResult(gameId: string): Promise<any>;
+    /**
+     * Create a tournament game using tournament chips
+     */
+    createTournamentGame(request: CreateTournamentGameRequest): Promise<TournamentGameState>;
+    /**
+     * Handle player action in tournament mode
+     */
+    handleTournamentPlayerAction(gameId: string, action: 'hit' | 'stand' | 'double_down' | 'split', entryId: string, handIndex?: number): Promise<TournamentGameState>;
 }
 //# sourceMappingURL=blackjack-game.service.d.ts.map

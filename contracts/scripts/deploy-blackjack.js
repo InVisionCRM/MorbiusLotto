@@ -30,18 +30,13 @@ async function main() {
 
   const Blackjack = await hre.ethers.getContractFactory("Blackjack");
   console.log("\nDeploying…");
-  const gasPrice = hre.ethers.parseUnits("400000", "gwei");
   const blackjack = await Blackjack.deploy(
     INITIAL_OWNER,
     MORBIUS_TOKEN,
     WPLS_TOKEN,
     PULSEX_ROUTER,
     AUTHORIZED_SERVER,
-    EMERGENCY_ADMIN,
-    {
-      gasLimit: 12000000,
-      gasPrice,
-    }
+    EMERGENCY_ADMIN
   );
 
   const deploymentTx = blackjack.deploymentTransaction();

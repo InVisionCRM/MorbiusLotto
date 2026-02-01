@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "sonner";
+import { GlobalChat } from "@/components/chat/GlobalChat";
+import { BreakReminderWrapper } from "@/components/ResponsibleGaming";
 
 // Use system fonts instead of Google Fonts to avoid build issues
 const geistSans = {
@@ -48,6 +50,8 @@ export default function RootLayout({
           <Providers>
             {children}
             <Toaster position="top-right" theme="dark" richColors />
+            <GlobalChat />
+            <BreakReminderWrapper />
           </Providers>
         </div>
       </body>

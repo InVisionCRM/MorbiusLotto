@@ -20,8 +20,6 @@ module.exports = {
       chainId: 369,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       timeout: 120000,
-      gas: 8000000,
-      gasPrice: 500000000000000, // 500,000 gwei for PulseChain
     },
     pulsechainTestnet: {
       url: "https://rpc.v4.testnet.pulsechain.com",

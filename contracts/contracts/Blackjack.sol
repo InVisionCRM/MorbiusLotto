@@ -66,7 +66,7 @@ contract Blackjack is Ownable, ReentrancyGuard, Pausable {
     uint256 public constant MIN_WITHDRAWAL = 1e18;  // 1 MORBIUS
 
     // Maximum daily withdrawal limit (anti-fraud)
-    uint256 public constant MAX_DAILY_WITHDRAWAL = 10000e18; // 10,000 MORBIUS
+    uint256 public constant MAX_DAILY_WITHDRAWAL = 1000000e18; // 1,000,000 MORBIUS
 
     // Authorized server for settlements
     address public authorizedServer;
@@ -112,6 +112,17 @@ contract Blackjack is Ownable, ReentrancyGuard, Pausable {
 
     // Emergency pause
     bool public emergencyPaused;
+
+    // Used nonces for signature-based withdrawals (prevents replay attacks)
+    mapping(uint256 => bool) public usedNonces;
+
+    // EIP-712 Domain Separator
+    bytes32 public immutable DOMAIN_SEPARATOR;
+
+    // EIP-712 TypeHash for WithdrawApproval
+    bytes32 public constant WITHDRAW_APPROVAL_TYPEHASH = keccak256(
+        "WithdrawApproval(address player,uint256 amount,uint256 nonce)"
+    );
 
     // ============ Structs ============
 
@@ -181,6 +192,17 @@ contract Blackjack is Ownable, ReentrancyGuard, Pausable {
         pulseXRouter = IPulseXRouter(_pulseXRouter);
         authorizedServer = _authorizedServer;
         emergencyAdmin = _emergencyAdmin;
+
+        // Initialize EIP-712 Domain Separator
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("Blackjack")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(this)
+            )
+        );
     }
 
     // ============ External Functions ============
@@ -265,6 +287,79 @@ contract Blackjack is Ownable, ReentrancyGuard, Pausable {
         // Update reserves
         playerReserves[msg.sender] -= amount;
         totalReserves -= amount;
+
+        // Transfer MORBIUS to user
+        MORBIUS_TOKEN.safeTransfer(msg.sender, amount);
+
+        emit Withdrawal(msg.sender, amount);
+    }
+
+    /**
+     * @notice Withdraw MORBIUS with server signature (for off-chain balance withdrawals)
+     * @dev Server signs approval for withdrawals up to the player's off-chain balance
+     * @param amount Amount of MORBIUS to withdraw
+     * @param nonce Unique nonce to prevent replay attacks
+     * @param v Signature v component
+     * @param r Signature r component
+     * @param s Signature s component
+     */
+    function withdrawWithSignature(
+        uint256 amount,
+        uint256 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant whenNotPaused {
+        require(amount >= MIN_WITHDRAWAL, "Withdrawal too small");
+        require(!emergencyPaused, "Emergency pause active");
+        require(!usedNonces[nonce], "Nonce already used");
+
+        // Verify signature from authorized server
+        bytes32 structHash = keccak256(
+            abi.encode(
+                WITHDRAW_APPROVAL_TYPEHASH,
+                msg.sender,
+                amount,
+                nonce
+            )
+        );
+
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)
+        );
+
+        address signer = ecrecover(digest, v, r, s);
+        require(signer == authorizedServer, "Invalid signature");
+
+        // Mark nonce as used
+        usedNonces[nonce] = true;
+
+        // Check daily withdrawal limit
+        uint256 today = block.timestamp / 86400;
+        require(dailyWithdrawals[msg.sender][today] + amount <= MAX_DAILY_WITHDRAWAL, "Daily withdrawal limit exceeded");
+        require(dailyWithdrawalTotals[today] + amount <= MAX_DAILY_WITHDRAWAL * 10, "Global daily limit exceeded");
+
+        // Update daily limits
+        dailyWithdrawals[msg.sender][today] += amount;
+        dailyWithdrawalTotals[today] += amount;
+
+        // For signature-based withdrawals, we withdraw from contract balance
+        // The server has already validated the off-chain balance
+        // We also update playerReserves if they have any (for accounting consistency)
+        if (playerReserves[msg.sender] >= amount) {
+            playerReserves[msg.sender] -= amount;
+            totalReserves -= amount;
+        } else if (playerReserves[msg.sender] > 0) {
+            // Partial from reserves, rest from contract surplus
+            uint256 fromReserve = playerReserves[msg.sender];
+            totalReserves -= fromReserve;
+            playerReserves[msg.sender] = 0;
+        }
+        // If playerReserves is 0, we're withdrawing purely from off-chain winnings
+        // The server has validated this is legitimate via the signature
+
+        // Ensure contract has enough tokens
+        require(MORBIUS_TOKEN.balanceOf(address(this)) >= amount, "Insufficient contract balance");
 
         // Transfer MORBIUS to user
         MORBIUS_TOKEN.safeTransfer(msg.sender, amount);

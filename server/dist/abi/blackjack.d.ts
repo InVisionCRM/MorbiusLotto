@@ -249,6 +249,16 @@ export declare const blackjackAbi: readonly [{
     readonly type: "function";
 }, {
     readonly inputs: readonly [];
+    readonly name: "DOMAIN_SEPARATOR";
+    readonly outputs: readonly [{
+        readonly internalType: "bytes32";
+        readonly name: "";
+        readonly type: "bytes32";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [];
     readonly name: "HOUSE_EDGE_BPS";
     readonly outputs: readonly [{
         readonly internalType: "uint256";
@@ -294,6 +304,16 @@ export declare const blackjackAbi: readonly [{
         readonly internalType: "contract IERC20";
         readonly name: "";
         readonly type: "address";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [];
+    readonly name: "WITHDRAW_APPROVAL_TYPEHASH";
+    readonly outputs: readonly [{
+        readonly internalType: "bytes32";
+        readonly name: "";
+        readonly type: "bytes32";
     }];
     readonly stateMutability: "view";
     readonly type: "function";
@@ -732,10 +752,50 @@ export declare const blackjackAbi: readonly [{
 }, {
     readonly inputs: readonly [{
         readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly name: "usedNonces";
+    readonly outputs: readonly [{
+        readonly internalType: "bool";
+        readonly name: "";
+        readonly type: "bool";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "uint256";
         readonly name: "amount";
         readonly type: "uint256";
     }];
     readonly name: "withdraw";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "amount";
+        readonly type: "uint256";
+    }, {
+        readonly internalType: "uint256";
+        readonly name: "nonce";
+        readonly type: "uint256";
+    }, {
+        readonly internalType: "uint8";
+        readonly name: "v";
+        readonly type: "uint8";
+    }, {
+        readonly internalType: "bytes32";
+        readonly name: "r";
+        readonly type: "bytes32";
+    }, {
+        readonly internalType: "bytes32";
+        readonly name: "s";
+        readonly type: "bytes32";
+    }];
+    readonly name: "withdrawWithSignature";
     readonly outputs: readonly [];
     readonly stateMutability: "nonpayable";
     readonly type: "function";

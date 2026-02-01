@@ -105,7 +105,7 @@ export function TokenomicsSection() {
           viewport={{ once: true, margin: "-100px" }}
           variants={fadeIn}
         >
-          <h2 className="text-5xl md:text-6xl font-russo-one font-normal text-white mb-4">
+          <h2 className="text-5xl md:text-6xl font-russo-one font-normal text-cyan-500/80 mb-4">
             Tokenomics
           </h2>
           <MorbiusBurnedDisplay variant="card" className="mt-6" />
