@@ -24,11 +24,19 @@ const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 3001;
 
-// Security middleware
+// CORS: allow frontend origin(s). Set FRONTEND_URL on Railway to your app URL (comma-separated for multiple).
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // same-origin or non-browser
+    if (allowedOrigins.includes(origin)) return cb(null, true); // reflect allowed origin
+    return cb(null, false);
+  },
+  credentials: true,
 }));
 
 // Rate limiting (relaxed for development - 1000 requests per minute)
