@@ -180,9 +180,10 @@ export function ChatPanel({
     }
   };
 
+  const messageListMaxHeight = collapsible ? 'max-h-[280px]' : 'min-h-0';
   const panelContent = (
     <>
-      <div className="relative flex-1 min-h-[120px] max-h-[280px] flex flex-col">
+      <div className={`relative flex-1 min-h-[120px] flex flex-col ${messageListMaxHeight}`}>
         <div
           ref={listRef}
           onScroll={handleListScroll}

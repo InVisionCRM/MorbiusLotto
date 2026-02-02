@@ -24,6 +24,13 @@ export function getWebSocketUrl(): string {
   return requireEnv('NEXT_PUBLIC_WEBSOCKET_URL');
 }
 
+/** Returns WebSocket URL or null if not set. Use when chat is optional so the app doesn't throw on load. */
+export function getWebSocketUrlOptional(): string | null {
+  const value = process.env.NEXT_PUBLIC_WEBSOCKET_URL;
+  if (!value || value.trim() === '') return null;
+  return value.trim();
+}
+
 export function getBlackjackServerUrl(): string {
   return requireEnv('NEXT_PUBLIC_BLACKJACK_SERVER_URL');
 }

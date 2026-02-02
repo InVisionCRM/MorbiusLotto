@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { getWebSocketUrl } from '@/lib/api-urls';
+import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import {
   BlackjackWebSocketClient,
   type ChatMessagePayload,
@@ -67,7 +67,13 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
   useEffect(() => {
     if (externalClient != null || !roomId) return;
 
-    const internal = new BlackjackWebSocketClient(getWebSocketUrl(), address ?? undefined);
+    const wsUrl = getWebSocketUrlOptional();
+    if (!wsUrl) {
+      setError('Chat not configured (set NEXT_PUBLIC_WEBSOCKET_URL)');
+      return;
+    }
+
+    const internal = new BlackjackWebSocketClient(wsUrl, address ?? undefined);
     internalClientRef.current = internal;
     setError(null);
 

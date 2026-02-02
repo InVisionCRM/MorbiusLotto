@@ -3,6 +3,12 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
+import { MessageCircle } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { ChatPanel } from './ChatPanel';
 
 const PATH_TO_ROOM: Record<string, { roomId: string; title: string }> = {
@@ -34,17 +40,47 @@ function getRoomForPath(pathname: string): { roomId: string; title: string } {
 export function GlobalChat() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [open, setOpen] = useState(false);
   const { roomId, title } = getRoomForPath(pathname ?? '/');
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const chat = <ChatPanel roomId={roomId} title={title} collapsible />;
+  const chatSheet = (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          className="fixed right-0 top-1/2 z-40 -translate-y-1/2 flex items-center justify-center w-10 h-24 rounded-l-lg border border-r-0 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-lg hover:bg-slate-800/90 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:ring-offset-2 focus:ring-offset-background"
+          style={{
+            boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5)',
+          }}
+          aria-label="Open chat"
+        >
+          <MessageCircle className="h-5 w-5 text-cyan-400" />
+          <span className="sr-only">Chat</span>
+        </button>
+      </SheetTrigger>
+      <SheetContent
+        side="right"
+        className="w-[50vw] max-w-[50vw] p-0 flex flex-col border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800"
+        style={{
+          background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+          border: '1px solid rgba(34, 211, 238, 0.3)',
+        }}
+      >
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <ChatPanel roomId={roomId} title={title} collapsible={false} className="flex-1 flex flex-col min-h-0 overflow-hidden" />
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
 
-  // After mount, render chat into body so it isn't scaled by .app-content-wrapper's transform
+  // After mount, render into body so it isn't scaled by .app-content-wrapper's transform
   if (mounted && typeof document !== 'undefined') {
-    return createPortal(chat, document.body);
+    return createPortal(chatSheet, document.body);
   }
-  return chat;
+  return chatSheet;
 }
