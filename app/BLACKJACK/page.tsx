@@ -430,7 +430,7 @@ export default function BlackjackPage() {
   // If split, only add chips for half the stack (current hand)
   // If not split, double the entire stack
   const handleDoubleDownChips = useCallback(() => {
-    const currentGame = gameState.currentGame;
+    const currentGame = currentGameRef.current;
     const isSplit = currentGame?.playerHands && currentGame.playerHands.length > 1;
 
     setChipStack(prev => {
@@ -455,7 +455,7 @@ export default function BlackjackPage() {
 
       return [...prev, ...chipsToAdd];
     });
-  }, [gameState.currentGame]);
+  }, []);
 
   // Split chips: duplicate the chip stack for the second hand
   const handleSplitChips = useCallback(() => {
@@ -492,6 +492,12 @@ export default function BlackjackPage() {
     currentHandIndex: 0,
     canSplit: false
   });
+
+  // Ref to track current game for callbacks that can't access gameState directly
+  const currentGameRef = useRef<Game | null>(null);
+  useEffect(() => {
+    currentGameRef.current = gameState.currentGame;
+  }, [gameState.currentGame]);
 
   // WebSocket client (declare before fetchBalance/syncBalance)
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
