@@ -58,9 +58,15 @@ export class BlackjackWebSocketClient {
   private intentionalClose = false;
 
   constructor(
-    private serverUrl: string = 'ws://localhost:3001',
+    private serverUrl: string,
     private playerAddress?: string
-  ) {}
+  ) {
+    if (!serverUrl || serverUrl.trim() === '') {
+      throw new Error(
+        'BlackjackWebSocketClient requires serverUrl (use getWebSocketUrl() from @/lib/api-urls).'
+      );
+    }
+  }
 
   /**
    * Connect to the WebSocket server

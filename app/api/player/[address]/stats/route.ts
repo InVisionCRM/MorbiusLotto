@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BLACKJACK_SERVER_URL || 'http://localhost:3001';
+function getBackendUrl(): string {
+  const url = process.env.BLACKJACK_SERVER_URL;
+  if (!url || url.trim() === '') {
+    throw new Error(
+      'Missing required env: BLACKJACK_SERVER_URL. Set it in your deployment (e.g. Vercel).'
+    );
+  }
+  return url.trim();
+}
 
 export async function GET(
   request: NextRequest,
@@ -13,14 +21,15 @@ export async function GET(
   }
 
   try {
+    const backendUrl = getBackendUrl();
     // Try enhanced stats first, fall back to basic stats
-    let res = await fetch(`${BACKEND_URL}/api/player/${address}/stats/enhanced`, {
+    let res = await fetch(`${backendUrl}/api/player/${address}/stats/enhanced`, {
       headers: { 'Content-Type': 'application/json' },
       next: { revalidate: 30 }, // Cache for 30 seconds
     });
 
     if (!res.ok) {
-      res = await fetch(`${BACKEND_URL}/api/player/${address}/stats`, {
+      res = await fetch(`${backendUrl}/api/player/${address}/stats`, {
         headers: { 'Content-Type': 'application/json' },
         next: { revalidate: 30 },
       });

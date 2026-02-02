@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import { getWebSocketUrl } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 
 type DurationType = '24h' | '7d' | '30d' | '6m' | '1y' | 'permanent';
@@ -29,10 +30,6 @@ const DURATION_OPTIONS: { value: DurationType; label: string; description: strin
   { value: 'permanent', label: 'Permanent', description: 'Irreversible self-exclusion' },
 ];
 
-const WS_URL = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:3001')
-  : 'ws://localhost:3001';
-
 export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }: SelfExclusionModalProps) {
   const { address } = useAccount();
   const [status, setStatus] = useState<ExclusionStatus | null>(null);
@@ -50,7 +47,7 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
   useEffect(() => {
     if (!isOpen || !address || externalClient) return;
 
-    const ws = new BlackjackWebSocketClient(WS_URL, address);
+    const ws = new BlackjackWebSocketClient(getWebSocketUrl(), address);
     ws.connect()
       .then(() => setInternalClient(ws))
       .catch((err) => setError(err.message));

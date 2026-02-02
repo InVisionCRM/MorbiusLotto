@@ -10,6 +10,7 @@ import { useNativeBalance } from '@/hooks/use-native-balance'
 import { usePlsQuote } from '@/hooks/use-pls-quote'
 import { useBlackjackContract } from '@/hooks/use-blackjack-contract'
 import { useTokenApproval } from '@/hooks/use-token-approval'
+import { getBlackjackServerUrl } from '@/lib/api-urls'
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal'
 import { Button } from '@/components/ui/button'
@@ -255,7 +256,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
 
     try {
       // Step 1: Get server signature for the withdrawal
-      const serverUrl = process.env.NEXT_PUBLIC_BLACKJACK_SERVER_URL || 'http://localhost:3001'
+      const serverUrl = getBlackjackServerUrl()
       const response = await fetch(`${serverUrl}/api/withdraw/prepare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

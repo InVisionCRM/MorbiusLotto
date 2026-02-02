@@ -2,15 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAccount } from 'wagmi';
+import { getWebSocketUrl } from '@/lib/api-urls';
 import {
   BlackjackWebSocketClient,
   type ChatMessagePayload,
   type RoomJoinedPayload,
 } from '@/lib/websocket-client';
-
-const WS_URL = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:3001')
-  : 'ws://localhost:3001';
 
 export interface UseChatOptions {
   /** Optional existing WebSocket client (e.g. from Blackjack page). If not provided, a chat-only client is created. */
@@ -70,7 +67,7 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
   useEffect(() => {
     if (externalClient != null || !roomId) return;
 
-    const internal = new BlackjackWebSocketClient(WS_URL, address ?? undefined);
+    const internal = new BlackjackWebSocketClient(getWebSocketUrl(), address ?? undefined);
     internalClientRef.current = internal;
     setError(null);
 

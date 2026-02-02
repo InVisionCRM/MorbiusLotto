@@ -32,6 +32,7 @@ import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, BLACKJACK_IMA
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
+import { getApiUrl, getWebSocketUrl } from '@/lib/api-urls';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
@@ -724,7 +725,7 @@ export default function BlackjackPage() {
   const wsAddressRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:3001';
+    const wsUrl = getWebSocketUrl();
 
     // If address changed and we have an existing client, disconnect it first
     if (wsClient && address && wsAddressRef.current !== address.toLowerCase()) {
@@ -866,7 +867,7 @@ export default function BlackjackPage() {
 
     // Convert database Game[] to GameResult[] format
     const loadHistoryFromDatabase = async () => {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const API_BASE_URL = getApiUrl();
       // #region agent log
       fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:start',message:'loadHistoryFromDatabase',data:{playerGamesDataLength:playerGamesData.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
       // #endregion
