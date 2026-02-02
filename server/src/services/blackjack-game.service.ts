@@ -917,18 +917,22 @@ export class BlackjackGameService {
         dealerCards: game.dealer_cards,
         dealerTotal: game.dealer_total,
         totalPayout: game.total_payout,
+        betAmount: game.total_bet_amount,
+        timestamp: game.created_at ? new Date(game.created_at).getTime() : undefined,
         serverSeedHash: seedReveal?.server_seed_hash ? `0x${seedReveal.server_seed_hash}` : undefined,
         serverSeed: seedReveal?.server_seed,
         clientSeed: game.client_seed_commitment || 'default',
         gameNumber: game.game_number,
         baseNonce,
+        nonce: Number(baseNonce),
         nonceScheme: {
           baseNonceMultiplier: BlackjackGameService.GAME_NONCE_MULTIPLIER,
           initialDealOrder: ['player', 'dealer', 'player', 'dealer'],
           note: 'Each card draw uses nonce = baseNonce + drawIndex; drawIndex increments globally per game.',
         },
         actions: game.actions || [],
-        dealerActions: game.dealer_actions || []
+        dealerActions: game.dealer_actions || [],
+        result: game.result
       };
     } catch (error) {
       logger.error('Error getting game result:', error);

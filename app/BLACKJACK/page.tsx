@@ -14,12 +14,13 @@ import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal'
 import { GameHistory } from '@/components/BLACKJACK/GameHistory';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalyticsDashboard';
-import { GameVerificationTools } from '@/components/BLACKJACK/GameVerificationTools';
+import { GameVerificationTools, type GameVerificationData } from '@/components/BLACKJACK/GameVerificationTools';
 import { GlobalWinsFeed } from '@/components/BLACKJACK/GlobalWinsFeed';
 import { ContractAddress } from '@/components/ui/contract-address';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
 import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers';
 import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
+import QuickHistory from '@/components/BLACKJACK/QuickHistory';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { useTournament, TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
 import {
@@ -2035,6 +2036,36 @@ export default function BlackjackPage() {
 
   // Note: Approval handling no longer needed since bets come from reserve
 
+  // Fetch game result for verification (Verify tab)
+  const handleVerifyGame = useCallback(async (id: string): Promise<GameVerificationData | null> => {
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/game/${id}/verify`);
+      if (!res.ok) return null;
+      const raw = await res.json();
+      if (!raw || !raw.gameId) return null;
+      const hands = raw.playerHands || [];
+      const playerCards = hands.flatMap((h: { cards?: number[] }) => h.cards || []);
+      const firstResult = hands[0]?.result ?? raw.result ?? 'push';
+      return {
+        gameId: raw.gameId,
+        serverSeedHash: raw.serverSeedHash ?? '',
+        serverSeed: raw.serverSeed,
+        clientSeed: raw.clientSeed ?? 'default',
+        nonce: typeof raw.nonce === 'number' ? raw.nonce : Number(raw.baseNonce ?? 0),
+        betAmount: BigInt(raw.betAmount ?? raw.total_bet_amount ?? 0),
+        playerCards,
+        dealerCards: Array.isArray(raw.dealerCards) ? raw.dealerCards : [],
+        result: raw.result ?? firstResult,
+        payout: BigInt(raw.totalPayout ?? raw.total_payout ?? 0),
+        timestamp: raw.timestamp ?? 0,
+        actions: raw.actions ?? [],
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Handle player actions
   const handlePlayerAction = useCallback(async (action: Action) => {
     if (!gameState.currentGame || !wsClient || !wsConnected) return;
@@ -2258,8 +2289,9 @@ export default function BlackjackPage() {
         {/* View-specific content */}
         {currentView === 'game' && (
           <>
-        {/* Game Table */}
-        <div className="flex gap-1 pb-0 -mx-2 sm:mx-0">
+        {/* Game Table + Quick History: 2-col grid on md-lg (2/3 table, 1/3 history) */}
+        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2 md:gap-4">
+          <div className="min-w-0 flex gap-1 pb-0 -mx-2 sm:mx-0">
           <div className="relative w-full">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
@@ -2353,6 +2385,11 @@ export default function BlackjackPage() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="min-w-0">
+          <QuickHistory history={gameState.history} reserveBalance={offChainBalance} />
+        </div>
         </div>
 
         {/* Mobile-only: action buttons in own section below table, above tournament (default layout, full width) */}
@@ -2704,7 +2741,7 @@ export default function BlackjackPage() {
         )}
 
         {currentView === 'verify' && (
-          <GameVerificationTools />
+          <GameVerificationTools onVerify={handleVerifyGame} />
         )}
 
         {/* Provably Fair (Advanced) - Above Contract Addresses */}

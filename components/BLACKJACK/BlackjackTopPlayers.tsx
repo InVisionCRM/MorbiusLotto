@@ -23,6 +23,7 @@ export default function BlackjackTopPlayers() {
   const { data: players, isLoading, error } = useBlackjackTopPlayers(TOP_N)
 
   if (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load leaderboard.'
     return (
       <div className="w-full max-w-5xl mx-auto px-4 py-6 min-w-0">
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -32,7 +33,8 @@ export default function BlackjackTopPlayers() {
           </h2>
         </header>
         <div className={`${PANEL_CLASS} p-8 text-center`}>
-          <p className="text-red-400/90 text-sm">Failed to load leaderboard. Check your connection.</p>
+          <p className="text-red-400/90 text-sm">Failed to load leaderboard.</p>
+          <p className="text-red-300/80 text-xs mt-2 font-mono max-w-xl mx-auto break-words">{message}</p>
         </div>
       </div>
     )

@@ -162,21 +162,41 @@ export function useBlackjackTopPlayers(limit: number = 10) {
   return useQuery<TopPlayerEntry[]>({
     queryKey: ['blackjackTopPlayers', limit],
     queryFn: async () => {
+      let apiUrl: string;
       try {
-        const response = await fetch(`${getApiUrl()}/api/analytics/top-players?limit=${limit}`);
+        apiUrl = getApiUrl();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Missing API URL';
+        throw new Error(`${msg}. Set NEXT_PUBLIC_API_URL in .env.local.`);
+      }
+      try {
+        const response = await fetch(`${apiUrl}/api/analytics/top-players?limit=${limit}`);
+        const text = await response.text();
         if (!response.ok) {
-          throw new Error('Failed to fetch top players');
+          let body = text;
+          try {
+            const parsed = JSON.parse(text);
+            body = parsed?.error ?? parsed?.message ?? text;
+          } catch {
+            // use raw text
+          }
+          throw new Error(`Top players: ${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`);
         }
-        const data = await response.json();
+        const data = text ? JSON.parse(text) : [];
         return (Array.isArray(data) ? data : []).map((row: any) => ({
           ...row,
+          total_games: Number(row.total_games ?? 0),
+          win_rate: Number(row.win_rate ?? 0),
           total_bet: BigInt(row.total_bet ?? 0),
           total_win: BigInt(row.total_win ?? 0),
           profit_loss: BigInt(row.profit_loss ?? 0),
         }));
       } catch (error) {
+        if (error instanceof SyntaxError) {
+          throw new Error('Top players: invalid JSON from server');
+        }
         if (error instanceof TypeError && error.message === 'Failed to fetch') {
-          throw new Error(`Cannot connect to backend server at ${getApiUrl()}. Make sure the server is running.`);
+          throw new Error(`Cannot reach backend at ${apiUrl}. Check CORS and that the server is running.`);
         }
         throw error;
       }

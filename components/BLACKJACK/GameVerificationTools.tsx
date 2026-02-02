@@ -10,10 +10,7 @@ import {
   Eye,
   EyeOff,
   Copy,
-  ExternalLink,
   Shield,
-  Lock,
-  Unlock
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -54,6 +51,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
     errors: string[]
   } | null>(null)
   const [showServerSeed, setShowServerSeed] = useState(false)
+  const [showProvablyFair, setShowProvablyFair] = useState(true)
 
   const handleVerify = async () => {
     if (!gameId.trim() && !verificationData) return
@@ -191,9 +189,9 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
       const suitIndex = Math.floor((card - 1) / 13) % 4
       const rank = ((card - 1) % 13) + 1
       return (
-        <span key={index} className="inline-flex items-center mx-1 px-2 py-1 bg-gray-800 rounded text-sm">
-          <span className="font-bold mr-1">{CARD_NAMES[rank as keyof typeof CARD_NAMES]}</span>
-          <span style={{ color: suitIndex % 2 === 0 ? '#fff' : '#ff6b6b' }}>
+        <span key={index} className="inline-flex items-center mx-0.5 px-2 py-1 rounded text-sm border border-slate-600/50" style={{ background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9))' }}>
+          <span className="font-bold mr-1 text-white">{CARD_NAMES[rank as keyof typeof CARD_NAMES]}</span>
+          <span style={{ color: suitIndex % 2 === 0 ? '#e2e8f0' : '#f87171' }}>
             {SUITS[suitIndex]}
           </span>
         </span>
@@ -209,23 +207,30 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
     return (Number(value) / 1e18).toFixed(6)
   }
 
+  // Multiplier = payout / wager (e.g. 2.00x win, 1.50x blackjack, 1.00x push, 0x loss)
+  const multiplierDisplay = verificationData
+    ? verificationData.betAmount > 0n
+      ? (Number(verificationData.payout) / Number(verificationData.betAmount)).toFixed(2) + 'x'
+      : '0.00x'
+    : ''
+
   return (
     <div className="space-y-6">
       {/* Verification Input */}
-      <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
+      <Card className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 shadow-2xl">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
-            <Shield className="w-5 h-5 text-blue-400" />
+            <Shield className="w-5 h-5 text-cyan-400" />
             Game Verification Tools
           </CardTitle>
-          <p className="text-gray-400 text-sm">
+          <p className="text-slate-400 text-sm">
             Independently verify the fairness of any completed game using provably fair cryptography
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="game-id" className="text-gray-300">
+              <Label htmlFor="game-id" className="text-cyan-300/80">
                 Game ID
               </Label>
               <Input
@@ -233,14 +238,14 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
                 placeholder="Enter game ID to verify"
                 value={gameId}
                 onChange={(e) => setGameId(e.target.value)}
-                className="bg-gray-800 border-gray-600 text-white"
+                className="bg-slate-800/80 border-cyan-500/30 text-white placeholder:text-slate-500"
               />
             </div>
             <div className="flex items-end">
               <Button
                 onClick={handleVerify}
                 disabled={isVerifying || (!gameId.trim() && !verificationData)}
-                className="w-full bg-blue-600 hover:bg-blue-700"
+                className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white"
               >
                 {isVerifying ? (
                   <>
@@ -259,7 +264,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
         </CardContent>
       </Card>
 
-      {/* Verification Results */}
+      {/* Verification Results — competitor-style layout: title + ID, cards, Multi/Wager/Rakeback/Payout, expandable Provably Fair */}
       <AnimatePresence>
         {verificationData && (
           <motion.div
@@ -267,13 +272,17 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
           >
-            <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Lock className="w-5 h-5 text-green-400" />
-                    Game Verification Results
-                  </CardTitle>
+            <Card className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 shadow-2xl overflow-hidden">
+              <CardHeader className="pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-white text-lg font-semibold">
+                      Blackjack
+                    </CardTitle>
+                    <span className="text-cyan-300/80 font-mono text-sm">
+                      #{verificationData.gameId}
+                    </span>
+                  </div>
                   {verificationResult && (
                     <Badge className={`${
                       verificationResult.isValid
@@ -295,64 +304,105 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Game Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="space-y-4">
+                {/* Cards — player and dealer */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <h4 className="text-sm font-medium text-gray-300 mb-3">Game Details</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Game ID:</span>
-                        <span className="text-white font-mono">{verificationData.gameId}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Timestamp:</span>
-                        <span className="text-white">{formatTimestamp(verificationData.timestamp)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Bet Amount:</span>
-                        <span className="text-white">{formatEther(verificationData.betAmount)} PLS</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Result:</span>
-                        <Badge className={`${
-                          verificationData.result === 'win' ? 'bg-green-900/50 text-green-400' :
-                          verificationData.result === 'loss' ? 'bg-red-900/50 text-red-400' :
-                          verificationData.result === 'blackjack' ? 'bg-purple-900/50 text-purple-400' :
-                          'bg-yellow-900/50 text-yellow-400'
-                        }`}>
-                          {verificationData.result.toUpperCase()}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Payout:</span>
-                        <span className={`font-bold ${
-                          Number(verificationData.payout) > Number(verificationData.betAmount) ? 'text-green-400' :
-                          Number(verificationData.payout) === Number(verificationData.betAmount) ? 'text-yellow-400' :
-                          'text-red-400'
-                        }`}>
-                          {formatEther(verificationData.payout)} PLS
-                        </span>
-                      </div>
+                    <div className="text-xs text-cyan-300/70 uppercase tracking-wider mb-1">Player</div>
+                    <div className="flex flex-wrap gap-1">
+                      {formatCards(verificationData.playerCards)}
                     </div>
                   </div>
-
                   <div>
-                    <h4 className="text-sm font-medium text-gray-300 mb-3">Provably Fair Seeds</h4>
-                    <div className="space-y-3">
+                    <div className="text-xs text-cyan-300/70 uppercase tracking-wider mb-1">Dealer</div>
+                    <div className="flex flex-wrap gap-1">
+                      {formatCards(verificationData.dealerCards)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Multi | Wager | Rakeback | Payout — same info as competitor */}
+                <div
+                  className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl"
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                  }}
+                >
+                  <div>
+                    <div className="text-[10px] uppercase text-cyan-300/50 tracking-wider">Multi</div>
+                    <div className="text-white font-mono text-sm">{multiplierDisplay}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase text-cyan-300/50 tracking-wider">Wager</div>
+                    <div className="text-white font-mono text-sm">{formatEther(verificationData.betAmount)} PLS</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase text-cyan-300/50 tracking-wider">Rakeback</div>
+                    <div className="text-slate-400 font-mono text-sm">—</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase text-cyan-300/50 tracking-wider">Payout</div>
+                    <div className={`font-mono text-sm font-semibold ${
+                      Number(verificationData.payout) > Number(verificationData.betAmount) ? 'text-green-400' :
+                      Number(verificationData.payout) === Number(verificationData.betAmount) ? 'text-cyan-300' :
+                      'text-red-400'
+                    }`}>
+                      {formatEther(verificationData.payout)} PLS
+                    </div>
+                  </div>
+                </div>
+
+                {/* Result + Timestamp (same info, compact) */}
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Result</span>
+                    <Badge className={`${
+                      verificationData.result === 'win' ? 'bg-green-900/50 text-green-400' :
+                      verificationData.result === 'loss' ? 'bg-red-900/50 text-red-400' :
+                      verificationData.result === 'blackjack' ? 'bg-purple-900/50 text-purple-400' :
+                      'bg-yellow-900/50 text-yellow-400'
+                    }`}>
+                      {verificationData.result.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <span className="text-slate-500">·</span>
+                  <span className="text-slate-400">
+                    {formatTimestamp(verificationData.timestamp)}
+                  </span>
+                </div>
+
+                {/* Expandable Provably Fair — seed number, verifiable proof, client seed, server seed, nonce */}
+                <div className="rounded-xl border border-cyan-500/30 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowProvablyFair(!showProvablyFair)}
+                    className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left bg-slate-800/60 hover:bg-slate-800/80 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-cyan-300 flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      Provably Fair
+                    </span>
+                    <span aria-hidden className={`transition-transform ${showProvablyFair ? 'rotate-180' : ''}`}>
+                      ▾
+                    </span>
+                  </button>
+                  {showProvablyFair && (
+                    <div className="p-4 space-y-4 bg-slate-900/60 border-t border-cyan-500/20">
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-400">Server Seed Hash</span>
+                          <span className="text-xs text-cyan-300/70">Verifiable proof (Server Seed Hash)</span>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => copyToClipboard(verificationData.serverSeedHash)}
-                            className="h-6 px-2 text-xs"
+                            className="h-6 px-2 text-xs text-cyan-300/80"
                           >
                             <Copy className="w-3 h-3" />
                           </Button>
                         </div>
-                        <div className="text-xs font-mono bg-gray-800 p-2 rounded text-gray-300 break-all">
+                        <div className="text-xs font-mono bg-slate-800/80 p-2 rounded text-slate-300 break-all border border-slate-600/50">
                           {verificationData.serverSeedHash}
                         </div>
                       </div>
@@ -360,7 +410,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
                       {verificationData.serverSeed && (
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <span className="text-xs text-cyan-300/70 flex items-center gap-1">
                               Server Seed
                               <Button
                                 variant="ghost"
@@ -375,12 +425,12 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
                               variant="ghost"
                               size="sm"
                               onClick={() => copyToClipboard(verificationData.serverSeed)}
-                              className="h-6 px-2 text-xs"
+                              className="h-6 px-2 text-xs text-cyan-300/80"
                             >
                               <Copy className="w-3 h-3" />
                             </Button>
                           </div>
-                          <div className="text-xs font-mono bg-gray-800 p-2 rounded text-gray-300 break-all">
+                          <div className="text-xs font-mono bg-slate-800/80 p-2 rounded text-slate-300 break-all border border-slate-600/50">
                             {showServerSeed ? verificationData.serverSeed : '••••••••••••••••••••••••••••••••'}
                           </div>
                         </div>
@@ -388,56 +438,35 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
 
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-400">Client Seed</span>
+                          <span className="text-xs text-cyan-300/70">Client Seed</span>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => copyToClipboard(verificationData.clientSeed)}
-                            className="h-6 px-2 text-xs"
+                            className="h-6 px-2 text-xs text-cyan-300/80"
                           >
                             <Copy className="w-3 h-3" />
                           </Button>
                         </div>
-                        <div className="text-xs font-mono bg-gray-800 p-2 rounded text-gray-300 break-all">
+                        <div className="text-xs font-mono bg-slate-800/80 p-2 rounded text-slate-300 break-all border border-slate-600/50">
                           {verificationData.clientSeed}
                         </div>
                       </div>
 
-                      <div className="flex justify-between">
-                        <span className="text-xs text-gray-400">Nonce:</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-cyan-300/70">Nonce</span>
                         <span className="text-xs text-white font-mono">{verificationData.nonce}</span>
                       </div>
                     </div>
-                  </div>
-                </div>
-
-                <Separator className="bg-gray-700" />
-
-                {/* Card Details */}
-                <div>
-                  <h4 className="text-sm font-medium text-gray-300 mb-3">Card Distribution</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-400 mb-2">Player Cards</div>
-                      <div className="flex flex-wrap gap-1">
-                        {formatCards(verificationData.playerCards)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-400 mb-2">Dealer Cards</div>
-                      <div className="flex flex-wrap gap-1">
-                        {formatCards(verificationData.dealerCards)}
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Verification Status */}
                 {verificationResult && (
                   <>
-                    <Separator className="bg-gray-700" />
+                    <Separator className="bg-slate-600/50" />
                     <div>
-                      <h4 className="text-sm font-medium text-gray-300 mb-3">Verification Details</h4>
+                      <h4 className="text-sm font-medium text-cyan-300/80 mb-3">Verification Details</h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="text-center">
                           <div className={`text-lg font-bold mb-1 ${
@@ -445,7 +474,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
                           }`}>
                             {verificationResult.details.cardsVerified ? '✓' : '✗'}
                           </div>
-                          <div className="text-xs text-gray-400">Cards</div>
+                          <div className="text-xs text-slate-400">Cards</div>
                         </div>
                         <div className="text-center">
                           <div className={`text-lg font-bold mb-1 ${
@@ -453,7 +482,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
                           }`}>
                             {verificationResult.details.payoutVerified ? '✓' : '✗'}
                           </div>
-                          <div className="text-xs text-gray-400">Payout</div>
+                          <div className="text-xs text-slate-400">Payout</div>
                         </div>
                         <div className="text-center">
                           <div className={`text-lg font-bold mb-1 ${
@@ -461,7 +490,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
                           }`}>
                             {verificationResult.details.seedVerified ? '✓' : '✗'}
                           </div>
-                          <div className="text-xs text-gray-400">Seeds</div>
+                          <div className="text-xs text-slate-400">Seeds</div>
                         </div>
                         <div className="text-center">
                           <div className={`text-lg font-bold mb-1 ${
@@ -469,7 +498,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
                           }`}>
                             {verificationResult.details.houseEdgeVerified ? '✓' : '✗'}
                           </div>
-                          <div className="text-xs text-gray-400">House Edge</div>
+                          <div className="text-xs text-slate-400">House Edge</div>
                         </div>
                       </div>
 
@@ -504,9 +533,9 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
                 )}
 
                 {/* How It Works */}
-                <div className="mt-6 p-4 bg-blue-900/10 border border-blue-500/20 rounded-lg">
-                  <h4 className="text-sm font-medium text-blue-400 mb-2">How Provably Fair Verification Works</h4>
-                  <div className="text-xs text-gray-300 space-y-1">
+                <div className="p-4 rounded-xl border border-cyan-500/20 bg-slate-800/40">
+                  <h4 className="text-sm font-medium text-cyan-400 mb-2">How Provably Fair Verification Works</h4>
+                  <div className="text-xs text-slate-300 space-y-1">
                     <p>1. <strong>Server Seed Hash</strong> is shown before the game starts</p>
                     <p>2. <strong>Client Seed</strong> is chosen/provided by you</p>
                     <p>3. <strong>Server Seed</strong> is revealed after game completion</p>
