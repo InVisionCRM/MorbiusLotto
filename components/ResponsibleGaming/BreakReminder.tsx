@@ -3,12 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 
-const REMINDER_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const REMINDER_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
 const STORAGE_KEY = 'morblotto_session_start';
 const SNOOZE_KEY = 'morblotto_reminder_snoozed_until';
 
 interface BreakReminderProps {
-  /** Override the default 30 minute interval (in milliseconds) */
+  /** Override the default 60 minute interval (in milliseconds) */
   intervalMs?: number;
 }
 

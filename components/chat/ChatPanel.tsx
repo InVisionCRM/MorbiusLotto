@@ -438,11 +438,11 @@ export function ChatPanel({
     return (
       <>
         <div
-          className={`fixed bottom-4 right-4 z-[100] w-[320px] sm:w-[360px] ${className}`}
+          className={`fixed right-0 top-1/4 z-[100] w-[320px] sm:w-[360px] ${className}`}
           aria-label="Community chat"
         >
           {open ? (
-            <div className="relative flex flex-col" style={{ height: '380px' }}>
+            <div className="relative flex flex-col" style={{ height: '75vh' }}>
               <button
                 type="button"
                 onClick={() => setOpen(false)}

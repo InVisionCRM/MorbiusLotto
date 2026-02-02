@@ -79,6 +79,15 @@ export interface EnhancedPlayerStats extends PlayerStats {
     last_game_timestamp?: Date;
     rank: number;
 }
+export interface TopPlayerEntry {
+    rank: number;
+    wallet_address: string;
+    total_games: number;
+    total_bet: bigint;
+    total_win: bigint;
+    profit_loss: bigint;
+    win_rate: number;
+}
 export interface GlobalAnalytics {
     total_players: number;
     active_players: number;
@@ -138,6 +147,8 @@ export declare class DatabaseService {
     getPlayerStats(walletAddress: string): Promise<PlayerStats>;
     getPlayerStatsEnhanced(walletAddress: string): Promise<EnhancedPlayerStats>;
     getGlobalAnalytics(): Promise<GlobalAnalytics>;
+    getTopPlayers(limit?: number): Promise<TopPlayerEntry[]>;
+    private normalizeTopPlayerEntry;
     getPlayerGames(walletAddress: string, limit?: number, offset?: number): Promise<Game[]>;
     createGameSession(playerId: string, serverSeed: string, serverSeedHash: string): Promise<GameSession>;
     getActiveSession(playerId: string): Promise<GameSession | null>;

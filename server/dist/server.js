@@ -16,6 +16,7 @@ const provably_fair_service_1 = require("./services/provably-fair.service");
 const blackjack_game_service_1 = require("./services/blackjack-game.service");
 const tournament_service_1 = require("./services/tournament.service");
 const websocket_service_1 = require("./services/websocket.service");
+const chain_analytics_service_1 = require("./services/chain-analytics.service");
 const logger_1 = require("./utils/logger");
 const withdraw_sign_1 = require("./utils/withdraw-sign");
 const blackjack_1 = require("./abi/blackjack");
@@ -65,6 +66,8 @@ async function initializeServices() {
         gameService.setTournamentService(tournamentService);
         // Initialize WebSocket service
         const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService, tournamentService);
+        // Chain analytics (on-chain games: Plinko, Keno, Lottery, BigWheel)
+        const chainAnalytics = new chain_analytics_service_1.ChainAnalyticsService();
         // API routes
         app.get('/api/player/:address/stats', async (req, res) => {
             try {
@@ -108,6 +111,59 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error fetching global analytics:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Top players leaderboard (by total volume)
+        app.get('/api/analytics/top-players', async (req, res) => {
+            try {
+                const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+                const topPlayers = await dbService.getTopPlayers(limit);
+                sendJson(res, topPlayers);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching top players:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Platform analytics: Blackjack (DB) + Plinko, Keno, Lottery, BigWheel (chain)
+        app.get('/api/analytics/platform', async (req, res) => {
+            try {
+                const [blackjack, chain] = await Promise.all([
+                    dbService.getGlobalAnalytics(),
+                    chainAnalytics.getAllChainStats(),
+                ]);
+                const bjGames = BigInt(blackjack.total_games_played);
+                const bjVolume = blackjack.total_volume;
+                const bjPayouts = blackjack.total_payouts;
+                const plinkoGames = chain.plinko?.totalDrops ?? 0n;
+                const plinkoVolume = chain.plinko?.totalRevenue ?? 0n;
+                const plinkoPayouts = chain.plinko?.totalPayouts ?? 0n;
+                const kenoGames = chain.keno?.ticketCount ?? 0n;
+                const kenoVolume = chain.keno?.totalWagered ?? 0n;
+                const kenoPayouts = chain.keno?.totalWon ?? 0n;
+                const lotteryGames = chain.lottery?.totalTicketsEver ?? 0n;
+                const lotteryVolume = chain.lottery?.totalCollected ?? 0n;
+                const lotteryPayouts = chain.lottery?.totalClaimed ?? 0n;
+                const bigWheelGames = chain.bigWheel?.spins ?? 0n;
+                const bigWheelVolume = chain.bigWheel?.volume ?? 0n;
+                const bigWheelPayouts = chain.bigWheel?.payouts ?? 0n;
+                const combined = {
+                    totalGamesPlayed: bjGames + plinkoGames + kenoGames + lotteryGames + bigWheelGames,
+                    totalVolume: bjVolume + plinkoVolume + kenoVolume + lotteryVolume + bigWheelVolume,
+                    totalPayouts: bjPayouts + plinkoPayouts + kenoPayouts + lotteryPayouts + bigWheelPayouts,
+                };
+                sendJson(res, {
+                    blackjack,
+                    plinko: chain.plinko,
+                    keno: chain.keno,
+                    lottery: chain.lottery,
+                    bigWheel: chain.bigWheel,
+                    combined,
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching platform analytics:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });

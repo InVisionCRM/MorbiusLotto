@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { Hand, GameState, Action, GameResult } from '@/app/BLACKJACK/types';
 import { formatEther } from 'viem';
@@ -10,6 +10,15 @@ import BettingPanel from './BettingPanel';
 import { NumberTicker } from '@/components/ui/number-ticker';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS } from '@/app/BLACKJACK/constants';
 import type { BlackjackImageId, BlackjackVideoId } from '@/app/BLACKJACK/constants';
+
+// Background music playlist (all from public/BlackJack/music except Big-Winner)
+const BLACKJACK_MUSIC_PLAYLIST = [
+  '/BlackJack/music/Winning-Big.mp3',
+  '/BlackJack/music/Lucky-Ducky.mp3',
+  '/BlackJack/music/Smooth-Gains.mp3',
+  '/BlackJack/music/Top-Tier.mp3',
+  '/BlackJack/music/Chances.mp3',
+] as const;
 
 interface BlackjackTableProps {
   playerHand: Hand;
@@ -114,6 +123,51 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   const revealTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevGameStateRef = useRef<GameState>(gameState);
   const prevDealerCardCountRef = useRef(dealerHand.cards.length);
+
+  // Background music player (top-left of table)
+  const [musicTrackIndex, setMusicTrackIndex] = useState(0);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(25); // 0–100
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const el = musicAudioRef.current;
+    if (el) el.volume = musicVolume / 100;
+  }, [musicVolume]);
+
+  useEffect(() => {
+    if (musicAudioRef.current && !isMusicPlaying) {
+      musicAudioRef.current.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+    }
+  }, []);
+
+  const handleMusicEnded = useCallback(() => {
+    setMusicTrackIndex((prev) => (prev + 1) % BLACKJACK_MUSIC_PLAYLIST.length);
+    setIsMusicPlaying(false);
+  }, []);
+
+  useEffect(() => {
+    const el = musicAudioRef.current;
+    if (!el) return;
+    el.volume = musicVolume / 100;
+    el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+  }, [musicTrackIndex]);
+
+  const toggleMusic = useCallback(() => {
+    const el = musicAudioRef.current;
+    if (!el) return;
+    if (isMusicPlaying) {
+      el.pause();
+      setIsMusicPlaying(false);
+    } else {
+      el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+    }
+  }, [isMusicPlaying]);
+
+  const nextTrack = useCallback(() => {
+    setMusicTrackIndex((prev) => (prev + 1) % BLACKJACK_MUSIC_PLAYLIST.length);
+    setIsMusicPlaying(false);
+  }, []);
 
   // Chip animation state
   const [chipAnimationState, setChipAnimationState] = useState<'none' | 'win' | 'loss'>('none');
@@ -652,6 +706,59 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             'linear-gradient(145deg, rgba(0,0,0,0.45), rgba(0,0,0,0.25))',
         }}
       />
+
+      {/* Background music: hidden audio + player at top-left */}
+      <audio
+        ref={musicAudioRef}
+        src={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex]}
+        onEnded={handleMusicEnded}
+        loop={false}
+        preload="metadata"
+      />
+      <div
+        className="absolute top-4 left-4 z-20 flex flex-col gap-1.5 rounded-xl border border-cyan-500/30 px-3 py-2 shadow-lg pointer-events-auto"
+        style={{
+          background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.8))',
+          boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.5)',
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-cyan-400/90 text-xs font-medium max-w-[90px] sm:max-w-[100px] truncate" title={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? ''}>
+            {BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? 'Music'}
+          </span>
+          <button
+            type="button"
+            onClick={toggleMusic}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+            aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
+          >
+            {isMusicPlaying ? <i className="fas fa-pause text-sm" /> : <i className="fas fa-play text-sm" />}
+          </button>
+          <button
+            type="button"
+            onClick={nextTrack}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+            aria-label="Next track"
+          >
+            <i className="fas fa-forward text-sm" />
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <i className="fas fa-volume-up text-cyan-400/80 text-xs w-3" aria-hidden />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={musicVolume}
+            onChange={(e) => setMusicVolume(Number(e.target.value))}
+            className="w-20 h-1.5 rounded-full appearance-none cursor-pointer accent-cyan-500"
+            style={{
+              background: `linear-gradient(to right, rgba(34, 211, 238, 0.5) 0%, rgba(34, 211, 238, 0.5) ${musicVolume}%, rgba(60, 60, 60, 0.6) ${musicVolume}%, rgba(60, 60, 60, 0.6) 100%)`,
+            }}
+            aria-label="Music volume"
+          />
+        </div>
+      </div>
 
       {/* System Time Display + Change Table link */}
       <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-1 pointer-events-auto">

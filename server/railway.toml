@@ -3,7 +3,7 @@
 # In Railway: set Service "Root Directory" to `server` and "Config File" to `server/railway.toml`
 
 [build]
-builder = "nixpacks"
+builder = "railpack"
 buildCommand = "npm install && npm run build"
 
 [deploy]

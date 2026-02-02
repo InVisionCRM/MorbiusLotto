@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { MessageCircle } from 'lucide-react';
@@ -46,14 +46,9 @@ function getRoomForPath(pathname: string): { roomId: string; title: string } {
 
 export function GlobalChat() {
   const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const { roomId, title } = getRoomForPath(pathname ?? '/');
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
@@ -66,7 +61,7 @@ export function GlobalChat() {
       <SheetTrigger asChild>
         <button
           type="button"
-          className="fixed right-0 top-1/2 z-40 -translate-y-1/2 flex items-center justify-center w-10 h-24 rounded-l-lg border border-r-0 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-lg hover:bg-slate-800/90 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:ring-offset-2 focus:ring-offset-background relative"
+          className="fixed right-0 top-[calc(50%+30px)] z-[100] -translate-y-1/2 flex items-center justify-center w-10 h-24 rounded-l-lg border border-r-0 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-lg hover:bg-slate-800/90 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:ring-offset-2 focus:ring-offset-background"
           style={{
             boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5)',
           }}
@@ -85,7 +80,8 @@ export function GlobalChat() {
       </SheetTrigger>
       <SheetContent
         side="right"
-        className="w-[50vw] max-w-[50vw] p-0 flex flex-col border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800"
+        overlayClassName="bg-transparent"
+        className="w-[50vw] max-w-[50vw] h-[75vh] max-h-[75vh] pt-12 px-0 pb-0 flex flex-col border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800"
         style={{
           background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
           boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
@@ -106,9 +102,9 @@ export function GlobalChat() {
     </Sheet>
   );
 
-  // After mount, render into body so it isn't scaled by .app-content-wrapper's transform
-  if (mounted && typeof document !== 'undefined') {
+  // Portal into body so the trigger is never inside app-wrapper (transform/filter on ancestor would make fixed relative to it and push the tag to bottom)
+  if (typeof document !== 'undefined' && document.body) {
     return createPortal(chatSheet, document.body);
   }
-  return chatSheet;
+  return null;
 }

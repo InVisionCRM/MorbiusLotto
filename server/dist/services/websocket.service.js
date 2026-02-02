@@ -234,6 +234,22 @@ class WebSocketService {
                 case 'tournament_info':
                     await this.handleGetTournamentInfo(ws, message);
                     break;
+                // Tournament Creator - New handlers
+                case 'tournament_create':
+                    await this.handleTournamentCreate(ws, message);
+                    break;
+                case 'tournament_list':
+                    await this.handleTournamentList(ws, message);
+                    break;
+                case 'tournament_join':
+                    await this.handleTournamentJoin(ws, message);
+                    break;
+                case 'tournament_rebuy':
+                    await this.handleTournamentRebuy(ws, message);
+                    break;
+                case 'tournament_get_info':
+                    await this.handleTournamentGetInfo(ws, message);
+                    break;
                 default:
                     this.sendError(ws, 'Unknown message type', message.requestId);
             }
@@ -1227,6 +1243,304 @@ class WebSocketService {
         }
         catch (error) {
             logger_1.logger.error('Error broadcasting tournament leaderboard:', error);
+        }
+    }
+    // ============================================
+    // Tournament Creator Handlers
+    // ============================================
+    async handleTournamentCreate(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload;
+            // Convert buyInAmount string to bigint
+            let buyInAmount;
+            try {
+                buyInAmount = BigInt(payload.buyInAmount);
+            }
+            catch {
+                return this.sendError(ws, 'Invalid buy-in amount', message.requestId);
+            }
+            const tournament = await this.tournamentService.createTournament({
+                creatorAddress: ws.playerAddress,
+                name: payload.name,
+                buyInAmount,
+                startingChips: payload.startingChips,
+                maxHands: payload.maxHands,
+                timeLimitMinutes: payload.timeLimitMinutes,
+                rebuyConfig: payload.rebuyConfig,
+                tableTheme: payload.tableTheme,
+                isPrivate: payload.isPrivate,
+                prizeDistributionType: payload.prizeDistributionType,
+                customPrizePercentages: payload.customPrizePercentages,
+                maxPlayers: payload.maxPlayers,
+            });
+            // Determine prize percentages for response
+            const prizePercentages = this.getPrizePercentagesForType(tournament.prize_distribution_type, tournament.prize_percentages);
+            this.sendMessage(ws, {
+                type: 'tournament_created',
+                payload: {
+                    tournamentId: tournament.id,
+                    name: tournament.name,
+                    pinCode: tournament.is_private ? tournament.pin_code : undefined,
+                    buyInAmount: tournament.buy_in_amount.toString(),
+                    startingChips: tournament.starting_chips,
+                    maxHands: tournament.max_hands,
+                    timeLimitMinutes: tournament.time_limit_minutes,
+                    endsAt: tournament.ends_at?.toISOString() || null,
+                    rebuyConfig: tournament.rebuy_config,
+                    tableTheme: tournament.table_theme,
+                    isPrivate: tournament.is_private,
+                    prizeDistributionType: tournament.prize_distribution_type,
+                    prizePercentages,
+                },
+                requestId: message.requestId
+            });
+            // Broadcast new tournament to all clients (except private tournaments)
+            if (!tournament.is_private) {
+                this.broadcastToAll({
+                    type: 'tournament_created_global',
+                    payload: {
+                        tournamentId: tournament.id,
+                        name: tournament.name,
+                        creatorAddress: tournament.creator_address,
+                        buyInAmount: tournament.buy_in_amount.toString(),
+                        startingChips: tournament.starting_chips,
+                        maxHands: tournament.max_hands,
+                        timeLimitMinutes: tournament.time_limit_minutes,
+                    }
+                });
+            }
+            // Post a system message to chat so it appears in GlobalChat (Blackjack + Lobby)
+            const buyInMorbius = Number(tournament.buy_in_amount) / 1e18;
+            const tournamentChatText = tournament.is_private
+                ? `New private tournament: "${tournament.name}" — ${buyInMorbius.toLocaleString()} MORBIUS buy-in. Join from Blackjack!`
+                : `New tournament: "${tournament.name}" — ${buyInMorbius.toLocaleString()} MORBIUS buy-in. Join from Blackjack!`;
+            const chatRooms = ['blackjack', 'main'];
+            for (const roomId of chatRooms) {
+                try {
+                    const row = await this.dbService.insertChatMessage(roomId, null, tournamentChatText);
+                    const broadcastPayload = {
+                        id: row.id,
+                        roomId: row.room_id,
+                        senderAddress: row.sender_address,
+                        displayName: null,
+                        text: row.text,
+                        timestamp: row.created_at
+                    };
+                    this.broadcastToRoom(roomId, {
+                        type: 'chat_message',
+                        payload: broadcastPayload
+                    });
+                }
+                catch (chatErr) {
+                    logger_1.logger.error('Failed to post tournament announcement to chat', { roomId, error: chatErr });
+                }
+            }
+            logger_1.logger.info('Tournament created via WebSocket', {
+                tournamentId: tournament.id,
+                name: tournament.name,
+                creator: ws.playerAddress,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error creating tournament:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to create tournament';
+            this.sendError(ws, errorMessage, message.requestId);
+        }
+    }
+    async handleTournamentList(ws, message) {
+        try {
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const tournaments = await this.tournamentService.listTournaments(false);
+            // Convert to response format
+            const tournamentList = tournaments.map(t => ({
+                id: t.id,
+                name: t.name,
+                creatorAddress: t.creator_address,
+                buyInAmount: t.buy_in_amount.toString(),
+                startingChips: t.starting_chips,
+                maxHands: t.max_hands,
+                prizePool: t.prize_pool.toString(),
+                entryCount: t.entry_count,
+                maxPlayers: t.max_players,
+                timeLimitMinutes: t.time_limit_minutes,
+                endsAt: t.ends_at?.toISOString() || null,
+                rebuyConfig: t.rebuy_config,
+                tableTheme: t.table_theme,
+                isPrivate: t.is_private,
+                prizeDistributionType: t.prize_distribution_type,
+                createdAt: t.created_at.toISOString(),
+            }));
+            this.sendMessage(ws, {
+                type: 'tournament_list',
+                payload: { tournaments: tournamentList },
+                requestId: message.requestId
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error listing tournaments:', error);
+            this.sendError(ws, 'Failed to list tournaments', message.requestId);
+        }
+    }
+    async handleTournamentJoin(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            // Check if player is self-excluded
+            const exclusionStatus = await this.dbService.checkExclusionStatus(ws.playerAddress);
+            if (exclusionStatus.isExcluded) {
+                return this.sendError(ws, 'Account is self-excluded. Gaming is disabled.', message.requestId);
+            }
+            const payload = message.payload;
+            if (!payload.tournamentId) {
+                return this.sendError(ws, 'Tournament ID required', message.requestId);
+            }
+            const entry = await this.tournamentService.joinTournament(ws.playerAddress, payload.tournamentId, payload.pinCode);
+            // Get tournament details for response
+            const tournamentInfo = await this.tournamentService.getTournamentInfoExtended(payload.tournamentId);
+            this.sendMessage(ws, {
+                type: 'tournament_joined',
+                payload: {
+                    entryId: entry.id,
+                    tournamentId: entry.tournament_id,
+                    chips: entry.chips_remaining,
+                    handsPlayed: entry.hands_played,
+                    handsRemaining: tournamentInfo?.tournament.max_hands ? tournamentInfo.tournament.max_hands - entry.hands_played : 0,
+                    maxHands: tournamentInfo?.tournament.max_hands,
+                    startingChips: tournamentInfo?.tournament.starting_chips,
+                    buyInAmount: tournamentInfo?.tournament.buy_in_amount.toString(),
+                    prizePool: tournamentInfo?.tournament.prize_pool.toString(),
+                    tableTheme: tournamentInfo?.tournament.table_theme,
+                    rebuyConfig: tournamentInfo?.tournament.rebuy_config,
+                },
+                requestId: message.requestId
+            });
+            // Broadcast leaderboard update
+            this.broadcastTournamentLeaderboardUpdate(entry.tournament_id);
+            logger_1.logger.info('Player joined tournament via WebSocket', {
+                playerAddress: ws.playerAddress,
+                tournamentId: payload.tournamentId,
+                entryId: entry.id,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error joining tournament:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to join tournament';
+            this.sendError(ws, errorMessage, message.requestId);
+        }
+    }
+    async handleTournamentRebuy(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload;
+            if (!payload.tournamentId) {
+                return this.sendError(ws, 'Tournament ID required', message.requestId);
+            }
+            const result = await this.tournamentService.processRebuy(ws.playerAddress, payload.tournamentId);
+            // Get tournament for extended info
+            const tournamentInfo = await this.tournamentService.getTournamentInfoExtended(payload.tournamentId);
+            this.sendMessage(ws, {
+                type: 'tournament_rebuy_result',
+                payload: {
+                    success: true,
+                    entryId: result.entry.id,
+                    newChips: result.entry.chips_remaining,
+                    rebuyCount: result.entry.rebuy_count,
+                    totalBuyIn: result.entry.total_buy_in.toString(),
+                    newPrizePool: result.newPrizePool.toString(),
+                    maxRebuys: tournamentInfo?.tournament.rebuy_config.maxRebuys || 0,
+                },
+                requestId: message.requestId
+            });
+            // Broadcast leaderboard update
+            this.broadcastTournamentLeaderboardUpdate(payload.tournamentId);
+            logger_1.logger.info('Player rebuy processed via WebSocket', {
+                playerAddress: ws.playerAddress,
+                tournamentId: payload.tournamentId,
+                rebuyCount: result.entry.rebuy_count,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error processing rebuy:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to process rebuy';
+            this.sendError(ws, errorMessage, message.requestId);
+        }
+    }
+    async handleTournamentGetInfo(ws, message) {
+        try {
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload;
+            if (!payload.tournamentId) {
+                return this.sendError(ws, 'Tournament ID required', message.requestId);
+            }
+            const info = await this.tournamentService.getTournamentInfoExtended(payload.tournamentId);
+            if (!info) {
+                return this.sendError(ws, 'Tournament not found', message.requestId);
+            }
+            this.sendMessage(ws, {
+                type: 'tournament_info_extended',
+                payload: {
+                    tournamentId: info.tournament.id,
+                    name: info.tournament.name,
+                    creatorAddress: info.tournament.creator_address,
+                    status: info.tournament.status,
+                    buyInAmount: info.tournament.buy_in_amount.toString(),
+                    startingChips: info.tournament.starting_chips,
+                    maxHands: info.tournament.max_hands,
+                    prizePool: info.tournament.prize_pool.toString(),
+                    entryCount: info.entryCount,
+                    maxPlayers: info.tournament.max_players,
+                    timeLimitMinutes: info.tournament.time_limit_minutes,
+                    endsAt: info.tournament.ends_at?.toISOString() || null,
+                    rebuyConfig: info.tournament.rebuy_config,
+                    tableTheme: info.tournament.table_theme,
+                    isPrivate: info.tournament.is_private,
+                    prizeDistributionType: info.tournament.prize_distribution_type,
+                    prizePercentages: info.prizePercentages,
+                    createdAt: info.tournament.created_at.toISOString(),
+                },
+                requestId: message.requestId
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error getting tournament info:', error);
+            this.sendError(ws, 'Failed to get tournament info', message.requestId);
+        }
+    }
+    // Helper to get prize percentages from type
+    getPrizePercentagesForType(type, custom) {
+        switch (type) {
+            case 'winner_takes_all':
+                return [100];
+            case 'top_3':
+                return [50, 30, 20];
+            case 'top_3_steep':
+                return [60, 25, 15];
+            case 'top_5':
+                return [40, 25, 15, 12, 8];
+            case 'custom':
+                return custom || [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+            case 'top_10':
+            default:
+                return [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
         }
     }
     // Clean shutdown

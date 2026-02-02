@@ -233,6 +233,42 @@ class DatabaseService {
         const result = await this.pool.query(query);
         return this.normalizeGlobalAnalytics(result.rows[0] || {});
     }
+    async getTopPlayers(limit = 10) {
+        const query = `
+      WITH agg AS (
+        SELECT
+          p.wallet_address,
+          COUNT(g.*)::BIGINT AS total_games,
+          COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(g.total_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(g.*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE g.result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate
+        FROM players p
+        JOIN game_sessions gs ON gs.player_id = p.id
+        JOIN games g ON g.session_id = gs.id AND g.result IS NOT NULL AND g.result != 'ongoing'
+        GROUP BY p.id, p.wallet_address
+      )
+      SELECT ROW_NUMBER() OVER (ORDER BY total_bet DESC)::INTEGER AS rank, *
+      FROM agg
+      ORDER BY total_bet DESC
+      LIMIT $1
+    `;
+        const result = await this.pool.query(query, [limit]);
+        return result.rows.map((r) => this.normalizeTopPlayerEntry(r));
+    }
+    normalizeTopPlayerEntry(row) {
+        return {
+            rank: Number(row.rank ?? 0),
+            wallet_address: row.wallet_address ?? '',
+            total_games: Number(row.total_games ?? 0),
+            total_bet: this.toBigInt(row.total_bet),
+            total_win: this.toBigInt(row.total_win),
+            profit_loss: this.toBigInt(row.profit_loss),
+            win_rate: Number(row.win_rate ?? 0),
+        };
+    }
     async getPlayerGames(walletAddress, limit = 50, offset = 0) {
         // #region agent log
         fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:getPlayerGames:entry', message: 'getPlayerGames called', data: { walletAddress: walletAddress?.slice(0, 12) + '…', limit, offset }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H1' }) }).catch(() => { });

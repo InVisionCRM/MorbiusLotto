@@ -97,7 +97,7 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
 
   return (
     <nav
-      className="fixed top-0 left-0 right-0 z-[100]"
+      className="fixed top-0 left-0 right-0 z-[100] h-12 min-h-12"
       style={{
         background: 'linear-gradient(to right, #0f172a, #0f172a, rgba(6, 182, 212, 0.5))',
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',

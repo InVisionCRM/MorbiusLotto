@@ -49,6 +49,12 @@ export declare class WebSocketService {
     private handleTournamentLeaderboard;
     private handleGetTournamentInfo;
     private broadcastTournamentLeaderboardUpdate;
+    private handleTournamentCreate;
+    private handleTournamentList;
+    private handleTournamentJoin;
+    private handleTournamentRebuy;
+    private handleTournamentGetInfo;
+    private getPrizePercentagesForType;
     shutdown(): void;
 }
 //# sourceMappingURL=websocket.service.d.ts.map

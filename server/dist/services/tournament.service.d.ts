@@ -9,6 +9,14 @@ export declare const TOURNAMENT_CONFIG: {
     PRIZE_PERCENTAGES: number[];
     HOUSE_PERCENTAGE: number;
 };
+export interface RebuyConfig {
+    enabled: boolean;
+    maxRebuys: number;
+}
+export interface TableTheme {
+    kind: 'image' | 'video';
+    id: string;
+}
 export interface Tournament {
     id: string;
     name: string;
@@ -20,6 +28,16 @@ export interface Tournament {
     prize_pool: bigint;
     created_at: Date;
     ended_at?: Date;
+    creator_address?: string;
+    time_limit_minutes?: number;
+    rebuy_config: RebuyConfig;
+    table_theme: TableTheme;
+    is_private: boolean;
+    pin_code?: string;
+    prize_distribution_type: string;
+    prize_percentages?: number[];
+    max_players?: number;
+    ends_at?: Date;
 }
 export interface TournamentEntry {
     id: string;
@@ -33,6 +51,40 @@ export interface TournamentEntry {
     status: 'playing' | 'busted' | 'completed';
     bought_in_at: Date;
     finished_at?: Date;
+    rebuy_count: number;
+    total_buy_in: bigint;
+}
+export interface CreateTournamentParams {
+    creatorAddress: string;
+    name: string;
+    buyInAmount: bigint;
+    startingChips: number;
+    maxHands: number;
+    timeLimitMinutes: number | null;
+    rebuyConfig: RebuyConfig;
+    tableTheme: TableTheme;
+    isPrivate: boolean;
+    prizeDistributionType: string;
+    customPrizePercentages?: number[];
+    maxPlayers?: number | null;
+}
+export interface TournamentListItem {
+    id: string;
+    name: string;
+    creator_address: string | null;
+    buy_in_amount: bigint;
+    starting_chips: number;
+    max_hands: number;
+    prize_pool: bigint;
+    entry_count: number;
+    max_players: number | null;
+    time_limit_minutes: number | null;
+    ends_at: Date | null;
+    rebuy_config: RebuyConfig;
+    table_theme: TableTheme;
+    is_private: boolean;
+    prize_distribution_type: string;
+    created_at: Date;
 }
 export interface TournamentGame {
     id: string;
@@ -81,6 +133,14 @@ export declare class TournamentService {
     private normalizeAddress;
     private normalizeTournament;
     private normalizeEntry;
+    /**
+     * Generate a random 4-digit PIN code
+     */
+    private generatePinCode;
+    /**
+     * Get prize percentages for a distribution type
+     */
+    private getPrizePercentages;
     /**
      * Get the current active tournament, creating one if needed
      */
@@ -144,5 +204,49 @@ export declare class TournamentService {
         valid: boolean;
         error?: string;
     };
+    /**
+     * Create a custom tournament
+     */
+    createTournament(params: CreateTournamentParams): Promise<Tournament>;
+    /**
+     * Validate tournament creation parameters
+     */
+    validateTournamentParams(params: CreateTournamentParams): {
+        valid: boolean;
+        error?: string;
+    };
+    /**
+     * List active tournaments (for browser)
+     */
+    listTournaments(includePrivate?: boolean): Promise<TournamentListItem[]>;
+    /**
+     * Join a specific tournament by ID
+     */
+    joinTournament(playerAddress: string, tournamentId: string, pinCode?: string): Promise<TournamentEntry>;
+    /**
+     * Process rebuy for a player
+     */
+    processRebuy(playerAddress: string, tournamentId: string): Promise<{
+        entry: TournamentEntry;
+        newPrizePool: bigint;
+    }>;
+    /**
+     * Get extended tournament info including all settings
+     */
+    getTournamentInfoExtended(tournamentId: string): Promise<{
+        tournament: Tournament;
+        entryCount: number;
+        prizePercentages: number[];
+    } | null>;
+    /**
+     * Get tournament state including rebuy info
+     */
+    getTournamentStateExtended(playerAddress: string): Promise<(TournamentState & {
+        rebuyCount: number;
+        totalBuyIn: bigint;
+        canRebuy: boolean;
+        maxRebuys: number;
+        rebuyEnabled: boolean;
+    }) | null>;
 }
 //# sourceMappingURL=tournament.service.d.ts.map

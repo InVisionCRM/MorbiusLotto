@@ -31,6 +31,51 @@ class TournamentService {
         return address?.toLowerCase() || address;
     }
     normalizeTournament(row) {
+        // Parse rebuy_config from JSONB
+        let rebuyConfig = { enabled: false, maxRebuys: 0 };
+        if (row.rebuy_config) {
+            if (typeof row.rebuy_config === 'string') {
+                try {
+                    rebuyConfig = JSON.parse(row.rebuy_config);
+                }
+                catch {
+                    // Keep default
+                }
+            }
+            else {
+                rebuyConfig = row.rebuy_config;
+            }
+        }
+        // Parse table_theme from JSONB
+        let tableTheme = { kind: 'image', id: 'BigRich' };
+        if (row.table_theme) {
+            if (typeof row.table_theme === 'string') {
+                try {
+                    tableTheme = JSON.parse(row.table_theme);
+                }
+                catch {
+                    // Keep default
+                }
+            }
+            else {
+                tableTheme = row.table_theme;
+            }
+        }
+        // Parse prize_percentages from JSONB
+        let prizePercentages;
+        if (row.prize_percentages) {
+            if (typeof row.prize_percentages === 'string') {
+                try {
+                    prizePercentages = JSON.parse(row.prize_percentages);
+                }
+                catch {
+                    // Keep undefined
+                }
+            }
+            else {
+                prizePercentages = row.prize_percentages;
+            }
+        }
         return {
             id: row.id,
             name: row.name,
@@ -42,6 +87,17 @@ class TournamentService {
             prize_pool: this.toBigInt(row.prize_pool),
             created_at: row.created_at,
             ended_at: row.ended_at,
+            // New fields
+            creator_address: row.creator_address,
+            time_limit_minutes: row.time_limit_minutes ? Number(row.time_limit_minutes) : undefined,
+            rebuy_config: rebuyConfig,
+            table_theme: tableTheme,
+            is_private: Boolean(row.is_private),
+            pin_code: row.pin_code,
+            prize_distribution_type: row.prize_distribution_type || 'top_10',
+            prize_percentages: prizePercentages,
+            max_players: row.max_players ? Number(row.max_players) : undefined,
+            ends_at: row.ends_at,
         };
     }
     normalizeEntry(row) {
@@ -57,7 +113,36 @@ class TournamentService {
             status: row.status,
             bought_in_at: row.bought_in_at,
             finished_at: row.finished_at,
+            // Rebuy tracking
+            rebuy_count: Number(row.rebuy_count || 0),
+            total_buy_in: this.toBigInt(row.total_buy_in),
         };
+    }
+    /**
+     * Generate a random 4-digit PIN code
+     */
+    generatePinCode() {
+        return Math.floor(1000 + Math.random() * 9000).toString();
+    }
+    /**
+     * Get prize percentages for a distribution type
+     */
+    getPrizePercentages(type, custom) {
+        switch (type) {
+            case 'winner_takes_all':
+                return [100];
+            case 'top_3':
+                return [50, 30, 20];
+            case 'top_3_steep':
+                return [60, 25, 15];
+            case 'top_5':
+                return [40, 25, 15, 12, 8];
+            case 'custom':
+                return custom || [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+            case 'top_10':
+            default:
+                return [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+        }
     }
     /**
      * Get the current active tournament, creating one if needed
@@ -488,6 +573,407 @@ class TournamentService {
             return { valid: false, error: `Cannot bet more than your chip count (${chips})` };
         }
         return { valid: true };
+    }
+    // ============================================
+    // Tournament Creator Methods
+    // ============================================
+    /**
+     * Create a custom tournament
+     */
+    async createTournament(params) {
+        const normalizedCreator = this.normalizeAddress(params.creatorAddress);
+        // Validate parameters
+        const validation = this.validateTournamentParams(params);
+        if (!validation.valid) {
+            throw new Error(validation.error);
+        }
+        // Generate PIN for private tournaments
+        const pinCode = params.isPrivate ? this.generatePinCode() : null;
+        // Calculate ends_at if time limit is set
+        let endsAt = null;
+        if (params.timeLimitMinutes) {
+            endsAt = new Date(Date.now() + params.timeLimitMinutes * 60 * 1000);
+        }
+        // Get prize percentages
+        const prizePercentages = this.getPrizePercentages(params.prizeDistributionType, params.customPrizePercentages);
+        const query = `
+      INSERT INTO tournaments (
+        name,
+        creator_address,
+        buy_in_amount,
+        starting_chips,
+        max_hands,
+        time_limit_minutes,
+        rebuy_config,
+        table_theme,
+        is_private,
+        pin_code,
+        prize_distribution_type,
+        prize_percentages,
+        max_players,
+        ends_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING *
+    `;
+        const result = await this.pool.query(query, [
+            params.name.trim(),
+            normalizedCreator,
+            params.buyInAmount.toString(),
+            params.startingChips,
+            params.maxHands,
+            params.timeLimitMinutes,
+            JSON.stringify(params.rebuyConfig),
+            JSON.stringify(params.tableTheme),
+            params.isPrivate,
+            pinCode,
+            params.prizeDistributionType,
+            JSON.stringify(prizePercentages),
+            params.maxPlayers,
+            endsAt,
+        ]);
+        const tournament = this.normalizeTournament(result.rows[0]);
+        logger_1.logger.info('Custom tournament created', {
+            tournamentId: tournament.id,
+            name: tournament.name,
+            creator: normalizedCreator,
+            buyIn: params.buyInAmount.toString(),
+            isPrivate: params.isPrivate,
+        });
+        return tournament;
+    }
+    /**
+     * Validate tournament creation parameters
+     */
+    validateTournamentParams(params) {
+        // Validate name
+        const name = params.name.trim();
+        if (name.length < 3) {
+            return { valid: false, error: 'Tournament name must be at least 3 characters' };
+        }
+        if (name.length > 50) {
+            return { valid: false, error: 'Tournament name must be at most 50 characters' };
+        }
+        if (!/^[\w\s-]+$/.test(name)) {
+            return { valid: false, error: 'Tournament name contains invalid characters' };
+        }
+        // Validate buy-in
+        const minBuyIn = BigInt('100000000000000000000'); // 100 MORBIUS
+        const maxBuyIn = BigInt('1000000000000000000000000'); // 1M MORBIUS
+        if (params.buyInAmount < minBuyIn) {
+            return { valid: false, error: 'Minimum buy-in is 100 MORBIUS' };
+        }
+        if (params.buyInAmount > maxBuyIn) {
+            return { valid: false, error: 'Maximum buy-in is 1,000,000 MORBIUS' };
+        }
+        // Validate starting chips
+        const validStartingChips = [1000, 5000, 10000, 25000];
+        if (!validStartingChips.includes(params.startingChips)) {
+            return { valid: false, error: 'Invalid starting chips amount' };
+        }
+        // Validate max hands
+        const validMaxHands = [25, 50, 100, 200, 500];
+        if (!validMaxHands.includes(params.maxHands)) {
+            return { valid: false, error: 'Invalid max hands amount' };
+        }
+        // Validate time limit
+        const validTimeLimits = [null, 60, 120, 240, 1440];
+        if (!validTimeLimits.includes(params.timeLimitMinutes)) {
+            return { valid: false, error: 'Invalid time limit' };
+        }
+        // Validate rebuy config
+        if (params.rebuyConfig.enabled) {
+            const validMaxRebuys = [0, 1, 3, 5];
+            if (!validMaxRebuys.includes(params.rebuyConfig.maxRebuys)) {
+                return { valid: false, error: 'Invalid max rebuys setting' };
+            }
+        }
+        // Validate prize distribution
+        const validTypes = ['winner_takes_all', 'top_3', 'top_3_steep', 'top_5', 'top_10', 'custom'];
+        if (!validTypes.includes(params.prizeDistributionType)) {
+            return { valid: false, error: 'Invalid prize distribution type' };
+        }
+        // Validate custom percentages if provided
+        if (params.prizeDistributionType === 'custom' && params.customPrizePercentages) {
+            const sum = params.customPrizePercentages.reduce((a, b) => a + b, 0);
+            if (sum !== 100) {
+                return { valid: false, error: 'Custom prize percentages must sum to 100' };
+            }
+        }
+        return { valid: true };
+    }
+    /**
+     * List active tournaments (for browser)
+     */
+    async listTournaments(includePrivate = false) {
+        const query = `SELECT * FROM list_active_tournaments($1)`;
+        const result = await this.pool.query(query, [includePrivate]);
+        return result.rows.map(row => {
+            // Parse JSONB fields
+            let rebuyConfig = { enabled: false, maxRebuys: 0 };
+            if (row.rebuy_config) {
+                rebuyConfig = typeof row.rebuy_config === 'string'
+                    ? JSON.parse(row.rebuy_config)
+                    : row.rebuy_config;
+            }
+            let tableTheme = { kind: 'image', id: 'BigRich' };
+            if (row.table_theme) {
+                tableTheme = typeof row.table_theme === 'string'
+                    ? JSON.parse(row.table_theme)
+                    : row.table_theme;
+            }
+            return {
+                id: row.id,
+                name: row.name,
+                creator_address: row.creator_address,
+                buy_in_amount: this.toBigInt(row.buy_in_amount),
+                starting_chips: Number(row.starting_chips),
+                max_hands: Number(row.max_hands),
+                prize_pool: this.toBigInt(row.prize_pool),
+                entry_count: Number(row.entry_count),
+                max_players: row.max_players ? Number(row.max_players) : null,
+                time_limit_minutes: row.time_limit_minutes ? Number(row.time_limit_minutes) : null,
+                ends_at: row.ends_at,
+                rebuy_config: rebuyConfig,
+                table_theme: tableTheme,
+                is_private: Boolean(row.is_private),
+                prize_distribution_type: row.prize_distribution_type || 'top_10',
+                created_at: row.created_at,
+            };
+        });
+    }
+    /**
+     * Join a specific tournament by ID
+     */
+    async joinTournament(playerAddress, tournamentId, pinCode) {
+        const normalizedAddress = this.normalizeAddress(playerAddress);
+        // Get tournament
+        const tournament = await this.getTournament(tournamentId);
+        if (!tournament) {
+            throw new Error('Tournament not found');
+        }
+        if (tournament.status !== 'active') {
+            throw new Error('Tournament is not active');
+        }
+        // Check time limit
+        if (tournament.ends_at && new Date(tournament.ends_at) <= new Date()) {
+            throw new Error('Tournament has ended');
+        }
+        // Check PIN for private tournaments
+        if (tournament.is_private) {
+            if (!pinCode) {
+                throw new Error('PIN code required for private tournament');
+            }
+            if (pinCode !== tournament.pin_code) {
+                throw new Error('Invalid PIN code');
+            }
+        }
+        // Check max players
+        const entryCount = await this.getTournamentEntryCount(tournamentId);
+        if (tournament.max_players && entryCount >= tournament.max_players) {
+            throw new Error('Tournament is full');
+        }
+        // Check if player already in this tournament
+        const existingEntry = await this.getTournamentEntry(normalizedAddress, tournamentId);
+        if (existingEntry && existingEntry.status === 'playing') {
+            throw new Error('Already in this tournament');
+        }
+        // Check player balance
+        const balanceQuery = `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`;
+        const balanceResult = await this.pool.query(balanceQuery, [normalizedAddress]);
+        if (balanceResult.rows.length === 0) {
+            throw new Error('Player not found');
+        }
+        const balance = this.toBigInt(balanceResult.rows[0].balance);
+        if (balance < tournament.buy_in_amount) {
+            throw new Error(`Insufficient balance for buy-in. Need ${tournament.buy_in_amount.toString()}, have ${balance.toString()}`);
+        }
+        // Process buy-in
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            // Deduct buy-in
+            await client.query(`UPDATE players SET balance = balance - $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [tournament.buy_in_amount.toString(), normalizedAddress]);
+            // Add to prize pool
+            await client.query(`UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`, [tournament.buy_in_amount.toString(), tournamentId]);
+            // Create entry
+            const entryQuery = `
+        INSERT INTO tournament_entries (
+          tournament_id, player_address, chips_remaining, highest_chip_count, total_buy_in
+        ) VALUES ($1, $2, $3, $3, $4)
+        RETURNING *
+      `;
+            const entryResult = await client.query(entryQuery, [
+                tournamentId,
+                normalizedAddress,
+                tournament.starting_chips,
+                tournament.buy_in_amount.toString(),
+            ]);
+            await client.query('COMMIT');
+            logger_1.logger.info('Player joined tournament', {
+                playerAddress: normalizedAddress,
+                tournamentId,
+                entryId: entryResult.rows[0].id,
+            });
+            return this.normalizeEntry(entryResult.rows[0]);
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    }
+    /**
+     * Process rebuy for a player
+     */
+    async processRebuy(playerAddress, tournamentId) {
+        const normalizedAddress = this.normalizeAddress(playerAddress);
+        // Get tournament
+        const tournament = await this.getTournament(tournamentId);
+        if (!tournament) {
+            throw new Error('Tournament not found');
+        }
+        if (tournament.status !== 'active') {
+            throw new Error('Tournament is not active');
+        }
+        // Check if rebuys are enabled
+        if (!tournament.rebuy_config.enabled) {
+            throw new Error('Rebuys are not enabled for this tournament');
+        }
+        // Get entry
+        const entry = await this.getTournamentEntry(normalizedAddress, tournamentId);
+        if (!entry) {
+            throw new Error('Not in this tournament');
+        }
+        // Check if player can rebuy
+        if (entry.status !== 'busted' && entry.chips_remaining > 0) {
+            throw new Error('Can only rebuy when busted or at 0 chips');
+        }
+        // Check max rebuys (0 = unlimited)
+        if (tournament.rebuy_config.maxRebuys > 0 && entry.rebuy_count >= tournament.rebuy_config.maxRebuys) {
+            throw new Error(`Maximum rebuys (${tournament.rebuy_config.maxRebuys}) reached`);
+        }
+        // Check player balance
+        const balanceQuery = `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`;
+        const balanceResult = await this.pool.query(balanceQuery, [normalizedAddress]);
+        if (balanceResult.rows.length === 0) {
+            throw new Error('Player not found');
+        }
+        const balance = this.toBigInt(balanceResult.rows[0].balance);
+        if (balance < tournament.buy_in_amount) {
+            throw new Error(`Insufficient balance for rebuy. Need ${tournament.buy_in_amount.toString()}, have ${balance.toString()}`);
+        }
+        // Process rebuy
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            // Deduct buy-in
+            await client.query(`UPDATE players SET balance = balance - $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [tournament.buy_in_amount.toString(), normalizedAddress]);
+            // Add to prize pool
+            const prizePoolResult = await client.query(`UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2 RETURNING prize_pool`, [tournament.buy_in_amount.toString(), tournamentId]);
+            const newPrizePool = this.toBigInt(prizePoolResult.rows[0].prize_pool);
+            // Update entry: reset chips, increment rebuy count, add to total buy-in
+            const entryResult = await client.query(`UPDATE tournament_entries
+         SET
+           chips_remaining = $1,
+           status = 'playing',
+           rebuy_count = rebuy_count + 1,
+           total_buy_in = total_buy_in + $2::NUMERIC,
+           highest_chip_count = GREATEST(highest_chip_count, $1)
+         WHERE id = $3
+         RETURNING *`, [tournament.starting_chips, tournament.buy_in_amount.toString(), entry.id]);
+            await client.query('COMMIT');
+            logger_1.logger.info('Player rebuy processed', {
+                playerAddress: normalizedAddress,
+                tournamentId,
+                entryId: entry.id,
+                rebuyCount: entryResult.rows[0].rebuy_count,
+            });
+            return {
+                entry: this.normalizeEntry(entryResult.rows[0]),
+                newPrizePool,
+            };
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    }
+    /**
+     * Get extended tournament info including all settings
+     */
+    async getTournamentInfoExtended(tournamentId) {
+        const tournament = await this.getTournament(tournamentId);
+        if (!tournament) {
+            return null;
+        }
+        const entryCount = await this.getTournamentEntryCount(tournamentId);
+        const prizePercentages = this.getPrizePercentages(tournament.prize_distribution_type, tournament.prize_percentages);
+        return {
+            tournament,
+            entryCount,
+            prizePercentages,
+        };
+    }
+    /**
+     * Get tournament state including rebuy info
+     */
+    async getTournamentStateExtended(playerAddress) {
+        const normalizedAddress = this.normalizeAddress(playerAddress);
+        const query = `
+      SELECT
+        te.*,
+        t.max_hands,
+        t.starting_chips,
+        t.rebuy_config,
+        tl.current_rank
+      FROM tournament_entries te
+      JOIN tournaments t ON te.tournament_id = t.id
+      LEFT JOIN tournament_leaderboard tl ON tl.entry_id = te.id
+      WHERE LOWER(te.player_address) = LOWER($1)
+        AND t.status = 'active'
+      ORDER BY te.bought_in_at DESC
+      LIMIT 1
+    `;
+        const result = await this.pool.query(query, [normalizedAddress]);
+        if (result.rows.length === 0) {
+            return null;
+        }
+        const row = result.rows[0];
+        // Parse rebuy config
+        let rebuyConfig = { enabled: false, maxRebuys: 0 };
+        if (row.rebuy_config) {
+            rebuyConfig = typeof row.rebuy_config === 'string'
+                ? JSON.parse(row.rebuy_config)
+                : row.rebuy_config;
+        }
+        // Determine if player can rebuy
+        const canRebuy = rebuyConfig.enabled &&
+            (row.status === 'busted' || Number(row.chips_remaining) <= 0) &&
+            (rebuyConfig.maxRebuys === 0 || Number(row.rebuy_count || 0) < rebuyConfig.maxRebuys);
+        return {
+            entryId: row.id,
+            tournamentId: row.tournament_id,
+            chips: Number(row.chips_remaining),
+            handsPlayed: Number(row.hands_played),
+            handsRemaining: Number(row.max_hands) - Number(row.hands_played),
+            highestChips: Number(row.highest_chip_count),
+            currentRank: Number(row.current_rank || 1),
+            status: row.status,
+            prizeWon: this.toBigInt(row.prize_won),
+            maxHands: Number(row.max_hands),
+            startingChips: Number(row.starting_chips),
+            // Extended fields
+            rebuyCount: Number(row.rebuy_count || 0),
+            totalBuyIn: this.toBigInt(row.total_buy_in),
+            canRebuy,
+            maxRebuys: rebuyConfig.maxRebuys,
+            rebuyEnabled: rebuyConfig.enabled,
+        };
     }
 }
 exports.TournamentService = TournamentService;
