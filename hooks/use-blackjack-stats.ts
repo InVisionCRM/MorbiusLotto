@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAccount } from 'wagmi';
 
-import { getApiUrl } from '@/lib/api-urls';
+import { getApiUrlOptional } from '@/lib/api-urls';
 
 export interface EnhancedPlayerStats {
   total_games: number;
@@ -52,16 +52,26 @@ export interface GlobalAnalytics {
 /**
  * Hook to fetch enhanced player statistics
  */
+function defaultEnhancedStats(): EnhancedPlayerStats {
+  return {
+    total_games: 0, total_bet: 0n, total_win: 0n, win_rate: 0, blackjack_count: 0,
+    current_streak: 0, best_streak: 0, biggest_win: 0n, biggest_loss: 0n, average_bet: 0, average_payout: 0,
+    profit_loss: 0n, roi: 0, games_today: 0, games_this_week: 0, favorite_bet_amount: 0n, rank: 0,
+  };
+}
+
 export function usePlayerStatsEnhanced() {
   const { address } = useAccount();
+  const apiUrl = getApiUrlOptional();
 
   return useQuery<EnhancedPlayerStats>({
-    queryKey: ['playerStatsEnhanced', address],
+    queryKey: ['playerStatsEnhanced', address, !!apiUrl],
     queryFn: async () => {
       if (!address) throw new Error('Wallet not connected');
-      
+      if (!apiUrl) return defaultEnhancedStats();
+
       try {
-        const response = await fetch(`${getApiUrl()}/api/player/${address}/stats/enhanced`);
+        const response = await fetch(`${apiUrl}/api/player/${address}/stats/enhanced`);
         if (!response.ok) {
           const errorText = await response.text();
           let errorMessage = 'Failed to fetch player stats';
@@ -75,8 +85,7 @@ export function usePlayerStatsEnhanced() {
           throw new Error(errorMessage);
         }
         const data = await response.json();
-        
-        // Convert string bigints to BigInt
+
         return {
           ...data,
           total_bet: BigInt(data.total_bet || 0),
@@ -88,7 +97,7 @@ export function usePlayerStatsEnhanced() {
         };
       } catch (error) {
         if (error instanceof TypeError && error.message === 'Failed to fetch') {
-          throw new Error(`Cannot connect to backend server at ${getApiUrl()}. Make sure the server is running (cd server && npm run dev)`);
+          throw new Error(`Cannot connect to backend server at ${apiUrl}. Make sure the server is running.`);
         }
         throw error;
       }
@@ -99,15 +108,27 @@ export function usePlayerStatsEnhanced() {
   });
 }
 
+function defaultGlobalAnalytics(): GlobalAnalytics {
+  return {
+    total_players: 0, active_players: 0, total_games_played: 0, total_volume: 0n, total_payouts: 0n, house_profit: 0n,
+    games_last_hour: 0, games_last_24_hours: 0, volume_last_24_hours: 0n, profit_last_24_hours: 0n,
+    average_win_rate: 0, average_bet_size: 0, house_edge: 0, active_connections: 0, blackjack_rate: 0,
+    split_rate: 0, double_down_rate: 0, surrender_rate: 0, pending_settlements: 0, failed_settlements: 0,
+    largest_bet: 0n, largest_payout: 0n,
+  };
+}
+
 /**
  * Hook to fetch global analytics
  */
 export function useGlobalAnalytics() {
+  const apiUrl = getApiUrlOptional();
   return useQuery<GlobalAnalytics>({
-    queryKey: ['globalAnalytics'],
+    queryKey: ['globalAnalytics', !!apiUrl],
     queryFn: async () => {
+      if (!apiUrl) return defaultGlobalAnalytics();
       try {
-        const response = await fetch(`${getApiUrl()}/api/analytics/global`);
+        const response = await fetch(`${apiUrl}/api/analytics/global`);
         if (!response.ok) {
           const errorText = await response.text();
           let errorMessage = 'Failed to fetch global analytics';
@@ -121,8 +142,7 @@ export function useGlobalAnalytics() {
           throw new Error(errorMessage);
         }
         const data = await response.json();
-        
-        // Convert string bigints to BigInt
+
         return {
           ...data,
           total_volume: BigInt(data.total_volume || 0),
@@ -135,7 +155,7 @@ export function useGlobalAnalytics() {
         };
       } catch (error) {
         if (error instanceof TypeError && error.message === 'Failed to fetch') {
-          throw new Error(`Cannot connect to backend server at ${getApiUrl()}. Make sure the server is running (cd server && npm run dev)`);
+          throw new Error(`Cannot connect to backend server at ${apiUrl}. Make sure the server is running.`);
         }
         throw error;
       }
@@ -162,12 +182,9 @@ export function useBlackjackTopPlayers(limit: number = 10) {
   return useQuery<TopPlayerEntry[]>({
     queryKey: ['blackjackTopPlayers', limit],
     queryFn: async () => {
-      let apiUrl: string;
-      try {
-        apiUrl = getApiUrl();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Missing API URL';
-        throw new Error(`${msg}. Set NEXT_PUBLIC_API_URL in .env.local.`);
+      const apiUrl = getApiUrlOptional();
+      if (!apiUrl) {
+        return [];
       }
       try {
         const response = await fetch(`${apiUrl}/api/analytics/top-players?limit=${limit}`);
@@ -211,14 +228,16 @@ export function useBlackjackTopPlayers(limit: number = 10) {
  */
 export function usePlayerGames(limit: number = 50, offset: number = 0) {
   const { address } = useAccount();
+  const apiUrl = getApiUrlOptional();
 
   return useQuery({
-    queryKey: ['playerGames', address, limit, offset],
+    queryKey: ['playerGames', address, limit, offset, !!apiUrl],
     queryFn: async () => {
       if (!address) throw new Error('Wallet not connected');
-      
+      if (!apiUrl) return [];
+
       const response = await fetch(
-        `${getApiUrl()}/api/player/${address}/games?limit=${limit}&offset=${offset}`
+        `${apiUrl}/api/player/${address}/games?limit=${limit}&offset=${offset}`
       );
       if (!response.ok) {
         throw new Error('Failed to fetch player games');
@@ -233,13 +252,15 @@ export function usePlayerGames(limit: number = 50, offset: number = 0) {
  * Hook to fetch settlements
  */
 export function useSettlements(status?: string, limit: number = 100) {
+  const apiUrl = getApiUrlOptional();
   return useQuery({
-    queryKey: ['settlements', status, limit],
+    queryKey: ['settlements', status, limit, !!apiUrl],
     queryFn: async () => {
-      const url = new URL(`${getApiUrl()}/api/settlements`);
+      if (!apiUrl) return [];
+      const url = new URL(`${apiUrl}/api/settlements`);
       if (status) url.searchParams.set('status', status);
       url.searchParams.set('limit', limit.toString());
-      
+
       const response = await fetch(url.toString());
       if (!response.ok) {
         throw new Error('Failed to fetch settlements');

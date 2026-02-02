@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getApiUrl } from '@/lib/api-urls';
+import { getApiUrlOptional } from '@/lib/api-urls';
 
 export interface PlinkoChainStats {
   totalDrops: bigint;
@@ -111,11 +111,24 @@ function parsePlatformResponse(data: any): PlatformAnalytics {
   };
 }
 
+function defaultPlatformAnalytics(): PlatformAnalytics {
+  return {
+    blackjack: {},
+    plinko: null,
+    keno: null,
+    lottery: null,
+    bigWheel: null,
+    combined: { totalGamesPlayed: '0', totalVolume: '0', totalPayouts: '0' },
+  };
+}
+
 export function usePlatformAnalytics() {
+  const apiUrl = getApiUrlOptional();
   return useQuery<PlatformAnalytics>({
-    queryKey: ['platformAnalytics'],
+    queryKey: ['platformAnalytics', !!apiUrl],
     queryFn: async () => {
-      const response = await fetch(`${getApiUrl()}/api/analytics/platform`);
+      if (!apiUrl) return defaultPlatformAnalytics();
+      const response = await fetch(`${apiUrl}/api/analytics/platform`);
       if (!response.ok) {
         const text = await response.text();
         let msg = 'Failed to fetch platform analytics';

@@ -38,7 +38,7 @@ import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, BLACKJACK_IMA
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
-import { getApiUrl, getWebSocketUrlOptional } from '@/lib/api-urls';
+import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
@@ -898,7 +898,8 @@ export default function BlackjackPage() {
 
     // Convert database Game[] to GameResult[] format
     const loadHistoryFromDatabase = async () => {
-      const API_BASE_URL = getApiUrl();
+      const API_BASE_URL = getApiUrlOptional();
+      if (!API_BASE_URL) return;
       // #region agent log
       fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:start',message:'loadHistoryFromDatabase',data:{playerGamesDataLength:playerGamesData.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
       // #endregion
@@ -2039,7 +2040,8 @@ export default function BlackjackPage() {
   // Fetch game result for verification (Verify tab)
   const handleVerifyGame = useCallback(async (id: string): Promise<GameVerificationData | null> => {
     try {
-      const apiUrl = getApiUrl();
+      const apiUrl = getApiUrlOptional();
+      if (!apiUrl) return null;
       const res = await fetch(`${apiUrl}/api/game/${id}/verify`);
       if (!res.ok) return null;
       const raw = await res.json();

@@ -1,7 +1,7 @@
 /**
  * Central place for API and WebSocket base URLs.
- * No fallbacks: set these in your deployment environment or the app will throw.
- *   NEXT_PUBLIC_API_URL
+ * Set in your deployment (e.g. Vercel project settings, Railway variables).
+ *   NEXT_PUBLIC_API_URL — required for core Blackjack; optional for Top Players (getApiUrlOptional).
  *   NEXT_PUBLIC_WEBSOCKET_URL
  *   NEXT_PUBLIC_BLACKJACK_SERVER_URL
  */
@@ -10,7 +10,7 @@ function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim() === '') {
     throw new Error(
-      `Missing required env: ${name}. Set it in your deployment (e.g. Vercel / .env.local).`
+      `Missing ${name}. Add it in Vercel (frontend): Settings → Environment Variables. Then redeploy — Next.js embeds NEXT_PUBLIC_* at build time, so a new build is required after adding it. Railway env does not apply to the Next.js app.`
     );
   }
   return value.trim();
@@ -18,6 +18,13 @@ function requireEnv(name: string): string {
 
 export function getApiUrl(): string {
   return requireEnv('NEXT_PUBLIC_API_URL');
+}
+
+/** Returns API base URL or null if not set. Use for features that can degrade when backend is unavailable (e.g. Top Players). */
+export function getApiUrlOptional(): string | null {
+  const value = process.env.NEXT_PUBLIC_API_URL;
+  if (!value || value.trim() === '') return null;
+  return value.trim();
 }
 
 export function getWebSocketUrl(): string {
