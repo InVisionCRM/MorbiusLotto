@@ -522,14 +522,13 @@ export function TicketPurchaseBuilder({
         border: '1px inset rgba(60, 60, 60, 0.5)',
       }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
 
       <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
         {/* Builder Panel */}
         <div className="flex-1 space-y-4 min-w-0 w-full overflow-x-hidden">
           {/* Number Grid */}
           <div className="w-full overflow-x-hidden">
-            <div className="grid grid-cols-6 xs:grid-cols-7 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-11 gap-1.5 mb-3 w-full">
+            <div className="grid grid-cols-6 xs:grid-cols-7 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-11 gap-0 p-0 rounded-0 mb-3 w-full">
               {Array.from({ length: MAX_NUMBER }, (_, i) => i + MIN_NUMBER).map((num) => {
                 const selected = workingTicket.includes(num)
                 return (
@@ -538,11 +537,16 @@ export function TicketPurchaseBuilder({
                     onClick={() => toggleNumber(num)}
                     disabled={!selected && workingTicket.length >= NUMBERS_PER_TICKET}
                     className={cn(
-                      'h-8 rounded border text-xs font-semibold transition-all cursor-pointer hover:shadow-[0_4px_12px_rgba(147,51,234,0.3)]',
+                      'h-8 rounded-0 text-xs font-semibold transition-all cursor-pointer p-0',
                       selected
-                        ? 'bg-white text-black border-white scale-105'
-                        : 'bg-gradient-to-br from-slate-950 to-slate-900/40 border-white/20 text-white hover:border-white/40 hover:bg-white/5'
+                        ? 'bg-white text-black border border-white scale-105'
+                        : 'text-white hover:border-white/40'
                     )}
+                    style={!selected ? {
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    } : undefined}
                   >
                     {num}
                   </button>
@@ -724,7 +728,7 @@ export function TicketPurchaseBuilder({
               <span
                 className={cn(
                   'font-semibold',
-                  hasEnoughBalance ? 'text-emerald-400' : 'text-amber-400'
+                  hasEnoughBalance ? 'text-cyan-500' : 'text-amber-400'
                 )}
                 title={`Raw: ${paymentMethod === 'PLS' ? nativePlsBalance?.toString() : MORBIUSBalance?.toString() || 'undefined'} | Address: ${address || 'not connected'}`}
               >
@@ -755,8 +759,8 @@ export function TicketPurchaseBuilder({
               </Alert>
             )}
             {uiState === 'success' && (
-              <Alert className="border-emerald-400/40 bg-emerald-500/10">
-                <AlertDescription className="text-emerald-200 text-sm">Success! Good luck!</AlertDescription>
+              <Alert className="border-cyan-500/40 bg-cyan-500/10">
+                <AlertDescription className="text-cyan-200 text-sm">Success! Good luck!</AlertDescription>
               </Alert>
             )}
             {/* PLS Quote Error Warning */}
@@ -778,7 +782,7 @@ export function TicketPurchaseBuilder({
               <RippleButton
                 className={cn(
                   'w-full h-12 font-semibold',
-                  isProcessing ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold' : 'bg-green-600 text-white hover:bg-green-600'
+                  isProcessing ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold' : 'bg-cyan-500 text-white hover:bg-cyan-600'
                 )}
                 disabled={isProcessing || workingTicket.length !== NUMBERS_PER_TICKET}
                 onClick={handleApprove}
@@ -796,7 +800,7 @@ export function TicketPurchaseBuilder({
               <RippleButton
                 className={cn(
                   'w-full h-12 font-semibold',
-                  isProcessing || !canBuy ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold ' : 'bg-green-500 text-white hover:bg-green-600'
+                  isProcessing || !canBuy ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold ' : 'bg-cyan-500 text-white hover:bg-cyan-600'
                 )}
                 disabled={!canBuy || isProcessing}
                 onClick={handleBuy}
@@ -821,7 +825,7 @@ export function TicketPurchaseBuilder({
       <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
         <DialogContent className="bg-slate-900 border-white/20 text-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-center text-emerald-400">
+            <DialogTitle className="text-2xl font-black text-center text-cyan-500">
               Purchase Successful!
             </DialogTitle>
             <DialogDescription className="text-white/80 text-center pt-2">
@@ -840,7 +844,7 @@ export function TicketPurchaseBuilder({
               }}
             >
               <div className="text-sm text-white/60 mb-1">Rounds Purchased</div>
-              <div className="text-3xl font-black text-emerald-400">
+              <div className="text-3xl font-black text-cyan-500">
                 {successRoundsCount} {successRoundsCount === 1 ? 'Round' : 'Rounds'}
               </div>
             </div>
@@ -864,7 +868,7 @@ export function TicketPurchaseBuilder({
             <div className="flex gap-3 pt-2">
               <RippleButton
                 variant="outline"
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500"
+                className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white border-cyan-500"
                 onClick={() => {
                   window.open(`https://scan.pulsechain.com/tx/${successTxHash}`, '_blank')
                 }}

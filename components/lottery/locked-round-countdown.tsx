@@ -77,11 +77,11 @@ export function LockedRoundCountdown({ roundId, drawBlock }: LockedRoundCountdow
 
         {/* Countdown */}
         {canDrawNow ? (
-          <div className="flex items-center gap-3 p-4 bg-green-500/20 border border-green-500/40 rounded-lg">
-            <Loader2 className="h-6 w-6 text-green-400 animate-spin" />
+          <div className="flex items-center gap-3 p-4 bg-cyan-500/20 border border-cyan-500/40 rounded-lg">
+            <Loader2 className="h-6 w-6 text-cyan-500 animate-spin" />
             <div>
-              <div className="text-sm font-bold text-green-300">Drawing Numbers Now...</div>
-              <div className="text-xs text-green-200/80">Waiting for keeper to draw winning numbers</div>
+              <div className="text-sm font-bold text-cyan-300">Drawing Numbers Now...</div>
+              <div className="text-xs text-cyan-200/80">Waiting for keeper to draw winning numbers</div>
             </div>
           </div>
         ) : (

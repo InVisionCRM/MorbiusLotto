@@ -163,7 +163,6 @@ export function KenoTicket({
       }}
     >
       {/* Radial gradient overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
       <div className="relative" style={{ perspective: '1000px' }}>
         <div
           className={cn(
@@ -205,7 +204,7 @@ export function KenoTicket({
                 <div
                   className={cn(
                     "text-sm font-black whitespace-nowrap",
-                    isPositive ? "text-green-400" : isNegative ? "text-red-400" : "text-white"
+                    isPositive ? "text-cyan-500" : isNegative ? "text-red-400" : "text-white"
                   )}
                 >
                   {pl.toFixed(0)} Morbius
@@ -254,7 +253,7 @@ export function KenoTicket({
                       className={cn(
                         'relative inline-flex items-center justify-center w-8 h-8 rounded-full border text-[18px] font-bold transition-all',
                         isHit
-                          ? 'border-2 border-green-400/90 bg-white/50 text-purple-600'
+                          ? 'border-2 border-cyan-500/90 bg-white/50 text-purple-600'
                           : 'border-red-400 border-1 bg-transparent text-purple-500'
                       )}
                     > 
@@ -263,7 +262,7 @@ export function KenoTicket({
                         <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-blue-400 shadow-[0_0_3px_rgba(59,130,246,0.8)]" />
                       )}
                       {isHit && (
-                        <span className="absolute inset-0 rounded-full bg-emerald-400/25 animate-pulse" />
+                        <span className="absolute inset-0 rounded-full bg-cyan-500/25 animate-pulse" />
                       )}
                     </span>
                   )
@@ -392,14 +391,14 @@ export function KenoTicket({
                   <div
                     className={cn(
                       "font-bold",
-                      round.matchCount > 0 ? "text-green-400" : "text-red-400"
+                      round.matchCount > 0 ? "text-cyan-500" : "text-red-400"
                     )}
                   >
                     {round.matchCount} of {spotSize}
                   </div>
                   <div className={cn(
                     "text-right font-mono",
-                    (round.roundPL ?? 0) > 0 ? "text-green-400" : (round.roundPL ?? 0) < 0 ? "text-red-400" : "text-white"
+                    (round.roundPL ?? 0) > 0 ? "text-cyan-500" : (round.roundPL ?? 0) < 0 ? "text-red-400" : "text-white"
                   )}>
                     {(round.roundPL ?? 0).toFixed(0)}
                   </div>
@@ -418,7 +417,7 @@ export function KenoTicket({
                 <div className={cn(
                   "text-right font-mono",
                   roundHistory.reduce((acc, r) => acc + (r.roundPL ?? 0), 0) > 0
-                    ? "text-green-400"
+                    ? "text-cyan-500"
                     : roundHistory.reduce((acc, r) => acc + (r.roundPL ?? 0), 0) < 0
                       ? "text-red-400"
                       : "text-white"

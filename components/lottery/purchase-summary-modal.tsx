@@ -320,7 +320,7 @@ export function PurchaseSummaryModal({
           <div className="flex items-center gap-2">
             <Coins className="h-4 w-4" />
             <span className="text-sm font-medium">Payment Method: MORBIUS</span>
-            <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
+            <span className="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-500 border border-cyan-500/30">
               Best Rate
             </span>
           </div>
@@ -363,7 +363,7 @@ export function PurchaseSummaryModal({
                       {group.numbers.map((num) => (
                         <div
                           key={num}
-                          className="flex items-center justify-center w-8 h-8 rounded-lg bg-green-500/40 text-white font-bold text-sm ring-2 ring-green-600/40"
+                          className="flex items-center justify-center w-8 h-8 rounded-lg bg-cyan-500/40 text-white font-bold text-sm ring-2 ring-cyan-500/40"
                         >
                           {num}
                         </div>
@@ -420,7 +420,7 @@ export function PurchaseSummaryModal({
 
             <div className="flex justify-between text-sm">
               <span className="text-white/60">Total entries (tickets × rounds):</span>
-              <span className="font-semibold text-green-400">{totalEntries}</span>
+              <span className="font-semibold text-cyan-500">{totalEntries}</span>
             </div>
 
             <div className="pt-2 border-t border-white/10">
@@ -438,7 +438,7 @@ export function PurchaseSummaryModal({
 
             <div className="flex justify-between text-xs pt-2">
               <span className="text-white/60">Your {currentTokenSymbol} Balance:</span>
-              <span className={hasEnoughBalance ? 'text-green-400' : 'text-red-400'}>
+              <span className={hasEnoughBalance ? 'text-cyan-500' : 'text-red-400'}>
                 {currentBalance ? formatToken(currentBalance, 'MORBIUS') : '0'} MORBIUS
               </span>
             </div>
@@ -454,9 +454,9 @@ export function PurchaseSummaryModal({
 
           {/* Success Message */}
           {step === 'success' && (
-            <Alert className="border-green-500/50 bg-green-500/10">
-              <CheckCircle2 className="h-4 w-4 text-green-400" />
-              <AlertDescription className="text-green-400">
+            <Alert className="border-cyan-500/50 bg-cyan-500/10">
+              <CheckCircle2 className="h-4 w-4 text-cyan-500" />
+              <AlertDescription className="text-cyan-500">
                 <div className="space-y-2">
                   <div className="font-semibold text-base">✅ Purchase Confirmed!</div>
                   <div className="text-sm space-y-1.5">
@@ -465,12 +465,12 @@ export function PurchaseSummaryModal({
                     ) : (
                       <>
                         <div>
-                          You now have <strong className="text-green-300">{ticketCount} ticket{ticketCount !== 1 ? 's' : ''} in each of the next {effectiveRounds} rounds</strong> ({totalEntries} total entries).
+                          You now have <strong className="text-cyan-300">{ticketCount} ticket{ticketCount !== 1 ? 's' : ''} in each of the next {effectiveRounds} rounds</strong> ({totalEntries} total entries).
                         </div>
-                        <div className="text-green-300/90">
+                        <div className="text-cyan-300/90">
                           Your tickets will automatically play in the next {effectiveRounds} consecutive rounds!
                         </div>
-                        <div className="pt-2 border-t border-green-500/20 text-xs text-green-200/80">
+                        <div className="pt-2 border-t border-cyan-500/20 text-xs text-cyan-200/80">
                           💡 <strong>Note:</strong> Your future round tickets are saved on the blockchain. They will appear automatically when each round starts. No action needed!
                         </div>
                       </>

@@ -142,7 +142,7 @@ export function AllTicketsAccordion() {
         <div className="mt-3">
           {isLoading && (
             <div className="flex items-center justify-center gap-2 mb-4">
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+              <Loader2 className="h-4 w-4 animate-spin text-cyan-500" />
               <span className="text-xs text-gray-400">Loading...</span>
             </div>
           )}

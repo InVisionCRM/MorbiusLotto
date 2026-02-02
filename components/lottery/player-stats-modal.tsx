@@ -81,7 +81,7 @@ export function PlayerStatsModal() {
                 <div className="text-sm font-bold text-white">{fmt(stats.spent)}</div>
               </div>
               <div className="bg-slate-900 p-2">
-                <div className="text-[9px] text-green-400/70 uppercase tracking-wide mb-0.5">Claimed</div>
+                <div className="text-[9px] text-cyan-500/70 uppercase tracking-wide mb-0.5">Claimed</div>
                 <div className="text-sm font-bold text-white">{fmt(stats.claimed)}</div>
               </div>
               <div className="bg-slate-900 p-2">
@@ -97,7 +97,7 @@ export function PlayerStatsModal() {
                   <span className="text-[10px] text-white/50">Current P/L</span>
                   <span className="text-[9px] text-white/40">ROI {stats.roi}%</span>
                 </div>
-                <div className={cn("text-xl font-bold mt-0.5", stats.pl >= 0 ? "text-green-400" : "text-red-400")}>
+                <div className={cn("text-xl font-bold mt-0.5", stats.pl >= 0 ? "text-cyan-500" : "text-red-400")}>
                   {stats.pl >= 0 ? '+' : ''}{fmt(stats.pl)}
                 </div>
               </div>
@@ -106,7 +106,7 @@ export function PlayerStatsModal() {
                   <span className="text-[10px] text-white/50">If Claimed</span>
                   <span className="text-[9px] text-white/40">ROI {stats.potentialROI}%</span>
                 </div>
-                <div className={cn("text-xl font-bold mt-0.5", stats.potentialPL >= 0 ? "text-green-400" : "text-red-400")}>
+                <div className={cn("text-xl font-bold mt-0.5", stats.potentialPL >= 0 ? "text-cyan-500" : "text-red-400")}>
                   {stats.potentialPL >= 0 ? '+' : ''}{fmt(stats.potentialPL)}
                 </div>
               </div>
@@ -132,7 +132,7 @@ export function PlayerStatsModal() {
                         <tr key={r.id} className={cn("border-b border-white/5 hover:bg-white/5 transition-colors", i % 2 === 0 ? "bg-gradient-to-br from-slate-950 to-slate-900/20" : "")}>
                           <td className="py-1.5 px-3 font-mono font-semibold text-white">#{r.id}</td>
                           <td className="py-1.5 px-2 text-center text-white/60">{r.tickets}</td>
-                          <td className={cn("py-1.5 px-3 text-right font-mono font-semibold", r.wins > 0 ? "text-green-400" : "text-white/30")}>
+                          <td className={cn("py-1.5 px-3 text-right font-mono font-semibold", r.wins > 0 ? "text-cyan-500" : "text-white/30")}>
                             {r.wins > 0 ? fmt(r.wins) : '—'}
                           </td>
                         </tr>

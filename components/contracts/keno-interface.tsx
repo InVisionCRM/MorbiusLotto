@@ -225,16 +225,16 @@ function AdvancedAdminSection({ address }: { address?: `0x${string}` }) {
           <Button
             onClick={handleUnpause}
             disabled={!address || isPending}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-cyan-500 hover:bg-cyan-600"
           >
             Unpause Contract
           </Button>
         </div>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Operation completed successfully!
             </AlertDescription>
           </Alert>
@@ -389,9 +389,9 @@ function RandomnessManagement({ address }: { address?: `0x${string}` }) {
         </div>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Randomness operation completed!
             </AlertDescription>
           </Alert>
@@ -678,7 +678,7 @@ function TokenInfoSection() {
             </div>
             <div className="p-3 bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10 rounded-lg">
               <p className="text-xs text-white/50">Contract Status</p>
-              <p className={`text-lg font-bold ${isPaused ? 'text-red-500' : 'text-green-500'}`}>
+              <p className={`text-lg font-bold ${isPaused ? 'text-red-500' : 'text-cyan-500'}`}>
                 {isPaused ? 'PAUSED' : 'ACTIVE'}
               </p>
             </div>
@@ -888,7 +888,7 @@ function ClaimedStatusCheck({ address }: { address?: `0x${string}` }) {
         {roundId && ticketId && (
           <div className="p-4 bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10 rounded-lg text-center">
             <p className="text-xs text-white/50 mb-2">Claim Status</p>
-            <p className={`text-2xl font-bold ${isClaimed ? 'text-green-500' : 'text-yellow-500'}`}>
+            <p className={`text-2xl font-bold ${isClaimed ? 'text-cyan-500' : 'text-yellow-500'}`}>
               {isClaimed ? '✓ CLAIMED' : '○ NOT CLAIMED'}
             </p>
           </div>
@@ -1015,9 +1015,9 @@ function BuyTicketSection({ address }: { address?: `0x${string}` }) {
             </Button>
           </div>
           {isApproved && (
-            <Alert className="mt-2 bg-green-500/10 border-green-500/20">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <AlertDescription className="text-green-500">
+            <Alert className="mt-2 bg-cyan-500/10 border-cyan-500/20">
+              <CheckCircle className="h-4 w-4 text-cyan-500" />
+              <AlertDescription className="text-cyan-500">
                 Approval successful!
               </AlertDescription>
             </Alert>
@@ -1044,7 +1044,7 @@ function BuyTicketSection({ address }: { address?: `0x${string}` }) {
             onChange={(e) => setNumbers(e.target.value)}
             placeholder="[1,2,3,4,5,6,7,8,9,10]"
             rows={3}
-            className="w-full mt-2 p-3 bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10 rounded-md text-white font-mono text-sm"
+            className="w-full mt-2 p-3 bg-gradient-to-br from-slate-500 to-slate-900/40 border border-white/10 rounded-md text-white font-mono text-sm"
           />
         </div>
 
@@ -1107,9 +1107,9 @@ function BuyTicketSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Ticket purchased successfully!
             </AlertDescription>
           </Alert>
@@ -1201,7 +1201,7 @@ function ClaimPrizeSection({ address }: { address?: `0x${string}` }) {
         <Button
           onClick={handleClaim}
           disabled={!address || !roundId || !ticketId || isPending || isConfirming}
-          className="w-full bg-green-600 hover:bg-green-700"
+          className="w-full bg-cyan-500 hover:bg-cyan-600"
           size="lg"
         >
           {isPending || isConfirming ? (
@@ -1215,9 +1215,9 @@ function ClaimPrizeSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Prize claimed successfully!
             </AlertDescription>
           </Alert>
@@ -1281,7 +1281,7 @@ function AutoClaimSection({ address }: { address?: `0x${string}` }) {
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between p-4 bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10 rounded-lg">
           <span className="text-sm">Auto-Claim Status</span>
-          <span className={`text-sm font-bold ${currentStatus ? 'text-green-500' : 'text-red-500'}`}>
+          <span className={`text-sm font-bold ${currentStatus ? 'text-cyan-500' : 'text-red-500'}`}>
             {currentStatus ? 'ENABLED' : 'DISABLED'}
           </span>
         </div>
@@ -1289,7 +1289,7 @@ function AutoClaimSection({ address }: { address?: `0x${string}` }) {
         <Button
           onClick={handleToggle}
           disabled={!address || isPending || isConfirming}
-          className={`w-full ${currentStatus ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+          className={`w-full ${currentStatus ? 'bg-red-600 hover:bg-red-700' : 'bg-cyan-500 hover:bg-cyan-600'}`}
           size="lg"
         >
           {isPending || isConfirming ? (
@@ -1305,9 +1305,9 @@ function AutoClaimSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Auto-claim settings updated!
             </AlertDescription>
           </Alert>
@@ -1378,9 +1378,9 @@ function RoundManagementSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Round operation successful!
             </AlertDescription>
           </Alert>
@@ -1499,9 +1499,9 @@ function PaytableConfigSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Paytable updated successfully!
             </AlertDescription>
           </Alert>
@@ -1622,9 +1622,9 @@ function ContractConfigSection({ address }: { address?: `0x${string}` }) {
         </div>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Configuration updated successfully!
             </AlertDescription>
           </Alert>
@@ -1756,7 +1756,7 @@ function PlayerStatsSection({ address }: { address?: `0x${string}` }) {
             </div>
             <div>
               <p className="text-xs text-white/50">Net P&L</p>
-              <p className={`text-xl font-bold ${Number(stats[5]) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              <p className={`text-xl font-bold ${Number(stats[5]) >= 0 ? 'text-cyan-500' : 'text-red-500'}`}>
                 {(Number(stats[5]) / 1e18).toFixed(4)}
               </p>
             </div>

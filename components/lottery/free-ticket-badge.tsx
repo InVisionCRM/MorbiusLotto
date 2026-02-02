@@ -38,8 +38,8 @@ export function FreeTicketBadge({
       <Badge
         variant="outline"
         className={`
-          bg-green-500/20 border-green-500/50 text-green-400
-          hover:bg-green-500/30
+          bg-cyan-500/20 border-cyan-500/50 text-cyan-500
+          hover:bg-cyan-500/30
           ${className}
         `}
         title="Earned from non-winning tickets, applied automatically at purchase"
@@ -51,15 +51,15 @@ export function FreeTicketBadge({
   }
 
   return (
-    <Card className={`p-4 bg-gradient-to-br from-green-900/20 to-emerald-900/20 border-green-500/30 ${className}`}>
+    <Card className={`p-4 bg-gradient-to-br from-cyan-900/20 to-cyan-900/20 border-cyan-500/30 ${className}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-green-500/20 rounded-lg">
-            <Gift className="h-5 w-5 text-green-400" />
+          <div className="p-2 bg-cyan-500/20 rounded-lg">
+            <Gift className="h-5 w-5 text-cyan-500" />
           </div>
           <div>
             <div className="text-sm text-muted-foreground">Free Tickets</div>
-            <div className="text-2xl font-bold text-green-400">
+            <div className="text-2xl font-bold text-cyan-500">
               {credits}
             </div>
           </div>
@@ -79,7 +79,7 @@ export function FreeTicketBadge({
           </div>
         </div>
       </div>
-      <div className="mt-3 p-2 bg-green-500/10 border border-green-500/20 rounded text-xs text-center text-green-400/80">
+      <div className="mt-3 p-2 bg-cyan-500/10 border border-cyan-500/20 rounded text-xs text-center text-cyan-500/80">
         Applied automatically when you buy tickets
       </div>
     </Card>

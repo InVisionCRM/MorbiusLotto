@@ -20,7 +20,6 @@ export function KenoPrizePoolModal({ open, onOpenChange }: KenoPrizePoolModalPro
         }}
       >
         {/* Radial gradient overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
         <div className="relative z-10 p-6">
         <DialogHeader className="mb-6">
           <DialogTitle className="text-2xl font-bold text-white text-center">
@@ -142,7 +141,6 @@ export function KenoPrizePoolModal({ open, onOpenChange }: KenoPrizePoolModalPro
               }}
             >
               {/* Radial gradient overlay */}
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
               <div className="relative z-10">
               <div className="bg-lime-600/70 px-4 py-2 border-b border-white/10">
                 <h3 className="text-lg font-bold text-white">{spot} SPOT</h3>
@@ -190,7 +188,6 @@ export function KenoPrizePoolModal({ open, onOpenChange }: KenoPrizePoolModalPro
           }}
         >
           {/* Radial gradient overlay */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
           <div className="relative z-10">
           <p className="text-xs text-amber-200 mb-2">
             <strong>*</strong> Subject to contract rules, prize amounts may vary. The total liability for 10 of 10 prize is limited.

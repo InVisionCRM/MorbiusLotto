@@ -39,10 +39,15 @@ export const BentoGridItem = ({
   return (
     <div
       className={cn(
-        "group/bento shadow-input flex flex-col justify-between space-y-4 rounded-lg border border-neutral-200 bg-gradient-to-br from-slate-900 to-black/20 backdrop-blur-sm p-4 dark:border-white/[0.2] dark:shadow-none",
+        "group/bento shadow-input flex flex-col justify-between space-y-4 rounded-lg border p-4 dark:border-white/[0.2] dark:shadow-none",
         onClick && "cursor-pointer hover:scale-105",
         className,
       )}
+      style={{
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        border: '1px inset rgba(60, 60, 60, 0.5)',
+      }}
       onClick={onClick}
     >
       {header}

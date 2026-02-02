@@ -296,11 +296,11 @@ export function MORBIUSMovementFeed() {
               >
                 <div
                   className={`mt-1 rounded-full p-1 ${
-                    item.direction === 'in' ? 'bg-green-500/20' : 'bg-red-500/20'
+                    item.direction === 'in' ? 'bg-cyan-500/20' : 'bg-red-500/20'
                   }`}
                 >
                   {item.direction === 'in' ? (
-                    <ArrowDownRight className="h-4 w-4 text-green-400" />
+                    <ArrowDownRight className="h-4 w-4 text-cyan-500" />
                   ) : (
                     <ArrowUpRight className="h-4 w-4 text-red-400" />
                   )}

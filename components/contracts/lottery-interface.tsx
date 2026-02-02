@@ -170,9 +170,9 @@ function BuyTicketsSection({ address }: { address?: `0x${string}` }) {
             </Button>
           </div>
           {isApproved && (
-            <Alert className="mt-2 bg-green-500/10 border-green-500/20">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <AlertDescription className="text-green-500">
+            <Alert className="mt-2 bg-cyan-500/10 border-cyan-500/20">
+              <CheckCircle className="h-4 w-4 text-cyan-500" />
+              <AlertDescription className="text-cyan-500">
                 Approval successful! You can now buy tickets.
               </AlertDescription>
             </Alert>
@@ -211,9 +211,9 @@ function BuyTicketsSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Tickets purchased successfully!
             </AlertDescription>
           </Alert>
@@ -334,9 +334,9 @@ function BuyTicketsMultiRoundSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Multi-round tickets purchased successfully!
             </AlertDescription>
           </Alert>
@@ -463,9 +463,9 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
             </Button>
           </div>
           {isApproved && (
-            <Alert className="mt-2 bg-green-500/10 border-green-500/20">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <AlertDescription className="text-green-500">
+            <Alert className="mt-2 bg-cyan-500/10 border-cyan-500/20">
+              <CheckCircle className="h-4 w-4 text-cyan-500" />
+              <AlertDescription className="text-cyan-500">
                 WPLS approval successful!
               </AlertDescription>
             </Alert>
@@ -516,9 +516,9 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Tickets purchased with WPLS successfully!
             </AlertDescription>
           </Alert>
@@ -596,7 +596,7 @@ function ClaimWinningsSection({ address }: { address?: `0x${string}` }) {
         <Button
           onClick={handleClaim}
           disabled={!address || !roundId || isPending || isConfirming}
-          className="w-full bg-green-600 hover:bg-green-700"
+          className="w-full bg-cyan-500 hover:bg-cyan-600"
           size="lg"
         >
           {isPending || isConfirming ? (
@@ -610,9 +610,9 @@ function ClaimWinningsSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Winnings claimed successfully!
             </AlertDescription>
           </Alert>
@@ -687,9 +687,9 @@ function FinalizeRoundSection({ address }: { address?: `0x${string}` }) {
         </Button>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Round finalized successfully!
             </AlertDescription>
           </Alert>
@@ -851,9 +851,9 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
         </div>
 
         {isSuccess && (
-          <Alert className="bg-green-500/10 border-green-500/20">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">
+          <Alert className="bg-cyan-500/10 border-cyan-500/20">
+            <CheckCircle className="h-4 w-4 text-cyan-500" />
+            <AlertDescription className="text-cyan-500">
               Settings updated successfully!
             </AlertDescription>
           </Alert>
@@ -1013,7 +1013,7 @@ function PlayerStats({ address }: { address?: `0x${string}` }) {
             </div>
             <div>
               <p className="text-xs text-white/50">Claimable Now</p>
-              <p className="text-xl font-bold text-green-500">{formatUnits(stats[3] || BigInt(0), TOKEN_DECIMALS)}</p>
+              <p className="text-xl font-bold text-cyan-500">{formatUnits(stats[3] || BigInt(0), TOKEN_DECIMALS)}</p>
             </div>
           </div>
         ) : (

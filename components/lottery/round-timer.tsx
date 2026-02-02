@@ -230,7 +230,6 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
         }}
       >
         {/* Radial gradient overlay matching ticket-purchase-builder */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
       {/* House Ticket Numbers - Vertical on left */}
       <div className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 flex flex-col gap-1 sm:gap-2">
         {houseTicketNumbers && houseTicketNumbers.length === 6 ? (
@@ -258,7 +257,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
       {/* Round Winning Numbers Title */}
       <div className="absolute top-10 left-0 right-0 flex justify-center mt-1 z-10">
         <div className="text-sm sm:text-sm text-white/70 font-bold uppercase tracking-wide text-center">
-          Round <span className="text-lg sm:text-lg text-green-600 font-extrabold">{previousRoundId || roundId || '?'}</span> Winning Numbers
+          Round <span className="text-lg sm:text-lg text-cyan-500 font-extrabold">{previousRoundId || roundId || '?'}</span> Winning Numbers
         </div>
       </div>
 
@@ -372,8 +371,8 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
                       key={idx}
                       className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white font-bold text-base shadow-lg transition-all duration-300 ${
                         isDrawn
-                          ? 'bg-green-500/30 border-2 border-green-300 shadow-[0_0_12px_rgba(34,197,94,0.8)]'
-                          : 'bg-blue-950/20 backdrop-blur-sm border border-white/20'
+                          ? 'bg-cyan-500/30 border-2 border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.8)]'
+                          : 'bg-slate-700/20 backdrop-blur-sm border border-white/20'
                       }`}
                     >
                       {num}
@@ -457,7 +456,7 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
           {onBuyTicketsClick && (
             <Button
               variant="outline"
-              className="text-white bg-green-500/50 hover:bg-green-600/60 border-white/10 flex-1 h-10 p-0 font-bold text-sm"
+              className="text-white bg-cyan-500/50 hover:bg-cyan-600/60 border-white/10 flex-1 h-10 p-0 font-bold text-sm"
               title="Buy lottery tickets"
               onClick={onBuyTicketsClick}
             >
@@ -517,14 +516,14 @@ export function PayoutBreakdownDialog({ totalMORBIUS }: PayoutBreakdownDialogPro
           Payouts
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-gradient-to-br from-slate-950 to-slate-900 border-white/10">
+      <DialogContent className="bg-gradient-to-br from-slate-500 to-slate-900 border-white/10">
         <DialogHeader>
           <DialogTitle>Payout Breakdown</DialogTitle>
           <DialogDescription>Distribution of the current pool</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 text-sm text-white">
-          <div className="bg-gradient-to-br from-slate-950 to-slate-900/40 rounded-lg p-4 border border-white/10">
+          <div className="bg-gradient-to-br from-slate-500 to-slate-900/40 rounded-lg p-4 border border-white/10">
             <div className="flex items-center justify-between mb-1">
               <span className="font-semibold text-white">Winners Pool</span>
               <span className="text-white/80">70%</span>
@@ -543,7 +542,7 @@ export function PayoutBreakdownDialog({ totalMORBIUS }: PayoutBreakdownDialogPro
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-950 to-slate-900/40 rounded-lg p-4 border border-white/10">
+          <div className="bg-gradient-to-br from-slate-500 to-slate-900/40 rounded-lg p-4 border border-white/10">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-white">Burn</span>
               <span className="text-white/80">10%</span>
@@ -551,7 +550,7 @@ export function PayoutBreakdownDialog({ totalMORBIUS }: PayoutBreakdownDialogPro
             <div className="text-white/60 mt-1">{formatMORBIUS(burnAllocation)} MORBIUS</div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-950 to-slate-900/40 rounded-lg p-4 border border-white/10">
+          <div className="bg-gradient-to-br from-slate-500 to-slate-900/40 rounded-lg p-4 border border-white/10">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-white">MegaMORBIUS Bank</span>
               <span className="text-white/80">10%</span>
@@ -560,7 +559,7 @@ export function PayoutBreakdownDialog({ totalMORBIUS }: PayoutBreakdownDialogPro
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gradient-to-br from-slate-950 to-slate-900/40 rounded-lg p-3 border border-white/10">
+            <div className="bg-gradient-to-br from-slate-500 to-slate-900/40 rounded-lg p-3 border border-white/10">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-white text-xs">Keeper</span>
                 <span className="text-white/80 text-xs">5%</span>
@@ -568,7 +567,7 @@ export function PayoutBreakdownDialog({ totalMORBIUS }: PayoutBreakdownDialogPro
               <div className="text-white/60 mt-1 text-xs">{formatMORBIUS(keeperFee)} MORBIUS</div>
             </div>
 
-            <div className="bg-gradient-to-br from-slate-950 to-slate-900/40 rounded-lg p-3 border border-white/10">
+            <div className="bg-gradient-to-br from-slate-500 to-slate-900/40 rounded-lg p-3 border border-white/10">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-white text-xs">Deployer</span>
                 <span className="text-white/80 text-xs">5%</span>

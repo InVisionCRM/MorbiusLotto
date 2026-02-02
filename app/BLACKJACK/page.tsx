@@ -32,7 +32,7 @@ import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, BLACKJACK_IMA
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
-import { getApiUrl, getWebSocketUrl } from '@/lib/api-urls';
+import { getApiUrl, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
@@ -218,6 +218,7 @@ export default function BlackjackPage() {
   const [videoSource, setVideoSource] = useState<BlackjackVideoId>('glowingTable');
   const [videoSyncToClock, setVideoSyncToClock] = useState(true);
   const [videoPosition, setVideoPosition] = useState(50); // 0-100, used when sync to clock is off
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
 
   const useVideoBackground = theme === 'video';
 
@@ -725,7 +726,8 @@ export default function BlackjackPage() {
   const wsAddressRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const wsUrl = getWebSocketUrl();
+    const wsUrl = getWebSocketUrlOptional();
+    if (!wsUrl) return;
 
     // If address changed and we have an existing client, disconnect it first
     if (wsClient && address && wsAddressRef.current !== address.toLowerCase()) {
@@ -1904,6 +1906,10 @@ export default function BlackjackPage() {
       toast.error('Please connect your wallet first');
       return;
     }
+    if (!getWebSocketUrlOptional()) {
+      toast.error('Game server not configured. Set NEXT_PUBLIC_WEBSOCKET_URL in your environment.');
+      return;
+    }
     if (!wsConnected || !wsClient) {
       console.log('Game server not connected yet');
       toast.error('Connecting to game server… try again in a second');
@@ -2127,6 +2133,8 @@ export default function BlackjackPage() {
         onVideoPositionChange={setVideoPosition}
         soundEnabled={soundEnabled}
         onSoundChange={setSoundEnabled}
+        themeModalOpen={themeModalOpen}
+        onThemeModalOpenChange={setThemeModalOpen}
       />
 
       {/* Splash Screen Overlay - Dismissible */}
@@ -2243,6 +2251,7 @@ export default function BlackjackPage() {
               videoSyncToClock={videoSyncToClock}
               videoPosition={videoPosition}
               onOpenDepositModal={handleOpenDepositModal}
+              onOpenTableThemeSelector={() => setThemeModalOpen(true)}
               soundEnabled={soundEnabled}
             />
 

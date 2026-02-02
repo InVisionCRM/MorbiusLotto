@@ -652,7 +652,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                             className={cn(
                               "inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded border",
                               isMatch
-                                ? "bg-green-500/20 text-green-300 border-green-500/30"
+                                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
                                 : "bg-white/10 text-white/70 border-white/20"
                             )}
                           >
@@ -663,7 +663,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                     </div>
                     <span className={cn(
                       "text-xs font-medium",
-                      isWinner ? "text-green-400" : "text-white/60"
+                      isWinner ? "text-cyan-500" : "text-white/60"
                     )}>
                       ({matches} match{matches !== 1 ? 'es' : ''})
                     </span>
@@ -749,7 +749,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
           <div className="space-y-6">
             {/* Total Winnings Summary */}
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400 font-sans mb-1">
+              <div className="text-2xl font-bold text-cyan-500 dark:text-cyan-400 font-sans mb-1">
                 {fmt(totalClaimable)} MORBIUS
               </div>
               <div className="text-sm text-neutral-600 dark:text-neutral-400 font-sans">
@@ -766,7 +766,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
             <Button
               onClick={handleClaimAll}
               disabled={isClaiming}
-              className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-bold text-lg py-3 font-sans"
+              className="w-full bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-bold text-lg py-3 font-sans"
             >
               {isClaiming ? (
                 <>
@@ -808,7 +808,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
 
               <Tabs defaultValue="claimable" className="w-full flex-1 flex flex-col min-h-0">
                 <TabsList className="w-full grid grid-cols-2 bg-neutral-100 dark:bg-neutral-800/50 mx-4" style={{ width: 'calc(100% - 2rem)' }}>
-                  <TabsTrigger value="claimable" className="data-[state=active]:bg-green-600/20 data-[state=active]:text-green-400 font-sans text-neutral-600 dark:text-neutral-200">
+                  <TabsTrigger value="claimable" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-500 font-sans text-neutral-600 dark:text-neutral-200">
                     <Coins className="w-3 h-3 mr-2" />
                     Claimable ({claimableRounds.length})
                   </TabsTrigger>
@@ -860,7 +860,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                         <div className="px-4 py-3 bg-neutral-50 dark:bg-neutral-800/30 border-b border-neutral-200 dark:border-neutral-700">
                           <div className="flex items-center justify-between mb-2">
                             <div className="text-xs text-neutral-600 dark:text-neutral-300 font-sans">Total Claimable</div>
-                            <div className="text-sm font-bold text-green-600 dark:text-green-400 font-sans">{fmt(totalClaimable)} MORBIUS</div>
+                            <div className="text-sm font-bold text-cyan-500 dark:text-cyan-400 font-sans">{fmt(totalClaimable)} MORBIUS</div>
                           </div>
                           {selectedRounds.size > 0 && (
                             <div className="flex items-center justify-between">
@@ -932,7 +932,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                                   >
                                     {expandedRounds.has(round.roundId) ? '−' : '+'}
                                   </Button>
-                                  <div className="text-sm font-bold text-green-600 dark:text-green-400 font-sans">
+                                  <div className="text-sm font-bold text-cyan-500 dark:text-cyan-400 font-sans">
                                     {fmt(round.amount)} MORBIUS
                                   </div>
                                 </div>
@@ -952,7 +952,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                         <Button
                           onClick={handleClaim}
                           disabled={selectedRounds.size === 0 || isClaiming}
-                          className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-bold font-sans"
+                          className="w-full bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-bold font-sans"
                         >
                           {isClaiming ? (
                             <>
@@ -991,7 +991,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                               round.status === 'claimed'
                                 ? "bg-blue-500/10 border-blue-500/30 dark:bg-blue-500/5 dark:border-blue-500/20"
                                 : round.status === 'claimable'
-                                ? "bg-green-500/10 border-green-500/30 dark:bg-green-500/5 dark:border-green-500/20"
+                                ? "bg-cyan-500/10 border-cyan-500/30 dark:bg-cyan-500/5 dark:border-cyan-500/20"
                                 : "bg-neutral-100 dark:bg-neutral-800/20 border-neutral-200 dark:border-neutral-700"
                             )}
                           >
@@ -1000,7 +1000,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                                 <CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                               )}
                               {round.status === 'claimable' && (
-                                <Coins className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <Coins className="w-5 h-5 text-cyan-500 dark:text-cyan-400" />
                               )}
                               {round.status === 'no-win' && (
                                 <XCircle className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
@@ -1016,7 +1016,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                                   <span className="text-blue-600 dark:text-blue-400">✓ Claimed</span>
                                 )}
                                 {round.status === 'claimable' && (
-                                  <span className="text-green-600 dark:text-green-400">• Ready to Claim</span>
+                                  <span className="text-cyan-500 dark:text-cyan-400">• Ready to Claim</span>
                                 )}
                                 {round.status === 'no-win' && (
                                   <span className="text-neutral-600 dark:text-neutral-400">No Winnings</span>
@@ -1039,7 +1039,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                             <div className={cn(
                               "text-sm font-bold font-sans",
                               round.status === 'claimed' ? "text-blue-600 dark:text-blue-400" :
-                              round.status === 'claimable' ? "text-green-600 dark:text-green-400" :
+                              round.status === 'claimable' ? "text-cyan-500 dark:text-cyan-400" :
                               "text-neutral-600 dark:text-neutral-400"
                             )}>
                               {round.amount > 0 ? fmt(round.amount) : '0'} MORBIUS

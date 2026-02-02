@@ -160,7 +160,7 @@ export function LotteryTicket({
                 <div
                   className={cn(
                     "text-sm font-black whitespace-nowrap",
-                    isPositive ? "text-green-700" : isNegative ? "text-red-700" : "text-black"
+                    isPositive ? "text-cyan-500" : isNegative ? "text-red-700" : "text-black"
                   )}
                 >
                   {pl.toFixed(4)} MORBIUS
@@ -199,7 +199,7 @@ export function LotteryTicket({
               <div className="text-sm font-bold text-black mb-1 flex items-center gap-2">
                 PICK 6
                 {isFreeTicket && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-700 border border-green-500/30">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-500 border border-cyan-500/30">
                     FREE
                   </span>
                 )}
@@ -327,14 +327,14 @@ export function LotteryTicket({
                   <div
                     className={cn(
                       "font-bold",
-                      round.matches > 0 ? "text-green-600" : "text-red-600"
+                      round.matches > 0 ? "text-cyan-500" : "text-red-600"
                     )}
                   >
                     {round.matches} of 6
                   </div>
                   <div className={cn(
                     "text-right font-mono font-bold",
-                    round.payout > 0 ? "text-green-600" : "text-black"
+                    round.payout > 0 ? "text-cyan-500" : "text-black"
                   )}>
                     {formatMORBIUS(round.payout)}
                   </div>
@@ -353,7 +353,7 @@ export function LotteryTicket({
                 <div className={cn(
                   "text-right font-mono",
                   roundHistory.reduce((acc, r) => acc + Number(formatUnits(r.payout, TOKEN_DECIMALS)), 0) > 0
-                    ? "text-green-600"
+                    ? "text-cyan-500"
                     : "text-black"
                 )}>
                   {roundHistory.reduce((acc, r) => acc + Number(formatUnits(r.payout, TOKEN_DECIMALS)), 0).toFixed(4)}
@@ -388,7 +388,7 @@ export function LotteryTicket({
             <div className="border-t-2 border-black pt-3 mt-3">
               <div className="text-center">
                 <p className="text-xs font-bold text-black mb-1">CURRENT WIN</p>
-                <p className="text-xl font-black text-green-600">{formatMORBIUS(currentWin)} MORBIUS</p>
+                <p className="text-xl font-black text-cyan-500">{formatMORBIUS(currentWin)} MORBIUS</p>
               </div>
             </div>
           )}

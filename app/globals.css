@@ -138,20 +138,10 @@ body {
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
-/* Apply transform to content wrapper instead of body */
-/* This prevents modals (which render to body) from being affected */
+/* Apply content wrapper - no scale so viewport fills with no gap and no scroll past footer */
 .app-content-wrapper {
-  transform: scale(0.85);
-  transform-origin: top center;
-  min-height: 117.65vh; /* 100 / 0.85 to compensate for scale */
+  min-height: 100vh;
   width: 100%;
-}
-
-@media (max-width: 768px) {
-  .app-content-wrapper {
-    transform: scale(1);
-    min-height: 100vh;
-  }
 }
 
 /* Ball Draw Simulator Styles */

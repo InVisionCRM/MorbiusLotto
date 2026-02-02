@@ -113,7 +113,7 @@ function BracketWinnersModal({ roundId, bracket, payoutPerWinner }: BracketWinne
                             <ExternalLink className="w-2.5 h-2.5" />
                           </button>
                           {isFreeTicket && (
-                            <span className="text-[9px] px-1 py-0.5 rounded bg-green-500/20 text-green-600 dark:text-green-400 border border-green-500/30 font-sans">
+                            <span className="text-[9px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-500 dark:text-cyan-400 border border-cyan-500/30 font-sans">
                               FREE
                             </span>
                           )}

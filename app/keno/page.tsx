@@ -27,10 +27,10 @@ import { KENO_ABI } from '@/lib/keno-abi'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Trophy, Info, LayoutGrid } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { KenoTicket } from '@/components/CryptoKeno/keno-ticket'
+// import { KenoTicket } from '@/components/CryptoKeno/keno-ticket'
 import { LiveKenoBoard } from '@/components/CryptoKeno/live-keno-board'
 import { KenoPrizePoolModal } from '@/components/CryptoKeno/keno-prize-pool-modal'
-import { useKenoTicketRoundHistory } from '@/hooks/use-keno-ticket-round-history'
+// import { useKenoTicketRoundHistory } from '@/hooks/use-keno-ticket-round-history'
 import { ContractAddress } from '@/components/ui/contract-address'
 import Footer from '@/components/PLINKO/Footer'
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text'
@@ -110,52 +110,46 @@ type MyTicket = {
   addons?: number[] // Add missing addons property
 }
 
+// KenoTicket / KenoTicketBarcode commented out from page UI
 // Wrapper component that fetches round history for a keno ticket
-function KenoTicketWithHistory({
-  ticket,
-  index,
-}: {
-  ticket: MyTicket
-  index: number
-}) {
-  const ticketForHook = {
-    numbers: ticket.numbers,
-    spotSize: ticket.spotSize,
-    wagerPerDraw: ticket.wagerPerDraw,
-    firstRoundId: ticket.firstRoundId,
-    roundTo: ticket.roundTo,
-    addons: (ticket.addons || []) as any, // Add missing addons property
-  }
-
-  const { roundHistory } = useKenoTicketRoundHistory(ticketForHook as any)
-
-  const isActive = ticket.drawsRemaining > 0
-
-  return (
-    <KenoTicket
-      key={ticket.ticketId.toString()}
-      ticketId={ticket.ticketId}
-      numbers={ticket.numbers}
-      spotSize={ticket.spotSize}
-      wager={ticket.wagerPerDraw}
-      draws={ticket.draws}
-      drawsRemaining={ticket.drawsRemaining}
-      firstRoundId={ticket.firstRoundId}
-      roundTo={ticket.roundTo}
-      addons={{
-        multiplier: false,
-        bullsEye: false,
-        plus3: false,
-      }}
-      isActive={isActive}
-      currentWin={ticket.currentWin}
-      purchaseTimestamp={ticket.purchaseTimestamp}
-      transactionHash={ticket.transactionHash}
-      roundHistory={roundHistory}
-      index={index}
-    />
-  )
-}
+// function KenoTicketWithHistory({
+//   ticket,
+//   index,
+// }: {
+//   ticket: MyTicket
+//   index: number
+// }) {
+//   const ticketForHook = {
+//     numbers: ticket.numbers,
+//     spotSize: ticket.spotSize,
+//     wagerPerDraw: ticket.wagerPerDraw,
+//     firstRoundId: ticket.firstRoundId,
+//     roundTo: ticket.roundTo,
+//     addons: (ticket.addons || []) as any,
+//   }
+//   const { roundHistory } = useKenoTicketRoundHistory(ticketForHook as any)
+//   const isActive = ticket.drawsRemaining > 0
+//   return (
+//     <KenoTicket
+//       key={ticket.ticketId.toString()}
+//       ticketId={ticket.ticketId}
+//       numbers={ticket.numbers}
+//       spotSize={ticket.spotSize}
+//       wager={ticket.wagerPerDraw}
+//       draws={ticket.draws}
+//       drawsRemaining={ticket.drawsRemaining}
+//       firstRoundId={ticket.firstRoundId}
+//       roundTo={ticket.roundTo}
+//       addons={{ multiplier: false, bullsEye: false, plus3: false }}
+//       isActive={isActive}
+//       currentWin={ticket.currentWin}
+//       purchaseTimestamp={ticket.purchaseTimestamp}
+//       transactionHash={ticket.transactionHash}
+//       roundHistory={roundHistory}
+//       index={index}
+//     />
+//   )
+// }
 
 // Memoized function that enriches tickets with round history for LiveKenoBoard
 // Since we can't call hooks in loops, we'll use a simpler approach for now
@@ -199,7 +193,7 @@ export default function KenoPage() {
 
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([])
   const [spotSize, setSpotSize] = useState(8)
-  const [wager, setWager] = useState(100) // Wager amount in MORBIUS (contract expects MORBIUS amounts)
+  const [wager, setWager] = useState(1000) // Wager amount in MORBIUS (contract expects MORBIUS amounts)
   const [draws, setDraws] = useState(1)
   const [paymentMethod, setPaymentMethod] = useState<'MORBIUS' | 'PLS'>('MORBIUS')
   const [nextDrawTime, setNextDrawTime] = useState<number | null>(null)
@@ -433,7 +427,7 @@ export default function KenoPage() {
           functionName: 'buyTicketWithPLS',
           args: [roundIdArg, numbersArg, spotSize, draws, wagerArg],
           value: wplsRequiredWei,
-        })
+        } as any)
         await publicClient?.waitForTransactionReceipt({ hash: buyHashTx })
         toast.success('Tickets purchased with PLS')
         triggerSuccessConfetti()
@@ -453,14 +447,14 @@ export default function KenoPage() {
         abi: ERC20_ABI, 
         functionName: 'approve', 
         args: [KENO_ADDRESS, totalCostWei],
-      })
+      } as any)
     } else {
       writeBuy({
         address: KENO_ADDRESS,
         abi: KENO_ABI,
         functionName: 'buyTicket',
         args: [roundIdArg, numbersArg, spotSize, draws, wagerArg],
-      })
+      } as any)
     }
   }
 
@@ -482,7 +476,7 @@ export default function KenoPage() {
           pendingBuy.drawsArg,
           pendingBuy.wagerArg,
         ],
-      })
+      } as any)
       setPendingBuy(null)
     }
   }, [isApproveConfirmed, pendingBuy, writeBuy])
@@ -709,7 +703,6 @@ export default function KenoPage() {
                         }}
                       >
                         {/* Radial gradient overlay */}
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
                         <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
                           {/* LEFT PANEL - Builder */}
                           <div className="space-y-4 min-w-0 w-full overflow-x-hidden">
@@ -727,7 +720,6 @@ export default function KenoPage() {
                                 }}
                               >
                                 {/* Radial gradient overlay */}
-                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                                 <div className="relative z-10 space-y-1">
                                 <label className="text-white/70 text-sm">How many spots? (1-10)</label>
                                 <div className="grid grid-cols-4 gap-1">
@@ -737,7 +729,7 @@ export default function KenoPage() {
                                       onClick={() => setSpotSize(num)}
                                       className={cn(
                                         "w-full h-8 rounded-lg font-semibold text-sm transition-all hover:opacity-80",
-                                        spotSize === num ? "text-green-400" : "text-gray-300"
+                                        spotSize === num ? "text-cyan-500" : "text-gray-300"
                                       )}
                                       style={
                                         spotSize === num
@@ -770,16 +762,15 @@ export default function KenoPage() {
                                 }}
                               >
                                 {/* Radial gradient overlay */}
-                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                                 <div className="relative">
-                                <h3 className="text-sm font-bold text-emerald-400 mb-2 text-center">{spotSize}-Spot Payouts</h3>
+                                <h3 className="text-sm font-bold text-cyan-500 mb-2 text-center">{spotSize}-Spot Payouts</h3>
                                 <div className="space-y-1">
                                   {Object.entries(PAYTABLE[spotSize] || {}).map(([matches, payout]) => (
                                     <div key={matches} className="flex justify-between items-center text-xs">
                                       <span className="text-white/70">
                                         {matches === '0' ? 'No Match' : `Match ${matches}${spotSize > 1 ? ` of ${spotSize}` : ''}`}
                                       </span>
-                                      <span className="text-emerald-400 font-semibold">
+                                      <span className="text-cyan-500 font-semibold">
                                         {payout}x
                                       </span>
                                     </div>
@@ -794,9 +785,9 @@ export default function KenoPage() {
                               <label className="block text-sm font-medium text-gray-300">Wager per Draw</label>
                               <Input
                                 type="number"
-                                step="1"
-                                min="1"
-                                max="1000"
+                                step="1000"
+                                min="1000"
+                                max="100000"
                                 value={wager}
                                 onChange={(e) => setWager(parseFloat(e.target.value) || 0)}
                                 className="text-white relative"
@@ -806,20 +797,20 @@ export default function KenoPage() {
                                   border: '1px inset rgba(60, 60, 60, 0.5)',
                                 }}
                               />
-                              <div className="grid grid-cols-3 gap-1">
-                                {[1, 5, 10, 25, 50, 100].map((preset) => (
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {[1000, 5000, 10000, 25000, 50000, 100000].map((preset) => (
                                   <button
                                     key={preset}
                                     onClick={() => setWager(preset)}
                                     className={cn(
-                                      "w-full py-1 text-xs rounded transition-all hover:opacity-80",
-                                      wager === preset ? "text-emerald-400" : "text-white/70"
+                                      "w-full py-2.5 text-sm rounded-none transition-all hover:opacity-80",
+                                      wager === preset ? "text-cyan-500" : "text-white/70"
                                     )}
                                     style={
                                       wager === preset
                                         ? {
                                             background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(16, 185, 129, 0.2)',
+                                            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(6, 182, 212, 0.2)',
                                             border: '1px inset rgba(60, 60, 60, 0.5)',
                                           }
                                         : {
@@ -829,7 +820,7 @@ export default function KenoPage() {
                                           }
                                     }
                                   >
-                                    {preset}
+                                    {preset.toLocaleString()}
                                   </button>
                                 ))}
                               </div>
@@ -849,7 +840,6 @@ export default function KenoPage() {
                                   }}
                                 >
                                   {/* Radial gradient overlay */}
-                                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                                   <span className="relative z-10">Quick Pick</span>
                                 </button>
                                 <button
@@ -862,7 +852,6 @@ export default function KenoPage() {
                                   }}
                                 >
                                   {/* Radial gradient overlay */}
-                                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                                   <span className="relative z-10">Clear</span>
                                 </button>
                               </div>
@@ -941,7 +930,6 @@ export default function KenoPage() {
                             }}
                           >
                             {/* Radial gradient overlay */}
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                             <div className="relative z-10">
 
                             {/* Selected Numbers Display */}
@@ -956,7 +944,6 @@ export default function KenoPage() {
                                 }}
                               >
                                 {/* Radial gradient overlay */}
-                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                                 <div className="relative">
                                 <div className="text-sm text-white/70 mb-2 text-center">Numbers selected</div>
                                 <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center mb-2">
@@ -987,7 +974,6 @@ export default function KenoPage() {
                               }}
                             >
                               {/* Radial gradient overlay */}
-                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                               <div className="relative">
                               <div className="text-xs text-white/70 mb-2 font-medium text-center">Pay In...</div>
                               <div className="flex items-center justify-center gap-4">
@@ -995,7 +981,7 @@ export default function KenoPage() {
                                   className={cn(
                                     'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
                                     paymentMethod === 'MORBIUS'
-                                      ? 'mitr-semibold bg-gradient-to-r from-green-400 to-green-600 bg-clip-text text-purple-500'
+                                      ? 'mitr-semibold bg-gradient-to-r from-cyan-400 to-cyan-600 bg-clip-text text-purple-500'
                                       : 'mitr-regular text-white hover:text-white'
                                   )}
                                   onClick={() => setPaymentMethod('MORBIUS')}
@@ -1007,7 +993,7 @@ export default function KenoPage() {
                                   className={cn(
                                     'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
                                     paymentMethod === 'PLS'
-                                      ? 'mitr-semibold bg-gradient-to-r from-pink-400 via-red-400 to-green-500 bg-clip-text text-purple-500'
+                                      ? 'mitr-semibold bg-gradient-to-r from-pink-400 via-red-400 to-cyan-500 bg-clip-text text-purple-500'
                                       : 'mitr-regular text-white/70 hover:text-white'
                                   )}
                                   onClick={() => setPaymentMethod('PLS')}
@@ -1030,7 +1016,6 @@ export default function KenoPage() {
                               }}
                             >
                               {/* Radial gradient overlay */}
-                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                               <div className="relative">
                               <div className="flex justify-between text-xs">
                                 <span className="text-white/70">Spot Size</span>
@@ -1113,13 +1098,12 @@ export default function KenoPage() {
               }}
             >
               {/* Radial gradient overlay */}
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
               <div className="relative">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "w-3 h-3 rounded-full",
-                      roundState === 1 ? "bg-green-500" :
+                      roundState === 1 ? "bg-cyan-500" :
                       roundState === 2 ? "bg-blue-500" :
                       "bg-yellow-500"
                     )} />
@@ -1160,7 +1144,6 @@ export default function KenoPage() {
               }}
             >
           {/* Radial gradient overlay */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
 
           <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
             {/* LEFT PANEL - Builder */}
@@ -1179,7 +1162,6 @@ export default function KenoPage() {
                   }}
                 >
                   {/* Radial gradient overlay */}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                   <div className="relative z-10 space-y-1">
                   <label className="text-white/70 text-sm">How many spots? (1-10)</label>
                   <div className="grid grid-cols-4 gap-1">
@@ -1189,7 +1171,7 @@ export default function KenoPage() {
                         onClick={() => setSpotSize(num)}
                         className={cn(
                           "w-full h-8 rounded-lg font-semibold text-sm transition-all hover:opacity-80",
-                          spotSize === num ? "text-green-400" : "text-gray-300"
+                          spotSize === num ? "text-cyan-500" : "text-gray-300"
                         )}
                         style={
                           spotSize === num
@@ -1222,16 +1204,15 @@ export default function KenoPage() {
                   }}
                 >
                   {/* Radial gradient overlay */}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                   <div className="relative">
-                  <h3 className="text-sm font-bold text-emerald-400 mb-2 text-center">{spotSize}-Spot Payouts</h3>
+                  <h3 className="text-sm font-bold text-cyan-500 mb-2 text-center">{spotSize}-Spot Payouts</h3>
                   <div className="space-y-1">
                     {Object.entries(PAYTABLE[spotSize] || {}).map(([matches, payout]) => (
                       <div key={matches} className="flex justify-between items-center text-xs">
                         <span className="text-white/70">
                           {matches === '0' ? 'No Match' : `Match ${matches}${spotSize > 1 ? ` of ${spotSize}` : ''}`}
                         </span>
-                        <span className="text-emerald-400 font-semibold">
+                        <span className="text-cyan-500 font-semibold">
                           {payout}x
                         </span>
                       </div>
@@ -1246,9 +1227,9 @@ export default function KenoPage() {
                 <label className="block text-sm font-medium text-gray-300">Wager per Draw</label>
                 <Input
                   type="number"
-                  step="1"
-                  min="1"
-                  max="1000"
+                  step="1000"
+                  min="1000"
+                  max="100000"
                   value={wager}
                   onChange={(e) => setWager(parseFloat(e.target.value) || 0)}
                   className="text-white relative"
@@ -1258,20 +1239,20 @@ export default function KenoPage() {
                     border: '1px inset rgba(60, 60, 60, 0.5)',
                   }}
                 />
-                <div className="grid grid-cols-3 gap-1">
-                  {[1, 5, 10, 25, 50, 100].map((preset) => (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[1000, 5000, 10000, 25000, 50000, 100000].map((preset) => (
                     <button
                       key={preset}
                       onClick={() => setWager(preset)}
                       className={cn(
-                        "w-full py-1 text-xs rounded transition-all hover:opacity-80",
-                        wager === preset ? "text-emerald-400" : "text-white/70"
+                        "w-full py-2.5 text-sm rounded-none transition-all hover:opacity-80",
+                        wager === preset ? "text-cyan-500" : "text-white/70"
                       )}
                       style={
                         wager === preset
                           ? {
                               background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(16, 185, 129, 0.2)',
+                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(6, 182, 212, 0.2)',
                               border: '1px inset rgba(60, 60, 60, 0.5)',
                             }
                           : {
@@ -1281,7 +1262,7 @@ export default function KenoPage() {
                             }
                       }
                     >
-                      {preset}
+                      {preset.toLocaleString()}
                     </button>
                   ))}
                 </div>
@@ -1301,7 +1282,6 @@ export default function KenoPage() {
                     }}
                   >
                     {/* Radial gradient overlay */}
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                     <span className="relative z-10">Quick Pick</span>
                   </button>
                   <button
@@ -1314,7 +1294,6 @@ export default function KenoPage() {
                     }}
                   >
                     {/* Radial gradient overlay */}
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                     <span className="relative z-10">Clear</span>
                   </button>
                 </div>
@@ -1393,7 +1372,6 @@ export default function KenoPage() {
               }}
             >
               {/* Radial gradient overlay */}
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
               <div className="relative z-10">
 
               {/* Selected Numbers Display */}
@@ -1408,7 +1386,6 @@ export default function KenoPage() {
                   }}
                 >
                   {/* Radial gradient overlay */}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                   <div className="relative">
                   <div className="text-sm text-white/70 mb-2 text-center">Numbers selected</div>
                   <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center mb-2">
@@ -1439,7 +1416,6 @@ export default function KenoPage() {
                 }}
               >
                 {/* Radial gradient overlay */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                 <div className="relative">
                 <div className="text-xs text-white/70 mb-2 font-medium text-center">Pay In...</div>
                 <div className="flex items-center justify-center gap-4">
@@ -1447,7 +1423,7 @@ export default function KenoPage() {
                     className={cn(
                       'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
                       paymentMethod === 'MORBIUS'
-                        ? 'mitr-semibold bg-gradient-to-r from-green-400 to-green-600 bg-clip-text text-purple-500'
+                        ? 'mitr-semibold bg-gradient-to-r from-cyan-400 to-cyan-600 bg-clip-text text-purple-500'
                         : 'mitr-regular text-white hover:text-white'
                     )}
                     onClick={() => setPaymentMethod('MORBIUS')}
@@ -1459,7 +1435,7 @@ export default function KenoPage() {
                     className={cn(
                       'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
                       paymentMethod === 'PLS'
-                        ? 'mitr-semibold bg-gradient-to-r from-pink-400 via-red-400 to-green-500 bg-clip-text text-purple-500'
+                        ? 'mitr-semibold bg-gradient-to-r from-pink-400 via-red-400 to-cyan-500 bg-clip-text text-purple-500'
                         : 'mitr-regular text-white/70 hover:text-white'
                     )}
                     onClick={() => setPaymentMethod('PLS')}
@@ -1482,7 +1458,6 @@ export default function KenoPage() {
                 }}
               >
                 {/* Radial gradient overlay */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)] rounded-lg" />
                 <div className="relative">
                 <div className="flex justify-between text-xs">
                   <span className="text-white/70">Spot Size</span>
@@ -1565,7 +1540,6 @@ export default function KenoPage() {
           }}
         >
           {/* Radial gradient overlay */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="relative h-72">
             <Image
               src="/MORBIUS/821eff6f-8815-47ac-b93d-61d09d859de6.png"
@@ -1575,7 +1549,7 @@ export default function KenoPage() {
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 480px"
             />
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 to-slate-900/40" />
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-500 to-slate-600/40" />
             <div className="absolute inset-0 flex flex-col justify-end gap-3 p-6">
               <p className="text-xl font-bold">No active tickets yet</p>
               <p className="text-sm text-gray-100">

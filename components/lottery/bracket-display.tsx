@@ -23,7 +23,7 @@ const FIXED_PRIZES = [
   { matches: 6, prize: 15000, odds: '1 in 28,989,675', color: 'from-yellow-500 to-amber-600' },
   { matches: 5, prize: 5000, odds: '1 in 145,716', color: 'from-purple-500 to-violet-600' },
   { matches: 4, prize: 2000, odds: '1 in 3,387', color: 'from-blue-500 to-cyan-600' },
-  { matches: 3, prize: 750, odds: '1 in 220', color: 'from-green-500 to-emerald-600' },
+  { matches: 3, prize: 750, odds: '1 in 220', color: 'from-cyan-500 to-cyan-600' },
   { matches: 2, prize: 250, odds: '1 in 22', color: 'from-orange-500 to-red-600' },
   { matches: 1, prize: 100, odds: '1 in 5', color: 'from-gray-500 to-slate-600' },
 ]
@@ -97,7 +97,7 @@ export function BracketDisplay({ brackets, isLoading = false, hasMegaMORBIUSWinn
                           Bracket {7 - index}
                         </h3>
                         {hasWinners && (
-                          <span className="px-2 py-0.5 bg-green-500/20 text-green-500 text-xs font-semibold rounded-full">
+                          <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-500 text-xs font-semibold rounded-full">
                             {Number(bracketData.winnerCount)} Winner{Number(bracketData.winnerCount) !== 1 ? 's' : ''}
                           </span>
                         )}

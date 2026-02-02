@@ -31,6 +31,9 @@ interface MainNavProps {
   onVideoPositionChange?: (position: number) => void;
   soundEnabled?: boolean;
   onSoundChange?: (enabled: boolean) => void;
+  /** When provided, theme modal is controlled by parent (e.g. for opening from table "Change Table" link) */
+  themeModalOpen?: boolean;
+  onThemeModalOpenChange?: (open: boolean) => void;
 }
 
 const viewLabels: Record<string, string> = {
@@ -49,12 +52,15 @@ const viewIcons: Record<string, string> = {
   verify: 'fa-check-circle'
 };
 
-export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = BLACKJACK_IMAGE_BACKGROUNDS[0].id, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange }: MainNavProps) {
+export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = BLACKJACK_IMAGE_BACKGROUNDS[0].id, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange }: MainNavProps) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [themeModalOpen, setThemeModalOpen] = useState(false);
+  const [internalThemeModalOpen, setInternalThemeModalOpen] = useState(false);
+  const isThemeModalControlled = onThemeModalOpenChange !== undefined;
+  const themeModalOpen = isThemeModalControlled ? (themeModalOpenProp ?? false) : internalThemeModalOpen;
+  const setThemeModalOpen = isThemeModalControlled ? onThemeModalOpenChange : setInternalThemeModalOpen;
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 

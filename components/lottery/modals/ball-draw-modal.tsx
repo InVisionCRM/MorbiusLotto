@@ -25,7 +25,6 @@ export function BallDrawModal({ winningNumbers, roundId, playerTickets = [] }: B
       }}
     >
       {/* Radial gradient overlay matching ticket-purchase-builder */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
       
       <div className="relative">
         {hasCompleteDraw ? (

@@ -73,10 +73,10 @@ export function HowToPlayModal() {
           </div>
 
           {/* 2 Matches */}
-          <div className="p-4 rounded-xl bg-gradient-to-br from-green-500/30 to-green-900/20 border-2 border-green-400/50">
+          <div className="p-4 rounded-xl bg-gradient-to-br from-cyan-500/30 to-cyan-900/20 border-2 border-cyan-500/50">
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-300">2 Matches</div>
-              <div className="text-lg text-green-200 mt-1">250 MORBIUS!</div>
+              <div className="text-3xl font-bold text-cyan-300">2 Matches</div>
+              <div className="text-lg text-cyan-200 mt-1">250 MORBIUS!</div>
               <div className="text-xs text-white/60 mt-2">Guaranteed Prize</div>
             </div>
           </div>
@@ -151,14 +151,14 @@ export function HowToPlayModal() {
       </div>
 
       {/* Rollover Logic */}
-      <div className="p-5 rounded-xl bg-gradient-to-br from-green-900/30 to-green-950/20 border border-green-500/30">
-        <h4 className="font-bold mb-3 text-lg text-green-300 flex items-center gap-2">
+      <div className="p-5 rounded-xl bg-gradient-to-br from-cyan-900/30 to-cyan-950/20 border border-cyan-500/30">
+        <h4 className="font-bold mb-3 text-lg text-cyan-300 flex items-center gap-2">
           <span>🔄</span> Unclaimed Prizes Rollover
         </h4>
         <p className="text-sm text-white/70 mb-3">If a prize bracket has no winners, the prize is distributed:</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center text-sm">
-          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-            <div className="text-2xl font-bold text-green-400">75%</div>
+          <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+            <div className="text-2xl font-bold text-cyan-500">75%</div>
             <div className="text-xs text-white/60 mt-1">Next Round</div>
           </div>
           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
@@ -193,9 +193,9 @@ export function HowToPlayModal() {
           <div className="font-semibold text-blue-300 mb-1">Wait 30 Min</div>
           <div className="text-xs text-white/60">Automatic draw</div>
         </div>
-        <div className="p-4 rounded-xl bg-gradient-to-br from-green-500/20 to-green-900/20 border border-green-500/30 text-center">
+        <div className="p-4 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-900/20 border border-cyan-500/30 text-center">
           <div className="text-2xl mb-2">4️⃣</div>
-          <div className="font-semibold text-green-300 mb-1">Claim Prizes</div>
+          <div className="font-semibold text-cyan-300 mb-1">Claim Prizes</div>
           <div className="text-xs text-white/60">Match & win!</div>
         </div>
       </div>

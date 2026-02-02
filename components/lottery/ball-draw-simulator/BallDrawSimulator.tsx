@@ -232,7 +232,6 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
     >
       {/* Radial gradient overlay matching ticket-purchase-builder */}
       {!isBackground && (
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
       )}
 
       {/* Round Number - Top Center */}
@@ -340,11 +339,11 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
                                     <span className="text-xs font-semibold">Ticket #{ticketId}</span>
                                     {isFree && (
                                       <span
-                                        className="text-[10px] px-1.5 py-0.5 rounded text-green-400 font-bold"
+                                        className="text-[10px] px-1.5 py-0.5 rounded text-cyan-500 font-bold"
                                         style={{
                                           background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                                           boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 -2px 4px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.4)',
-                                          border: '1px inset rgba(34, 197, 94, 0.5)',
+                                          border: '1px inset rgba(6, 182, 212, 0.5)',
                                         }}
                                       >
                                         FREE
@@ -413,7 +412,7 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
         {/* Round Winning Numbers Title */}
         <section className="absolute top-[-7px] left-0 right-0 flex justify-center -mt-6">
           <div className="text-xs sm:text-xs text-white/70 font-bold uppercase tracking-wide text-center">
-            Round <span className="text-sm sm:text-base text-green-600 font-extrabold">{roundId || '?'}</span> Winning Numbers
+            Round <span className="text-sm sm:text-base text-cyan-500 font-extrabold">{roundId || '?'}</span> Winning Numbers
           </div>
         </section>
 

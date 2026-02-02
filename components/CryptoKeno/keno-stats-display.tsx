@@ -22,7 +22,6 @@ export function KenoStatsDisplay() {
     return (
       <Card className="p-6 relative" style={cardStyle}>
         {/* Radial gradient overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
         <div className="relative z-10">
           <p className="text-center text-gray-400">Connect your wallet to view statistics</p>
         </div>
@@ -34,10 +33,9 @@ export function KenoStatsDisplay() {
     return (
       <Card className="p-6 relative" style={cardStyle}>
         {/* Radial gradient overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
         <div className="relative z-10">
           <div className="flex items-center justify-center gap-2">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
             <p className="text-gray-400">Loading statistics...</p>
           </div>
         </div>
@@ -49,7 +47,6 @@ export function KenoStatsDisplay() {
     return (
       <Card className="p-6 relative" style={cardStyle}>
         {/* Radial gradient overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
         <div className="relative z-10">
           <p className="text-center text-gray-400">No statistics available</p>
         </div>
@@ -68,7 +65,7 @@ export function KenoStatsDisplay() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-white">Your Statistics</h2>
-        <Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-500/40">
+        <Badge className="bg-cyan-500/20 text-cyan-200 border border-cyan-500/40">
           Live Stats
         </Badge>
       </div>
@@ -81,7 +78,6 @@ export function KenoStatsDisplay() {
           style={cardStyle}
         >
           {/* Radial gradient overlay */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="absolute top-0 right-0 opacity-10">
             <DollarSign className="h-24 w-24 text-purple-400" />
           </div>
@@ -103,19 +99,18 @@ export function KenoStatsDisplay() {
           style={cardStyle}
         >
           {/* Radial gradient overlay */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="absolute top-0 right-0 opacity-10">
-            <Trophy className="h-24 w-24 text-emerald-400" />
+            <Trophy className="h-24 w-24 text-cyan-500" />
           </div>
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
-              <Trophy className="h-5 w-5 text-emerald-400" />
-              <p className="text-sm text-emerald-200">Claimed</p>
+              <Trophy className="h-5 w-5 text-cyan-500" />
+              <p className="text-sm text-cyan-200">Claimed</p>
             </div>
             <p className="text-3xl font-bold text-white">
               {totalWonEth.toFixed(0)}
             </p>
-            <p className="text-xs text-emerald-300 mt-1">Morbius</p>
+            <p className="text-xs text-cyan-300 mt-1">Morbius</p>
           </div>
         </Card>
 
@@ -125,10 +120,9 @@ export function KenoStatsDisplay() {
           style={cardStyle}
         >
           {/* Radial gradient overlay */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="absolute top-0 right-0 opacity-10">
             {playerStats.isProfit ? (
-              <TrendingUp className="h-24 w-24 text-green-400" />
+              <TrendingUp className="h-24 w-24 text-cyan-500" />
             ) : (
               <TrendingDown className="h-24 w-24 text-red-400" />
             )}
@@ -136,14 +130,14 @@ export function KenoStatsDisplay() {
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
               {playerStats.isProfit ? (
-                <TrendingUp className="h-5 w-5 text-green-400" />
+                <TrendingUp className="h-5 w-5 text-cyan-500" />
               ) : (
                 <TrendingDown className="h-5 w-5 text-red-400" />
               )}
               <p
                 className={cn(
                   'text-sm',
-                  playerStats.isProfit ? 'text-green-200' : 'text-red-200'
+                  playerStats.isProfit ? 'text-cyan-200' : 'text-red-200'
                 )}
               >
                 Net P/L
@@ -156,7 +150,7 @@ export function KenoStatsDisplay() {
             <p
               className={cn(
                 'text-xs mt-1',
-                playerStats.isProfit ? 'text-green-300' : 'text-red-300'
+                playerStats.isProfit ? 'text-cyan-300' : 'text-red-300'
               )}
             >
               Morbius
@@ -170,7 +164,6 @@ export function KenoStatsDisplay() {
           style={cardStyle}
         >
           {/* Radial gradient overlay */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.08),transparent_38%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_30%)]" />
           <div className="absolute top-0 right-0 opacity-10">
             <Target className="h-24 w-24 text-blue-300" />
           </div>

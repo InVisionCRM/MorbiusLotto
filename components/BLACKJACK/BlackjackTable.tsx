@@ -51,6 +51,8 @@ interface BlackjackTableProps {
   videoSyncToClock?: boolean;
   videoPosition?: number;
   onOpenDepositModal?: () => void;
+  onOpenTableThemeSelector?: () => void;
+  soundEnabled?: boolean;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -92,7 +94,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   videoSyncToClock = true,
   videoPosition = 50,
   onOpenDepositModal,
-  soundEnabled = true
+  onOpenTableThemeSelector,
+  soundEnabled = true,
 }) => {
   const videoSrc = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const imageSrc = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
@@ -627,8 +630,19 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         }}
       />
 
-      {/* System Time Display */}
-      <SystemTime />
+      {/* System Time Display + Change Table link */}
+      <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-1">
+        <SystemTime className="!static" />
+        {onOpenTableThemeSelector && (
+          <button
+            type="button"
+            onClick={onOpenTableThemeSelector}
+            className="text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-1 transition-colors"
+          >
+            Change Table
+          </button>
+        )}
+      </div>
 
       {/* Game Result Banner - Shows when game is complete until next deal */}
       {gameState === GameState.COMPLETE && displayedResult && (
