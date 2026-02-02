@@ -34,6 +34,16 @@ import {
 } from '@/components/BLACKJACK/Tournament';
 import { CreateTournamentRequest } from '@/lib/tournament-types';
 import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from './constants';
+
+// Background music playlist (Big-Winner first, then all from public/BlackJack/music)
+const BLACKJACK_MUSIC_PLAYLIST = [
+  '/BlackJack/music/Big-Winner.mp3',
+  '/BlackJack/music/Chances.mp3',
+  '/BlackJack/music/Lucky-Ducky.mp3',
+  '/BlackJack/music/Smooth-Gains.mp3',
+  '/BlackJack/music/Top-Tier.mp3',
+  '/BlackJack/music/Winning-Big.mp3',
+] as const;
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -212,6 +222,11 @@ export default function BlackjackPage() {
   // Intro screen state
   const [showIntro, setShowIntro] = useState(true);
 
+  // Background music player state
+  const [musicTrackIndex, setMusicTrackIndex] = useState(0);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // Provably Fair Advanced state
   const [clientSeed, setClientSeed] = useState('');
   const [showProvablyFairAdvanced, setShowProvablyFairAdvanced] = useState(false);
@@ -226,6 +241,42 @@ export default function BlackjackPage() {
   const [themeModalOpen, setThemeModalOpen] = useState(false);
 
   const useVideoBackground = theme === 'video';
+
+  // Auto-play background music when intro is skipped/done (user gesture unlocks audio)
+  useEffect(() => {
+    if (!showIntro && musicAudioRef.current && !isMusicPlaying) {
+      musicAudioRef.current.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+    }
+  }, [showIntro]);
+
+  // Advance to next track when current track ends
+  const handleMusicEnded = useCallback(() => {
+    setMusicTrackIndex((prev) => (prev + 1) % BLACKJACK_MUSIC_PLAYLIST.length);
+    setIsMusicPlaying(false);
+  }, []);
+
+  // When track index changes (e.g. after track ends), play new track
+  useEffect(() => {
+    const el = musicAudioRef.current;
+    if (!el || showIntro) return;
+    el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+  }, [musicTrackIndex, showIntro]);
+
+  const toggleMusic = useCallback(() => {
+    const el = musicAudioRef.current;
+    if (!el) return;
+    if (isMusicPlaying) {
+      el.pause();
+      setIsMusicPlaying(false);
+    } else {
+      el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+    }
+  }, [isMusicPlaying]);
+
+  const nextTrack = useCallback(() => {
+    setMusicTrackIndex((prev) => (prev + 1) % BLACKJACK_MUSIC_PLAYLIST.length);
+    setIsMusicPlaying(false);
+  }, []);
 
   const TABLE_PREFS_KEY = 'morb_blackjack_table';
   const validImageIds = useMemo(() => new Set(BLACKJACK_IMAGE_BACKGROUNDS.map((x) => x.id)), []);
@@ -2765,6 +2816,42 @@ export default function BlackjackPage() {
       </main>
 
       <Footer />
+
+      {/* Background music: hidden audio + simple player */}
+      <audio
+        ref={musicAudioRef}
+        src={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex]}
+        onEnded={handleMusicEnded}
+        loop={false}
+        preload="metadata"
+      />
+      <div
+        className="fixed bottom-20 right-3 sm:bottom-6 sm:right-4 z-40 flex items-center gap-2 rounded-xl border border-cyan-500/30 px-3 py-2 shadow-lg"
+        style={{
+          background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.8))',
+          boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.5)',
+        }}
+      >
+        <span className="text-cyan-400/90 text-xs font-medium hidden sm:inline max-w-[100px] truncate" title={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? ''}>
+          {BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? 'Music'}
+        </span>
+        <button
+          type="button"
+          onClick={toggleMusic}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+          aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
+        >
+          {isMusicPlaying ? <i className="fas fa-pause text-sm" /> : <i className="fas fa-play text-sm" />}
+        </button>
+        <button
+          type="button"
+          onClick={nextTrack}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+          aria-label="Next track"
+        >
+          <i className="fas fa-forward text-sm" />
+        </button>
+      </div>
 
       <style jsx global>{`
         .history-item-enter {
