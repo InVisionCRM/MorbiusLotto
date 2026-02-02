@@ -12,6 +12,7 @@ import { ProvablyFairService } from './services/provably-fair.service';
 import { BlackjackGameService } from './services/blackjack-game.service';
 import { TournamentService } from './services/tournament.service';
 import { WebSocketService } from './services/websocket.service';
+import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { blackjackAbi } from './abi/blackjack';
@@ -74,6 +75,9 @@ async function initializeServices() {
     // Initialize WebSocket service
     const wsService = new WebSocketService(server, gameService, dbService, tournamentService);
 
+    // Chain analytics (on-chain games: Plinko, Keno, Lottery, BigWheel)
+    const chainAnalytics = new ChainAnalyticsService();
+
     // API routes
     app.get('/api/player/:address/stats', async (req, res) => {
       try {
@@ -128,6 +132,47 @@ async function initializeServices() {
         sendJson(res, topPlayers);
       } catch (error) {
         logger.error('Error fetching top players:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Platform analytics: Blackjack (DB) + Plinko, Keno, Lottery, BigWheel (chain)
+    app.get('/api/analytics/platform', async (req, res) => {
+      try {
+        const [blackjack, chain] = await Promise.all([
+          dbService.getGlobalAnalytics(),
+          chainAnalytics.getAllChainStats(),
+        ]);
+        const bjGames = BigInt(blackjack.total_games_played);
+        const bjVolume = blackjack.total_volume;
+        const bjPayouts = blackjack.total_payouts;
+        const plinkoGames = chain.plinko?.totalDrops ?? 0n;
+        const plinkoVolume = chain.plinko?.totalRevenue ?? 0n;
+        const plinkoPayouts = chain.plinko?.totalPayouts ?? 0n;
+        const kenoGames = chain.keno?.ticketCount ?? 0n;
+        const kenoVolume = chain.keno?.totalWagered ?? 0n;
+        const kenoPayouts = chain.keno?.totalWon ?? 0n;
+        const lotteryGames = chain.lottery?.totalTicketsEver ?? 0n;
+        const lotteryVolume = chain.lottery?.totalCollected ?? 0n;
+        const lotteryPayouts = chain.lottery?.totalClaimed ?? 0n;
+        const bigWheelGames = chain.bigWheel?.spins ?? 0n;
+        const bigWheelVolume = chain.bigWheel?.volume ?? 0n;
+        const bigWheelPayouts = chain.bigWheel?.payouts ?? 0n;
+        const combined = {
+          totalGamesPlayed: bjGames + plinkoGames + kenoGames + lotteryGames + bigWheelGames,
+          totalVolume: bjVolume + plinkoVolume + kenoVolume + lotteryVolume + bigWheelVolume,
+          totalPayouts: bjPayouts + plinkoPayouts + kenoPayouts + lotteryPayouts + bigWheelPayouts,
+        };
+        sendJson(res, {
+          blackjack,
+          plinko: chain.plinko,
+          keno: chain.keno,
+          lottery: chain.lottery,
+          bigWheel: chain.bigWheel,
+          combined,
+        });
+      } catch (error) {
+        logger.error('Error fetching platform analytics:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });

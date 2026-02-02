@@ -1,7 +1,9 @@
 'use client'
 
 import { LatestWins } from '@/components/home/latest-wins'
+import { GlobalStatsSection } from '@/components/home/global-stats-section'
 import { AcesParallaxSection } from '@/components/home/aces-parallax-section'
+import { GamesSection } from '@/components/home/games-section'
 
 const RESPONSIBLE_GAMING_ITEMS = [
   'Self-exclusion and cool-off options so you can voluntarily step away for a set period.',
@@ -16,8 +18,14 @@ export default function Page() {
     <div className="min-h-screen text-white bg-black flex flex-col items-center py-12 px-4 gap-16">
       <LatestWins />
 
+      {/* Platform stats: Blackjack + Plinko, Keno, Lottery, Big Wheel */}
+      <GlobalStatsSection />
+
       {/* Aces parallax: slide in then out */}
       <AcesParallaxSection />
+
+      {/* Games: Lottery, Keno, Plinko, Blackjack, etc. */}
+      <GamesSection />
 
       {/* Responsible Gaming Section */}
       <section className="w-full max-w-2xl">

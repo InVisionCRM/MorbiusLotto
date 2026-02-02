@@ -426,25 +426,36 @@ export default function BlackjackPage() {
     setCurrentGameResult(null);
   }, [manageChipStack]);
 
-  // Double down chips: duplicate the current chip stack
+  // Double down chips: add chips only for the current hand's bet
+  // If split, only add chips for half the stack (current hand)
+  // If not split, double the entire stack
   const handleDoubleDownChips = useCallback(() => {
+    const currentGame = gameState.currentGame;
+    const isSplit = currentGame?.playerHands && currentGame.playerHands.length > 1;
+
     setChipStack(prev => {
+      // Calculate chips to add: if split, only add for current hand (half); if not split, add all
+      const chipsToAdd = isSplit
+        ? prev.slice(0, Math.ceil(prev.length / 2)) // Only current hand's chips
+        : prev; // All chips
+
       const currentTotal = prev.reduce((sum, chip) => sum + chip, 0);
-      const doubleAmount = currentTotal * 2;
-      const doubleAmountWei = BigInt(doubleAmount.toString() + '0'.repeat(18));
-      
+      const addAmount = chipsToAdd.reduce((sum, chip) => sum + chip, 0);
+      const newTotal = currentTotal + addAmount;
+      const newTotalWei = BigInt(newTotal.toString() + '0'.repeat(18));
+
       // Check if doubling would exceed MAX_BET
-      if (doubleAmountWei > BET_LIMITS.MAX_BET) {
+      if (newTotalWei > BET_LIMITS.MAX_BET) {
         const currentMorbius = Number(formatEther(BigInt(currentTotal.toString() + '0'.repeat(18))));
         toast.error('Bet limit exceeded', {
           description: `Maximum bet is 100,000 MORBIUS. Cannot double down bet of ${currentMorbius.toFixed(0)} MORBIUS`
         });
         return prev; // Don't double
       }
-      
-      return [...prev, ...prev];
+
+      return [...prev, ...chipsToAdd];
     });
-  }, []);
+  }, [gameState.currentGame]);
 
   // Split chips: duplicate the chip stack for the second hand
   const handleSplitChips = useCallback(() => {
@@ -1340,10 +1351,11 @@ export default function BlackjackPage() {
       clientSeed: gameState.clientSeed,
     };
 
+    // Keep isPlaying true when status is 'completed' until dealer reveal finishes (handleDealerRevealComplete)
     setGameState(prev => ({
       ...prev,
       currentGame: localGame,
-      isPlaying: status !== 'completed',
+      isPlaying: status === 'completed' ? true : status === 'player_turn' || status === 'dealer_turn',
     }));
     
     // Track new cards for animations
@@ -1790,6 +1802,8 @@ export default function BlackjackPage() {
 
   // Handle dealer reveal completion - show win notification and trigger chip animation
   const handleDealerRevealComplete = useCallback(() => {
+    // Allow REBET/DEAL only after dealer hand is fully revealed
+    setGameState(prev => ({ ...prev, isPlaying: false }));
     // Trigger chip animation now that dealer reveal is complete
     if (pendingChipResult) {
       chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
@@ -1850,11 +1864,7 @@ export default function BlackjackPage() {
       if (gameState) {
         // Convert tournament game state to local game state format
         updateGameStateFromServer(gameState);
-
-        // Check if game completed immediately (blackjack)
-        if (gameState.status === 'completed') {
-          setGameState(prev => ({ ...prev, isPlaying: false }));
-        }
+        // If game completed, isPlaying is set to false in handleDealerRevealComplete after dealer reveal
       } else {
         setGameState(prev => ({ ...prev, isPlaying: false }));
       }

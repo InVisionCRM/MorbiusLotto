@@ -186,27 +186,27 @@ export default function ThemeSelectionModal({
                   return (
                     <div
                       key={img.id}
-                      className="relative aspect-[4/3] overflow-hidden bg-black/40 border-2 border-transparent transition-all"
+                      className="relative aspect-[4/3] overflow-hidden bg-black/40 border-2 border-transparent transition-all group"
                       style={isSelected ? { borderColor: 'rgba(34, 211, 238, 0.6)' } : undefined}
                     >
                       <Image
                         src={img.src}
                         alt={img.label}
                         fill
-                        className="object-cover"
+                        className="object-cover pointer-events-none"
                         sizes="(max-width: 640px) 50vw, 20vw"
                       />
-                      <label
-                        className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-white border border-black border-2 cursor-pointer hover:bg-cyan-50 transition-colors"
+                      <button
+                        type="button"
+                        onClick={() => handleSelectImage(img.id)}
+                        className="absolute inset-0 z-[5] cursor-pointer"
+                        aria-label={`Select ${img.label}`}
                         title="Select and apply"
+                      />
+                      <div
+                        className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-white border border-black border-2 pointer-events-none"
+                        aria-hidden
                       >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleSelectImage(img.id)}
-                          className="sr-only"
-                          aria-label={`Select ${img.label}`}
-                        />
                         {isSelected ? (
                           <svg className="w-4 h-4 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -214,11 +214,14 @@ export default function ThemeSelectionModal({
                         ) : (
                           <span className="w-4 h-4 border border-slate-400 rounded" />
                         )}
-                      </label>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => setExpandSrc(img.src)}
-                        className="absolute top-1.5 right-1.5 z-10 w-6 h-6 bg-white border border-slate-300 flex items-center justify-center text-slate-700 hover:bg-slate-100 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setExpandSrc(img.src)
+                        }}
+                        className="absolute top-1.5 right-1.5 z-10 w-6 h-6 bg-white border border-slate-300 flex items-center justify-center text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                         title="Expand"
                         aria-label={`Expand ${img.label}`}
                       >
@@ -226,7 +229,7 @@ export default function ThemeSelectionModal({
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1v4m0 0h-4m4 0l-5-5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                         </svg>
                       </button>
-                      <span className="absolute bottom-0 left-0 right-0 py-1 px-2 text-[10px] font-medium text-white bg-black/70 truncate">
+                      <span className="absolute bottom-0 left-0 right-0 py-1 px-2 text-[10px] font-medium text-white bg-black/70 truncate pointer-events-none">
                         {img.label}
                       </span>
                     </div>
@@ -254,24 +257,24 @@ export default function ThemeSelectionModal({
                       >
                         <video
                           src={v.src}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover pointer-events-none"
                           muted
                           loop
                           playsInline
                           preload="metadata"
                           poster=""
                         />
-                        <label
-                          className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-4 h-4 rounded-full bg-white border border-cyan-400/60 cursor-pointer hover:bg-cyan-50 transition-colors"
+                        <button
+                          type="button"
+                          onClick={() => handleSelectVideo(v.id)}
+                          className="absolute inset-0 z-[5] cursor-pointer"
+                          aria-label={`Select ${v.label}`}
                           title="Select and apply"
+                        />
+                        <div
+                          className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-4 h-4 rounded-full bg-white border border-cyan-400/60 pointer-events-none"
+                          aria-hidden
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleSelectVideo(v.id)}
-                            className="sr-only"
-                            aria-label={`Select ${v.label}`}
-                          />
                           {isSelected ? (
                             <svg className="w-4 h-4 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -279,14 +282,15 @@ export default function ThemeSelectionModal({
                           ) : (
                             <span className="w-4 h-4 border border-slate-400 rounded-full" />
                           )}
-                        </label>
+                        </div>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation()
                             setExpandSrc(v.src)
                             setExpandVideo(true)
                           }}
-                          className="absolute top-1.5 right-1.5 z-10 w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-700 hover:bg-slate-100 transition-colors"
+                          className="absolute top-1.5 right-1.5 z-10 w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                           title="Expand"
                           aria-label={`Expand ${v.label}`}
                         >
@@ -294,7 +298,7 @@ export default function ThemeSelectionModal({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1v4m0 0h-4m4 0l-5-5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                           </svg>
                         </button>
-                        <span className="absolute bottom-0 left-0 right-0 py-1 px-2 text-[10px] font-medium text-white bg-black/70 truncate">
+                        <span className="absolute bottom-0 left-0 right-0 py-1 px-2 text-[10px] font-medium text-white bg-black/70 truncate pointer-events-none">
                           {v.label}
                         </span>
                       </div>

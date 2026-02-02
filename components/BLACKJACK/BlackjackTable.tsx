@@ -439,7 +439,11 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     const dealerCardsArrived = gameState === GameState.COMPLETE && totalCards > prevCardCount && prevCardCount >= 2;
     const shouldStartReveal = (gameJustCompleted || dealerCardsArrived) && !isRevealing && visibleDealerCards < totalCards;
     
-    if (shouldStartReveal) {
+    // Game completed with no reveal (e.g. only one dealer card): signal completion immediately so REBET/DEAL unlock
+    if (gameJustCompleted && totalCards < 2) {
+      onDealerRevealCompleteRef.current?.();
+    }
+    else if (shouldStartReveal) {
       setIsRevealing(true);
       
       if (totalCards > 2) {
@@ -650,13 +654,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       />
 
       {/* System Time Display + Change Table link */}
-      <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-1">
-        <SystemTime className="!static" />
+      <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-1 pointer-events-auto">
+        <SystemTime className="!static pointer-events-none" />
         {onOpenTableThemeSelector && (
           <button
             type="button"
-            onClick={onOpenTableThemeSelector}
-            className="text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-1 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenTableThemeSelector();
+            }}
+            className="text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-1 transition-colors cursor-pointer py-0.5 px-1 -mx-1"
           >
             Change Table
           </button>
@@ -875,56 +882,103 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                     </div>
 
                     {/* Chip Stack Under Each Split Hand */}
-                    {hasSplit && chipStack.length > 0 && (
-                      <div className="mt-2 flex flex-col items-center">
-                        {/* Chips for this hand - show half the total chips */}
-                        <div
-                          className="relative"
-                          style={{
-                            width: '40px',
-                            height: `${Math.max(40, Math.ceil(chipStack.length / 2) * 2 + 40)}px`
-                          }}
-                        >
-                          {/* Split chips evenly between hands */}
-                          {chipStack
-                            .slice(
-                              handIndex === 0 ? 0 : Math.ceil(chipStack.length / 2),
-                              handIndex === 0 ? Math.ceil(chipStack.length / 2) : chipStack.length
-                            )
-                            .map((chipValue, index) => {
+                    {hasSplit && chipStack.length > 0 && (() => {
+                      // Determine animation state for this specific hand
+                      const handResult = hand.result;
+                      const isHandWin = handResult === 'win' || handResult === 'blackjack';
+                      const isHandLoss = handResult === 'loss';
+                      const showHandAnimation = gameState === GameState.COMPLETE && chipAnimationState !== 'none';
+
+                      // Get chips for this hand
+                      const handChips = chipStack.slice(
+                        handIndex === 0 ? 0 : Math.ceil(chipStack.length / 2),
+                        handIndex === 0 ? Math.ceil(chipStack.length / 2) : chipStack.length
+                      );
+                      const handBetTotal = handChips.reduce((sum, chip) => sum + chip, 0);
+
+                      return (
+                        <div className="mt-2 flex flex-col items-center">
+                          {/* Chips for this hand */}
+                          <div
+                            className={`relative ${
+                              showHandAnimation && isHandLoss ? 'chip-stack-lose' :
+                              showHandAnimation && isHandWin ? 'chip-stack-win' : ''
+                            }`}
+                            style={{
+                              width: '40px',
+                              height: `${Math.max(40, handChips.length * 2 + 40)}px`
+                            }}
+                          >
+                            {/* Original bet chips */}
+                            {handChips.map((chipValue, index) => {
                               const chipImage = getChipImage(chipValue);
                               const stackOffset = index * 2;
 
                               return (
                                 <div
                                   key={`split-chip-${handIndex}-${index}`}
-                                  className="absolute w-10 h-10 rounded-full"
+                                  className={`absolute w-10 h-10 rounded-full ${
+                                    showHandAnimation && isHandLoss ? 'chip-lose' : ''
+                                  }`}
                                   style={{
                                     background: `url('${chipImage}') center/contain no-repeat`,
                                     bottom: `${stackOffset}px`,
                                     left: '0',
                                     zIndex: 10 + index,
+                                    animationDelay: showHandAnimation && isHandLoss ? `${index * 0.05}s` : '0s',
                                   }}
                                 />
                               );
                             })}
+
+                            {/* Winning chips for this hand - animate in on win */}
+                            {showHandAnimation && isHandWin && (() => {
+                              // Calculate payout for this hand (1:1 for regular win)
+                              const payoutAmount = handBetTotal; // Win pays 1:1
+                              const winningChips: number[] = [];
+                              let remaining = payoutAmount;
+                              const chipValues = [100000, 10000, 2500, 1000, 500];
+
+                              for (const chipValue of chipValues) {
+                                while (remaining >= chipValue) {
+                                  winningChips.push(chipValue);
+                                  remaining -= chipValue;
+                                }
+                              }
+
+                              return winningChips.map((chipValue, index) => {
+                                const chipImage = getChipImage(chipValue);
+                                return (
+                                  <div
+                                    key={`split-win-chip-${handIndex}-${index}`}
+                                    className="absolute w-10 h-10 rounded-full chip-win"
+                                    style={{
+                                      background: `url('${chipImage}') center/contain no-repeat`,
+                                      bottom: `${handChips.length * 2 + 5}px`,
+                                      left: '0',
+                                      zIndex: 100 + index,
+                                      animationDelay: `${index * 0.2}s`,
+                                    }}
+                                  />
+                                );
+                              });
+                            })()}
+                          </div>
+                          {/* Bet amount for this hand */}
+                          <span
+                            className={`text-white font-bold text-sm mt-1 ${
+                              showHandAnimation && chipAnimationState !== 'none' ? 'opacity-0' : ''
+                            }`}
+                            style={{
+                              textShadow: '1px 1px 3px rgba(0, 0, 0, 0.8)',
+                              transition: 'opacity 0.3s ease-out',
+                            }}
+                          >
+                            {handBetTotal}
+                          </span>
                         </div>
-                        {/* Bet amount for this hand */}
-                        <span
-                          className="text-white font-bold text-sm mt-1"
-                          style={{
-                            textShadow: '1px 1px 3px rgba(0, 0, 0, 0.8)',
-                          }}
-                        >
-                          {chipStack
-                            .slice(
-                              handIndex === 0 ? 0 : Math.ceil(chipStack.length / 2),
-                              handIndex === 0 ? Math.ceil(chipStack.length / 2) : chipStack.length
-                            )
-                            .reduce((sum, chip) => sum + chip, 0)}
-                        </span>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -935,13 +989,31 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         {/* Actions Area - Buttons (draggable on md+, hidden on mobile; mobile uses section below table) */}
         <div
           ref={widgetRef}
-          className="hidden md:block cursor-move z-20 touch-none"
+          className="hidden md:block cursor-move z-20 touch-none p-1"
           style={{
             position: 'absolute',
             left: `${widgetPosition.x}px`,
             top: `${widgetPosition.y}px`,
             transform: `translate(-50%, -50%)`,
             transformOrigin: 'center center',
+          }}
+          onMouseDown={handleMouseDown}
+          onTouchStart={(e) => {
+            if (!tableContainerRef.current) return;
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'BUTTON' || target.closest('button')) {
+              return;
+            }
+            e.preventDefault();
+            const tableRect = tableContainerRef.current.getBoundingClientRect();
+            const touch = e.touches[0];
+            const touchXRelativeToTable = touch.clientX - tableRect.left;
+            const touchYRelativeToTable = touch.clientY - tableRect.top;
+            setIsDragging(true);
+            setDragStart({
+              x: touchXRelativeToTable - widgetPosition.x,
+              y: touchYRelativeToTable - widgetPosition.y,
+            });
           }}
         >
           <div
@@ -950,24 +1022,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               background: 'linear-gradient(145deg, rgba(17, 5, 27, 0.14), rgb(0, 0, 0))',
               border: '1px solid rgba(255, 255, 255, 0.42)',
               boxShadow: '0 8px 32px rgba(38, 38, 38, 0.5), inset 0 1px 0 rgba(84, 33, 162, 0.1)',
-            }}
-            onMouseDown={handleMouseDown}
-            onTouchStart={(e) => {
-              if (!tableContainerRef.current) return;
-              const target = e.target as HTMLElement;
-              if (target.tagName === 'BUTTON' || target.closest('button')) {
-                return;
-              }
-              e.preventDefault();
-              const tableRect = tableContainerRef.current.getBoundingClientRect();
-              const touch = e.touches[0];
-              const touchXRelativeToTable = touch.clientX - tableRect.left;
-              const touchYRelativeToTable = touch.clientY - tableRect.top;
-              setIsDragging(true);
-              setDragStart({
-                x: touchXRelativeToTable - widgetPosition.x,
-                y: touchYRelativeToTable - widgetPosition.y,
-              });
             }}
           >
             {/* Rotation toggle button */}
