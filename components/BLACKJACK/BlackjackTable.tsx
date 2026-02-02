@@ -38,6 +38,8 @@ interface BlackjackTableProps {
   onDoubleDownChips?: () => void;
   onSplitChips?: () => void;
   onRebet?: () => void;
+  /** Rebet and deal in one action: same bet as last hand, then start game */
+  onRebetAndDeal?: () => void;
   onHalfBet?: () => void;
   onDoubleBet?: () => void;
   canDeal?: boolean;
@@ -81,6 +83,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onDoubleDownChips,
   onSplitChips,
   onRebet,
+  onRebetAndDeal,
   onHalfBet,
   onDoubleBet,
   canDeal = false,
@@ -124,10 +127,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const widgetRef = useRef<HTMLDivElement>(null);
+  // Action buttons layout: REBET+DEAL always separate from HIT/STAND/DOUBLE/SPLIT in non-default layouts
+  type ActionButtonsLayout = 'default' | 'grouped' | 'deal-top' | 'deal-left' | 'deal-bottom';
+  const LAYOUT_ORDER: ActionButtonsLayout[] = ['default', 'grouped', 'deal-top', 'deal-left', 'deal-bottom'];
+  const [actionButtonsLayout, setActionButtonsLayout] = useState<ActionButtonsLayout>('deal-top');
 
-  // Load saved position/orientation from localStorage or set default
+  // Load saved position/orientation and action-buttons layout from localStorage or set default
   // Position is stored as pixels relative to table container (not viewport)
   useEffect(() => {
+    const layoutSaved = localStorage.getItem('blackjack-action-buttons-layout');
+    if (LAYOUT_ORDER.includes(layoutSaved as ActionButtonsLayout)) {
+      setActionButtonsLayout(layoutSaved as ActionButtonsLayout);
+    }
     if (tableContainerRef.current) {
       const tableRect = tableContainerRef.current.getBoundingClientRect();
       const saved = localStorage.getItem('blackjack-widget-position');
@@ -167,6 +178,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     const newOrientation = !isHorizontal;
     setIsHorizontal(newOrientation);
     saveWidgetState(widgetPosition.x, widgetPosition.y, newOrientation);
+  };
+
+  // Cycle action buttons layout (all variants keep REBET+DEAL separate from the other 4 except default)
+  const cycleActionButtonsLayout = () => {
+    const idx = LAYOUT_ORDER.indexOf(actionButtonsLayout);
+    const next = LAYOUT_ORDER[(idx + 1) % LAYOUT_ORDER.length];
+    setActionButtonsLayout(next);
+    localStorage.setItem('blackjack-action-buttons-layout', next);
   };
 
   // Update widget position when table resizes or widget renders (position is relative to table, so no scroll handler needed)
@@ -913,10 +932,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           </div>
         </div>
 
-        {/* Actions Area - Buttons (draggable/orientable on all screens) */}
+        {/* Actions Area - Buttons (draggable on md+, hidden on mobile; mobile uses section below table) */}
         <div
           ref={widgetRef}
-          className="cursor-move z-20 touch-none"
+          className="hidden md:block cursor-move z-20 touch-none"
           style={{
             position: 'absolute',
             left: `${widgetPosition.x}px`,
@@ -926,10 +945,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           }}
         >
           <div
-            className={`${isHorizontal ? 'flex-row' : 'flex-col'} flex gap-2 p-2 rounded-2xl relative cursor-move`}
+            className={`${isHorizontal ? 'flex-row' : 'flex-col'} flex gap-2 p-0 relative cursor-move ${actionButtonsLayout !== 'default' ? 'rounded-lg' : 'rounded-2xl'}`}
             style={{
-              background: 'linear-gradient(145deg, rgba(62, 17, 98, 0.95), rgba(6, 12, 21, 0.6))',
-              border: '1px solid rgba(50, 9, 125, 0.81)',
+              background: 'linear-gradient(145deg, rgba(17, 5, 27, 0.14), rgb(0, 0, 0))',
+              border: '1px solid rgba(255, 255, 255, 0.42)',
               boxShadow: '0 8px 32px rgba(38, 38, 38, 0.5), inset 0 1px 0 rgba(84, 33, 162, 0.1)',
             }}
             onMouseDown={handleMouseDown}
@@ -986,6 +1005,114 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   />
                 </svg>
               </button>
+            {/* Layout cycle: default → grouped → deal-top → deal-left → deal-bottom (all except default keep REBET+DEAL separate) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                cycleActionButtonsLayout();
+              }}
+              className="absolute -top-2 left-0 w-6 h-6 rounded-full bg-slate-500/70 border-2 border-slate-400 hover:bg-slate-500/90 active:bg-slate-500 transition-all z-50 flex items-center justify-center cursor-pointer touch-manipulation"
+              style={{
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.1)',
+              }}
+              title={`Layout: ${actionButtonsLayout}. Click to cycle.`}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
+              <span className="text-white text-[10px] font-bold leading-none">{LAYOUT_ORDER.indexOf(actionButtonsLayout) + 1}</span>
+            </button>
+            {actionButtonsLayout !== 'default' ? (
+              (() => {
+                const groupStyle = { background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.15)' };
+                const outerCol = actionButtonsLayout === 'deal-top' || actionButtonsLayout === 'deal-bottom';
+                const outerRow = actionButtonsLayout === 'grouped' && isHorizontal || actionButtonsLayout === 'deal-left';
+                const dealFirst = actionButtonsLayout !== 'deal-bottom';
+                const dealGroupRow = actionButtonsLayout === 'deal-top' || actionButtonsLayout === 'deal-bottom' || (actionButtonsLayout === 'grouped' && isHorizontal);
+                const gameGroupRow = actionButtonsLayout === 'deal-top' || actionButtonsLayout === 'deal-bottom' || (actionButtonsLayout === 'grouped' && isHorizontal);
+                const dealGroupClass = `flex gap-2 p-0 rounded-lg ${dealGroupRow ? 'flex-row' : 'flex-col'}`;
+                const gameGroupClass = `flex gap-2 p-0 rounded-lg ${gameGroupRow ? 'flex-row' : 'flex-col'}`;
+                const outerClass = `flex gap-2 p-0 ${outerCol ? 'flex-col' : 'flex-row'}`;
+                const dealGroup = (
+                  <div className={`flex overflow-hidden rounded-xl border-2 border-white/10 shadow-lg ${dealGroupRow ? 'flex-row' : 'flex-col'}`} style={groupStyle}>
+                    {onRebetAndDeal && (
+                      <button onClick={(e) => { e.stopPropagation(); if (!isPlaying && parseFloat(lastBetAmount || '0') > 0) { if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); onRebetAndDeal(); } }} disabled={isPlaying || parseFloat(lastBetAmount || '0') <= 0} className={`flex-1 min-w-[4rem] h-16 flex items-center justify-center bg-gradient-to-br from-violet-500 to-violet-700 border-r border-violet-400/50 transition-all hover:scale-[1.02] active:scale-[0.98] ${isPlaying || parseFloat(lastBetAmount || '0') <= 0 ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: !isPlaying && parseFloat(lastBetAmount || '0') > 0 ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                        <span className="text-white font-black text-xs tracking-wider">REBET</span>
+                      </button>
+                    )}
+                    {!isPlaying && (
+                      <button onClick={(e) => { e.stopPropagation(); if (canDeal && chipStack.length > 0) { if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); onStartGame?.(); } }} disabled={!canDeal || chipStack.length === 0} className={`flex-1 min-w-[4rem] h-16 flex items-center justify-center bg-gradient-to-br from-green-500 to-green-700 transition-all hover:scale-[1.02] active:scale-[0.98] ${!canDeal || chipStack.length === 0 ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canDeal && chipStack.length > 0 ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                        <span className="text-white font-black text-sm tracking-wider">DEAL</span>
+                      </button>
+                    )}
+                  </div>
+                );
+                const gameGroup = (
+                  <div className={gameGroupClass} style={groupStyle}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canHit) { if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); onAction(Action.HIT); } }} disabled={!canHit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canHit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                      <span className="text-white font-black text-sm tracking-wider">HIT</span>
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); if (canStand) onAction(Action.STAND); }} disabled={!canStand} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canStand ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canStand ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                      <span className="text-white font-black text-sm tracking-wider">STAND</span>
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); if (canDoubleDown) { onDoubleDownChips?.(); onAction(Action.DOUBLE_DOWN); } }} disabled={!canDoubleDown} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canDoubleDown ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canDoubleDown ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                      <span className="text-white font-black text-xs tracking-wider">DOUBLE</span>
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); if (canSplit) { onSplitChips?.(); onAction(Action.SPLIT); } }} disabled={!canSplit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-emerald-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canSplit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canSplit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                      <span className="text-white font-black text-sm tracking-wider">SPLIT</span>
+                    </button>
+                  </div>
+                );
+                return (
+                  <div className={outerClass}>
+                    {dealFirst ? <>{dealGroup}{gameGroup}</> : <>{gameGroup}{dealGroup}</>}
+                  </div>
+                );
+              })()
+            ) : (
+              <>
+            {/* Default layout: Deal button with two options — REBET | DEAL */}
+            {!isPlaying && (
+              <div className="flex rounded-full overflow-hidden border-2 border-white/10 shadow-lg" style={{ minWidth: '8rem' }}>
+                {onRebetAndDeal && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (parseFloat(lastBetAmount || '0') > 0) {
+                        if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
+                        onRebetAndDeal();
+                      }
+                    }}
+                    disabled={parseFloat(lastBetAmount || '0') <= 0}
+                    className={`flex-1 min-w-[4rem] h-16 flex items-center justify-center bg-gradient-to-br from-violet-500 to-violet-700 border-r border-violet-400/50 transition-all hover:scale-105 active:scale-95 ${parseFloat(lastBetAmount || '0') <= 0 ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`}
+                    style={{
+                      opacity: parseFloat(lastBetAmount || '0') > 0 ? 1 : 0.3,
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <span className="text-white font-black text-xs tracking-wider">REBET</span>
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (canDeal && chipStack.length > 0) {
+                      if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
+                      onStartGame?.();
+                    }
+                  }}
+                  disabled={!canDeal || chipStack.length === 0}
+                  className={`flex-1 min-w-[4rem] h-16 flex items-center justify-center bg-gradient-to-br from-green-500 to-green-700 transition-all hover:scale-105 active:scale-95 ${!canDeal || chipStack.length === 0 ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`}
+                  style={{
+                    opacity: canDeal && chipStack.length > 0 ? 1 : 0.3,
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                >
+                  <span className="text-white font-black text-sm tracking-wider">DEAL</span>
+                </button>
+              </div>
+            )}
             {/* HIT Button - Always visible */}
             <button
               onClick={(e) => {
@@ -1066,6 +1193,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             >
               <span className="text-white font-black text-sm tracking-wider">SPLIT</span>
             </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1206,59 +1335,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             </div>
           )}
 
-          {/* Betting Controls - Right side of chips (Desktop only) */}
-          {!isPlaying && (
-            <div className="hidden lg:block relative bottom-[-35px] right-[-165px] z-20 gap-02 mb-2">
-              {/* DEAL Button */}
-              <button
-                onClick={onStartGame}
-                disabled={!canDeal || chipStack.length === 0}
-                className="px-3 py-2 rounded-sm font-bold text-3xl uppercase tracking-wider transition-all hover:scale-105 active:scale-95 text-green-500/70 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  background: canDeal && chipStack.length > 0
-                    ? 'linear-gradient(145deg, rgba(6, 181, 212, 0), rgba(8, 144, 178, 0))'
-                    : 'linear-gradient(145deg, rgba(35, 45, 55, 0.9), rgba(25, 35, 45, 0.9))',
-                  boxShadow: canDeal && chipStack.length > 0
-                    ? 'inset 2px 2px 4px rgba(255, 255, 255, 0), inset -2px -2px 4px rgba(0, 0, 0, 0), 0 4px 12px rgba(6, 181, 212, 0)'
-                    : 'inset 2px 2px 4px rgba(0, 0, 0, 0), inset -2px -2px 4px rgba(255, 255, 255, 0)',
-                  border: canDeal && chipStack.length > 0
-                    ? '1px solid rgba(6, 181, 212, 0)'
-                    : '1px solid rgba(60, 60, 60, 0)',
-                }}
-              >
-                DEAL
-              </button>
-            </div>
-          )}
         </div>
-
-        {/* Betting Controls - Right side, bottom near edge */}
-        {!isPlaying && (
-          <>
-            {/* Right Side Controls - DEAL */}
-            <div className="absolute bottom-[140px] right-[70px] z-20 lg:hidden">
-              {/* DEAL Button */}
-              <button
-                onClick={onStartGame}
-                disabled={!canDeal || chipStack.length === 0}
-                className="px-2 py-2 bg-gradient-to-b from-slate-900/90 to-slate-900/70 rounded-sm font-bold text-sm md:text-base uppercase tracking-wider transition-all hover:scale-105 active:scale-95 text-green-500/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  background: canDeal && chipStack.length > 0
-                    ? 'linear-gradient(145deg, rgba(7, 66, 77, 0.88), rgba(13, 82, 99, 0.94))'
-                    : 'linear-gradient(145deg, rgba(35, 45, 55, 0.9), rgba(25, 35, 45, 0.9))',
-                  boxShadow: canDeal && chipStack.length > 0
-                    ? 'inset 2px 2px 4px rgba(255, 255, 255, 0.2), inset -2px -2px 4px rgba(0, 0, 0, 0.69), 0 4px 12px rgba(20, 117, 136, 0.3)'
-                    : 'inset 2px 2px 4px rgba(0, 0, 0, 0.89), inset -2px -2px 4pxrgba(255, 255, 255, 0))',
-                  border: canDeal && chipStack.length > 0
-                    ? '1px solid rgba(0, 221, 255, 0.78)'
-                    : '1px solid rgba(9, 204, 252, 0.93)',
-                }}
-              >
-                DEAL
-              </button>
-            </div>
-          </>
-        )}
 
         {/* Betting Panel - Bottom of table, under betting controls */}
         <div className="mt-8 w-full">

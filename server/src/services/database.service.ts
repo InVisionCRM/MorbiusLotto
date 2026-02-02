@@ -87,6 +87,16 @@ export interface EnhancedPlayerStats extends PlayerStats {
   rank: number;
 }
 
+export interface TopPlayerEntry {
+  rank: number;
+  wallet_address: string;
+  total_games: number;
+  total_bet: bigint;
+  total_win: bigint;
+  profit_loss: bigint;
+  win_rate: number;
+}
+
 export interface GlobalAnalytics {
   total_players: number;
   active_players: number;
@@ -371,6 +381,44 @@ export class DatabaseService {
     const query = `SELECT * FROM get_global_analytics()`;
     const result = await this.pool.query(query);
     return this.normalizeGlobalAnalytics(result.rows[0] || {});
+  }
+
+  async getTopPlayers(limit: number = 10): Promise<TopPlayerEntry[]> {
+    const query = `
+      WITH agg AS (
+        SELECT
+          p.wallet_address,
+          COUNT(g.*)::BIGINT AS total_games,
+          COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(g.total_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(g.*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE g.result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate
+        FROM players p
+        JOIN game_sessions gs ON gs.player_id = p.id
+        JOIN games g ON g.session_id = gs.id AND g.result IS NOT NULL AND g.result != 'ongoing'
+        GROUP BY p.id, p.wallet_address
+      )
+      SELECT ROW_NUMBER() OVER (ORDER BY total_bet DESC)::INTEGER AS rank, *
+      FROM agg
+      ORDER BY total_bet DESC
+      LIMIT $1
+    `;
+    const result = await this.pool.query(query, [limit]);
+    return result.rows.map((r: any) => this.normalizeTopPlayerEntry(r));
+  }
+
+  private normalizeTopPlayerEntry(row: any): TopPlayerEntry {
+    return {
+      rank: Number(row.rank ?? 0),
+      wallet_address: row.wallet_address ?? '',
+      total_games: Number(row.total_games ?? 0),
+      total_bet: this.toBigInt(row.total_bet),
+      total_win: this.toBigInt(row.total_win),
+      profit_loss: this.toBigInt(row.profit_loss),
+      win_rate: Number(row.win_rate ?? 0),
+    };
   }
 
   async getPlayerGames(walletAddress: string, limit: number = 50, offset: number = 0): Promise<Game[]> {

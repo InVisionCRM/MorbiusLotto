@@ -18,7 +18,8 @@ import { GameVerificationTools } from '@/components/BLACKJACK/GameVerificationTo
 import { GlobalWinsFeed } from '@/components/BLACKJACK/GlobalWinsFeed';
 import { ContractAddress } from '@/components/ui/contract-address';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
-import QuickHistory from '@/components/BLACKJACK/QuickHistory';
+import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers';
+import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { useTournament, TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
 import {
@@ -27,7 +28,11 @@ import {
   TournamentLeaderboard,
   TournamentComplete,
   TournamentBetPanel,
+  TournamentCreator,
+  TournamentBrowser,
+  TournamentPinEntry,
 } from '@/components/BLACKJACK/Tournament';
+import { CreateTournamentRequest } from '@/lib/tournament-types';
 import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
@@ -485,6 +490,12 @@ export default function BlackjackPage() {
   const [isTournamentMode, setIsTournamentMode] = useState(false);
   const [showTournamentEntry, setShowTournamentEntry] = useState(false);
   const [showTournamentComplete, setShowTournamentComplete] = useState(false);
+
+  // Tournament creator/browser state
+  const [showTournamentBrowser, setShowTournamentBrowser] = useState(false);
+  const [showTournamentCreator, setShowTournamentCreator] = useState(false);
+  const [showTournamentPinEntry, setShowTournamentPinEntry] = useState(false);
+  const [pendingJoinTournamentId, setPendingJoinTournamentId] = useState<string | null>(null);
 
   // Tournament hook
   const tournament = useTournament({
@@ -1981,6 +1992,31 @@ export default function BlackjackPage() {
     }
   }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer]);
 
+  // Rebet and deal: same bet as last hand, then start game in one action (must be after handleStartGame)
+  const handleRebetAndDeal = useCallback(() => {
+    const lastBet = parseFloat(lastBetAmount);
+    if (lastBet <= 0) return;
+    const lastBetWei = BigInt(lastBet.toString() + '0'.repeat(18));
+    if (lastBetWei > BET_LIMITS.MAX_BET) {
+      toast.error('Bet limit exceeded', {
+        description: `Maximum bet is 100,000 MORBIUS. Cannot rebet ${lastBet} MORBIUS`,
+      });
+      return;
+    }
+    // Set chip stack to last bet (visual sync)
+    const chips: number[] = [];
+    let remaining = lastBet;
+    const chipValues = [100000, 10000, 2500, 1000, 500];
+    for (const chipValue of chipValues) {
+      while (remaining >= chipValue) {
+        chips.push(chipValue);
+        remaining -= chipValue;
+      }
+    }
+    setChipStack(chips);
+    handleStartGame(lastBetWei, clientSeed);
+  }, [lastBetAmount, clientSeed, handleStartGame]);
+
   // Note: Approval handling no longer needed since bets come from reserve
 
   // Handle player actions
@@ -2237,6 +2273,7 @@ export default function BlackjackPage() {
               onDoubleDownChips={tournament.tournamentState.inTournament ? () => {} : handleDoubleDownChips}
               onSplitChips={tournament.tournamentState.inTournament ? () => {} : handleSplitChips}
               onRebet={tournament.tournamentState.inTournament ? () => {} : handleRebet}
+              onRebetAndDeal={tournament.tournamentState.inTournament ? undefined : handleRebetAndDeal}
               onHalfBet={tournament.tournamentState.inTournament ? () => {} : handleHalfBet}
               onDoubleBet={tournament.tournamentState.inTournament ? () => {} : handleDoubleBet}
               canDeal={tournament.tournamentState.inTournament
@@ -2288,28 +2325,80 @@ export default function BlackjackPage() {
                       setIsTournamentMode(false);
                     }
                   }}
+                  onRebuy={async () => {
+                    const success = await tournament.requestRebuy();
+                    if (success) {
+                      toast.success('Rebuy successful! Good luck!');
+                      fetchBalance();
+                    }
+                  }}
+                  isRebuyLoading={tournament.isLoading}
                 />
               </div>
             )}
           </div>
         </div>
 
-        {/* Tournament Mode Toggle Button */}
+        {/* Mobile-only: action buttons in own section below table, above tournament (default layout, full width) */}
+        {currentView === 'game' && (
+          <BlackjackMobileActionBar
+            onRebetAndDeal={tournament.tournamentState.inTournament ? undefined : handleRebetAndDeal}
+            onStartGame={
+              tournament.tournamentState.inTournament
+                ? () => handleStartTournamentGame(TOURNAMENT_CONFIG.MIN_BET)
+                : () => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)
+            }
+            onAction={tournament.tournamentState.inTournament ? handleTournamentPlayerAction : handlePlayerAction}
+            onDoubleDownChips={tournament.tournamentState.inTournament ? undefined : handleDoubleDownChips}
+            onSplitChips={tournament.tournamentState.inTournament ? undefined : handleSplitChips}
+            isPlaying={gameState.isPlaying}
+            canHit={canHit}
+            canStand={canStand}
+            canDoubleDown={canDoubleDown && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
+            canSplit={canSplit && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
+            canDeal={
+              tournament.tournamentState.inTournament
+                ? !gameState.isPlaying && tournament.tournamentState.handsRemaining > 0
+                : !gameState.isPlaying && totalBetAmount > 0
+            }
+            chipStackLength={tournament.tournamentState.inTournament ? 0 : chipStack.length}
+            lastBetAmount={lastBetAmount}
+            soundEnabled={soundEnabled}
+          />
+        )}
+
+        {/* Tournament Mode Toggle Buttons */}
         {!tournament.tournamentState.inTournament && !gameState.isPlaying && (
-          <div className="mt-4 text-center">
-            <button
-              onClick={() => setShowTournamentEntry(true)}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/30 transition-all transform hover:scale-105"
-            >
-              <span className="flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                </svg>
-                Enter Tournament Mode
-              </span>
-            </button>
+          <div className="mt-6 md:mt-4 text-center">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              {/* Quick Join Default Tournament */}
+              <button
+                onClick={() => setShowTournamentEntry(true)}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/30 transition-all transform hover:scale-105"
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                  Quick Join Tournament
+                </span>
+              </button>
+
+              {/* Tournament Lobby Button */}
+              <button
+                onClick={() => setShowTournamentBrowser(true)}
+                className="px-6 py-3 bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400 text-white font-bold rounded-xl shadow-lg shadow-pink-500/30 transition-all transform hover:scale-105"
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Tournament Lobby
+                </span>
+              </button>
+            </div>
             <p className="text-gray-500 text-xs mt-2">
-              100,000 MORBIUS buy-in | 5,000 starting chips | 50 hands
+              Quick Join: 1,000 MORBIUS | Or browse/create custom tournaments in the Lobby
             </p>
           </div>
         )}
@@ -2379,7 +2468,7 @@ export default function BlackjackPage() {
           </div>
         )}
 
-        {/* Quick History + Global Wins Feed: 2-col grid (below) */}
+        {/* Top Players + Global Wins Feed: 2-col grid (below) */}
         {currentView === 'game' && (
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div
@@ -2390,7 +2479,7 @@ export default function BlackjackPage() {
                 border: '1px solid rgba(6, 182, 212, 0.2)',
               }}
             >
-              <QuickHistory history={gameState.history} reserveBalance={offChainBalance} />
+              <BlackjackTopPlayers />
             </div>
             <div
               className="rounded-xl p-4 min-w-0"
@@ -2466,6 +2555,77 @@ export default function BlackjackPage() {
           prizeWon={tournament.tournamentState.status === 'completed' && tournament.tournamentState.currentRank <= 10
             ? tournament.getPrizeForRank(tournament.tournamentState.currentRank, BigInt(tournament.tournamentInfo?.prizePool || '0'))
             : 0n}
+        />
+
+        {/* Tournament Browser Modal */}
+        <TournamentBrowser
+          isOpen={showTournamentBrowser}
+          onClose={() => setShowTournamentBrowser(false)}
+          onJoin={(tournamentId, isPrivate) => {
+            if (isPrivate) {
+              setPendingJoinTournamentId(tournamentId);
+              setShowTournamentPinEntry(true);
+            } else {
+              // Join directly
+              tournament.joinTournament(tournamentId).then(success => {
+                if (success) {
+                  setShowTournamentBrowser(false);
+                  setIsTournamentMode(true);
+                  toast.success('Joined tournament!');
+                  fetchBalance();
+                }
+              });
+            }
+          }}
+          onCreateNew={() => {
+            setShowTournamentBrowser(false);
+            setShowTournamentCreator(true);
+          }}
+          onRefresh={() => tournament.fetchTournamentList()}
+          tournaments={tournament.tournamentList}
+          isLoading={tournament.isLoading}
+          playerBalance={offChainBalance}
+        />
+
+        {/* Tournament Creator Modal */}
+        <TournamentCreator
+          isOpen={showTournamentCreator}
+          onClose={() => setShowTournamentCreator(false)}
+          onCreate={async (params: CreateTournamentRequest) => {
+            const result = await tournament.createTournament(params);
+            if (result) {
+              toast.success('Tournament created!');
+              // Refresh tournament list
+              tournament.fetchTournamentList();
+              return result;
+            }
+            return null;
+          }}
+          isLoading={tournament.isLoading}
+          playerBalance={offChainBalance}
+        />
+
+        {/* Tournament PIN Entry Modal */}
+        <TournamentPinEntry
+          isOpen={showTournamentPinEntry}
+          onClose={() => {
+            setShowTournamentPinEntry(false);
+            setPendingJoinTournamentId(null);
+          }}
+          onSubmit={async (pin) => {
+            if (!pendingJoinTournamentId) return false;
+            const success = await tournament.joinTournament(pendingJoinTournamentId, pin);
+            if (success) {
+              setShowTournamentPinEntry(false);
+              setShowTournamentBrowser(false);
+              setPendingJoinTournamentId(null);
+              setIsTournamentMode(true);
+              toast.success('Joined private tournament!');
+              fetchBalance();
+            }
+            return success;
+          }}
+          isLoading={tournament.isLoading}
         />
 
         {currentView === 'history' && (

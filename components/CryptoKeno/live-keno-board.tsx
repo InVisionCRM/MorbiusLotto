@@ -466,9 +466,7 @@ export function LiveKenoBoard({
 
           {/* Player Statistics */}
           <BentoGridItem
-            title="Your Statistics"
-            className="relative md:row-start-3 md:col-span-2"
-            description={address ? 'Live player performance metrics' : 'Connect wallet to view stats'}
+            className="relative md:row-start-3 md:col-span-2 rounded-0 !p-0 flex-1 min-h-0 flex flex-col border-0"
           >
             {!address ? (
               <div className="text-center text-white/60 py-8">Connect your wallet to view statistics</div>
@@ -480,14 +478,13 @@ export function LiveKenoBoard({
             ) : !playerStats ? (
               <div className="text-center text-white/60 py-8">No statistics available</div>
             ) : (
-              <div className="grid grid-cols-2 gap-px bg-white/10 p-px rounded-lg">
+              <div className="grid grid-cols-2 gap-0 rounded-0 w-full h-full min-h-0 flex-1">
                 {/* Total Wagered */}
                 <Card
                   className="relative overflow-hidden border-0 p-4"
                   style={{
                     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                     boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px inset rgba(60, 60, 60, 0.5)',
                   }}
                 >
                   {/* Radial gradient overlay */}
@@ -512,7 +509,6 @@ export function LiveKenoBoard({
                   style={{
                     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                     boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px inset rgba(60, 60, 60, 0.5)',
                   }}
                 >
                   <div className="absolute top-0 right-0 opacity-10">
@@ -536,7 +532,6 @@ export function LiveKenoBoard({
                   style={{
                     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                     boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px inset rgba(60, 60, 60, 0.5)',
                   }}
                 >
                   {/* Radial gradient overlay */}
@@ -584,7 +579,6 @@ export function LiveKenoBoard({
                   style={{
                     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                     boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px inset rgba(60, 60, 60, 0.5)',
                   }}
                 >
                   <div className="absolute top-0 right-0 opacity-10">

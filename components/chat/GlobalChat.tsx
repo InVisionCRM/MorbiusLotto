@@ -11,6 +11,13 @@ import {
 } from '@/components/ui/sheet';
 import { ChatPanel } from './ChatPanel';
 
+const breathingKeyframes = `
+  @keyframes chat-unread-breathe {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.15); }
+  }
+`;
+
 const PATH_TO_ROOM: Record<string, { roomId: string; title: string }> = {
   '/': { roomId: 'main', title: 'Lobby Chat' },
   '/home': { roomId: 'main', title: 'Lobby Chat' },
@@ -41,24 +48,38 @@ export function GlobalChat() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
   const { roomId, title } = getRoomForPath(pathname ?? '/');
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) setHasUnread(false);
+  };
+
   const chatSheet = (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <style dangerouslySetInnerHTML={{ __html: breathingKeyframes }} />
       <SheetTrigger asChild>
         <button
           type="button"
-          className="fixed right-0 top-1/2 z-40 -translate-y-1/2 flex items-center justify-center w-10 h-24 rounded-l-lg border border-r-0 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-lg hover:bg-slate-800/90 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:ring-offset-2 focus:ring-offset-background"
+          className="fixed right-0 top-1/2 z-40 -translate-y-1/2 flex items-center justify-center w-10 h-24 rounded-l-lg border border-r-0 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-lg hover:bg-slate-800/90 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:ring-offset-2 focus:ring-offset-background relative"
           style={{
             boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5)',
           }}
-          aria-label="Open chat"
+          aria-label={hasUnread ? 'Open chat (unread messages)' : 'Open chat'}
         >
           <MessageCircle className="h-5 w-5 text-cyan-400" />
+          {hasUnread && (
+            <span
+              className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full bg-red-500 pointer-events-none"
+              style={{ animation: 'chat-unread-breathe 1.5s ease-in-out infinite' }}
+              aria-hidden
+            />
+          )}
           <span className="sr-only">Chat</span>
         </button>
       </SheetTrigger>
@@ -72,7 +93,14 @@ export function GlobalChat() {
         }}
       >
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <ChatPanel roomId={roomId} title={title} collapsible={false} className="flex-1 flex flex-col min-h-0 overflow-hidden" />
+          <ChatPanel
+            roomId={roomId}
+            title={title}
+            collapsible={false}
+            className="flex-1 flex flex-col min-h-0 overflow-hidden"
+            sheetOpen={open}
+            onUnreadChange={setHasUnread}
+          />
         </div>
       </SheetContent>
     </Sheet>

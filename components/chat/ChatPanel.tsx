@@ -71,6 +71,10 @@ export interface ChatPanelProps {
   collapsible?: boolean;
   /** Optional class for the container (e.g. position/size overrides) */
   className?: string;
+  /** When used inside GlobalChat Sheet: true when the sheet is open. Used to report unseen messages. */
+  sheetOpen?: boolean;
+  /** Called when unseen message state changes (e.g. for showing a dot on the collapsed chat trigger). */
+  onUnreadChange?: (hasUnread: boolean) => void;
 }
 
 export function ChatPanel({
@@ -80,6 +84,8 @@ export function ChatPanel({
   wsConnected,
   collapsible = true,
   className = '',
+  sheetOpen,
+  onUnreadChange,
 }: ChatPanelProps) {
   const { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore } = useChat(roomId, { wsClient, wsConnected });
   const [input, setInput] = useState('');
@@ -95,6 +101,7 @@ export function ChatPanel({
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastReadCountRef = useRef(0);
+  const lastReadWhenSheetOpenRef = useRef(0);
   const lastMessageIdRef = useRef<string | null>(null);
   const { address: walletAddress } = useAccount();
   const { minutes: sessionMinutes } = useSessionDuration();
@@ -112,6 +119,18 @@ export function ChatPanel({
       }
     }
   }, [open, messages.length]);
+
+  // Report unseen messages to parent (e.g. GlobalChat) when sheet is closed
+  useEffect(() => {
+    if (onUnreadChange == null) return;
+    if (sheetOpen === true) {
+      lastReadWhenSheetOpenRef.current = messages.length;
+      onUnreadChange(false);
+    } else if (sheetOpen === false) {
+      const hasUnread = messages.length > lastReadWhenSheetOpenRef.current;
+      onUnreadChange(hasUnread);
+    }
+  }, [sheetOpen, messages.length, onUnreadChange]);
 
   // Auto-scroll to bottom only when the latest message changed (new message at end), not when loading more
   useEffect(() => {

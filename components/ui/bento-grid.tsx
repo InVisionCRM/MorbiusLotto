@@ -51,15 +51,21 @@ export const BentoGridItem = ({
       onClick={onClick}
     >
       {header}
-      <div>
+      <div className={cn("flex flex-col", (!title && !description) && "flex-1 min-h-0")}>
         {icon}
-        <div className="mt-1 mb-0.5 font-poppins font-bold text-white dark:text-white text-center">
-          {title}
+        {title != null && title !== "" && (
+          <div className="mt-1 mb-0.5 font-poppins font-bold text-white dark:text-white text-center">
+            {title}
+          </div>
+        )}
+        {description != null && description !== "" && (
+          <div className="font-poppins text-xs font-normal text-white dark:text-white text-center">
+            {description}
+          </div>
+        )}
+        <div className={cn(!title && !description && "flex-1 min-h-0 flex flex-col")}>
+          {children}
         </div>
-        <div className="font-poppins text-xs font-normal text-white dark:text-white text-center">
-          {description}
-        </div>
-        {children}
       </div>
     </div>
   );

@@ -4,8 +4,14 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { formatEther } from 'viem';
+import {
+  CreateTournamentRequest,
+  TournamentListItem,
+  RebuyConfig,
+  TableTheme,
+} from '@/lib/tournament-types';
 
-// Tournament configuration (matches server)
+// Tournament configuration (matches server defaults)
 export const TOURNAMENT_CONFIG = {
   BUY_IN_AMOUNT: BigInt('1000000000000000000000'), // 1,000 MORBIUS
   BUY_IN_DISPLAY: '1,000',
@@ -28,6 +34,14 @@ export interface TournamentState {
   status: 'playing' | 'busted' | 'completed' | null;
   maxHands: number;
   startingChips: number;
+  // Rebuy info
+  rebuyCount: number;
+  totalBuyIn: string;
+  canRebuy: boolean;
+  maxRebuys: number;
+  rebuyEnabled: boolean;
+  // Custom tournament info
+  tableTheme?: TableTheme;
 }
 
 export interface TournamentInfo {
@@ -39,6 +53,23 @@ export interface TournamentInfo {
   maxHands: number;
   prizePool: string;
   entryCount: number;
+  // Extended info for custom tournaments
+  creatorAddress?: string;
+  maxPlayers?: number | null;
+  timeLimitMinutes?: number | null;
+  endsAt?: string | null;
+  rebuyConfig?: RebuyConfig;
+  tableTheme?: TableTheme;
+  isPrivate?: boolean;
+  prizeDistributionType?: string;
+  prizePercentages?: number[];
+}
+
+// Created tournament result
+export interface CreatedTournament {
+  tournamentId: string;
+  name: string;
+  pinCode?: string;
 }
 
 export interface LeaderboardEntry {
@@ -97,6 +128,11 @@ export function useTournament(options: UseTournamentOptions) {
     status: null,
     maxHands: TOURNAMENT_CONFIG.MAX_HANDS,
     startingChips: TOURNAMENT_CONFIG.STARTING_CHIPS,
+    rebuyCount: 0,
+    totalBuyIn: '0',
+    canRebuy: false,
+    maxRebuys: 0,
+    rebuyEnabled: false,
   });
 
   const [tournamentInfo, setTournamentInfo] = useState<TournamentInfo | null>(null);
@@ -104,6 +140,10 @@ export function useTournament(options: UseTournamentOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentGame, setCurrentGame] = useState<TournamentGameState | null>(null);
+
+  // Tournament creator state
+  const [tournamentList, setTournamentList] = useState<TournamentListItem[]>([]);
+  const [createdTournament, setCreatedTournament] = useState<CreatedTournament | null>(null);
 
   // Refs for callbacks
   const onBustedRef = useRef(onBusted);
@@ -132,9 +172,22 @@ export function useTournament(options: UseTournamentOptions) {
         ...prev,
         status: 'busted',
         chips: 0,
+        // Can rebuy if rebuys are enabled and under max limit
+        canRebuy: prev.rebuyEnabled && (prev.maxRebuys === 0 || prev.rebuyCount < prev.maxRebuys),
       }));
       setCurrentGame(null);
       onBustedRef.current?.();
+    };
+
+    // New tournament created globally
+    const handleTournamentCreatedGlobal = async (payload: any) => {
+      // Refresh tournament list when a new public tournament is created
+      try {
+        const response = await wsClient.sendRequest('tournament_list', {});
+        setTournamentList(response.tournaments || []);
+      } catch (err) {
+        console.error('Failed to refresh tournament list:', err);
+      }
     };
 
     // Tournament completed
@@ -153,11 +206,13 @@ export function useTournament(options: UseTournamentOptions) {
     wsClient.on('tournament_leaderboard_update', handleLeaderboardUpdate);
     wsClient.on('tournament_busted', handleTournamentBusted);
     wsClient.on('tournament_completed', handleTournamentCompleted);
+    wsClient.on('tournament_created_global', handleTournamentCreatedGlobal);
 
     return () => {
       wsClient.off('tournament_leaderboard_update');
       wsClient.off('tournament_busted');
       wsClient.off('tournament_completed');
+      wsClient.off('tournament_created_global');
     };
   }, [wsClient]);
 
@@ -455,6 +510,218 @@ export function useTournament(options: UseTournamentOptions) {
     }
   }, []);
 
+  // ============================================
+  // Tournament Creator Methods
+  // ============================================
+
+  /**
+   * Create a new custom tournament
+   */
+  const createTournament = useCallback(async (
+    params: CreateTournamentRequest
+  ): Promise<CreatedTournament | null> => {
+    if (!wsClient || !address) {
+      setError('Not connected');
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await wsClient.sendRequest('tournament_create', params);
+
+      const result: CreatedTournament = {
+        tournamentId: response.tournamentId,
+        name: response.name,
+        pinCode: response.pinCode,
+      };
+
+      setCreatedTournament(result);
+      return result;
+    } catch (err: any) {
+      setError(err.message || 'Failed to create tournament');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [wsClient, address]);
+
+  /**
+   * Fetch list of active tournaments
+   */
+  const fetchTournamentList = useCallback(async (): Promise<TournamentListItem[]> => {
+    if (!wsClient) return [];
+
+    try {
+      const response = await wsClient.sendRequest('tournament_list', {});
+      const list = response.tournaments || [];
+      setTournamentList(list);
+      return list;
+    } catch (err) {
+      console.error('Failed to fetch tournament list:', err);
+      return [];
+    }
+  }, [wsClient]);
+
+  /**
+   * Join a specific tournament by ID
+   */
+  const joinTournament = useCallback(async (
+    tournamentId: string,
+    pinCode?: string
+  ): Promise<boolean> => {
+    if (!wsClient || !address) {
+      setError('Not connected');
+      return false;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await wsClient.sendRequest('tournament_join', {
+        tournamentId,
+        pinCode,
+      });
+
+      setTournamentState({
+        inTournament: true,
+        entryId: response.entryId,
+        tournamentId: response.tournamentId,
+        chips: response.chips,
+        handsPlayed: response.handsPlayed,
+        handsRemaining: response.handsRemaining,
+        highestChips: response.chips,
+        currentRank: 1,
+        status: 'playing',
+        maxHands: response.maxHands,
+        startingChips: response.startingChips,
+        rebuyCount: 0,
+        totalBuyIn: response.buyInAmount || '0',
+        canRebuy: false,
+        maxRebuys: response.rebuyConfig?.maxRebuys || 0,
+        rebuyEnabled: response.rebuyConfig?.enabled || false,
+        tableTheme: response.tableTheme,
+      });
+
+      // Update tournament info
+      if (response.prizePool) {
+        setTournamentInfo(prev => prev ? {
+          ...prev,
+          prizePool: response.prizePool,
+        } : null);
+      }
+
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Failed to join tournament');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [wsClient, address]);
+
+  /**
+   * Request a rebuy in the current tournament
+   */
+  const requestRebuy = useCallback(async (): Promise<boolean> => {
+    if (!wsClient || !tournamentState.tournamentId) {
+      setError('Not in a tournament');
+      return false;
+    }
+
+    if (!tournamentState.rebuyEnabled) {
+      setError('Rebuys not enabled for this tournament');
+      return false;
+    }
+
+    if (!tournamentState.canRebuy) {
+      setError('Cannot rebuy right now');
+      return false;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await wsClient.sendRequest('tournament_rebuy', {
+        tournamentId: tournamentState.tournamentId,
+      });
+
+      setTournamentState(prev => ({
+        ...prev,
+        chips: response.newChips,
+        status: 'playing',
+        rebuyCount: response.rebuyCount,
+        totalBuyIn: response.totalBuyIn,
+        canRebuy: prev.maxRebuys === 0 || response.rebuyCount < prev.maxRebuys,
+      }));
+
+      // Update prize pool in tournament info
+      if (response.newPrizePool) {
+        setTournamentInfo(prev => prev ? {
+          ...prev,
+          prizePool: response.newPrizePool,
+        } : null);
+      }
+
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Failed to process rebuy');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [wsClient, tournamentState]);
+
+  /**
+   * Get extended tournament info by ID
+   */
+  const getTournamentInfo = useCallback(async (
+    tournamentId: string
+  ): Promise<TournamentInfo | null> => {
+    if (!wsClient) return null;
+
+    try {
+      const response = await wsClient.sendRequest('tournament_get_info', {
+        tournamentId,
+      });
+
+      const info: TournamentInfo = {
+        tournamentId: response.tournamentId,
+        name: response.name,
+        status: response.status,
+        buyInAmount: response.buyInAmount,
+        startingChips: response.startingChips,
+        maxHands: response.maxHands,
+        prizePool: response.prizePool,
+        entryCount: response.entryCount,
+        creatorAddress: response.creatorAddress,
+        maxPlayers: response.maxPlayers,
+        timeLimitMinutes: response.timeLimitMinutes,
+        endsAt: response.endsAt,
+        rebuyConfig: response.rebuyConfig,
+        tableTheme: response.tableTheme,
+        isPrivate: response.isPrivate,
+        prizeDistributionType: response.prizeDistributionType,
+        prizePercentages: response.prizePercentages,
+      };
+
+      return info;
+    } catch (err) {
+      console.error('Failed to get tournament info:', err);
+      return null;
+    }
+  }, [wsClient]);
+
+  /**
+   * Clear created tournament state
+   */
+  const clearCreatedTournament = useCallback(() => {
+    setCreatedTournament(null);
+  }, []);
+
   return {
     // State
     tournamentState,
@@ -464,6 +731,10 @@ export function useTournament(options: UseTournamentOptions) {
     isLoading,
     error,
 
+    // Tournament Creator State
+    tournamentList,
+    createdTournament,
+
     // Actions
     enterTournament,
     leaveTournament,
@@ -472,6 +743,14 @@ export function useTournament(options: UseTournamentOptions) {
     fetchTournamentState,
     fetchTournamentInfo,
     fetchLeaderboard,
+
+    // Tournament Creator Actions
+    createTournament,
+    fetchTournamentList,
+    joinTournament,
+    requestRebuy,
+    getTournamentInfo,
+    clearCreatedTournament,
 
     // Utilities
     getPrizeForRank,

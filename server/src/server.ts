@@ -120,6 +120,18 @@ async function initializeServices() {
       }
     });
 
+    // Top players leaderboard (by total volume)
+    app.get('/api/analytics/top-players', async (req, res) => {
+      try {
+        const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+        const topPlayers = await dbService.getTopPlayers(limit);
+        sendJson(res, topPlayers);
+      } catch (error) {
+        logger.error('Error fetching top players:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Player game history endpoint
     app.get('/api/player/:address/games', async (req, res) => {
       try {

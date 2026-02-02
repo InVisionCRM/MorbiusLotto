@@ -145,6 +145,47 @@ export function useGlobalAnalytics() {
   });
 }
 
+export interface TopPlayerEntry {
+  rank: number;
+  wallet_address: string;
+  total_games: number;
+  total_bet: bigint;
+  total_win: bigint;
+  profit_loss: bigint;
+  win_rate: number;
+}
+
+/**
+ * Hook to fetch top players leaderboard (by total volume)
+ */
+export function useBlackjackTopPlayers(limit: number = 10) {
+  return useQuery<TopPlayerEntry[]>({
+    queryKey: ['blackjackTopPlayers', limit],
+    queryFn: async () => {
+      try {
+        const response = await fetch(`${getApiUrl()}/api/analytics/top-players?limit=${limit}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch top players');
+        }
+        const data = await response.json();
+        return (Array.isArray(data) ? data : []).map((row: any) => ({
+          ...row,
+          total_bet: BigInt(row.total_bet ?? 0),
+          total_win: BigInt(row.total_win ?? 0),
+          profit_loss: BigInt(row.profit_loss ?? 0),
+        }));
+      } catch (error) {
+        if (error instanceof TypeError && error.message === 'Failed to fetch') {
+          throw new Error(`Cannot connect to backend server at ${getApiUrl()}. Make sure the server is running.`);
+        }
+        throw error;
+      }
+    },
+    refetchInterval: 60000,
+    retry: 1,
+  });
+}
+
 /**
  * Hook to fetch player game history
  */
