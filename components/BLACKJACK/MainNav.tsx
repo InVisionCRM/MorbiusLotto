@@ -34,6 +34,13 @@ interface MainNavProps {
   /** When provided, theme modal is controlled by parent (e.g. for opening from table "Change Table" link) */
   themeModalOpen?: boolean;
   onThemeModalOpenChange?: (open: boolean) => void;
+  /** Opens the Tournament Lobby browser from nav */
+  onTournamentLobby?: () => void;
+  /** Profile for connected wallet (display name + avatar). When set, show in nav with edit icon. */
+  profileDisplayName?: string | null;
+  profileImageUrl?: string | null;
+  /** Opens the profile settings modal when edit icon is clicked */
+  onOpenProfileSettings?: () => void;
 }
 
 const viewLabels: Record<string, string> = {
@@ -52,7 +59,7 @@ const viewIcons: Record<string, string> = {
   verify: 'fa-check-circle'
 };
 
-export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange }: MainNavProps) {
+export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings }: MainNavProps) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -155,19 +162,44 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
               </div>
             )}
 
-            {/* Wallet Connection */}
+            {/* Wallet / Profile */}
             <div className="flex items-center flex-shrink-0">
               {isConnected && address ? (
-                <button
-                  onClick={() => disconnect()}
-                  className="flex items-center  gap-2 px-4 py-1 rounded-sm text-white text-sm font-bold transition-all hover:scale-105 active:scale-95"
+                <div
+                  className="flex items-center gap-2 px-2 py-1 rounded-sm text-white text-sm font-bold transition-all"
                   style={{
                     background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))',
                   }}
                 >
-                  <span className="text-white">{address.slice(-4)}</span>
-                  <i className="fas fa-chevron-down text-white text-sm"></i>
-                </button>
+                  <div className="w-7 h-7 rounded-full bg-slate-700 border border-cyan-500/30 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                    {profileImageUrl ? (
+                      <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-gray-400 text-xs">?</span>
+                    )}
+                  </div>
+                  <span className="text-white max-w-[80px] truncate">
+                    {profileDisplayName || `…${address.slice(-4)}`}
+                  </span>
+                  {onOpenProfileSettings && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onOpenProfileSettings(); }}
+                      className="p-1 rounded hover:bg-white/10 text-cyan-400 hover:text-cyan-300"
+                      aria-label="Edit profile"
+                      title="Edit profile"
+                    >
+                      <i className="fas fa-pen text-xs" aria-hidden />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => disconnect()}
+                    className="p-1 rounded hover:bg-white/10 transition-all hover:scale-105 active:scale-95"
+                    aria-label="Disconnect"
+                  >
+                    <i className="fas fa-chevron-down text-white text-sm" />
+                  </button>
+                </div>
               ) : (
                 <ConnectButton.Custom>
                   {({ openConnectModal }) => (
@@ -232,6 +264,22 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                         )}
                       </button>
                     ))}
+                    {/* Tournament Lobby */}
+                    {onTournamentLobby && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onTournamentLobby();
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-t border-gray-700/50 mt-2 pt-2"
+                        aria-label="Open Tournament Lobby"
+                      >
+                        <i className="fas fa-trophy w-4 text-center" aria-hidden />
+                        <span className="text-sm font-medium">Tournament Lobby</span>
+                        <i className="fas fa-chevron-right ml-auto text-white/50 text-xs" aria-hidden />
+                      </button>
+                    )}
                     {/* Table theme – opens modal */}
                     {onThemeChange && (
                       <button
@@ -338,6 +386,19 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                           <i className="fas fa-coins w-4 text-center"></i>
                           <span className="text-sm">Balance: {Math.floor(Number(reserveBalance) / 1e18)} MORBIUS</span>
                         </div>
+                      )}
+                      {onOpenProfileSettings && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onOpenProfileSettings();
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        >
+                          <i className="fas fa-pen w-4 text-center" aria-hidden />
+                          <span className="text-sm font-medium">Edit profile</span>
+                        </button>
                       )}
                       <button
                         onClick={() => {

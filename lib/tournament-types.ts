@@ -171,6 +171,8 @@ export interface CreateTournamentRequest {
   prizeTokenAddress?: string | null;
   prizeAmount?: string; // token smallest unit
   prizeTokenDecimals?: number | null;
+  /** Optional PIN for private tournaments; if not set, server generates one */
+  pinCode?: string | null;
 }
 
 // Create tournament response

@@ -19,6 +19,7 @@ import { ContractAddress } from '@/components/ui/contract-address';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
 import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
+import ProfileSettingsModal from '@/components/BLACKJACK/ProfileSettingsModal';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { useTournament, TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
 import {
@@ -597,6 +598,11 @@ export default function BlackjackPage() {
   // Deposit/Withdraw modal state
   const [showDepositModal, setShowDepositModal] = useState(false);
 
+  // Profile (display name + avatar) for nav
+  const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+
   // View state
   const [currentView, setCurrentView] = useState<'game' | 'history' | 'stats' | 'analytics' | 'verify'>('game');
   // When user clicks "Verify Game" in History, open Verify tab with this game ID pre-filled
@@ -893,6 +899,24 @@ export default function BlackjackPage() {
       fetchBalance();
     }
   }, [wsConnected, wsClient, fetchBalance]);
+
+  // Clear profile when wallet changes; fetch when WebSocket connects
+  useEffect(() => {
+    if (!address) {
+      setProfileDisplayName(null);
+      setProfileImageUrl(null);
+      return;
+    }
+    if (!wsConnected || !wsClient) return;
+    let cancelled = false;
+    wsClient.getProfile().then((p) => {
+      if (!cancelled) {
+        setProfileDisplayName(p.displayName);
+        setProfileImageUrl(p.profileImageUrl);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [address, wsConnected, wsClient]);
 
   // Load game history from database when wallet connects
   useEffect(() => {
@@ -2250,6 +2274,23 @@ export default function BlackjackPage() {
         onSoundChange={setSoundEnabled}
         themeModalOpen={themeModalOpen}
         onThemeModalOpenChange={setThemeModalOpen}
+        onTournamentLobby={() => setShowTournamentBrowser(true)}
+        profileDisplayName={profileDisplayName}
+        profileImageUrl={profileImageUrl}
+        onOpenProfileSettings={() => setProfileModalOpen(true)}
+      />
+
+      <ProfileSettingsModal
+        open={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        displayName={profileDisplayName ?? ''}
+        profileImageUrl={profileImageUrl}
+        onSave={async (displayName, profileImageUrl) => {
+          if (!wsClient) return;
+          const res = await wsClient.setDisplayName(displayName, profileImageUrl);
+          setProfileDisplayName(res.displayName);
+          setProfileImageUrl(res.profileImageUrl);
+        }}
       />
 
       {/* Splash Screen Overlay - Dismissible */}
@@ -2636,6 +2677,7 @@ export default function BlackjackPage() {
           tournaments={tournament.tournamentList}
           isLoading={tournament.isLoading}
           playerBalance={offChainBalance}
+          playerAddress={address ?? null}
           wsClient={wsClient}
           onFreerollJoined={async (tournamentId) => {
             setShowTournamentBrowser(false);
@@ -2654,8 +2696,8 @@ export default function BlackjackPage() {
             const result = await tournament.createTournament(params);
             if (result) {
               toast.success('Tournament created!');
-              // Refresh tournament list
-              tournament.fetchTournamentList();
+              // Refresh tournament list so new tournament appears in lobby
+              await tournament.fetchTournamentList();
               return result;
             }
             return null;

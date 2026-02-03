@@ -94,6 +94,8 @@ export interface CreateTournamentParams {
   prizeTokenAddress?: string | null;
   prizeAmount?: string; // wei/smallest unit
   prizeTokenDecimals?: number | null;
+  /** Optional PIN for private tournaments; if provided and valid, used instead of generating */
+  pinCode?: string | null;
 }
 
 // Freeroll list item (from list_freeroll_tournaments)
@@ -1047,8 +1049,16 @@ export class TournamentService {
       throw new Error(validation.error);
     }
 
-    // Generate PIN for private tournaments
-    const pinCode = params.isPrivate ? this.generatePinCode() : null;
+    // PIN for private tournaments: use creator-provided if valid, else generate
+    let pinCode: string | null = null;
+    if (params.isPrivate) {
+      const customPin = params.pinCode?.trim();
+      if (customPin && customPin.length >= 4 && customPin.length <= 12 && /^\d+$/.test(customPin)) {
+        pinCode = customPin;
+      } else {
+        pinCode = this.generatePinCode();
+      }
+    }
 
     // Calculate ends_at if time limit is set
     let endsAt: Date | null = null;

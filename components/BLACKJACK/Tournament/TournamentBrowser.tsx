@@ -20,7 +20,7 @@ interface LeaderboardEntry {
   current_rank: number;
 }
 
-type LobbyTab = 'join' | 'freeroll';
+type LobbyTab = 'join' | 'my' | 'freeroll';
 
 interface TournamentBrowserProps {
   isOpen: boolean;
@@ -32,6 +32,8 @@ interface TournamentBrowserProps {
   tournaments: TournamentListItem[];
   isLoading: boolean;
   playerBalance: bigint;
+  /** For "My Tournaments" tab: filter by creator address */
+  playerAddress?: string | null;
   /** Required to show Freeroll tab; when user joins a freeroll this is called */
   wsClient?: BlackjackWebSocketClient | null;
   onFreerollJoined?: (tournamentId: string) => void;
@@ -284,15 +286,16 @@ export function TournamentBrowser({
   tournaments,
   isLoading,
   playerBalance,
+  playerAddress,
   wsClient,
   onFreerollJoined,
 }: TournamentBrowserProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<LobbyTab>('join');
 
-  // Auto-refresh on open (Join tab only)
+  // Auto-refresh on open for Browse and My Tournaments
   useEffect(() => {
-    if (isOpen && activeTab === 'join') {
+    if (isOpen && (activeTab === 'join' || activeTab === 'my')) {
       handleRefresh();
     }
   }, [isOpen, activeTab]);
@@ -305,6 +308,17 @@ export function TournamentBrowser({
       setRefreshing(false);
     }
   };
+
+  const normalizedAddress = playerAddress?.toLowerCase() ?? '';
+  const myTournaments = normalizedAddress
+    ? tournaments.filter((t) => (t.creatorAddress ?? '').toLowerCase() === normalizedAddress)
+    : [];
+  const displayList = activeTab === 'my' ? myTournaments : tournaments;
+  const showEmptyMessage = activeTab === 'my' ? myTournaments.length === 0 : tournaments.length === 0;
+  const emptyCopy =
+    activeTab === 'my'
+      ? "You haven't created any tournaments yet."
+      : 'No active tournaments. Be the first to create one!';
 
   if (!isOpen) return null;
 
@@ -346,9 +360,41 @@ export function TournamentBrowser({
           </div>
         </div>
 
-        {/* Tournament Grid */}
+        {/* Tabs: Browse | My Tournaments | Freeroll */}
+        <div className="flex gap-1 px-4 pt-2 pb-0 border-b border-gray-700 bg-gray-900/30">
+          <button
+            onClick={() => setActiveTab('join')}
+            className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors ${
+              activeTab === 'join' ? 'bg-gray-800 text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Browse
+          </button>
+          <button
+            onClick={() => setActiveTab('my')}
+            className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors ${
+              activeTab === 'my' ? 'bg-gray-800 text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            My Tournaments
+          </button>
+          {wsClient && (
+            <button
+              onClick={() => setActiveTab('freeroll')}
+              className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors ${
+                activeTab === 'freeroll' ? 'bg-gray-800 text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Freeroll
+            </button>
+          )}
+        </div>
+
+        {/* Content: Freeroll tab uses FreerollList, others use tournament grid */}
         <div className="flex-1 overflow-y-auto p-4">
-          {isLoading && tournaments.length === 0 ? (
+          {activeTab === 'freeroll' && wsClient ? (
+            <FreerollList wsClient={wsClient} onJoined={onFreerollJoined} />
+          ) : isLoading && displayList.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
                 <svg className="animate-spin h-8 w-8 text-cyan-400 mx-auto mb-4" viewBox="0 0 24 24">
@@ -358,17 +404,24 @@ export function TournamentBrowser({
                 <p className="text-gray-400">Loading tournaments...</p>
               </div>
             </div>
-          ) : tournaments.length === 0 ? (
+          ) : showEmptyMessage ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
                 <div className="text-6xl mb-4">🏆</div>
-                <p className="text-gray-400 mb-2">No active tournaments</p>
-                <p className="text-gray-500 text-sm">Be the first to create one!</p>
+                <p className="text-gray-400 mb-2">{emptyCopy}</p>
+                {activeTab === 'my' && (
+                  <button
+                    onClick={onCreateNew}
+                    className="mt-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium"
+                  >
+                    Create Tournament
+                  </button>
+                )}
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {tournaments.map((tournament) => (
+              {displayList.map((tournament) => (
                 <TournamentCard
                   key={tournament.id}
                   tournament={tournament}

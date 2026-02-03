@@ -162,8 +162,14 @@ export default function BlackjackSidebar({
         {activeTab === 'wins' && (
           <GlobalWinsFeed wsClient={wsClient} wsConnected={wsConnected ?? false} className="min-h-0" />
         )}
-        {activeTab === 'chart' && chartRef != null && (
-          <div className="h-[320px] min-h-[280px] w-full" style={{ minWidth: 0 }}>
+        {/* Chart is always mounted when chartRef is set so addGameResult() works from page (ref stays attached).
+            Hidden when tab is not active so data accumulates across tab switches. */}
+        {chartRef != null && (
+          <div
+            className={activeTab === 'chart' ? 'h-[320px] min-h-[280px] w-full' : 'hidden'}
+            style={{ minWidth: 0 }}
+            aria-hidden={activeTab !== 'chart'}
+          >
             <BlackjackRealTimeBetChart
               ref={chartRef}
               sessionStartTime={chartSessionStartTime ?? Date.now()}

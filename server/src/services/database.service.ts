@@ -907,7 +907,7 @@ export class DatabaseService {
     })).reverse(); // chronological order for display
   }
 
-  // Chat display names (editable per wallet)
+  // Chat display names and profile (editable per wallet)
   async getDisplayName(walletAddress: string): Promise<string | null> {
     const normalized = this.normalizeAddress(walletAddress);
     const query = `SELECT display_name FROM chat_display_names WHERE wallet_address = $1`;
@@ -915,15 +915,34 @@ export class DatabaseService {
     return result.rows[0]?.display_name ?? null;
   }
 
-  async setDisplayName(walletAddress: string, displayName: string): Promise<void> {
+  async getProfile(walletAddress: string): Promise<{ displayName: string; profileImageUrl: string | null } | null> {
     const normalized = this.normalizeAddress(walletAddress);
-    const query = `
-      INSERT INTO chat_display_names (wallet_address, display_name)
-      VALUES ($1, $2)
-      ON CONFLICT (wallet_address)
-      DO UPDATE SET display_name = $2, updated_at = NOW()
-    `;
-    await this.pool.query(query, [normalized, displayName]);
+    const query = `SELECT display_name, profile_image_url FROM chat_display_names WHERE wallet_address = $1`;
+    const result = await this.pool.query(query, [normalized]);
+    const row = result.rows[0];
+    if (!row) return null;
+    return { displayName: row.display_name, profileImageUrl: row.profile_image_url ?? null };
+  }
+
+  async setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null): Promise<void> {
+    const normalized = this.normalizeAddress(walletAddress);
+    if (profileImageUrl === undefined) {
+      const query = `
+        INSERT INTO chat_display_names (wallet_address, display_name)
+        VALUES ($1, $2)
+        ON CONFLICT (wallet_address)
+        DO UPDATE SET display_name = $2, updated_at = NOW()
+      `;
+      await this.pool.query(query, [normalized, displayName]);
+    } else {
+      const query = `
+        INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (wallet_address)
+        DO UPDATE SET display_name = $2, updated_at = NOW(), profile_image_url = $3
+      `;
+      await this.pool.query(query, [normalized, displayName, profileImageUrl]);
+    }
   }
 
   async getDisplayNames(walletAddresses: string[]): Promise<Map<string, string>> {

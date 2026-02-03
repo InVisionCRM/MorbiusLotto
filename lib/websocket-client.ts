@@ -416,11 +416,20 @@ export class BlackjackWebSocketClient {
   }
 
   /**
-   * Set your display name for chat (3–32 chars, letters/numbers/spaces/hyphens/underscores).
+   * Set your display name and optional profile image for chat/nav (3–32 chars for name).
    * Requires connected wallet. Use on('display_name_set', handler) for the response.
    */
-  async setDisplayName(displayName: string): Promise<{ displayName: string }> {
-    return this.sendRequest('set_display_name', { displayName });
+  async setDisplayName(displayName: string, profileImageUrl?: string | null): Promise<{ displayName: string; profileImageUrl: string | null }> {
+    const payload: { displayName: string; profileImageUrl?: string | null } = { displayName };
+    if (profileImageUrl !== undefined) payload.profileImageUrl = profileImageUrl;
+    return this.sendRequest('set_display_name', payload);
+  }
+
+  /**
+   * Get current profile (display name and profile image URL) for the connected wallet.
+   */
+  async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null }> {
+    return this.sendRequest('get_profile', {});
   }
 
   /**

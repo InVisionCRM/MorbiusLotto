@@ -246,6 +246,10 @@ export class WebSocketService {
           await this.handleSetDisplayName(ws, message);
           break;
 
+        case 'get_profile':
+          await this.handleGetProfile(ws, message);
+          break;
+
         case 'get_chat_history':
           await this.handleGetChatHistory(ws, message);
           break;
@@ -711,7 +715,7 @@ export class WebSocketService {
         return this.sendError(ws, 'Wallet required to set display name', message.requestId);
       }
 
-      const payload = message.payload as { displayName?: string };
+      const payload = message.payload as { displayName?: string; profileImageUrl?: string | null };
       const raw = payload?.displayName;
       if (raw === undefined || raw === null || typeof raw !== 'string') {
         return this.sendError(ws, 'displayName required', message.requestId);
@@ -732,16 +736,42 @@ export class WebSocketService {
       }
 
       const displayName = sanitized.slice(0, CHAT_DISPLAY_NAME_MAX_LEN);
-      await this.dbService.setDisplayName(ws.playerAddress, displayName);
+      const profileImageUrl = payload.profileImageUrl !== undefined
+        ? (typeof payload.profileImageUrl === 'string' ? payload.profileImageUrl : null)
+        : undefined;
+      await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl);
+      const profile = await this.dbService.getProfile(ws.playerAddress);
 
       this.sendMessage(ws, {
         type: 'display_name_set',
-        payload: { displayName },
+        payload: {
+          displayName,
+          profileImageUrl: profile?.profileImageUrl ?? null
+        },
         requestId: message.requestId
       });
     } catch (error) {
       logger.error('Error setting display name:', error);
       this.sendError(ws, 'Failed to set display name', message.requestId);
+    }
+  }
+
+  private async handleGetProfile(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required to get profile', message.requestId);
+      }
+      const profile = await this.dbService.getProfile(ws.playerAddress);
+      this.sendMessage(ws, {
+        type: 'profile',
+        payload: profile
+          ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl }
+          : { displayName: null, profileImageUrl: null },
+        requestId: message.requestId
+      });
+    } catch (error) {
+      logger.error('Error getting profile:', error);
+      this.sendError(ws, 'Failed to get profile', message.requestId);
     }
   }
 
@@ -1512,6 +1542,7 @@ export class WebSocketService {
         prizeTokenAddress?: string | null;
         prizeAmount?: string;
         prizeTokenDecimals?: number | null;
+        pinCode?: string | null;
       };
 
       // Convert buyInAmount string to bigint
@@ -1539,6 +1570,7 @@ export class WebSocketService {
         prizeTokenAddress: payload.prizeTokenAddress,
         prizeAmount: payload.prizeAmount,
         prizeTokenDecimals: payload.prizeTokenDecimals,
+        pinCode: payload.pinCode,
       });
 
       // Determine prize percentages for response
@@ -1629,7 +1661,8 @@ export class WebSocketService {
         return this.sendError(ws, 'Tournament mode not available', message.requestId);
       }
 
-      const tournaments = await this.tournamentService.listTournaments(false);
+      // Include private tournaments so creators see their own and others can discover (with PIN)
+      const tournaments = await this.tournamentService.listTournaments(true);
 
       // Convert to response format
       const tournamentList = tournaments.map(t => ({
