@@ -41,6 +41,7 @@ import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/we
 import { formatEther, parseEther } from 'viem';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
 import { useTokenApproval } from '@/hooks/use-token-approval';
+import { useAudio } from '@/hooks/use-audio';
 
 // Intro screen component
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -218,6 +219,7 @@ export default function BlackjackPage() {
   const [theme, setTheme] = useState<BlackjackThemeKind>('video');
   const [imageSource, setImageSource] = useState<BlackjackImageId>(DEFAULT_BLACKJACK_IMAGE_ID);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const { playSound } = useAudio(soundEnabled);
   const [videoSource, setVideoSource] = useState<BlackjackVideoId>('glowingTable');
   const [videoSyncToClock, setVideoSyncToClock] = useState(true);
   const [videoPosition, setVideoPosition] = useState(50); // 0-100, used when sync to clock is off
@@ -1374,7 +1376,7 @@ export default function BlackjackPage() {
       for (let i = prevPlayerCardCount.current; i < currentPlayerCardCount; i++) {
         newIndices.add(i);
       }
-      if (soundEnabled) new Audio('/BlackJack/sounds/cards.wav').play().catch(() => {});
+      if (soundEnabled) playSound('/BlackJack/sounds/cards.wav');
       setNewCardIndices(prev => ({ ...prev, player: newIndices }));
       // Clear animation flags after animation completes
       setTimeout(() => {
@@ -1391,7 +1393,7 @@ export default function BlackjackPage() {
       for (let i = prevDealerCardCount.current; i < currentDealerCardCount; i++) {
         newIndices.add(i);
       }
-      if (soundEnabled) new Audio('/BlackJack/sounds/cards.wav').play().catch(() => {});
+      if (soundEnabled) playSound('/BlackJack/sounds/cards.wav');
       setNewCardIndices(prev => ({ ...prev, dealer: newIndices }));
       // Clear animation flags after animation completes
       setTimeout(() => {
@@ -1408,7 +1410,7 @@ export default function BlackjackPage() {
     
     // Return the processed localGame so it can be used immediately
     return localGame;
-  }, [address, gameState.clientSeed, soundEnabled]);
+  }, [address, gameState.clientSeed, soundEnabled, playSound]);
 
   // Handle game completion
   const handleGameCompletion = useCallback((data: any) => {
@@ -1818,13 +1820,11 @@ export default function BlackjackPage() {
       setPendingChipResult(null);
       // Play sound: dealer wins (including dealer blackjack)
       if (soundEnabled && pendingChipResult === 'loss') {
-        const audio = new Audio('/BlackJack/sounds/DealerWins.mp3');
-        audio.play().catch(() => {});
+        playSound('/BlackJack/sounds/DealerWins.mp3');
       }
       // Play sound: player wins (including player blackjack — same as any other win)
       if (soundEnabled && (pendingChipResult === 'win' || pendingChipResult === 'blackjack')) {
-        const audio = new Audio('/BlackJack/sounds/PlayerWins.mp3');
-        audio.play().catch(() => {});
+        playSound('/BlackJack/sounds/PlayerWins.mp3');
       }
     }
 
@@ -1835,7 +1835,7 @@ export default function BlackjackPage() {
       setShowWinNotification(true);
       setPendingWinData(null);
     }
-  }, [pendingWinData, pendingChipResult, soundEnabled]);
+  }, [pendingWinData, pendingChipResult, soundEnabled, playSound]);
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {
@@ -2031,6 +2031,11 @@ export default function BlackjackPage() {
 
   // Note: Approval handling no longer needed since bets come from reserve
 
+  const openVerifyView = useCallback((gameId: string) => {
+    setInitialVerifyGameId(gameId);
+    setCurrentView('verify');
+  }, []);
+
   // Fetch game result for verification (Verify tab)
   const handleVerifyGame = useCallback(async (id: string): Promise<GameVerificationData | null> => {
     try {
@@ -2081,6 +2086,11 @@ export default function BlackjackPage() {
       // Show the actual error message from the server (e.g., "Insufficient balance...")
       const errorMessage = error instanceof Error ? error.message : 'Failed to perform action';
       toast.error(errorMessage);
+
+      // Revert optimistic chip stack when double down/split failed (e.g. insufficient funds)
+      if ((action === Action.DOUBLE_DOWN || action === Action.SPLIT) && /insufficient/i.test(errorMessage)) {
+        setChipStack(prev => (prev.length <= 1 ? prev : prev.slice(0, Math.floor(prev.length / 2))));
+      }
 
       // Refresh balance in case it's a balance-related error
       fetchBalance();
@@ -2335,6 +2345,7 @@ export default function BlackjackPage() {
               onOpenDepositModal={handleOpenDepositModal}
               onOpenTableThemeSelector={() => setThemeModalOpen(true)}
               soundEnabled={soundEnabled}
+              onPlaySfx={playSound}
               hideBettingPanel={true}
             />
 
@@ -2403,6 +2414,7 @@ export default function BlackjackPage() {
                 chipStackLength={chipStack.length}
                 lastBetAmount={lastBetAmount}
                 soundEnabled={soundEnabled}
+                onPlaySfx={playSound}
               />
             </div>
           )}
@@ -2421,6 +2433,8 @@ export default function BlackjackPage() {
             clientSeed={clientSeed}
             onClientSeedChange={setClientSeed}
             onGenerateClientSeed={generateClientSeed}
+            onVerifyGameRequest={openVerifyView}
+            verifyGameHandler={handleVerifyGame}
             inTournament={tournament.tournamentState.inTournament}
             betTabContent={
               !tournament.tournamentState.inTournament ? (
@@ -2451,6 +2465,7 @@ export default function BlackjackPage() {
                     chipStackLength={chipStack.length}
                     lastBetAmount={lastBetAmount}
                     soundEnabled={soundEnabled}
+                    onPlaySfx={playSound}
                     alwaysVisible
                   />
                 </>
@@ -2594,6 +2609,14 @@ export default function BlackjackPage() {
           tournaments={tournament.tournamentList}
           isLoading={tournament.isLoading}
           playerBalance={offChainBalance}
+          wsClient={wsClient}
+          onFreerollJoined={async (tournamentId) => {
+            setShowTournamentBrowser(false);
+            await tournament.fetchTournamentState();
+            await tournament.fetchTournamentInfo();
+            setIsTournamentMode(true);
+            toast.success('Joined freeroll!');
+          }}
         />
 
         {/* Tournament Creator Modal */}
@@ -2641,10 +2664,7 @@ export default function BlackjackPage() {
           <div className="max-w-7xl mx-auto">
             <GameHistory
               history={gameHistoryEntries}
-              onVerifyGame={(gameId) => {
-                setInitialVerifyGameId(gameId);
-                setCurrentView('verify');
-              }}
+              onVerifyGame={openVerifyView}
             />
           </div>
         )}

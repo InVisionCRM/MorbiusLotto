@@ -89,8 +89,8 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
 
   return (
     <div className="w-full">
-      {/* 3-col grid: chips + Clear */}
-      <div className="grid grid-cols-3 gap-2 place-items-center">
+      {/* 6-col grid: chips + Clear */}
+      <div className="grid grid-cols-6 gap-2 place-items-center">
         {quickBetAmounts.map(amount => {
           const chipImage = getChipImage(amount);
           const affordable = isChipAffordable(amount);
@@ -106,7 +106,7 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
                 onBetAmountChange?.(newAmount, amount);
               }}
               disabled={isPlaying || !affordable}
-              className={`relative w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center font-bold text-xs transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md overflow-hidden ${
+              className={`relative w-16 h-16 md:w-12 md:h-12 rounded-full flex items-center justify-center font-bold text-xs transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md overflow-hidden ${
                 !affordable ? 'opacity-50' : ''
               }`}
               style={{
@@ -138,10 +138,10 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
             onBetAmountChange?.('', undefined, true);
           }}
           disabled={isPlaying}
-          className="col-span-1 w-full min-h-[2.5rem] px-2 py-1.5 rounded-lg font-bold text-xs md:text-sm uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/80 border border-cyan-500/30"
+          className="w-full min-h-[2.5rem] px-2 py-1.5 rounded-lg font-bold text-xs md:text-sm uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/80"
           style={{
-            background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
-            boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
+            background: 'linear-gradient(145deg, rgba(35, 45, 55, 0), rgba(25, 35, 45, 0.01))',
+            boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0), inset -2px -2px 4px rgba(255, 255, 255, 0)',
           }}
         >
           Clear

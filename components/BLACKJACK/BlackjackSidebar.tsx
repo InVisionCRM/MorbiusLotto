@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { History, Trophy, BookOpen, Award, TrendingUp, Zap, ShieldCheck, Gamepad2, DollarSign } from 'lucide-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
 import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers'
@@ -8,6 +8,7 @@ import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
 import GlobalWinsFeed from '@/components/BLACKJACK/GlobalWinsFeed'
 import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart'
 import { GameResult } from '@/app/BLACKJACK/types'
+import { GameVerificationTools, type GameVerificationData } from '@/components/BLACKJACK/GameVerificationTools'
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false)
@@ -57,6 +58,8 @@ interface BlackjackSidebarProps {
   clientSeed?: string
   onClientSeedChange?: (value: string) => void
   onGenerateClientSeed?: () => void
+  onVerifyGameRequest?: (gameId: string) => void
+  verifyGameHandler?: (gameId: string) => Promise<GameVerificationData | null>
   /** When true, a "Tournament" tab is shown with HUD + betting controls; only visible during a tournament */
   inTournament?: boolean
   /** Content for the tournament tab (TournamentHUD + TournamentBetPanel) */
@@ -77,12 +80,17 @@ export default function BlackjackSidebar({
   clientSeed = '',
   onClientSeedChange,
   onGenerateClientSeed,
+  onVerifyGameRequest,
+  verifyGameHandler,
   inTournament = false,
   tournamentTabContent,
   betTabContent,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
-  const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>('bet')
+  const betTabAvailable = isDesktop && !inTournament
+  const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'recent')
+  const [sidebarVerifyGameId, setSidebarVerifyGameId] = useState<string | null>(null)
+  const prevBetAvailableRef = useRef(false)
 
   const tabs = inTournament
     ? [...BASE_TABS, TOURNAMENT_PLAY_TAB]
@@ -94,11 +102,20 @@ export default function BlackjackSidebar({
     if (inTournament) {
       setActiveTab('tournament-play')
     } else if (activeTab === 'tournament-play') {
-      setActiveTab(isDesktop ? 'bet' : 'recent')
-    } else if (!isDesktop && activeTab === 'bet') {
+      setActiveTab(betTabAvailable ? 'bet' : 'recent')
+    } else if (!betTabAvailable && activeTab === 'bet') {
       setActiveTab('recent')
+    } else if (betTabAvailable && !prevBetAvailableRef.current) {
+      setActiveTab('bet')
     }
-  }, [inTournament, isDesktop])
+    prevBetAvailableRef.current = betTabAvailable
+  }, [inTournament, isDesktop, betTabAvailable, activeTab])
+
+  const handleQuickHistoryVerify = (gameId: string) => {
+    setSidebarVerifyGameId(gameId)
+    setActiveTab('verify')
+    onVerifyGameRequest?.(gameId)
+  }
 
   return (
     <div className="w-full min-w-0 flex flex-col h-full">
@@ -134,7 +151,11 @@ export default function BlackjackSidebar({
           </div>
         )}
         {activeTab === 'recent' && (
-          <QuickHistory history={history} reserveBalance={reserveBalance} />
+          <QuickHistory
+            history={history}
+            reserveBalance={reserveBalance}
+            onVerifyGame={handleQuickHistoryVerify}
+          />
         )}
         {activeTab === 'top' && <BlackjackTopPlayers />}
         {activeTab === 'wins' && (
@@ -220,6 +241,15 @@ export default function BlackjackSidebar({
                 ↻
               </button>
             </div>
+            {verifyGameHandler && (
+              <div className="pt-2">
+                <GameVerificationTools
+                  onVerify={verifyGameHandler}
+                  initialGameId={sidebarVerifyGameId ?? undefined}
+                  onInitialGameIdConsumed={() => setSidebarVerifyGameId(null)}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

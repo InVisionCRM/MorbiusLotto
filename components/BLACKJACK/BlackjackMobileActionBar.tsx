@@ -18,6 +18,8 @@ export interface BlackjackMobileActionBarProps {
   chipStackLength: number;
   lastBetAmount: string;
   soundEnabled?: boolean;
+  /** Play a sound effect via Web Audio API (avoids interrupting background music). When provided, SFX use this instead of new Audio().play() */
+  onPlaySfx?: (path: string) => void;
   /** When true, show on all screen sizes (e.g. when embedded in sidebar Bet tab). Default false = hidden on md+ */
   alwaysVisible?: boolean;
 }
@@ -37,10 +39,14 @@ export function BlackjackMobileActionBar({
   chipStackLength,
   lastBetAmount,
   soundEnabled = true,
+  onPlaySfx,
   alwaysVisible = false,
 }: BlackjackMobileActionBarProps) {
   const playKnock = () => {
-    if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
+    if (soundEnabled) {
+      if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav');
+      else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
+    }
   };
 
   const lastBet = parseFloat(lastBetAmount || '0');

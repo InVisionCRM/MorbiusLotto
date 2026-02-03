@@ -7,6 +7,8 @@ import {
   formatTimeRemaining,
   getDefaultTourCard,
 } from '@/lib/tournament-types';
+import { FreerollList } from './FreerollList';
+import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 
 interface LeaderboardEntry {
   entry_id: string;
@@ -18,6 +20,8 @@ interface LeaderboardEntry {
   current_rank: number;
 }
 
+type LobbyTab = 'join' | 'freeroll';
+
 interface TournamentBrowserProps {
   isOpen: boolean;
   onClose: () => void;
@@ -28,6 +32,9 @@ interface TournamentBrowserProps {
   tournaments: TournamentListItem[];
   isLoading: boolean;
   playerBalance: bigint;
+  /** Required to show Freeroll tab; when user joins a freeroll this is called */
+  wsClient?: BlackjackWebSocketClient | null;
+  onFreerollJoined?: (tournamentId: string) => void;
 }
 
 // Individual tournament card component
@@ -277,15 +284,18 @@ export function TournamentBrowser({
   tournaments,
   isLoading,
   playerBalance,
+  wsClient,
+  onFreerollJoined,
 }: TournamentBrowserProps) {
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<LobbyTab>('join');
 
-  // Auto-refresh on open
+  // Auto-refresh on open (Join tab only)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && activeTab === 'join') {
       handleRefresh();
     }
-  }, [isOpen]);
+  }, [isOpen, activeTab]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -372,6 +382,7 @@ export function TournamentBrowser({
         </div>
 
         {/* Footer */}
+
         <div className="p-4 border-t border-gray-700 bg-gray-900/50">
           <div className="flex items-center justify-between">
             <div className="text-sm">

@@ -60,9 +60,10 @@ const cellCls = 'text-white p-2'
 interface QuickHistoryProps {
   history: GameResult[]
   reserveBalance?: bigint
+  onVerifyGame?: (gameId: string) => void
 }
 
-export default function QuickHistory({ history, reserveBalance }: QuickHistoryProps) {
+export default function QuickHistory({ history, reserveBalance, onVerifyGame }: QuickHistoryProps) {
   const [page, setPage] = useState(0)
 
   const recentHistory = useMemo(() => history.slice(0, MAX_HISTORY_ITEMS), [history])
@@ -148,7 +149,18 @@ export default function QuickHistory({ history, reserveBalance }: QuickHistoryPr
                   </TableCell>
                 )}
                 <TableCell className={`${cellCls} font-mono text-xs text-white/80`} title={result.gameId}>
-                  {shortenGameId(result.gameId)}
+                  {result.gameId && onVerifyGame ? (
+                    <button
+                      type="button"
+                      onClick={() => onVerifyGame(result.gameId!)}
+                      className="text-cyan-300/90 hover:text-cyan-200 transition-colors underline underline-offset-2"
+                      aria-label={`Verify game ${result.gameId}`}
+                    >
+                      {shortenGameId(result.gameId)}
+                    </button>
+                  ) : (
+                    shortenGameId(result.gameId)
+                  )}
                 </TableCell>
               </TableRow>
             )

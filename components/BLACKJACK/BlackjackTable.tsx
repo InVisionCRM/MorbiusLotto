@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
-import { Hand, GameState, Action, GameResult } from '@/app/BLACKJACK/types';
+import { Hand, GameState, Action, GameResult, Card } from '@/app/BLACKJACK/types';
 import { formatEther } from 'viem';
 import PlayingCard from './PlayingCard';
 import { SystemTime } from '@/components/ui/system-time';
@@ -19,6 +19,18 @@ const BLACKJACK_MUSIC_PLAYLIST = [
   '/BlackJack/music/Top-Tier.mp3',
   '/BlackJack/music/Chances.mp3',
 ] as const;
+
+// Demo cards for "Preview card layout" — 2 dealer (K♠, hole), 2 player (A♥, 10♦)
+const DEMO_DEALER_CARDS: Card[] = [
+  { value: 13, suit: 'spades' },
+  { value: 10, suit: 'hearts' },
+];
+const DEMO_PLAYER_CARDS: Card[] = [
+  { value: 1, suit: 'hearts' },
+  { value: 10, suit: 'diamonds' },
+];
+// Demo chip stack for preview (e.g. 1000 + 1000 + 500 = 2500)
+const DEMO_CHIP_STACK: number[] = [1000, 1000, 500];
 
 interface BlackjackTableProps {
   playerHand: Hand;
@@ -64,6 +76,8 @@ interface BlackjackTableProps {
   onOpenDepositModal?: () => void;
   onOpenTableThemeSelector?: () => void;
   soundEnabled?: boolean;
+  /** Play a sound effect via Web Audio API (avoids interrupting background music). When provided, SFX use this instead of new Audio().play() */
+  onPlaySfx?: (path: string) => void;
   /** When true (e.g. tournament mode), the betting panel is hidden; controls move to sidebar tab */
   hideBettingPanel?: boolean;
 }
@@ -110,6 +124,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onOpenDepositModal,
   onOpenTableThemeSelector,
   soundEnabled = true,
+  onPlaySfx,
   hideBettingPanel = false,
 }) => {
   const videoSrc = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
@@ -174,6 +189,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
   // Chip animation state
   const [chipAnimationState, setChipAnimationState] = useState<'none' | 'win' | 'loss'>('none');
+  // Preview card layout: show 2 dealer + 2 player cards to check position/size
+  const [showCardLayoutPreview, setShowCardLayoutPreview] = useState(false);
   const prevGameResult = useRef<string | null>(null);
   const tableVideoRef = useRef<HTMLVideoElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -660,15 +677,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   return (
     <div
       ref={tableContainerRef}
-      className="relative w-full max-w-full sm:max-w-6xl mx-auto blackjack-table flex flex-col flex-1"
+      className="relative w-full max-w-full sm:max-w-6xl mx-auto blackjack-table flex flex-col flex-1 min-h-[500px] sm:min-h-[600px]"
       style={{
-        minHeight: '450px',
         boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.9), inset 0 -2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3)',
         border: '1px inset rgba(60, 60, 60, 0.5)',
       }}
     >
       {/* Table surface: flex-1 with min height so table stays a good size */}
-      <div className="flex-1 min-h-[600px] sm:min-h-[500px] relative">
+      <div className="flex-1 min-h-[500px] sm:min-h-[600px] relative">
       {/* Looping video background — key forces remount when src changes */}
       {useVideoBackground ? (
         <video
@@ -787,6 +803,13 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       {/* System Time Display (top-right) */}
       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex flex-col items-end gap-0.5 sm:gap-1 pointer-events-auto">
         <SystemTime className="!static pointer-events-none" />
+        <button
+          type="button"
+          onClick={() => setShowCardLayoutPreview((p) => !p)}
+          className="mt-1 px-2 py-1 rounded text-xs font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 pointer-events-auto"
+        >
+          {showCardLayoutPreview ? 'Hide preview' : 'Preview cards'}
+        </button>
       </div>
 
       {/* Game Result Banner - Shows when game is complete until next deal */}
@@ -864,20 +887,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           {/* Dealer Area */}
           <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 flex flex-col items-center">
             <div className="flex">
-              {/* Industry standard dealer card display:
-                  - During play: Show first card face-up, second card (hole card) face-down
-                  - When complete: Show all cards face-up */}
-              {dealerHand.cards.map((card, index) => {
-                // Only render cards up to visibleDealerCards
-                // This ensures cards don't appear prematurely
-                if (index >= visibleDealerCards) return null;
-
-                // Determine if this card should be hidden (hole card during play)
-                const isHoleCard = hideHoleCard && index === 1;
-
-                return (
+              {showCardLayoutPreview ? (
+                DEMO_DEALER_CARDS.map((card, index) => (
                   <div
-                    key={`dealer-${card.id || `card-${index}`}`}
+                    key={`demo-dealer-${index}`}
                     style={{
                       marginLeft: index > 0 ? '-15px' : '0',
                       zIndex: index
@@ -886,30 +899,82 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                     <PlayingCard
                       card={card}
                       owner="dealer"
-                      hidden={isHoleCard}
+                      hidden={index === 1}
                       className=""
                       index={index}
-                      isNewCard={index >= 2 && index === visibleDealerCards - 1}
+                      isNewCard={false}
                     />
                   </div>
-                );
-              })}
+                ))
+              ) : (
+                dealerHand.cards.map((card, index) => {
+                  if (index >= visibleDealerCards) return null;
+                  const isHoleCard = hideHoleCard && index === 1;
+                  return (
+                    <div
+                      key={`dealer-${card.id || `card-${index}`}`}
+                      style={{
+                        marginLeft: index > 0 ? '-15px' : '0',
+                        zIndex: index
+                      }}
+                    >
+                      <PlayingCard
+                        card={card}
+                        owner="dealer"
+                        hidden={isHoleCard}
+                        className=""
+                        index={index}
+                        isNewCard={index >= 2 && index === visibleDealerCards - 1}
+                      />
+                    </div>
+                  );
+                })
+              )}
             </div>
-            {visibleDealerCards > 0 && (
+            {(showCardLayoutPreview || (visibleDealerCards > 0 && !showCardLayoutPreview)) && (
               <div className="flex items-center gap-1 sm:gap-2 mt-1 sm:mt-2">
-                <span className="text-white font-black text-2xl sm:text-4xl">
-                  {isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal())}
+                <span className="text-white font-black text-2xl sm:text-3xl">
+                  {showCardLayoutPreview ? 20 : (isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal()))}
                 </span>
                 {/* Only show BUST/BJ text when game is COMPLETE, reveal is done, AND all cards are visible */}
-                {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-ld">BUST</span>}
-                {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-ld">BJ</span>}
+                {!showCardLayoutPreview && gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-ld">BUST</span>}
+                {!showCardLayoutPreview && gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-ld">BJ</span>}
               </div>
             )}
           </div>
 
           {/* Player Area */}
-          <div className="absolute bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 flex flex-col gap-2 sm:gap-4 items-center">
-            {/* Player Hands - Side by Side for Split */}
+          <div className="absolute bottom-36 sm:bottom-55 left-1/2 -translate-x-1/2 flex flex-col gap-2 sm:gap-4 items-center">
+            {showCardLayoutPreview ? (
+              /* Preview: 2 player cards + total for testing */
+              <div className="flex items-end">
+                <div className="flex flex-col items-center">
+                  <div className="mb-1">
+                    <span className="text-white font-black text-2xl sm:text-3xl">21</span>
+                  </div>
+                  <div className="flex">
+                    {DEMO_PLAYER_CARDS.map((card, cardIndex) => (
+                      <div
+                        key={`demo-player-${cardIndex}`}
+                        style={{
+                          marginLeft: cardIndex > 0 ? '-25px' : '0',
+                          zIndex: cardIndex
+                        }}
+                      >
+                        <PlayingCard
+                          card={card}
+                          owner="player"
+                          className=""
+                          index={cardIndex}
+                          isNewCard={false}
+                          size="normal"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div className={`flex ${hasSplit ? 'gap-2 sm:gap-8' : 'gap-4'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
@@ -955,7 +1020,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
                     {/* Hand Score */}
                     <div className="flex items-center gap-1 sm:gap-2 mb-0">
-                      <span className={`font-black ${hasSplit ? 'text-lg sm:text-2xl' : 'text-4xl'} ${
+                      <span className={`font-black text-2xl sm:text-3xl ${
                         isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
                       }`}>
                         {hand.total}
@@ -975,8 +1040,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                           isNewCard = newCardIndices.player.has(cardIndex);
                         }
 
-                        // Determine card size: large for single hand, normal for split
-                        const cardSize = hasSplit ? 'normal' : 'large';
+                        // Player cards: normal size (reduced from large)
+                        const cardSize = 'normal';
                         const cardMargin = hasSplit ? '5px' : '-25px';
 
                         return (
@@ -1102,6 +1167,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 );
               })}
             </div>
+            )}
           </div>
         </div>
 
@@ -1208,12 +1274,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 const dealGroup = (
                   <div className={`flex overflow-hidden rounded-xl border-2 border-white/10 shadow-lg ${dealGroupRow ? 'flex-row' : 'flex-col'}`} style={groupStyle}>
                     {onRebetAndDeal && (
-                      <button onClick={(e) => { e.stopPropagation(); if (!isPlaying && parseFloat(lastBetAmount || '0') > 0) { if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); onRebetAndDeal(); } }} disabled={isPlaying || parseFloat(lastBetAmount || '0') <= 0} className={`flex-1 min-w-[4rem] h-16 flex items-center justify-center bg-gradient-to-br from-violet-500 to-violet-700 border-r border-violet-400/50 transition-all hover:scale-[1.02] active:scale-[0.98] ${isPlaying || parseFloat(lastBetAmount || '0') <= 0 ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: !isPlaying && parseFloat(lastBetAmount || '0') > 0 ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                      <button onClick={(e) => { e.stopPropagation(); if (!isPlaying && parseFloat(lastBetAmount || '0') > 0) { if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); } onRebetAndDeal(); } }} disabled={isPlaying || parseFloat(lastBetAmount || '0') <= 0} className={`flex-1 min-w-[4rem] h-16 flex items-center justify-center bg-gradient-to-br from-violet-500 to-violet-700 border-r border-violet-400/50 transition-all hover:scale-[1.02] active:scale-[0.98] ${isPlaying || parseFloat(lastBetAmount || '0') <= 0 ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: !isPlaying && parseFloat(lastBetAmount || '0') > 0 ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                         <span className="text-white font-black text-xs tracking-wider">REBET</span>
                       </button>
                     )}
                     {!isPlaying && (
-                      <button onClick={(e) => { e.stopPropagation(); if (canDeal && chipStack.length > 0) { if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); onStartGame?.(); } }} disabled={!canDeal || chipStack.length === 0} className={`flex-1 min-w-[4rem] h-16 flex items-center justify-center bg-gradient-to-br from-green-500 to-green-700 transition-all hover:scale-[1.02] active:scale-[0.98] ${!canDeal || chipStack.length === 0 ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canDeal && chipStack.length > 0 ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                      <button onClick={(e) => { e.stopPropagation(); if (canDeal && chipStack.length > 0) { if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); } onStartGame?.(); } }} disabled={!canDeal || chipStack.length === 0} className={`flex-1 min-w-[4rem] h-16 flex items-center justify-center bg-gradient-to-br from-green-500 to-green-700 transition-all hover:scale-[1.02] active:scale-[0.98] ${!canDeal || chipStack.length === 0 ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canDeal && chipStack.length > 0 ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                         <span className="text-white font-black text-sm tracking-wider">DEAL</span>
                       </button>
                     )}
@@ -1221,7 +1287,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 );
                 const gameGroup = (
                   <div className={gameGroupClass} style={groupStyle}>
-                    <button onClick={(e) => { e.stopPropagation(); if (canHit) { if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); onAction(Action.HIT); } }} disabled={!canHit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canHit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canHit) { if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); } onAction(Action.HIT); } }} disabled={!canHit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canHit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">HIT</span>
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); if (canStand) onAction(Action.STAND); }} disabled={!canStand} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canStand ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canStand ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
@@ -1251,7 +1317,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (parseFloat(lastBetAmount || '0') > 0) {
-                        if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
+                        if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); }
                         onRebetAndDeal();
                       }
                     }}
@@ -1270,7 +1336,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   onClick={(e) => {
                     e.stopPropagation();
                     if (canDeal && chipStack.length > 0) {
-                      if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
+                      if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); }
                       onStartGame?.();
                     }
                   }}
@@ -1291,7 +1357,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 if (canHit) {
-                  if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
+                  if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); }
                   onAction(Action.HIT);
                 }
               }}
@@ -1373,19 +1439,20 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       {/* End Play Area */}
 
-      {/* Stacked Chip Display - Between table and betting panel */}
-      {/* Only show center chips when NOT split - split hands show chips under each hand */}
-      {chipStack.length > 0 && !hasSplit && (
-        <div className="flex justify-center py-2">
+      {/* Stacked Chip Display - On the table, above the betting panel. Shown in preview with demo stack. */}
+      {((chipStack.length > 0 && !hasSplit) || showCardLayoutPreview) && (() => {
+        const stackToShow = showCardLayoutPreview ? DEMO_CHIP_STACK : chipStack;
+        return (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-20 z-40 pointer-events-none">
           <div
             className={`relative chip-stack-container ${
-              chipAnimationState === 'loss' ? 'chip-stack-lose' :
-              chipAnimationState === 'win' ? 'chip-stack-win' : ''
+              !showCardLayoutPreview && chipAnimationState === 'loss' ? 'chip-stack-lose' :
+              !showCardLayoutPreview && chipAnimationState === 'win' ? 'chip-stack-win' : ''
             }`}
-            style={{ width: '64px', height: `${Math.max(48, chipStack.length * 3 + 48)}px` }}
+            style={{ width: '64px', height: `${Math.max(48, stackToShow.length * 3 + 48)}px` }}
           >
             {/* Original bet chips - stay in place during win animation */}
-            {chipStack.map((chipValue, index) => {
+            {stackToShow.map((chipValue, index) => {
               const chipImage = getChipImage(chipValue);
               const stackOffset = index * 3; // 3px offset per chip for stacking
 
@@ -1393,7 +1460,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 <div
                   key={`original-${chipValue}-${index}`}
                   className={`absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden ${
-                    chipAnimationState === 'loss' ? 'chip-lose' : ''
+                    !showCardLayoutPreview && chipAnimationState === 'loss' ? 'chip-lose' : ''
                   }`}
                   style={{
                     background: `url('${chipImage}') center/contain no-repeat`,
@@ -1417,8 +1484,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 </div>
               );
             })}
-            {/* Winning chips - animate in from top during win animation */}
-            {chipAnimationState === 'win' && (() => {
+            {/* Winning chips - animate in from top during win animation (not in preview) */}
+            {!showCardLayoutPreview && chipAnimationState === 'win' && (() => {
               const totalBet = chipStack.reduce((sum, chip) => sum + chip, 0);
               let payoutInTokens: number;
               if (totalPayout > BigInt(0)) {
@@ -1474,7 +1541,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             {/* Total Bet Amount Display */}
             <div
               className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
-                chipAnimationState !== 'none' ? 'opacity-0' : ''
+                !showCardLayoutPreview && chipAnimationState !== 'none' ? 'opacity-0' : ''
               }`}
               style={{
                 top: `-20px`,
@@ -1487,12 +1554,13 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9)',
                 }}
               >
-                {chipStack.reduce((sum, chip) => sum + chip, 0)}
+                {stackToShow.reduce((sum, chip) => sum + chip, 0)}
               </span>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Betting Panel - Overlay at bottom of table (hidden in tournament mode; controls in sidebar tab) */}
       {!hideBettingPanel && (
@@ -1677,14 +1745,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
         }
 
-        /* Mobile optimizations - scale down cards and chips */
+        /* Mobile: cards near full size so they're readable (was 0.62/0.88, too small) */
         @media (max-width: 640px) {
-          .blackjack-table .blackjack-card {
-            transform: scale(0.7);
+          .blackjack-table .blackjack-card-player {
+            transform: scale(0.95);
+            transform-origin: center center;
+          }
+          .blackjack-table .blackjack-card-dealer {
+            transform: scale(1);
             transform-origin: center center;
           }
           .blackjack-table .chip-stack-container {
-            transform: scale(0.75);
+            transform: scale(0.9);
             transform-origin: center bottom;
           }
         }

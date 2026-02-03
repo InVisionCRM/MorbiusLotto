@@ -275,10 +275,14 @@ export class BlackjackWebSocketClient {
             logger.debug('Resolving promise', { requestId: message.requestId, type: message.type });
             promise.resolve(message.payload);
           }
-          // Also allow consumers to subscribe to the response message type (e.g. 'game_updated')
-          const handler = this.messageHandlers.get(message.type);
-          if (handler) {
-            handler(message.payload);
+          // Don't invoke generic 'error' handler for request error responses — those are
+          // application errors (e.g. insufficient balance); the promise was already rejected.
+          // The 'error' handler is for connection/transport errors only.
+          if (message.type !== 'error') {
+            const handler = this.messageHandlers.get(message.type);
+            if (handler) {
+              handler(message.payload);
+            }
           }
           return;
         } else {
