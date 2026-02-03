@@ -570,6 +570,39 @@ export function useTournament(options: UseTournamentOptions) {
   }, [wsClient, address]);
 
   /**
+   * Create a new freeroll tournament
+   */
+  const createFreeroll = useCallback(async (
+    params: CreateFreerollRequest
+  ): Promise<CreatedTournament | null> => {
+    if (!wsClient || !address) {
+      setError('Not connected');
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await wsClient.sendRequest('create_freeroll', params);
+
+      const result: CreatedTournament = {
+        tournamentId: response.tournamentId,
+        name: params.name,
+        pinCode: response.pinCode,
+      };
+
+      setCreatedTournament(result);
+      return result;
+    } catch (err: any) {
+      setError(err.message ?? 'Failed to create freeroll');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [wsClient, address]);
+
+  /**
    * Fetch list of active tournaments
    */
   const fetchTournamentList = useCallback(async (): Promise<TournamentListItem[]> => {
