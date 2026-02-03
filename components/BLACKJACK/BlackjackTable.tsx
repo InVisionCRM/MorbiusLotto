@@ -20,18 +20,6 @@ const BLACKJACK_MUSIC_PLAYLIST = [
   '/BlackJack/music/Chances.mp3',
 ] as const;
 
-// Demo cards for "Preview card layout" — 2 dealer (K♠, hole), 2 player (A♥, 10♦)
-const DEMO_DEALER_CARDS: Card[] = [
-  { value: 13, suit: 'spades' },
-  { value: 10, suit: 'hearts' },
-];
-const DEMO_PLAYER_CARDS: Card[] = [
-  { value: 1, suit: 'hearts' },
-  { value: 10, suit: 'diamonds' },
-];
-// Demo chip stack for preview (e.g. 1000 + 1000 + 500 = 2500)
-const DEMO_CHIP_STACK: number[] = [1000, 1000, 500];
-
 interface BlackjackTableProps {
   playerHand: Hand;
   playerHands?: Hand[];
@@ -80,6 +68,8 @@ interface BlackjackTableProps {
   onPlaySfx?: (path: string) => void;
   /** When true (e.g. tournament mode), the betting panel is hidden; controls move to sidebar tab */
   hideBettingPanel?: boolean;
+  /** When game is COMPLETE, pass current game id so dealer-reveal completion can reset for each new game (fixes freeze when back-to-back blackjack). */
+  completedGameId?: string;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -126,6 +116,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   soundEnabled = true,
   onPlaySfx,
   hideBettingPanel = false,
+  completedGameId,
 }) => {
   const videoSrc = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const imageSrc = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
@@ -141,6 +132,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   const revealTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevGameStateRef = useRef<GameState>(gameState);
   const prevDealerCardCountRef = useRef(dealerHand.cards.length);
+  const lastCompletedGameIdRef = useRef<string | undefined>(undefined);
 
   // Background music player (top-left of table)
   const [musicTrackIndex, setMusicTrackIndex] = useState(0);
@@ -189,8 +181,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
   // Chip animation state
   const [chipAnimationState, setChipAnimationState] = useState<'none' | 'win' | 'loss'>('none');
-  // Preview card layout: show 2 dealer + 2 player cards to check position/size
-  const [showCardLayoutPreview, setShowCardLayoutPreview] = useState(false);
   const prevGameResult = useRef<string | null>(null);
   const tableVideoRef = useRef<HTMLVideoElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -504,6 +494,17 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     const stateTransitionedAway = prevState === GameState.COMPLETE && gameState !== GameState.COMPLETE;
     if (stateTransitionedAway) {
       hasCalledRevealCompleteRef.current = false;
+      lastCompletedGameIdRef.current = undefined;
+      if (revealTimeoutRef.current) {
+        clearTimeout(revealTimeoutRef.current);
+        revealTimeoutRef.current = null;
+      }
+    }
+
+    // New completed game (e.g. back-to-back blackjack): reset so we run reveal completion for this game
+    if (gameState === GameState.COMPLETE && completedGameId && completedGameId !== lastCompletedGameIdRef.current) {
+      lastCompletedGameIdRef.current = completedGameId;
+      hasCalledRevealCompleteRef.current = false;
       if (revealTimeoutRef.current) {
         clearTimeout(revealTimeoutRef.current);
         revealTimeoutRef.current = null;
@@ -609,7 +610,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       // 1. Component unmounts (React will handle this)
       // 2. State transitions away from COMPLETE (handled above)
     };
-  }, [gameState, dealerHand.cards.length, isRevealing, visibleDealerCards]);
+  }, [gameState, dealerHand.cards.length, isRevealing, visibleDealerCards, completedGameId]);
 
   // Track visibleDealerCards changes
   useEffect(() => {
@@ -803,13 +804,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       {/* System Time Display (top-right) */}
       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex flex-col items-end gap-0.5 sm:gap-1 pointer-events-auto">
         <SystemTime className="!static pointer-events-none" />
-        <button
-          type="button"
-          onClick={() => setShowCardLayoutPreview((p) => !p)}
-          className="mt-1 px-2 py-1 rounded text-xs font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 pointer-events-auto"
-        >
-          {showCardLayoutPreview ? 'Hide preview' : 'Preview cards'}
-        </button>
       </div>
 
       {/* Game Result Banner - Shows when game is complete until next deal */}
@@ -887,10 +881,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           {/* Dealer Area */}
           <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 flex flex-col items-center">
             <div className="flex">
-              {showCardLayoutPreview ? (
-                DEMO_DEALER_CARDS.map((card, index) => (
+              {dealerHand.cards.map((card, index) => {
+                if (index >= visibleDealerCards) return null;
+                const isHoleCard = hideHoleCard && index === 1;
+                return (
                   <div
-                    key={`demo-dealer-${index}`}
+                    key={`dealer-${card.id || `card-${index}`}`}
                     style={{
                       marginLeft: index > 0 ? '-15px' : '0',
                       zIndex: index
@@ -899,82 +895,28 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                     <PlayingCard
                       card={card}
                       owner="dealer"
-                      hidden={index === 1}
+                      hidden={isHoleCard}
                       className=""
                       index={index}
-                      isNewCard={false}
+                      isNewCard={index >= 2 && index === visibleDealerCards - 1}
                     />
                   </div>
-                ))
-              ) : (
-                dealerHand.cards.map((card, index) => {
-                  if (index >= visibleDealerCards) return null;
-                  const isHoleCard = hideHoleCard && index === 1;
-                  return (
-                    <div
-                      key={`dealer-${card.id || `card-${index}`}`}
-                      style={{
-                        marginLeft: index > 0 ? '-15px' : '0',
-                        zIndex: index
-                      }}
-                    >
-                      <PlayingCard
-                        card={card}
-                        owner="dealer"
-                        hidden={isHoleCard}
-                        className=""
-                        index={index}
-                        isNewCard={index >= 2 && index === visibleDealerCards - 1}
-                      />
-                    </div>
-                  );
-                })
-              )}
+                );
+              })}
             </div>
-            {(showCardLayoutPreview || (visibleDealerCards > 0 && !showCardLayoutPreview)) && (
+            {visibleDealerCards > 0 && (
               <div className="flex items-center gap-1 sm:gap-2 mt-1 sm:mt-2">
                 <span className="text-white font-black text-2xl sm:text-3xl">
-                  {showCardLayoutPreview ? 20 : (isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal()))}
+                  {isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal())}
                 </span>
-                {/* Only show BUST/BJ text when game is COMPLETE, reveal is done, AND all cards are visible */}
-                {!showCardLayoutPreview && gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-ld">BUST</span>}
-                {!showCardLayoutPreview && gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-ld">BJ</span>}
+                {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-ld">BUST</span>}
+                {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-ld">BJ</span>}
               </div>
             )}
           </div>
 
           {/* Player Area */}
           <div className="absolute bottom-36 sm:bottom-55 left-1/2 -translate-x-1/2 flex flex-col gap-2 sm:gap-4 items-center">
-            {showCardLayoutPreview ? (
-              /* Preview: 2 player cards + total for testing */
-              <div className="flex items-end">
-                <div className="flex flex-col items-center">
-                  <div className="mb-1">
-                    <span className="text-white font-black text-2xl sm:text-3xl">21</span>
-                  </div>
-                  <div className="flex">
-                    {DEMO_PLAYER_CARDS.map((card, cardIndex) => (
-                      <div
-                        key={`demo-player-${cardIndex}`}
-                        style={{
-                          marginLeft: cardIndex > 0 ? '-25px' : '0',
-                          zIndex: cardIndex
-                        }}
-                      >
-                        <PlayingCard
-                          card={card}
-                          owner="player"
-                          className=""
-                          index={cardIndex}
-                          isNewCard={false}
-                          size="normal"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
             <div className={`flex ${hasSplit ? 'gap-2 sm:gap-8' : 'gap-4'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
@@ -1167,7 +1109,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 );
               })}
             </div>
-            )}
           </div>
         </div>
 
@@ -1439,20 +1380,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       {/* End Play Area */}
 
-      {/* Stacked Chip Display - On the table, above the betting panel. Shown in preview with demo stack. */}
-      {((chipStack.length > 0 && !hasSplit) || showCardLayoutPreview) && (() => {
-        const stackToShow = showCardLayoutPreview ? DEMO_CHIP_STACK : chipStack;
-        return (
+      {/* Stacked Chip Display - On the table, above the betting panel. */}
+      {(chipStack.length > 0 && !hasSplit) && (
         <div className="absolute left-1/2 -translate-x-1/2 bottom-20 z-40 pointer-events-none">
           <div
             className={`relative chip-stack-container ${
-              !showCardLayoutPreview && chipAnimationState === 'loss' ? 'chip-stack-lose' :
-              !showCardLayoutPreview && chipAnimationState === 'win' ? 'chip-stack-win' : ''
+              chipAnimationState === 'loss' ? 'chip-stack-lose' :
+              chipAnimationState === 'win' ? 'chip-stack-win' : ''
             }`}
-            style={{ width: '64px', height: `${Math.max(48, stackToShow.length * 3 + 48)}px` }}
+            style={{ width: '64px', height: `${Math.max(48, chipStack.length * 3 + 48)}px` }}
           >
             {/* Original bet chips - stay in place during win animation */}
-            {stackToShow.map((chipValue, index) => {
+            {chipStack.map((chipValue, index) => {
               const chipImage = getChipImage(chipValue);
               const stackOffset = index * 3; // 3px offset per chip for stacking
 
@@ -1460,7 +1399,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 <div
                   key={`original-${chipValue}-${index}`}
                   className={`absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden ${
-                    !showCardLayoutPreview && chipAnimationState === 'loss' ? 'chip-lose' : ''
+                    chipAnimationState === 'loss' ? 'chip-lose' : ''
                   }`}
                   style={{
                     background: `url('${chipImage}') center/contain no-repeat`,
@@ -1484,8 +1423,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 </div>
               );
             })}
-            {/* Winning chips - animate in from top during win animation (not in preview) */}
-            {!showCardLayoutPreview && chipAnimationState === 'win' && (() => {
+            {/* Winning chips - animate in from top during win animation */}
+            {chipAnimationState === 'win' && (() => {
               const totalBet = chipStack.reduce((sum, chip) => sum + chip, 0);
               let payoutInTokens: number;
               if (totalPayout > BigInt(0)) {
@@ -1541,7 +1480,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             {/* Total Bet Amount Display */}
             <div
               className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
-                !showCardLayoutPreview && chipAnimationState !== 'none' ? 'opacity-0' : ''
+                chipAnimationState !== 'none' ? 'opacity-0' : ''
               }`}
               style={{
                 top: `-20px`,
@@ -1554,13 +1493,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9)',
                 }}
               >
-                {stackToShow.reduce((sum, chip) => sum + chip, 0)}
+                {chipStack.reduce((sum, chip) => sum + chip, 0)}
               </span>
             </div>
           </div>
         </div>
-        );
-      })()}
+      )}
 
       {/* Betting Panel - Overlay at bottom of table (hidden in tournament mode; controls in sidebar tab) */}
       {!hideBettingPanel && (

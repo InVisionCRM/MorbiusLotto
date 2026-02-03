@@ -301,8 +301,13 @@ export class BlackjackWebSocketClient {
         logger.debug('Handling event message', { type: message.type });
         handler(message.payload);
       } else {
-        // These are informational server events; ignore if the app didn't register a handler.
-        if (message.type !== 'connection_established' && message.type !== 'pong') {
+        // Known broadcast types (handled by optional listeners like GlobalWinsFeed) — don't warn.
+        const knownEventTypes = new Set([
+          'connection_established',
+          'pong',
+          'global_game_completed',
+        ]);
+        if (!knownEventTypes.has(message.type)) {
           logger.warn('Unhandled message type:', message.type);
         }
       }

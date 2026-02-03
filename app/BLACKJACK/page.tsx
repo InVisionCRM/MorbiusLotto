@@ -808,6 +808,7 @@ export default function BlackjackPage() {
             result: overallResult,
             processedGame: processedGame // Pass the processed game with cards already extracted
           });
+          fetchBalance();
         }
       });
 
@@ -1978,7 +1979,26 @@ export default function BlackjackPage() {
       console.log('Game started:', serverGameState);
 
       // Apply returned game state immediately (server response includes requestId so it won't emit as a separate event)
-      updateGameStateFromServer(serverGameState);
+      const processedGame = updateGameStateFromServer(serverGameState);
+      // Some games complete immediately (player or dealer blackjack). Run completion flow so dealer reveal + REBET unlock.
+      if (String(serverGameState?.status) === 'completed' && processedGame) {
+        const completedBetAmount = processedGame.totalBetAmount ?? BigInt(0);
+        const completedPayout = processedGame.totalPayout ?? BigInt(0);
+        const hasWin = Array.isArray(processedGame.playerHands) &&
+          processedGame.playerHands.some((h: any) => h.result === 'win' || h.result === 'blackjack');
+        const allPush = Array.isArray(processedGame.playerHands) &&
+          processedGame.playerHands.every((h: any) => h.result === 'push');
+        const isBlackjack = Array.isArray(processedGame.playerHands) &&
+          processedGame.playerHands.some((h: any) => h.result === 'blackjack');
+        const overallResult = isBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
+        handleGameCompletion({
+          gameId: processedGame.id,
+          betAmount: completedBetAmount,
+          payout: completedPayout,
+          result: overallResult,
+          processedGame,
+        });
+      }
       // Refresh balance (bet was deducted off-chain)
       fetchBalance();
       return;
@@ -2002,7 +2022,7 @@ export default function BlackjackPage() {
       });
       setGameState(prev => ({ ...prev, isPlaying: false }));
     }
-  }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer]);
+  }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer, handleGameCompletion]);
 
   // Rebet and deal: same bet as last hand, then start game in one action (must be after handleStartGame)
   const handleRebetAndDeal = useCallback(() => {
@@ -2041,7 +2061,10 @@ export default function BlackjackPage() {
     try {
       const apiUrl = getApiUrlOptional();
       if (!apiUrl) return null;
-      const res = await fetch(`${apiUrl}/api/game/${id}/verify`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout so UI doesn't hang
+      const res = await fetch(`${apiUrl}/api/game/${id}/verify`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (!res.ok) return null;
       const raw = await res.json();
       if (!raw || !raw.gameId) return null;
@@ -2066,6 +2089,9 @@ export default function BlackjackPage() {
       return null;
     }
   }, []);
+
+  // Stable callback for verification "initial game id consumed" (avoids verify effect re-running every render)
+  const handleInitialVerifyGameIdConsumed = useCallback(() => setInitialVerifyGameId(null), []);
 
   // Handle player actions
   const handlePlayerAction = useCallback(async (action: Action) => {
@@ -2347,6 +2373,7 @@ export default function BlackjackPage() {
               soundEnabled={soundEnabled}
               onPlaySfx={playSound}
               hideBettingPanel={true}
+              completedGameId={currentGame?.state === GameState.COMPLETE ? currentGame?.id : undefined}
             />
 
             {/* Win Notification */}
@@ -2730,7 +2757,7 @@ export default function BlackjackPage() {
             <GameVerificationTools
               onVerify={handleVerifyGame}
               initialGameId={initialVerifyGameId ?? undefined}
-              onInitialGameIdConsumed={() => setInitialVerifyGameId(null)}
+              onInitialGameIdConsumed={handleInitialVerifyGameIdConsumed}
             />
           </div>
         )}

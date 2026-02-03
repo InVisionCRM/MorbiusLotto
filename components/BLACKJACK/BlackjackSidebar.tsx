@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { History, Trophy, BookOpen, Award, TrendingUp, Zap, ShieldCheck, Gamepad2, DollarSign } from 'lucide-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
 import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers'
@@ -91,6 +91,7 @@ export default function BlackjackSidebar({
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'recent')
   const [sidebarVerifyGameId, setSidebarVerifyGameId] = useState<string | null>(null)
   const prevBetAvailableRef = useRef(false)
+  const onSidebarVerifyGameIdConsumed = useCallback(() => setSidebarVerifyGameId(null), [])
 
   const tabs = inTournament
     ? [...BASE_TABS, TOURNAMENT_PLAY_TAB]
@@ -246,7 +247,7 @@ export default function BlackjackSidebar({
                 <GameVerificationTools
                   onVerify={verifyGameHandler}
                   initialGameId={sidebarVerifyGameId ?? undefined}
-                  onInitialGameIdConsumed={() => setSidebarVerifyGameId(null)}
+                  onInitialGameIdConsumed={onSidebarVerifyGameIdConsumed}
                 />
               </div>
             )}

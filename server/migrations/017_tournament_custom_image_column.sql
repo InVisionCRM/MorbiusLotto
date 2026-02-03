@@ -1,7 +1,11 @@
 -- Add custom_image column if missing (from 014; may have been skipped)
--- and ensure list_active_tournaments returns it
+-- and ensure list_active_tournaments returns it.
+-- Also ensure prize_token columns exist (from 016) so this migration is safe if 016 was skipped.
 
 ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS custom_image TEXT;
+ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS prize_token_address VARCHAR(42) DEFAULT NULL;
+ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS prize_token_decimals INT DEFAULT NULL;
+CREATE INDEX IF NOT EXISTS idx_tournaments_prize_token ON tournaments(prize_token_address) WHERE prize_token_address IS NOT NULL;
 
 -- Must drop before changing return type (PostgreSQL doesn't allow CREATE OR REPLACE to change columns)
 DROP FUNCTION IF EXISTS list_active_tournaments(BOOLEAN);
