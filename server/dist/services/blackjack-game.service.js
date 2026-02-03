@@ -456,9 +456,6 @@ class BlackjackGameService {
         const currentHand = playerHands[handIndex];
         const baseNonce = this.getGameBaseNonce(game.game_number);
         let rngCounter = gameSeeds.nonce - baseNonce;
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/blackjack-game.service.ts:handleHandAction:entry', message: 'handleHandAction entry', data: { action, gameId, currentHandId: currentHand?.id, handIndex, cardsLen: currentHand?.cards?.length, result: currentHand?.result }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
-        // #endregion
         if (action === 'hit') {
             // Deal new card
             const nonceUsed = baseNonce + rngCounter;
@@ -478,9 +475,6 @@ class BlackjackGameService {
                 currentHand.canDoubleDown = false;
             }
             // Update hand in database
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/blackjack-game.service.ts:handleHandAction:beforeUpdateHand', message: 'About to update hand in DB', data: { handId: currentHand.id, updateKeys: ['cards', 'total', 'has_ace', 'is_bust', 'result', 'actions'], cardsLen: currentHand.cards.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
-            // #endregion
             await this.dbService.updateGameHand(currentHand.id, {
                 cards: currentHand.cards,
                 total: currentHand.total,
@@ -605,9 +599,6 @@ class BlackjackGameService {
      * Play dealer turn and complete the game
      */
     async playDealerAndComplete(gameId, game, playerHands, gameSeeds) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/blackjack-game.service.ts:playDealerAndComplete:entry', message: 'playDealerAndComplete', data: { gameId, handCount: playerHands.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H2' }) }).catch(() => { });
-        // #endregion
         const dealerCards = [...game.dealer_cards];
         const dealerActions = [];
         const baseNonce = this.getGameBaseNonce(game.game_number);
@@ -679,9 +670,6 @@ class BlackjackGameService {
             rng_counter: rngCounter,
             completed_at: new Date()
         });
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/blackjack-game.service.ts:playDealerAndComplete:afterUpdateGame', message: 'game completed and persisted', data: { gameId, result: overallResult, totalPayout: totalPayout.toString() }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H2' }) }).catch(() => { });
-        // #endregion
         // Add winnings to off-chain balance
         if (totalPayout > 0n) {
             const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
@@ -730,11 +718,14 @@ class BlackjackGameService {
      */
     async getGameResult(gameId) {
         try {
-            const game = await this.dbService.getGame(gameId);
-            if (!game || !game.result)
+            const id = typeof gameId === 'string' ? gameId.trim() : gameId;
+            const game = await this.dbService.getGame(id);
+            if (!game)
                 return null;
-            const hands = await this.dbService.getGameHands(gameId);
-            const seedReveal = await this.dbService.getSeedReveal(gameId);
+            if (!game.result || game.result === 'ongoing')
+                return null;
+            const hands = await this.dbService.getGameHands(id);
+            const seedReveal = await this.dbService.getSeedReveal(id);
             const baseNonce = this.getGameBaseNonce(game.game_number);
             return {
                 gameId: game.id,
@@ -747,18 +738,22 @@ class BlackjackGameService {
                 dealerCards: game.dealer_cards,
                 dealerTotal: game.dealer_total,
                 totalPayout: game.total_payout,
+                betAmount: game.total_bet_amount,
+                timestamp: game.created_at ? new Date(game.created_at).getTime() : undefined,
                 serverSeedHash: seedReveal?.server_seed_hash ? `0x${seedReveal.server_seed_hash}` : undefined,
                 serverSeed: seedReveal?.server_seed,
                 clientSeed: game.client_seed_commitment || 'default',
                 gameNumber: game.game_number,
                 baseNonce,
+                nonce: Number(baseNonce),
                 nonceScheme: {
                     baseNonceMultiplier: BlackjackGameService.GAME_NONCE_MULTIPLIER,
                     initialDealOrder: ['player', 'dealer', 'player', 'dealer'],
                     note: 'Each card draw uses nonce = baseNonce + drawIndex; drawIndex increments globally per game.',
                 },
                 actions: game.actions || [],
-                dealerActions: game.dealer_actions || []
+                dealerActions: game.dealer_actions || [],
+                result: game.result
             };
         }
         catch (error) {

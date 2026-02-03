@@ -141,9 +141,12 @@ export class DatabaseService {
   }
 
   constructor() {
-    // Neon PostgreSQL requires SSL, so enable it for all environments
-    const sslConfig = process.env.DATABASE_URL?.includes('neon.tech') 
-      ? { rejectUnauthorized: false }
+    // Neon PostgreSQL requires SSL. Respect sslmode in URL: verify-full/verify-ca => verify cert; require => accept any cert.
+    const url = process.env.DATABASE_URL ?? '';
+    const useVerifyFull = /sslmode=verify-full|sslmode=verify-ca/i.test(url);
+    const isNeon = url.includes('neon.tech');
+    const sslConfig = isNeon
+      ? (useVerifyFull ? { rejectUnauthorized: true } : { rejectUnauthorized: false })
       : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false);
 
     this.pool = new Pool({

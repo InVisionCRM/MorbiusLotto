@@ -38,6 +38,9 @@ export interface Tournament {
     prize_percentages?: number[];
     max_players?: number;
     ends_at?: Date;
+    custom_image?: string | null;
+    prize_token_address?: string | null;
+    prize_token_decimals?: number | null;
 }
 export interface TournamentEntry {
     id: string;
@@ -67,6 +70,32 @@ export interface CreateTournamentParams {
     prizeDistributionType: string;
     customPrizePercentages?: number[];
     maxPlayers?: number | null;
+    customImage?: string | null;
+    /** When set, prize pool is funded by creator via escrow; prizeAmount in token smallest unit */
+    prizeTokenAddress?: string | null;
+    prizeAmount?: string;
+    prizeTokenDecimals?: number | null;
+    /** Optional PIN for private tournaments; if provided and valid, used instead of generating */
+    pinCode?: string | null;
+}
+export interface FreerollListItem {
+    id: string;
+    name: string;
+    creator_address: string | null;
+    tournament_type: string;
+    freeroll_mode: string;
+    scheduled_start_at: Date | null;
+    registration_opens_at: Date | null;
+    duration_minutes: number | null;
+    starting_chips: number;
+    current_phase: string | null;
+    registered_count: number;
+    action_timer_seconds: number | null;
+    elimination_config: Record<string, unknown> | null;
+    reentry_config: Record<string, unknown> | null;
+    prize_distribution_type: string;
+    custom_image: string | null;
+    created_at: Date;
 }
 export interface TournamentListItem {
     id: string;
@@ -85,6 +114,9 @@ export interface TournamentListItem {
     is_private: boolean;
     prize_distribution_type: string;
     created_at: Date;
+    custom_image?: string | null;
+    prize_token_address?: string | null;
+    prize_token_decimals?: number | null;
 }
 export interface TournamentGame {
     id: string;
@@ -198,6 +230,22 @@ export declare class TournamentService {
      */
     getTournamentEntryCount(tournamentId: string): Promise<number>;
     /**
+     * List freeroll tournaments (from list_freeroll_tournaments).
+     */
+    listFreerollTournaments(includePast?: boolean): Promise<FreerollListItem[]>;
+    /**
+     * Register for a freeroll (during registration phase).
+     */
+    registerFreeroll(playerAddress: string, tournamentId: string): Promise<TournamentEntry>;
+    /**
+     * Mark freeroll registration as "joined" (player is at the table).
+     */
+    joinFreeroll(playerAddress: string, tournamentId: string): Promise<TournamentEntry>;
+    /**
+     * Re-enter a freeroll during the reentry window (after elimination).
+     */
+    reentryFreeroll(playerAddress: string, tournamentId: string): Promise<TournamentEntry>;
+    /**
      * Validate bet amount for tournament
      */
     validateTournamentBet(chips: number, betAmount: number): {
@@ -248,5 +296,22 @@ export declare class TournamentService {
         maxRebuys: number;
         rebuyEnabled: boolean;
     }) | null>;
+    /**
+     * Execute a pending freeroll scheduled event (start, elimination_round, end, reentry_close).
+     * Called by FreerollSchedulerService. Marks the event as executed after handling.
+     */
+    executeScheduledEvent(event: {
+        id: string;
+        tournament_id: string;
+        event_type: string;
+        scheduled_at: Date;
+        metadata: Record<string, unknown> | null;
+    }): Promise<void>;
+    /** Transition freeroll to active and mark no-shows. */
+    private handleFreerollStart;
+    /** Run elimination round: eliminate bottom % by chips (with tiebreakers), optionally reset chips for survivors. */
+    private handleEliminationRound;
+    /** Complete freeroll: distribute prizes (via existing logic) and set current_phase = completed. */
+    private handleFreerollEnd;
 }
 //# sourceMappingURL=tournament.service.d.ts.map

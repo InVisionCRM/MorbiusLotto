@@ -29,6 +29,7 @@ export declare class WebSocketService {
     private handleJoinRoom;
     private handleGetChatHistory;
     private handleSetDisplayName;
+    private handleGetProfile;
     private handleChatMessage;
     private sendMessage;
     private sendError;
@@ -47,6 +48,7 @@ export declare class WebSocketService {
     private handleTournamentGameStart;
     private handleTournamentPlayerAction;
     private handleTournamentLeaderboard;
+    private handleTournamentLeaderboardById;
     private handleGetTournamentInfo;
     private broadcastTournamentLeaderboardUpdate;
     private handleTournamentCreate;
@@ -54,6 +56,10 @@ export declare class WebSocketService {
     private handleTournamentJoin;
     private handleTournamentRebuy;
     private handleTournamentGetInfo;
+    private handleFreerollList;
+    private handleFreerollRegister;
+    private handleFreerollJoin;
+    private handleFreerollReentry;
     private getPrizePercentagesForType;
     shutdown(): void;
 }

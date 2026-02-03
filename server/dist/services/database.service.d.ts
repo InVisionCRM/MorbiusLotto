@@ -178,7 +178,11 @@ export declare class DatabaseService {
     /** Messages older than the message with id beforeId, in chronological order (oldest first). */
     getChatMessagesBefore(roomId: string, beforeId: string, limit?: number): Promise<ChatMessage[]>;
     getDisplayName(walletAddress: string): Promise<string | null>;
-    setDisplayName(walletAddress: string, displayName: string): Promise<void>;
+    getProfile(walletAddress: string): Promise<{
+        displayName: string;
+        profileImageUrl: string | null;
+    } | null>;
+    setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null): Promise<void>;
     getDisplayNames(walletAddresses: string[]): Promise<Map<string, string>>;
     withTransaction<T>(callback: (client: any) => Promise<T>): Promise<T>;
     checkExclusionStatus(walletAddress: string): Promise<{

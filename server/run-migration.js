@@ -12,9 +12,12 @@ const migrationFile = process.argv[2] || 'migrations/010_chat_messages.sql';
 const fullPath = path.isAbsolute(migrationFile) ? migrationFile : path.join(__dirname, migrationFile);
 const sql = fs.readFileSync(fullPath, 'utf8');
 
+const url = process.env.DATABASE_URL || '';
+const useVerifyFull = /sslmode=verify-full|sslmode=verify-ca/i.test(url);
+const isNeon = url.includes('neon.tech');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false
+  ssl: isNeon ? (useVerifyFull ? { rejectUnauthorized: true } : { rejectUnauthorized: false }) : false
 });
 
 async function run() {

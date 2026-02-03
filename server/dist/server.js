@@ -15,6 +15,7 @@ const database_service_1 = require("./services/database.service");
 const provably_fair_service_1 = require("./services/provably-fair.service");
 const blackjack_game_service_1 = require("./services/blackjack-game.service");
 const tournament_service_1 = require("./services/tournament.service");
+const freeroll_scheduler_service_1 = require("./services/freeroll-scheduler.service");
 const websocket_service_1 = require("./services/websocket.service");
 const chain_analytics_service_1 = require("./services/chain-analytics.service");
 const logger_1 = require("./utils/logger");
@@ -25,11 +26,21 @@ dotenv_1.default.config();
 const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
 const PORT = process.env.PORT || 3001;
-// Security middleware
+// CORS: allow frontend origin(s). Set FRONTEND_URL on Railway to your app URL (comma-separated for multiple).
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true
+    origin: (origin, cb) => {
+        if (!origin)
+            return cb(null, true); // same-origin or non-browser
+        if (allowedOrigins.includes(origin))
+            return cb(null, true); // reflect allowed origin
+        return cb(null, false);
+    },
+    credentials: true,
 }));
 // Rate limiting (relaxed for development - 1000 requests per minute)
 const limiter = (0, express_rate_limit_1.default)({
@@ -66,6 +77,9 @@ async function initializeServices() {
         gameService.setTournamentService(tournamentService);
         // Initialize WebSocket service
         const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService, tournamentService);
+        // Freeroll scheduler (polls pending scheduled events: start, elimination_round, end)
+        freerollScheduler = new freeroll_scheduler_service_1.FreerollSchedulerService(dbService.getPool(), tournamentService);
+        freerollScheduler.start();
         // Chain analytics (on-chain games: Plinko, Keno, Lottery, BigWheel)
         const chainAnalytics = new chain_analytics_service_1.ChainAnalyticsService();
         // API routes
@@ -84,6 +98,10 @@ async function initializeServices() {
             try {
                 const { gameId } = req.params;
                 const verification = await gameService.verifyGame(gameId);
+                if (verification == null) {
+                    res.status(404).json({ error: 'Game not found', message: 'No completed game with this ID. Use a game ID from your History (same backend).' });
+                    return;
+                }
                 sendJson(res, verification);
             }
             catch (error) {
@@ -173,13 +191,7 @@ async function initializeServices() {
                 const { address } = req.params;
                 const limit = parseInt(req.query.limit) || 50;
                 const offset = parseInt(req.query.offset) || 0;
-                // #region agent log
-                fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/server.ts:GET /api/player/:address/games', message: 'player games request', data: { address: address?.slice(0, 12) + '…', limit, offset }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H1' }) }).catch(() => { });
-                // #endregion
                 const games = await dbService.getPlayerGames(address, limit, offset);
-                // #region agent log
-                fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/server.ts:GET /api/player/:address/games:response', message: 'player games response', data: { gamesCount: games.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H1' }) }).catch(() => { });
-                // #endregion
                 sendJson(res, games);
             }
             catch (error) {
@@ -191,13 +203,7 @@ async function initializeServices() {
         app.get('/api/game/:gameId/hands', async (req, res) => {
             try {
                 const { gameId } = req.params;
-                // #region agent log
-                fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/server.ts:GET /api/game/:gameId/hands', message: 'game hands request', data: { gameId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' }) }).catch(() => { });
-                // #endregion
                 const hands = await dbService.getGameHands(gameId);
-                // #region agent log
-                fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/server.ts:GET /api/game/:gameId/hands:response', message: 'game hands response', data: { gameId, handsCount: hands.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' }) }).catch(() => { });
-                // #endregion
                 sendJson(res, hands);
             }
             catch (error) {
@@ -320,9 +326,11 @@ async function initializeServices() {
         process.exit(1);
     }
 }
-// Graceful shutdown
+// Graceful shutdown (freerollScheduler ref set in initializeServices)
+let freerollScheduler = null;
 process.on('SIGTERM', () => {
     logger_1.logger.info('SIGTERM received, shutting down gracefully');
+    freerollScheduler?.stop();
     server.close(() => {
         logger_1.logger.info('Server closed');
         process.exit(0);
@@ -330,6 +338,7 @@ process.on('SIGTERM', () => {
 });
 process.on('SIGINT', () => {
     logger_1.logger.info('SIGINT received, shutting down gracefully');
+    freerollScheduler?.stop();
     server.close(() => {
         logger_1.logger.info('Server closed');
         process.exit(0);

@@ -199,6 +199,9 @@ class WebSocketService {
                 case 'set_display_name':
                     await this.handleSetDisplayName(ws, message);
                     break;
+                case 'get_profile':
+                    await this.handleGetProfile(ws, message);
+                    break;
                 case 'get_chat_history':
                     await this.handleGetChatHistory(ws, message);
                     break;
@@ -231,6 +234,9 @@ class WebSocketService {
                 case 'tournament_leaderboard':
                     await this.handleTournamentLeaderboard(ws, message);
                     break;
+                case 'tournament_leaderboard_by_id':
+                    await this.handleTournamentLeaderboardById(ws, message);
+                    break;
                 case 'tournament_info':
                     await this.handleGetTournamentInfo(ws, message);
                     break;
@@ -249,6 +255,18 @@ class WebSocketService {
                     break;
                 case 'tournament_get_info':
                     await this.handleTournamentGetInfo(ws, message);
+                    break;
+                case 'freeroll_list':
+                    await this.handleFreerollList(ws, message);
+                    break;
+                case 'freeroll_register':
+                    await this.handleFreerollRegister(ws, message);
+                    break;
+                case 'freeroll_join':
+                    await this.handleFreerollJoin(ws, message);
+                    break;
+                case 'freeroll_reentry':
+                    await this.handleFreerollReentry(ws, message);
                     break;
                 default:
                     this.sendError(ws, 'Unknown message type', message.requestId);
@@ -613,16 +631,42 @@ class WebSocketService {
                 return this.sendError(ws, 'Display name contains invalid characters', message.requestId);
             }
             const displayName = sanitized.slice(0, CHAT_DISPLAY_NAME_MAX_LEN);
-            await this.dbService.setDisplayName(ws.playerAddress, displayName);
+            const profileImageUrl = payload.profileImageUrl !== undefined
+                ? (typeof payload.profileImageUrl === 'string' ? payload.profileImageUrl : null)
+                : undefined;
+            await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl);
+            const profile = await this.dbService.getProfile(ws.playerAddress);
             this.sendMessage(ws, {
                 type: 'display_name_set',
-                payload: { displayName },
+                payload: {
+                    displayName,
+                    profileImageUrl: profile?.profileImageUrl ?? null
+                },
                 requestId: message.requestId
             });
         }
         catch (error) {
             logger_1.logger.error('Error setting display name:', error);
             this.sendError(ws, 'Failed to set display name', message.requestId);
+        }
+    }
+    async handleGetProfile(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required to get profile', message.requestId);
+            }
+            const profile = await this.dbService.getProfile(ws.playerAddress);
+            this.sendMessage(ws, {
+                type: 'profile',
+                payload: profile
+                    ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl }
+                    : { displayName: null, profileImageUrl: null },
+                requestId: message.requestId
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error getting profile:', error);
+            this.sendError(ws, 'Failed to get profile', message.requestId);
         }
     }
     async handleChatMessage(ws, message) {
@@ -1196,6 +1240,32 @@ class WebSocketService {
             this.sendError(ws, 'Failed to get leaderboard', message.requestId);
         }
     }
+    async handleTournamentLeaderboardById(ws, message) {
+        try {
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const { payload } = message;
+            const tournamentId = payload?.tournamentId;
+            if (!tournamentId) {
+                return this.sendError(ws, 'Tournament ID required', message.requestId);
+            }
+            const limit = payload?.limit ?? 10;
+            const leaderboard = await this.tournamentService.getLeaderboard(tournamentId, limit);
+            this.sendMessage(ws, {
+                type: 'tournament_leaderboard_by_id',
+                payload: {
+                    tournamentId,
+                    leaderboard,
+                },
+                requestId: message.requestId
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error getting tournament leaderboard by ID:', error);
+            this.sendError(ws, 'Failed to get leaderboard', message.requestId);
+        }
+    }
     async handleGetTournamentInfo(ws, message) {
         try {
             if (!this.tournamentService) {
@@ -1278,6 +1348,11 @@ class WebSocketService {
                 prizeDistributionType: payload.prizeDistributionType,
                 customPrizePercentages: payload.customPrizePercentages,
                 maxPlayers: payload.maxPlayers,
+                customImage: payload.customImage,
+                prizeTokenAddress: payload.prizeTokenAddress,
+                prizeAmount: payload.prizeAmount,
+                prizeTokenDecimals: payload.prizeTokenDecimals,
+                pinCode: payload.pinCode,
             });
             // Determine prize percentages for response
             const prizePercentages = this.getPrizePercentagesForType(tournament.prize_distribution_type, tournament.prize_percentages);
@@ -1297,6 +1372,8 @@ class WebSocketService {
                     isPrivate: tournament.is_private,
                     prizeDistributionType: tournament.prize_distribution_type,
                     prizePercentages,
+                    prizeTokenAddress: tournament.prize_token_address ?? undefined,
+                    prizeTokenDecimals: tournament.prize_token_decimals ?? undefined,
                 },
                 requestId: message.requestId
             });
@@ -1358,7 +1435,8 @@ class WebSocketService {
             if (!this.tournamentService) {
                 return this.sendError(ws, 'Tournament mode not available', message.requestId);
             }
-            const tournaments = await this.tournamentService.listTournaments(false);
+            // Include private tournaments so creators see their own and others can discover (with PIN)
+            const tournaments = await this.tournamentService.listTournaments(true);
             // Convert to response format
             const tournamentList = tournaments.map(t => ({
                 id: t.id,
@@ -1376,7 +1454,10 @@ class WebSocketService {
                 tableTheme: t.table_theme,
                 isPrivate: t.is_private,
                 prizeDistributionType: t.prize_distribution_type,
+                prizeTokenAddress: t.prize_token_address ?? null,
+                prizeTokenDecimals: t.prize_token_decimals ?? null,
                 createdAt: t.created_at.toISOString(),
+                customImage: t.custom_image || null,
             }));
             this.sendMessage(ws, {
                 type: 'tournament_list',
@@ -1516,6 +1597,8 @@ class WebSocketService {
                     prizeDistributionType: info.tournament.prize_distribution_type,
                     prizePercentages: info.prizePercentages,
                     createdAt: info.tournament.created_at.toISOString(),
+                    prizeTokenAddress: info.tournament.prize_token_address ?? null,
+                    prizeTokenDecimals: info.tournament.prize_token_decimals ?? null,
                 },
                 requestId: message.requestId
             });
@@ -1523,6 +1606,117 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error getting tournament info:', error);
             this.sendError(ws, 'Failed to get tournament info', message.requestId);
+        }
+    }
+    async handleFreerollList(ws, message) {
+        try {
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload ?? {};
+            const includePast = Boolean(payload.includePast);
+            const list = await this.tournamentService.listFreerollTournaments(includePast);
+            this.sendMessage(ws, {
+                type: 'freeroll_list',
+                payload: {
+                    tournaments: list.map((t) => ({
+                        ...t,
+                        scheduled_start_at: t.scheduled_start_at?.toISOString() ?? null,
+                        registration_opens_at: t.registration_opens_at?.toISOString() ?? null,
+                        created_at: t.created_at.toISOString(),
+                    })),
+                },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error listing freeroll tournaments:', error);
+            this.sendError(ws, error instanceof Error ? error.message : 'Failed to list freerolls', message.requestId);
+        }
+    }
+    async handleFreerollRegister(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Player address not authenticated', message.requestId);
+            }
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload;
+            if (!payload?.tournamentId) {
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            }
+            const entry = await this.tournamentService.registerFreeroll(ws.playerAddress, payload.tournamentId);
+            this.sendMessage(ws, {
+                type: 'freeroll_registered',
+                payload: {
+                    tournamentId: payload.tournamentId,
+                    entryId: entry.id,
+                    chips: entry.chips_remaining,
+                    startingChips: entry.chips_remaining,
+                },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error registering for freeroll:', error);
+            this.sendError(ws, error instanceof Error ? error.message : 'Failed to register', message.requestId);
+        }
+    }
+    async handleFreerollJoin(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Player address not authenticated', message.requestId);
+            }
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload;
+            if (!payload?.tournamentId) {
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            }
+            const entry = await this.tournamentService.joinFreeroll(ws.playerAddress, payload.tournamentId);
+            this.sendMessage(ws, {
+                type: 'freeroll_joined',
+                payload: {
+                    tournamentId: payload.tournamentId,
+                    entryId: entry.id,
+                    chips: entry.chips_remaining,
+                },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error joining freeroll:', error);
+            this.sendError(ws, error instanceof Error ? error.message : 'Failed to join', message.requestId);
+        }
+    }
+    async handleFreerollReentry(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Player address not authenticated', message.requestId);
+            }
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload;
+            if (!payload?.tournamentId) {
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            }
+            const entry = await this.tournamentService.reentryFreeroll(ws.playerAddress, payload.tournamentId);
+            this.sendMessage(ws, {
+                type: 'freeroll_reentered',
+                payload: {
+                    tournamentId: payload.tournamentId,
+                    entryId: entry.id,
+                    chips: entry.chips_remaining,
+                },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error re-entering freeroll:', error);
+            this.sendError(ws, error instanceof Error ? error.message : 'Failed to re-enter', message.requestId);
         }
     }
     // Helper to get prize percentages from type

@@ -12,9 +12,12 @@ class DatabaseService {
         return this.pool;
     }
     constructor() {
-        // Neon PostgreSQL requires SSL, so enable it for all environments
-        const sslConfig = process.env.DATABASE_URL?.includes('neon.tech')
-            ? { rejectUnauthorized: false }
+        // Neon PostgreSQL requires SSL. Respect sslmode in URL: verify-full/verify-ca => verify cert; require => accept any cert.
+        const url = process.env.DATABASE_URL ?? '';
+        const useVerifyFull = /sslmode=verify-full|sslmode=verify-ca/i.test(url);
+        const isNeon = url.includes('neon.tech');
+        const sslConfig = isNeon
+            ? (useVerifyFull ? { rejectUnauthorized: true } : { rejectUnauthorized: false })
             : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false);
         this.pool = new pg_1.Pool({
             connectionString: process.env.DATABASE_URL,
@@ -270,9 +273,6 @@ class DatabaseService {
         };
     }
     async getPlayerGames(walletAddress, limit = 50, offset = 0) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:getPlayerGames:entry', message: 'getPlayerGames called', data: { walletAddress: walletAddress?.slice(0, 12) + '…', limit, offset }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H1' }) }).catch(() => { });
-        // #endregion
         const normalizedAddress = this.normalizeAddress(walletAddress);
         const query = `
       SELECT g.*, gs.player_id
@@ -285,10 +285,6 @@ class DatabaseService {
     `;
         const result = await this.pool.query(query, [normalizedAddress, limit, offset]);
         const games = result.rows.map((r) => this.normalizeGame(r));
-        // #region agent log
-        const completedCount = games.filter((g) => g.result && g.result !== 'ongoing').length;
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:getPlayerGames:exit', message: 'getPlayerGames result', data: { totalGames: games.length, completedCount, sampleGameIds: games.slice(0, 3).map((g) => g.id), sampleResults: games.slice(0, 3).map((g) => g.result) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H1' }) }).catch(() => { });
-        // #endregion
         return games;
     }
     // Game session operations
@@ -437,9 +433,6 @@ class DatabaseService {
         return this.normalizeGameHand(result.rows[0]);
     }
     async updateGameHand(handId, updates) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:updateGameHand:entry', message: 'updateGameHand called', data: { handId, updateKeys: Object.keys(updates || {}), hasCards: updates?.cards !== undefined }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
-        // #endregion
         const fields = [];
         const values = [];
         let paramCount = 1;
@@ -492,15 +485,9 @@ class DatabaseService {
       WHERE id = $${idParam}
     `;
         values.push(handId);
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:updateGameHand:beforeQuery', message: 'updateGameHand SQL about to run', data: { query, valuesCount: values.length, valueTypes: values.map(v => typeof v), firstValuePreview: String(values[0]).slice(0, 48), lastValuePreview: String(values[values.length - 1]).slice(0, 48) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
-        // #endregion
         await this.pool.query(query, values);
     }
     async getGameHands(gameId) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:getGameHands:entry', message: 'getGameHands called', data: { gameId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' }) }).catch(() => { });
-        // #endregion
         const query = `
       SELECT * FROM game_hands
       WHERE game_id = $1
@@ -508,15 +495,9 @@ class DatabaseService {
     `;
         const result = await this.pool.query(query, [gameId]);
         const hands = result.rows.map((r) => this.normalizeGameHand(r));
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:getGameHands:exit', message: 'getGameHands result', data: { gameId, handsCount: hands.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' }) }).catch(() => { });
-        // #endregion
         return hands;
     }
     async updateGame(gameId, updates) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:updateGame:entry', message: 'updateGame called', data: { gameId, updateKeys: Object.keys(updates || {}), hasDealerCards: updates?.dealer_cards !== undefined }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-        // #endregion
         const fields = [];
         const values = [];
         let paramCount = 1;
@@ -585,14 +566,14 @@ class DatabaseService {
       WHERE id = $${idParam}
     `;
         values.push(gameId);
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'server/src/services/database.service.ts:updateGame:beforeQuery', message: 'updateGame SQL about to run', data: { query, valuesCount: values.length, valueTypes: values.map(v => typeof v), firstValuePreview: String(values[0]).slice(0, 48), lastValuePreview: String(values[values.length - 1]).slice(0, 48) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-        // #endregion
         await this.pool.query(query, values);
     }
     async getGame(gameId) {
+        const id = typeof gameId === 'string' ? gameId.trim() : gameId;
+        if (!id)
+            return null;
         const query = `SELECT * FROM games WHERE id = $1`;
-        const result = await this.pool.query(query, [gameId]);
+        const result = await this.pool.query(query, [id]);
         return result.rows[0] ? this.normalizeGame(result.rows[0]) : null;
     }
     async getSessionGames(sessionId) {
@@ -705,22 +686,42 @@ class DatabaseService {
             created_at: row.created_at
         })).reverse(); // chronological order for display
     }
-    // Chat display names (editable per wallet)
+    // Chat display names and profile (editable per wallet)
     async getDisplayName(walletAddress) {
         const normalized = this.normalizeAddress(walletAddress);
         const query = `SELECT display_name FROM chat_display_names WHERE wallet_address = $1`;
         const result = await this.pool.query(query, [normalized]);
         return result.rows[0]?.display_name ?? null;
     }
-    async setDisplayName(walletAddress, displayName) {
+    async getProfile(walletAddress) {
         const normalized = this.normalizeAddress(walletAddress);
-        const query = `
-      INSERT INTO chat_display_names (wallet_address, display_name)
-      VALUES ($1, $2)
-      ON CONFLICT (wallet_address)
-      DO UPDATE SET display_name = $2, updated_at = NOW()
-    `;
-        await this.pool.query(query, [normalized, displayName]);
+        const query = `SELECT display_name, profile_image_url FROM chat_display_names WHERE wallet_address = $1`;
+        const result = await this.pool.query(query, [normalized]);
+        const row = result.rows[0];
+        if (!row)
+            return null;
+        return { displayName: row.display_name, profileImageUrl: row.profile_image_url ?? null };
+    }
+    async setDisplayName(walletAddress, displayName, profileImageUrl) {
+        const normalized = this.normalizeAddress(walletAddress);
+        if (profileImageUrl === undefined) {
+            const query = `
+        INSERT INTO chat_display_names (wallet_address, display_name)
+        VALUES ($1, $2)
+        ON CONFLICT (wallet_address)
+        DO UPDATE SET display_name = $2, updated_at = NOW()
+      `;
+            await this.pool.query(query, [normalized, displayName]);
+        }
+        else {
+            const query = `
+        INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (wallet_address)
+        DO UPDATE SET display_name = $2, updated_at = NOW(), profile_image_url = $3
+      `;
+            await this.pool.query(query, [normalized, displayName, profileImageUrl]);
+        }
     }
     async getDisplayNames(walletAddresses) {
         if (walletAddresses.length === 0)
