@@ -243,7 +243,10 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                 >
                   {/* Blackjack Views Section */}
                   <div className="p-2 border-b border-gray-700/50">
-                    <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Blackjack</div>
+                    <div className="flex items-center gap-2 text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">
+                      <i className="fas fa-club w-4 text-center" aria-hidden />
+                      Blackjack
+                    </div>
                     {views.map((view) => (
                       <button
                         key={view}

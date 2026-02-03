@@ -926,13 +926,7 @@ export default function BlackjackPage() {
     const loadHistoryFromDatabase = async () => {
       const API_BASE_URL = getApiUrlOptional();
       if (!API_BASE_URL) return;
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:start',message:'loadHistoryFromDatabase',data:{playerGamesDataLength:playerGamesData.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
       const completedGames = playerGamesData.filter((game: any) => game.result && game.result !== 'ongoing' && game.completed_at);
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:filter',message:'completed games count',data:{completedCount:completedGames.length,totalGames:playerGamesData.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
       // Fetch game hands for all games in parallel
       const gamesWithHands = await Promise.all(
         completedGames
@@ -941,15 +935,9 @@ export default function BlackjackPage() {
               // Fetch game hands for this game
               const handsResponse = await fetch(`${API_BASE_URL}/api/game/${game.id}/hands`);
               const handsData = handsResponse.ok ? await handsResponse.json() : [];
-              // #region agent log
-              fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:handsFetch',message:'hands fetch per game',data:{gameId:game.id,ok:handsResponse.ok,handsCount:Array.isArray(handsData)?handsData.length:0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-              // #endregion
               return { game, hands: Array.isArray(handsData) ? handsData : [] };
             } catch (error) {
               console.error(`Failed to fetch hands for game ${game.id}:`, error);
-              // #region agent log
-              fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:handsFetchError',message:'hands fetch failed',data:{gameId:game.id,error:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-              // #endregion
               return { game, hands: [] };
             }
           })
@@ -1061,10 +1049,6 @@ export default function BlackjackPage() {
           };
         })
         .sort((a, b) => b.timestamp - a.timestamp); // Most recent first
-
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:loadHistoryFromDatabase:done',message:'databaseHistory built',data:{databaseHistoryLength:databaseHistory.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
 
       // Merge with existing in-memory history, avoiding duplicates
       setGameState(prev => {
@@ -1440,9 +1424,6 @@ export default function BlackjackPage() {
   // Handle game completion
   const handleGameCompletion = useCallback((data: any) => {
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:handleGameCompletion:entry',message:'handleGameCompletion',data:{gameId:data?.gameId,payloadKeys:data?Object.keys(data):[],hasProcessedGame:!!data?.processedGame,hasGameState:!!data?.gameState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-      // #endregion
       const payout: bigint =
         typeof data?.payout === 'bigint' ? data.payout : BigInt(String(data?.payout || '0'));
       const betAmount: bigint =
@@ -1734,9 +1715,6 @@ export default function BlackjackPage() {
           // Only update if the new entry has cards (to avoid overwriting with empty cards)
           const shouldUpdate = gameResult.playerHand.cards.length > 0 || gameResult.dealerHand.cards.length > 0;
           if (shouldUpdate) {
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:handleGameCompletion:updateExisting',message:'updating existing history entry',data:{gameId:gameResult.gameId,existingIndex},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-            // #endregion
             console.log('handleGameCompletion: Updating existing history entry', {
               existingIndex,
               oldPlayerCards: prev.history[existingIndex].playerHand.cards.map(c => c.value),
@@ -1755,9 +1733,6 @@ export default function BlackjackPage() {
             return prev;
           }
         }
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/BLACKJACK/page.tsx:handleGameCompletion:addNew',message:'adding new history entry',data:{gameId:gameResult.gameId,prevHistoryLength:prev.history.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
         console.log('handleGameCompletion: Adding new history entry');
         const newHistory = [gameResult, ...prev.history].slice(0, 50);
         
@@ -2082,9 +2057,11 @@ export default function BlackjackPage() {
 
   // Fetch game result for verification (Verify tab)
   const handleVerifyGame = useCallback(async (id: string): Promise<GameVerificationData | null> => {
+    const apiUrl = getApiUrlOptional();
+    if (!apiUrl) {
+      throw new Error('Verification requires the game server. Set NEXT_PUBLIC_API_URL in your environment.');
+    }
     try {
-      const apiUrl = getApiUrlOptional();
-      if (!apiUrl) return null;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout so UI doesn't hang
       const res = await fetch(`${apiUrl}/api/game/${id}/verify`, { signal: controller.signal });
@@ -2109,8 +2086,11 @@ export default function BlackjackPage() {
         timestamp: raw.timestamp ?? 0,
         actions: raw.actions ?? [],
       };
-    } catch {
-      return null;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('Verification timed out. Is the game server running?');
+      }
+      throw new Error('Could not reach the game server. Is it running and is NEXT_PUBLIC_API_URL correct?');
     }
   }, []);
 

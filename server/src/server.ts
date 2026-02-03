@@ -107,6 +107,10 @@ async function initializeServices() {
       try {
         const { gameId } = req.params;
         const verification = await gameService.verifyGame(gameId);
+        if (verification == null) {
+          res.status(404).json({ error: 'Game not found', message: 'No completed game with this ID. Use a game ID from your History (same backend).' });
+          return;
+        }
         sendJson(res, verification);
       } catch (error) {
         logger.error('Error verifying game:', error);
@@ -196,13 +200,7 @@ async function initializeServices() {
         const { address } = req.params;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/server.ts:GET /api/player/:address/games',message:'player games request',data:{address:address?.slice(0,12)+'…',limit,offset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
         const games = await dbService.getPlayerGames(address, limit, offset);
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/server.ts:GET /api/player/:address/games:response',message:'player games response',data:{gamesCount:games.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
         sendJson(res, games);
       } catch (error) {
         logger.error('Error fetching player games:', error);
@@ -214,13 +212,7 @@ async function initializeServices() {
     app.get('/api/game/:gameId/hands', async (req, res) => {
       try {
         const { gameId } = req.params;
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/server.ts:GET /api/game/:gameId/hands',message:'game hands request',data:{gameId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-        // #endregion
         const hands = await dbService.getGameHands(gameId);
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/server.ts:GET /api/game/:gameId/hands:response',message:'game hands response',data:{gameId,handsCount:hands.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-        // #endregion
         sendJson(res, hands);
       } catch (error) {
         logger.error('Error fetching game hands:', error);

@@ -198,7 +198,7 @@ export default function MainNav({ balance, soundEnabled, onSoundToggle, freePlay
                         className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                         onClick={() => setMenuOpen(false)}
                       >
-                        <i className="fas fa-cards w-4 text-center"></i>
+                        <i className="fas fa-club w-4 text-center" aria-hidden />
                         <span className="text-sm font-medium">Blackjack</span>
                       </Link>
                       {/* Big Wheel - commented out

@@ -123,7 +123,7 @@ export default function SlotMachinesMainNav({
                       className="flex items-center gap-3 px-4 py-2 text-purple-300 hover:bg-purple-900/30 transition-colors"
                       onClick={() => setMenuOpen(false)}
                     >
-                      <span>🃏</span>
+                      <i className="fas fa-club w-4 text-center" aria-hidden />
                       <span>Blackjack</span>
                     </Link>
                     <Link

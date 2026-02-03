@@ -84,8 +84,11 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
         } else {
           toast.error('Game not found')
         }
-      } catch {
-        if (!cancelled) toast.error('Verification failed')
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Verification failed'
+          toast.error(msg)
+        }
       } finally {
         if (!cancelled) setIsVerifying(false)
       }
@@ -119,7 +122,8 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
         toast.error('Game not found')
       }
     } catch (error) {
-      toast.error('Verification failed')
+      const msg = error instanceof Error ? error.message : 'Verification failed'
+      toast.error(msg)
       console.error('Verification error:', error)
     } finally {
       setIsVerifying(false)

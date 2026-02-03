@@ -422,9 +422,6 @@ export class DatabaseService {
   }
 
   async getPlayerGames(walletAddress: string, limit: number = 50, offset: number = 0): Promise<Game[]> {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:getPlayerGames:entry',message:'getPlayerGames called',data:{walletAddress:walletAddress?.slice(0,12)+'…',limit,offset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
     const normalizedAddress = this.normalizeAddress(walletAddress);
     const query = `
       SELECT g.*, gs.player_id
@@ -437,10 +434,6 @@ export class DatabaseService {
     `;
     const result = await this.pool.query(query, [normalizedAddress, limit, offset]);
     const games = result.rows.map((r: any) => this.normalizeGame(r));
-    // #region agent log
-    const completedCount = games.filter((g: Game) => g.result && g.result !== 'ongoing').length;
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:getPlayerGames:exit',message:'getPlayerGames result',data:{totalGames:games.length,completedCount,sampleGameIds:games.slice(0,3).map((g:Game)=>g.id),sampleResults:games.slice(0,3).map((g:Game)=>g.result)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
     return games;
   }
 
@@ -613,9 +606,6 @@ export class DatabaseService {
   }
 
   async updateGameHand(handId: string, updates: Partial<GameHand>): Promise<void> {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:updateGameHand:entry',message:'updateGameHand called',data:{handId,updateKeys:Object.keys(updates||{}),hasCards:updates?.cards!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     const fields = [];
     const values = [];
     let paramCount = 1;
@@ -671,16 +661,10 @@ export class DatabaseService {
     `;
 
     values.push(handId);
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:updateGameHand:beforeQuery',message:'updateGameHand SQL about to run',data:{query,valuesCount:values.length,valueTypes:values.map(v=>typeof v),firstValuePreview:String(values[0]).slice(0,48),lastValuePreview:String(values[values.length-1]).slice(0,48)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     await this.pool.query(query, values);
   }
 
   async getGameHands(gameId: string): Promise<GameHand[]> {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:getGameHands:entry',message:'getGameHands called',data:{gameId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
     const query = `
       SELECT * FROM game_hands
       WHERE game_id = $1
@@ -688,16 +672,10 @@ export class DatabaseService {
     `;
     const result = await this.pool.query(query, [gameId]);
     const hands = result.rows.map((r: any) => this.normalizeGameHand(r));
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:getGameHands:exit',message:'getGameHands result',data:{gameId,handsCount:hands.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
     return hands;
   }
 
   async updateGame(gameId: string, updates: Partial<Game>): Promise<void> {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:updateGame:entry',message:'updateGame called',data:{gameId,updateKeys:Object.keys(updates||{}),hasDealerCards:updates?.dealer_cards!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     const fields = [];
     const values = [];
     let paramCount = 1;
@@ -769,15 +747,14 @@ export class DatabaseService {
     `;
 
     values.push(gameId);
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/src/services/database.service.ts:updateGame:beforeQuery',message:'updateGame SQL about to run',data:{query,valuesCount:values.length,valueTypes:values.map(v=>typeof v),firstValuePreview:String(values[0]).slice(0,48),lastValuePreview:String(values[values.length-1]).slice(0,48)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     await this.pool.query(query, values);
   }
 
   async getGame(gameId: string): Promise<Game | null> {
+    const id = typeof gameId === 'string' ? gameId.trim() : gameId;
+    if (!id) return null;
     const query = `SELECT * FROM games WHERE id = $1`;
-    const result = await this.pool.query(query, [gameId]);
+    const result = await this.pool.query(query, [id]);
     return result.rows[0] ? this.normalizeGame(result.rows[0]) : null;
   }
 
