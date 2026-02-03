@@ -117,11 +117,11 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
         <div className="mb-1">
           <div className="grid grid-cols-3 items-center justify-center text-center">
             <div className="bg-slate-00/50 w-full px-1 py-1 rounded-tl-lg">
-              <div className="text-cyan-300/80 text-[16px] uppercase font-bold font-prosto-one tracking-wider">Games</div>
-              <div className="text-white font-bold text-2xl text-center">{history.length}</div>
+              <div className="text-cyan-500/80 text-[16px] font-semibold uppercase tracking-wider">Games</div>
+              <div className="text-white text-2xl text-center">{history.length}</div>
             </div>
             <div className="bg-slate-00/50 w-full px-1 py-1">
-              <div className="text-cyan-300/80 text-[16px] uppercase font-bold font-prosto-one tracking-wider">Net P&amp;L</div>
+              <div className="text-cyan-500/80 text-[16px] uppercase font-semibold font-poppins tracking-wider">Net P&amp;L</div>
               <div
                 className={`font-bold text-2xl flex text-center justify-center items-center gap-0.5 ${
                   netPnL >= 0 ? "text-green-400" : "text-red-400"
@@ -132,13 +132,13 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
                 <img
                   src="/morbius/MorbiusLogo (3).png"
                   alt="Morbius"
-                  className="w-16 h-16 object-contain"
+                  className="w-10 h-10 object-contain"
                 />
               </div>
             </div>
             <div className="bg-slate-000/50 w-full px-1 py-1 rounded-tl-lg">
-              <div className="text-cyan-300/80 text-[16px] uppercase font-bold font-prosto-one tracking-wider">ROI</div>
-              <div className={`font-bold font-prosto-one text-2xl ${Number.parseFloat(roi) >= 0 ? "text-green-400" : "text-red-400"}`}>
+              <div className="text-cyan-500/80 text-[16px] uppercase font-semibold font-poppins tracking-wider">ROI</div>
+              <div className={`text-2xl ${Number.parseFloat(roi) >= 0 ? "text-green-400" : "text-red-400"}`}>
                 {Number.parseFloat(roi) >= 0 ? "+" : ""}
                 {roi}%
               </div>
@@ -150,9 +150,9 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
         <div className="h-full min-h-[300px] w-full flex-1" style={{ minWidth: 0, minHeight: '300px' }}>
           {history.length === 0 ? (
             <div className="h-full flex items-center justify-center">
-              <div className="text-center text-purple-500">
-                <p className="text-lg font-bold font-prosto-one">P&amp;L chart will appear</p>
-                <p className="text-sm font-bold font-prosto-one">after your first game</p>
+              <div className="text-center text-white/80">
+                <p className="text-sm font-semibold font-poppins">P&amp;L chart will appear</p>
+                <p className="text-sm font-semibold font-poppins">after your first game</p>
               </div>
             </div>
           ) : (
@@ -177,7 +177,7 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
                   dataKey="gameNumber"
                   stroke="rgba(255,255,255,0.4)"
                   fontSize={10}
-                  tick={{ fill: "rgba(255,255,255,0.5)" }}
+                  tick={{ fill: "rgba(255,255,255,0.5)", fontFamily: "Poppins", fontWeight: 600 }}
                   axisLine={{ stroke: "rgba(255,255,255,0.15)" }}
                   tickLine={{ stroke: "rgba(255,255,255,0.15)" }}
                 />
@@ -185,7 +185,7 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
                 <YAxis
                   stroke="rgba(255,255,255,0.4)"
                   fontSize={10}
-                  tick={{ fill: "rgba(255,255,255,0.5)" }}
+                  tick={{ fill: "rgba(255,255,255,0.5)", fontFamily: "Poppins", fontWeight: 600 }}
                   axisLine={{ stroke: "rgba(255,255,255,0.15)" }}
                   tickLine={{ stroke: "rgba(255,255,255,0.15)" }}
                   domain={getYAxisDomain()}
@@ -233,7 +233,7 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
             <button
               type="button"
               onClick={clear}
-              className="px-2 py-1 text-[10px] bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-500/20 rounded text-cyan-300/80 transition-colors"
+              className="px-2 py-1 text-[10px] bg-cyan-500/10 hover:bg-cyan-600/20 border border-cyan-500/20 rounded text-cyan-300/80 transition-colors"
               title="Clear chart"
             >
               Clear

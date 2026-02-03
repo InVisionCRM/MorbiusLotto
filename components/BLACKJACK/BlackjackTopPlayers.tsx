@@ -2,7 +2,6 @@
 
 import React from 'react'
 import { formatEther } from 'viem'
-import { Trophy } from 'lucide-react'
 import { useBlackjackTopPlayers, type TopPlayerEntry } from '@/hooks/use-blackjack-stats'
 
 const PANEL_CLASS =
@@ -25,30 +24,16 @@ export default function BlackjackTopPlayers() {
   if (error) {
     const message = error instanceof Error ? error.message : 'Failed to load leaderboard.'
     return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-6 min-w-0">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-cyan-400/80" />
-            Top Players
-          </h2>
-        </header>
-        <div className={`${PANEL_CLASS} p-8 text-center`}>
-          <p className="text-red-400/90 text-sm">Failed to load leaderboard.</p>
-          <p className="text-red-300/80 text-xs mt-2 font-mono max-w-xl mx-auto break-words">{message}</p>
-        </div>
+      <div className="w-full max-w-5xl mx-auto px-4 py-4 min-w-0 text-center">
+        <p className="text-red-400/90 text-sm">Failed to load leaderboard.</p>
+        <p className="text-red-300/80 text-xs mt-2 font-mono max-w-xl mx-auto break-words">{message}</p>
       </div>
     )
   }
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-6 min-w-0">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-cyan-400/80" />
-            Top Players
-          </h2>
-        </header>
+      <div className="w-full max-w-5xl mx-auto px-4 py-2 min-w-0">
         <div className={`${PANEL_CLASS} p-8 flex items-center justify-center gap-2`}>
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
           <p className="text-white/60 text-sm">Loading leaderboard...</p>
@@ -61,16 +46,8 @@ export default function BlackjackTopPlayers() {
 
   if (list.length === 0) {
     return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-6 min-w-0">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-cyan-400/80" />
-            Top Players
-          </h2>
-        </header>
-        <div className={`${PANEL_CLASS} p-8 text-center`}>
-          <p className="text-white/50 text-sm">No player stats yet. Play games to appear on the leaderboard.</p>
-        </div>
+      <div className="w-full max-w-5xl mx-auto px-4 py-4 min-w-0 text-center">
+        <p className="text-white/50 text-sm">No player stats yet. Play games to appear on the leaderboard.</p>
       </div>
     )
   }
@@ -78,14 +55,7 @@ export default function BlackjackTopPlayers() {
   const gridCols = 'grid-cols-[auto_minmax(5rem,1fr)_minmax(4rem,1fr)_minmax(4rem,1fr)_minmax(4rem,1fr)_minmax(3.5rem,1fr)]'
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 py-6 min-w-0">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <Trophy className="w-5 h-5 text-cyan-400/80" />
-          Top Players
-        </h2>
-      </header>
-
+    <div className="w-full max-w-5xl mx-auto px-4 py-2 min-w-0">
       <div
         className={`hidden sm:grid ${gridCols} gap-3 px-4 py-2.5 text-xs font-medium text-white/50 uppercase tracking-wider border-b border-white/10 mb-1`}
       >

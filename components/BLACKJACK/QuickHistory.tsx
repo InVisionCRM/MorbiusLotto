@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect } from 'react'
 import Image from 'next/image'
 import { formatEther } from 'viem'
 import { GameResult } from '@/app/BLACKJACK/types'
-import { ChevronLeft, ChevronRight, History } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 const PAGE_SIZE = 10
 const MAX_HISTORY_ITEMS = 50
@@ -19,17 +19,10 @@ const RESULT_CONFIG: Record<'win' | 'loss' | 'push' | 'blackjack', { label: stri
   push: { label: 'PUSH', className: 'bg-slate-500/20 text-slate-300 border-slate-400/40' },
 }
 
-const SUIT_LETTER: Record<string, string> = { hearts: 'H', diamonds: 'D', clubs: 'C', spades: 'S' }
-
-function cardValueStr(value: number): string {
-  if (value === 1) return 'A'
-  if (value >= 11 && value <= 13) return ['', 'J', 'Q', 'K'][value - 10]
-  return String(value)
-}
-
-function cardImagePath(card: { value: number; suit: string }): string {
-  const suit = SUIT_LETTER[card.suit] ?? 'S'
-  return `/BlackJack/Cards/PNG/${cardValueStr(card.value)}${suit}.png`
+function shortenGameId(gameId: string | undefined): string {
+  if (!gameId) return '—'
+  if (gameId.length <= 10) return gameId
+  return `${gameId.slice(0, 6)}…${gameId.slice(-4)}`
 }
 
 function getResultType(result: GameResult): 'win' | 'loss' | 'push' | 'blackjack' {
@@ -88,44 +81,19 @@ export default function QuickHistory({ history, reserveBalance }: QuickHistoryPr
 
   const showBalance = balanceAtBetByIndex !== null
   const gridCols = showBalance
-    ? 'grid-cols-[auto_minmax(4rem,1fr)_minmax(4rem,1fr)_minmax(5rem,1fr)_1fr_1fr]'
-    : 'grid-cols-[auto_minmax(4rem,1fr)_minmax(4rem,1fr)_1fr_1fr]'
+    ? 'grid-cols-[auto_minmax(3.5rem,1fr)_minmax(3.5rem,1fr)_minmax(4rem,1fr)_minmax(4rem,1fr)_minmax(5rem,1fr)]'
+    : 'grid-cols-[auto_minmax(3.5rem,1fr)_minmax(3.5rem,1fr)_minmax(5rem,1fr)]'
 
   if (recentHistory.length === 0) {
     return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-6 min-w-0">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <History className="w-5 h-5 text-cyan-400/80" />
-            Recent Games
-          </h2>
-          {reserveBalance !== undefined && (
-            <div className="text-sm text-white/70">
-              Reserve: <span className="font-semibold text-white">{formatMorbius(reserveBalance)} MORBIUS</span>
-            </div>
-          )}
-        </header>
-        <div className={`${PANEL_CLASS} p-8 text-center`}>
-          <p className="text-white/50 text-sm">No games yet. Place a bet to see your history here.</p>
-        </div>
+      <div className="w-full max-w-5xl mx-auto px-4 py-4 min-w-0 text-center">
+        <p className="text-white/50 text-sm">No games yet. Place a bet to see your history here.</p>
       </div>
     )
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 py-6 min-w-0">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <History className="w-5 h-5 text-cyan-400/80" />
-          Recent Games
-        </h2>
-        {reserveBalance !== undefined && (
-          <div className="text-sm text-white/70">
-            Reserve: <span className="font-semibold text-white">{formatMorbius(reserveBalance)} MORBIUS</span>
-          </div>
-        )}
-      </header>
-
+    <div className="w-full max-w-5xl mx-auto px-4 py-2 min-w-0">
       {/* Table header — visible on larger screens */}
       <div
         className={`hidden sm:grid ${gridCols} gap-3 px-4 py-2.5 text-xs font-medium text-white/50 uppercase tracking-wider border-b border-white/10 mb-1`}
@@ -134,8 +102,7 @@ export default function QuickHistory({ history, reserveBalance }: QuickHistoryPr
         <span>Bet</span>
         <span>P/L</span>
         {showBalance && <span>Balance</span>}
-        <span>Player</span>
-        <span>Dealer</span>
+        <span>Bet ID</span>
       </div>
 
       <div className="space-y-1.5 overflow-x-auto min-w-0">
@@ -146,7 +113,6 @@ export default function QuickHistory({ history, reserveBalance }: QuickHistoryPr
           const betAmount = getTotalBet(result)
           const hands = result.playerHands?.length ? result.playerHands : [result.playerHand]
           const wasSplit = result.wasSplit ?? hands.length > 1
-          const wasDouble = result.wasDoubleDown ?? hands.some((h) => (h.actions as any[])?.some((a: any) => a.type === 'double_down'))
           const config = RESULT_CONFIG[resultType]
           const isWin = resultType === 'win' || resultType === 'blackjack'
 
@@ -163,11 +129,6 @@ export default function QuickHistory({ history, reserveBalance }: QuickHistoryPr
                   {wasSplit && (
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                       SPLIT
-                    </span>
-                  )}
-                  {wasDouble && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      2×
                     </span>
                   )}
                 </div>
@@ -192,57 +153,21 @@ export default function QuickHistory({ history, reserveBalance }: QuickHistoryPr
                 </div>
 
                 {showBalance && (
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex items-center gap-1">
                     <span className="text-white/60 text-xs sm:hidden">Balance </span>
-                    <span className="text-white font-semibold text-sm">{formatMorbius(balanceAtBetByIndex![globalIndex])} M</span>
+                    <span className="text-white font-semibold text-sm">{formatMorbius(balanceAtBetByIndex![globalIndex])}</span>
+                    <Image
+                      src="/morbius/MorbiusLogo (3).png"
+                      alt="MORBIUS"
+                      width={16}
+                      height={16}
+                      className="object-contain flex-shrink-0"
+                    />
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                  {hands.map((hand, handIdx) => (
-                    <div key={handIdx} className="flex items-center gap-1">
-                      {hands.length > 1 && <span className="text-white/40 text-[10px]">H{handIdx + 1}</span>}
-                      {handIdx > 0 && <span className="text-white/30">|</span>}
-                      <div className="flex -space-x-1">
-                        {hand.cards.map((card, ci) => (
-                          <div
-                            key={`p-${handIdx}-${ci}`}
-                            className="w-7 h-9 sm:w-8 sm:h-11 rounded overflow-hidden flex-shrink-0 shadow-md ring-1 ring-black/20"
-                          >
-                            <Image
-                              src={cardImagePath(card)}
-                              alt={`${cardValueStr(card.value)} ${card.suit}`}
-                              width={32}
-                              height={44}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      <span className="text-white/90 font-bold text-sm ml-0.5">{hand.total}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-white/50 text-[10px] sm:text-xs flex-shrink-0">vs</span>
-                  <div className="flex -space-x-1 min-w-0">
-                    {result.dealerHand.cards.map((card, ci) => (
-                      <div
-                        key={`d-${ci}`}
-                        className="w-7 h-9 sm:w-8 sm:h-11 rounded overflow-hidden flex-shrink-0 shadow-md ring-1 ring-black/20"
-                      >
-                        <Image
-                          src={cardImagePath(card)}
-                          alt={`${cardValueStr(card.value)} ${card.suit}`}
-                          width={32}
-                          height={44}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <span className="text-white/90 font-bold text-sm ml-0.5">{result.dealerHand.total}</span>
+                <div className="min-w-0 flex items-center gap-1" title={result.gameId}>
+                  <span className="text-white/70 font-mono text-xs truncate">{shortenGameId(result.gameId)}</span>
                 </div>
               </div>
             </div>

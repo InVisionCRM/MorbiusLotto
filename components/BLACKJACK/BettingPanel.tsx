@@ -78,10 +78,10 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
 
   return (
     <div className="w-full">
-      {/* Single Row: Quick Bets */}
+      {/* Single Row: Quick Bets + Clear */}
       <div className="flex items-center justify-center">
-        {/* Quick Bet Buttons */}
-        <div className="flex gap-0.5">
+        {/* Quick Bet Buttons + Clear */}
+        <div className="flex gap-0.5 items-center">
           {quickBetAmounts.map(amount => {
             // Map chip values to PNG images
             const getChipImage = (value: number) => {
@@ -96,8 +96,10 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
             };
 
             const chipImage = getChipImage(amount);
-
             const affordable = isChipAffordable(amount);
+            // Cyan chip (100000) has light background — use dark text so value is visible
+            const isCyanChip = amount === 100000;
+            const label = amount >= 1000 ? (amount >= 10000 ? `${amount / 1000}K` : amount) : amount;
 
             return (
               <button
@@ -116,20 +118,38 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
                   border: '1px solid rgba(60, 60, 60, 0.5)',
                 }}
               >
-                {/* Optional overlay for better text visibility */}
                 <div className="absolute inset-0 rounded-full" />
                 <span
-                  className="relative z-10 font-bold text-white text-shadow md:text-sm lg:text-base"
+                  className={`relative z-10 font-bold md:text-sm lg:text-base ${
+                    isCyanChip ? 'text-slate-800' : 'text-white'
+                  }`}
                   style={{
-                    textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
-                    fontSize: '12px',
+                    textShadow: isCyanChip
+                      ? '0 0 2px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.3)'
+                      : '1px 1px 2px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
+                    fontSize: amount >= 10000 ? '10px' : '12px',
                   }}
                 >
-                  {amount}
+                  {label}
                 </span>
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => {
+              setBetAmount('0');
+              onBetAmountChange?.('', undefined, true);
+            }}
+            disabled={isPlaying}
+            className="px-2 py-1 md:px-2.5 md:py-1.5 rounded-lg font-bold text-xs md:text-sm uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/80 border border-cyan-500/30"
+            style={{
+              background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
+              boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
+            }}
+          >
+            Clear
+          </button>
         </div>
       </div>
 

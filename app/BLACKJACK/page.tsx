@@ -15,12 +15,10 @@ import { GameHistory } from '@/components/BLACKJACK/GameHistory';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalyticsDashboard';
 import { GameVerificationTools, type GameVerificationData } from '@/components/BLACKJACK/GameVerificationTools';
-import { GlobalWinsFeed } from '@/components/BLACKJACK/GlobalWinsFeed';
 import { ContractAddress } from '@/components/ui/contract-address';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
-import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers';
 import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
-import QuickHistory from '@/components/BLACKJACK/QuickHistory';
+import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { useTournament, TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
 import {
@@ -34,7 +32,7 @@ import {
   TournamentPinEntry,
 } from '@/components/BLACKJACK/Tournament';
 import { CreateTournamentRequest } from '@/lib/tournament-types';
-import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from './constants';
+import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -213,13 +211,12 @@ export default function BlackjackPage() {
   // Intro screen state
   const [showIntro, setShowIntro] = useState(true);
 
-  // Provably Fair Advanced state
+  // Provably Fair: client seed (optional, used when starting a game; UI is in sidebar tab)
   const [clientSeed, setClientSeed] = useState('');
-  const [showProvablyFairAdvanced, setShowProvablyFairAdvanced] = useState(false);
 
   // Background preference state (persisted per wallet)
   const [theme, setTheme] = useState<BlackjackThemeKind>('video');
-  const [imageSource, setImageSource] = useState<BlackjackImageId>(BLACKJACK_IMAGE_BACKGROUNDS[0].id);
+  const [imageSource, setImageSource] = useState<BlackjackImageId>(DEFAULT_BLACKJACK_IMAGE_ID);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [videoSource, setVideoSource] = useState<BlackjackVideoId>('glowingTable');
   const [videoSyncToClock, setVideoSyncToClock] = useState(true);
@@ -600,6 +597,8 @@ export default function BlackjackPage() {
 
   // View state
   const [currentView, setCurrentView] = useState<'game' | 'history' | 'stats' | 'analytics' | 'verify'>('game');
+  // When user clicks "Verify Game" in History, open Verify tab with this game ID pre-filled
+  const [initialVerifyGameId, setInitialVerifyGameId] = useState<string | null>(null);
 
   const isDeployer = Boolean(
     address && BLACKJACK_DEPLOYER_WALLET && address.toLowerCase() === BLACKJACK_DEPLOYER_WALLET
@@ -1817,18 +1816,13 @@ export default function BlackjackPage() {
       chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
       setCurrentGameResult(pendingChipResult);
       setPendingChipResult(null);
-      // Play sound when dealer wins
+      // Play sound: dealer wins (including dealer blackjack)
       if (soundEnabled && pendingChipResult === 'loss') {
         const audio = new Audio('/BlackJack/sounds/DealerWins.mp3');
         audio.play().catch(() => {});
       }
-      // Play sound when player gets blackjack
-      if (soundEnabled && pendingChipResult === 'blackjack') {
-        const audio = new Audio('/BlackJack/sounds/Blackjack.mp3');
-        audio.play().catch(() => {});
-      }
-      // Play sound when player wins (regular win, not blackjack)
-      if (soundEnabled && pendingChipResult === 'win') {
+      // Play sound: player wins (including player blackjack — same as any other win)
+      if (soundEnabled && (pendingChipResult === 'win' || pendingChipResult === 'blackjack')) {
         const audio = new Audio('/BlackJack/sounds/PlayerWins.mp3');
         audio.play().catch(() => {});
       }
@@ -2195,7 +2189,7 @@ export default function BlackjackPage() {
     canSplitByBetLimit; // Also check bet limit
 
   return (
-    <div className="min-h-screen overflow-x-hidden w-full"
+    <div className="min-h-screen overflow-x-hidden overflow-y-auto w-full no-scrollbar"
       style={{
         background: 'linear-gradient(145deg, rgb(10, 15, 20), rgb(16, 26, 35))',
       }}
@@ -2287,14 +2281,15 @@ export default function BlackjackPage() {
         </div>
       )}
 
-      <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-12 pb-4 sm:pb-8 overflow-x-hidden">
+      <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-12 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
         {/* View-specific content */}
         {currentView === 'game' && (
           <>
-        {/* Game Table + Quick History: 2-col grid on md-lg (2/3 table, 1/3 history) */}
-        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2 md:gap-4">
-          <div className="min-w-0 flex gap-1 pb-0 -mx-2 sm:mx-0">
-          <div className="relative w-full">
+        {/* Game layout: table + betting fit when possible; min height so table stays usable */}
+        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] grid-rows-[1fr_auto_auto] md:grid-rows-[1fr_auto] gap-2 md:gap-4 min-h-0">
+          {/* 1. Table — mobile first, desktop row1 col1; flex so it fills and shrinks */}
+          <div className="min-w-0 flex flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1">
+          <div className="relative w-full flex-1 min-h-0 flex flex-col">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
               playerHands={currentGame?.playerHands}
@@ -2389,74 +2384,53 @@ export default function BlackjackPage() {
           </div>
         </div>
 
-        <div className="min-w-0">
-          <QuickHistory history={gameState.history} reserveBalance={offChainBalance} />
-        </div>
-        </div>
-
-        {/* Mobile-only: action buttons in own section below table, above tournament (default layout, full width) */}
-        {currentView === 'game' && (
-          <BlackjackMobileActionBar
-            onRebetAndDeal={tournament.tournamentState.inTournament ? undefined : handleRebetAndDeal}
-            onStartGame={
-              tournament.tournamentState.inTournament
-                ? () => handleStartTournamentGame(TOURNAMENT_CONFIG.MIN_BET)
-                : () => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)
-            }
-            onAction={tournament.tournamentState.inTournament ? handleTournamentPlayerAction : handlePlayerAction}
-            onDoubleDownChips={tournament.tournamentState.inTournament ? undefined : handleDoubleDownChips}
-            onSplitChips={tournament.tournamentState.inTournament ? undefined : handleSplitChips}
-            isPlaying={gameState.isPlaying}
-            canHit={canHit}
-            canStand={canStand}
-            canDoubleDown={canDoubleDown && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
-            canSplit={canSplit && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
-            canDeal={
-              tournament.tournamentState.inTournament
-                ? !gameState.isPlaying && tournament.tournamentState.handsRemaining > 0
-                : !gameState.isPlaying && totalBetAmount > 0
-            }
-            chipStackLength={tournament.tournamentState.inTournament ? 0 : chipStack.length}
-            lastBetAmount={lastBetAmount}
-            soundEnabled={soundEnabled}
-          />
-        )}
-
-        {/* Tournament Mode Toggle Buttons */}
-        {!tournament.tournamentState.inTournament && !gameState.isPlaying && (
-          <div className="mt-6 md:mt-4 text-center">
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              {/* Quick Join Default Tournament */}
-              <button
-                onClick={() => setShowTournamentEntry(true)}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/30 transition-all transform hover:scale-105"
-              >
-                <span className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                  </svg>
-                  Quick Join Tournament
-                </span>
-              </button>
-
-              {/* Tournament Lobby Button */}
-              <button
-                onClick={() => setShowTournamentBrowser(true)}
-                className="px-6 py-3 bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400 text-white font-bold rounded-xl shadow-lg shadow-pink-500/30 transition-all transform hover:scale-105"
-              >
-                <span className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                  Tournament Lobby
-                </span>
-              </button>
+          {/* 2. Mobile betting controls — directly under table on mobile; hidden on desktop */}
+          {currentView === 'game' && (
+            <div className="order-2 md:hidden">
+              <BlackjackMobileActionBar
+                onRebetAndDeal={tournament.tournamentState.inTournament ? undefined : handleRebetAndDeal}
+                onStartGame={
+                  tournament.tournamentState.inTournament
+                    ? () => handleStartTournamentGame(TOURNAMENT_CONFIG.MIN_BET)
+                    : () => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)
+                }
+                onAction={tournament.tournamentState.inTournament ? handleTournamentPlayerAction : handlePlayerAction}
+                onDoubleDownChips={tournament.tournamentState.inTournament ? undefined : handleDoubleDownChips}
+                onSplitChips={tournament.tournamentState.inTournament ? undefined : handleSplitChips}
+                isPlaying={gameState.isPlaying}
+                canHit={canHit}
+                canStand={canStand}
+                canDoubleDown={canDoubleDown && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
+                canSplit={canSplit && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
+                canDeal={
+                  tournament.tournamentState.inTournament
+                    ? !gameState.isPlaying && tournament.tournamentState.handsRemaining > 0
+                    : !gameState.isPlaying && totalBetAmount > 0
+                }
+                chipStackLength={tournament.tournamentState.inTournament ? 0 : chipStack.length}
+                lastBetAmount={lastBetAmount}
+                soundEnabled={soundEnabled}
+              />
             </div>
-            <p className="text-gray-500 text-xs mt-2">
-              Quick Join: 1,000 MORBIUS | Or browse/create custom tournaments in the Lobby
-            </p>
-          </div>
-        )}
+          )}
+
+          {/* 3. Tabbed sidebar — mobile after chart; desktop row1 col2 (chart is inside sidebar P&L tab) */}
+          <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2">
+          <BlackjackSidebar
+            history={gameState.history}
+            reserveBalance={offChainBalance}
+            onQuickJoinTournament={() => setShowTournamentEntry(true)}
+            onTournamentLobby={() => setShowTournamentBrowser(true)}
+            chartRef={chartRef}
+            chartSessionStartTime={chartSessionStartTime.current}
+            wsClient={wsClient}
+            wsConnected={wsConnected}
+            clientSeed={clientSeed}
+            onClientSeedChange={setClientSeed}
+            onGenerateClientSeed={generateClientSeed}
+          />
+        </div>
+        </div>
 
         {/* Tournament Leaderboard (shown when in tournament) */}
         {tournament.tournamentState.inTournament && (
@@ -2469,86 +2443,6 @@ export default function BlackjackPage() {
               )}
               onRefresh={() => tournament.fetchLeaderboard()}
             />
-          </div>
-        )}
-
-        {/* How-To Play + Real-Time Bet Chart: 2-col grid (above) */}
-        {currentView === 'game' && (
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div
-              className="rounded-xl p-4 min-w-0"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
-                border: '1px solid rgba(6, 182, 212, 0.2)',
-              }}
-            >
-              <h2 className="text-lg font-semibold text-cyan-300/95 mb-3">How to Play</h2>
-              <div className="text-sm text-white/85 space-y-3">
-                <div>
-                  <span className="font-medium text-cyan-300/90">Deposit & Withdraw</span>
-                  <ul className="mt-1 space-y-1 list-disc list-inside">
-                    <li><strong>Deposit:</strong> Open the game menu (top right) and choose &quot;Deposit&quot; to send MORBIUS to your reserve. You can also click your reserve balance to open the deposit/withdraw modal.</li>
-                    <li><strong>Withdraw:</strong> Withdraw anytime from the game menu or by clicking your reserve balance. Your full reserve is yours; withdraw when you want to cash out.</li>
-                    <li>Bets are taken from your reserve. Winnings are added back to it.</li>
-                  </ul>
-                </div>
-                <div>
-                  <span className="font-medium text-cyan-300/90">Game Rules</span>
-                  <ul className="mt-1 space-y-1 list-disc list-inside">
-                    <li>Get as close to 21 as possible without going over. Beat the dealer.</li>
-                    <li><strong>Hit</strong> — take another card. <strong>Stand</strong> — keep your hand.</li>
-                    <li><strong>Double Down</strong> — double your bet, receive one more card.</li>
-                    <li><strong>Split</strong> — on a pair, split into two hands (double bet).</li>
-                    <li>Blackjack (Ace + 10-value) pays 3:2. Dealer stands on 17.</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-            <div
-              className="rounded-xl p-4 min-w-0"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
-                border: '1px solid rgba(6, 182, 212, 0.2)',
-              }}
-            >
-              <div className="h-96 w-full" style={{ minWidth: 0, minHeight: '384px' }}>
-                <BlackjackRealTimeBetChart
-                  ref={chartRef}
-                  sessionStartTime={chartSessionStartTime.current}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Top Players + Global Wins Feed: 2-col grid (below) */}
-        {currentView === 'game' && (
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div
-              className="rounded-xl p-4 min-w-0"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
-                border: '1px solid rgba(6, 182, 212, 0.2)',
-              }}
-            >
-              <BlackjackTopPlayers />
-            </div>
-            <div
-              className="rounded-xl p-4 min-w-0"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
-                border: '1px solid rgba(6, 182, 212, 0.2)',
-              }}
-            >
-              <GlobalWinsFeed
-                wsClient={wsClient}
-                wsConnected={wsConnected}
-              />
-            </div>
           </div>
         )}
 
@@ -2685,7 +2579,13 @@ export default function BlackjackPage() {
 
         {currentView === 'history' && (
           <div className="max-w-7xl mx-auto">
-            <GameHistory history={gameHistoryEntries} />
+            <GameHistory
+              history={gameHistoryEntries}
+              onVerifyGame={(gameId) => {
+                setInitialVerifyGameId(gameId);
+                setCurrentView('verify');
+              }}
+            />
           </div>
         )}
 
@@ -2743,65 +2643,25 @@ export default function BlackjackPage() {
         )}
 
         {currentView === 'verify' && (
-          <GameVerificationTools onVerify={handleVerifyGame} />
+          <div className="max-w-4xl mx-auto space-y-4">
+            <p className="text-center text-cyan-300/80 text-sm">
+              Provably fair seeds (server seed hash, server seed, client seed, nonce) for any hand. Enter a game ID below or open <span className="text-white font-medium">History</span> and click <span className="text-white font-medium">Verify Game</span> on a hand to load it here.
+            </p>
+            <GameVerificationTools
+              onVerify={handleVerifyGame}
+              initialGameId={initialVerifyGameId ?? undefined}
+              onInitialGameIdConsumed={() => setInitialVerifyGameId(null)}
+            />
+          </div>
         )}
 
-        {/* Provably Fair (Advanced) - Above Contract Addresses */}
-        <div className="mt-12 mb-6 px-1">
-          <div className="max-w-2xl mx-auto">
-            <button
-              type="button"
-              onClick={() => setShowProvablyFairAdvanced(v => !v)}
-              className="w-full flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-wider text-cyan-300/60 hover:text-cyan-300 transition-colors mb-3"
-            >
-              <span>Provably Fair (Advanced)</span>
-              <span aria-hidden className={`transition-transform ${showProvablyFairAdvanced ? 'rotate-180' : ''}`}>▾</span>
-            </button>
-
-            {showProvablyFairAdvanced && (
-              <div className="mt-3">
-                <div className="text-[10px] text-cyan-300/40 text-center mb-2">
-                  Optional. Leave blank to auto-generate a seed on "Deal Cards".
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={clientSeed}
-                    onChange={(e) => setClientSeed(e.target.value)}
-                    className="flex-1 px-3 py-2 text-center font-mono text-cyan-300 rounded border focus:outline-none"
-                    style={{
-                      background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
-                      boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(60, 60, 60, 0.3)',
-                    }}
-                    placeholder="Client seed (optional)"
-                  />
-                  <button
-                    type="button"
-                    onClick={generateClientSeed}
-                    className="w-10 h-10 rounded-lg font-black text-base transition-all active:scale-95"
-                    title="Generate random client seed"
-                    style={{
-                      background: 'linear-gradient(145deg, rgba(6, 182, 212, 0.18), rgba(8, 145, 178, 0.18))',
-                      boxShadow: 'inset 3px 3px 6px rgba(0, 0, 0, 0.3), inset -3px -3px 6px rgba(255, 255, 255, 0.05)',
-                      color: 'rgb(6, 182, 212)',
-                      border: '1px solid rgba(6, 182, 212, 0.35)',
-                    }}
-                  >
-                    ↻
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Contract Addresses - Above Footer */}
-        <div className="mt-6 mb-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
-          <ContractAddress address={MORBIUS_TOKEN_ADDRESS} label="MORBIUS Token" />
-          <ContractAddress address={BLACKJACK_ADDRESS} label="Blackjack Contract" />
-        </div>
       </main>
+
+      {/* Contract Addresses - Above Footer */}
+      <div className="w-full py-4 px-4 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 bg-transparent">
+        <ContractAddress address={MORBIUS_TOKEN_ADDRESS} label="MORBIUS Token" />
+        <ContractAddress address={BLACKJACK_ADDRESS} label="Blackjack Contract" />
+      </div>
 
       <Footer />
 

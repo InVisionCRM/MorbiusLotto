@@ -120,6 +120,9 @@ export const BLACKJACK_IMAGE_BACKGROUNDS = [
 ] as const;
 export type BlackjackImageId = (typeof BLACKJACK_IMAGE_BACKGROUNDS)[number]['id'];
 
+// Default table when player has no saved preference (wallet/localStorage)
+export const DEFAULT_BLACKJACK_IMAGE_ID: BlackjackImageId = 'High-Roller';
+
 // Table background videos (files in /public/BlackJack/video table/)
 export const BLACKJACK_VIDEO_BACKGROUNDS = [
   { id: 'glowingTable', label: 'Glowing Table', src: '/BlackJack/video%20table/glowingTable.mp4' },

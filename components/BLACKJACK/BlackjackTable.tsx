@@ -101,7 +101,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   currentBetAmount = '0',
   lastBetAmount = '0',
   useVideoBackground = true,
-  imageSource = BLACKJACK_IMAGE_BACKGROUNDS[0].id,
+  imageSource = DEFAULT_BLACKJACK_IMAGE_ID,
   videoSource = 'glowingTable',
   videoSyncToClock = true,
   videoPosition = 50,
@@ -110,7 +110,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   soundEnabled = true,
 }) => {
   const videoSrc = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
-  const imageSrc = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
+  const imageSrc = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
   // State for progressive dealer card reveal
   // Industry standard: Show only first card during play, reveal all when game completes
   const [visibleDealerCards, setVisibleDealerCards] = useState(() => {
@@ -468,6 +468,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
   // Store callback in ref to avoid re-triggering useEffect
   const onDealerRevealCompleteRef = useRef(onDealerRevealComplete);
+  const hasCalledRevealCompleteRef = useRef(false);
   useEffect(() => {
     onDealerRevealCompleteRef.current = onDealerRevealComplete;
   }, [onDealerRevealComplete]);
@@ -479,12 +480,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     const prevCardCount = prevDealerCardCountRef.current;
     const prevState = prevGameStateRef.current;
     
-    // Only clear pending reveal timeouts when gameState transitions away from COMPLETE
-    // Don't clear during an active reveal sequence (when isRevealing is true or when visibleDealerCards is changing)
+    // Reset "called" flag when leaving COMPLETE so next completion can trigger
     const stateTransitionedAway = prevState === GameState.COMPLETE && gameState !== GameState.COMPLETE;
-    if (stateTransitionedAway && revealTimeoutRef.current) {
-      clearTimeout(revealTimeoutRef.current);
-      revealTimeoutRef.current = null;
+    if (stateTransitionedAway) {
+      hasCalledRevealCompleteRef.current = false;
+      if (revealTimeoutRef.current) {
+        clearTimeout(revealTimeoutRef.current);
+        revealTimeoutRef.current = null;
+      }
     }
 
     // Game completed: Start reveal sequence
@@ -493,8 +496,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     const dealerCardsArrived = gameState === GameState.COMPLETE && totalCards > prevCardCount && prevCardCount >= 2;
     const shouldStartReveal = (gameJustCompleted || dealerCardsArrived) && !isRevealing && visibleDealerCards < totalCards;
     
-    // Game completed with no reveal (e.g. only one dealer card): signal completion immediately so REBET/DEAL unlock
-    if (gameJustCompleted && totalCards < 2) {
+    // When game is COMPLETE and there's nothing to reveal (0–1 cards or all already visible), signal completion immediately so REBET/DEAL unlock (fixes blackjack freeze)
+    const noRevealNeeded = gameState === GameState.COMPLETE && (totalCards < 2 || visibleDealerCards >= totalCards);
+    if (noRevealNeeded && !hasCalledRevealCompleteRef.current) {
+      hasCalledRevealCompleteRef.current = true;
       onDealerRevealCompleteRef.current?.();
     }
     else if (shouldStartReveal) {
@@ -516,6 +521,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             } else {
               // All cards revealed
               setIsRevealing(false);
+              hasCalledRevealCompleteRef.current = true;
               onDealerRevealCompleteRef.current?.();
             }
           };
@@ -528,6 +534,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         revealTimeoutRef.current = setTimeout(() => {
           setVisibleDealerCards(2);
           setIsRevealing(false);
+          hasCalledRevealCompleteRef.current = true;
           onDealerRevealCompleteRef.current?.();
         }, 1000); // 1 second delay before revealing hole card
       }
@@ -582,7 +589,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       // 1. Component unmounts (React will handle this)
       // 2. State transitions away from COMPLETE (handled above)
     };
-  }, [gameState, dealerHand.cards.length, isRevealing]);
+  }, [gameState, dealerHand.cards.length, isRevealing, visibleDealerCards]);
 
   // Track visibleDealerCards changes
   useEffect(() => {
@@ -650,13 +657,15 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   return (
     <div
       ref={tableContainerRef}
-      className="relative w-full max-w-full sm:max-w-6xl mx-auto overflow-hidden blackjack-table"
+      className="relative w-full max-w-full sm:max-w-6xl mx-auto blackjack-table flex flex-col flex-1"
       style={{
-        minHeight: '500px',
+        minHeight: '450px',
         boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.9), inset 0 -2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3)',
         border: '1px inset rgba(60, 60, 60, 0.5)',
       }}
     >
+      {/* Table surface: flex-1 with min height so table stays a good size */}
+      <div className="flex-1 min-h-[600px] sm:min-h-[500px] relative">
       {/* Looping video background — key forces remount when src changes */}
       {useVideoBackground ? (
         <video
@@ -716,7 +725,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         preload="metadata"
       />
       <div
-        className="absolute top-4 left-4 z-20 flex flex-col gap-1.5 rounded-xl border border-cyan-500/30 px-3 py-2 shadow-lg pointer-events-auto"
+        className="absolute top-2 left-2 sm:top-4 sm:left-4 z-20 flex flex-col gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl border border-cyan-500/30 px-2 py-1.5 sm:px-3 sm:py-2 shadow-lg pointer-events-auto"
         style={{
           background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.8))',
           boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.5)',
@@ -729,18 +738,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           <button
             type="button"
             onClick={toggleMusic}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+            className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
             aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
           >
-            {isMusicPlaying ? <i className="fas fa-pause text-sm" /> : <i className="fas fa-play text-sm" />}
+            {isMusicPlaying ? <i className="fas fa-pause text-xs sm:text-sm" /> : <i className="fas fa-play text-xs sm:text-sm" />}
           </button>
           <button
             type="button"
             onClick={nextTrack}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+            className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
             aria-label="Next track"
           >
-            <i className="fas fa-forward text-sm" />
+            <i className="fas fa-forward text-xs sm:text-sm" />
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -758,11 +767,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             aria-label="Music volume"
           />
         </div>
-      </div>
-
-      {/* System Time Display + Change Table link */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-1 pointer-events-auto">
-        <SystemTime className="!static pointer-events-none" />
         {onOpenTableThemeSelector && (
           <button
             type="button"
@@ -770,11 +774,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               e.stopPropagation();
               onOpenTableThemeSelector();
             }}
-            className="text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-1 transition-colors cursor-pointer py-0.5 px-1 -mx-1"
+            className="text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-1 transition-colors cursor-pointer py-0.5 px-0 -mx-0 text-left w-full"
           >
             Change Table
           </button>
         )}
+      </div>
+
+      {/* System Time Display (top-right) */}
+      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex flex-col items-end gap-0.5 sm:gap-1 pointer-events-auto">
+        <SystemTime className="!static pointer-events-none" />
       </div>
 
       {/* Game Result Banner - Shows when game is complete until next deal */}
@@ -782,7 +791,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex justify-center pointer-events-none">
           <div
             className={`
-              px-8 py-4 rounded-2xl backdrop-blur-md
+              px-4 py-2 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl backdrop-blur-md
               transform transition-all duration-500 ease-out
               animate-result-banner
               ${displayedResult === 'blackjack' ? 'bg-gradient-to-r from-yellow-500/90 via-amber-400/90 to-yellow-500/90 border-2 border-yellow-300' :
@@ -800,9 +809,9 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 : '0 0 30px rgba(156, 163, 175, 0.4), inset 0 2px 4px rgba(255,255,255,0.2)',
             }}
           >
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
               {/* Result Icon */}
-              <div className="text-4xl mb-1">
+              <div className="text-2xl sm:text-4xl mb-0.5 sm:mb-1">
                 {displayedResult === 'blackjack' && '🃏✨'}
                 {displayedResult === 'win' && '🎉'}
                 {displayedResult === 'loss' && '😔'}
@@ -811,7 +820,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
               {/* Result Text */}
               <h2
-                className={`text-4xl font-black uppercase tracking-wider
+                className={`text-2xl sm:text-4xl font-black uppercase tracking-wider
                   ${displayedResult === 'blackjack' ? 'text-yellow-900' :
                     displayedResult === 'win' ? 'text-white' :
                     displayedResult === 'loss' ? 'text-white' :
@@ -846,11 +855,11 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-      <div className="relative z-10 flex flex-col" style={{ height: '100%', minHeight: '700px' }}>
+      <div className="relative z-10 flex flex-col" style={{ height: '100%' }}>
         {/* Play Area */}
-        <div className="flex-1 relative w-full z-10" style={{ minHeight: '600px' }}>
+        <div className="flex-1 relative w-full z-10" style={{ minHeight: '400px' }}>
           {/* Dealer Area */}
-          <div className="absolute top-35 left-1/2 -translate-x-1/2 flex flex-col items-center">
+          <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 flex flex-col items-center">
             <div className="flex">
               {/* Industry standard dealer card display:
                   - During play: Show first card face-up, second card (hole card) face-down
@@ -884,8 +893,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               })}
             </div>
             {visibleDealerCards > 0 && (
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-white font-black text-4xl">
+              <div className="flex items-center gap-1 sm:gap-2 mt-1 sm:mt-2">
+                <span className="text-white font-black text-2xl sm:text-4xl">
                   {isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal())}
                 </span>
                 {/* Only show BUST/BJ text when game is COMPLETE, reveal is done, AND all cards are visible */}
@@ -896,7 +905,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           </div>
 
           {/* Player Area */}
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex flex-col gap-4 items-center">
+          <div className="absolute bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 flex flex-col gap-2 sm:gap-4 items-center">
             {/* Player Hands - Side by Side for Split */}
             <div className={`flex ${hasSplit ? 'gap-2 sm:gap-8' : 'gap-4'} items-end`}>
               {displayHands.map((hand, handIndex) => {
@@ -1358,148 +1367,132 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             )}
           </div>
         </div>
+        </div>
+      {/* End Play Area */}
 
-        {/* Stacked Chip Display with Betting Controls - Bottom Center */}
-        {/* Only show center chips when NOT split - split hands show chips under each hand */}
-        <div className="absolute bottom-33 left-1/2 transform -translate-x-1/2 z-15 flex items-end">
-          {/* Chip Stack - hide when split (chips are shown under each hand) */}
-          {chipStack.length > 0 && !hasSplit && (
-            <div
-              className={`relative ${
-                chipAnimationState === 'loss' ? 'chip-stack-lose' :
-                chipAnimationState === 'win' ? 'chip-stack-win' : ''
-              }`}
-              style={{ width: '64px', height: `${Math.max(64, chipStack.length * 3 + 64)}px` }}
-            >
-              {/* Original bet chips - stay in place during win animation */}
-              {chipStack.map((chipValue, index) => {
+      {/* Stacked Chip Display - Between table and betting panel */}
+      {/* Only show center chips when NOT split - split hands show chips under each hand */}
+      {chipStack.length > 0 && !hasSplit && (
+        <div className="flex justify-center py-2">
+          <div
+            className={`relative chip-stack-container ${
+              chipAnimationState === 'loss' ? 'chip-stack-lose' :
+              chipAnimationState === 'win' ? 'chip-stack-win' : ''
+            }`}
+            style={{ width: '64px', height: `${Math.max(48, chipStack.length * 3 + 48)}px` }}
+          >
+            {/* Original bet chips - stay in place during win animation */}
+            {chipStack.map((chipValue, index) => {
+              const chipImage = getChipImage(chipValue);
+              const stackOffset = index * 3; // 3px offset per chip for stacking
+
+              return (
+                <div
+                  key={`original-${chipValue}-${index}`}
+                  className={`absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden ${
+                    chipAnimationState === 'loss' ? 'chip-lose' : ''
+                  }`}
+                  style={{
+                    background: `url('${chipImage}') center/contain no-repeat`,
+                    border: '2px solid rgba(0, 0, 0, 0)',
+                    bottom: `${stackOffset}px`,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 10 + index,
+                    animationDelay: chipAnimationState === 'loss' ? `${index * 0.05}s` : '0s',
+                  }}
+                >
+                  <span
+                    className="font-bold text-white"
+                    style={{
+                      textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)',
+                      fontSize: '9px',
+                    }}
+                  >
+                    {chipValue}
+                  </span>
+                </div>
+              );
+            })}
+            {/* Winning chips - animate in from top during win animation */}
+            {chipAnimationState === 'win' && (() => {
+              const totalBet = chipStack.reduce((sum, chip) => sum + chip, 0);
+              let payoutInTokens: number;
+              if (totalPayout > BigInt(0)) {
+                const payoutWei = Number(totalPayout);
+                const betWei = totalBet * 1e18;
+                const winningWei = payoutWei - betWei;
+                payoutInTokens = Math.floor(winningWei / 1e18);
+              } else {
+                if (gameResult === 'blackjack') {
+                  payoutInTokens = Math.floor(totalBet * 1.5);
+                } else {
+                  payoutInTokens = totalBet;
+                }
+              }
+              const winningChips: number[] = [];
+              let remaining = payoutInTokens;
+              const chipValues = [100000, 10000, 2500, 1000, 500];
+              for (const chipValue of chipValues) {
+                while (remaining >= chipValue) {
+                  winningChips.push(chipValue);
+                  remaining -= chipValue;
+                }
+              }
+              return winningChips.map((chipValue, index) => {
                 const chipImage = getChipImage(chipValue);
-                const stackOffset = index * 3; // 3px offset per chip for stacking
-
                 return (
                   <div
-                    key={`original-${chipValue}-${index}`}
-                    className={`absolute w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden ${
-                      chipAnimationState === 'loss' ? 'chip-lose' : ''
-                    }`}
+                    key={`win-${chipValue}-${index}`}
+                    className="absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden chip-win"
                     style={{
                       background: `url('${chipImage}') center/contain no-repeat`,
                       border: '2px solid rgba(0, 0, 0, 0)',
-                      bottom: `${stackOffset}px`,
-                      left: '0',
-                      zIndex: 10 + index,
-                      animationDelay: chipAnimationState === 'loss' ? `${index * 0.05}s` : '0s',
+                      bottom: `${chipStack.length * 3 + 10}px`,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      zIndex: 100 + index,
+                      animationDelay: `${index * 0.2}s`,
                     }}
                   >
-                    <div className="relative z-10 flex flex-col items-center gap-4">
-                      <span
-                        className="font-bold text-white text-shadow"
-                        style={{
-                          textShadow: '2px 2px 4px rgba(0, 0, 0, 0), -1px -1px 2px rgba(0, 0, 0, 0)',
-                          fontSize: '10px',
-                        }}
-                      >
-                        {chipValue}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-              {/* Winning chips - animate in from top during win animation */}
-              {chipAnimationState === 'win' && (() => {
-                // Calculate winning chips based on payout
-                // For blackjack: payout is 1.5x bet (3:2), for regular win: payout is 2x bet (1:1)
-                const totalBet = chipStack.reduce((sum, chip) => sum + chip, 0);
-                
-                // Convert payout from wei to whole tokens, or calculate based on result
-                let payoutInTokens: number;
-                if (totalPayout > BigInt(0)) {
-                  // Use actual payout from server (already includes bet + winnings)
-                  // Payout is total returned, so winning amount = payout - bet
-                  const payoutWei = Number(totalPayout);
-                  const betWei = totalBet * 1e18;
-                  const winningWei = payoutWei - betWei;
-                  payoutInTokens = Math.floor(winningWei / 1e18);
-                } else {
-                  // Fallback: calculate based on result type
-                  if (gameResult === 'blackjack') {
-                    // Blackjack pays 3:2 = 1.5x bet
-                    payoutInTokens = Math.floor(totalBet * 1.5);
-                  } else {
-                    // Regular win pays 1:1 = 1x bet
-                    payoutInTokens = totalBet;
-                  }
-                }
-                
-                // Calculate how many chips to show for the payout
-                // Convert payout to chip stack representation
-                const winningChips: number[] = [];
-                let remaining = payoutInTokens;
-                const chipValues = [100000, 10000, 2500, 1000, 500];
-                
-                for (const chipValue of chipValues) {
-                  while (remaining >= chipValue) {
-                    winningChips.push(chipValue);
-                    remaining -= chipValue;
-                  }
-                }
-                
-                return winningChips.map((chipValue, index) => {
-                  const chipImage = getChipImage(chipValue);
-                  return (
-                    <div
-                      key={`win-${chipValue}-${index}`}
-                      className="absolute w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden chip-win"
+                    <span
+                      className="font-bold text-white"
                       style={{
-                        background: `url('${chipImage}') center/contain no-repeat`,
-                        border: '2px solid rgba(0, 0, 0, 0)',
-                        bottom: `${chipStack.length * 3 + 10}px`,
-                        left: '0',
-                        zIndex: 100 + index,
-                        animationDelay: `${index * 0.2}s`,
+                        textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)',
+                        fontSize: '9px',
                       }}
                     >
-                      <div className="relative z-10 flex flex-col items-center gap-4">
-                        <span
-                          className="font-bold text-white text-shadow"
-                          style={{
-                            textShadow: '2px 2px 4px rgba(0, 0, 0, 0), -1px -1px 2px rgba(0, 0, 0, 0)',
-                            fontSize: '10px',
-                          }}
-                        >
-                          {chipValue}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-              {/* Total Bet Amount Display */}
-              <div
-                className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
-                  chipAnimationState !== 'none' ? 'opacity-0' : ''
-                }`}
+                      {chipValue}
+                    </span>
+                  </div>
+                );
+              });
+            })()}
+            {/* Total Bet Amount Display */}
+            <div
+              className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
+                chipAnimationState !== 'none' ? 'opacity-0' : ''
+              }`}
+              style={{
+                top: `-20px`,
+                transition: 'opacity 0.3s ease-out',
+              }}
+            >
+              <span
+                className="font-black text-sm text-white"
                 style={{
-                  bottom: `${chipStack.length * 3 + 10}px`,
-                  transition: 'opacity 0.3s ease-out',
+                  textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9)',
                 }}
               >
-                <span
-                  className="font-black text-md text-white"
-                  style={{
-                    textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  {chipStack.reduce((sum, chip) => sum + chip, 0)}
-                </span>
-              </div>
+                {chipStack.reduce((sum, chip) => sum + chip, 0)}
+              </span>
             </div>
-          )}
-
+          </div>
         </div>
+      )}
 
-        {/* Betting Panel - Bottom of table, under betting controls */}
-        <div className="mt-8 w-full">
+      {/* Betting Panel - Overlay at bottom of table */}
+      <div className="absolute bottom-1 left-0 right-0 z-50 flex justify-center pointer-events-auto">
           <BettingPanel
             onStartGame={onStartGame || (() => {})}
             isPlaying={isPlaying}
@@ -1513,50 +1506,39 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           />
         </div>
 
-        {/* Clear Button + Reserve - Own row under betting panel */}
-        <div className="mt-0.5 w-full flex justify-center items-center gap-3">
-          <button
-            onClick={() => onBetAmountChange?.('', undefined, true)}
-            disabled={isPlaying}
-            className="px-1.5 py-0.5 md:px-2 md:py-1 lg:px-3 lg:py-1 rounded font-bold text-base md:text-lg lg:text-xl uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/70"
-            style={{
-              background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
-              boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(60, 60, 60, 0.3)',
-            }}
-          >
-            Clear
-          </button>
+        {/* Reserve - bottom right corner */}
+        <div className="absolute bottom-2 right-2 z-50 pointer-events-auto">
           <button
             type="button"
             onClick={onOpenDepositModal}
             aria-label={`Reserve balance: ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS. Open deposit and withdraw.`}
-            className="flex relative items-center justify-start rounded-lg py-2 px-4 pr-10 gap-1 text-xl flex-shrink min-w-0 hover:brightness-110 transition-all cursor-pointer"
+            className="flex relative items-center justify-start rounded-md py-1 px-2.5 pr-6 gap-1 text-sm flex-shrink min-w-0 hover:brightness-110 transition-all cursor-pointer"
             style={{
               background: 'linear-gradient(145deg, rgb(30, 40, 50), rgb(20, 30, 40))',
               boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.4), inset -2px -2px 4px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.3)',
               border: '1px solid rgba(80, 90, 100, 0.3)',
             }}
           >
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <NumberTicker
                 value={Math.floor(Number(reserveBalance) / 1e18)}
-                className="text-white/80 font-bold whitespace-nowrap text-xl"
+                className="text-white/80 font-bold whitespace-nowrap text-sm"
                 animateOnChange={true}
               />
               <Image
                 src="/morbius/MorbiusLogo (3).png"
                 alt="Morbius Logo"
-                width={16}
-                height={16}
+                width={12}
+                height={12}
                 className="object-contain"
               />
             </div>
-            <i className="fas fa-chevron-down text-white/60 text-xs absolute right-2 top-1/2 transform -translate-y-1/2" />
+            <i className="fas fa-chevron-down text-white/60 text-[10px] absolute right-1.5 top-1/2 transform -translate-y-1/2" />
           </button>
         </div>
 
       </div>
+      {/* End table surface */}
 
       <style jsx global>{`
         /* Result banner animation */
@@ -1688,6 +1670,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         }
         .blackjack-card-player:hover {
           box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Mobile optimizations - scale down cards and chips */
+        @media (max-width: 640px) {
+          .blackjack-table .blackjack-card {
+            transform: scale(0.7);
+            transform-origin: center center;
+          }
+          .blackjack-table .chip-stack-container {
+            transform: scale(0.75);
+            transform-origin: center bottom;
+          }
         }
       `}</style>
     </div>

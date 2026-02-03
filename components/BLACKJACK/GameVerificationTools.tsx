@@ -39,11 +39,16 @@ interface GameVerificationToolsProps {
   gameData?: GameVerificationData
   onVerify?: (gameId: string) => Promise<GameVerificationData | null>
   isLoading?: boolean
+  /** When opening from History "Verify Game", prefill and auto-run verify for this game ID */
+  initialGameId?: string
+  /** Call after consuming initialGameId so parent can clear it */
+  onInitialGameIdConsumed?: () => void
 }
 
-export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVerificationToolsProps) {
-  const [gameId, setGameId] = useState('')
+export function GameVerificationTools({ gameData, onVerify, isLoading, initialGameId, onInitialGameIdConsumed }: GameVerificationToolsProps) {
+  const [gameId, setGameId] = useState(initialGameId ?? '')
   const [verificationData, setVerificationData] = useState<GameVerificationData | null>(gameData || null)
+  const initialGameIdConsumedRef = React.useRef(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [verificationResult, setVerificationResult] = useState<{
     isValid: boolean
@@ -52,6 +57,42 @@ export function GameVerificationTools({ gameData, onVerify, isLoading }: GameVer
   } | null>(null)
   const [showServerSeed, setShowServerSeed] = useState(false)
   const [showProvablyFair, setShowProvablyFair] = useState(true)
+
+  // When opened from History with a game ID, prefill and auto-run verify once
+  useEffect(() => {
+    if (!initialGameId) {
+      initialGameIdConsumedRef.current = false
+      return
+    }
+    if (initialGameIdConsumedRef.current || !onVerify) return
+    initialGameIdConsumedRef.current = true
+    setGameId(initialGameId)
+    onInitialGameIdConsumed?.()
+    let cancelled = false
+    const run = async () => {
+      setIsVerifying(true)
+      setVerificationResult(null)
+      try {
+        const data = await onVerify(initialGameId)
+        if (cancelled) return
+        if (data) {
+          setVerificationData(data)
+          const result = verifyGame(data)
+          setVerificationResult(result)
+          if (result.isValid) toast.success('Game verification successful!')
+          else toast.error('Game verification failed!')
+        } else {
+          toast.error('Game not found')
+        }
+      } catch {
+        if (!cancelled) toast.error('Verification failed')
+      } finally {
+        if (!cancelled) setIsVerifying(false)
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [initialGameId, onVerify, onInitialGameIdConsumed])
 
   const handleVerify = async () => {
     if (!gameId.trim() && !verificationData) return
