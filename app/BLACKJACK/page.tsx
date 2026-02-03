@@ -814,7 +814,7 @@ export default function BlackjackPage() {
             result: overallResult,
             processedGame: processedGame // Pass the processed game with cards already extracted
           });
-          fetchBalance();
+          // Balance refreshes after dealer reveal (handleDealerRevealComplete) for immersion
         }
       });
 
@@ -849,17 +849,14 @@ export default function BlackjackPage() {
             result: isBlackjack ? 'blackjack' : overallResult,
             processedGame: processedGame // Pass the processed game with cards already extracted
           });
-          // Refresh balance after game completes
-          fetchBalance();
+          // Balance refreshes after dealer reveal (handleDealerRevealComplete) for immersion
         }
       });
 
       client.on('game_completed', (data: any) => {
         console.log('Game completed event received:', data);
         // Don't handle here - we already handle it in game_updated when status is 'completed'
-        // This event is just for notification purposes, the actual data comes from game_updated
-        // Refresh balance after game completes
-        fetchBalance();
+        // Balance refreshes after dealer reveal (handleDealerRevealComplete) for immersion
       });
 
       client.on('error', (error: any) => {
@@ -1835,7 +1832,10 @@ export default function BlackjackPage() {
       setShowWinNotification(true);
       setPendingWinData(null);
     }
-  }, [pendingWinData, pendingChipResult, soundEnabled, playSound]);
+
+    // Refresh reserve display only after dealer hand is fully revealed (preserves immersion)
+    fetchBalance();
+  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, fetchBalance]);
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {
@@ -2106,10 +2106,7 @@ export default function BlackjackPage() {
       const serverGameState = await wsClient.playerAction(gameState.currentGame.id, action);
       console.log('Player action processed:', serverGameState);
       updateGameStateFromServer(serverGameState);
-      // If the server completed the game, refresh balance
-      if (serverGameState?.status === 'completed') {
-        fetchBalance();
-      }
+      // Balance refreshes after dealer reveal (handleDealerRevealComplete) for immersion
       return;
     } catch (error) {
       console.error('Failed to perform action:', error);
