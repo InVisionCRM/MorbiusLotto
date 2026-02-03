@@ -38,6 +38,11 @@ export function getWebSocketUrlOptional(): string | null {
   return value.trim();
 }
 
+/** Blackjack backend URL. Falls back to API URL when not set (same backend). */
 export function getBlackjackServerUrl(): string {
-  return requireEnv('NEXT_PUBLIC_BLACKJACK_SERVER_URL');
+  const v = process.env.NEXT_PUBLIC_BLACKJACK_SERVER_URL;
+  if (v != null && v.trim() !== '') return v.trim();
+  const api = getApiUrlOptional();
+  if (api) return api;
+  return requireEnv('NEXT_PUBLIC_API_URL');
 }
