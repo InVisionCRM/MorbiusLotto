@@ -2570,6 +2570,7 @@ export default function BlackjackPage() {
           isOpen={showDepositModal}
           onClose={() => setShowDepositModal(false)}
           onBalanceSync={syncBalance}
+          onRefreshBalance={fetchBalance}
           contractReserve={playerReserve}
           offChainBalance={offChainBalance}
         />

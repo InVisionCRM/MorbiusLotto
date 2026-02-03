@@ -23,12 +23,13 @@ import { toast } from 'sonner'
 interface DepositWithdrawModalProps {
   isOpen: boolean
   onClose: () => void
-  onBalanceSync?: () => Promise<void> // Callback to sync balance after deposit/withdraw
+  onBalanceSync?: () => Promise<void> // Callback to sync balance after deposit/withdraw (overwrites DB with contract)
+  onRefreshBalance?: () => Promise<void> // Callback to refresh display from server only (safe, no overwrite)
   contractReserve?: bigint // Contract reserve for withdrawals (still needed for withdraw limits)
   offChainBalance?: bigint // Off-chain balance from server (for display)
 }
 
-export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractReserve, offChainBalance }: DepositWithdrawModalProps) {
+export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefreshBalance, contractReserve, offChainBalance }: DepositWithdrawModalProps) {
   // Display balance: prefer off-chain balance (most up-to-date), fallback to contract reserve
   // Use offChainBalance if available and > 0, otherwise use contractReserve
   const displayBalance = (offChainBalance !== undefined && offChainBalance !== null && offChainBalance > 0n)
@@ -97,23 +98,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
     }
   }, [isApprovalSuccess])
 
-  // Auto-sync when modal opens and there's a balance mismatch
-  useEffect(() => {
-    if (isOpen && onBalanceSync && contractReserve !== undefined && contractReserve !== null) {
-      // If on-chain is significantly higher than off-chain, auto-sync
-      const onChain = contractReserve
-      const offChain = offChainBalance ?? 0n
-      if (onChain > offChain) {
-        console.log('Balance mismatch detected, auto-syncing...', {
-          onChain: onChain.toString(),
-          offChain: offChain.toString()
-        })
-        onBalanceSync().catch(err => {
-          console.error('Auto-sync failed:', err)
-        })
-      }
-    }
-  }, [isOpen, contractReserve, offChainBalance, onBalanceSync])
+  // Do NOT auto-sync when modal opens. During play, off-chain balance is the source of truth
+  // (bets/losses are deducted there); contract balance stays higher until user withdraws.
+  // Syncing on open would overwrite correct off-chain balance with contract and "restore" lost bets.
 
   // Handle deposit PLS
   const handleDepositPLS = async () => {
@@ -417,31 +404,31 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, contractR
                     <div className="text-2xl font-bold text-white">
                       {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0} MORBIUS
                     </div>
-                    {/* Show contract reserve if different from display balance */}
+                    {/* Show contract reserve if different from display (e.g. during play, display = off-chain) */}
                     {contractReserve && contractReserve !== displayBalance && (
                       <div className="flex items-center justify-center gap-2 mt-2">
                         <div className="text-xs text-yellow-400">
                           On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()} MORBIUS
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            if (onBalanceSync) {
-                              toast.info('Syncing balance...')
+                        {onRefreshBalance && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              toast.info('Refreshing...')
                               try {
-                                await onBalanceSync()
-                                toast.success('Balance synced!', { duration: 5000 })
+                                await onRefreshBalance()
+                                toast.success('Balance refreshed', { duration: 3000 })
                               } catch (error) {
-                                console.error('Sync failed:', error)
-                                toast.error('Sync failed. Please try again.')
+                                console.error('Refresh failed:', error)
+                                toast.error('Refresh failed. Please try again.')
                               }
-                            }
-                          }}
-                          className="h-6 px-2 text-xs bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
-                        >
-                          Sync Now
-                        </Button>
+                            }}
+                            className="h-6 px-2 text-xs bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
+                          >
+                            Refresh
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
