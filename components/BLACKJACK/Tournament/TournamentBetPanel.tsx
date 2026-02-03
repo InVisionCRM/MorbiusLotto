@@ -64,7 +64,7 @@ export function TournamentBetPanel({
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap gap-2 items-center">
       {/* Chip Amount Display */}
       <div className="flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full border border-yellow-500/30">
         <div className="w-5 h-5 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center">
@@ -75,8 +75,8 @@ export function TournamentBetPanel({
         </span>
       </div>
 
-      {/* Preset Bet Buttons */}
-      <div className="flex gap-1">
+      {/* Preset Bet Buttons — grid-4 */}
+      <div className="grid grid-cols-4 gap-1">
         {presetBets.map(({ amount, label }) => {
           const affordable = amount <= chips;
           const isSelected = betAmount === amount;
@@ -87,7 +87,7 @@ export function TournamentBetPanel({
               onClick={() => handlePresetBet(amount)}
               disabled={isPlaying || isLoading || !affordable}
               className={`
-                px-3 py-1.5 rounded-full text-xs font-bold transition-all
+                px-2 py-1.5 rounded-full text-xs font-bold transition-all
                 ${isSelected
                   ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/40'
                   : affordable
@@ -102,7 +102,7 @@ export function TournamentBetPanel({
         })}
       </div>
 
-      {/* All-In Button */}
+      {/* All-In */}
       <button
         onClick={handleAllIn}
         disabled={isPlaying || isLoading}
@@ -111,12 +111,12 @@ export function TournamentBetPanel({
         ALL IN
       </button>
 
-      {/* Deal Button */}
+      {/* Deal */}
       <button
         onClick={handleStartGame}
         disabled={!isValidBet || isPlaying || isLoading}
         className={`
-          px-6 py-2 rounded-full font-bold text-sm transition-all
+          px-4 py-2 rounded-full font-bold text-sm transition-all
           ${isValidBet && !isPlaying && !isLoading
             ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-400 hover:to-emerald-500 shadow-lg shadow-green-500/30'
             : 'bg-gray-600 text-gray-400 cursor-not-allowed'

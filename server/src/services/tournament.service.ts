@@ -98,6 +98,29 @@ export interface CreateTournamentParams {
   pinCode?: string | null;
 }
 
+/** Create freeroll tournament (no buy-in, scheduled start). */
+export interface CreateFreerollParams {
+  creatorAddress: string;
+  name: string;
+  freerollMode: 'elimination' | 'standard_chip_count';
+  scheduledStartAt: string; // ISO date string
+  registrationOpensAt: string; // ISO date string
+  durationMinutes: number;
+  startingChips: number;
+  maxHands: number;
+  prizeDistributionType: string;
+  customPrizePercentages?: number[];
+  eliminationConfig?: { intervalType: string; intervalValue: number; eliminationPercentage: number; resetChipsAfterRound?: boolean } | null;
+  reentryConfig: { enabled: boolean; windowMinutes?: number };
+  actionTimerSeconds: number | null;
+  tiebreakerOrder?: string[];
+  tableTheme: TableTheme;
+  isPrivate: boolean;
+  maxPlayers?: number | null;
+  customImage?: string | null;
+  pinCode?: string | null;
+}
+
 // Freeroll list item (from list_freeroll_tournaments)
 export interface FreerollListItem {
   id: string;
@@ -1131,6 +1154,115 @@ export class TournamentService {
     });
 
     return tournament;
+  }
+
+  /**
+   * Create a freeroll tournament (no buy-in, scheduled start).
+   */
+  async createFreeroll(params: CreateFreerollParams): Promise<{ id: string; pinCode?: string | null }> {
+    const normalizedCreator = this.normalizeAddress(params.creatorAddress);
+    const name = params.name.trim();
+    if (name.length < 3 || name.length > 50) {
+      throw new Error('Tournament name must be 3–50 characters');
+    }
+    const scheduledStart = new Date(params.scheduledStartAt);
+    const registrationOpens = new Date(params.registrationOpensAt);
+    if (isNaN(scheduledStart.getTime()) || isNaN(registrationOpens.getTime())) {
+      throw new Error('Invalid scheduled or registration date');
+    }
+    if (params.durationMinutes < 5 || params.durationMinutes > 1440) {
+      throw new Error('Duration must be 5–1440 minutes');
+    }
+    const validStartingChips = [1000, 5000, 10000, 25000];
+    if (!validStartingChips.includes(params.startingChips)) {
+      throw new Error('Invalid starting chips');
+    }
+    if (params.maxHands < 1 || params.maxHands > 200) {
+      throw new Error('Max hands must be 1–200');
+    }
+    let pinCode: string | null = null;
+    if (params.isPrivate) {
+      pinCode = (params.pinCode?.trim() && /^\d{4,12}$/.test(params.pinCode.trim()))
+        ? params.pinCode.trim()
+        : this.generatePinCode();
+    }
+    const prizePercentages = this.getPrizePercentages(params.prizeDistributionType, params.customPrizePercentages);
+    const rebuyConfig = { enabled: false, maxRebuys: 0 };
+
+    const query = `
+      INSERT INTO tournaments (
+        name,
+        creator_address,
+        buy_in_amount,
+        starting_chips,
+        max_hands,
+        min_players,
+        status,
+        prize_pool,
+        time_limit_minutes,
+        rebuy_config,
+        table_theme,
+        is_private,
+        pin_code,
+        prize_distribution_type,
+        prize_percentages,
+        max_players,
+        custom_image,
+        tournament_type,
+        scheduled_start_at,
+        registration_opens_at,
+        duration_minutes,
+        freeroll_mode,
+        elimination_config,
+        reentry_config,
+        action_timer_seconds,
+        current_phase,
+        current_elimination_round,
+        tiebreaker_order
+      ) VALUES ($1, $2, 0, $3, $4, 2, 'active', 0, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, 'registration', 0, $20)
+      RETURNING id, pin_code
+    `;
+    const result = await this.pool.query(query, [
+      name,
+      normalizedCreator,
+      params.startingChips,
+      params.maxHands,
+      JSON.stringify(rebuyConfig),
+      JSON.stringify(params.tableTheme),
+      params.isPrivate,
+      pinCode,
+      params.prizeDistributionType,
+      JSON.stringify(prizePercentages),
+      params.maxPlayers,
+      params.customImage || null,
+      scheduledStart.toISOString(),
+      registrationOpens.toISOString(),
+      params.durationMinutes,
+      params.freerollMode,
+      params.eliminationConfig ? JSON.stringify(params.eliminationConfig) : null,
+      JSON.stringify(params.reentryConfig),
+      params.actionTimerSeconds,
+      Array.isArray(params.tiebreakerOrder) && params.tiebreakerOrder.length > 0
+        ? JSON.stringify(params.tiebreakerOrder)
+        : JSON.stringify(['highest_chips', 'blackjacks', 'hands_won', 'entry_time']),
+    ]);
+    const row = result.rows[0];
+    const tournamentId = row.id;
+
+    const endAt = new Date(scheduledStart.getTime() + params.durationMinutes * 60 * 1000);
+    await this.pool.query(
+      `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
+       VALUES ($1, 'start', $2, 'pending'), ($1, 'end', $3, 'pending')`,
+      [tournamentId, scheduledStart.toISOString(), endAt.toISOString()]
+    );
+
+    logger.info('Freeroll tournament created', {
+      tournamentId,
+      name,
+      creator: normalizedCreator,
+      scheduledStartAt: params.scheduledStartAt,
+    });
+    return { id: tournamentId, pinCode: row.pin_code };
   }
 
   /**

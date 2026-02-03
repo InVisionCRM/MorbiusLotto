@@ -305,6 +305,10 @@ export class WebSocketService {
           await this.handleTournamentCreate(ws, message);
           break;
 
+        case 'create_freeroll':
+          await this.handleCreateFreeroll(ws, message);
+          break;
+
         case 'tournament_list':
           await this.handleTournamentList(ws, message);
           break;
@@ -1651,6 +1655,68 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error creating tournament:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create tournament';
+      this.sendError(ws, errorMessage, message.requestId);
+    }
+  }
+
+  private async handleCreateFreeroll(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+      const payload = message.payload as {
+        name: string;
+        freerollMode: 'elimination' | 'standard_chip_count';
+        scheduledStartAt: string;
+        registrationOpensAt: string;
+        durationMinutes: number;
+        startingChips: number;
+        maxHands: number;
+        prizeDistributionType: string;
+        customPrizePercentages?: number[];
+        eliminationConfig?: { intervalType: string; intervalValue: number; eliminationPercentage: number; resetChipsAfterRound?: boolean } | null;
+        reentryConfig: { enabled: boolean; windowMinutes?: number };
+        actionTimerSeconds: number | null;
+        tiebreakerOrder?: string[];
+        tableTheme: { kind: 'image' | 'video'; id: string };
+        isPrivate: boolean;
+        maxPlayers?: number | null;
+        customImage?: string | null;
+        pinCode?: string | null;
+      };
+      const result = await this.tournamentService.createFreeroll({
+        creatorAddress: ws.playerAddress,
+        name: payload.name,
+        freerollMode: payload.freerollMode,
+        scheduledStartAt: payload.scheduledStartAt,
+        registrationOpensAt: payload.registrationOpensAt,
+        durationMinutes: payload.durationMinutes,
+        startingChips: payload.startingChips,
+        maxHands: payload.maxHands,
+        prizeDistributionType: payload.prizeDistributionType,
+        customPrizePercentages: payload.customPrizePercentages,
+        eliminationConfig: payload.eliminationConfig,
+        reentryConfig: payload.reentryConfig,
+        actionTimerSeconds: payload.actionTimerSeconds,
+        tiebreakerOrder: payload.tiebreakerOrder,
+        tableTheme: payload.tableTheme,
+        isPrivate: payload.isPrivate,
+        maxPlayers: payload.maxPlayers,
+        customImage: payload.customImage,
+        pinCode: payload.pinCode,
+      });
+      this.sendMessage(ws, {
+        type: 'freeroll_created',
+        payload: { tournamentId: result.id, pinCode: result.pinCode ?? undefined },
+        requestId: message.requestId,
+      });
+      logger.info('Freeroll created via WebSocket', { tournamentId: result.id, creator: ws.playerAddress });
+    } catch (error) {
+      logger.error('Error creating freeroll:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create freeroll';
       this.sendError(ws, errorMessage, message.requestId);
     }
   }

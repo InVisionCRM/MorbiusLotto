@@ -2,16 +2,19 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { formatEther, parseEther } from 'viem';
-import { useWriteContract } from 'wagmi';
+import { useWriteContract, usePublicClient } from 'wagmi';
 import {
   PRIZE_PRESETS,
   TOURNAMENT_VALIDATION,
+  FREEROLL_VALIDATION,
   TIME_LIMIT_LABELS,
   MAX_REBUYS_LABELS,
   PrizeDistributionType,
   TableTheme,
   RebuyConfig,
   CreateTournamentRequest,
+  CreateFreerollRequest,
+  FreerollMode,
   getExamplePrizeDistribution,
   DEFAULT_TOUR_CARDS,
 } from '@/lib/tournament-types';
@@ -35,14 +38,35 @@ interface TournamentCreatorProps {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (params: CreateTournamentRequest) => Promise<{ tournamentId: string; pinCode?: string } | null>;
+  onCreateFreeroll?: (params: CreateFreerollRequest) => Promise<{ tournamentId: string; pinCode?: string } | null>;
   isLoading: boolean;
   playerBalance: bigint;
+}
+
+function toDatetimeLocal(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${day}T${h}:${min}`;
+  } catch {
+    return '';
+  }
+}
+
+function fromDatetimeLocal(local: string): string {
+  if (!local) return '';
+  return new Date(local).toISOString();
 }
 
 export function TournamentCreator({
   isOpen,
   onClose,
   onCreate,
+  onCreateFreeroll,
   isLoading,
   playerBalance,
 }: TournamentCreatorProps) {
@@ -53,8 +77,11 @@ export function TournamentCreator({
   const [fundingError, setFundingError] = useState<string | null>(null);
   const [fundingPending, setFundingPending] = useState(false);
 
-  const { writeContractAsync: writeApprove } = useWriteContract();
-  const { writeContractAsync: writeDeposit } = useWriteContract();
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
+
+  // Tournament type: buy-in or freeroll
+  const [tournamentType, setTournamentType] = useState<'buyin' | 'freeroll'>('buyin');
 
   // Form state
   const [name, setName] = useState('');
@@ -70,6 +97,23 @@ export function TournamentCreator({
   const [prizeDistributionType, setPrizeDistributionType] = useState<PrizeDistributionType>('top_10');
   const [themeKind, setThemeKind] = useState<'image' | 'video'>('image');
   const [themeId, setThemeId] = useState<string>('BigRich');
+
+  // Freeroll-specific state
+  const [scheduledStartAt, setScheduledStartAt] = useState(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 30);
+    return toDatetimeLocal(d.toISOString());
+  });
+  const [registrationOpensAt, setRegistrationOpensAt] = useState(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 5);
+    return toDatetimeLocal(d.toISOString());
+  });
+  const [durationMinutes, setDurationMinutes] = useState<number>(60);
+  const [freerollMode, setFreerollMode] = useState<FreerollMode>('standard_chip_count');
+  const [reentryEnabled, setReentryEnabled] = useState(false);
+  const [reentryWindowMinutes, setReentryWindowMinutes] = useState<number>(5);
+  const [actionTimerSeconds, setActionTimerSeconds] = useState<number | null>(null);
 
   // Custom image upload state
   const [customImage, setCustomImage] = useState<string | null>(null);
@@ -181,7 +225,6 @@ export function TournamentCreator({
   const handleCreate = async () => {
     setError(null);
 
-    // Validate name
     const trimmedName = name.trim();
     if (trimmedName.length < TOURNAMENT_VALIDATION.NAME_MIN_LENGTH) {
       setError(`Name must be at least ${TOURNAMENT_VALIDATION.NAME_MIN_LENGTH} characters`);
@@ -194,7 +237,44 @@ export function TournamentCreator({
       return;
     }
 
-    // Validate buy-in
+    if (tournamentType === 'freeroll' && onCreateFreeroll) {
+      const regOpens = fromDatetimeLocal(registrationOpensAt);
+      const startAt = fromDatetimeLocal(scheduledStartAt);
+      if (!regOpens || !startAt) {
+        setError('Set registration opens and scheduled start date/time');
+        setActiveTab('basics');
+        return;
+      }
+      if (durationMinutes < FREEROLL_VALIDATION.DURATION_MIN_MINUTES || durationMinutes > FREEROLL_VALIDATION.DURATION_MAX_MINUTES) {
+        setError(`Duration must be ${FREEROLL_VALIDATION.DURATION_MIN_MINUTES}–${FREEROLL_VALIDATION.DURATION_MAX_MINUTES} minutes`);
+        setActiveTab('basics');
+        return;
+      }
+      const freerollParams: CreateFreerollRequest = {
+        name: trimmedName,
+        freerollMode,
+        scheduledStartAt: startAt,
+        registrationOpensAt: regOpens,
+        durationMinutes,
+        startingChips,
+        maxHands,
+        prizeDistributionType,
+        reentryConfig: { enabled: reentryEnabled, windowMinutes: reentryEnabled ? reentryWindowMinutes : 0 },
+        actionTimerSeconds,
+        tableTheme: { kind: themeKind, id: themeId },
+        isPrivate,
+        maxPlayers: undefined,
+        customImage: customImage || undefined,
+        pinCode: isPrivate && manualPin.trim() ? manualPin.trim() : undefined,
+      };
+      const result = await onCreateFreeroll(freerollParams);
+      if (result) {
+        setCreatedTournament({ id: result.tournamentId, pinCode: result.pinCode });
+      }
+      return;
+    }
+
+    // Buy-in validation
     if (buyInAmountWei < TOURNAMENT_VALIDATION.BUY_IN_MIN) {
       setError('Minimum buy-in is 100 MORBIUS');
       setActiveTab('basics');
@@ -265,15 +345,21 @@ export function TournamentCreator({
         );
         return;
       }
-      await writeApprove({
+      // Step 1: Approve escrow to spend tokens (first wallet request)
+      const approveHash = await writeContractAsync({
         address: token,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [escrow, amountWei],
       });
+      // Wait for approval to be mined so allowance is updated before deposit
+      if (publicClient && approveHash) {
+        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+      }
+      // Step 2: Deposit tokens into escrow for this tournament (second wallet request)
       const idBytes32 = tournamentIdToBytes32(createdTournament.id);
-      await writeDeposit({
-        address: escrow,
+      await writeContractAsync({
+        address: escrow as `0x${string}`,
         abi: tournamentPrizeEscrowAbi,
         functionName: 'depositPrizePool',
         args: [idBytes32, token, amountWei],
@@ -307,9 +393,14 @@ export function TournamentCreator({
                     Prize escrow is not configured. Set <code className="bg-gray-700 px-1 rounded">NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS</code> in your environment and deploy the Tournament Prize Escrow contract (see <code className="bg-gray-700 px-1 rounded text-[10px]">contracts/scripts/deploy-tournament-prize-escrow.js</code>).
                   </p>
                 ) : (
-                  <p className="text-gray-400 text-xs mb-3">
-                    Approve and deposit your token to the escrow so prizes can be paid out.
-                  </p>
+                  <>
+                    <p className="text-gray-400 text-xs mb-2">
+                      You will get <strong className="text-cyan-300">2 wallet requests</strong>: first Approve, then Deposit. Wait for the first to confirm before the second appears.
+                    </p>
+                    <p className="text-gray-500 text-xs mb-3">
+                      Tokens are sent to the prize escrow contract; the escrow holds them until the tournament ends and pays winners.
+                    </p>
+                  </>
                 )}
                 {fundingError && (
                   <p className="text-red-400 text-xs mb-2">{fundingError}</p>
@@ -381,6 +472,37 @@ export function TournamentCreator({
           {/* Basics Tab */}
           {activeTab === 'basics' && (
             <div className="space-y-6">
+              {/* Tournament type: Buy-in or Freeroll */}
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2">
+                  Tournament type
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTournamentType('buyin')}
+                    className={`flex-1 py-2.5 rounded-xl font-medium transition-colors ${
+                      tournamentType === 'buyin'
+                        ? 'bg-cyan-500 text-white'
+                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    }`}
+                  >
+                    Buy-in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTournamentType('freeroll')}
+                    className={`flex-1 py-2.5 rounded-xl font-medium transition-colors ${
+                      tournamentType === 'freeroll'
+                        ? 'bg-cyan-500 text-white'
+                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    }`}
+                  >
+                    Freeroll
+                  </button>
+                </div>
+              </div>
+
               {/* Name */}
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-2">
@@ -399,23 +521,119 @@ export function TournamentCreator({
                 </p>
               </div>
 
-              {/* Buy-in Amount */}
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
-                  Buy-in Amount (MORBIUS)
-                </label>
-                <input
-                  type="number"
-                  value={buyInAmount}
-                  onChange={(e) => setBuyInAmount(e.target.value)}
-                  min="100"
-                  max="1000000"
-                  className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
-                />
-                <p className="text-gray-500 text-xs mt-1">
-                  Min: 100 | Max: 1,000,000 MORBIUS
-                </p>
-              </div>
+              {/* Freeroll-only: schedule */}
+              {tournamentType === 'freeroll' && (
+                <div className="space-y-4 p-4 rounded-xl bg-gray-800/50 border border-cyan-500/20">
+                  <p className="text-cyan-300 text-sm font-medium">Schedule</p>
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">Registration opens</label>
+                    <input
+                      type="datetime-local"
+                      value={registrationOpensAt}
+                      onChange={(e) => setRegistrationOpensAt(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">Tournament starts</label>
+                    <input
+                      type="datetime-local"
+                      value={scheduledStartAt}
+                      onChange={(e) => setScheduledStartAt(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">Duration (minutes)</label>
+                    <input
+                      type="number"
+                      min={FREEROLL_VALIDATION.DURATION_MIN_MINUTES}
+                      max={FREEROLL_VALIDATION.DURATION_MAX_MINUTES}
+                      value={durationMinutes}
+                      onChange={(e) => setDurationMinutes(parseInt(e.target.value, 10) || 60)}
+                      className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">Mode</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFreerollMode('standard_chip_count')}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium ${
+                          freerollMode === 'standard_chip_count' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'
+                        }`}
+                      >
+                        Chip count
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFreerollMode('elimination')}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium ${
+                          freerollMode === 'elimination' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'
+                        }`}
+                      >
+                        Elimination
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 text-sm">Re-entry window</span>
+                    <button
+                      type="button"
+                      onClick={() => setReentryEnabled(!reentryEnabled)}
+                      className={`relative w-12 h-6 rounded-full transition-colors ${reentryEnabled ? 'bg-cyan-500' : 'bg-gray-600'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${reentryEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  {reentryEnabled && (
+                    <div>
+                      <label className="block text-gray-400 text-xs mb-1">Re-entry window (minutes)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={FREEROLL_VALIDATION.REENTRY_WINDOW_MAX_MINUTES}
+                        value={reentryWindowMinutes}
+                        onChange={(e) => setReentryWindowMinutes(parseInt(e.target.value, 10) || 5)}
+                        className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">Action timer (seconds, optional)</label>
+                    <select
+                      value={actionTimerSeconds ?? ''}
+                      onChange={(e) => setActionTimerSeconds(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                      className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                    >
+                      <option value="">None</option>
+                      <option value="10">10</option>
+                      <option value="15">15</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Buy-in Amount (only for buy-in tournaments) */}
+              {tournamentType === 'buyin' && (
+                <div>
+                  <label className="block text-gray-300 text-sm font-medium mb-2">
+                    Buy-in Amount (MORBIUS)
+                  </label>
+                  <input
+                    type="number"
+                    value={buyInAmount}
+                    onChange={(e) => setBuyInAmount(e.target.value)}
+                    min="100"
+                    max="1000000"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">
+                    Min: 100 | Max: 1,000,000 MORBIUS
+                  </p>
+                </div>
+              )}
 
               {/* Private Toggle */}
               <div className="flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-700">

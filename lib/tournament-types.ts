@@ -119,6 +119,8 @@ export interface CreateFreerollRequest {
   isPrivate: boolean;
   maxPlayers?: number | null;
   customImage?: string | null;
+  /** Optional PIN for private freerolls; if not set, server generates one */
+  pinCode?: string | null;
 }
 
 // Validation constants

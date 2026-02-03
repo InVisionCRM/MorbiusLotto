@@ -2341,9 +2341,9 @@ export default function BlackjackPage() {
           <>
         {/* Game layout: table + betting fit when possible; min height so table stays usable */}
         <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] grid-rows-[1fr_auto_auto] md:grid-rows-[1fr_auto] gap-2 md:gap-4 min-h-0">
-          {/* 1. Table — mobile first, desktop row1 col1; flex so it fills and shrinks */}
-          <div className="min-w-0 flex flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1">
-          <div className="relative w-full flex-1 min-h-0 flex flex-col">
+          {/* 1. Table + mobile controls (right of table on mobile) */}
+          <div className="min-w-0 flex flex-row md:flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1 gap-2 md:gap-0">
+          <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
               playerHands={currentGame?.playerHands}
@@ -2403,47 +2403,22 @@ export default function BlackjackPage() {
               />
             )}
 
-            {/* Tournament HUD (overlay on top of table when in tournament mode) */}
-            {tournament.tournamentState.inTournament && (
-              <div className="absolute top-4 right-4 z-30">
-                <TournamentHUD
-                  state={tournament.tournamentState}
-                  onLeave={() => {
-                    if (confirm('Are you sure you want to leave the tournament? You will forfeit your remaining chips.')) {
-                      tournament.leaveTournament();
-                      setIsTournamentMode(false);
-                    }
-                  }}
-                  onRebuy={async () => {
-                    const success = await tournament.requestRebuy();
-                    if (success) {
-                      toast.success('Rebuy successful! Good luck!');
-                      fetchBalance();
-                    }
-                  }}
-                  isRebuyLoading={tournament.isLoading}
-                />
-              </div>
-            )}
           </div>
-        </div>
 
-          {/* 2. Mobile only: betting panel + quick actions below table */}
+          {/* Mobile only: betting panel + quick actions — right side of table */}
           {currentView === 'game' && !tournament.tournamentState.inTournament && (
-            <div className="order-2 md:hidden flex flex-col gap-2 w-full min-w-0">
-              <div className="px-2">
-                <BettingPanel
-                  onStartGame={(betBigInt, _clientSeed) => handleStartGame(betBigInt, clientSeed)}
-                  isPlaying={gameState.isPlaying}
-                  reserveBalance={offChainBalance}
-                  onBetAmountChange={manageChipStack}
-                  currentBetAmount={displayBetAmount}
-                  lastBetAmount={lastBetAmount}
-                  onRebet={handleRebet}
-                  onHalfBet={handleHalfBet}
-                  onDoubleBet={handleDoubleBet}
-                />
-              </div>
+            <div className="md:hidden flex flex-col gap-2 flex-shrink-0">
+              <BettingPanel
+                onStartGame={(betBigInt, _clientSeed) => handleStartGame(betBigInt, clientSeed)}
+                isPlaying={gameState.isPlaying}
+                reserveBalance={offChainBalance}
+                onBetAmountChange={manageChipStack}
+                currentBetAmount={displayBetAmount}
+                lastBetAmount={lastBetAmount}
+                onRebet={handleRebet}
+                onHalfBet={handleHalfBet}
+                onDoubleBet={handleDoubleBet}
+              />
               <BlackjackMobileActionBar
                 onRebetAndDeal={handleRebetAndDeal}
                 onStartGame={() => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)}
@@ -2463,6 +2438,7 @@ export default function BlackjackPage() {
               />
             </div>
           )}
+        </div>
 
           {/* 3. Tabbed sidebar — mobile after controls; desktop row1 col2 (Bet tab = betting + quick actions) */}
           <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2">
@@ -2674,7 +2650,15 @@ export default function BlackjackPage() {
             const result = await tournament.createTournament(params);
             if (result) {
               toast.success('Tournament created!');
-              // Refresh tournament list so new tournament appears in lobby
+              await tournament.fetchTournamentList();
+              return result;
+            }
+            return null;
+          }}
+          onCreateFreeroll={async (params) => {
+            const result = await tournament.createFreeroll(params);
+            if (result) {
+              toast.success('Freeroll created!');
               await tournament.fetchTournamentList();
               return result;
             }

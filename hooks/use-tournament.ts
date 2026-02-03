@@ -6,6 +6,7 @@ import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { formatEther } from 'viem';
 import {
   CreateTournamentRequest,
+  CreateFreerollRequest,
   TournamentListItem,
   RebuyConfig,
   TableTheme,
@@ -768,6 +769,7 @@ export function useTournament(options: UseTournamentOptions) {
 
     // Tournament Creator Actions
     createTournament,
+    createFreeroll,
     fetchTournamentList,
     joinTournament,
     requestRebuy,
