@@ -48,6 +48,35 @@ export interface RoomJoinedPayload {
   }>;
 }
 
+/** Freeroll list item (server → client). Request: freeroll_list { includePast?: boolean }. Response: freeroll_list { tournaments: FreerollListItemPayload[] }. */
+export interface FreerollListItemPayload {
+  id: string;
+  name: string;
+  creator_address: string | null;
+  tournament_type: string;
+  freeroll_mode: string;
+  scheduled_start_at: string | null;
+  registration_opens_at: string | null;
+  duration_minutes: number | null;
+  starting_chips: number;
+  current_phase: string | null;
+  registered_count: number;
+  action_timer_seconds: number | null;
+  elimination_config: Record<string, unknown> | null;
+  reentry_config: Record<string, unknown> | null;
+  prize_distribution_type: string;
+  custom_image: string | null;
+  created_at: string;
+}
+
+/** freeroll_registered / freeroll_joined / freeroll_reentered payload. */
+export interface FreerollEntryPayload {
+  tournamentId: string;
+  entryId: string;
+  chips: number;
+  startingChips?: number;
+}
+
 export class BlackjackWebSocketClient {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;

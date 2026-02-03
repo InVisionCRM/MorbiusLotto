@@ -1,13 +1,26 @@
 'use client'
 
-import React, { useState } from 'react'
-import { History, Trophy, BookOpen, Award, TrendingUp, Zap, ShieldCheck } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { History, Trophy, BookOpen, Award, TrendingUp, Zap, ShieldCheck, Gamepad2, DollarSign } from 'lucide-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
 import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers'
 import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
 import GlobalWinsFeed from '@/components/BLACKJACK/GlobalWinsFeed'
 import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart'
 import { GameResult } from '@/app/BLACKJACK/types'
+
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(false)
+  useEffect(() => {
+    const mql = typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)') : null
+    if (!mql) return
+    setIsDesktop(mql.matches)
+    const handler = () => setIsDesktop(mql.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
+  return isDesktop
+}
 
 const PANEL_CLASS = 'rounded-xl'
 const PANEL_STYLE: React.CSSProperties = {
@@ -16,7 +29,9 @@ const PANEL_STYLE: React.CSSProperties = {
   border: '1px inset rgba(60, 60, 60, 0.5)',
 }
 
-const TABS = [
+const BET_TAB = { id: 'bet' as const, label: 'Bet', icon: DollarSign }
+
+const BASE_TABS = [
   { id: 'recent', label: 'Recent Games', icon: History },
   { id: 'top', label: 'Top Players', icon: Trophy },
   { id: 'wins', label: 'Global Wins', icon: Zap },
@@ -26,7 +41,9 @@ const TABS = [
   { id: 'verify', label: 'Provably Fair', icon: ShieldCheck },
 ] as const
 
-export type BlackjackSidebarTabId = (typeof TABS)[number]['id']
+const TOURNAMENT_PLAY_TAB = { id: 'tournament-play' as const, label: 'Tournament', icon: Gamepad2 }
+
+export type BlackjackSidebarTabId = (typeof BASE_TABS)[number]['id'] | 'tournament-play' | 'bet'
 
 interface BlackjackSidebarProps {
   history: GameResult[]
@@ -40,6 +57,12 @@ interface BlackjackSidebarProps {
   clientSeed?: string
   onClientSeedChange?: (value: string) => void
   onGenerateClientSeed?: () => void
+  /** When true, a "Tournament" tab is shown with HUD + betting controls; only visible during a tournament */
+  inTournament?: boolean
+  /** Content for the tournament tab (TournamentHUD + TournamentBetPanel) */
+  tournamentTabContent?: React.ReactNode
+  /** Content for the Bet tab (BettingPanel + quick actions); only visible when not in tournament */
+  betTabContent?: React.ReactNode
 }
 
 export default function BlackjackSidebar({
@@ -54,14 +77,34 @@ export default function BlackjackSidebar({
   clientSeed = '',
   onClientSeedChange,
   onGenerateClientSeed,
+  inTournament = false,
+  tournamentTabContent,
+  betTabContent,
 }: BlackjackSidebarProps) {
-  const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>('recent')
+  const isDesktop = useIsDesktop()
+  const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>('bet')
+
+  const tabs = inTournament
+    ? [...BASE_TABS, TOURNAMENT_PLAY_TAB]
+    : isDesktop
+      ? [BET_TAB, ...BASE_TABS]
+      : BASE_TABS
+
+  useEffect(() => {
+    if (inTournament) {
+      setActiveTab('tournament-play')
+    } else if (activeTab === 'tournament-play') {
+      setActiveTab(isDesktop ? 'bet' : 'recent')
+    } else if (!isDesktop && activeTab === 'bet') {
+      setActiveTab('recent')
+    }
+  }, [inTournament, isDesktop])
 
   return (
     <div className="w-full min-w-0 flex flex-col h-full">
       {/* Tabs */}
       <div className="flex overflow-x-auto no-scrollbar bg-slate-800/60 rounded-t-xs">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"
@@ -78,13 +121,18 @@ export default function BlackjackSidebar({
         ))}
       </div>
 
-      {/* Content — padding only for howto/tournaments/chart; Recent/Top have their own */}
+      {/* Content — padding only for howto/tournaments/chart/tournament-play/bet; Recent/Top have their own */}
       <div
         className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar ${
-          activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'verify' ? 'p-4' : ''
+          activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'verify' || activeTab === 'tournament-play' || activeTab === 'bet' ? 'p-4' : ''
         }`}
         style={PANEL_STYLE}
       >
+        {activeTab === 'bet' && !inTournament && betTabContent != null && (
+          <div className="flex flex-col gap-4 h-full min-h-0">
+            {betTabContent}
+          </div>
+        )}
         {activeTab === 'recent' && (
           <QuickHistory history={history} reserveBalance={reserveBalance} />
         )}
@@ -143,6 +191,11 @@ export default function BlackjackSidebar({
                 </button>
               )}
             </div>
+          </div>
+        )}
+        {activeTab === 'tournament-play' && inTournament && tournamentTabContent != null && (
+          <div className="flex flex-col gap-4 h-full min-h-0">
+            {tournamentTabContent}
           </div>
         )}
         {activeTab === 'verify' && (

@@ -6,3 +6,4 @@ export { TournamentBetPanel } from './TournamentBetPanel';
 export { TournamentCreator } from './TournamentCreator';
 export { TournamentBrowser } from './TournamentBrowser';
 export { TournamentPinEntry } from './TournamentPinEntry';
+export { FreerollList } from './FreerollList';

@@ -5,18 +5,23 @@ import Image from 'next/image'
 import { formatEther } from 'viem'
 import { GameResult } from '@/app/BLACKJACK/types'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 const PAGE_SIZE = 10
 const MAX_HISTORY_ITEMS = 50
 
-const PANEL_CLASS =
-  'rounded-xl border border-white/10 bg-gradient-to-br from-slate-900/95 to-slate-800/90 shadow-[inset_0_3px_6px_rgba(0,0,0,0.8),inset_0_-3px_6px_rgba(255,255,255,0.06)]'
-
 const RESULT_CONFIG: Record<'win' | 'loss' | 'push' | 'blackjack', { label: string; className: string }> = {
-  blackjack: { label: 'BJ', className: 'bg-amber-500/20 text-amber-300 border-amber-400/40' },
-  win: { label: 'WIN', className: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40' },
-  loss: { label: 'LOSS', className: 'bg-red-500/20 text-red-300 border-red-400/40' },
-  push: { label: 'PUSH', className: 'bg-slate-500/20 text-slate-300 border-slate-400/40' },
+  blackjack: { label: 'BJ', className: 'text-amber-300' },
+  win: { label: 'WIN', className: 'text-emerald-400' },
+  loss: { label: 'LOSS', className: 'text-red-400' },
+  push: { label: 'PUSH', className: 'text-slate-400' },
 }
 
 function shortenGameId(gameId: string | undefined): string {
@@ -46,6 +51,11 @@ function getWinLossAmount(result: GameResult): bigint {
 function formatMorbius(wei: bigint): string {
   return Math.floor(Number(formatEther(wei))).toLocaleString()
 }
+
+const tableCls = 'text-white font-poppins bg-transparent'
+const rowCls = 'border-white/10 hover:bg-transparent'
+const headCls = 'text-white/80 font-medium h-9 px-2'
+const cellCls = 'text-white p-2'
 
 interface QuickHistoryProps {
   history: GameResult[]
@@ -80,120 +90,91 @@ export default function QuickHistory({ history, reserveBalance }: QuickHistoryPr
   }, [recentHistory, reserveBalance])
 
   const showBalance = balanceAtBetByIndex !== null
-  const gridCols = showBalance
-    ? 'grid-cols-[auto_minmax(3.5rem,1fr)_minmax(3.5rem,1fr)_minmax(4rem,1fr)_minmax(4rem,1fr)_minmax(5rem,1fr)]'
-    : 'grid-cols-[auto_minmax(3.5rem,1fr)_minmax(3.5rem,1fr)_minmax(5rem,1fr)]'
 
   if (recentHistory.length === 0) {
     return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-4 min-w-0 text-center">
-        <p className="text-white/50 text-sm">No games yet. Place a bet to see your history here.</p>
-      </div>
+      <p className="text-white/50 text-sm font-poppins text-center py-4">
+        No games yet. Place a bet to see your history here.
+      </p>
     )
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 py-2 min-w-0">
-      {/* Table header — visible on larger screens */}
-      <div
-        className={`hidden sm:grid ${gridCols} gap-3 px-4 py-2.5 text-xs font-medium text-white/50 uppercase tracking-wider border-b border-white/10 mb-1`}
-      >
-        <span>Result</span>
-        <span>Bet</span>
-        <span>P/L</span>
-        {showBalance && <span>Balance</span>}
-        <span>Bet ID</span>
-      </div>
+    <div className="w-full min-w-0">
+      <Table className={tableCls}>
+        <TableHeader>
+          <TableRow className={rowCls}>
+            <TableHead className={headCls}>Result</TableHead>
+            <TableHead className={headCls}>Bet</TableHead>
+            <TableHead className={headCls}>P/L</TableHead>
+            {showBalance && <TableHead className={headCls}>Balance</TableHead>}
+            <TableHead className={headCls}>Bet ID</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {paginatedHistory.map((result, index) => {
+            const globalIndex = currentPage * PAGE_SIZE + index
+            const resultType = getResultType(result)
+            const winLoss = getWinLossAmount(result)
+            const betAmount = getTotalBet(result)
+            const hands = result.playerHands?.length ? result.playerHands : [result.playerHand]
+            const wasSplit = result.wasSplit ?? hands.length > 1
+            const config = RESULT_CONFIG[resultType]
+            const isWin = resultType === 'win' || resultType === 'blackjack'
 
-      <div className="space-y-1.5 overflow-x-auto min-w-0">
-        {paginatedHistory.map((result, index) => {
-          const globalIndex = currentPage * PAGE_SIZE + index
-          const resultType = getResultType(result)
-          const winLoss = getWinLossAmount(result)
-          const betAmount = getTotalBet(result)
-          const hands = result.playerHands?.length ? result.playerHands : [result.playerHand]
-          const wasSplit = result.wasSplit ?? hands.length > 1
-          const config = RESULT_CONFIG[resultType]
-          const isWin = resultType === 'win' || resultType === 'blackjack'
-
-          return (
-            <div
-              key={result.gameId ?? `qh-${globalIndex}`}
-              className={`${PANEL_CLASS} p-3 sm:px-4 transition-all hover:border-cyan-500/20`}
-            >
-              <div className={`grid ${gridCols} gap-3 sm:gap-4 items-center text-left`}>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${config.className}`}>
-                    {config.label}
-                  </span>
-                  {wasSplit && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                      SPLIT
-                    </span>
-                  )}
-                </div>
-
-                <div className="min-w-0">
-                  <span className="text-white/60 text-xs sm:hidden">Bet </span>
-                  <span className="text-white font-semibold text-sm">{formatEther(betAmount)}</span>
-                </div>
-
-                <div className="min-w-0">
-                  <span className="text-white/60 text-xs sm:hidden">
-                    {isWin ? 'Won ' : resultType === 'push' ? 'Returned ' : 'Lost '}
-                  </span>
-                  <span
-                    className={`font-semibold text-sm ${
-                      isWin ? 'text-emerald-400' : resultType === 'loss' ? 'text-red-400' : 'text-slate-400'
-                    }`}
-                  >
+            return (
+              <TableRow key={result.gameId ?? `qh-${globalIndex}`} className={rowCls}>
+                <TableCell className={cellCls}>
+                  <span className={config.className}>{config.label}</span>
+                  {wasSplit && <span className="text-cyan-400/90 text-xs ml-1">SPLIT</span>}
+                </TableCell>
+                <TableCell className={cellCls}>{formatEther(betAmount)}</TableCell>
+                <TableCell className={cellCls}>
+                  <span className={config.className}>
                     {resultType === 'loss' ? '−' : '+'}
                     {formatEther(winLoss < BigInt(0) ? -winLoss : winLoss)}
                   </span>
-                </div>
-
+                </TableCell>
                 {showBalance && (
-                  <div className="min-w-0 flex items-center gap-1">
-                    <span className="text-white/60 text-xs sm:hidden">Balance </span>
-                    <span className="text-white font-semibold text-sm">{formatMorbius(balanceAtBetByIndex![globalIndex])}</span>
+                  <TableCell className={cellCls}>
+                    <span className="tabular-nums">{formatMorbius(balanceAtBetByIndex![globalIndex])}</span>
                     <Image
                       src="/morbius/MorbiusLogo (3).png"
                       alt="MORBIUS"
-                      width={16}
-                      height={16}
-                      className="object-contain flex-shrink-0"
+                      width={14}
+                      height={14}
+                      className="inline object-contain ml-1 align-middle"
                     />
-                  </div>
+                  </TableCell>
                 )}
-
-                <div className="min-w-0 flex items-center gap-1" title={result.gameId}>
-                  <span className="text-white/70 font-mono text-xs truncate">{shortenGameId(result.gameId)}</span>
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+                <TableCell className={`${cellCls} font-mono text-xs text-white/80`} title={result.gameId}>
+                  {shortenGameId(result.gameId)}
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
 
       {totalPages > 1 && (
-        <div className={`mt-4 flex items-center justify-center gap-3 ${PANEL_CLASS} p-3`}>
+        <div className="mt-4 flex items-center justify-center gap-3">
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={currentPage === 0}
-            className="p-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-cyan-500/20 transition-colors"
+            className="p-2 rounded-lg text-white/80 font-poppins disabled:opacity-40 disabled:cursor-not-allowed hover:text-white transition-colors"
             aria-label="Previous page"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm text-white/80 tabular-nums">
+          <span className="text-sm text-white/80 font-poppins tabular-nums">
             {currentPage + 1} / {totalPages}
           </span>
           <button
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             disabled={currentPage >= totalPages - 1}
-            className="p-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-cyan-500/20 transition-colors"
+            className="p-2 rounded-lg text-white/80 font-poppins disabled:opacity-40 disabled:cursor-not-allowed hover:text-white transition-colors"
             aria-label="Next page"
           >
             <ChevronRight className="w-4 h-4" />

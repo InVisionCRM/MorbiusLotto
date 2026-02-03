@@ -18,6 +18,8 @@ export interface BlackjackMobileActionBarProps {
   chipStackLength: number;
   lastBetAmount: string;
   soundEnabled?: boolean;
+  /** When true, show on all screen sizes (e.g. when embedded in sidebar Bet tab). Default false = hidden on md+ */
+  alwaysVisible?: boolean;
 }
 
 export function BlackjackMobileActionBar({
@@ -35,6 +37,7 @@ export function BlackjackMobileActionBar({
   chipStackLength,
   lastBetAmount,
   soundEnabled = true,
+  alwaysVisible = false,
 }: BlackjackMobileActionBarProps) {
   const playKnock = () => {
     if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
@@ -46,7 +49,7 @@ export function BlackjackMobileActionBar({
 
   return (
     <section
-      className="w-full mt-1 px-4 pt-1 pb-1 md:hidden"
+      className={`w-full mt-1 px-4 pt-1 pb-1 ${alwaysVisible ? '' : 'md:hidden'}`}
       style={{
         background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
         boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',

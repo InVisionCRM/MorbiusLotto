@@ -30,6 +30,13 @@ export const BIGWHEEL_ADDRESS = '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F' as 
 // Blackjack contract (6-deck provably fair blackjack game with withdrawWithSignature)
 export const BLACKJACK_ADDRESS = '0x32435e633EB691f7039EB73107FD15EF13125703' as const
 
+// Tournament Prize Escrow (custom token prize pools for tournaments)
+export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS
+    ? process.env.NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS
+    : '0x0000000000000000000000000000000000000000'
+) as `0x${string}`
+
 // Contract deployment info
 export const LOTTERY_DEPLOY_BLOCK = 25329129
 export const KENO_DEPLOY_BLOCK = 25341670 // Deployed Dec 21, 2025

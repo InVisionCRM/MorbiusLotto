@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+import Image from 'next/image'
 import { LatestWins } from '@/components/home/latest-wins'
 import { GlobalStatsSection } from '@/components/home/global-stats-section'
 import { AcesParallaxSection } from '@/components/home/aces-parallax-section'
@@ -27,6 +29,45 @@ export default function Page() {
       {/* Games: Lottery, Keno, Plinko, Blackjack, etc. */}
       <GamesSection />
 
+      {/* Blackjack Tournament Promo */}
+      <section className="w-full max-w-2xl">
+        <div className="text-center mb-6">
+          <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-white mb-2">
+            Blackjack Tournaments
+          </h2>
+          <p className="text-white/50 text-sm">
+            Enter now — fully automated, verifiable, and built for communities.
+          </p>
+        </div>
+        <Link
+          href="/BLACKJACK"
+          className="block rounded-2xl overflow-hidden border-2 border-cyan-500/30 hover:border-cyan-400/50 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:ring-offset-2 focus:ring-offset-black"
+          aria-label="Go to Blackjack tournaments"
+        >
+          <div className="relative w-full aspect-[3/2] max-h-[320px]">
+            <Image
+              src="/BlackJack/Tournament-Promo/EnterNow.jpg"
+              alt="Blackjack Tournament — Enter Now"
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 672px"
+              priority={false}
+            />
+          </div>
+        </Link>
+        <div className="mt-6 rounded-2xl border border-cyan-500/30 p-6 space-y-4 bg-gradient-to-br from-slate-900/90 to-slate-800/80 shadow-[inset_0_3px_6px_rgba(0,0,0,0.8),inset_0_-3px_6px_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.5)]">
+          <p className="text-white/90 text-sm leading-relaxed">
+            We give founders and communities an extra tool to keep engagement high and curate events that matter. Add your own images and branding so your tournaments keep your community’s identity front and center — and stay number one when it counts.
+          </p>
+          <p className="text-white/90 text-sm leading-relaxed">
+            Everything runs fully automated with verifiable, on-chain proof. That means you can host with confidence: not just one tournament, but many more to come.
+          </p>
+          <p className="text-cyan-300/90 text-sm font-medium">
+            Coming soon: use your own token as prizes. Same automation, same verifiable proof — your token, your rules.
+          </p>
+        </div>
+      </section>
+
       {/* Responsible Gaming Section */}
       <section className="w-full max-w-2xl">
         <div className="text-center mb-6">
@@ -37,14 +78,7 @@ export default function Page() {
             We give you the tools to play responsibly and step away when you need to.
           </p>
         </div>
-        <div
-          className="rounded-2xl border border-cyan-500/30 p-6 space-y-4"
-          style={{
-            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
-          }}
-        >
+        <div className="rounded-2xl border border-cyan-500/30 p-6 space-y-4 bg-gradient-to-br from-slate-900/90 to-slate-800/80 shadow-[inset_0_3px_6px_rgba(0,0,0,0.8),inset_0_-3px_6px_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.5)]">
           <p className="text-white/90 text-sm leading-relaxed">
             We focus on meeting responsible gaming standards and making sure you have everything you need to pull back from the games whenever you want. Here’s what we offer:
           </p>

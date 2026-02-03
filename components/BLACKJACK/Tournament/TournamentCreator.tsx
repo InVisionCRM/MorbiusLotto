@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { formatEther, parseEther } from 'viem';
+import { useWriteContract } from 'wagmi';
 import {
   PRIZE_PRESETS,
   TOURNAMENT_VALIDATION,
@@ -12,6 +13,7 @@ import {
   RebuyConfig,
   CreateTournamentRequest,
   getExamplePrizeDistribution,
+  DEFAULT_TOUR_CARDS,
 } from '@/lib/tournament-types';
 import {
   BLACKJACK_IMAGE_BACKGROUNDS,
@@ -19,6 +21,10 @@ import {
   BlackjackImageId,
   BlackjackVideoId,
 } from '@/app/BLACKJACK/constants';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
+import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
+import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
+import { ERC20_ABI } from '@/abi/erc20';
 
 type TabId = 'basics' | 'rules' | 'prizes' | 'theme';
 
@@ -40,6 +46,12 @@ export function TournamentCreator({
   const [activeTab, setActiveTab] = useState<TabId>('basics');
   const [error, setError] = useState<string | null>(null);
   const [createdTournament, setCreatedTournament] = useState<{ id: string; pinCode?: string } | null>(null);
+  const [funded, setFunded] = useState(false);
+  const [fundingError, setFundingError] = useState<string | null>(null);
+  const [fundingPending, setFundingPending] = useState(false);
+
+  const { writeContractAsync: writeApprove } = useWriteContract();
+  const { writeContractAsync: writeDeposit } = useWriteContract();
 
   // Form state
   const [name, setName] = useState('');
@@ -47,12 +59,90 @@ export function TournamentCreator({
   const [isPrivate, setIsPrivate] = useState(false);
   const [startingChips, setStartingChips] = useState<number>(5000);
   const [maxHands, setMaxHands] = useState<number>(50);
+  const [maxHandsInput, setMaxHandsInput] = useState<string>('50');
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
   const [rebuyEnabled, setRebuyEnabled] = useState(false);
   const [maxRebuys, setMaxRebuys] = useState<number>(0);
   const [prizeDistributionType, setPrizeDistributionType] = useState<PrizeDistributionType>('top_10');
   const [themeKind, setThemeKind] = useState<'image' | 'video'>('image');
   const [themeId, setThemeId] = useState<string>('BigRich');
+
+  // Custom image upload state
+  const [customImage, setCustomImage] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Custom prize token (when prize type is 'custom')
+  const [prizeType, setPrizeType] = useState<'platform' | 'custom'>('platform');
+  const [prizeTokenAddress, setPrizeTokenAddress] = useState('');
+  const [prizeAmountHuman, setPrizeAmountHuman] = useState('');
+  const [prizeTokenDecimals, setPrizeTokenDecimals] = useState<number>(18);
+
+  // Handle max hands slider change
+  const handleMaxHandsSlider = (value: number) => {
+    setMaxHands(value);
+    setMaxHandsInput(value.toString());
+  };
+
+  // Handle max hands direct input
+  const handleMaxHandsInput = (value: string) => {
+    setMaxHandsInput(value);
+    const num = parseInt(value, 10);
+    if (!isNaN(num) && num >= 1 && num <= 200) {
+      setMaxHands(num);
+    }
+  };
+
+  // Handle max hands input blur (validate and clamp)
+  const handleMaxHandsBlur = () => {
+    const num = parseInt(maxHandsInput, 10);
+    if (isNaN(num) || num < 1) {
+      setMaxHands(1);
+      setMaxHandsInput('1');
+    } else if (num > 200) {
+      setMaxHands(200);
+      setMaxHandsInput('200');
+    } else {
+      setMaxHands(num);
+      setMaxHandsInput(num.toString());
+    }
+  };
+
+  // Handle image upload
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Image must be smaller than 2MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setCustomImage(dataUrl);
+      setImagePreview(dataUrl);
+      setError(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Remove custom image
+  const handleRemoveImage = () => {
+    setCustomImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   // Computed values
   const buyInAmountWei = useMemo(() => {
@@ -128,7 +218,17 @@ export function TournamentCreator({
       },
       isPrivate,
       prizeDistributionType,
+      customImage: customImage || undefined,
     };
+    if (prizeType === 'custom' && prizeTokenAddress.trim() && prizeAmountHuman.trim()) {
+      const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
+      const prizeAmountWei = BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
+      if (prizeAmountWei > 0n) {
+        params.prizeTokenAddress = prizeTokenAddress.trim();
+        params.prizeAmount = prizeAmountWei.toString();
+        params.prizeTokenDecimals = dec;
+      }
+    }
 
     const result = await onCreate(params);
     if (result) {
@@ -144,8 +244,44 @@ export function TournamentCreator({
 
   if (!isOpen) return null;
 
+  const handleFundPrizePool = async () => {
+    if (!createdTournament || prizeType !== 'custom' || !prizeTokenAddress.trim() || !prizeAmountHuman.trim()) return;
+    const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
+    const amountWei = BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
+    if (amountWei <= 0n) return;
+    setFundingError(null);
+    setFundingPending(true);
+    try {
+      const token = prizeTokenAddress.trim() as `0x${string}`;
+      const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+      if (escrow === '0x0000000000000000000000000000000000000000') {
+        setFundingError('Escrow not configured');
+        return;
+      }
+      await writeApprove({
+        address: token,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [escrow, amountWei],
+      });
+      const idBytes32 = tournamentIdToBytes32(createdTournament.id);
+      await writeDeposit({
+        address: escrow,
+        abi: tournamentPrizeEscrowAbi,
+        functionName: 'depositPrizePool',
+        args: [idBytes32, token, amountWei],
+      });
+      setFunded(true);
+    } catch (e) {
+      setFundingError(e instanceof Error ? e.message : 'Funding failed');
+    } finally {
+      setFundingPending(false);
+    }
+  };
+
   // Show success screen if tournament was created
   if (createdTournament) {
+    const needsFunding = prizeType === 'custom' && prizeTokenAddress.trim() && prizeAmountHuman.trim() && !funded;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
@@ -156,6 +292,24 @@ export function TournamentCreator({
           <div className="p-6 space-y-4 text-center">
             <div className="text-6xl">🎉</div>
             <p className="text-white text-lg font-semibold">{name}</p>
+            {needsFunding && (
+              <div className="bg-gray-800 rounded-xl p-4 border border-cyan-500/30 text-left">
+                <p className="text-cyan-300 text-sm font-medium mb-2">Fund prize pool</p>
+                <p className="text-gray-400 text-xs mb-3">
+                  Approve and deposit your token to the escrow so prizes can be paid out.
+                </p>
+                {fundingError && (
+                  <p className="text-red-400 text-xs mb-2">{fundingError}</p>
+                )}
+                <button
+                  onClick={handleFundPrizePool}
+                  disabled={fundingPending}
+                  className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {fundingPending ? 'Confirm in wallet...' : 'Fund prize pool'}
+                </button>
+              </div>
+            )}
             {createdTournament.pinCode && (
               <div className="bg-gray-800 rounded-xl p-4 border border-yellow-500/30">
                 <p className="text-gray-400 text-sm mb-2">Private Tournament PIN</p>
@@ -269,6 +423,67 @@ export function TournamentCreator({
                   />
                 </button>
               </div>
+
+              {/* Custom Tournament Image Upload */}
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2">
+                  Tournament Card Image
+                </label>
+                <p className="text-gray-500 text-xs mb-3">
+                  Upload a custom image for your tournament (3:2 aspect ratio recommended, max 2MB)
+                </p>
+
+                {imagePreview ? (
+                  <div className="relative">
+                    <div className="aspect-[3/2] rounded-xl overflow-hidden border-2 border-cyan-500/50">
+                      <img
+                        src={imagePreview}
+                        alt="Tournament card preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <button
+                      onClick={handleRemoveImage}
+                      className="absolute top-2 right-2 p-2 rounded-full bg-red-500/80 hover:bg-red-500 text-white transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full aspect-[3/2] rounded-xl border-2 border-dashed border-gray-600 hover:border-cyan-500/50 bg-gray-800/50 hover:bg-gray-800 transition-colors flex flex-col items-center justify-center gap-2"
+                    >
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span className="text-gray-400 text-sm">Click to upload image</span>
+                      <span className="text-gray-500 text-xs">or leave empty for a random default</span>
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                    {/* Show default card preview */}
+                    <div className="text-center">
+                      <p className="text-gray-500 text-xs mb-2">Default cards (assigned randomly):</p>
+                      <div className="flex gap-2 justify-center">
+                        {DEFAULT_TOUR_CARDS.slice(0, 3).map((src, i) => (
+                          <div key={i} className="w-16 aspect-[3/2] rounded overflow-hidden border border-gray-700">
+                            <img src={src} alt={`Default card ${i + 1}`} className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -297,25 +512,43 @@ export function TournamentCreator({
                 </div>
               </div>
 
-              {/* Max Hands */}
+              {/* Max Hands - Slider + Direct Input */}
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-2">
                   Maximum Hands
                 </label>
-                <div className="grid grid-cols-5 gap-2">
-                  {TOURNAMENT_VALIDATION.MAX_HANDS_OPTIONS.map((hands) => (
-                    <button
-                      key={hands}
-                      onClick={() => setMaxHands(hands)}
-                      className={`py-3 rounded-xl font-medium transition-colors ${
-                        maxHands === hands
-                          ? 'bg-cyan-500 text-white'
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      {hands}
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  {/* Slider */}
+                  <div className="relative">
+                    <input
+                      type="range"
+                      min="1"
+                      max="200"
+                      value={maxHands}
+                      onChange={(e) => handleMaxHandsSlider(parseInt(e.target.value, 10))}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>1</span>
+                      <span>50</span>
+                      <span>100</span>
+                      <span>150</span>
+                      <span>200</span>
+                    </div>
+                  </div>
+                  {/* Direct Input */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min="1"
+                      max="200"
+                      value={maxHandsInput}
+                      onChange={(e) => handleMaxHandsInput(e.target.value)}
+                      onBlur={handleMaxHandsBlur}
+                      className="w-24 px-3 py-2 rounded-xl bg-gray-800 border border-gray-700 text-white text-center focus:outline-none focus:border-cyan-500"
+                    />
+                    <span className="text-gray-400 text-sm">hands (1-200)</span>
+                  </div>
                 </div>
               </div>
 
@@ -391,6 +624,73 @@ export function TournamentCreator({
           {/* Prizes Tab */}
           {activeTab === 'prizes' && (
             <div className="space-y-6">
+              {/* Prize source: platform vs custom token */}
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2">
+                  Prize source
+                </label>
+                <div className="flex gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setPrizeType('platform')}
+                    className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
+                      prizeType === 'platform' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    Platform (MORBIUS from buy-ins)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrizeType('custom')}
+                    className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
+                      prizeType === 'custom' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    Custom token
+                  </button>
+                </div>
+                {prizeType === 'custom' && (
+                  <div className="space-y-3 p-4 rounded-xl bg-gray-800/50 border border-gray-700">
+                    <div>
+                      <label className="block text-gray-400 text-xs mb-1">Token contract address</label>
+                      <input
+                        type="text"
+                        value={prizeTokenAddress}
+                        onChange={(e) => setPrizeTokenAddress(e.target.value)}
+                        placeholder="0x..."
+                        className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm font-mono focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-gray-400 text-xs mb-1">Prize amount (human)</label>
+                        <input
+                          type="text"
+                          value={prizeAmountHuman}
+                          onChange={(e) => setPrizeAmountHuman(e.target.value)}
+                          placeholder="e.g. 1000000"
+                          className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-cyan-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-400 text-xs mb-1">Decimals</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={18}
+                          value={prizeTokenDecimals}
+                          onChange={(e) => setPrizeTokenDecimals(Number(e.target.value) || 18)}
+                          className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-cyan-500"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-gray-500 text-xs">
+                      After creating, you will fund the prize pool by approving and depositing this token to the escrow.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-3">
                   Prize Distribution

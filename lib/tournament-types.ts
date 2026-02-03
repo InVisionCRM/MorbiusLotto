@@ -62,6 +62,65 @@ export interface RebuyConfig {
   maxRebuys: number; // 0 = unlimited
 }
 
+// ========== FREEROLL Tournament Types ==========
+
+export type TournamentType = 'standard' | 'freeroll';
+
+export type FreerollMode = 'elimination' | 'standard_chip_count';
+
+export type TournamentPhase = 'registration' | 'active' | 'elimination_round' | 'completed';
+
+export type TiebreakerMetric = 'blackjacks' | 'hands_won' | 'highest_chips' | 'entry_time';
+
+/** Elimination mode: interval (time or hands), % to eliminate, chip reset after round */
+export interface EliminationConfig {
+  intervalType: 'time' | 'hands';
+  intervalValue: number;           // minutes or number of hands
+  eliminationPercentage: number;   // e.g. 20 = bottom 20% eliminated
+  resetChipsAfterRound: boolean;
+}
+
+/** Re-entry: allowed within a time window from tournament start */
+export interface ReentryConfig {
+  enabled: boolean;
+  windowMinutes: number;           // 0 = until start only
+}
+
+/** Registration status for freeroll entries */
+export type RegistrationStatus = 'registered' | 'joined' | 'no_show';
+
+// FREEROLL validation constants (aligned with migration 015)
+export const FREEROLL_VALIDATION = {
+  ACTION_TIMER_MIN_SECONDS: 10,
+  ACTION_TIMER_MAX_SECONDS: 15,
+  DURATION_MIN_MINUTES: 5,
+  DURATION_MAX_MINUTES: 1440,      // 24h
+  ELIMINATION_PERCENTAGE_MIN: 5,
+  ELIMINATION_PERCENTAGE_MAX: 50,
+  REENTRY_WINDOW_MAX_MINUTES: 60,
+  TIEBREAKER_ORDER_DEFAULT: ['highest_chips', 'blackjacks', 'hands_won', 'entry_time'] as TiebreakerMetric[],
+};
+
+export interface CreateFreerollRequest {
+  name: string;
+  freerollMode: FreerollMode;
+  scheduledStartAt: string;        // ISO date string
+  registrationOpensAt: string;     // ISO date string
+  durationMinutes: number;
+  startingChips: number;
+  maxHands: number;
+  prizeDistributionType: PrizeDistributionType;
+  customPrizePercentages?: number[];
+  eliminationConfig?: EliminationConfig;   // Required when freerollMode === 'elimination'
+  reentryConfig: ReentryConfig;
+  actionTimerSeconds: number | null;      // 10–15 or null for all tournament types
+  tiebreakerOrder?: TiebreakerMetric[];   // For elimination mode
+  tableTheme: TableTheme;
+  isPrivate: boolean;
+  maxPlayers?: number | null;
+  customImage?: string | null;
+}
+
 // Validation constants
 export const TOURNAMENT_VALIDATION = {
   NAME_MIN_LENGTH: 3,
@@ -69,7 +128,9 @@ export const TOURNAMENT_VALIDATION = {
   BUY_IN_MIN: BigInt('100000000000000000000'),           // 100 MORBIUS (18 decimals)
   BUY_IN_MAX: BigInt('1000000000000000000000000'),       // 1,000,000 MORBIUS
   STARTING_CHIPS_OPTIONS: [1000, 5000, 10000, 25000] as const,
-  MAX_HANDS_OPTIONS: [25, 50, 100, 200, 500] as const,
+  MAX_HANDS_MIN: 1,
+  MAX_HANDS_MAX: 200,
+  MAX_HANDS_OPTIONS: [25, 50, 100, 200, 500] as const, // Legacy: kept for backwards compatibility
   TIME_LIMIT_OPTIONS: [null, 60, 120, 240, 1440] as const, // minutes (null = no limit)
   MAX_REBUYS_OPTIONS: [0, 1, 3, 5] as const, // 0 = unlimited when enabled
   PIN_LENGTH: 4,
@@ -105,6 +166,11 @@ export interface CreateTournamentRequest {
   prizeDistributionType: PrizeDistributionType;
   customPrizePercentages?: number[]; // Only used when type is 'custom'
   maxPlayers?: number | null;
+  customImage?: string; // Base64 data URL or null for default
+  /** When set, prize pool is funded by creator via escrow (custom token) */
+  prizeTokenAddress?: string | null;
+  prizeAmount?: string; // token smallest unit
+  prizeTokenDecimals?: number | null;
 }
 
 // Create tournament response
@@ -122,6 +188,8 @@ export interface CreateTournamentResponse {
   isPrivate: boolean;
   prizeDistributionType: PrizeDistributionType;
   prizePercentages: number[];
+  prizeTokenAddress?: string | null;
+  prizeTokenDecimals?: number | null;
 }
 
 // Join tournament request
@@ -133,6 +201,27 @@ export interface JoinTournamentRequest {
 // Rebuy request
 export interface RebuyRequest {
   tournamentId: string;
+}
+
+// Default tournament card images (from /public/BlackJack/TourCards/)
+export const DEFAULT_TOUR_CARDS = [
+  '/BlackJack/TourCards/TourCard1.png',
+  '/BlackJack/TourCards/TourCard2.png',
+  '/BlackJack/TourCards/TourCard3.png',
+  '/BlackJack/TourCards/TourCard4.png',
+  '/BlackJack/TourCards/TourCard5.png',
+] as const;
+
+// Get a deterministic default tour card based on tournament ID
+export function getDefaultTourCard(tournamentId: string): string {
+  // Simple hash to pick a card consistently
+  let hash = 0;
+  for (let i = 0; i < tournamentId.length; i++) {
+    hash = ((hash << 5) - hash) + tournamentId.charCodeAt(i);
+    hash = hash & hash;
+  }
+  const index = Math.abs(hash) % DEFAULT_TOUR_CARDS.length;
+  return DEFAULT_TOUR_CARDS[index];
 }
 
 // Tournament list item (for browser)
@@ -154,6 +243,9 @@ export interface TournamentListItem {
   prizeDistributionType: PrizeDistributionType;
   createdAt: string;
   timeRemaining?: number; // Computed on client
+  customImage?: string | null; // Custom uploaded image or null for default
+  prizeTokenAddress?: string | null;
+  prizeTokenDecimals?: number | null;
 }
 
 // Extended tournament info
@@ -176,6 +268,8 @@ export interface TournamentInfoExtended {
   prizeDistributionType: PrizeDistributionType;
   prizePercentages: number[];
   createdAt: string;
+  prizeTokenAddress?: string | null;
+  prizeTokenDecimals?: number | null;
 }
 
 // Rebuy result

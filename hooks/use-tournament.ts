@@ -473,7 +473,7 @@ export function useTournament(options: UseTournamentOptions) {
   }, [wsClient, currentGame]);
 
   /**
-   * Fetch leaderboard
+   * Fetch leaderboard for current tournament
    */
   const fetchLeaderboard = useCallback(async (limit: number = 50): Promise<LeaderboardEntry[]> => {
     if (!wsClient) return [];
@@ -484,6 +484,27 @@ export function useTournament(options: UseTournamentOptions) {
       return response.leaderboard || [];
     } catch (err) {
       console.error('Failed to fetch leaderboard:', err);
+      return [];
+    }
+  }, [wsClient]);
+
+  /**
+   * Fetch leaderboard for a specific tournament by ID
+   */
+  const fetchTournamentLeaderboard = useCallback(async (
+    tournamentId: string,
+    limit: number = 10
+  ): Promise<LeaderboardEntry[]> => {
+    if (!wsClient) return [];
+
+    try {
+      const response = await wsClient.sendRequest('tournament_leaderboard_by_id', {
+        tournamentId,
+        limit,
+      });
+      return response.leaderboard || [];
+    } catch (err) {
+      console.error('Failed to fetch tournament leaderboard:', err);
       return [];
     }
   }, [wsClient]);
@@ -743,6 +764,7 @@ export function useTournament(options: UseTournamentOptions) {
     fetchTournamentState,
     fetchTournamentInfo,
     fetchLeaderboard,
+    fetchTournamentLeaderboard,
 
     // Tournament Creator Actions
     createTournament,

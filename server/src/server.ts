@@ -11,6 +11,7 @@ import { DatabaseService } from './services/database.service';
 import { ProvablyFairService } from './services/provably-fair.service';
 import { BlackjackGameService } from './services/blackjack-game.service';
 import { TournamentService } from './services/tournament.service';
+import { FreerollSchedulerService } from './services/freeroll-scheduler.service';
 import { WebSocketService } from './services/websocket.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { logger } from './utils/logger';
@@ -82,6 +83,10 @@ async function initializeServices() {
 
     // Initialize WebSocket service
     const wsService = new WebSocketService(server, gameService, dbService, tournamentService);
+
+    // Freeroll scheduler (polls pending scheduled events: start, elimination_round, end)
+    freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);
+    freerollScheduler.start();
 
     // Chain analytics (on-chain games: Plinko, Keno, Lottery, BigWheel)
     const chainAnalytics = new ChainAnalyticsService();
@@ -359,9 +364,12 @@ async function initializeServices() {
   }
 }
 
-// Graceful shutdown
+// Graceful shutdown (freerollScheduler ref set in initializeServices)
+let freerollScheduler: FreerollSchedulerService | null = null;
+
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  freerollScheduler?.stop();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
@@ -370,6 +378,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully');
+  freerollScheduler?.stop();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);

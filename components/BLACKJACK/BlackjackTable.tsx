@@ -64,6 +64,8 @@ interface BlackjackTableProps {
   onOpenDepositModal?: () => void;
   onOpenTableThemeSelector?: () => void;
   soundEnabled?: boolean;
+  /** When true (e.g. tournament mode), the betting panel is hidden; controls move to sidebar tab */
+  hideBettingPanel?: boolean;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -108,6 +110,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onOpenDepositModal,
   onOpenTableThemeSelector,
   soundEnabled = true,
+  hideBettingPanel = false,
 }) => {
   const videoSrc = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const imageSrc = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
@@ -1102,10 +1105,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           </div>
         </div>
 
-        {/* Actions Area - Buttons (draggable on md+, hidden on mobile; mobile uses section below table) */}
+        {/* Actions Area - Hidden; actions are in sidebar Bet tab (desktop) and in mobile block below table (mobile) */}
         <div
           ref={widgetRef}
-          className="hidden md:block cursor-move z-20 touch-none p-1"
+          className="hidden cursor-move z-20 touch-none p-1"
           style={{
             position: 'absolute',
             left: `${widgetPosition.x}px`,
@@ -1491,8 +1494,9 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-      {/* Betting Panel - Overlay at bottom of table */}
-      <div className="absolute bottom-1 left-0 right-0 z-50 flex justify-center pointer-events-auto">
+      {/* Betting Panel - Overlay at bottom of table (hidden in tournament mode; controls in sidebar tab) */}
+      {!hideBettingPanel && (
+        <div className="absolute bottom-1 left-0 right-0 z-50 flex justify-center pointer-events-auto">
           <BettingPanel
             onStartGame={onStartGame || (() => {})}
             isPlaying={isPlaying}
@@ -1505,6 +1509,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             onDoubleBet={onDoubleBet}
           />
         </div>
+      )}
 
         {/* Reserve - bottom right corner */}
         <div className="absolute bottom-2 right-2 z-50 pointer-events-auto">

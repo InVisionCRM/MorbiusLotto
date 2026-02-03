@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { sendEscrowPayout } from '../utils/escrow-payout';
 
 // Tournament constants
 export const TOURNAMENT_CONFIG = {
@@ -51,6 +52,10 @@ export interface Tournament {
   prize_percentages?: number[];
   max_players?: number;
   ends_at?: Date;
+  custom_image?: string | null; // Base64 data URL for custom tournament card
+  // Custom prize token (when set, payouts go via TournamentPrizeEscrow)
+  prize_token_address?: string | null;
+  prize_token_decimals?: number | null;
 }
 
 export interface TournamentEntry {
@@ -84,6 +89,32 @@ export interface CreateTournamentParams {
   prizeDistributionType: string;
   customPrizePercentages?: number[];
   maxPlayers?: number | null;
+  customImage?: string | null; // Base64 data URL for custom tournament card
+  /** When set, prize pool is funded by creator via escrow; prizeAmount in token smallest unit */
+  prizeTokenAddress?: string | null;
+  prizeAmount?: string; // wei/smallest unit
+  prizeTokenDecimals?: number | null;
+}
+
+// Freeroll list item (from list_freeroll_tournaments)
+export interface FreerollListItem {
+  id: string;
+  name: string;
+  creator_address: string | null;
+  tournament_type: string;
+  freeroll_mode: string;
+  scheduled_start_at: Date | null;
+  registration_opens_at: Date | null;
+  duration_minutes: number | null;
+  starting_chips: number;
+  current_phase: string | null;
+  registered_count: number;
+  action_timer_seconds: number | null;
+  elimination_config: Record<string, unknown> | null;
+  reentry_config: Record<string, unknown> | null;
+  prize_distribution_type: string;
+  custom_image: string | null;
+  created_at: Date;
 }
 
 // Tournament list item for browser
@@ -104,6 +135,9 @@ export interface TournamentListItem {
   is_private: boolean;
   prize_distribution_type: string;
   created_at: Date;
+  custom_image?: string | null; // Base64 data URL for custom tournament card
+  prize_token_address?: string | null;
+  prize_token_decimals?: number | null;
 }
 
 export interface TournamentGame {
@@ -232,6 +266,9 @@ export class TournamentService {
       prize_percentages: prizePercentages,
       max_players: row.max_players ? Number(row.max_players) : undefined,
       ends_at: row.ends_at,
+      custom_image: row.custom_image || null,
+      prize_token_address: row.prize_token_address ?? null,
+      prize_token_decimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
     };
   }
 
@@ -356,11 +393,13 @@ export class TournamentService {
         [tournament.buy_in_amount.toString(), normalizedAddress]
       );
 
-      // Add to prize pool
-      await client.query(
-        `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`,
-        [tournament.buy_in_amount.toString(), tournament.id]
-      );
+      // Add to prize pool only for platform (non–custom token) tournaments
+      if (!tournament.prize_token_address) {
+        await client.query(
+          `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`,
+          [tournament.buy_in_amount.toString(), tournament.id]
+        );
+      }
 
       // Create tournament entry
       const entryQuery = `
@@ -727,6 +766,7 @@ export class TournamentService {
       const prizesResult = await client.query(prizesQuery, [tournamentId]);
 
       const distributions: PrizeDistribution[] = [];
+      const useEscrow = Boolean(tournament.prize_token_address);
 
       // Apply prizes
       for (const row of prizesResult.rows) {
@@ -741,13 +781,25 @@ export class TournamentService {
             [prizeAmount.toString(), row.final_rank, row.entry_id]
           );
 
-          // Add prize to player balance
-          await client.query(
-            `UPDATE players
-             SET balance = balance + $1::NUMERIC
-             WHERE LOWER(wallet_address) = LOWER($2)`,
-            [prizeAmount.toString(), row.player_address]
-          );
+          if (useEscrow) {
+            const result = await sendEscrowPayout(tournamentId, row.player_address, prizeAmount);
+            if (!result.success) {
+              logger.error('Escrow payout failed; tournament may need manual resolution', {
+                tournamentId,
+                winner: row.player_address,
+                amount: prizeAmount.toString(),
+                error: result.error,
+              });
+            }
+          } else {
+            // Add prize to player balance (platform MORBIUS)
+            await client.query(
+              `UPDATE players
+               SET balance = balance + $1::NUMERIC
+               WHERE LOWER(wallet_address) = LOWER($2)`,
+              [prizeAmount.toString(), row.player_address]
+            );
+          }
 
           distributions.push({
             entry_id: row.entry_id,
@@ -761,6 +813,7 @@ export class TournamentService {
             playerAddress: row.player_address,
             rank: row.final_rank,
             prize: prizeAmount.toString(),
+            viaEscrow: useEscrow,
           });
         } else {
           // Just update final rank for non-prize positions
@@ -801,6 +854,166 @@ export class TournamentService {
     const query = `SELECT COUNT(*) FROM tournament_entries WHERE tournament_id = $1`;
     const result = await this.pool.query(query, [tournamentId]);
     return Number(result.rows[0].count);
+  }
+
+  // ============================================
+  // Freeroll methods
+  // ============================================
+
+  /**
+   * List freeroll tournaments (from list_freeroll_tournaments).
+   */
+  async listFreerollTournaments(includePast = false): Promise<FreerollListItem[]> {
+    const result = await this.pool.query('SELECT * FROM list_freeroll_tournaments($1)', [includePast]);
+    return (result.rows || []).map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      creator_address: row.creator_address,
+      tournament_type: row.tournament_type,
+      freeroll_mode: row.freeroll_mode,
+      scheduled_start_at: row.scheduled_start_at,
+      registration_opens_at: row.registration_opens_at,
+      duration_minutes: row.duration_minutes != null ? Number(row.duration_minutes) : null,
+      starting_chips: Number(row.starting_chips),
+      current_phase: row.current_phase,
+      registered_count: Number(row.registered_count),
+      action_timer_seconds: row.action_timer_seconds != null ? Number(row.action_timer_seconds) : null,
+      elimination_config: row.elimination_config ?? null,
+      reentry_config: row.reentry_config ?? null,
+      prize_distribution_type: row.prize_distribution_type,
+      custom_image: row.custom_image ?? null,
+      created_at: row.created_at,
+    }));
+  }
+
+  /**
+   * Register for a freeroll (during registration phase).
+   */
+  async registerFreeroll(playerAddress: string, tournamentId: string): Promise<TournamentEntry> {
+    const normalizedAddress = this.normalizeAddress(playerAddress);
+
+    const tournamentResult = await this.pool.query(
+      `SELECT id, tournament_type, current_phase, starting_chips, max_players FROM tournaments WHERE id = $1`,
+      [tournamentId]
+    );
+    if (tournamentResult.rows.length === 0) {
+      throw new Error('Tournament not found');
+    }
+    const t = tournamentResult.rows[0];
+    if (t.tournament_type !== 'freeroll') {
+      throw new Error('Not a freeroll tournament');
+    }
+    if (t.current_phase !== 'registration') {
+      throw new Error('Registration is closed');
+    }
+
+    const existing = await this.getTournamentEntry(normalizedAddress, tournamentId);
+    if (existing) {
+      throw new Error('Already registered');
+    }
+
+    const countResult = await this.pool.query(
+      `SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 AND registration_status IN ('registered', 'joined')`,
+      [tournamentId]
+    );
+    const count = Number(countResult.rows[0].c);
+    if (t.max_players != null && count >= t.max_players) {
+      throw new Error('Tournament is full');
+    }
+
+    const startingChips = Number(t.starting_chips);
+    const entryResult = await this.pool.query(
+      `INSERT INTO tournament_entries (
+        tournament_id, player_address, chips_remaining, highest_chip_count, total_buy_in, registration_status
+      ) VALUES ($1, $2, $3, $3, 0, 'registered')
+      RETURNING *`,
+      [tournamentId, normalizedAddress, startingChips]
+    );
+    logger.info('Player registered for freeroll', { playerAddress: normalizedAddress, tournamentId });
+    return this.normalizeEntry(entryResult.rows[0]);
+  }
+
+  /**
+   * Mark freeroll registration as "joined" (player is at the table).
+   */
+  async joinFreeroll(playerAddress: string, tournamentId: string): Promise<TournamentEntry> {
+    const normalizedAddress = this.normalizeAddress(playerAddress);
+
+    const entry = await this.getTournamentEntry(normalizedAddress, tournamentId);
+    if (!entry) {
+      throw new Error('Not registered for this freeroll');
+    }
+
+    const tournamentResult = await this.pool.query(
+      `SELECT tournament_type, current_phase FROM tournaments WHERE id = $1`,
+      [tournamentId]
+    );
+    if (tournamentResult.rows.length === 0) {
+      throw new Error('Tournament not found');
+    }
+    const t = tournamentResult.rows[0];
+    if (t.tournament_type !== 'freeroll') {
+      throw new Error('Not a freeroll tournament');
+    }
+    if (t.current_phase !== 'registration' && t.current_phase !== 'active' && t.current_phase !== 'elimination_round') {
+      throw new Error('Cannot join at this phase');
+    }
+
+    const statusResult = await this.pool.query(
+      `SELECT registration_status FROM tournament_entries WHERE id = $1`,
+      [entry.id]
+    );
+    const registrationStatus = statusResult.rows[0]?.registration_status;
+    if (registrationStatus === 'joined') {
+      return entry;
+    }
+    if (registrationStatus !== 'registered') {
+      throw new Error('Invalid registration status');
+    }
+
+    await this.pool.query(
+      `UPDATE tournament_entries SET registration_status = 'joined' WHERE id = $1`,
+      [entry.id]
+    );
+    const updated = await this.getTournamentEntry(normalizedAddress, tournamentId);
+    return updated!;
+  }
+
+  /**
+   * Re-enter a freeroll during the reentry window (after elimination).
+   */
+  async reentryFreeroll(playerAddress: string, tournamentId: string): Promise<TournamentEntry> {
+    const normalizedAddress = this.normalizeAddress(playerAddress);
+
+    const windowResult = await this.pool.query('SELECT is_reentry_window_open($1) AS open', [tournamentId]);
+    if (!windowResult.rows[0]?.open) {
+      throw new Error('Re-entry window is not open');
+    }
+
+    const entry = await this.getTournamentEntry(normalizedAddress, tournamentId);
+    if (!entry) {
+      throw new Error('Not in this tournament');
+    }
+    if (entry.status !== 'busted') {
+      throw new Error('Only eliminated players can re-enter');
+    }
+
+    const tournamentResult = await this.pool.query(
+      `SELECT starting_chips FROM tournaments WHERE id = $1 AND tournament_type = 'freeroll'`,
+      [tournamentId]
+    );
+    if (tournamentResult.rows.length === 0) {
+      throw new Error('Tournament not found');
+    }
+    const startingChips = Number(tournamentResult.rows[0].starting_chips);
+
+    await this.pool.query(
+      `UPDATE tournament_entries SET status = 'playing', chips_remaining = $1, reentry_count = COALESCE(reentry_count, 0) + 1, last_reentry_at = NOW() WHERE id = $2`,
+      [startingChips, entry.id]
+    );
+    const updated = await this.getTournamentEntry(normalizedAddress, tournamentId);
+    logger.info('Player re-entered freeroll', { playerAddress: normalizedAddress, tournamentId });
+    return updated!;
   }
 
   /**
@@ -849,6 +1062,9 @@ export class TournamentService {
       params.customPrizePercentages
     );
 
+    const hasCustomPrizeToken = params.prizeTokenAddress != null && params.prizeTokenAddress.trim() !== '';
+    const initialPrizePool = hasCustomPrizeToken && params.prizeAmount ? params.prizeAmount : '0';
+
     const query = `
       INSERT INTO tournaments (
         name,
@@ -864,8 +1080,12 @@ export class TournamentService {
         prize_distribution_type,
         prize_percentages,
         max_players,
-        ends_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        ends_at,
+        custom_image,
+        prize_token_address,
+        prize_token_decimals,
+        prize_pool
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `;
 
@@ -884,6 +1104,10 @@ export class TournamentService {
       JSON.stringify(prizePercentages),
       params.maxPlayers,
       endsAt,
+      params.customImage || null,
+      hasCustomPrizeToken ? params.prizeTokenAddress!.trim() : null,
+      hasCustomPrizeToken && params.prizeTokenDecimals != null ? params.prizeTokenDecimals : null,
+      initialPrizePool,
     ]);
 
     const tournament = this.normalizeTournament(result.rows[0]);
@@ -931,10 +1155,23 @@ export class TournamentService {
       return { valid: false, error: 'Invalid starting chips amount' };
     }
 
-    // Validate max hands
-    const validMaxHands = [25, 50, 100, 200, 500];
-    if (!validMaxHands.includes(params.maxHands)) {
-      return { valid: false, error: 'Invalid max hands amount' };
+    // Validate max hands (1-200 range)
+    if (params.maxHands < 1 || params.maxHands > 200) {
+      return { valid: false, error: 'Max hands must be between 1 and 200' };
+    }
+
+    // Validate custom prize token (if set)
+    if (params.prizeTokenAddress != null && params.prizeTokenAddress.trim() !== '') {
+      const addr = params.prizeTokenAddress.trim();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+        return { valid: false, error: 'Invalid prize token address' };
+      }
+      if (!params.prizeAmount || BigInt(params.prizeAmount) <= 0n) {
+        return { valid: false, error: 'Prize amount required when using custom token' };
+      }
+      if (params.prizeTokenDecimals != null && (params.prizeTokenDecimals < 0 || params.prizeTokenDecimals > 18)) {
+        return { valid: false, error: 'Prize token decimals must be 0–18' };
+      }
     }
 
     // Validate time limit
@@ -1008,6 +1245,9 @@ export class TournamentService {
         is_private: Boolean(row.is_private),
         prize_distribution_type: row.prize_distribution_type || 'top_10',
         created_at: row.created_at,
+        custom_image: row.custom_image || null,
+        prize_token_address: row.prize_token_address ?? null,
+        prize_token_decimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
       };
     });
   }
@@ -1083,11 +1323,13 @@ export class TournamentService {
         [tournament.buy_in_amount.toString(), normalizedAddress]
       );
 
-      // Add to prize pool
-      await client.query(
-        `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`,
-        [tournament.buy_in_amount.toString(), tournamentId]
-      );
+      // Add to prize pool only for platform (non–custom token) tournaments
+      if (!tournament.prize_token_address) {
+        await client.query(
+          `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`,
+          [tournament.buy_in_amount.toString(), tournamentId]
+        );
+      }
 
       // Create entry
       const entryQuery = `
@@ -1184,12 +1426,15 @@ export class TournamentService {
         [tournament.buy_in_amount.toString(), normalizedAddress]
       );
 
-      // Add to prize pool
-      const prizePoolResult = await client.query(
-        `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2 RETURNING prize_pool`,
-        [tournament.buy_in_amount.toString(), tournamentId]
-      );
-      const newPrizePool = this.toBigInt(prizePoolResult.rows[0].prize_pool);
+      // Add to prize pool only for platform (non–custom token) tournaments
+      let newPrizePool = tournament.prize_pool;
+      if (!tournament.prize_token_address) {
+        const prizePoolResult = await client.query(
+          `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2 RETURNING prize_pool`,
+          [tournament.buy_in_amount.toString(), tournamentId]
+        );
+        newPrizePool = this.toBigInt(prizePoolResult.rows[0].prize_pool);
+      }
 
       // Update entry: reset chips, increment rebuy count, add to total buy-in
       const entryResult = await client.query(
@@ -1320,5 +1565,179 @@ export class TournamentService {
       maxRebuys: rebuyConfig.maxRebuys,
       rebuyEnabled: rebuyConfig.enabled,
     };
+  }
+
+  /**
+   * Execute a pending freeroll scheduled event (start, elimination_round, end, reentry_close).
+   * Called by FreerollSchedulerService. Marks the event as executed after handling.
+   */
+  async executeScheduledEvent(event: {
+    id: string;
+    tournament_id: string;
+    event_type: string;
+    scheduled_at: Date;
+    metadata: Record<string, unknown> | null;
+  }): Promise<void> {
+    const { id: eventId, tournament_id: tournamentId, event_type: eventType, metadata } = event;
+
+    try {
+      switch (eventType) {
+        case 'start':
+          await this.handleFreerollStart(tournamentId);
+          break;
+        case 'elimination_round':
+          await this.handleEliminationRound(tournamentId, metadata);
+          break;
+        case 'end':
+          await this.handleFreerollEnd(tournamentId);
+          break;
+        case 'reentry_close':
+          // No-op: reentry window is time-based; closing is implicit
+          break;
+        default:
+          logger.warn('executeScheduledEvent: unknown event_type %s', eventType);
+      }
+    } finally {
+      await this.pool.query(
+        `UPDATE tournament_scheduled_events SET executed_at = NOW(), status = 'executed' WHERE id = $1`,
+        [eventId]
+      );
+    }
+  }
+
+  /** Transition freeroll to active and mark no-shows. */
+  private async handleFreerollStart(tournamentId: string): Promise<void> {
+    logger.info('handleFreerollStart: tournamentId=%s', tournamentId);
+    await this.pool.query(
+      `UPDATE tournaments SET current_phase = 'active' WHERE id = $1 AND tournament_type = 'freeroll'`,
+      [tournamentId]
+    );
+    await this.pool.query(
+      `UPDATE tournament_entries SET registration_status = 'no_show' WHERE tournament_id = $1 AND registration_status = 'registered'`,
+      [tournamentId]
+    );
+  }
+
+  /** Run elimination round: eliminate bottom % by chips (with tiebreakers), optionally reset chips for survivors. */
+  private async handleEliminationRound(tournamentId: string, metadata: Record<string, unknown> | null): Promise<void> {
+    const roundNumber = typeof metadata?.round_number === 'number' ? metadata.round_number : 1;
+
+    const tournamentResult = await this.pool.query(
+      `SELECT elimination_config, tiebreaker_order, starting_chips FROM tournaments WHERE id = $1 AND tournament_type = 'freeroll'`,
+      [tournamentId]
+    );
+    if (tournamentResult.rows.length === 0) {
+      logger.warn('handleEliminationRound: tournament not found or not freeroll: %s', tournamentId);
+      return;
+    }
+
+    const row = tournamentResult.rows[0];
+    const eliminationConfig = row.elimination_config as { eliminationPercentage?: number; resetChipsAfterRound?: boolean } | null;
+    const tiebreakerOrder = row.tiebreaker_order ?? ['highest_chips', 'blackjacks', 'hands_won', 'entry_time'];
+    const startingChips = Number(row.starting_chips);
+
+    if (!eliminationConfig || typeof eliminationConfig.eliminationPercentage !== 'number') {
+      logger.warn('handleEliminationRound: missing elimination_config or eliminationPercentage: %s', tournamentId);
+      return;
+    }
+
+    const eliminationPct = Math.min(50, Math.max(5, eliminationConfig.eliminationPercentage));
+    const resetChipsAfterRound = Boolean(eliminationConfig.resetChipsAfterRound);
+
+    const entriesResult = await this.pool.query(
+      `SELECT entry_id, player_address, rank_position, chips_remaining FROM get_entries_for_elimination($1, $2::jsonb)`,
+      [tournamentId, JSON.stringify(tiebreakerOrder)]
+    );
+    const entries = entriesResult.rows as { entry_id: string; player_address: string; rank_position: number; chips_remaining: string }[];
+    const count = entries.length;
+    if (count === 0) {
+      logger.info('handleEliminationRound: no playing entries, skipping round %s', roundNumber);
+      return;
+    }
+
+    const toEliminate = Math.min(count - 1, Math.ceil((count * eliminationPct) / 100));
+    if (toEliminate <= 0) {
+      await this.pool.query(
+        `UPDATE tournaments SET current_elimination_round = $1, current_phase = 'elimination_round' WHERE id = $2`,
+        [roundNumber, tournamentId]
+      );
+      return;
+    }
+
+    const toEliminateList = entries.filter((e) => e.rank_position <= toEliminate);
+    const thresholdChips = toEliminateList.length > 0
+      ? toEliminateList[toEliminateList.length - 1].chips_remaining
+      : '0';
+    const eliminatedEntryIds = toEliminateList.map((e) => e.entry_id);
+    const survivorCount = count - eliminatedEntryIds.length;
+    const eliminatedEntriesJson = JSON.stringify(
+      toEliminateList.map((e) => ({ entry_id: e.entry_id, player_address: e.player_address, chips: e.chips_remaining }))
+    );
+
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      for (const entryId of eliminatedEntryIds) {
+        await client.query(
+          `UPDATE tournament_entries SET status = 'busted', eliminated_in_round = $1, chips_at_elimination = chips_remaining WHERE id = $2`,
+          [roundNumber, entryId]
+        );
+      }
+
+      await client.query(
+        `INSERT INTO tournament_eliminations (tournament_id, round_number, eliminated_entries, threshold_chips, survivors_count)
+         VALUES ($1, $2, $3::jsonb, $4::bigint, $5)`,
+        [tournamentId, roundNumber, eliminatedEntriesJson, thresholdChips, survivorCount]
+      );
+
+      if (resetChipsAfterRound && survivorCount > 0) {
+        await client.query(
+          `UPDATE tournament_entries SET chips_remaining = $1, elimination_stats = '{"blackjacks": 0, "hands_won": 0, "hands_played": 0}' WHERE tournament_id = $2 AND status = 'playing' AND registration_status = 'joined'`,
+          [startingChips, tournamentId]
+        );
+      }
+
+      await client.query(
+        `UPDATE tournaments SET current_elimination_round = $1, current_phase = 'elimination_round' WHERE id = $2`,
+        [roundNumber, tournamentId]
+      );
+
+      await client.query('COMMIT');
+      logger.info('handleEliminationRound: tournamentId=%s round=%s eliminated=%s survivors=%s', tournamentId, roundNumber, eliminatedEntryIds.length, survivorCount);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Complete freeroll: distribute prizes (via existing logic) and set current_phase = completed. */
+  private async handleFreerollEnd(tournamentId: string): Promise<void> {
+    logger.info('handleFreerollEnd: tournamentId=%s', tournamentId);
+
+    const tournamentResult = await this.pool.query(
+      `SELECT status FROM tournaments WHERE id = $1 AND tournament_type = 'freeroll'`,
+      [tournamentId]
+    );
+    if (tournamentResult.rows.length === 0) {
+      logger.warn('handleFreerollEnd: tournament not found or not freeroll: %s', tournamentId);
+      return;
+    }
+    if (tournamentResult.rows[0].status !== 'active') {
+      logger.info('handleFreerollEnd: tournament already not active, skipping: %s', tournamentId);
+      await this.pool.query(
+        `UPDATE tournaments SET current_phase = 'completed' WHERE id = $1 AND tournament_type = 'freeroll'`,
+        [tournamentId]
+      );
+      return;
+    }
+
+    await this.distributePrizes(tournamentId);
+    await this.pool.query(
+      `UPDATE tournaments SET current_phase = 'completed' WHERE id = $1 AND tournament_type = 'freeroll'`,
+      [tournamentId]
+    );
   }
 }
