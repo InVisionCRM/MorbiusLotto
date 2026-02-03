@@ -75,7 +75,7 @@ export class WebSocketService {
       transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com')
     });
     
-    this.contractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0xDe2c7a18de8a9d889E18874EA90A42f84FbaA080') as `0x${string}`;
+    this.contractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0x32435e633EB691f7039EB73107FD15EF13125703') as `0x${string}`;
 
     this.wss.on('connection', this.handleConnection.bind(this));
 

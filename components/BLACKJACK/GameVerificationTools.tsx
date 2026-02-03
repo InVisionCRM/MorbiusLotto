@@ -49,6 +49,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
   const [gameId, setGameId] = useState(initialGameId ?? '')
   const [verificationData, setVerificationData] = useState<GameVerificationData | null>(gameData || null)
   const initialGameIdConsumedRef = React.useRef(false)
+  const lastProcessedInitialGameIdRef = React.useRef<string | null>(null)
   const [isVerifying, setIsVerifying] = useState(false)
   const [verificationResult, setVerificationResult] = useState<{
     isValid: boolean
@@ -58,13 +59,11 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
   const [showServerSeed, setShowServerSeed] = useState(false)
   const [showProvablyFair, setShowProvablyFair] = useState(true)
 
-  // When opened from History with a game ID, prefill and auto-run verify once
+  // When opened from History with a game ID, prefill and auto-run verify once per game ID
   useEffect(() => {
-    if (!initialGameId) {
-      initialGameIdConsumedRef.current = false
-      return
-    }
-    if (initialGameIdConsumedRef.current || !onVerify) return
+    if (!initialGameId || !onVerify) return
+    if (lastProcessedInitialGameIdRef.current === initialGameId) return
+    lastProcessedInitialGameIdRef.current = initialGameId
     initialGameIdConsumedRef.current = true
     setGameId(initialGameId)
     onInitialGameIdConsumed?.()
@@ -77,7 +76,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
         if (cancelled) return
         if (data) {
           setVerificationData(data)
-          const result = verifyGame(data)
+          const result = await verifyGame(data)
           setVerificationResult(result)
           if (result.isValid) toast.success('Game verification successful!')
           else toast.error('Game verification failed!')
@@ -110,7 +109,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
       const data = await onVerify?.(idToVerify)
       if (data) {
         setVerificationData(data)
-        const result = verifyGame(data)
+        const result = await verifyGame(data)
         setVerificationResult(result)
 
         if (result.isValid) {
@@ -130,17 +129,22 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
     }
   }
 
-  const verifyGame = (data: GameVerificationData) => {
+  // Browser-compatible SHA-256 hex (Web Crypto API)
+  const sha256Hex = async (text: string): Promise<string> => {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+    return Array.from(new Uint8Array(buf))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+  }
+
+  const verifyGame = async (data: GameVerificationData) => {
     const errors: string[] = []
     let isValid = true
 
     try {
-      // Verify server seed hash
+      // Verify server seed hash (browser-safe)
       if (data.serverSeed && data.serverSeedHash) {
-        const calculatedHash = crypto.createHash('sha256')
-          .update(data.serverSeed)
-          .digest('hex')
-
+        const calculatedHash = await sha256Hex(data.serverSeed)
         if (calculatedHash !== data.serverSeedHash) {
           errors.push('Server seed hash does not match')
           isValid = false
@@ -202,7 +206,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
       }
 
     } catch (error) {
-      errors.push(`Verification error: ${error.message}`)
+      errors.push(`Verification error: ${error instanceof Error ? error.message : String(error)}`)
       isValid = false
     }
 

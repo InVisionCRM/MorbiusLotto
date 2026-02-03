@@ -71,9 +71,13 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Get native PLS balance
+  // Get native PLS balance (throttled to reduce RPC load)
   const { data: plsBalance } = useBalance({
-    address: address,
+    address: address ?? undefined,
+    query: {
+      enabled: !!address,
+      refetchInterval: 60_000, // 1 minute when connected
+    },
   });
 
   useEffect(() => {

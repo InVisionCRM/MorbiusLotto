@@ -26,7 +26,7 @@ const server = createServer(app);
 const PORT = process.env.PORT || 3001;
 
 // CORS: allow frontend origin(s). Set FRONTEND_URL on Railway to your app URL (comma-separated for multiple).
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+const allowedOrigins = (process.env.FRONTEND_URL || 'https://win.morbius.io')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
