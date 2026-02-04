@@ -67,10 +67,12 @@ interface BlackjackTableProps {
   soundEnabled?: boolean;
   /** Play a sound effect via Web Audio API (avoids interrupting background music). When provided, SFX use this instead of new Audio().play() */
   onPlaySfx?: (path: string) => void;
-  /** When true (e.g. tournament mode), the betting panel is hidden; controls move to sidebar tab */
+  /** When true (e.g. tournament mode), the betting panel is hidden; controls move to table bottom */
   hideBettingPanel?: boolean;
   /** When game is COMPLETE, pass current game id so dealer-reveal completion can reset for each new game (fixes freeze when back-to-back blackjack). */
   completedGameId?: string;
+  /** Tournament HUD + bet panel rendered at bottom center of table (all layouts) */
+  tournamentControls?: React.ReactNode;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -1591,7 +1593,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-      {/* Betting Panel - Overlay at bottom of table (hidden in tournament mode; controls in sidebar tab) */}
+      {/* Betting Panel - Overlay at bottom of table (hidden in tournament mode) */}
       {!hideBettingPanel && (
         <div className="absolute bottom-1 left-0 right-0 z-50 flex justify-center pointer-events-auto">
           <BettingPanel
@@ -1605,6 +1607,15 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             onHalfBet={onHalfBet}
             onDoubleBet={onDoubleBet}
           />
+        </div>
+      )}
+
+      {/* Tournament controls - grid-8 bottom-15 center (all layouts) */}
+      {tournamentControls && (
+        <div className="absolute left-0 right-0 bottom-[3.75rem] z-50 grid grid-cols-8 justify-center items-center pointer-events-auto">
+          <div className="col-span-8 flex flex-col items-center justify-center gap-3">
+            {tournamentControls}
+          </div>
         </div>
       )}
 

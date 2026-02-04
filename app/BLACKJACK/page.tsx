@@ -2494,33 +2494,9 @@ export default function BlackjackPage() {
             }
             tournamentTabContent={
               tournament.tournamentState.inTournament ? (
-                <>
-                  <TournamentHUD
-                    state={tournament.tournamentState}
-                    onLeave={() => {
-                      if (confirm('Are you sure you want to leave the tournament? You will forfeit your remaining chips.')) {
-                        tournament.leaveTournament();
-                        setIsTournamentMode(false);
-                      }
-                    }}
-                    onRebuy={async () => {
-                      const success = await tournament.requestRebuy();
-                      if (success) {
-                        toast.success('Rebuy successful! Good luck!');
-                        fetchBalance();
-                      }
-                    }}
-                    isRebuyLoading={tournament.isLoading}
-                  />
-                  <TournamentBetPanel
-                    chips={tournament.tournamentState.chips}
-                    onStartGame={handleStartTournamentGame}
-                    isPlaying={gameState.isPlaying}
-                    isLoading={tournament.isLoading}
-                    handsRemaining={tournament.tournamentState.handsRemaining}
-                    gameResult={currentGameResult}
-                  />
-                </>
+                <p className="text-gray-400 text-sm text-center py-4">
+                  Tournament controls are on the table. Use the panel at the bottom to place bets and the HUD for chips, rank, and leave/rebuy.
+                </p>
               ) : null
             }
           />
