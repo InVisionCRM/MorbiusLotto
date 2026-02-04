@@ -87,7 +87,7 @@ export default function BlackjackSidebar({
   betTabContent,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
-  const betTabAvailable = isDesktop && !inTournament
+  const betTabAvailable = !inTournament
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'recent')
   const [sidebarVerifyGameId, setSidebarVerifyGameId] = useState<string | null>(null)
   const prevBetAvailableRef = useRef(false)
@@ -95,9 +95,7 @@ export default function BlackjackSidebar({
 
   const tabs = inTournament
     ? [...BASE_TABS, TOURNAMENT_PLAY_TAB]
-    : isDesktop
-      ? [BET_TAB, ...BASE_TABS]
-      : BASE_TABS
+    : [BET_TAB, ...BASE_TABS]
 
   useEffect(() => {
     if (inTournament) {
