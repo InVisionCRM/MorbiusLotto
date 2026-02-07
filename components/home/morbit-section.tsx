@@ -16,18 +16,18 @@ export function MorbItSection() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.08)_0%,transparent_50%)] pointer-events-none" />
 
       <div className="container mx-auto max-w-4xl relative z-10">
-        {/* Header */}
+        {/* Header — matches other home sections */}
         <motion.div
-          className="text-center mb-12"
+          className="text-center mb-8"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
           variants={fadeIn}
         >
-          <h2 className="text-5xl md:text-6xl font-russo-one font-normal text-white mb-4">
+          <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
             MORB-IT
           </h2>
-          <p className="text-xl text-cyan-400 font-prosto-one">
+          <p className="text-white/50 text-sm">
             Community Tools
           </p>
         </motion.div>

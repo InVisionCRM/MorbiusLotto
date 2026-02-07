@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { ContractAddress } from '@/components/ui/contract-address'
 import { DisclaimerModal } from '@/components/footer/disclaimer-modal'
@@ -10,10 +10,22 @@ import { TermsOfServiceModal } from '@/components/footer/terms-of-service'
 import { AboutUsModal } from '@/components/footer/about-us'
 import { UserAgreementModal } from '@/components/footer/user-agreement'
 import { FAQModal } from '@/components/footer/faq-modal'
-import { LOTTERY_ADDRESS } from '@/lib/contracts'
+import { LOTTERY_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { toast } from 'sonner'
 
 export function Footer() {
   const [showDisclaimer, setShowDisclaimer] = useState(false)
+  const [morbiusCopied, setMorbiusCopied] = useState(false)
+  const copyMorbius = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(MORBIUS_TOKEN_ADDRESS)
+      setMorbiusCopied(true)
+      toast.success('MORBIUS address copied')
+      setTimeout(() => setMorbiusCopied(false), 2000)
+    } catch {
+      toast.error('Failed to copy')
+    }
+  }, [])
   const [showPulseChain, setShowPulseChain] = useState(false)
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
@@ -23,7 +35,7 @@ export function Footer() {
 
   return (
     <>
-      <footer className="border-t border-white/10 py-6 mt-16">
+      <footer className="w-full border-t border-white/10 py-6 mt-16">
         <div className="container mx-auto px-4 max-w-7xl">
           <div className="flex flex-col items-center gap-6">
             {/* Navigation Links */}
@@ -106,6 +118,17 @@ export function Footer() {
               className="text-white/60 hover:text-white/90 text-sm underline transition-colors"
             >
               Important Disclaimer
+            </button>
+
+            {/* Morbius token address — click to copy */}
+            <button
+              type="button"
+              onClick={copyMorbius}
+              className="text-white font-bold font-poppins text-sm cursor-pointer hover:opacity-90 transition-opacity select-all"
+              title="Click to copy MORBIUS address"
+            >
+              {MORBIUS_TOKEN_ADDRESS}
+              {morbiusCopied && <span className="ml-2 text-cyan-400">Copied!</span>}
             </button>
           </div>
         </div>

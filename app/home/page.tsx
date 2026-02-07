@@ -2,10 +2,19 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
+import { HomeHeader } from '@/components/home/header'
+import { HeroSection } from '@/components/home/hero-section'
 import { LatestWins } from '@/components/home/latest-wins'
+import { ChatPanel } from '@/components/chat/ChatPanel'
 import { GlobalStatsSection } from '@/components/home/global-stats-section'
 import { AcesParallaxSection } from '@/components/home/aces-parallax-section'
 import { GamesSection } from '@/components/home/games-section'
+import { RoadMap } from '@/components/home/RoadMap'
+import { TokenomicsSection } from '@/components/home/tokenomics-section'
+import { SocialsSection } from '@/components/home/socials-section'
+import { MorbItSection } from '@/components/home/morbit-section'
+import { PulseChainSection } from '@/components/home/pulsechain-section'
+import Footer from '@/components/PLINKO/Footer'
 
 const RESPONSIBLE_GAMING_ITEMS = [
   'Self-exclusion and cool-off options so you can voluntarily step away for a set period.',
@@ -17,11 +26,26 @@ const RESPONSIBLE_GAMING_ITEMS = [
 
 export default function Page() {
   return (
-    <div className="min-h-screen text-white bg-black flex flex-col items-center py-12 px-4 gap-16">
-      <LatestWins />
-
-      {/* Platform stats: Blackjack + Plinko, Keno, Lottery, Big Wheel */}
-      <GlobalStatsSection />
+    <div className="min-h-screen text-white bg-black flex flex-col items-center">
+      {/* Main nav with dropdown (wallet, hamburger menu, Home, games, etc.) */}
+      <HomeHeader />
+      {/* Hero with background image and logo */}
+      <HeroSection />
+      <div className="w-full flex flex-col items-center py-12 px-4 gap-y-20 md:gap-y-24">
+      {/* Chat (left) + Latest Wins (right): 2-col on desktop, stacked on mobile (chat first, then latest wins) */}
+      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="min-h-[280px] order-1">
+          <ChatPanel
+            roomId="main"
+            title="Lobby Chat"
+            collapsible={false}
+            className="h-full"
+          />
+        </div>
+        <div className="order-2">
+          <LatestWins />
+        </div>
+      </div>
 
       {/* Aces parallax: slide in then out */}
       <AcesParallaxSection />
@@ -29,8 +53,12 @@ export default function Page() {
       {/* Games: Lottery, Keno, Plinko, Blackjack, etc. */}
       <GamesSection />
 
-      {/* Blackjack Tournament Promo */}
-      <section className="w-full max-w-2xl">
+      {/* Platform stats: Blackjack + Plinko, Keno, Lottery, Big Wheel */}
+      <GlobalStatsSection />
+
+      {/* Roadmap: Tournaments, Slot Machines, Texas Hold'em, Sponsorship */}
+      <RoadMap />
+      <section className="w-full max-w-2xl space-y-8" style={{ display: 'none' }}>
         <div className="text-center mb-6">
           <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-white mb-2">
             Blackjack Tournaments
@@ -92,6 +120,21 @@ export default function Page() {
           </ul>
         </div>
       </section>
+
+      {/* Tokenomics */}
+      <TokenomicsSection />
+
+      {/* We Support PulseChain */}
+      <PulseChainSection />
+
+      {/* Socials */}
+      <SocialsSection />
+
+      {/* Morb-It */}
+      <MorbItSection />
+
+      <Footer />
+      </div>
     </div>
   )
 }

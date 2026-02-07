@@ -103,6 +103,14 @@ export default function SlotMachinesMainNav({
                 {menuOpen && (
                   <div className="absolute right-0 mt-2 w-48 rounded-xl bg-black/95 border border-purple-900/50 shadow-xl shadow-purple-900/20 py-2 z-50">
                     <Link
+                      href="/home"
+                      className="flex items-center gap-3 px-4 py-2 text-purple-300 hover:bg-purple-900/30 transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <span>🏠</span>
+                      <span>Home</span>
+                    </Link>
+                    <Link
                       href="/slot-machines"
                       className="flex items-center gap-3 px-4 py-2 text-purple-300 hover:bg-purple-900/30 transition-colors"
                       onClick={() => setMenuOpen(false)}
@@ -123,7 +131,9 @@ export default function SlotMachinesMainNav({
                       className="flex items-center gap-3 px-4 py-2 text-purple-300 hover:bg-purple-900/30 transition-colors"
                       onClick={() => setMenuOpen(false)}
                     >
-                      <i className="fas fa-club w-4 text-center" aria-hidden />
+                      <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
+                        <Image src="/BlackJack/Cards/PNG/AS.png" alt="" width={20} height={20} className="object-contain" />
+                      </span>
                       <span>Blackjack</span>
                     </Link>
                     <Link

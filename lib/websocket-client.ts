@@ -363,12 +363,21 @@ export class BlackjackWebSocketClient {
   /**
    * Create a new game
    */
-  async createGame(betAmount: bigint, clientSeedCommitment?: string, gameHash?: string): Promise<GameState> {
-    return this.sendRequest('create_game', {
+  async createGame(
+    betAmount: bigint,
+    clientSeedCommitment?: string,
+    gameHash?: string,
+    perfectPairsBetAmount?: bigint
+  ): Promise<GameState> {
+    const payload: Record<string, string | undefined> = {
       betAmount: betAmount.toString(),
       clientSeedCommitment,
       gameHash
-    });
+    };
+    if (perfectPairsBetAmount != null && perfectPairsBetAmount > 0n) {
+      payload.perfectPairsBetAmount = perfectPairsBetAmount.toString();
+    }
+    return this.sendRequest('create_game', payload);
   }
 
   async getBalance(): Promise<{ balance: string }> {

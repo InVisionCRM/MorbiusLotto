@@ -5,7 +5,7 @@ import { useAccount, usePublicClient } from 'wagmi';
 import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
-import BettingPanel from '@/components/BLACKJACK/BettingPanel';
+import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
 import MainNav from '@/components/BLACKJACK/MainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
 import WinNotification from '@/components/BLACKJACK/WinNotification';
@@ -86,7 +86,7 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
       suppressHydrationWarning
     >
       {/* Animated card dealing effect */}
-      <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2">
+      <div className="absolute top-1/4 right-1/2 -translate-x-1/2 transform ">
         <div className="relative">
           {/* Stack of cards animation */}
           {[...Array(6)].map((_, i) => (
@@ -94,12 +94,12 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
               key={i}
               className="absolute items-center justify-center w-20 h-28 bg-white rounded-lg border-2 border-gray-300 shadow-lg"
               style={{
-                transform: `translate(${i * 2}px, ${i * 2}px) rotate(${i * 5}deg)`,
+                transform: `translate(${i * 2}px, ${i * 2}px) rotate(${i * 10}deg)`,
                 animation: `dealCard 0.5s ease-out ${i * 0.1}s both`,
                 zIndex: 6 - i
               }}
             >
-              <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 rounded-lg flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-purple-700 rounded-lg flex items-center justify-center">
                 <span className="text-white text-2xl font-bold">♠</span>
               </div>
             </div>
@@ -112,7 +112,7 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
         <div
           className="rounded-full h-3 overflow-hidden"
           style={{
-            background: 'linear-gradient(145deg, rgb(25, 35, 45), rgb(16, 26, 35))',
+            background: 'linear-gradient(145deg, rgba(25, 35, 45, 0.56), rgba(16, 26, 35, 0.62))',
             boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
           }}
         >
@@ -175,28 +175,28 @@ const createEmptyHand = (): Hand => ({
   isBust: false
 });
 
-// Helper function to calculate hand total
+// Helper: blackjack hand total with correct multi-ace handling (each ace 11 until bust, then soften one at a time)
 const calculateHandTotal = (cards: Card[]): { total: number; hasAce: boolean } => {
   let total = 0;
-  let hasAce = false;
+  let aceCount = 0;
 
   for (const card of cards) {
-    if (card.value === 1) { // Ace
-      hasAce = true;
-      total += 11; // Initially count as 11
-    } else if (card.value >= 11 && card.value <= 13) { // Face cards
+    if (card.value === 1) {
+      aceCount++;
+      total += 11;
+    } else if (card.value >= 11 && card.value <= 13) {
       total += 10;
     } else {
       total += card.value;
     }
   }
 
-  // Adjust for aces if total > 21
-  if (hasAce && total > 21) {
-    total -= 10; // Convert ace from 11 to 1
+  while (total > 21 && aceCount > 0) {
+    total -= 10;
+    aceCount--;
   }
 
-  return { total, hasAce };
+  return { total, hasAce: aceCount > 0 };
 };
 
 // Helper function to create a card
@@ -298,61 +298,72 @@ export default function BlackjackPage() {
   // Chip stack for individual bet tracking
   const [chipStack, setChipStack] = useState<number[]>([]);
 
+  /** Mobile manual entry: when set, bet comes from this (ether string) instead of chip stack. Cleared when desktop panel adds/clears chips. */
+  const [manualBetAmount, setManualBetAmount] = useState<string | null>(null);
+
   // Last bet amount for rebet functionality
   const [lastBetAmount, setLastBetAmount] = useState<string>('0');
 
   // Game result for chip animations
   const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
 
-  // Custom chip stack manager
-  const manageChipStack = useCallback((betAmount?: string, chipValue?: number, clearAll?: boolean) => {
-    if (clearAll) {
-      // Clearing all chips
-      setChipStack([]);
-    } else if (chipValue) {
-      // Check if adding this chip would exceed MAX_BET
-      setChipStack(prev => {
-        const currentTotal = prev.reduce((sum, chip) => sum + chip, 0);
-        const newTotal = currentTotal + chipValue;
-        // Convert to wei: chip values are in MORBIUS, need to add 18 decimals
-        const newTotalWei = BigInt(newTotal.toString() + '0'.repeat(18));
-        
-        if (newTotalWei > BET_LIMITS.MAX_BET) {
-          const currentTotalWei = BigInt(currentTotal.toString() + '0'.repeat(18));
-          const currentMorbius = Number(formatEther(currentTotalWei));
-          toast.error('Bet limit exceeded', {
-            description: `Maximum bet is 100,000 MORBIUS. Current bet: ${currentMorbius.toFixed(0)} MORBIUS`
-          });
-          return prev; // Don't add the chip
-        }
-        
-        // Adding a chip to the stack
-        return [...prev, chipValue];
-      });
+  // Convert integer MORBIUS amount to chip stack (same denominations as rebet/half/double)
+  const CHIP_VALUES = [100000, 10000, 2500, 1000, 500];
+  const amountToChipStack = useCallback((amount: number): number[] => {
+    const chips: number[] = [];
+    let remaining = Math.floor(amount);
+    for (const chipValue of CHIP_VALUES) {
+      while (remaining >= chipValue) {
+        chips.push(chipValue);
+        remaining -= chipValue;
+      }
     }
+    return chips;
   }, []);
 
-  // Calculate total bet amount from chip stack
-  const totalBetAmount = chipStack.reduce((sum, chip) => sum + chip, 0);
-  const displayBetAmount = totalBetAmount > 0 ? formatEther(BigInt(totalBetAmount.toString() + '0'.repeat(18))) : '0';
+  // Custom chip stack manager (single betting panel: amount input updates both display and chip stack)
+  const manageChipStack = useCallback((betAmount?: string, _chipValue?: number, clearAll?: boolean) => {
+    if (clearAll) {
+      setChipStack([]);
+      setManualBetAmount(null);
+      return;
+    }
+    if (betAmount === undefined) return;
+    if (betAmount === '' || betAmount === '0') {
+      setManualBetAmount(null);
+      setChipStack([]);
+      return;
+    }
+    const amount = Math.floor(parseFloat(betAmount) || 0);
+    const maxBetNum = Number(formatEther(BET_LIMITS.MAX_BET));
+    const clamped = Math.min(amount, maxBetNum);
+    setManualBetAmount(String(clamped));
+    setChipStack(amountToChipStack(clamped));
+  }, [amountToChipStack]);
+
+  // Total from chip stack
+  const totalBetAmountFromChips = chipStack.reduce((sum, chip) => sum + chip, 0);
+  // Effective total: manual amount or chip stack
+  const effectiveTotalBetWei = manualBetAmount != null
+    ? parseEther(manualBetAmount)
+    : BigInt(totalBetAmountFromChips.toString() + '0'.repeat(18));
+  const totalBetAmount = manualBetAmount != null ? parseFloat(manualBetAmount) || 0 : totalBetAmountFromChips;
+  const displayBetAmount = manualBetAmount ?? (totalBetAmountFromChips > 0 ? formatEther(BigInt(totalBetAmountFromChips.toString() + '0'.repeat(18))) : '0');
 
   // Rebet: restore last bet amount
   const handleRebet = useCallback(() => {
     const lastBet = parseFloat(lastBetAmount);
     if (lastBet > 0) {
-      // Check if rebet would exceed MAX_BET
-      const lastBetWei = BigInt(lastBet.toString() + '0'.repeat(18));
+      const lastBetWei = BigInt(Math.floor(lastBet).toString() + '0'.repeat(18));
       if (lastBetWei > BET_LIMITS.MAX_BET) {
         toast.error('Bet limit exceeded', {
           description: `Maximum bet is 100,000 MORBIUS. Cannot rebet ${lastBet} MORBIUS`
         });
         return;
       }
-      
-      // Convert lastBetAmount to chip stack
-      // Use optimal chip breakdown
+      setManualBetAmount(null);
       const chips: number[] = [];
-      let remaining = lastBet;
+      let remaining = Math.floor(lastBet);
       const chipValues = [100000, 10000, 2500, 1000, 500];
       for (const chipValue of chipValues) {
         while (remaining >= chipValue) {
@@ -366,54 +377,26 @@ export default function BlackjackPage() {
 
   // Half bet: reduce current bet by 50%
   const handleHalfBet = useCallback(() => {
-    if (totalBetAmount > 0) {
-      const halfAmount = Math.floor(totalBetAmount / 2);
-      if (halfAmount > 0) {
-        // Rebuild chip stack for half amount
-        const chips: number[] = [];
-        let remaining = halfAmount;
-        const chipValues = [100000, 10000, 2500, 1000, 500];
-        for (const chipValue of chipValues) {
-          while (remaining >= chipValue) {
-            chips.push(chipValue);
-            remaining -= chipValue;
-          }
-        }
-        setChipStack(chips);
-      } else {
-        setChipStack([]);
-      }
-    }
-  }, [totalBetAmount]);
+    const current = totalBetAmount;
+    if (current <= 0) return;
+    const half = Math.floor(current / 2);
+    manageChipStack(half > 0 ? String(half) : '0');
+  }, [totalBetAmount, manageChipStack]);
 
   // Double bet: double current bet
   const handleDoubleBet = useCallback(() => {
-    if (totalBetAmount > 0) {
-      const doubleAmount = totalBetAmount * 2;
-      const doubleAmountWei = BigInt(doubleAmount.toString() + '0'.repeat(18));
-      
-      // Check if doubling would exceed MAX_BET
-      if (doubleAmountWei > BET_LIMITS.MAX_BET) {
-        const currentMorbius = Number(formatEther(BigInt(totalBetAmount.toString() + '0'.repeat(18))));
-        toast.error('Bet limit exceeded', {
-          description: `Maximum bet is 100,000 MORBIUS. Cannot double bet of ${currentMorbius.toFixed(0)} MORBIUS`
-        });
-        return;
-      }
-      
-      // Rebuild chip stack for double amount
-      const chips: number[] = [];
-      let remaining = doubleAmount;
-      const chipValues = [100000, 10000, 2500, 1000, 500];
-      for (const chipValue of chipValues) {
-        while (remaining >= chipValue) {
-          chips.push(chipValue);
-          remaining -= chipValue;
-        }
-      }
-      setChipStack(chips);
+    const current = totalBetAmount;
+    if (current <= 0) return;
+    const doubleAmount = current * 2;
+    const doubleAmountWei = BigInt(doubleAmount.toString() + '0'.repeat(18));
+    if (doubleAmountWei > BET_LIMITS.MAX_BET) {
+      toast.error('Bet limit exceeded', {
+        description: `Maximum bet is 100,000 MORBIUS. Cannot double bet of ${Math.floor(current)} MORBIUS`
+      });
+      return;
     }
-  }, [totalBetAmount]);
+    manageChipStack(String(doubleAmount));
+  }, [totalBetAmount, manageChipStack]);
 
   // Reset game result after chip animation completes
   // Clear chips on loss AFTER animation completes (chips stay on win/blackjack/push)
@@ -1253,12 +1236,19 @@ export default function BlackjackPage() {
 
     const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
     const suitFor = (idx: number) => {
-      // Deterministic suit selection (suits don't matter in blackjack)
       const salt = gameId.length;
       return suits[(idx + salt) % suits.length];
     };
-    const toCard = (value: number, idx: number, hidden = false): Card =>
-      createCard(Number(value), suitFor(idx), hidden);
+    // Server may send encoded cards (value*10+suit, 10-133) for Perfect Pairs; else raw value 1-13
+    const toCard = (raw: number, idx: number, hidden = false): Card => {
+      const n = Number(raw);
+      if (n >= 10 && n <= 133) {
+        const value = Math.floor(n / 10);
+        const suitIndex = n % 10;
+        return createCard(value, suits[suitIndex % 4], hidden);
+      }
+      return createCard(n, suitFor(idx), hidden);
+    };
 
     const toBigIntSafe = (v: any) => {
       try {
@@ -1281,13 +1271,14 @@ export default function BlackjackPage() {
       const rawCards: number[] = Array.isArray(h.cards) ? h.cards.map((c: any) => Number(c)) : [];
       const cards = rawCards.map((c, idx) => toCard(c, handIdx * 10 + idx));
       const totals = calculateHandTotal(cards);
+      // Prefer total computed from cards (correct multi-ace logic); derive bust from that total so 15 never shows BUST
       return {
         id: String(h.id || `${gameId}-hand-${handIdx}`),
         cards,
-        total: Number(h.total ?? totals.total),
-        hasAce: Boolean(h.hasAce ?? totals.hasAce),
+        total: totals.total,
+        hasAce: totals.hasAce,
         isBlackjack: Boolean(h.isBlackjack ?? false),
-        isBust: Boolean(h.isBust ?? false),
+        isBust: totals.total > 21,
         betAmount: toBigIntSafe(h.betAmount ?? totalBetAmount),
         result: h.result,
         payout: toBigIntSafe(h.payout),
@@ -1362,6 +1353,9 @@ export default function BlackjackPage() {
       totalPayout,
       canSplit: Boolean(serverGameState.canSplit ?? activePlayerHand?.canSplit ?? false),
       isBlackjack: Boolean(serverGameState.isBlackjack ?? activePlayerHand?.isBlackjack ?? false),
+      perfectPairsBetAmount: serverGameState.perfectPairsBetAmount != null ? toBigIntSafe(serverGameState.perfectPairsBetAmount) : undefined,
+      perfectPairsResult: serverGameState.perfectPairsResult ?? undefined,
+      perfectPairsPayout: serverGameState.perfectPairsPayout != null ? toBigIntSafe(serverGameState.perfectPairsPayout) : undefined,
       timestamp: Date.now(),
       clientSeed: gameState.clientSeed,
     };
@@ -1794,12 +1788,16 @@ export default function BlackjackPage() {
       });
 
       if (profit > BigInt(0)) {
-        // Store pending win data - will show notification after dealer reveal completes
         setPendingWinData({
           amount: profit,
           isBlackjack: data.result === 'blackjack'
         });
       }
+
+      const ppResult = data.processedGame?.perfectPairsResult;
+      if (ppResult === 'perfect') toast.success('Perfect Pair! +25x', { description: 'Same rank and suit.' });
+      else if (ppResult === 'colored') toast.success('Colored Pair! +12x', { description: 'Same rank, same color.' });
+      else if (ppResult === 'mixed') toast.success('Mixed Pair! +5x', { description: 'Same rank, different color.' });
     } catch (error) {
       console.error('Error in handleGameCompletion:', error);
       // ignore malformed payload
@@ -1807,6 +1805,10 @@ export default function BlackjackPage() {
   }, [gameState.currentGame, manageChipStack]);
 
   // Handle dealer reveal completion - show win notification and trigger chip animation
+  const handleCardsClearComplete = useCallback(() => {
+    setGameState(prev => ({ ...prev, currentGame: null }));
+  }, []);
+
   const handleDealerRevealComplete = useCallback(() => {
     // Allow REBET/DEAL only after dealer hand is fully revealed
     setGameState(prev => ({ ...prev, isPlaying: false }));
@@ -1897,26 +1899,26 @@ export default function BlackjackPage() {
     }
   }, [gameState.currentGame, tournament, updateGameStateFromServer]);
 
-  // Handle starting a new game
-  const handleStartGame = useCallback(async (betAmount: bigint, _clientSeedFromPanel: string) => {
-    // Validate bet amount is within limits
+  // Handle starting a new game (optional Perfect Pairs side bet)
+  const handleStartGame = useCallback(async (betAmount: bigint, _clientSeedFromPanel: string, perfectPairsBetAmount?: bigint) => {
+    const sideBet = perfectPairsBetAmount ?? 0n;
+    const totalStake = betAmount + sideBet;
+
     if (betAmount < BET_LIMITS.MIN_BET) {
-      toast.error('Bet too small', {
-        description: `Minimum bet is 1 MORBIUS`
-      });
+      toast.error('Bet too small', { description: `Minimum bet is 1 MORBIUS` });
       return;
     }
     if (betAmount > BET_LIMITS.MAX_BET) {
-      toast.error('Bet too large', {
-        description: `Maximum bet is 100,000 MORBIUS`
-      });
+      toast.error('Bet too large', { description: `Maximum bet is 100,000 MORBIUS` });
       return;
     }
-    
-    // Use the clientSeed from page state (Provably Fair Advanced section)
-    // If empty, auto-generate one
+    if (sideBet > BET_LIMITS.MAX_BET) {
+      toast.error('Perfect Pairs bet too large');
+      return;
+    }
+
     const finalClientSeed = clientSeed || generateClientSeed();
-    console.log('Main handleStartGame called with:', { betAmount, clientSeed: finalClientSeed, isConnected, address });
+    console.log('Main handleStartGame called with:', { betAmount, perfectPairsBetAmount: sideBet.toString(), clientSeed: finalClientSeed, isConnected, address });
     
     // Reset card counts for new game animations
     prevPlayerCardCount.current = 0;
@@ -1945,14 +1947,11 @@ export default function BlackjackPage() {
       // Step 1: Get server seed hash and nonce from server
       const { serverSeedHash, nonce } = await wsClient.getServerSeedHash();
 
-      // Step 2: Generate game hash on frontend (for provably fair verification)
-      // Match server format: `${serverSeed}:${clientSeed}:${nonce}:${betAmount}:${timestamp}`
+      // Step 2: Generate game hash (must use total stake so server lock matches)
       const timestamp = Math.floor(Date.now() / 1000);
-      // Remove 0x prefix from serverSeedHash for hash calculation (server uses hex string without 0x)
       const serverSeedForHash = serverSeedHash.startsWith('0x') ? serverSeedHash.slice(2) : serverSeedHash;
-      const hashInput = `${serverSeedForHash}:${finalClientSeed}:${nonce}:${betAmount.toString()}:${timestamp}`;
-      
-      // Use Web Crypto API to generate SHA-256 hash (matches server's crypto.createHash('sha256').digest('hex'))
+      const hashInput = `${serverSeedForHash}:${finalClientSeed}:${nonce}:${totalStake.toString()}:${timestamp}`;
+
       const encoder = new TextEncoder();
       const data = encoder.encode(hashInput);
       const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -1960,21 +1959,10 @@ export default function BlackjackPage() {
       const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
       const gameHash = ('0x' + hashHex) as `0x${string}`;
 
-      console.log('Generated game hash:', gameHash, { 
-        serverSeedHash, 
-        serverSeedForHash,
-        clientSeed, 
-        betAmount: betAmount.toString(), 
-        nonce, 
-        timestamp,
-        hashInput,
-        hashHex
-      });
+      console.log('Generated game hash:', gameHash, { totalStake: totalStake.toString(), betAmount: betAmount.toString(), perfectPairs: sideBet.toString() });
 
-      // Step 3: Create game on server (off-chain betting)
-      // Server will validate reserves off-chain and create the game
-      // No on-chain transaction needed until game ends
-      const serverGameState = await wsClient.createGame(betAmount, clientSeed, gameHash);
+      // Step 3: Create game on server (off-chain betting; total stake = main + Perfect Pairs)
+      const serverGameState = await wsClient.createGame(betAmount, clientSeed, gameHash, sideBet > 0n ? sideBet : undefined);
       console.log('Game started:', serverGameState);
 
       // Apply returned game state immediately (server response includes requestId so it won't emit as a separate event)
@@ -2022,6 +2010,18 @@ export default function BlackjackPage() {
       setGameState(prev => ({ ...prev, isPlaying: false }));
     }
   }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer, handleGameCompletion]);
+
+  // When Deal is clicked: if bet came from mobile manual entry, convert to chip stack so table shows chips, then start game
+  const handleDealClick = useCallback(() => {
+    if (manualBetAmount != null) {
+      const amount = Math.floor(parseFloat(manualBetAmount) || 0);
+      if (amount > 0) {
+        setChipStack(amountToChipStack(amount));
+        setManualBetAmount(null);
+      }
+    }
+    handleStartGame(effectiveTotalBetWei, clientSeed);
+  }, [manualBetAmount, effectiveTotalBetWei, clientSeed, handleStartGame, amountToChipStack]);
 
   // Rebet and deal: same bet as last hand, then start game in one action (must be after handleStartGame)
   const handleRebetAndDeal = useCallback(() => {
@@ -2362,7 +2362,7 @@ export default function BlackjackPage() {
               onClearBet={tournament.tournamentState.inTournament ? () => {} : () => manageChipStack('', undefined, true)}
               onStartGame={tournament.tournamentState.inTournament
                 ? () => handleStartTournamentGame(TOURNAMENT_CONFIG.MIN_BET)
-                : () => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)}
+                : handleDealClick}
               isPlaying={gameState.isPlaying}
               onDealerRevealComplete={handleDealerRevealComplete}
               gameResult={currentGameResult}
@@ -2392,6 +2392,7 @@ export default function BlackjackPage() {
               onPlaySfx={playSound}
               hideBettingPanel={true}
               completedGameId={currentGame?.state === GameState.COMPLETE ? currentGame?.id : undefined}
+              onCardsClearComplete={handleCardsClearComplete}
             />
 
             {/* Win Notification */}
@@ -2405,39 +2406,6 @@ export default function BlackjackPage() {
 
           </div>
 
-          {/* Mobile only: betting panel + quick actions — right side of table */}
-          {currentView === 'game' && !tournament.tournamentState.inTournament && (
-            <div className="md:hidden flex flex-col gap-2 flex-shrink-0">
-              <BettingPanel
-                onStartGame={(betBigInt, _clientSeed) => handleStartGame(betBigInt, clientSeed)}
-                isPlaying={gameState.isPlaying}
-                reserveBalance={offChainBalance}
-                onBetAmountChange={manageChipStack}
-                currentBetAmount={displayBetAmount}
-                lastBetAmount={lastBetAmount}
-                onRebet={handleRebet}
-                onHalfBet={handleHalfBet}
-                onDoubleBet={handleDoubleBet}
-              />
-              <BlackjackMobileActionBar
-                onRebetAndDeal={handleRebetAndDeal}
-                onStartGame={() => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)}
-                onAction={handlePlayerAction}
-                onDoubleDownChips={handleDoubleDownChips}
-                onSplitChips={handleSplitChips}
-                isPlaying={gameState.isPlaying}
-                canHit={canHit}
-                canStand={canStand}
-                canDoubleDown={canDoubleDown}
-                canSplit={canSplit}
-                canDeal={!gameState.isPlaying && totalBetAmount > 0}
-                chipStackLength={chipStack.length}
-                lastBetAmount={lastBetAmount}
-                soundEnabled={soundEnabled}
-                onPlaySfx={playSound}
-              />
-            </div>
-          )}
         </div>
 
           {/* 3. Tabbed sidebar — mobile after controls; desktop row1 col2 (Bet tab = betting + quick actions) */}
@@ -2460,7 +2428,7 @@ export default function BlackjackPage() {
             betTabContent={
               !tournament.tournamentState.inTournament ? (
                 <>
-                  <BettingPanel
+                  <BettingPanelMobile
                     onStartGame={(betBigInt, _clientSeed) => handleStartGame(betBigInt, clientSeed)}
                     isPlaying={gameState.isPlaying}
                     reserveBalance={offChainBalance}
@@ -2473,7 +2441,7 @@ export default function BlackjackPage() {
                   />
                   <BlackjackMobileActionBar
                     onRebetAndDeal={handleRebetAndDeal}
-                    onStartGame={() => handleStartGame(BigInt(totalBetAmount.toString() + '0'.repeat(18)), clientSeed)}
+                    onStartGame={handleDealClick}
                     onAction={handlePlayerAction}
                     onDoubleDownChips={handleDoubleDownChips}
                     onSplitChips={handleSplitChips}

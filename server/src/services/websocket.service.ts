@@ -423,7 +423,21 @@ export class WebSocketService {
         return this.sendError(ws, 'Invalid bet amount format', message.requestId);
       }
 
-      // Validate bet amount is within limits
+      let perfectPairsBetAmount: bigint = 0n;
+      try {
+        if (payload.perfectPairsBetAmount != null && payload.perfectPairsBetAmount !== '') {
+          perfectPairsBetAmount = typeof payload.perfectPairsBetAmount === 'string'
+            ? BigInt(payload.perfectPairsBetAmount) : BigInt(payload.perfectPairsBetAmount);
+        }
+      } catch {
+        perfectPairsBetAmount = 0n;
+      }
+      if (perfectPairsBetAmount < 0n) perfectPairsBetAmount = 0n;
+      if (perfectPairsBetAmount > BET_LIMITS.MAX_BET) {
+        return this.sendError(ws, `Perfect Pairs bet too large. Maximum is ${BET_LIMITS.MAX_BET.toString()}`, message.requestId);
+      }
+
+      const totalStake = betAmount + perfectPairsBetAmount;
       if (betAmount < BET_LIMITS.MIN_BET) {
         return this.sendError(ws, `Bet amount too small. Minimum bet is ${BET_LIMITS.MIN_BET.toString()} (1 MORBIUS)`, message.requestId);
       }
@@ -431,11 +445,10 @@ export class WebSocketService {
         return this.sendError(ws, `Bet amount too large. Maximum bet is ${BET_LIMITS.MAX_BET.toString()} (100,000 MORBIUS)`, message.requestId);
       }
 
-      // Validate player has sufficient off-chain balance
       try {
         const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
-        if (balance < betAmount) {
-          return this.sendError(ws, `Insufficient balance. You have ${balance.toString()}, but need ${betAmount.toString()}`, message.requestId);
+        if (balance < totalStake) {
+          return this.sendError(ws, `Insufficient balance. You have ${balance.toString()}, but need ${totalStake.toString()} (main + Perfect Pairs)`, message.requestId);
         }
       } catch (error) {
         logger.error('Error checking player balance:', error);
@@ -445,14 +458,14 @@ export class WebSocketService {
       logger.debug('Creating game', {
         playerAddress: ws.playerAddress,
         betAmount: betAmount.toString(),
-        clientSeedCommitment: payload.clientSeedCommitment,
-        gameHash: payload.gameHash,
+        perfectPairsBetAmount: perfectPairsBetAmount.toString(),
         requestId: message.requestId
       });
 
       const gameState = await this.gameService.createGame({
         playerAddress: ws.playerAddress,
         betAmount,
+        perfectPairsBetAmount: perfectPairsBetAmount > 0n ? perfectPairsBetAmount : undefined,
         clientSeedCommitment: payload.clientSeedCommitment,
         gameHash: payload.gameHash
       });

@@ -2,12 +2,12 @@ export function SocialsSection() {
   return (
     <section className="py-4 px-4">
       <div className="container mx-auto max-w-4xl">
-        <div className="text-center mb-12 text-cyan-500/80">
-          <h2 className="text-4xl md:text-5xl font-russo-one font-normal mb-4">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
             Join the Community
           </h2>
-            <p className="text-xl text-white/80 font-bold font-prosto-one max-w-2xl mx-auto">
-            Follow Morbius on social media for the latest updates and announcements
+          <p className="text-white/50 text-sm">
+            Follow Morbius on social media for the latest updates and announcements.
           </p>
         </div>
 

@@ -53,17 +53,17 @@ export function LatestWins() {
   const { wins, isLoading } = useLatestWins()
 
   return (
-    <div className="relative overflow-hidden h-full">
+    <div className="relative flex flex-col overflow-hidden h-full min-h-0">
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-4 flex-shrink-0">
         <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-white mb-2">
           Latest Wins
         </h2>
         <p className="text-white/50 text-sm">Real-time winner feed</p>
       </div>
 
-      {/* Animated Win List */}
-      <div className="relative h-[400px] overflow-hidden">
+      {/* Animated Win List — fills remaining space so no gap at bottom of grid */}
+      <div className="relative flex-1 min-h-[280px] overflow-hidden">
         {/* Gradient overlay at top */}
         <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black to-transparent z-10 pointer-events-none" />
 

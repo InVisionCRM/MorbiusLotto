@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { getApiUrlOptional } from '@/lib/api-urls';
 
 export interface PlinkoChainStats {
   totalDrops: bigint;
@@ -123,27 +122,33 @@ function defaultPlatformAnalytics(): PlatformAnalytics {
 }
 
 export function usePlatformAnalytics() {
-  const apiUrl = getApiUrlOptional();
+  // Use same-origin proxy to avoid CORS / "Failed to fetch" when calling backend from the browser
+  const url = '/api/analytics/platform';
   return useQuery<PlatformAnalytics>({
-    queryKey: ['platformAnalytics', !!apiUrl],
+    queryKey: ['platformAnalytics'],
     queryFn: async () => {
-      if (!apiUrl) return defaultPlatformAnalytics();
-      const response = await fetch(`${apiUrl}/api/analytics/platform`);
-      if (!response.ok) {
-        const text = await response.text();
-        let msg = 'Failed to fetch platform analytics';
-        try {
-          const j = JSON.parse(text);
-          msg = j.error ?? msg;
-        } catch {
-          msg = text || msg;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          const text = await response.text();
+          let msg = `Failed to fetch platform analytics: ${response.status} ${response.statusText}`;
+          try {
+            const j = JSON.parse(text);
+            msg = (j as { error?: string }).error ?? msg;
+          } catch {
+            msg = text || msg;
+          }
+          throw new Error(msg);
         }
-        throw new Error(msg);
+        const data = await response.json();
+        return parsePlatformResponse(data);
+      } catch (error) {
+        console.error('Error in usePlatformAnalytics:', error);
+        throw error;
       }
-      const data = await response.json();
-      return parsePlatformResponse(data);
     },
     refetchInterval: 60_000,
     retry: 1,
+    staleTime: 30_000,
   });
 }

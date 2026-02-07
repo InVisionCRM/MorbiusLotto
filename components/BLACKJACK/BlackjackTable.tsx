@@ -10,7 +10,6 @@ import BettingPanel from './BettingPanel';
 import { NumberTicker } from '@/components/ui/number-ticker';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS } from '@/app/BLACKJACK/constants';
 import type { BlackjackImageId, BlackjackVideoId } from '@/app/BLACKJACK/constants';
-import GestureTutorial from './GestureTutorial';
 
 // Background music playlist (all from public/BlackJack/music except Big-Winner)
 const BLACKJACK_MUSIC_PLAYLIST = [
@@ -67,12 +66,12 @@ interface BlackjackTableProps {
   soundEnabled?: boolean;
   /** Play a sound effect via Web Audio API (avoids interrupting background music). When provided, SFX use this instead of new Audio().play() */
   onPlaySfx?: (path: string) => void;
-  /** When true (e.g. tournament mode), the betting panel is hidden; controls move to table bottom */
+  /** When true (e.g. tournament mode), the betting panel is hidden; controls move to sidebar tab */
   hideBettingPanel?: boolean;
   /** When game is COMPLETE, pass current game id so dealer-reveal completion can reset for each new game (fixes freeze when back-to-back blackjack). */
   completedGameId?: string;
-  /** Tournament HUD + bet panel rendered at bottom center of table (all layouts) */
-  tournamentControls?: React.ReactNode;
+  /** Called after cards clear animation (2s hold + exit animation). Parent should clear currentGame so table resets. */
+  onCardsClearComplete?: () => void;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -120,7 +119,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onPlaySfx,
   hideBettingPanel = false,
   completedGameId,
-  tournamentControls,
+  onCardsClearComplete,
 }) => {
   const videoSrc = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const imageSrc = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
@@ -134,6 +133,11 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   });
   const [isRevealing, setIsRevealing] = useState(false);
   const revealTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [cardsExiting, setCardsExiting] = useState(false);
+  const cardsClearTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const cardsClearCompleteRef = useRef<NodeJS.Timeout | null>(null);
+  const CARD_CLEAR_HOLD_MS = 2000;
+  const CARD_CLEAR_ANIMATION_MS = 450;
   const prevGameStateRef = useRef<GameState>(gameState);
   const prevDealerCardCountRef = useRef(dealerHand.cards.length);
   const lastCompletedGameIdRef = useRef<string | undefined>(undefined);
@@ -188,13 +192,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   const prevGameResult = useRef<string | null>(null);
   const tableVideoRef = useRef<HTMLVideoElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
-
-  // Gesture tutorial: show until 6s or first Hit/Stand
-  const [showGestureTutorial, setShowGestureTutorial] = useState(true);
-  const handleActionWithTutorialDismiss = useCallback((action: Action) => {
-    if (action === Action.HIT || action === Action.STAND) setShowGestureTutorial(false);
-    onAction(action);
-  }, [onAction]);
 
   // Draggable widget state (all screens)
   const [widgetPosition, setWidgetPosition] = useState({ x: 0, y: 0 }); // Will be set from saved or default
@@ -404,84 +401,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       };
     }
   }, [isDragging, dragStart, widgetPosition, isHorizontal]);
-
-  // Double-press Spacebar (~300ms) to Hit — only when player's turn; preventDefault so space doesn't scroll
-  const lastSpaceTimeRef = useRef<number>(0);
-  useEffect(() => {
-    const DOUBLE_PRESS_MS = 300;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== ' ' || !canHit) return;
-      const target = e.target as HTMLElement | null;
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT' || target?.isContentEditable) return;
-      e.preventDefault();
-      const now = Date.now();
-      if (now - lastSpaceTimeRef.current < DOUBLE_PRESS_MS) {
-        setShowGestureTutorial(false);
-        if (soundEnabled && onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav');
-        else if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
-        handleActionWithTutorialDismiss(Action.HIT);
-        lastSpaceTimeRef.current = 0;
-        return;
-      }
-      lastSpaceTimeRef.current = now;
-    };
-    window.addEventListener('keydown', onKeyDown, { passive: false });
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [canHit, soundEnabled, onPlaySfx, handleActionWithTutorialDismiss]);
-
-  // Touch gestures on table: double-tap = Hit, horizontal swipe = Stand. Only when player's turn; ignore widget/buttons.
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
-  const lastTapTimeRef = useRef<number>(0);
-  useEffect(() => {
-    const el = tableContainerRef.current;
-    if (!el) return;
-    const SWIPE_THRESHOLD = 60;
-    const SWIPE_MAX_VERTICAL = 80;
-    const DOUBLE_TAP_MS = 300;
-    const isOnWidgetOrButton = (target: EventTarget | null): boolean => {
-      const node = target as Node | null;
-      if (!node) return false;
-      const el = node as HTMLElement;
-      return el.tagName === 'BUTTON' || el.closest?.('button') !== null || (widgetRef.current?.contains(node) ?? false);
-    };
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1 || isOnWidgetOrButton(e.target)) return;
-      const t = e.touches[0];
-      touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
-    };
-    const onTouchEnd = (e: TouchEvent) => {
-      if (!touchStartRef.current || e.changedTouches.length !== 1) return;
-      if (isOnWidgetOrButton(e.target)) return;
-      const t = e.changedTouches[0];
-      const dx = t.clientX - touchStartRef.current.x;
-      const dy = t.clientY - touchStartRef.current.y;
-      const horizontalSwipe = Math.abs(dx) >= SWIPE_THRESHOLD && Math.abs(dy) <= SWIPE_MAX_VERTICAL;
-      if (horizontalSwipe && canStand) {
-        setShowGestureTutorial(false);
-        handleActionWithTutorialDismiss(Action.STAND);
-        touchStartRef.current = null;
-        return;
-      }
-      const now = Date.now();
-      if (now - lastTapTimeRef.current < DOUBLE_TAP_MS && canHit) {
-        setShowGestureTutorial(false);
-        if (soundEnabled && onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav');
-        else if (soundEnabled) new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
-        handleActionWithTutorialDismiss(Action.HIT);
-        lastTapTimeRef.current = 0;
-        touchStartRef.current = null;
-        return;
-      }
-      lastTapTimeRef.current = now;
-      touchStartRef.current = null;
-    };
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [canHit, canStand, soundEnabled, onPlaySfx, handleActionWithTutorialDismiss]);
 
   // Sync video to clock: 24-hour loop for table videos, 10-minute loop for glowingLogo
   const syncVideoToClock = (video: HTMLVideoElement | null) => {
@@ -706,6 +625,49 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     // This effect tracks visibleDealerCards changes but doesn't need to log anything
   }, [visibleDealerCards, dealerHand.cards.length, gameState, isRevealing]);
 
+  // 2s after game complete (reveal done), start card exit animation; then call onCardsClearComplete
+  useEffect(() => {
+    const revealDone = gameState === GameState.COMPLETE && !isRevealing &&
+      dealerHand.cards.length > 0 && visibleDealerCards >= dealerHand.cards.length;
+    if (!revealDone || !onCardsClearComplete || cardsExiting) return;
+
+    if (cardsClearTimeoutRef.current) return; // already scheduled
+    cardsClearTimeoutRef.current = setTimeout(() => {
+      cardsClearTimeoutRef.current = null;
+      setCardsExiting(true);
+      cardsClearCompleteRef.current = setTimeout(() => {
+        cardsClearCompleteRef.current = null;
+        onCardsClearComplete();
+      }, CARD_CLEAR_ANIMATION_MS);
+    }, CARD_CLEAR_HOLD_MS);
+
+    return () => {
+      if (cardsClearTimeoutRef.current) {
+        clearTimeout(cardsClearTimeoutRef.current);
+        cardsClearTimeoutRef.current = null;
+      }
+      if (cardsClearCompleteRef.current) {
+        clearTimeout(cardsClearCompleteRef.current);
+        cardsClearCompleteRef.current = null;
+      }
+    };
+  }, [gameState, isRevealing, dealerHand.cards.length, visibleDealerCards, onCardsClearComplete, cardsExiting]);
+
+  // Reset cardsExiting when leaving COMPLETE (new game)
+  useEffect(() => {
+    if (gameState !== GameState.COMPLETE) {
+      setCardsExiting(false);
+      if (cardsClearTimeoutRef.current) {
+        clearTimeout(cardsClearTimeoutRef.current);
+        cardsClearTimeoutRef.current = null;
+      }
+      if (cardsClearCompleteRef.current) {
+        clearTimeout(cardsClearCompleteRef.current);
+        cardsClearCompleteRef.current = null;
+      }
+    }
+  }, [gameState]);
+
   // Industry standard: Hide hole card (second card) during play, show when game completes
   // Hide hole card when:
   // - Game is not complete AND
@@ -767,17 +729,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   return (
     <div
       ref={tableContainerRef}
-      className="relative w-full max-w-full sm:max-w-6xl mx-auto blackjack-table flex flex-col flex-1 min-h-[500px] sm:min-h-[600px] touch-manipulation"
+      className="relative w-full max-w-full sm:max-w-6xl mx-auto blackjack-table flex flex-col flex-1 min-h-[500px] sm:min-h-[600px]"
       style={{
         boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.9), inset 0 -2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3)',
         border: '1px inset rgba(60, 60, 60, 0.5)',
       }}
     >
-      {/* Hand Ghost tutorial: double-tap then swipe; dismiss after 6s or first Hit/Stand */}
-      <GestureTutorial
-        visible={showGestureTutorial && (canHit || canStand)}
-        onDismiss={() => setShowGestureTutorial(false)}
-      />
       {/* Table surface: flex-1 with min height so table stays a good size */}
       <div className="flex-1 min-h-[500px] sm:min-h-[600px] relative">
       {/* Looping video background — key forces remount when src changes */}
@@ -993,6 +950,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                       className=""
                       index={index}
                       isNewCard={index >= 2 && index === visibleDealerCards - 1}
+                      exiting={cardsExiting}
+                      exitDelay={0}
                     />
                   </div>
                 );
@@ -1095,6 +1054,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                               index={cardIndex}
                               isNewCard={isNewCard}
                               size={cardSize}
+                              exiting={cardsExiting}
+                              exitDelay={0.15}
                             />
                           </div>
                         );
@@ -1322,16 +1283,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 );
                 const gameGroup = (
                   <div className={gameGroupClass} style={groupStyle}>
-                    <button onClick={(e) => { e.stopPropagation(); if (canHit) { if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); } handleActionWithTutorialDismiss(Action.HIT); } }} disabled={!canHit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canHit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canHit) { if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); } onAction(Action.HIT); } }} disabled={!canHit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canHit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">HIT</span>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (canStand) handleActionWithTutorialDismiss(Action.STAND); }} disabled={!canStand} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canStand ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canStand ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canStand) onAction(Action.STAND); }} disabled={!canStand} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canStand ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canStand ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">STAND</span>
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); if (canDoubleDown) { onDoubleDownChips?.(); onAction(Action.DOUBLE_DOWN); } }} disabled={!canDoubleDown} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canDoubleDown ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canDoubleDown ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-xs tracking-wider">DOUBLE</span>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (canSplit) { onSplitChips?.(); handleActionWithTutorialDismiss(Action.SPLIT); } }} disabled={!canSplit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-emerald-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canSplit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canSplit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canSplit) { onSplitChips?.(); onAction(Action.SPLIT); } }} disabled={!canSplit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-emerald-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canSplit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canSplit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">SPLIT</span>
                     </button>
                   </div>
@@ -1393,7 +1354,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 e.stopPropagation();
                 if (canHit) {
                   if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); }
-                  handleActionWithTutorialDismiss(Action.HIT);
+                  onAction(Action.HIT);
                 }
               }}
               disabled={!canHit}
@@ -1412,7 +1373,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (canStand) handleActionWithTutorialDismiss(Action.STAND);
+                if (canStand) onAction(Action.STAND);
               }}
               disabled={!canStand}
               className={`relative w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canStand ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`}
@@ -1453,7 +1414,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 e.stopPropagation();
                 if (canSplit) {
                   onSplitChips?.();
-                  handleActionWithTutorialDismiss(Action.SPLIT);
+                  onAction(Action.SPLIT);
                 }
               }}
               disabled={!canSplit}
@@ -1594,7 +1555,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-      {/* Betting Panel - Overlay at bottom of table (hidden in tournament mode) */}
+      {/* Betting Panel - Overlay at bottom of table (hidden in tournament mode; controls in sidebar tab) */}
       {!hideBettingPanel && (
         <div className="absolute bottom-1 left-0 right-0 z-50 flex justify-center pointer-events-auto">
           <BettingPanel
@@ -1608,15 +1569,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             onHalfBet={onHalfBet}
             onDoubleBet={onDoubleBet}
           />
-        </div>
-      )}
-
-      {/* Tournament controls - grid-8 bottom-15 center (all layouts) */}
-      {tournamentControls && (
-        <div className="absolute left-0 right-0 bottom-[3.75rem] z-50 grid grid-cols-8 justify-center items-center pointer-events-auto">
-          <div className="col-span-8 flex flex-col items-center justify-center gap-3">
-            {tournamentControls}
-          </div>
         </div>
       )}
 
@@ -1688,6 +1640,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
         .card-slide-in {
           animation: cardSlideIn 0.4s ease-out both;
+        }
+
+        /* Card clear: fade + slide down (collect) */
+        @keyframes cardClearOut {
+          to {
+            opacity: 0;
+            transform: translate(-80px, -120px) scale(0.6);
+          }
+        }
+        .card-clear-out {
+          animation: cardClearOut 0.45s ease-in forwards;
+          pointer-events: none;
         }
 
         /* Chip lose animation - slides up and fades out */

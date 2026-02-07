@@ -41,7 +41,7 @@ function TokenConversionCard() {
           <div className="flex flex-row items-center justify-between">
             {/* PLS - Far Left */}
             <div ref={plsRef} className="flex flex-col items-center z-10">
-              <div className="w-36 h-36 md:w-36 md:h-36 relative">
+              <div className="w-[4.5rem] h-[4.5rem] relative">
                 <Image
                   src="/Pulse Branding/Logo/ball.png"
                   alt="PLS"
@@ -55,7 +55,7 @@ function TokenConversionCard() {
 
             {/* MORBIUS - Far Right */}
             <div ref={morbiusRef} className="flex flex-col items-center z-10">
-              <div className="w-24 h-24 md:w-32 md:h-32 relative mb-2">
+              <div className="w-12 h-12 md:w-16 md:h-16 relative mb-2">
                 <Image
                   src="/morbius/MorbiusLogo (3).png"
                   alt="MORBIUS"
@@ -81,7 +81,7 @@ function TokenConversionCard() {
             curvature={100}
           />
 
-          <p className="relative text-center bottom-25 text-white text-lg font-bold font-prosto-one mt-0">
+          <p className="text-center text-white text-lg font-bold font-prosto-one mt-6 pt-6 border-t border-white/10">
             Instant swap via PulseX DEX
           </p>
         </div>
@@ -97,17 +97,18 @@ export function TokenomicsSection() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.08)_0%,transparent_50%)] pointer-events-none" />
 
       <div className="container mx-auto max-w-5xl relative z-10">
-        {/* Header */}
+        {/* Header — matches other home sections */}
         <motion.div
-          className="text-center mb-16"
+          className="text-center mb-8"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
           variants={fadeIn}
         >
-          <h2 className="text-5xl md:text-6xl font-russo-one font-normal text-cyan-500/80 mb-4">
-            Tokenomics
+          <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
+            Tokenomics*
           </h2>
+          <p className="text-white/50 text-sm mb-6">* Tokenomics are subject to change.</p>
           <MorbiusBurnedDisplay variant="card" className="mt-6" />
         </motion.div>
 

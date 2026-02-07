@@ -80,6 +80,36 @@ export class ProvablyFairService {
   }
 
   /**
+   * Generate suit indices 0-3 for cards (0=hearts, 1=diamonds, 2=clubs, 3=spades).
+   * Used with initial deal for Perfect Pairs (provably fair full card identity).
+   */
+  generateBlackjackSuits(seeds: GameSeeds, startNonce: number, count: number): number[] {
+    const results: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const gameSeeds = { ...seeds, nonce: startNonce + i };
+      const pfResult = this.generateProvablyFairRandom(gameSeeds, 0, 3);
+      results.push(pfResult.result);
+    }
+    return results;
+  }
+
+  /**
+   * Decode card to value 1-13. Handles encoded cards (value*10+suit, 10-133) and legacy raw values (1-13).
+   */
+  decodeCardValue(card: number): number {
+    if (card >= 10 && card <= 133) return Math.floor(card / 10);
+    return card >= 1 && card <= 13 ? card : 1;
+  }
+
+  /**
+   * Decode card to suit 0-3. Encoded cards are value*10+suit; legacy cards default to 0.
+   */
+  decodeCardSuit(card: number): number {
+    if (card >= 10 && card <= 133) return card % 10;
+    return 0;
+  }
+
+  /**
    * Generate dealer action (hit/stand) decision
    */
   generateDealerAction(seeds: GameSeeds, dealerTotal: number, hasAce: boolean): 'hit' | 'stand' {
@@ -193,24 +223,28 @@ export class ProvablyFairService {
   }
 
   /**
-   * Calculate optimal hand total considering aces
+   * Calculate optimal hand total considering aces (standard blackjack).
+   * Each ace counts as 11 until we bust, then we treat one ace as 1 (subtract 10); repeat per ace.
+   * Accepts encoded cards (value*10+suit) or raw values 1-13.
    */
   calculateHandTotal(cards: number[]): { total: number; hasAce: boolean } {
     let total = 0;
-    let hasAce = false;
+    let aceCount = 0;
 
     for (const card of cards) {
-      const value = this.getBlackjackValue(card);
+      const rank = this.decodeCardValue(card);
+      const value = this.getBlackjackValue(rank);
       total += value;
-      if (card === 1) hasAce = true; // Track aces
+      if (rank === 1) aceCount++;
     }
 
-    // Adjust for aces if total > 21
-    if (hasAce && total > 21) {
-      total -= 10; // Convert ace from 11 to 1
+    // Soften aces one at a time until total <= 21 or we've used all aces
+    while (total > 21 && aceCount > 0) {
+      total -= 10;
+      aceCount--;
     }
 
-    return { total, hasAce };
+    return { total, hasAce: aceCount > 0 };
   }
 
   /**
@@ -218,5 +252,13 @@ export class ProvablyFairService {
    */
   isNaturalBlackjack(cards: number[]): boolean {
     return cards.length === 2 && this.calculateHandTotal(cards).total === 21;
+  }
+
+  /**
+   * Encode a card as value*10 + suit for storage (value 1-13, suit 0-3).
+   * 0=hearts, 1=diamonds, 2=clubs, 3=spades (red=0,1; black=2,3).
+   */
+  encodeCard(value: number, suit: number): number {
+    return value * 10 + (suit % 4);
   }
 }

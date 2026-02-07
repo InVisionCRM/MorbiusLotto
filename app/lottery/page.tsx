@@ -595,13 +595,13 @@ export default function LotteryPage() {
 
         {/* Bento Grid Modal */}
         <Dialog open={showBentoGridModal} onOpenChange={setShowBentoGridModal}>
-          <DialogContent className="group/bento shadow-input row-span-1 flex flex-col justify-between space-y-4 rounded-xl border border-neutral-200 bg-white p-4 transition duration-200 hover:shadow-xl dark:border-white/[0.2] dark:bg-gradient-to-br from-slate-950 to-slate-900 dark:shadow-none max-w-6xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="font-sans font-bold text-neutral-600 dark:text-neutral-200 text-xl">
+          <DialogContent className="group/bento shadow-input row-span-1 justify-between bg-black/60 rounded-xl border border-black bg-Black/50 p-4 transition duration-200 hover:shadow-xl max-w-4xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-center">
+              <div className="font-poppins font-bold text-cyan-500 text-2xl">
                 Lottery Dashboard
               </div>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 bg-black">
               <LotteryBentoGrid
                 onPlayNow={() => {
                   setShowBentoGridModal(false);
@@ -633,6 +633,25 @@ export default function LotteryPage() {
           </DialogContent>
         </Dialog>
       </main>
+
+      {/* Lottery contract address — click to copy */}
+      <div className="w-full flex justify-center py-3">
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(LOTTERY_ADDRESS);
+              toast.success('Lottery contract address copied');
+            } catch {
+              toast.error('Failed to copy');
+            }
+          }}
+          className="text-white font-bold font-poppins text-sm cursor-pointer hover:opacity-90 transition-opacity select-all"
+          title="Click to copy Lottery contract address"
+        >
+          {LOTTERY_ADDRESS}
+        </button>
+      </div>
 
       {/* Footer */}
       <Footer />

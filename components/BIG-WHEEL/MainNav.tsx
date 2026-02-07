@@ -142,6 +142,17 @@ export default function MainNav({
                       boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
                     }}
                   >
+                    {/* Home */}
+                    <div className="p-2 border-b border-gray-700/50">
+                      <Link
+                        href="/home"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <i className="fas fa-home w-4 text-center" aria-hidden />
+                        <span className="text-sm font-medium">Home</span>
+                      </Link>
+                    </div>
                     {/* Big Wheel Section */}
                     <div className="p-2 border-b border-gray-700/50">
                       <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Big Wheel</div>
@@ -203,7 +214,9 @@ export default function MainNav({
                         className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                         onClick={() => setMenuOpen(false)}
                       >
-                        <i className="fas fa-club w-4 text-center" aria-hidden />
+                        <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
+                          <Image src="/BlackJack/Cards/PNG/AS.png" alt="" width={20} height={20} className="object-contain" />
+                        </span>
                         <span className="text-sm font-medium">Blackjack</span>
                       </Link>
                       <Link
@@ -281,6 +294,14 @@ export default function MainNav({
                       <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Morbius Stats</div>
                       <MorbiusBurnedDisplay variant="inline" className="px-3 py-2" />
                       <MorbiusPriceDisplay className="px-3 py-2" />
+                      <Link
+                        href="/swap"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <i className="fas fa-exchange-alt w-4 text-center" aria-hidden />
+                        <span className="text-sm font-medium">Swap</span>
+                      </Link>
                     </div>
                   </div>
                 )}

@@ -12,18 +12,22 @@ interface PlayingCardProps {
   index?: number;
   isNewCard?: boolean;
   size?: 'large' | 'normal' | 'small';
+  /** When true, play clear-out animation (fade + slide down). */
+  exiting?: boolean;
+  /** Delay in seconds before clear-out animation (e.g. 0.15 for player stagger). */
+  exitDelay?: number;
 }
 
-const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, className = '', index = 0, isNewCard = false, size = 'normal' }) => {
+const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, className = '', index = 0, isNewCard = false, size = 'normal', exiting = false, exitDelay = 0 }) => {
   const isDealer = owner === 'dealer';
 
   const ownerClass = isDealer ? 'blackjack-card-dealer' : 'blackjack-card-player';
 
-  // Animation classes
-  const animationClass = isNewCard ? 'card-slide-in' : '';
+  // Animation classes: slide-in for new card, clear-out when exiting
+  const animationClass = exiting ? 'card-clear-out' : (isNewCard ? 'card-slide-in' : '');
 
-  // Staggered animation delay
-  const animationDelay = index * 0.25;
+  // Staggered animation delay (slide-in); when exiting use exitDelay
+  const animationDelay = exiting ? exitDelay : (index * 0.25);
 
   // Get suit letter for image filename (S=spades, D=diamonds, C=clubs, H=hearts)
   const getSuitLetter = (suit: string) => {
@@ -67,7 +71,7 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
         className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden rounded-lg`}
         style={{
           boxShadow: getCardShadow(),
-          animationDelay: isNewCard ? `${animationDelay}s` : '1s',
+          animationDelay: exiting ? `${animationDelay}s` : (isNewCard ? `${animationDelay}s` : '1s'),
         }}
       >
         <div className="w-full h-full bg-slate-900 overflow-hidden">
@@ -89,7 +93,7 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
       className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden rounded-lg bg-white`}
       style={{
         boxShadow: getCardShadow(),
-        animationDelay: isNewCard ? `${animationDelay}s` : '1s',
+        animationDelay: exiting ? `${animationDelay}s` : (isNewCard ? `${animationDelay}s` : '1s'),
       }}
     >
       <Image

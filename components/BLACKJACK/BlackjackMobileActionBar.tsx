@@ -54,18 +54,25 @@ export function BlackjackMobileActionBar({
   const canDealNow = !isPlaying && canDeal && (chipStackLength > 0 || !onRebetAndDeal);
 
   return (
+    <>
+      <style>{`
+        .action-bar-btn:active:not(:disabled) {
+          transform: translateY(3px);
+          box-shadow: 0 1px 0 0 rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15) !important;
+        }
+      `}</style>
     <section
-      className={`w-full mt-1 px-4 pt-1 pb-1 ${alwaysVisible ? '' : 'md:hidden'}`}
+      className={`w-full mt-0.5 sm:mt-1 px-2 sm:px-4 py-0.5 sm:pt-1 sm:pb-1 ${alwaysVisible ? '' : 'md:hidden'}`}
       style={{
         background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
         boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
         border: '1px solid rgba(6, 182, 212, 0.2)',
       }}
     >
-      {/* Mobile layout: row 1 = HIT, STAND, DOUBLE, SPLIT; row 2 = REBET | DEAL */}
-      <div className="flex flex-col items-center gap-4 w-full max-w-full">
+      {/* Mobile layout: row 1 = HIT, STAND, DOUBLE, SPLIT; row 2 = REBET | DEAL — compact on mobile */}
+      <div className="flex flex-col items-center gap-1.5 sm:gap-4 w-full max-w-full">
         {/* Row 1: HIT, STAND, DOUBLE, SPLIT */}
-        <div className="flex flex-wrap items-center justify-center gap-3 w-full">
+        <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-3 w-full">
           {/* HIT */}
           <button
           type="button"
@@ -76,9 +83,13 @@ export function BlackjackMobileActionBar({
             }
           }}
           disabled={!canHit}
-          className={`flex-1 min-w-[64px] min-h-[52px] flex items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg transition-all active:scale-95 ${canHit ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          className={`action-bar-btn flex-1 min-w-[48px] min-h-[36px] sm:min-w-[64px] sm:min-h-[52px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-red-400/50 transition-all duration-150 text-xs sm:text-sm ${canHit ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          style={{
+            background: 'linear-gradient(180deg, #ef4444 0%, #b91c1c 50%, #991b1b 100%)',
+            boxShadow: canHit ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
+          }}
         >
-          <span className="text-white font-black text-sm tracking-wider">HIT</span>
+          <span className="text-white font-black text-sm tracking-wider drop-shadow-sm">HIT</span>
         </button>
 
         {/* STAND */}
@@ -86,9 +97,13 @@ export function BlackjackMobileActionBar({
           type="button"
           onClick={() => canStand && onAction(Action.STAND)}
           disabled={!canStand}
-          className={`flex-1 min-w-[64px] min-h-[52px] flex items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg transition-all active:scale-95 ${canStand ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          className={`action-bar-btn flex-1 min-w-[48px] min-h-[36px] sm:min-w-[64px] sm:min-h-[52px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-blue-400/50 transition-all duration-150 text-xs sm:text-sm ${canStand ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          style={{
+            background: 'linear-gradient(180deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.8) 50%, rgba(29, 78, 216, 0.9) 100%)',
+            boxShadow: canStand ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
+          }}
         >
-          <span className="text-white font-black text-sm tracking-wider">STAND</span>
+          <span className="text-white font-black text-sm tracking-wider drop-shadow-sm">STAND</span>
         </button>
 
         {/* DOUBLE */}
@@ -101,9 +116,13 @@ export function BlackjackMobileActionBar({
             }
           }}
           disabled={!canDoubleDown}
-          className={`flex-1 min-w-[64px] min-h-[52px] flex items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-400/50 shadow-lg transition-all active:scale-95 ${canDoubleDown ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          className={`action-bar-btn flex-1 min-w-[48px] min-h-[36px] sm:min-w-[64px] sm:min-h-[52px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-amber-400/50 transition-all duration-150 text-xs sm:text-sm ${canDoubleDown ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          style={{
+            background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 50%, #b45309 100%)',
+            boxShadow: canDoubleDown ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
+          }}
         >
-          <span className="text-white font-black text-xs tracking-wider">DOUBLE</span>
+          <span className="text-white font-black text-xs tracking-wider drop-shadow-sm">DOUBLE</span>
         </button>
 
         {/* SPLIT */}
@@ -116,14 +135,18 @@ export function BlackjackMobileActionBar({
             }
           }}
           disabled={!canSplit}
-          className={`flex-1 min-w-[64px] min-h-[52px] flex items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-emerald-400/50 shadow-lg transition-all active:scale-95 ${canSplit ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          className={`action-bar-btn flex-1 min-w-[48px] min-h-[36px] sm:min-w-[64px] sm:min-h-[52px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-emerald-400/50 transition-all duration-150 text-xs sm:text-sm ${canSplit ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          style={{
+            background: 'linear-gradient(180deg, #10b981 0%, #059669 50%, #047857 100%)',
+            boxShadow: canSplit ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
+          }}
         >
-          <span className="text-white font-black text-sm tracking-wider">SPLIT</span>
+          <span className="text-white font-black text-sm tracking-wider drop-shadow-sm">SPLIT</span>
         </button>
         </div>
 
         {/* Row 2: REBET | DEAL */}
-        <div className="flex rounded-xl overflow-hidden border-2 border-white/10 shadow-lg w-full">
+        <div className="flex rounded-lg sm:rounded-xl overflow-hidden border-2 border-white/10 w-full" style={{ boxShadow: '0 4px 0 0 rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.15)' }}>
           {onRebetAndDeal && (
             <button
               type="button"
@@ -134,9 +157,13 @@ export function BlackjackMobileActionBar({
                 }
               }}
               disabled={!canRebet}
-              className={`flex-1 min-h-[52px] flex items-center justify-center bg-gradient-to-br from-violet-500 to-violet-700 border-r border-violet-400/50 transition-all active:scale-[0.98] ${canRebet ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+              className={`action-bar-btn flex-1 min-h-[36px] sm:min-h-[52px] flex items-center justify-center border-r border-violet-400/50 transition-all duration-150 text-xs sm:text-sm ${canRebet ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+              style={{
+                background: 'linear-gradient(180deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%)',
+                boxShadow: canRebet ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
+              }}
             >
-              <span className="text-white font-black text-xs tracking-wider">REBET</span>
+              <span className="text-white font-black text-xs tracking-wider drop-shadow-sm">REBET</span>
             </button>
           )}
           <button
@@ -148,13 +175,18 @@ export function BlackjackMobileActionBar({
               }
             }}
             disabled={!canDealNow}
-            className={`flex-1 min-h-[52px] flex items-center justify-center bg-gradient-to-br from-green-500 to-green-700 transition-all active:scale-[0.98] ${canDealNow ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+            className={`action-bar-btn flex-1 min-h-[36px] sm:min-h-[52px] flex items-center justify-center transition-all duration-150 text-xs sm:text-sm ${canDealNow ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+            style={{
+              background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)',
+              boxShadow: canDealNow ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
+            }}
           >
-            <span className="text-white font-black text-sm tracking-wider">DEAL</span>
+            <span className="text-white font-black text-sm tracking-wider drop-shadow-sm">DEAL</span>
           </button>
         </div>
       </div>
     </section>
+    </>
   );
 }
 

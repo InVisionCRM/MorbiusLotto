@@ -1,7 +1,10 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { PauseCircle, Clock, Wallet, ShieldCheck, Gamepad2 } from 'lucide-react'
+import { PauseCircle, Clock, Wallet, ShieldCheck, Gamepad2, MessageCircle } from 'lucide-react'
+
+const X_LINK = 'https://x.com/morbiusfinance'
+const TELEGRAM_LINK = 'https://t.me/morbiusfinance'
 
 const CARDS = [
   {
@@ -29,6 +32,33 @@ const CARDS = [
     text: 'Clear access to responsible gaming info and tools (e.g. Responsible Gaming button in chat).',
     Icon: Gamepad2,
   },
+  {
+    title: '24/7 Community Support',
+    Icon: MessageCircle,
+    content: (
+      <>
+        Our community and team are here around the clock. Reach out on{' '}
+        <a
+          href={TELEGRAM_LINK}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+        >
+          Telegram
+        </a>{' '}
+        or{' '}
+        <a
+          href={X_LINK}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+        >
+          X
+        </a>{' '}
+        for help, questions, or just to connect.
+      </>
+    ),
+  },
 ]
 
 const cardVariants = {
@@ -55,22 +85,22 @@ export function ResponsibleGamingSection() {
 
       <div className="container mx-auto max-w-5xl relative z-10">
         <motion.div
-          className="text-center mb-12 text-cyan-500/80"
+          className="text-center mb-8"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-50px' }}
           transition={{ duration: 0.5 }}
         >
-          <h2 className="text-4xl md:text-5xl font-russo-one font-normal mb-4">
+          <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
             Responsible Gaming
           </h2>
-          <p className="text-xl text-white/80 font-bold font-prosto-one max-w-2xl mx-auto">
+          <p className="text-white/50 text-sm">
             We give you the tools to play responsibly and step away when you need to.
           </p>
         </motion.div>
 
         <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6"
+          className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6"
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
@@ -96,16 +126,18 @@ export function ResponsibleGamingSection() {
                 }}
               />
               <div className="relative">
-                <Icon
-                  className="w-10 h-10 md:w-12 md:h-12 mb-3 text-purple-400"
-                  strokeWidth={1.5}
-                  aria-hidden
-                />
+                <div className="flex justify-center mb-3">
+                  <Icon
+                    className="w-10 h-10 md:w-12 md:h-12 text-purple-400"
+                    strokeWidth={1.5}
+                    aria-hidden
+                  />
+                </div>
                 <h3 className="text-lg font-semibold text-cyan-300/95 mb-2 font-russo-one">
                   {card.title}
                 </h3>
                 <p className="text-white/85 text-sm md:text-base leading-relaxed">
-                  {card.text}
+                  {'content' in card && card.content ? card.content : card.text}
                 </p>
               </div>
             </motion.div>

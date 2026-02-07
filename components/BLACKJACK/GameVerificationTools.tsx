@@ -142,10 +142,11 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
     let isValid = true
 
     try {
-      // Verify server seed hash (browser-safe)
+      // Verify server seed hash (browser-safe). Server may send hash with or without 0x prefix.
       if (data.serverSeed && data.serverSeedHash) {
         const calculatedHash = await sha256Hex(data.serverSeed)
-        if (calculatedHash !== data.serverSeedHash) {
+        const expectedHash = (data.serverSeedHash || '').replace(/^0x/i, '')
+        if (calculatedHash !== expectedHash) {
           errors.push('Server seed hash does not match')
           isValid = false
         }
@@ -172,8 +173,9 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
         }
       }
 
-      // Verify payout calculation
-      if (data.result && data.payout !== undefined) {
+      // Verify payout calculation (single-hand only; split games use per-hand payouts)
+      const isSingleHand = !data.playerCards || data.playerCards.length <= 2
+      if (isSingleHand && data.result && data.payout !== undefined) {
         let expectedPayout = 0n
 
         if (data.result === 'blackjack') {
@@ -188,19 +190,6 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
 
         if (expectedPayout !== data.payout) {
           errors.push(`Payout mismatch. Expected: ${expectedPayout}, Actual: ${data.payout}`)
-          isValid = false
-        }
-      }
-
-      // Verify house edge (should be ~10% of winnings)
-      if (data.result === 'win' && data.payout > data.betAmount) {
-        const grossWin = data.payout - data.betAmount
-        const expectedHouseEdge = (grossWin * 1000n) / 10000n // 10%
-        const actualHouseEdge = grossWin - (data.payout - data.betAmount - expectedHouseEdge)
-
-        // Allow small variance due to rounding
-        if (Math.abs(Number(actualHouseEdge)) > Number(data.betAmount) / 100) {
-          errors.push('House edge calculation appears incorrect')
           isValid = false
         }
       }

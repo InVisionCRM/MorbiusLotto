@@ -1577,6 +1577,25 @@ export default function KenoPage() {
         onOpenChange={setShowPrizePool}
       />
 
+      {/* Keno contract address — click to copy */}
+      <div className="w-full flex justify-center py-3">
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(KENO_ADDRESS)
+              toast.success('Keno contract address copied')
+            } catch {
+              toast.error('Failed to copy')
+            }
+          }}
+          className="text-white font-bold font-poppins text-sm cursor-pointer hover:opacity-90 transition-opacity select-all"
+          title="Click to copy Keno contract address"
+        >
+          {KENO_ADDRESS}
+        </button>
+      </div>
+
       {/* Footer */}
       <Footer />
     </div>

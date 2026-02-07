@@ -10,12 +10,12 @@ export function HeroSection() {
   const [buyMorbiusModalOpen, setBuyMorbiusModalOpen] = useState(false)
 
   return (
-    <section className="relative min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-6 pt-16 pb-24">
+    <section className="relative w-full min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-6 pt-16 pb-24">
       {/* Background Image with top-to-bottom fade */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: 'url(/morbius/47dbb439-f5e8-447e-ad73-f7e234f19f6b.png)',
+          backgroundImage: 'url(/BlackJack/TableBackground3.png)',
           maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)',
           WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 60%)',
         }}

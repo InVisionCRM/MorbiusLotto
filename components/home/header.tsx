@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useAuth } from '@/hooks/use-auth'
@@ -161,6 +162,14 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
                   <div className="p-2 border-b border-gray-700/50">
                     <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Quick Links</div>
                     <Link
+                      href="/home"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <i className="fas fa-home w-4 text-center" aria-hidden />
+                      <span className="text-sm font-medium">Home</span>
+                    </Link>
+                    <Link
                       href="/swap"
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                       onClick={() => setMenuOpen(false)}
@@ -255,7 +264,9 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                       onClick={() => setMenuOpen(false)}
                     >
-                      <i className="fas fa-cards w-4 text-center"></i>
+                      <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
+                        <Image src="/BlackJack/Cards/PNG/AS.png" alt="" width={20} height={20} className="object-contain" />
+                      </span>
                       <span className="text-sm font-medium">Blackjack</span>
                     </Link>
                     {/* Big Wheel - commented out

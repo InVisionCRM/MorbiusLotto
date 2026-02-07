@@ -47,6 +47,12 @@ export interface Game {
   betAmount?: bigint;
   payout?: bigint;
   isBlackjack?: boolean;
+  /** Perfect Pairs side bet amount (for display). */
+  perfectPairsBetAmount?: bigint;
+  /** Perfect Pairs result: perfect | colored | mixed. */
+  perfectPairsResult?: 'perfect' | 'colored' | 'mixed';
+  /** Perfect Pairs payout (stake + winnings). */
+  perfectPairsPayout?: bigint;
 }
 
 export enum GameState {

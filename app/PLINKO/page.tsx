@@ -30,7 +30,9 @@ import {
 import { GameState, RiskLevel, ContractResult } from './types';
 import { MULTIPLIERS, RISK_NAMES, RISK_LEVEL, RISK_LEVEL_MAP } from './constants';
 import { formatEther, parseEther, decodeEventLog } from 'viem';
+import { toast } from 'sonner';
 import Footer from '@/components/PLINKO/Footer';
+import { ChatPanel } from '@/components/chat/ChatPanel';
 
 // BallDropped event ABI for decoding
 const BALL_DROPPED_EVENT_ABI = {
@@ -1575,15 +1577,25 @@ const Home: React.FC = () => {
         </div>
       </div>
 
-      {/* FULL-WIDTH CHART - Below 2-column layout */}
-      <div className="lg:block px-3 mt-4 mb-6">
-        <div className="h-64 md:h-72 lg:h-80">
-          <RealTimeBetChart
-            ref={chartRef}
-            sessionStartTime={chartSessionStartTime.current}
-            contractWagerPerBall={wagerPerBall}
-            freePlayWager={currentWagerRef.current}
-          />
+      {/* Chart + Chat: 2-col on desktop, stacked on mobile (chart first, then chat) */}
+      <div className="px-3 mt-4 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="h-64 md:h-72 lg:h-80 order-1">
+            <RealTimeBetChart
+              ref={chartRef}
+              sessionStartTime={chartSessionStartTime.current}
+              contractWagerPerBall={wagerPerBall}
+              freePlayWager={currentWagerRef.current}
+            />
+          </div>
+          <div className="order-2 min-h-[280px] lg:min-h-[320px] lg:h-80">
+            <ChatPanel
+              roomId="plinko"
+              title="Plinko Chat"
+              collapsible={false}
+              className="h-full"
+            />
+          </div>
         </div>
       </div>
 
@@ -2129,6 +2141,25 @@ const Home: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Plinko contract address — click to copy */}
+      <div className="w-full flex justify-center py-3">
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(PLINKO_ADDRESS);
+              toast.success('Plinko contract address copied');
+            } catch {
+              toast.error('Failed to copy');
+            }
+          }}
+          className="text-white font-bold font-poppins text-sm cursor-pointer hover:opacity-90 transition-opacity select-all"
+          title="Click to copy Plinko contract address"
+        >
+          {PLINKO_ADDRESS}
+        </button>
+      </div>
 
       {/* Footer */}
       <Footer />

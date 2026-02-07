@@ -35,14 +35,25 @@ export interface GameState {
   currentHandIndex: number;
   canSplit: boolean;
   isBlackjack: boolean;
+  /** Perfect Pairs side bet result (first two cards). */
+  perfectPairsResult?: PerfectPairsResult;
+  /** Payout for Perfect Pairs (0 if no bet or no pair). */
+  perfectPairsPayout?: bigint;
+  /** Side bet amount (for display). */
+  perfectPairsBetAmount?: bigint;
 }
 
 export interface CreateGameRequest {
   playerAddress: string;
   betAmount: bigint;
+  /** Optional Perfect Pairs side bet (first two cards). Locked together with main bet. */
+  perfectPairsBetAmount?: bigint;
   clientSeedCommitment?: string;
   gameHash?: string; // Optional game hash from frontend (for verification)
 }
+
+/** Perfect Pairs result for the first two player cards. */
+export type PerfectPairsResult = 'perfect' | 'colored' | 'mixed' | 'none';
 
 export interface CreateTournamentGameRequest {
   playerAddress: string;
@@ -65,6 +76,9 @@ export interface PlayerActionRequest {
   handIndex?: number; // For multi-hand games
   clientSeed?: string; // Revealed on first action
 }
+
+/** Perfect Pairs paytable: 25:1 perfect, 12:1 colored, 5:1 mixed (stake returned on win). */
+const PERFECT_PAIRS_MULTIPLIERS = { perfect: 25, colored: 12, mixed: 5 } as const;
 
 export class BlackjackGameService {
   private static readonly GAME_NONCE_MULTIPLIER = 1_000_000; // avoid collisions within a game
@@ -122,53 +136,55 @@ export class BlackjackGameService {
       }
 
       const clientSeed = request.clientSeedCommitment || 'default';
+      const perfectPairsBet = request.perfectPairsBetAmount ?? 0n;
+      const totalStake = request.betAmount + perfectPairsBet;
 
       // Generate per-game nonce (Stake-style: stable seeds, increment nonce)
       const gameNumber = session.game_count + 1;
       const baseNonce = this.getGameBaseNonce(gameNumber);
 
-      // If gameHash is provided, verify it matches
+      // If gameHash is provided, verify it matches (hash uses total stake for contract lock)
       if (request.gameHash) {
         const timestamp = Math.floor(Date.now() / 1000);
-        // Remove 0x prefix if present for comparison (server returns hex without 0x)
-        const receivedHash = request.gameHash.startsWith('0x') 
-          ? request.gameHash.slice(2).toLowerCase() 
+        const receivedHash = request.gameHash.startsWith('0x')
+          ? request.gameHash.slice(2).toLowerCase()
           : request.gameHash.toLowerCase();
-        
-        const expectedHash = this.pfService.generateGameHash(session.server_seed_hash, clientSeed, gameNumber, request.betAmount, timestamp).toLowerCase();
-        // Allow some timestamp variance (within 60 seconds)
+
+        const expectedHash = this.pfService.generateGameHash(session.server_seed_hash, clientSeed, gameNumber, totalStake, timestamp).toLowerCase();
         const hashMatches = expectedHash === receivedHash ||
-          this.pfService.generateGameHash(session.server_seed_hash, clientSeed, gameNumber, request.betAmount, timestamp - 60).toLowerCase() === receivedHash ||
-          this.pfService.generateGameHash(session.server_seed_hash, clientSeed, gameNumber, request.betAmount, timestamp + 60).toLowerCase() === receivedHash;
-        
+          this.pfService.generateGameHash(session.server_seed_hash, clientSeed, gameNumber, totalStake, timestamp - 60).toLowerCase() === receivedHash ||
+          this.pfService.generateGameHash(session.server_seed_hash, clientSeed, gameNumber, totalStake, timestamp + 60).toLowerCase() === receivedHash;
+
         if (!hashMatches) {
           logger.warn('Game hash mismatch', {
             expected: expectedHash,
             received: receivedHash,
-            serverSeedHash: session.server_seed_hash,
-            clientSeed,
             gameNumber,
-            betAmount: request.betAmount.toString(),
-            timestamp: timestamp
+            totalStake: totalStake.toString(),
+            timestamp
           });
-          // Don't fail, but log warning - hash verification can be done later
         } else {
           logger.debug('Game hash verified', { gameHash: receivedHash });
         }
       }
 
-      // Generate initial cards using provably fair randomness
+      // Generate initial cards: 4 values (1-13) + 4 suits (0-3) for Perfect Pairs
       const dealingSeeds: GameSeeds = {
         serverSeed: session.server_seed!,
         clientSeed,
-        nonce: baseNonce, // drawIndex starts at 0 for initial deal
+        nonce: baseNonce,
       };
-      const randoms = this.pfService.generateBlackjackRandoms(dealingSeeds, 4);
-      let rngCounter = 4; // we consumed 4 draws
+      const valueRandoms = this.pfService.generateBlackjackRandoms(dealingSeeds, 4);
+      const suitRandoms = this.pfService.generateBlackjackSuits(dealingSeeds, baseNonce + 4, 4);
+      let rngCounter = 8;
 
-      // Deal cards: player gets 2 cards, dealer gets 2 cards (1 face down)
-      const initialPlayerCards = [randoms[0], randoms[2]];
-      const dealerCards = [randoms[1], randoms[3]];
+      const encode = (v: number, s: number) => this.pfService.encodeCard(v, s);
+      const initialPlayerCards = [encode(valueRandoms[0], suitRandoms[0]), encode(valueRandoms[2], suitRandoms[2])];
+      const dealerCards = [encode(valueRandoms[1], suitRandoms[1]), encode(valueRandoms[3], suitRandoms[3])];
+
+      // Perfect Pairs: classify first two player cards
+      const perfectPairsResult = this.classifyPerfectPair(initialPlayerCards[0], initialPlayerCards[1]);
+      const perfectPairsPayout = this.getPerfectPairsPayout(perfectPairsBet, perfectPairsResult);
 
       // Create initial hand
       const initialHand: Hand = {
@@ -204,8 +220,8 @@ export class BlackjackGameService {
         status = 'completed';
         result = 'blackjack';
         initialHand.result = 'blackjack';
-        // 3:2 payout for natural blackjack: original bet + 1.5x winnings = 2.5x total
-        initialHand.payout = request.betAmount + (request.betAmount * 3n) / 2n;
+        // 3:2 payout for natural blackjack: 2.5x total (bet + 1.5x winnings)
+        initialHand.payout = (request.betAmount * 5n) / 2n;
       } else if (dealerBlackjack) {
         status = 'completed';
         result = 'loss';
@@ -213,12 +229,15 @@ export class BlackjackGameService {
         initialHand.payout = 0n;
       }
 
-      // Deduct bet amount from off-chain balance
-      await this.dbService.deductPlayerBalance(request.playerAddress, request.betAmount);
-      logger.debug('Deducted initial bet from balance', {
+      // Deduct total stake (main + Perfect Pairs) from off-chain balance
+      await this.dbService.deductPlayerBalance(request.playerAddress, totalStake);
+      logger.debug('Deducted stake from balance', {
         playerAddress: request.playerAddress,
-        betAmount: request.betAmount.toString()
+        totalStake: totalStake.toString(),
+        perfectPairsBet: perfectPairsBet.toString()
       });
+
+      const immediatePayout = initialHand.payout + perfectPairsPayout;
 
       // Create game record
       const game = await this.dbService.createGame(session.id, {
@@ -227,11 +246,13 @@ export class BlackjackGameService {
         dealer_cards: dealerCards,
         dealer_total: this.pfService.calculateHandTotal(dealerCards).total,
         result,
-        total_payout: initialHand.payout,
+        total_payout: immediatePayout,
         client_seed_commitment: clientSeed,
         hand_count: 1,
         current_hand_index: 0,
         rng_counter: rngCounter,
+        perfect_pairs_bet_amount: perfectPairsBet,
+        perfect_pairs_payout: perfectPairsPayout,
       });
 
       // Create initial hand record
@@ -249,20 +270,21 @@ export class BlackjackGameService {
 
       initialHand.id = gameHand.id;
 
-      // Update session stats for game start (increments game_count)
-      await this.dbService.updateSessionStats(session.id, request.betAmount, 0n, true);
+      // Update session stats for game start (increments game_count; use total stake wagered)
+      await this.dbService.updateSessionStats(session.id, totalStake, 0n, true);
 
-      // If the game completed immediately, record profit + credit payout + reveal server seed for verification
+      // If the game completed immediately, record profit + credit payout (main + Perfect Pairs) + reveal server seed
       if (result) {
-        const profit = initialHand.payout > request.betAmount ? initialHand.payout - request.betAmount : 0n;
+        const profit = immediatePayout > totalStake ? immediatePayout - totalStake : 0n;
         if (profit > 0n) {
           await this.dbService.updateSessionStats(session.id, 0n, profit, false);
         }
-        if (initialHand.payout > 0n) {
-          await this.dbService.addPlayerBalance(request.playerAddress, initialHand.payout);
+        if (immediatePayout > 0n) {
+          await this.dbService.addPlayerBalance(request.playerAddress, immediatePayout);
           logger.debug('Added winnings to balance', {
             playerAddress: request.playerAddress,
-            payout: initialHand.payout.toString()
+            payout: immediatePayout.toString(),
+            perfectPairsPayout: perfectPairsPayout.toString()
           });
         }
         await this.dbService.revealServerSeed(game.id, session.server_seed_hash, session.server_seed!);
@@ -272,19 +294,20 @@ export class BlackjackGameService {
         gameId: game.id,
         sessionId: session.id,
         playerHands: [initialHand],
-        // SECURITY: Only send visible dealer card during player turn to prevent cheating
-        // If game completed immediately (natural blackjack), send all cards
         dealerCards: status === 'completed' ? dealerCards : dealerCards.slice(0, 1),
         dealerTotal: dealerVisibleHand.total,
         dealerHasAce: dealerVisibleHand.hasAce,
         status,
         totalBetAmount: request.betAmount,
-        totalPayout: initialHand.payout,
+        totalPayout: immediatePayout,
         actions: [],
         dealerActions: [],
         currentHandIndex: 0,
         canSplit: initialHand.canSplit && status === 'player_turn',
-        isBlackjack: initialHand.isBlackjack
+        isBlackjack: initialHand.isBlackjack,
+        perfectPairsResult: perfectPairsResult !== 'none' ? perfectPairsResult : undefined,
+        perfectPairsPayout: perfectPairsPayout > 0n ? perfectPairsPayout : undefined,
+        perfectPairsBetAmount: perfectPairsBet > 0n ? perfectPairsBet : undefined,
       };
 
       logger.info('Game created', {
@@ -305,11 +328,43 @@ export class BlackjackGameService {
   }
 
   /**
-   * Check if hand can be split
+   * Check if hand can be split (same rank 1-13)
    */
   private canSplit(cards: number[]): boolean {
-    return cards.length === 2 &&
-           this.pfService.getBlackjackValue(cards[0]) === this.pfService.getBlackjackValue(cards[1]);
+    if (cards.length !== 2) return false;
+    const v1 = this.pfService.decodeCardValue(cards[0]);
+    const v2 = this.pfService.decodeCardValue(cards[1]);
+    return v1 === v2;
+  }
+
+  /**
+   * Classify Perfect Pairs result from first two player cards (encoded value*10+suit).
+   * Suits: 0=hearts, 1=diamonds (red), 2=clubs, 3=spades (black).
+   */
+  private classifyPerfectPair(card1: number, card2: number): PerfectPairsResult {
+    const v1 = this.pfService.decodeCardValue(card1);
+    const v2 = this.pfService.decodeCardValue(card2);
+    if (v1 !== v2) return 'none';
+    const s1 = this.pfService.decodeCardSuit(card1);
+    const s2 = this.pfService.decodeCardSuit(card2);
+    if (s1 === s2) return 'perfect';
+    const red = (s: number) => s === 0 || s === 1;
+    if (red(s1) === red(s2)) return 'colored';
+    return 'mixed';
+  }
+
+  private getPerfectPairsPayout(bet: bigint, result: PerfectPairsResult): bigint {
+    if (result === 'none' || bet <= 0n) return 0n;
+    const mult = BigInt(PERFECT_PAIRS_MULTIPLIERS[result]);
+    return bet + bet * mult; // stake + winnings
+  }
+
+  /** Draw one encoded card (value*10+suit), consumes 2 nonces. */
+  private drawEncodedCard(seeds: GameSeeds, nonce: number): { card: number; nextNonce: number } {
+    const valueRandoms = this.pfService.generateBlackjackRandoms({ ...seeds, nonce }, 1);
+    const suitRandoms = this.pfService.generateBlackjackSuits(seeds, nonce + 1, 1);
+    const card = this.pfService.encodeCard(valueRandoms[0], suitRandoms[0]);
+    return { card, nextNonce: nonce + 2 };
   }
 
   /**
@@ -471,14 +526,12 @@ export class BlackjackGameService {
     const card1 = [handToSplit.cards[0]];
     const card2 = [handToSplit.cards[1]];
 
-    // Deal one card to each new hand
-    const randoms = this.pfService.generateBlackjackRandoms(gameSeeds, 2);
-    card1.push(randoms[0]);
-    card2.push(randoms[1]);
     const baseNonce = this.getGameBaseNonce(game.game_number);
-    const splitNonce1 = gameSeeds.nonce;
-    const splitNonce2 = gameSeeds.nonce + 1;
-    const nextRngCounter = (splitNonce2 - baseNonce) + 1; // consumed 2 draws total
+    const draw1 = this.drawEncodedCard(gameSeeds, gameSeeds.nonce);
+    const draw2 = this.drawEncodedCard(gameSeeds, draw1.nextNonce);
+    card1.push(draw1.card);
+    card2.push(draw2.card);
+    const nextRngCounter = draw2.nextNonce - baseNonce;
 
     // Create new hands
     const hand1: Hand = {
@@ -488,9 +541,9 @@ export class BlackjackGameService {
       hasAce: this.pfService.calculateHandTotal(card1).hasAce,
       isBlackjack: false,
       isBust: false,
-      betAmount: handToSplit.betAmount, // Additional bet required for split
+      betAmount: handToSplit.betAmount,
       payout: 0n,
-      actions: [{ type: 'split', timestamp: Date.now(), nonce1: splitNonce1, nonce2: splitNonce2, cards: [randoms[0], randoms[1]] }],
+      actions: [{ type: 'split', timestamp: Date.now(), nonce1: gameSeeds.nonce, nonce2: draw1.nextNonce, cards: [draw1.card, draw2.card] }],
       canHit: true,
       canStand: true,
       canDoubleDown: true,
@@ -588,12 +641,11 @@ export class BlackjackGameService {
     let rngCounter = gameSeeds.nonce - baseNonce;
 
     if (action === 'hit') {
-      // Deal new card
       const nonceUsed = baseNonce + rngCounter;
-      const randoms = this.pfService.generateBlackjackRandoms({ ...gameSeeds, nonce: nonceUsed }, 1);
-      rngCounter += 1;
-      currentHand.cards.push(randoms[0]);
-      currentHand.actions.push({ type: 'hit', card: randoms[0], nonce: nonceUsed, timestamp: Date.now() });
+      const { card, nextNonce } = this.drawEncodedCard({ ...gameSeeds, nonce: nonceUsed }, nonceUsed);
+      rngCounter = nextNonce - baseNonce;
+      currentHand.cards.push(card);
+      currentHand.actions.push({ type: 'hit', card, nonce: nonceUsed, timestamp: Date.now() });
 
       const handTotal = this.pfService.calculateHandTotal(currentHand.cards);
       currentHand.total = handTotal.total;
@@ -770,13 +822,12 @@ export class BlackjackGameService {
       }
 
       const nonceUsed = nextNonce;
-      const randoms = this.pfService.generateBlackjackRandoms({ ...gameSeeds, nonce: nonceUsed }, 1);
-      nextNonce += 1;
-
-      dealerCards.push(randoms[0]);
+      const { card, nextNonce: next } = this.drawEncodedCard({ ...gameSeeds, nonce: nonceUsed }, nonceUsed);
+      nextNonce = next;
+      dealerCards.push(card);
       dealerActions.push({
         type: 'hit',
-        card: randoms[0],
+        card,
         nonce: nonceUsed,
         timestamp: Date.now()
       });
@@ -787,7 +838,10 @@ export class BlackjackGameService {
 
     // Calculate results for each hand
     for (const hand of playerHands) {
-      if (hand.isBust) {
+      // Never overwrite natural blackjack (3:2 payout) - should not reach here for immediate-completion games
+      if (hand.result === 'blackjack' && hand.isBlackjack) {
+        hand.payout = (hand.betAmount * 5n) / 2n; // 3:2 = 2.5x total
+      } else if (hand.isBust) {
         hand.result = 'loss';
         hand.payout = 0n;
       } else if (finalDealerTotal > 21) {
@@ -815,11 +869,21 @@ export class BlackjackGameService {
       });
     }
 
+    // Include Perfect Pairs payout in total (result was set at game creation)
+    const perfectPairsPayout = game.perfect_pairs_payout ?? 0n;
+    const totalPayoutWithSideBet = totalPayout + perfectPairsPayout;
+    const firstHandInitialCards = playerHands[0]?.cards?.slice(0, 2) ?? [];
+    const perfectPairsResult: PerfectPairsResult | undefined = firstHandInitialCards.length === 2
+      ? this.classifyPerfectPair(playerHands[0].cards[0], playerHands[0].cards[1])
+      : undefined;
+
     // Determine overall game result (win if any hand won, loss if all lost, push if all pushed)
     const hasWin = playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
     const hasLoss = playerHands.some(h => h.result === 'loss');
     const allPush = playerHands.every(h => h.result === 'push');
     const overallResult: Game['result'] = hasWin ? 'win' : allPush ? 'push' : 'loss';
+
+    const totalStakeForGame = game.total_bet_amount + (game.perfect_pairs_bet_amount ?? 0n);
 
     // Update game
     const rngCounter = nextNonce - baseNonce;
@@ -827,25 +891,26 @@ export class BlackjackGameService {
       dealer_cards: dealerCards,
       dealer_total: finalDealerTotal,
       result: overallResult,
-      total_payout: totalPayout,
+      total_payout: totalPayoutWithSideBet,
       dealer_actions: dealerActions,
       rng_counter: rngCounter,
       completed_at: new Date()
     });
 
-    // Add winnings to off-chain balance
-    if (totalPayout > 0n) {
+    // Add winnings to off-chain balance (main hand(s) + Perfect Pairs)
+    if (totalPayoutWithSideBet > 0n) {
       const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
-      await this.dbService.addPlayerBalance(playerAddress, totalPayout);
+      await this.dbService.addPlayerBalance(playerAddress, totalPayoutWithSideBet);
       logger.debug('Added game winnings to balance', {
         playerAddress,
-        totalPayout: totalPayout.toString(),
+        totalPayout: totalPayoutWithSideBet.toString(),
+        perfectPairsPayout: perfectPairsPayout.toString(),
         gameId
       });
     }
 
     // Update session win stats (profit only; do NOT increment game_count)
-    const profit = totalPayout > game.total_bet_amount ? totalPayout - game.total_bet_amount : 0n;
+    const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
     if (profit > 0n) {
       await this.dbService.updateSessionStats(game.session_id, 0n, profit, false);
     }
@@ -865,12 +930,15 @@ export class BlackjackGameService {
       dealerHasAce: this.pfService.calculateHandTotal(dealerCards).hasAce,
       status: 'completed',
       totalBetAmount: game.total_bet_amount,
-      totalPayout,
+      totalPayout: totalPayoutWithSideBet,
       actions: [],
       dealerActions,
       currentHandIndex: 0,
       canSplit: false,
-      isBlackjack: false
+      isBlackjack: false,
+      perfectPairsResult: perfectPairsResult !== undefined && perfectPairsResult !== 'none' ? perfectPairsResult : undefined,
+      perfectPairsPayout: perfectPairsPayout > 0n ? perfectPairsPayout : undefined,
+      perfectPairsBetAmount: (game.perfect_pairs_bet_amount ?? 0n) > 0n ? game.perfect_pairs_bet_amount : undefined,
     };
   }
 
@@ -1031,10 +1099,10 @@ export class BlackjackGameService {
         status = 'completed';
         result = 'blackjack';
         initialHand.result = 'blackjack';
-        // 3:2 payout in chips
-        const winnings = Math.floor(request.betAmount * 1.5);
-        initialHand.payout = BigInt(request.betAmount + winnings);
-        chipDelta = winnings;
+        // 3:2 payout in chips: 2.5x total
+        const betBig = BigInt(request.betAmount);
+        initialHand.payout = (betBig * 5n) / 2n;
+        chipDelta = Number(initialHand.payout) - request.betAmount;
       } else if (dealerBlackjack) {
         status = 'completed';
         result = 'loss';

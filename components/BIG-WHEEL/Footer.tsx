@@ -1,16 +1,29 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { toast } from 'sonner';
 import { AboutUsModal } from '@/components/footer/about-us';
 import { UserAgreementModal } from '@/components/footer/user-agreement';
+import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 
 export default function Footer() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [userAgreementOpen, setUserAgreementOpen] = useState(false);
+  const [morbiusCopied, setMorbiusCopied] = useState(false);
+  const copyMorbius = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(MORBIUS_TOKEN_ADDRESS);
+      setMorbiusCopied(true);
+      toast.success('MORBIUS address copied');
+      setTimeout(() => setMorbiusCopied(false), 2000);
+    } catch {
+      toast.error('Failed to copy');
+    }
+  }, []);
 
   return (
     <>
-      <footer className="bg-black/75 backdrop-blur-sm border-t border-black/10 py-4 px-4 mt-auto">
+      <footer className="w-full bg-black/75 backdrop-blur-sm border-t border-black/10 py-4 px-4 mt-auto">
         <div className="container mx-auto max-w-4xl">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {/* Column 1 - More From Morbius.io */}
@@ -141,8 +154,21 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Copyright */}
+          {/* Morbius token address — click to copy */}
           <div className="mt-3 pt-2 border-t border-black/10 text-center">
+            <button
+              type="button"
+              onClick={copyMorbius}
+              className="text-white font-bold font-poppins text-sm cursor-pointer hover:opacity-90 transition-opacity select-all"
+              title="Click to copy MORBIUS address"
+            >
+              {MORBIUS_TOKEN_ADDRESS}
+              {morbiusCopied && <span className="ml-2 text-cyan-400">Copied!</span>}
+            </button>
+          </div>
+
+          {/* Copyright */}
+          <div className="mt-2 pt-2 border-t border-black/10 text-center">
             <p className="text-gray-600 text-[10px] sm:text-xs">
               © 2025 Morbius.io. All rights reserved.
             </p>
