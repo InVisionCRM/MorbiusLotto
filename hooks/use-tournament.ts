@@ -41,6 +41,9 @@ export interface TournamentState {
   canRebuy: boolean;
   maxRebuys: number;
   rebuyEnabled: boolean;
+  // Session stats
+  biggestBet: number;
+  biggestWin: number;
   // Custom tournament info
   tableTheme?: TableTheme;
 }
@@ -134,6 +137,8 @@ export function useTournament(options: UseTournamentOptions) {
     canRebuy: false,
     maxRebuys: 0,
     rebuyEnabled: false,
+    biggestBet: 0,
+    biggestWin: 0,
   });
 
   const [tournamentInfo, setTournamentInfo] = useState<TournamentInfo | null>(null);
@@ -145,6 +150,10 @@ export function useTournament(options: UseTournamentOptions) {
   // Tournament creator state
   const [tournamentList, setTournamentList] = useState<TournamentListItem[]>([]);
   const [createdTournament, setCreatedTournament] = useState<CreatedTournament | null>(null);
+
+  // Track chips before each hand to calculate per-hand win
+  const chipsBeforeHandRef = useRef<number>(0);
+  const currentHandBetRef = useRef<number>(0);
 
   // Refs for callbacks
   const onBustedRef = useRef(onBusted);
@@ -235,7 +244,8 @@ export function useTournament(options: UseTournamentOptions) {
       const response = await wsClient.sendRequest('tournament_state', {});
 
       if (response.inTournament) {
-        setTournamentState({
+        setTournamentState(prev => ({
+          ...prev,
           inTournament: true,
           entryId: response.entryId,
           tournamentId: response.tournamentId,
@@ -247,7 +257,7 @@ export function useTournament(options: UseTournamentOptions) {
           status: response.status,
           maxHands: response.maxHands,
           startingChips: response.startingChips,
-        });
+        }));
       } else {
         setTournamentState(prev => ({ ...prev, inTournament: false }));
       }
@@ -294,7 +304,8 @@ export function useTournament(options: UseTournamentOptions) {
     try {
       const response = await wsClient.sendRequest('tournament_enter', {});
 
-      setTournamentState({
+      setTournamentState(prev => ({
+        ...prev,
         inTournament: true,
         entryId: response.entryId,
         tournamentId: response.tournamentId,
@@ -306,7 +317,9 @@ export function useTournament(options: UseTournamentOptions) {
         status: 'playing',
         maxHands: response.maxHands,
         startingChips: response.startingChips,
-      });
+        biggestBet: 0,
+        biggestWin: 0,
+      }));
 
       // Update tournament info with new prize pool
       if (response.prizePool) {
@@ -352,6 +365,13 @@ export function useTournament(options: UseTournamentOptions) {
         status: null,
         maxHands: TOURNAMENT_CONFIG.MAX_HANDS,
         startingChips: TOURNAMENT_CONFIG.STARTING_CHIPS,
+        rebuyCount: 0,
+        totalBuyIn: '0',
+        canRebuy: false,
+        maxRebuys: 0,
+        rebuyEnabled: false,
+        biggestBet: 0,
+        biggestWin: 0,
       });
       setCurrentGame(null);
 
@@ -399,13 +419,18 @@ export function useTournament(options: UseTournamentOptions) {
 
       setCurrentGame(gameState);
 
-      // Update tournament state
+      // Track pre-hand chips and bet for stats
+      chipsBeforeHandRef.current = tournamentState.chips;
+      currentHandBetRef.current = betAmount;
+
+      // Update tournament state (including biggestBet)
       setTournamentState(prev => ({
         ...prev,
         chips: response.tournamentChips,
         handsPlayed: response.handsPlayed,
         handsRemaining: response.handsRemaining,
         currentRank: response.currentRank,
+        biggestBet: Math.max(prev.biggestBet, betAmount),
       }));
 
       return gameState;
@@ -447,6 +472,16 @@ export function useTournament(options: UseTournamentOptions) {
 
       setCurrentGame(gameState);
 
+      // Track double-down as a bigger bet
+      if (action === 'double_down') {
+        currentHandBetRef.current = currentHandBetRef.current * 2;
+      }
+
+      // Calculate per-hand win when game completes
+      const handWin = gameState.status === 'completed'
+        ? Math.max(0, response.tournamentChips - chipsBeforeHandRef.current)
+        : 0;
+
       // Update tournament state
       setTournamentState(prev => ({
         ...prev,
@@ -457,6 +492,8 @@ export function useTournament(options: UseTournamentOptions) {
         status: response.tournamentChips <= 0 ? 'busted'
           : response.handsRemaining <= 0 ? 'completed'
           : 'playing',
+        biggestBet: Math.max(prev.biggestBet, currentHandBetRef.current),
+        biggestWin: Math.max(prev.biggestWin, handWin),
       }));
 
       // Clear game if completed
@@ -657,6 +694,8 @@ export function useTournament(options: UseTournamentOptions) {
         canRebuy: false,
         maxRebuys: response.rebuyConfig?.maxRebuys || 0,
         rebuyEnabled: response.rebuyConfig?.enabled || false,
+        biggestBet: 0,
+        biggestWin: 0,
         tableTheme: response.tableTheme,
       });
 

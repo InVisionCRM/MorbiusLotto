@@ -447,13 +447,13 @@ export function TournamentCreator({
     onClose();
   };
 
-  if (!isOpen) return null;
-
   // Funding helpers
   const fundingAmountWei = useMemo(() => {
     const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
     return BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
   }, [prizeAmountHuman, prizeTokenDecimals]);
+
+  if (!isOpen) return null;
 
   const handleApproveToken = async () => {
     if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= 0n) return;
@@ -698,9 +698,12 @@ export function TournamentCreator({
             <div className="space-y-6">
               {/* Tournament type: Buy-in or Freeroll */}
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
+                <label className="block text-gray-300 text-sm font-medium mb-1">
                   Tournament type
                 </label>
+                <p className="text-gray-500 text-xs mb-2">
+                  Buy-in tournaments require MORBIUS to enter. Freerolls are free to join with scheduled start times.
+                </p>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -749,8 +752,9 @@ export function TournamentCreator({
               {tournamentType === 'freeroll' && (
                 <div className="space-y-4 p-4 rounded-xl bg-gray-800/50 border border-cyan-500/20">
                   <p className="text-cyan-300 text-sm font-medium">Schedule</p>
+                  <p className="text-gray-500 text-xs">Set when players can register, when the tournament begins, and how long it runs.</p>
                   <div>
-                    <label className="block text-gray-400 text-xs mb-1">Registration opens</label>
+                    <label className="block text-gray-400 text-xs mb-1">Registration opens — players can sign up starting at this time</label>
                     <input
                       type="datetime-local"
                       value={registrationOpensAt}
@@ -759,7 +763,7 @@ export function TournamentCreator({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-400 text-xs mb-1">Tournament starts</label>
+                    <label className="block text-gray-400 text-xs mb-1">Tournament starts — gameplay begins at this time, registration closes</label>
                     <input
                       type="datetime-local"
                       value={scheduledStartAt}
@@ -768,7 +772,7 @@ export function TournamentCreator({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-400 text-xs mb-1">Duration (minutes)</label>
+                    <label className="block text-gray-400 text-xs mb-1">Duration (minutes) — how long the tournament runs after it starts</label>
                     <input
                       type="number"
                       min={FREEROLL_VALIDATION.DURATION_MIN_MINUTES}
@@ -780,6 +784,9 @@ export function TournamentCreator({
                   </div>
                   <div>
                     <label className="block text-gray-400 text-xs mb-1">Mode</label>
+                    <p className="text-gray-500 text-xs mb-2">
+                      Chip count: highest chip total at the end wins. Elimination: bottom players are removed in rounds until a winner remains.
+                    </p>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -802,7 +809,10 @@ export function TournamentCreator({
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400 text-sm">Re-entry window</span>
+                    <div>
+                      <span className="text-gray-400 text-sm">Re-entry window</span>
+                      <p className="text-gray-500 text-xs">Allow eliminated players to rejoin within a time window after tournament start</p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setReentryEnabled(!reentryEnabled)}
@@ -813,7 +823,7 @@ export function TournamentCreator({
                   </div>
                   {reentryEnabled && (
                     <div>
-                      <label className="block text-gray-400 text-xs mb-1">Re-entry window (minutes)</label>
+                      <label className="block text-gray-400 text-xs mb-1">Re-entry window (minutes) — how long after the start eliminated players can re-enter</label>
                       <input
                         type="number"
                         min={1}
@@ -825,7 +835,7 @@ export function TournamentCreator({
                     </div>
                   )}
                   <div>
-                    <label className="block text-gray-400 text-xs mb-1">Action timer (seconds, optional)</label>
+                    <label className="block text-gray-400 text-xs mb-1">Action timer (seconds) — time each player has to act per hand. None = no time pressure.</label>
                     <select
                       value={actionTimerSeconds ?? ''}
                       onChange={(e) => setActionTimerSeconds(e.target.value === '' ? null : parseInt(e.target.value, 10))}
@@ -842,9 +852,12 @@ export function TournamentCreator({
               {/* Buy-in Amount (only for buy-in tournaments) */}
               {tournamentType === 'buyin' && (
                 <div>
-                  <label className="block text-gray-300 text-sm font-medium mb-2">
+                  <label className="block text-gray-300 text-sm font-medium mb-1">
                     Buy-in Amount (MORBIUS)
                   </label>
+                  <p className="text-gray-500 text-xs mb-2">
+                    The amount each player pays to enter. All buy-ins go into the prize pool.
+                  </p>
                   <input
                     type="number"
                     value={buyInAmount}
@@ -954,9 +967,12 @@ export function TournamentCreator({
             <div className="space-y-6">
               {/* Starting Chips */}
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
+                <label className="block text-gray-300 text-sm font-medium mb-1">
                   Starting Chips
                 </label>
+                <p className="text-gray-500 text-xs mb-2">
+                  How many chips each player begins with. More chips means longer games with more strategic depth.
+                </p>
                 <div className="grid grid-cols-4 gap-2">
                   {TOURNAMENT_VALIDATION.STARTING_CHIPS_OPTIONS.map((chips) => (
                     <button
@@ -976,9 +992,12 @@ export function TournamentCreator({
 
               {/* Max Hands - Slider + Direct Input */}
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
+                <label className="block text-gray-300 text-sm font-medium mb-1">
                   Maximum Hands
                 </label>
+                <p className="text-gray-500 text-xs mb-2">
+                  The max number of hands each player can play. Once reached, their score is final. Lower = quicker games.
+                </p>
                 <div className="space-y-3">
                   {/* Slider */}
                   <div className="relative">
@@ -1016,9 +1035,12 @@ export function TournamentCreator({
 
               {/* Time Limit */}
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
+                <label className="block text-gray-300 text-sm font-medium mb-1">
                   Time Limit
                 </label>
+                <p className="text-gray-500 text-xs mb-2">
+                  How long the tournament stays open. When time runs out, rankings are finalized. &quot;No Limit&quot; means it ends only when all hands are played.
+                </p>
                 <div className="grid grid-cols-5 gap-2">
                   {TOURNAMENT_VALIDATION.TIME_LIMIT_OPTIONS.map((limit) => (
                     <button
@@ -1041,7 +1063,7 @@ export function TournamentCreator({
                 <div className="flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-700">
                   <div>
                     <p className="text-white font-medium">Enable Rebuys</p>
-                    <p className="text-gray-400 text-sm">Allow players to rebuy after busting</p>
+                    <p className="text-gray-400 text-sm">Allow players to buy back in after losing all chips. Each rebuy costs the same as the original buy-in and adds to the prize pool.</p>
                   </div>
                   <button
                     onClick={() => setRebuyEnabled(!rebuyEnabled)}
@@ -1059,9 +1081,12 @@ export function TournamentCreator({
 
                 {rebuyEnabled && (
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                    <label className="block text-gray-300 text-sm font-medium mb-1">
                       Max Rebuys per Player
                     </label>
+                    <p className="text-gray-500 text-xs mb-2">
+                      Limit how many times a player can rebuy. &quot;Unlimited&quot; means no cap.
+                    </p>
                     <div className="grid grid-cols-4 gap-2">
                       {TOURNAMENT_VALIDATION.MAX_REBUYS_OPTIONS.map((max) => (
                         <button
@@ -1088,9 +1113,12 @@ export function TournamentCreator({
             <div className="space-y-6">
               {/* Prize source: platform vs custom token */}
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
+                <label className="block text-gray-300 text-sm font-medium mb-1">
                   Prize source
                 </label>
+                <p className="text-gray-500 text-xs mb-2">
+                  Platform: prizes are paid from MORBIUS buy-ins. Custom token: you fund the prize pool with any PRC-20 token of your choice.
+                </p>
                 <div className="flex gap-2 mb-4">
                   <button
                     type="button"
@@ -1221,9 +1249,12 @@ export function TournamentCreator({
               </div>
 
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-3">
+                <label className="block text-gray-300 text-sm font-medium mb-1">
                   Prize Distribution
                 </label>
+                <p className="text-gray-500 text-xs mb-3">
+                  Choose how the prize pool is split among top finishers. 84% of the pool goes to winners, 16% to the house.
+                </p>
                 <div className="space-y-2">
                   {PRIZE_PRESETS.map((preset) => (
                     <button
@@ -1278,6 +1309,9 @@ export function TournamentCreator({
           {/* Theme Tab */}
           {activeTab === 'theme' && (
             <div className="space-y-6">
+              <p className="text-gray-500 text-xs">
+                Pick the table background players will see during the tournament. This is purely cosmetic.
+              </p>
               {/* Theme Type */}
               <div className="flex gap-2">
                 <button

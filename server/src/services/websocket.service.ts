@@ -34,6 +34,15 @@ const ALLOWED_CHAT_ROOMS = new Set([
   'morb-it'
 ]);
 
+// Check if a room ID is a tournament chat room (tournament:{uuid})
+function isTournamentRoom(room: string): boolean {
+  return room.startsWith('tournament:') && room.length > 'tournament:'.length;
+}
+
+function getTournamentIdFromRoom(room: string): string {
+  return room.slice('tournament:'.length);
+}
+
 const CHAT_MAX_LENGTH = 500;
 const CHAT_RATE_LIMIT_MS = 2000; // min 2s between messages per connection
 const CHAT_RECENT_MESSAGES_LIMIT = 50;
@@ -341,6 +350,10 @@ export class WebSocketService {
           await this.handleFreerollReentry(ws, message);
           break;
 
+        case 'tournament_entries_list':
+          await this.handleTournamentEntriesList(ws, message);
+          break;
+
         default:
           this.sendError(ws, 'Unknown message type', message.requestId);
       }
@@ -644,8 +657,21 @@ export class WebSocketService {
         return this.sendError(ws, 'roomId required', message.requestId);
       }
       const normalized = roomId.toLowerCase().trim();
-      if (!ALLOWED_CHAT_ROOMS.has(normalized)) {
+      if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized)) {
         return this.sendError(ws, 'Invalid room', message.requestId);
+      }
+
+      // Tournament rooms require participant check
+      if (isTournamentRoom(normalized)) {
+        if (!ws.playerAddress) {
+          return this.sendError(ws, 'Wallet required for tournament chat', message.requestId);
+        }
+        if (this.tournamentService) {
+          const entry = await this.tournamentService.getTournamentEntry(ws.playerAddress, getTournamentIdFromRoom(normalized));
+          if (!entry) {
+            return this.sendError(ws, 'Only participants can join tournament chat', message.requestId);
+          }
+        }
       }
 
       if (ws.currentRoom && ws.connectionId) {
@@ -698,7 +724,7 @@ export class WebSocketService {
         return this.sendError(ws, 'beforeId required', message.requestId);
       }
       const normalized = roomId.toLowerCase().trim();
-      if (!ALLOWED_CHAT_ROOMS.has(normalized)) {
+      if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized)) {
         return this.sendError(ws, 'Invalid room', message.requestId);
       }
       const limitNum = typeof limit === 'number' && limit > 0 && limit <= CHAT_RECENT_MESSAGES_LIMIT
@@ -811,8 +837,15 @@ export class WebSocketService {
       }
 
       const normalizedRoom = roomId.toLowerCase().trim();
-      if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom)) {
+      if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom)) {
         return this.sendError(ws, 'Invalid room', message.requestId);
+      }
+      // Tournament rooms require participant check on send
+      if (isTournamentRoom(normalizedRoom) && this.tournamentService && ws.playerAddress) {
+        const entry = await this.tournamentService.getTournamentEntry(ws.playerAddress, getTournamentIdFromRoom(normalizedRoom));
+        if (!entry) {
+          return this.sendError(ws, 'Only participants can comment', message.requestId);
+        }
       }
       if (ws.currentRoom !== normalizedRoom) {
         return this.sendError(ws, 'Not in this room', message.requestId);
@@ -1764,6 +1797,11 @@ export class WebSocketService {
         prizeTokenDecimals: t.prize_token_decimals ?? null,
         createdAt: t.created_at.toISOString(),
         customImage: t.custom_image || null,
+        tournamentType: t.tournament_type ?? 'standard',
+        scheduledStartAt: t.scheduled_start_at?.toISOString() ?? null,
+        registrationOpensAt: t.registration_opens_at?.toISOString() ?? null,
+        currentPhase: t.current_phase ?? null,
+        durationMinutes: t.duration_minutes ?? null,
       }));
 
       this.sendMessage(ws, {
@@ -2052,6 +2090,30 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error re-entering freeroll:', error);
       this.sendError(ws, error instanceof Error ? error.message : 'Failed to re-enter', message.requestId);
+    }
+  }
+
+  private async handleTournamentEntriesList(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const payload = message.payload as { tournamentId: string };
+      if (!payload?.tournamentId) {
+        return this.sendError(ws, 'Tournament ID required', message.requestId);
+      }
+
+      const entries = await this.tournamentService.getEntries(payload.tournamentId);
+
+      this.sendMessage(ws, {
+        type: 'tournament_entries_list',
+        payload: { tournamentId: payload.tournamentId, entries },
+        requestId: message.requestId,
+      });
+    } catch (error) {
+      logger.error('Error getting tournament entries:', error);
+      this.sendError(ws, 'Failed to get entries', message.requestId);
     }
   }
 

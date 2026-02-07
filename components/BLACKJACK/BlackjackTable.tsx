@@ -729,14 +729,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   return (
     <div
       ref={tableContainerRef}
-      className="relative w-full max-w-full sm:max-w-6xl mx-auto blackjack-table flex flex-col flex-1 min-h-[500px] sm:min-h-[600px]"
+      className="relative w-full max-w-full sm:max-w-6xl mx-auto blackjack-table flex flex-col flex-1 min-h-[380px] sm:min-h-[600px]"
       style={{
         boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.9), inset 0 -2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3)',
         border: '1px inset rgba(60, 60, 60, 0.5)',
       }}
     >
       {/* Table surface: flex-1 with min height so table stays a good size */}
-      <div className="flex-1 min-h-[500px] sm:min-h-[600px] relative">
+      <div className="flex-1 min-h-[380px] sm:min-h-[600px] relative">
       {/* Looping video background — key forces remount when src changes */}
       {useVideoBackground ? (
         <video
@@ -822,21 +822,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           >
             <i className="fas fa-forward text-xs sm:text-sm" />
           </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <i className="fas fa-volume-up text-cyan-400/80 text-xs w-3" aria-hidden />
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={musicVolume}
-            onChange={(e) => setMusicVolume(Number(e.target.value))}
-            className="w-20 h-1.5 rounded-full appearance-none cursor-pointer accent-cyan-500"
-            style={{
-              background: `linear-gradient(to right, rgba(34, 211, 238, 0.5) 0%, rgba(34, 211, 238, 0.5) ${musicVolume}%, rgba(60, 60, 60, 0.6) ${musicVolume}%, rgba(60, 60, 60, 0.6) 100%)`,
-            }}
-            aria-label="Music volume"
-          />
         </div>
         {onOpenTableThemeSelector && (
           <button
@@ -928,7 +913,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
       <div className="relative z-10 flex flex-col" style={{ height: '100%' }}>
         {/* Play Area */}
-        <div className="flex-1 relative w-full z-10" style={{ minHeight: '400px' }}>
+        <div className="flex-1 relative w-full z-10" style={{ minHeight: '340px' }}>
           {/* Dealer Area */}
           <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 flex flex-col items-center">
             <div className="flex">
@@ -1453,7 +1438,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               return (
                 <div
                   key={`original-${chipValue}-${index}`}
-                  className={`absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden ${
+                  className={`absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden ${
                     chipAnimationState === 'loss' ? 'chip-lose' : ''
                   }`}
                   style={{
@@ -1465,17 +1450,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                     zIndex: 10 + index,
                     animationDelay: chipAnimationState === 'loss' ? `${index * 0.05}s` : '0s',
                   }}
-                >
-                  <span
-                    className="font-bold text-white"
-                    style={{
-                      textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)',
-                      fontSize: '9px',
-                    }}
-                  >
-                    {chipValue}
-                  </span>
-                </div>
+                />
               );
             })}
             {/* Winning chips - animate in from top during win animation */}
@@ -1508,7 +1483,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 return (
                   <div
                     key={`win-${chipValue}-${index}`}
-                    className="absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden chip-win"
+                    className="absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden chip-win"
                     style={{
                       background: `url('${chipImage}') center/contain no-repeat`,
                       border: '2px solid rgba(0, 0, 0, 0)',
@@ -1518,17 +1493,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                       zIndex: 100 + index,
                       animationDelay: `${index * 0.2}s`,
                     }}
-                  >
-                    <span
-                      className="font-bold text-white"
-                      style={{
-                        textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)',
-                        fontSize: '9px',
-                      }}
-                    >
-                      {chipValue}
-                    </span>
-                  </div>
+                  />
                 );
               });
             })()}

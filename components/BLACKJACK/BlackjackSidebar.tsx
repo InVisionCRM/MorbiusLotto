@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { History, Trophy, BookOpen, Award, TrendingUp, Zap, ShieldCheck, Gamepad2, DollarSign } from 'lucide-react'
+import { History, Trophy, BookOpen, Award, TrendingUp, Zap, ShieldCheck, Gamepad2 } from 'lucide-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
 import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers'
 import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
@@ -30,8 +30,6 @@ const PANEL_STYLE: React.CSSProperties = {
   border: '1px inset rgba(60, 60, 60, 0.5)',
 }
 
-const BET_TAB = { id: 'bet' as const, label: 'Bet', icon: DollarSign }
-
 const BASE_TABS = [
   { id: 'recent', label: 'Recent Games', icon: History },
   { id: 'top', label: 'Top Players', icon: Trophy },
@@ -44,7 +42,7 @@ const BASE_TABS = [
 
 const TOURNAMENT_PLAY_TAB = { id: 'tournament-play' as const, label: 'Tournament', icon: Gamepad2 }
 
-export type BlackjackSidebarTabId = (typeof BASE_TABS)[number]['id'] | 'tournament-play' | 'bet'
+export type BlackjackSidebarTabId = (typeof BASE_TABS)[number]['id'] | 'tournament-play'
 
 interface BlackjackSidebarProps {
   history: GameResult[]
@@ -64,8 +62,6 @@ interface BlackjackSidebarProps {
   inTournament?: boolean
   /** Content for the tournament tab (TournamentHUD + TournamentBetPanel) */
   tournamentTabContent?: React.ReactNode
-  /** Content for the Bet tab (BettingPanel + quick actions); only visible when not in tournament */
-  betTabContent?: React.ReactNode
 }
 
 export default function BlackjackSidebar({
@@ -84,31 +80,23 @@ export default function BlackjackSidebar({
   verifyGameHandler,
   inTournament = false,
   tournamentTabContent,
-  betTabContent,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
-  const betTabAvailable = !inTournament
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'recent')
   const [sidebarVerifyGameId, setSidebarVerifyGameId] = useState<string | null>(null)
-  const prevBetAvailableRef = useRef(false)
   const onSidebarVerifyGameIdConsumed = useCallback(() => setSidebarVerifyGameId(null), [])
 
   const tabs = inTournament
     ? [...BASE_TABS, TOURNAMENT_PLAY_TAB]
-    : [BET_TAB, ...BASE_TABS]
+    : BASE_TABS
 
   useEffect(() => {
     if (inTournament) {
       setActiveTab('tournament-play')
     } else if (activeTab === 'tournament-play') {
-      setActiveTab(betTabAvailable ? 'bet' : 'recent')
-    } else if (!betTabAvailable && activeTab === 'bet') {
       setActiveTab('recent')
-    } else if (betTabAvailable && !prevBetAvailableRef.current) {
-      setActiveTab('bet')
     }
-    prevBetAvailableRef.current = betTabAvailable
-  }, [inTournament, isDesktop, betTabAvailable, activeTab])
+  }, [inTournament, isDesktop, activeTab])
 
   const handleQuickHistoryVerify = (gameId: string) => {
     setSidebarVerifyGameId(gameId)
@@ -144,11 +132,6 @@ export default function BlackjackSidebar({
         }`}
         style={PANEL_STYLE}
       >
-        {activeTab === 'bet' && !inTournament && betTabContent != null && (
-          <div className="flex flex-col gap-4 h-full min-h-0">
-            {betTabContent}
-          </div>
-        )}
         {activeTab === 'recent' && (
           <QuickHistory
             history={history}

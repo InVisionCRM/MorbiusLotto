@@ -163,6 +163,12 @@ export interface TournamentListItem {
   custom_image?: string | null; // Base64 data URL for custom tournament card
   prize_token_address?: string | null;
   prize_token_decimals?: number | null;
+  // Timing / phase fields (for freerolls and timer display)
+  tournament_type?: string | null;
+  scheduled_start_at?: Date | null;
+  registration_opens_at?: Date | null;
+  current_phase?: string | null;
+  duration_minutes?: number | null;
 }
 
 export interface TournamentGame {
@@ -873,6 +879,36 @@ export class TournamentService {
   }
 
   /**
+   * Get all entries for a tournament (for detail view player list)
+   */
+  async getEntries(tournamentId: string): Promise<LeaderboardEntry[]> {
+    const query = `
+      SELECT
+        te.id AS entry_id,
+        te.player_address,
+        te.chips_remaining,
+        te.hands_played,
+        te.highest_chip_count,
+        te.status,
+        COALESCE(tl.current_rank, 0) AS current_rank
+      FROM tournament_entries te
+      LEFT JOIN tournament_leaderboard tl ON tl.entry_id = te.id
+      WHERE te.tournament_id = $1
+      ORDER BY COALESCE(tl.current_rank, 999999) ASC
+    `;
+    const result = await this.pool.query(query, [tournamentId]);
+    return result.rows.map(row => ({
+      entry_id: row.entry_id,
+      player_address: row.player_address,
+      chips_remaining: Number(row.chips_remaining),
+      hands_played: Number(row.hands_played),
+      highest_chip_count: Number(row.highest_chip_count),
+      status: row.status,
+      current_rank: Number(row.current_rank),
+    }));
+  }
+
+  /**
    * Get total number of entries in a tournament
    */
   async getTournamentEntryCount(tournamentId: string): Promise<number> {
@@ -1390,6 +1426,11 @@ export class TournamentService {
         custom_image: row.custom_image || null,
         prize_token_address: row.prize_token_address ?? null,
         prize_token_decimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
+        tournament_type: row.tournament_type ?? null,
+        scheduled_start_at: row.scheduled_start_at ?? null,
+        registration_opens_at: row.registration_opens_at ?? null,
+        current_phase: row.current_phase ?? null,
+        duration_minutes: row.duration_minutes != null ? Number(row.duration_minutes) : null,
       };
     });
   }

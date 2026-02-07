@@ -250,6 +250,12 @@ export interface TournamentListItem {
   customImage?: string | null; // Custom uploaded image or null for default
   prizeTokenAddress?: string | null;
   prizeTokenDecimals?: number | null;
+  // Timing / phase fields (for freerolls and timer display)
+  tournamentType?: string | null;
+  scheduledStartAt?: string | null;
+  registrationOpensAt?: string | null;
+  currentPhase?: string | null;
+  durationMinutes?: number | null;
 }
 
 // Extended tournament info
@@ -284,6 +290,16 @@ export interface RebuyResult {
   totalBuyIn: string;
   newPrizePool: string;
 }
+
+// Display-friendly labels for prize distribution types
+export const PRIZE_DISTRIBUTION_LABELS: Record<PrizeDistributionType, string> = {
+  winner_takes_all: 'Winner Takes All',
+  top_3: 'Top 3',
+  top_3_steep: 'Top 3 (Steep)',
+  top_5: 'Top 5',
+  top_10: 'Top 10',
+  custom: 'Custom',
+};
 
 // Validate tournament name
 export function validateTournamentName(name: string): { valid: boolean; error?: string } {

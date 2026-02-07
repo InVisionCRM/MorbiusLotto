@@ -1,14 +1,31 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { formatEther } from 'viem';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   TournamentListItem,
   formatTimeRemaining,
   getDefaultTourCard,
+  getExamplePrizeDistribution,
+  PRIZE_PRESETS,
+  PRIZE_DISTRIBUTION_LABELS,
+  PrizeDistributionType,
+  TIME_LIMIT_LABELS,
+  MAX_REBUYS_LABELS,
 } from '@/lib/tournament-types';
+import { getTableThemeInfo } from '@/app/BLACKJACK/constants';
 import { FreerollList } from './FreerollList';
-import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { useOutsideClick } from '@/hooks/use-outside-click';
+import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
+
+// Cache for resolved token info (shared across all cards)
+interface TokenInfo {
+  name: string;
+  symbol: string;
+  logoUrl: string | null;
+}
+const tokenInfoCache: Record<string, TokenInfo> = {};
 
 interface LeaderboardEntry {
   entry_id: string;
@@ -39,243 +56,908 @@ interface TournamentBrowserProps {
   onFreerollJoined?: (tournamentId: string) => void;
 }
 
-// Individual tournament card component
+// ============================
+// Token info fetcher hook
+// ============================
+function useTokenInfo(address?: string | null): TokenInfo | null {
+  const [info, setInfo] = useState<TokenInfo | null>(
+    address ? tokenInfoCache[address] ?? null : null
+  );
+
+  useEffect(() => {
+    if (!address) return;
+    if (tokenInfoCache[address]) {
+      setInfo(tokenInfoCache[address]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      let name = 'Unknown';
+      let symbol = '???';
+      let logoUrl: string | null = null;
+      try {
+        const res = await fetch(`https://api.scan.pulsechain.com/api/v2/tokens/${address}`);
+        const data = await res.json();
+        if (data.name) name = data.name;
+        if (data.symbol) symbol = data.symbol;
+        if (data.icon_url) logoUrl = data.icon_url;
+      } catch { /* ignore */ }
+      if (!logoUrl) {
+        try {
+          const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
+          const data = await res.json();
+          const img = data.pairs?.[0]?.info?.imageUrl;
+          if (img) logoUrl = img;
+        } catch { /* ignore */ }
+      }
+      const result = { name, symbol, logoUrl };
+      tokenInfoCache[address] = result;
+      if (!cancelled) setInfo(result);
+    })();
+    return () => { cancelled = true; };
+  }, [address]);
+
+  return info;
+}
+
+// ============================
+// Dynamic tournament timer
+// ============================
+// Formats a millisecond duration into a short human string
+function formatMs(ms: number): string {
+  if (ms <= 0) return '0m';
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+  if (hours > 24) {
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+  }
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
+}
+
+interface TimerInput {
+  endsAt: string | null;
+  tournamentType?: string | null;
+  scheduledStartAt?: string | null;
+  registrationOpensAt?: string | null;
+  currentPhase?: string | null;
+}
+
+function useTournamentTimer(t: TimerInput): { label: string; color: string } | null {
+  const [, setTick] = useState(0);
+
+  // Find the nearest future timestamp we need to count down to
+  const targetTs = useMemo(() => {
+    const now = Date.now();
+    const candidates: number[] = [];
+    if (t.endsAt) candidates.push(new Date(t.endsAt).getTime());
+    if (t.scheduledStartAt) candidates.push(new Date(t.scheduledStartAt).getTime());
+    if (t.registrationOpensAt) candidates.push(new Date(t.registrationOpensAt).getTime());
+    // Pick the earliest future timestamp, or the most recent past one for "Ended" display
+    const future = candidates.filter((c) => c > now);
+    if (future.length > 0) return Math.min(...future);
+    if (candidates.length > 0) return Math.max(...candidates);
+    return null;
+  }, [t.endsAt, t.scheduledStartAt, t.registrationOpensAt]);
+
+  useEffect(() => {
+    if (targetTs === null) return;
+    const getInterval = () => {
+      const remaining = targetTs - Date.now();
+      return remaining < 5 * 60 * 1000 ? 1000 : 60_000;
+    };
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        setTick((v) => v + 1);
+        if (Date.now() < targetTs) schedule();
+      }, getInterval());
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, [targetTs]);
+
+  // Compute display state
+  const now = Date.now();
+  const isFreeroll = t.tournamentType === 'freeroll';
+
+  if (isFreeroll) {
+    const regOpens = t.registrationOpensAt ? new Date(t.registrationOpensAt).getTime() : null;
+    const startAt = t.scheduledStartAt ? new Date(t.scheduledStartAt).getTime() : null;
+    const phase = t.currentPhase;
+
+    // Before registration opens
+    if (regOpens && now < regOpens) {
+      return { label: `Reg opens ${formatMs(regOpens - now)}`, color: 'bg-blue-500/90' };
+    }
+
+    // Registration phase — countdown to start
+    if (phase === 'registration' && startAt && now < startAt) {
+      return { label: `Starts in ${formatMs(startAt - now)}`, color: 'bg-cyan-500/90' };
+    }
+
+    // Active / elimination round — show time remaining via endsAt or calculated end
+    if (phase === 'active' || phase === 'elimination_round') {
+      const endsAtMs = t.endsAt ? new Date(t.endsAt).getTime() : null;
+      // Freerolls without explicit endsAt: compute from scheduledStartAt + durationMinutes if available
+      if (endsAtMs && now < endsAtMs) {
+        const rem = endsAtMs - now;
+        if (rem < 5 * 60 * 1000) return { label: `${formatMs(rem)} left`, color: 'bg-red-500/90' };
+        if (rem < 30 * 60 * 1000) return { label: `${formatMs(rem)} left`, color: 'bg-orange-500/90' };
+        return { label: `${formatMs(rem)} left`, color: 'bg-green-500/90' };
+      }
+      return { label: 'Live', color: 'bg-green-500/90' };
+    }
+
+    if (phase === 'completed') {
+      return { label: 'Completed', color: 'bg-gray-500/90' };
+    }
+
+    // Fallback for freerolls with a start time in the future
+    if (startAt && now < startAt) {
+      return { label: `Starts ${formatMs(startAt - now)}`, color: 'bg-cyan-500/90' };
+    }
+  }
+
+  // Standard tournaments — use endsAt
+  if (!t.endsAt) return null;
+
+  const endTime = new Date(t.endsAt).getTime();
+  const remaining = endTime - now;
+  if (remaining <= 0) return { label: 'Ended', color: 'bg-red-500/90' };
+
+  const text = formatMs(remaining);
+  if (remaining < 5 * 60 * 1000) return { label: `${text} left`, color: 'bg-red-500/90' };
+  if (remaining < 30 * 60 * 1000) return { label: `${text} left`, color: 'bg-orange-500/90' };
+  return { label: `${text} left`, color: 'bg-amber-500/90' };
+}
+
+// ============================
+// Truncate address helper
+// ============================
+function truncAddr(addr: string): string {
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+// ============================
+// Section Header
+// ============================
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-2 border-b border-gray-700 pb-1">
+      {children}
+    </h4>
+  );
+}
+
+// ============================
+// Tournament Comments
+// ============================
+function TournamentComments({
+  tournamentId,
+  wsClient,
+  isParticipant,
+}: {
+  tournamentId: string;
+  wsClient: BlackjackWebSocketClient | null;
+  isParticipant: boolean;
+}) {
+  const [messages, setMessages] = useState<ChatMessagePayload[]>([]);
+  const [input, setInput] = useState('');
+  const [joined, setJoined] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const roomId = `tournament:${tournamentId}`;
+
+  useEffect(() => {
+    if (!wsClient || !isParticipant) return;
+
+    let mounted = true;
+
+    const joinChat = async () => {
+      try {
+        const result = await wsClient.joinRoom(roomId);
+        if (mounted) {
+          setMessages(result.recentMessages || []);
+          setJoined(true);
+        }
+      } catch {
+        // Participant check may fail — that's OK
+      }
+    };
+
+    const handleMessage = (payload: ChatMessagePayload) => {
+      if (payload.roomId === roomId) {
+        setMessages((prev) => [...prev, payload]);
+      }
+    };
+
+    wsClient.on('chat_message', handleMessage);
+    joinChat();
+
+    return () => {
+      mounted = false;
+      wsClient.off('chat_message');
+    };
+  }, [wsClient, isParticipant, roomId]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSend = () => {
+    if (!wsClient || !input.trim() || !joined) return;
+    wsClient.sendChatMessage(roomId, input.trim());
+    setInput('');
+  };
+
+  if (!isParticipant) {
+    return (
+      <div className="text-center py-4 text-gray-500 text-sm">
+        Join tournament to comment
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="max-h-40 overflow-y-auto space-y-1.5 mb-2 scrollbar-thin">
+        {messages.length === 0 ? (
+          <p className="text-gray-500 text-xs text-center py-2">No comments yet</p>
+        ) : (
+          messages.map((m) => (
+            <div key={m.id} className="flex gap-2 text-xs">
+              <span className="text-cyan-400 font-mono shrink-0">
+                {m.displayName || (m.senderAddress ? truncAddr(m.senderAddress) : 'System')}
+              </span>
+              <span className="text-gray-300 break-all">{m.text}</span>
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="Type a comment..."
+          maxLength={500}
+          className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
+        />
+        <button
+          onClick={handleSend}
+          disabled={!input.trim()}
+          className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium transition-colors"
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================
+// Expanded Card Detail View
+// ============================
+function ExpandedCardContent({
+  tournament,
+  tokenInfo,
+  playerBalance,
+  playerAddress,
+  wsClient,
+  onJoin,
+  entries,
+  loadingEntries,
+}: {
+  tournament: TournamentListItem;
+  tokenInfo: TokenInfo | null;
+  playerBalance: bigint;
+  playerAddress?: string | null;
+  wsClient?: BlackjackWebSocketClient | null;
+  onJoin: (tournamentId: string, isPrivate: boolean) => void;
+  entries: LeaderboardEntry[];
+  loadingEntries: boolean;
+}) {
+  const buyInBigInt = BigInt(tournament.buyInAmount);
+  const canAfford = playerBalance >= buyInBigInt;
+  const isFull = tournament.maxPlayers !== null && tournament.entryCount >= tournament.maxPlayers;
+
+  // Determine if current player is a participant
+  const isParticipant = useMemo(() => {
+    if (!playerAddress) return false;
+    const norm = playerAddress.toLowerCase();
+    return entries.some((e) => e.player_address.toLowerCase() === norm);
+  }, [entries, playerAddress]);
+
+  // Prize distribution
+  const prizePreset = PRIZE_PRESETS.find((p) => p.id === tournament.prizeDistributionType);
+  const prizePercentages = prizePreset?.percentages ?? [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+  const prizePool = BigInt(tournament.prizePool);
+  const prizeDistribution = getExamplePrizeDistribution(prizePool, prizePercentages);
+  const decimals = tournament.prizeTokenDecimals ?? 18;
+
+  // Table theme info
+  const themeInfo = getTableThemeInfo(tournament.tableTheme);
+
+  // Time limit label
+  const timeLimitLabel =
+    tournament.timeLimitMinutes === null
+      ? TIME_LIMIT_LABELS['null']
+      : TIME_LIMIT_LABELS[tournament.timeLimitMinutes] ?? `${tournament.timeLimitMinutes}m`;
+
+  const formatPrize = (amount: bigint) => {
+    if (tournament.prizeTokenAddress) {
+      return `${Number(amount / BigInt(10 ** Math.max(0, decimals - 4))) / 10000} ${tokenInfo?.symbol || '???'}`;
+    }
+    return `${Number(formatEther(amount)).toLocaleString()} MORBIUS`;
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-5 [scrollbar-width:thin]">
+        {/* a. Overview Section */}
+        <div>
+          <SectionHeader>Overview</SectionHeader>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+            <div className="text-gray-500">Creator</div>
+            <div className="text-gray-200 font-mono">
+              {tournament.creatorAddress ? truncAddr(tournament.creatorAddress) : 'System'}
+            </div>
+            <div className="text-gray-500">Type</div>
+            <div className="text-gray-200">{tournament.tournamentType === 'freeroll' ? 'Freeroll' : 'Standard'}</div>
+            <div className="text-gray-500">Private</div>
+            <div className="text-gray-200">{tournament.isPrivate ? 'Yes' : 'No'}</div>
+            <div className="text-gray-500">Time Limit</div>
+            <div className="text-gray-200">{timeLimitLabel}</div>
+            <div className="text-gray-500">Max Hands</div>
+            <div className="text-gray-200">{tournament.maxHands}</div>
+            <div className="text-gray-500">Starting Chips</div>
+            <div className="text-gray-200">{tournament.startingChips.toLocaleString()}</div>
+            <div className="text-gray-500">Players</div>
+            <div className="text-gray-200">
+              {tournament.entryCount} {tournament.maxPlayers ? `/ ${tournament.maxPlayers}` : ''}
+            </div>
+            <div className="text-gray-500">Created</div>
+            <div className="text-gray-200">
+              {new Date(tournament.createdAt).toLocaleDateString()}
+            </div>
+            {tournament.tournamentType === 'freeroll' && tournament.registrationOpensAt && (
+              <>
+                <div className="text-gray-500">Registration Opens</div>
+                <div className="text-gray-200">
+                  {new Date(tournament.registrationOpensAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </>
+            )}
+            {tournament.tournamentType === 'freeroll' && tournament.scheduledStartAt && (
+              <>
+                <div className="text-gray-500">Scheduled Start</div>
+                <div className="text-gray-200">
+                  {new Date(tournament.scheduledStartAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </>
+            )}
+            {tournament.tournamentType === 'freeroll' && tournament.durationMinutes && (
+              <>
+                <div className="text-gray-500">Duration</div>
+                <div className="text-gray-200">
+                  {tournament.durationMinutes >= 60 ? `${Math.floor(tournament.durationMinutes / 60)}h ${tournament.durationMinutes % 60}m` : `${tournament.durationMinutes}m`}
+                </div>
+              </>
+            )}
+            {tournament.tournamentType === 'freeroll' && tournament.currentPhase && (
+              <>
+                <div className="text-gray-500">Phase</div>
+                <div className="text-gray-200 capitalize">{tournament.currentPhase.replace(/_/g, ' ')}</div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* b. Prize Structure Section */}
+        <div>
+          <SectionHeader>Prize Structure</SectionHeader>
+          <p className="text-xs text-gray-400 mb-2">
+            {PRIZE_DISTRIBUTION_LABELS[tournament.prizeDistributionType as PrizeDistributionType] || tournament.prizeDistributionType.replace(/_/g, ' ')}
+            {tournament.prizeTokenAddress && tokenInfo && (
+              <span className="ml-2 inline-flex items-center gap-1">
+                {tokenInfo.logoUrl && (
+                  <img src={tokenInfo.logoUrl} alt="" className="w-3.5 h-3.5 rounded-full inline" />
+                )}
+                <span className="text-cyan-400">{tokenInfo.name}</span>
+                <span className="font-mono text-gray-600 text-[10px]">
+                  {truncAddr(tournament.prizeTokenAddress)}
+                </span>
+              </span>
+            )}
+          </p>
+          {prizeDistribution.length > 0 ? (
+            <div className="rounded-lg overflow-hidden border border-gray-700">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-800/80 text-gray-400">
+                    <th className="text-left px-3 py-1.5">Rank</th>
+                    <th className="text-right px-3 py-1.5">%</th>
+                    <th className="text-right px-3 py-1.5">Est. Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prizeDistribution.map((d) => (
+                    <tr
+                      key={d.rank}
+                      className={`border-t border-gray-700/50 ${
+                        d.rank === 1
+                          ? 'bg-yellow-500/5'
+                          : d.rank === 2
+                          ? 'bg-gray-400/5'
+                          : d.rank === 3
+                          ? 'bg-orange-500/5'
+                          : ''
+                      }`}
+                    >
+                      <td className="px-3 py-1.5 text-gray-300">
+                        {d.rank === 1 ? '1st' : d.rank === 2 ? '2nd' : d.rank === 3 ? '3rd' : `${d.rank}th`}
+                      </td>
+                      <td className="px-3 py-1.5 text-right text-gray-300">{d.percentage}%</td>
+                      <td className="px-3 py-1.5 text-right text-green-400 font-mono">
+                        {formatPrize(d.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-xs">No prize pool yet</p>
+          )}
+        </div>
+
+        {/* c. Table Theme Preview */}
+        <div>
+          <SectionHeader>Table Theme</SectionHeader>
+          <div className="flex items-center gap-3">
+            <div className="w-24 h-16 rounded-lg overflow-hidden border border-gray-700 bg-gray-800 shrink-0">
+              {themeInfo.kind === 'video' ? (
+                <video
+                  src={themeInfo.src}
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                  onMouseOver={(e) => (e.target as HTMLVideoElement).play()}
+                  onMouseOut={(e) => {
+                    const v = e.target as HTMLVideoElement;
+                    v.pause();
+                    v.currentTime = 0;
+                  }}
+                />
+              ) : (
+                <img src={themeInfo.src} alt={themeInfo.label} className="w-full h-full object-cover" />
+              )}
+            </div>
+            <span className="text-gray-300 text-sm">{themeInfo.label}</span>
+          </div>
+        </div>
+
+        {/* d. Rebuys Section */}
+        <div>
+          <SectionHeader>Rebuys</SectionHeader>
+          <div className="text-sm text-gray-300">
+            {tournament.rebuyConfig.enabled ? (
+              <p>
+                Enabled &mdash;{' '}
+                {tournament.rebuyConfig.maxRebuys === 0
+                  ? 'Unlimited'
+                  : MAX_REBUYS_LABELS[tournament.rebuyConfig.maxRebuys] ?? `${tournament.rebuyConfig.maxRebuys} rebuys`}
+              </p>
+            ) : (
+              <p className="text-gray-500">Disabled</p>
+            )}
+          </div>
+        </div>
+
+        {/* e. Players Section */}
+        <div>
+          <SectionHeader>Players ({entries.length})</SectionHeader>
+          {loadingEntries ? (
+            <div className="flex justify-center py-4">
+              <svg className="animate-spin h-5 w-5 text-cyan-400" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            </div>
+          ) : entries.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-2">No players yet</p>
+          ) : (
+            <div className="max-h-48 overflow-y-auto space-y-1 scrollbar-thin">
+              {entries.map((entry, index) => (
+                <div
+                  key={entry.entry_id}
+                  className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs ${
+                    index === 0
+                      ? 'bg-yellow-500/10 border border-yellow-500/30'
+                      : index === 1
+                      ? 'bg-gray-400/10 border border-gray-400/30'
+                      : index === 2
+                      ? 'bg-orange-500/10 border border-orange-500/30'
+                      : 'bg-gray-800/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        index === 0
+                          ? 'bg-yellow-500 text-black'
+                          : index === 1
+                          ? 'bg-gray-400 text-black'
+                          : index === 2
+                          ? 'bg-orange-500 text-black'
+                          : 'bg-gray-700 text-gray-300'
+                      }`}
+                    >
+                      {entry.current_rank || index + 1}
+                    </span>
+                    <span className="text-gray-300 font-mono">
+                      {truncAddr(entry.player_address)}
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        entry.status === 'playing'
+                          ? 'bg-green-500/20 text-green-400'
+                          : entry.status === 'busted'
+                          ? 'bg-red-500/20 text-red-400'
+                          : 'bg-blue-500/20 text-blue-400'
+                      }`}
+                    >
+                      {entry.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-400">
+                    <span>{entry.hands_played} hands</span>
+                    <span className="text-cyan-400 font-semibold">
+                      {entry.chips_remaining.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* f. Share Section */}
+        <div>
+          <SectionHeader>Share</SectionHeader>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/BLACKJACK?tournament=${tournament.id}`;
+                navigator.clipboard.writeText(url);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium transition-colors"
+            >
+              Copy Link
+            </button>
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/BLACKJACK?tournament=${tournament.id}`;
+                const text = `Join "${tournament.name}" tournament on MORBlotto! ${url}`;
+                window.open(
+                  `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
+                  '_blank'
+                );
+              }}
+              className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium transition-colors"
+            >
+              Share on X
+            </button>
+          </div>
+        </div>
+
+        {/* g. Comments Section */}
+        <div>
+          <SectionHeader>Comments</SectionHeader>
+          <TournamentComments
+            tournamentId={tournament.id}
+            wsClient={wsClient ?? null}
+            isParticipant={isParticipant}
+          />
+        </div>
+      </div>
+
+      {/* h. Join Button - sticky bottom */}
+      <div className="p-4 border-t border-gray-700 bg-gray-900/80">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onJoin(tournament.id, tournament.isPrivate);
+          }}
+          disabled={!canAfford || isFull}
+          className={`w-full py-3 rounded-xl font-semibold transition-all ${
+            canAfford && !isFull
+              ? 'bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white shadow-lg shadow-cyan-500/20'
+              : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+          }`}
+        >
+          {isFull ? 'Tournament Full' : !canAfford ? 'Insufficient Balance' : 'Join Tournament'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================
+// Compact Tournament Card
+// ============================
 function TournamentCard({
   tournament,
   playerBalance,
   onJoin,
-  onFetchLeaderboard,
+  onSelect,
 }: {
   tournament: TournamentListItem;
   playerBalance: bigint;
   onJoin: (tournamentId: string, isPrivate: boolean) => void;
-  onFetchLeaderboard?: (tournamentId: string) => Promise<LeaderboardEntry[]>;
+  onSelect: (tournament: TournamentListItem) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const tokenInfo = useTokenInfo(tournament.prizeTokenAddress);
+  const timer = useTournamentTimer(tournament);
 
   const buyInBigInt = BigInt(tournament.buyInAmount);
-  const canAfford = playerBalance >= buyInBigInt;
-  const timeRemaining = formatTimeRemaining(tournament.endsAt);
-  const isFull = tournament.maxPlayers !== null && tournament.entryCount >= tournament.maxPlayers;
-
-  // Get the tournament image (custom or default)
   const tournamentImage = tournament.customImage || getDefaultTourCard(tournament.id);
 
-  // Fetch leaderboard when expanded
-  const handleExpand = useCallback(async () => {
-    const newExpanded = !isExpanded;
-    setIsExpanded(newExpanded);
-
-    if (newExpanded && onFetchLeaderboard && leaderboard.length === 0) {
-      setLoadingLeaderboard(true);
-      try {
-        const data = await onFetchLeaderboard(tournament.id);
-        setLeaderboard(data);
-      } catch (err) {
-        console.error('Failed to fetch leaderboard:', err);
-      } finally {
-        setLoadingLeaderboard(false);
-      }
-    }
-  }, [isExpanded, onFetchLeaderboard, tournament.id, leaderboard.length]);
-
   return (
-    <div className="bg-gray-800/50 rounded-xl border border-gray-700 hover:border-gray-600 transition-all overflow-hidden">
-      {/* Card Header - Clickable Image */}
-      <button
-        onClick={handleExpand}
-        className="w-full relative cursor-pointer group"
-      >
-        {/* Tournament Image (3:2 aspect ratio) */}
+    <motion.div
+      layoutId={`card-${tournament.id}`}
+      onClick={() => onSelect(tournament)}
+      className="bg-gray-800/50 rounded-xl border border-gray-700 hover:border-cyan-500/50 transition-all overflow-hidden cursor-pointer group"
+    >
+      {/* Tournament Image (3:2 aspect ratio) */}
+      <motion.div layoutId={`image-${tournament.id}`} className="relative">
         <div className="aspect-[3/2] overflow-hidden">
           <img
             src={tournamentImage}
             alt={tournament.name}
             className="w-full h-full object-cover transition-transform group-hover:scale-105"
           />
-          {/* Overlay with tournament name */}
+          {/* Overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent">
-            <div className="absolute bottom-0 left-0 right-0 p-4">
-              <h3 className="text-white font-bold text-xl truncate">{tournament.name}</h3>
+            <div className="absolute bottom-0 left-0 right-0 p-3">
+              <motion.h3
+                layoutId={`title-${tournament.id}`}
+                className="text-white font-bold text-lg truncate"
+              >
+                {tournament.name}
+              </motion.h3>
               {tournament.creatorAddress && (
-                <p className="text-gray-400 text-sm">
-                  by {tournament.creatorAddress.slice(0, 6)}...{tournament.creatorAddress.slice(-4)}
+                <p className="text-gray-400 text-xs">
+                  by {truncAddr(tournament.creatorAddress)}
                 </p>
               )}
             </div>
           </div>
-          {/* Badges */}
-          <div className="absolute top-3 right-3 flex gap-2">
+
+          {/* Badges top-right */}
+          <div className="absolute top-2.5 right-2.5 flex flex-wrap gap-1.5 justify-end">
+            {tournament.tournamentType === 'freeroll' && (
+              <span className="px-2 py-0.5 rounded-full bg-cyan-500/90 text-white text-[10px] font-medium shadow-lg">
+                Freeroll
+              </span>
+            )}
             {tournament.isPrivate && (
-              <span className="px-2 py-1 rounded-full bg-purple-500/90 text-white text-xs font-medium shadow-lg">
+              <span className="px-2 py-0.5 rounded-full bg-purple-500/90 text-white text-[10px] font-medium shadow-lg">
                 Private
               </span>
             )}
             {tournament.rebuyConfig.enabled && (
-              <span className="px-2 py-1 rounded-full bg-green-500/90 text-white text-xs font-medium shadow-lg">
+              <span className="px-2 py-0.5 rounded-full bg-green-500/90 text-white text-[10px] font-medium shadow-lg">
                 Rebuys
               </span>
             )}
-            {timeRemaining && (
-              <span className="px-2 py-1 rounded-full bg-orange-500/90 text-white text-xs font-medium shadow-lg">
-                {timeRemaining}
+            {timer && (
+              <span className={`px-2 py-0.5 rounded-full ${timer.color} text-white text-[10px] font-medium shadow-lg`}>
+                {timer.label}
               </span>
             )}
           </div>
-          {/* Quick Stats Overlay */}
-          <div className="absolute top-3 left-3 flex gap-2">
-            <span className="px-2 py-1 rounded-full bg-black/60 text-yellow-400 text-xs font-bold">
+
+          {/* Quick stats top-left */}
+          <div className="absolute top-2.5 left-2.5 flex flex-col gap-1">
+            <span className="px-2 py-0.5 rounded-full bg-black/60 text-yellow-400 text-[10px] font-bold">
               {Number(formatEther(buyInBigInt)).toLocaleString()} MORBIUS
             </span>
-            <span className="px-2 py-1 rounded-full bg-black/60 text-cyan-400 text-xs font-bold">
-              {tournament.entryCount} {tournament.maxPlayers ? `/ ${tournament.maxPlayers}` : ''} players
+            <span className="px-2 py-0.5 rounded-full bg-black/60 text-cyan-400 text-[10px] font-bold">
+              {tournament.entryCount}{tournament.maxPlayers ? `/${tournament.maxPlayers}` : ''} players
             </span>
           </div>
-          {/* Expand indicator */}
-          <div className="absolute bottom-3 right-3">
-            <svg
-              className={`w-6 h-6 text-white transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
         </div>
-      </button>
+      </motion.div>
 
-      {/* Expandable Details */}
-      <div
-        className={`transition-all duration-300 ease-in-out overflow-hidden ${
-          isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
-        }`}
+      {/* Quick info bar */}
+      <div className="px-3 py-2 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400">
+            Pool:{' '}
+            <span className="text-green-400 font-semibold">
+              {tournament.prizeTokenAddress && tokenInfo
+                ? `${Number(BigInt(tournament.prizePool) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} ${tokenInfo.symbol}`
+                : `${Number(formatEther(BigInt(tournament.prizePool))).toLocaleString()} MORBIUS`}
+            </span>
+          </span>
+        </div>
+        <span className="text-gray-500">
+          {PRIZE_DISTRIBUTION_LABELS[tournament.prizeDistributionType as PrizeDistributionType] ?? tournament.prizeDistributionType.replace(/_/g, ' ')}
+        </span>
+      </div>
+    </motion.div>
+  );
+}
+
+// ============================
+// Expanded Card Overlay
+// ============================
+function ExpandedCard({
+  tournament,
+  onClose,
+  onJoin,
+  playerBalance,
+  playerAddress,
+  wsClient,
+}: {
+  tournament: TournamentListItem;
+  onClose: () => void;
+  onJoin: (tournamentId: string, isPrivate: boolean) => void;
+  playerBalance: bigint;
+  playerAddress?: string | null;
+  wsClient?: BlackjackWebSocketClient | null;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const tokenInfo = useTokenInfo(tournament.prizeTokenAddress);
+  const timer = useTournamentTimer(tournament);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loadingEntries, setLoadingEntries] = useState(true);
+
+  const tournamentImage = tournament.customImage || getDefaultTourCard(tournament.id);
+
+  useOutsideClick(ref as React.RefObject<HTMLDivElement>, onClose);
+
+  // Escape key to close
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = 'auto';
+    };
+  }, [onClose]);
+
+  // Fetch entries
+  useEffect(() => {
+    if (!wsClient) {
+      setLoadingEntries(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await wsClient.sendRequest('tournament_entries_list', { tournamentId: tournament.id });
+        if (!cancelled && result?.entries) {
+          setEntries(result.entries);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setLoadingEntries(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [wsClient, tournament.id]);
+
+  return (
+    <div className="fixed inset-0 grid place-items-center z-[100] p-4">
+      {/* Close button - mobile */}
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0, transition: { duration: 0.05 } }}
+        className="absolute top-4 right-4 z-[110] flex items-center justify-center bg-gray-800 border border-gray-600 rounded-full w-8 h-8 text-white hover:bg-gray-700"
+        onClick={onClose}
       >
-        <div className="p-4 border-t border-gray-700">
-          {/* Stats Grid */}
-          <div className="grid grid-cols-4 gap-4 mb-4">
-            <div>
-              <p className="text-gray-500 text-xs">Buy-in</p>
-              <p className="text-yellow-400 font-semibold">
-                {Number(formatEther(buyInBigInt)).toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-gray-500 text-xs">Prize Pool</p>
-              <p className="text-green-400 font-semibold">
-                {tournament.prizeTokenAddress
-                  ? `${Number(BigInt(tournament.prizePool) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} (custom token)`
-                  : `${Number(formatEther(BigInt(tournament.prizePool))).toLocaleString()} MORBIUS`}
-              </p>
-            </div>
-            <div>
-              <p className="text-gray-500 text-xs">Starting Chips</p>
-              <p className="text-white font-semibold">
-                {tournament.startingChips.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-gray-500 text-xs">Max Hands</p>
-              <p className="text-white font-semibold">
-                {tournament.maxHands}
-              </p>
-            </div>
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </motion.button>
+
+      <motion.div
+        layoutId={`card-${tournament.id}`}
+        ref={ref}
+        className="w-full max-w-lg h-full max-h-[90vh] flex flex-col bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden shadow-2xl shadow-cyan-500/10"
+      >
+        {/* Image header */}
+        <motion.div layoutId={`image-${tournament.id}`} className="relative shrink-0">
+          <div className="aspect-[3/1] overflow-hidden">
+            <img
+              src={tournamentImage}
+              alt={tournament.name}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-black/40 to-transparent" />
           </div>
 
-          {/* Additional Info */}
-          <div className="flex gap-3 text-xs text-gray-400 mb-4">
-            <span>{tournament.prizeDistributionType.replace(/_/g, ' ')}</span>
+          {/* Badges */}
+          <div className="absolute top-3 right-3 flex flex-wrap gap-1.5 justify-end">
+            {tournament.isPrivate && (
+              <span className="px-2 py-0.5 rounded-full bg-purple-500/90 text-white text-[10px] font-medium">
+                Private
+              </span>
+            )}
             {tournament.rebuyConfig.enabled && (
-              <span>
-                {tournament.rebuyConfig.maxRebuys === 0
-                  ? 'Unlimited rebuys'
-                  : `Max ${tournament.rebuyConfig.maxRebuys} rebuys`}
+              <span className="px-2 py-0.5 rounded-full bg-green-500/90 text-white text-[10px] font-medium">
+                Rebuys
+              </span>
+            )}
+            {timer && (
+              <span className={`px-2 py-0.5 rounded-full ${timer.color} text-white text-[10px] font-medium`}>
+                {timer.label}
               </span>
             )}
           </div>
 
-          {/* Top Players Leaderboard */}
-          <div className="mb-4">
-            <h4 className="text-gray-300 text-sm font-medium mb-2 flex items-center gap-2">
-              <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clipRule="evenodd" />
-              </svg>
-              Top Players
-            </h4>
-            {loadingLeaderboard ? (
-              <div className="flex items-center justify-center py-4">
-                <svg className="animate-spin h-5 w-5 text-cyan-400" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              </div>
-            ) : leaderboard.length === 0 ? (
-              <p className="text-gray-500 text-sm py-2 text-center">No players yet</p>
-            ) : (
-              <div className="space-y-1">
-                {leaderboard.slice(0, 5).map((entry, index) => (
-                  <div
-                    key={entry.entry_id}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                      index === 0
-                        ? 'bg-yellow-500/10 border border-yellow-500/30'
-                        : index === 1
-                        ? 'bg-gray-400/10 border border-gray-400/30'
-                        : index === 2
-                        ? 'bg-orange-500/10 border border-orange-500/30'
-                        : 'bg-gray-800/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          index === 0
-                            ? 'bg-yellow-500 text-black'
-                            : index === 1
-                            ? 'bg-gray-400 text-black'
-                            : index === 2
-                            ? 'bg-orange-500 text-black'
-                            : 'bg-gray-700 text-gray-300'
-                        }`}
-                      >
-                        {index + 1}
-                      </span>
-                      <span className="text-gray-300 text-sm font-mono">
-                        {entry.player_address.slice(0, 6)}...{entry.player_address.slice(-4)}
-                      </span>
-                    </div>
-                    <span className="text-cyan-400 font-semibold text-sm">
-                      {entry.chips_remaining.toLocaleString()} chips
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Title overlay */}
+          <div className="absolute bottom-0 left-0 right-0 px-4 pb-3">
+            <motion.h3
+              layoutId={`title-${tournament.id}`}
+              className="text-white font-bold text-xl"
+            >
+              {tournament.name}
+            </motion.h3>
+            <div className="flex items-center gap-3 mt-1 text-xs">
+              <span className="text-yellow-400 font-bold">
+                {Number(formatEther(BigInt(tournament.buyInAmount))).toLocaleString()} MORBIUS
+              </span>
+              <span className="text-cyan-400 font-bold">
+                {tournament.entryCount}{tournament.maxPlayers ? `/${tournament.maxPlayers}` : ''} players
+              </span>
+              <span className="text-green-400 font-bold">
+                Pool: {tournament.prizeTokenAddress && tokenInfo
+                  ? `${Number(BigInt(tournament.prizePool) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} ${tokenInfo.symbol}`
+                  : `${Number(formatEther(BigInt(tournament.prizePool))).toLocaleString()} MORBIUS`}
+              </span>
+            </div>
           </div>
+        </motion.div>
 
-          {/* Join Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onJoin(tournament.id, tournament.isPrivate);
-            }}
-            disabled={!canAfford || isFull}
-            className={`w-full py-3 rounded-xl font-semibold transition-all ${
-              canAfford && !isFull
-                ? 'bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white shadow-lg shadow-cyan-500/20'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            {isFull ? 'Tournament Full' : !canAfford ? 'Insufficient Balance' : 'Join Tournament'}
-          </button>
-        </div>
-      </div>
+        {/* Scrollable content + join button */}
+        <motion.div
+          layout
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="flex-1 flex flex-col overflow-hidden min-h-0"
+        >
+          <ExpandedCardContent
+            tournament={tournament}
+            tokenInfo={tokenInfo}
+            playerBalance={playerBalance}
+            playerAddress={playerAddress}
+            wsClient={wsClient}
+            onJoin={onJoin}
+            entries={entries}
+            loadingEntries={loadingEntries}
+          />
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
 
+// ============================
+// Main TournamentBrowser
+// ============================
 export function TournamentBrowser({
   isOpen,
   onClose,
@@ -292,6 +974,7 @@ export function TournamentBrowser({
 }: TournamentBrowserProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<LobbyTab>('join');
+  const [activeTournament, setActiveTournament] = useState<TournamentListItem | null>(null);
 
   // Auto-refresh on open for Browse and My Tournaments
   useEffect(() => {
@@ -299,6 +982,11 @@ export function TournamentBrowser({
       handleRefresh();
     }
   }, [isOpen, activeTab]);
+
+  // Close expanded card when browser closes
+  useEffect(() => {
+    if (!isOpen) setActiveTournament(null);
+  }, [isOpen]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -390,7 +1078,7 @@ export function TournamentBrowser({
           )}
         </div>
 
-        {/* Content: Freeroll tab uses FreerollList, others use tournament grid */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
           {activeTab === 'freeroll' && wsClient ? (
             <FreerollList wsClient={wsClient} onJoined={onFreerollJoined} />
@@ -427,7 +1115,7 @@ export function TournamentBrowser({
                   tournament={tournament}
                   playerBalance={playerBalance}
                   onJoin={onJoin}
-                  onFetchLeaderboard={onFetchLeaderboard}
+                  onSelect={setActiveTournament}
                 />
               ))}
             </div>
@@ -435,7 +1123,6 @@ export function TournamentBrowser({
         </div>
 
         {/* Footer */}
-
         <div className="p-4 border-t border-gray-700 bg-gray-900/50">
           <div className="flex items-center justify-between">
             <div className="text-sm">
@@ -453,6 +1140,29 @@ export function TournamentBrowser({
           </div>
         </div>
       </div>
+
+      {/* Expanded card overlay */}
+      <AnimatePresence>
+        {activeTournament && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-[90]"
+              onClick={() => setActiveTournament(null)}
+            />
+            <ExpandedCard
+              tournament={activeTournament}
+              onClose={() => setActiveTournament(null)}
+              onJoin={onJoin}
+              playerBalance={playerBalance}
+              playerAddress={playerAddress}
+              wsClient={wsClient}
+            />
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

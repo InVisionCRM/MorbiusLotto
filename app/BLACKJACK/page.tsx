@@ -2408,8 +2408,57 @@ export default function BlackjackPage() {
 
         </div>
 
-          {/* 3. Tabbed sidebar — mobile after controls; desktop row1 col2 (Bet tab = betting + quick actions) */}
-          <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2">
+          {/* 3. Betting panel (always visible) + tabbed sidebar */}
+          <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2">
+          {tournament.tournamentState.inTournament ? (
+            <TournamentBetPanel
+              chips={tournament.tournamentState.chips}
+              onStartGame={handleStartTournamentGame}
+              isPlaying={gameState.isPlaying}
+              handsRemaining={tournament.tournamentState.handsRemaining}
+              gameResult={currentGameResult}
+              onHit={() => handleTournamentPlayerAction(Action.HIT)}
+              onStand={() => handleTournamentPlayerAction(Action.STAND)}
+              onDoubleDown={() => handleTournamentPlayerAction(Action.DOUBLE_DOWN)}
+              onSplit={() => handleTournamentPlayerAction(Action.SPLIT)}
+              canHit={canHit}
+              canStand={canStand}
+              canDoubleDown={canDoubleDown && tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
+              canSplit={canSplit && tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
+            />
+          ) : (
+            <>
+              <BettingPanelMobile
+                onStartGame={(betBigInt, _clientSeed) => handleStartGame(betBigInt, clientSeed)}
+                isPlaying={gameState.isPlaying}
+                reserveBalance={offChainBalance}
+                onBetAmountChange={manageChipStack}
+                currentBetAmount={displayBetAmount}
+                lastBetAmount={lastBetAmount}
+                onRebet={handleRebet}
+                onHalfBet={handleHalfBet}
+                onDoubleBet={handleDoubleBet}
+              />
+              <BlackjackMobileActionBar
+                onRebetAndDeal={handleRebetAndDeal}
+                onStartGame={handleDealClick}
+                onAction={handlePlayerAction}
+                onDoubleDownChips={handleDoubleDownChips}
+                onSplitChips={handleSplitChips}
+                isPlaying={gameState.isPlaying}
+                canHit={canHit}
+                canStand={canStand}
+                canDoubleDown={canDoubleDown}
+                canSplit={canSplit}
+                canDeal={!gameState.isPlaying && totalBetAmount > 0}
+                chipStackLength={chipStack.length}
+                lastBetAmount={lastBetAmount}
+                soundEnabled={soundEnabled}
+                onPlaySfx={playSound}
+                alwaysVisible
+              />
+            </>
+          )}
           <BlackjackSidebar
             history={gameState.history}
             reserveBalance={offChainBalance}
@@ -2425,46 +2474,21 @@ export default function BlackjackPage() {
             onVerifyGameRequest={openVerifyView}
             verifyGameHandler={handleVerifyGame}
             inTournament={tournament.tournamentState.inTournament}
-            betTabContent={
-              !tournament.tournamentState.inTournament ? (
-                <>
-                  <BettingPanelMobile
-                    onStartGame={(betBigInt, _clientSeed) => handleStartGame(betBigInt, clientSeed)}
-                    isPlaying={gameState.isPlaying}
-                    reserveBalance={offChainBalance}
-                    onBetAmountChange={manageChipStack}
-                    currentBetAmount={displayBetAmount}
-                    lastBetAmount={lastBetAmount}
-                    onRebet={handleRebet}
-                    onHalfBet={handleHalfBet}
-                    onDoubleBet={handleDoubleBet}
-                  />
-                  <BlackjackMobileActionBar
-                    onRebetAndDeal={handleRebetAndDeal}
-                    onStartGame={handleDealClick}
-                    onAction={handlePlayerAction}
-                    onDoubleDownChips={handleDoubleDownChips}
-                    onSplitChips={handleSplitChips}
-                    isPlaying={gameState.isPlaying}
-                    canHit={canHit}
-                    canStand={canStand}
-                    canDoubleDown={canDoubleDown}
-                    canSplit={canSplit}
-                    canDeal={!gameState.isPlaying && totalBetAmount > 0}
-                    chipStackLength={chipStack.length}
-                    lastBetAmount={lastBetAmount}
-                    soundEnabled={soundEnabled}
-                    onPlaySfx={playSound}
-                    alwaysVisible
-                  />
-                </>
-              ) : null
-            }
             tournamentTabContent={
               tournament.tournamentState.inTournament ? (
-                <p className="text-gray-400 text-sm text-center py-4">
-                  Tournament controls are on the table. Use the panel at the bottom to place bets and the HUD for chips, rank, and leave/rebuy.
-                </p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Chips</span>
+                    <span className="text-yellow-400 font-bold">{tournament.tournamentState.chips.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Hands remaining</span>
+                    <span className="text-cyan-400 font-bold">{tournament.tournamentState.handsRemaining}</span>
+                  </div>
+                  <p className="text-gray-500 text-xs text-center pt-2">
+                    Use the betting panel above to place bets and deal.
+                  </p>
+                </div>
               ) : null
             }
           />
@@ -2540,7 +2564,15 @@ export default function BlackjackPage() {
             setShowTournamentComplete(false);
             setShowTournamentEntry(true);
           }}
+          onRebuy={async () => {
+            const success = await tournament.requestRebuy();
+            if (success) {
+              setShowTournamentComplete(false);
+              toast.success('Rebuy successful! Back in the game.');
+            }
+          }}
           state={tournament.tournamentState}
+          tournamentName={tournament.tournamentInfo?.name}
           prizeWon={tournament.tournamentState.status === 'completed' && tournament.tournamentState.currentRank <= 10
             ? tournament.getPrizeForRank(tournament.tournamentState.currentRank, BigInt(tournament.tournamentInfo?.prizePool || '0'))
             : 0n}

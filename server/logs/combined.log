@@ -6763,3 +6763,14 @@
 {"connectionId":"94289989-0b50-4960-ac5e-a8c8aa6863f8","level":"info","message":"WebSocket connection closed","service":"blackjack-server","timestamp":"2026-02-01T07:58:32.965Z"}
 {"connectionId":"96ee041d-7ad0-4719-a1f9-8bf428992126","level":"info","message":"WebSocket connection established","playerAddress":"0xb6b3b6b3f5605b276b6347bb1cc34c3532362378","playerId":"30ac736f-cbe9-400c-9f01-5a0b93cebc65","service":"blackjack-server","timestamp":"2026-02-01T07:58:34.356Z"}
 {"connectionId":"bb7e603f-2a5f-4b92-9fde-74257c86316c","level":"info","message":"WebSocket connection established","playerAddress":"0xb6b3b6b3f5605b276b6347bb1cc34c3532362378","playerId":"30ac736f-cbe9-400c-9f01-5a0b93cebc65","service":"blackjack-server","timestamp":"2026-02-01T07:58:34.356Z"}
+{"level":"info","message":"Database connected successfully","service":"blackjack-server","timestamp":"2026-02-07T07:06:18.524Z"}
+{"level":"info","message":"WebSocket service initialized","service":"blackjack-server","timestamp":"2026-02-07T07:06:18.544Z"}
+{"level":"info","message":"FreerollSchedulerService started (poll every %d ms)","service":"blackjack-server","timestamp":"2026-02-07T07:06:18.547Z"}
+{"level":"info","message":"Blackjack server running on port 8080","service":"blackjack-server","timestamp":"2026-02-07T07:06:18.557Z"}
+{"level":"info","message":"WebSocket server initialized","service":"blackjack-server","timestamp":"2026-02-07T07:06:18.558Z"}
+{"level":"info","message":"Database connected","service":"blackjack-server","timestamp":"2026-02-07T07:06:18.560Z"}
+{"level":"info","message":"Database connected successfully","service":"blackjack-server","timestamp":"2026-02-07T07:06:21.482Z"}
+{"level":"info","message":"handleFreerollStart: tournamentId=%s","service":"blackjack-server","timestamp":"2026-02-07T07:20:03.725Z"}
+{"level":"info","message":"handleFreerollEnd: tournamentId=%s","service":"blackjack-server","timestamp":"2026-02-07T07:30:03.840Z"}
+{"level":"info","message":"handleFreerollEnd: tournament already not active, skipping: %s","service":"blackjack-server","timestamp":"2026-02-07T07:30:03.883Z"}
+{"level":"error","message":"FreerollSchedulerService: poll error: %s","service":"blackjack-server","timestamp":"2026-02-07T14:13:27.671Z"}

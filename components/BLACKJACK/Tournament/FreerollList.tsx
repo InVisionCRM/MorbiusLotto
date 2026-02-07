@@ -30,6 +30,18 @@ function formatDate(iso: string | null): string {
   }
 }
 
+function formatCountdown(iso: string | null): string | null {
+  if (!iso) return null;
+  const diff = new Date(iso).getTime() - Date.now();
+  if (diff <= 0) return null;
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
 interface FreerollListProps extends Pick<UseFreerollOptions, 'wsClient'> {
   includePast?: boolean;
   onRegistered?: (tournamentId: string) => void;
@@ -116,6 +128,19 @@ export function FreerollList({
                   </div>
                   <div className="text-xs text-white/70">
                     Start: {formatDate(t.scheduled_start_at)} · {t.registered_count} registered · {t.starting_chips} chips
+                  </div>
+                  {/* Countdown badges */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {t.current_phase === 'registration' && formatCountdown(t.scheduled_start_at) && (
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                        Starts in {formatCountdown(t.scheduled_start_at)}
+                      </span>
+                    )}
+                    {!t.current_phase && formatCountdown(t.registration_opens_at) && (
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                        Registration in {formatCountdown(t.registration_opens_at)}
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {t.current_phase === 'registration' && (

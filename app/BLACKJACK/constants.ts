@@ -130,3 +130,16 @@ export const BLACKJACK_VIDEO_BACKGROUNDS = [
   { id: 'glowingLogo', label: 'Glowing Logo', src: '/BlackJack/video%20table/glowingLogo.mp4' },
 ] as const;
 export type BlackjackVideoId = (typeof BLACKJACK_VIDEO_BACKGROUNDS)[number]['id'];
+
+// Resolve a table theme (kind + id) to display info
+export function getTableThemeInfo(theme: { kind: 'image' | 'video'; id: string }): { label: string; src: string; kind: 'image' | 'video' } {
+  if (theme.kind === 'video') {
+    const found = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === theme.id);
+    if (found) return { label: found.label, src: found.src, kind: 'video' };
+  }
+  const found = BLACKJACK_IMAGE_BACKGROUNDS.find((v) => v.id === theme.id);
+  if (found) return { label: found.label, src: found.src, kind: 'image' };
+  // Fallback to default
+  const def = BLACKJACK_IMAGE_BACKGROUNDS.find((v) => v.id === DEFAULT_BLACKJACK_IMAGE_ID)!;
+  return { label: def.label, src: def.src, kind: 'image' };
+}
