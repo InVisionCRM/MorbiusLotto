@@ -5,22 +5,34 @@ import { AnimatedList } from '@/components/ui/animated-list'
 import { formatEther } from 'viem'
 import { useLatestWins, WinEntry } from '@/hooks/use-latest-wins'
 
-function WinNotification({ address, amount, game }: { address: string; amount: bigint; game: string }) {
+function timeAgo(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000)
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
+function WinNotification({ address, amount, game, timestamp }: { address: string; amount: bigint; game: string; timestamp: number }) {
   const formattedAmount = Math.floor(Number(formatEther(amount))).toLocaleString()
 
   return (
     <div
-      className="flex items-center gap-2 px-4 py-3 rounded-lg w-full max-w-md"
+      className="flex items-center justify-between gap-2 px-4 py-3 rounded-lg w-full max-w-md"
       style={{
         background: 'rgba(15, 23, 42, 0.5)',
       }}
     >
       <span className="text-white text-sm">
-        {address} just won{' '}
+        {address} won{' '}
         <span className="text-green-500 font-bold">{formattedAmount} MORBIUS</span>
         {' '}playing{' '}
-        <span className="text-blue-500 font-bold">{game}</span>!
+        <span className="text-blue-500 font-bold">{game}</span>
       </span>
+      <span className="text-white/40 text-xs whitespace-nowrap">{timeAgo(timestamp)}</span>
     </div>
   )
 }
@@ -63,7 +75,7 @@ export function LatestWins() {
       </div>
 
       {/* Animated Win List — fills remaining space so no gap at bottom of grid */}
-      <div className="relative flex-1 min-h-[280px] overflow-hidden">
+      <div className="relative flex-1 h-200 overflow-hidden">
         {/* Gradient overlay at top */}
         <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black to-transparent z-10 pointer-events-none" />
 
@@ -74,12 +86,13 @@ export function LatestWins() {
           <EmptyState />
         ) : (
           <AnimatedList className="gap-3" delay={2500}>
-            {wins.map((win) => (
+            {wins.slice(0, 15).map((win) => (
               <WinNotification
                 key={win.id}
                 address={win.address}
                 amount={win.amount}
                 game={win.game}
+                timestamp={win.timestamp}
               />
             ))}
           </AnimatedList>
