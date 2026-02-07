@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { useWriteContract, usePublicClient } from 'wagmi';
 import {
@@ -33,6 +33,23 @@ import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 
 type TabId = 'basics' | 'rules' | 'prizes' | 'theme';
+type FundingStep = 'idle' | 'approving' | 'approved' | 'depositing' | 'done';
+
+interface TokenSearchResult {
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number | null;
+  iconUrl: string | null;
+}
+
+interface SelectedToken {
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  logoUrl: string | null;
+}
 
 interface TournamentCreatorProps {
   isOpen: boolean;
@@ -73,9 +90,17 @@ export function TournamentCreator({
   const [activeTab, setActiveTab] = useState<TabId>('basics');
   const [error, setError] = useState<string | null>(null);
   const [createdTournament, setCreatedTournament] = useState<{ id: string; pinCode?: string } | null>(null);
-  const [funded, setFunded] = useState(false);
+  const [fundingStep, setFundingStep] = useState<FundingStep>('idle');
+  const [approvalTxHash, setApprovalTxHash] = useState<string | null>(null);
   const [fundingError, setFundingError] = useState<string | null>(null);
-  const [fundingPending, setFundingPending] = useState(false);
+
+  // Token search state
+  const [tokenQuery, setTokenQuery] = useState('');
+  const [tokenSearchResults, setTokenSearchResults] = useState<TokenSearchResult[]>([]);
+  const [tokenSearching, setTokenSearching] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<SelectedToken | null>(null);
+  const tokenSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tokenDropdownRef = useRef<HTMLDivElement>(null);
 
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
@@ -191,6 +216,101 @@ export function TournamentCreator({
       fileInputRef.current.value = '';
     }
   };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tokenDropdownRef.current && !tokenDropdownRef.current.contains(e.target as Node)) {
+        setTokenSearchResults([]);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Debounced token search
+  const handleTokenQueryChange = useCallback((query: string) => {
+    setTokenQuery(query);
+    if (tokenSearchTimeout.current) clearTimeout(tokenSearchTimeout.current);
+    if (!query.trim() || query.trim().length < 2) {
+      setTokenSearchResults([]);
+      setTokenSearching(false);
+      return;
+    }
+    setTokenSearching(true);
+    tokenSearchTimeout.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://api.scan.pulsechain.com/api/v2/search?q=${encodeURIComponent(query.trim())}`);
+        const data = await res.json();
+        const items = (data.items || [])
+          .filter((item: any) => item.type === 'token')
+          .slice(0, 8)
+          .map((item: any) => ({
+            address: item.address,
+            name: item.name || 'Unknown',
+            symbol: item.symbol || '???',
+            decimals: item.token_type === 'ERC-20' ? (item.exchange_rate ? null : null) : null,
+            iconUrl: item.icon_url || null,
+          }));
+        setTokenSearchResults(items);
+      } catch {
+        setTokenSearchResults([]);
+      } finally {
+        setTokenSearching(false);
+      }
+    }, 400);
+  }, []);
+
+  // Fetch token details (decimals + logo) after selection
+  const fetchTokenDetails = useCallback(async (address: string, name: string, symbol: string) => {
+    let decimals = 18;
+    let logoUrl: string | null = null;
+    try {
+      const res = await fetch(`https://api.scan.pulsechain.com/api/v2/tokens/${address}`);
+      const data = await res.json();
+      if (data.decimals != null) decimals = Number(data.decimals);
+      if (data.name) name = data.name;
+      if (data.symbol) symbol = data.symbol;
+      if (data.icon_url) logoUrl = data.icon_url;
+    } catch { /* use defaults */ }
+
+    // Try DexScreener for logo if scan didn't have one
+    if (!logoUrl) {
+      try {
+        const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
+        const data = await res.json();
+        const img = data.pairs?.[0]?.info?.imageUrl;
+        if (img) logoUrl = img;
+      } catch { /* no logo */ }
+    }
+
+    setSelectedToken({ address, name, symbol, decimals, logoUrl });
+    setPrizeTokenAddress(address);
+    setPrizeTokenDecimals(decimals);
+    setTokenQuery('');
+    setTokenSearchResults([]);
+  }, []);
+
+  // Handle selecting a token from search results
+  const handleSelectToken = useCallback((result: TokenSearchResult) => {
+    fetchTokenDetails(result.address, result.name, result.symbol);
+  }, [fetchTokenDetails]);
+
+  // Handle pasting a raw address (no search result) — fetch its details
+  const handleRawAddressSubmit = useCallback(() => {
+    const addr = tokenQuery.trim();
+    if (/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+      fetchTokenDetails(addr, 'Unknown Token', '???');
+    }
+  }, [tokenQuery, fetchTokenDetails]);
+
+  // Clear selected token
+  const handleClearToken = useCallback(() => {
+    setSelectedToken(null);
+    setPrizeTokenAddress('');
+    setPrizeTokenDecimals(18);
+    setTokenQuery('');
+  }, []);
 
   // Computed values
   const buyInAmountWei = useMemo(() => {
@@ -329,52 +449,66 @@ export function TournamentCreator({
 
   if (!isOpen) return null;
 
-  const handleFundPrizePool = async () => {
-    if (!createdTournament || prizeType !== 'custom' || !prizeTokenAddress.trim() || !prizeAmountHuman.trim()) return;
+  // Funding helpers
+  const fundingAmountWei = useMemo(() => {
     const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
-    const amountWei = BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
-    if (amountWei <= 0n) return;
+    return BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
+  }, [prizeAmountHuman, prizeTokenDecimals]);
+
+  const handleApproveToken = async () => {
+    if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= 0n) return;
+    const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+    if (!isEscrowConfigured || escrow === ESCROW_ZERO) {
+      setFundingError('Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env.');
+      return;
+    }
     setFundingError(null);
-    setFundingPending(true);
+    setFundingStep('approving');
     try {
       const token = prizeTokenAddress.trim() as `0x${string}`;
-      const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-      if (!isEscrowConfigured || escrow === ESCROW_ZERO) {
-        setFundingError(
-          'Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env (see contracts/scripts/deploy-tournament-prize-escrow.js to deploy the contract).'
-        );
-        return;
-      }
-      // Step 1: Approve escrow to spend tokens (first wallet request)
-      const approveHash = await writeContractAsync({
+      const hash = await writeContractAsync({
         address: token,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [escrow, amountWei],
+        args: [escrow, fundingAmountWei],
       });
-      // Wait for approval to be mined so allowance is updated before deposit
-      if (publicClient && approveHash) {
-        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+      if (publicClient && hash) {
+        await publicClient.waitForTransactionReceipt({ hash });
       }
-      // Step 2: Deposit tokens into escrow for this tournament (second wallet request)
+      setApprovalTxHash(hash);
+      setFundingStep('approved');
+    } catch (e) {
+      setFundingError(e instanceof Error ? e.message : 'Approval failed');
+      setFundingStep('idle');
+    }
+  };
+
+  const handleDepositToEscrow = async () => {
+    if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= 0n) return;
+    const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+    if (!isEscrowConfigured || escrow === ESCROW_ZERO) return;
+    setFundingError(null);
+    setFundingStep('depositing');
+    try {
+      const token = prizeTokenAddress.trim() as `0x${string}`;
       const idBytes32 = tournamentIdToBytes32(createdTournament.id);
       await writeContractAsync({
         address: escrow as `0x${string}`,
         abi: tournamentPrizeEscrowAbi,
         functionName: 'depositPrizePool',
-        args: [idBytes32, token, amountWei],
+        args: [idBytes32, token, fundingAmountWei],
       });
-      setFunded(true);
+      setFundingStep('done');
     } catch (e) {
-      setFundingError(e instanceof Error ? e.message : 'Funding failed');
-    } finally {
-      setFundingPending(false);
+      setFundingError(e instanceof Error ? e.message : 'Deposit failed');
+      setFundingStep('approved'); // revert to approved so they can retry deposit
     }
   };
 
   // Show success screen if tournament was created
   if (createdTournament) {
-    const needsFunding = prizeType === 'custom' && prizeTokenAddress.trim() && prizeAmountHuman.trim() && !funded;
+    const needsFunding = prizeType === 'custom' && prizeTokenAddress.trim() && prizeAmountHuman.trim() && fundingStep !== 'done';
+    const funded = fundingStep === 'done';
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
@@ -385,35 +519,125 @@ export function TournamentCreator({
           <div className="p-6 space-y-4 text-center">
             <div className="text-6xl">🎉</div>
             <p className="text-white text-lg font-semibold">{name}</p>
-            {needsFunding && (
-              <div className="bg-gray-800 rounded-xl p-4 border border-cyan-500/30 text-left">
-                <p className="text-cyan-300 text-sm font-medium mb-2">Fund prize pool</p>
+
+            {/* Two-step funding UI */}
+            {(needsFunding || funded) && (
+              <div className="bg-gray-800 rounded-xl p-4 border border-cyan-500/30 text-left space-y-4">
+                {/* Token info header */}
+                <div className="flex items-center gap-3">
+                  {selectedToken?.logoUrl && (
+                    <img src={selectedToken.logoUrl} alt="" className="w-8 h-8 rounded-full" />
+                  )}
+                  <div>
+                    <p className="text-white text-sm font-medium">
+                      {prizeAmountHuman} {selectedToken?.symbol || 'tokens'}
+                    </p>
+                    <p className="text-gray-500 text-xs font-mono">
+                      {prizeTokenAddress.slice(0, 6)}...{prizeTokenAddress.slice(-4)}
+                    </p>
+                  </div>
+                </div>
+
                 {!isEscrowConfigured ? (
-                  <p className="text-amber-400 text-xs mb-2">
-                    Prize escrow is not configured. Set <code className="bg-gray-700 px-1 rounded">NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS</code> in your environment and deploy the Tournament Prize Escrow contract (see <code className="bg-gray-700 px-1 rounded text-[10px]">contracts/scripts/deploy-tournament-prize-escrow.js</code>).
+                  <p className="text-amber-400 text-xs">
+                    Prize escrow is not configured. Set <code className="bg-gray-700 px-1 rounded">NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS</code> in your environment.
                   </p>
                 ) : (
                   <>
-                    <p className="text-gray-400 text-xs mb-2">
-                      You will get <strong className="text-cyan-300">2 wallet requests</strong>: first Approve, then Deposit. Wait for the first to confirm before the second appears.
+                    <p className="text-gray-500 text-xs">
+                      Tokens are sent to the prize escrow contract which holds them until the tournament ends and pays winners.
                     </p>
-                    <p className="text-gray-500 text-xs mb-3">
-                      Tokens are sent to the prize escrow contract; the escrow holds them until the tournament ends and pays winners.
-                    </p>
+
+                    {fundingError && (
+                      <p className="text-red-400 text-xs">{fundingError}</p>
+                    )}
+
+                    {/* Step 1: Approve */}
+                    <div className="flex items-center gap-3">
+                      <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${
+                        fundingStep === 'approved' || fundingStep === 'depositing' || funded
+                          ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-300'
+                      }`}>
+                        {fundingStep === 'approved' || fundingStep === 'depositing' || funded ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : '1'}
+                      </div>
+                      <div className="flex-1">
+                        {fundingStep === 'idle' && (
+                          <button
+                            onClick={handleApproveToken}
+                            disabled={!isEscrowConfigured}
+                            className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-medium disabled:opacity-50 hover:from-cyan-500 hover:to-blue-500 transition-all"
+                          >
+                            Approve Token
+                          </button>
+                        )}
+                        {fundingStep === 'approving' && (
+                          <div className="flex items-center gap-2 py-2">
+                            <svg className="animate-spin h-4 w-4 text-cyan-400" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            <span className="text-cyan-300 text-sm">Confirm in wallet...</span>
+                          </div>
+                        )}
+                        {(fundingStep === 'approved' || fundingStep === 'depositing' || funded) && (
+                          <div>
+                            <span className="text-green-400 text-sm font-medium">Approved</span>
+                            {approvalTxHash && (
+                              <p className="text-gray-500 text-xs font-mono mt-0.5">
+                                tx: {approvalTxHash.slice(0, 10)}...{approvalTxHash.slice(-6)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step 2: Deposit */}
+                    <div className="flex items-center gap-3">
+                      <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${
+                        funded ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-300'
+                      }`}>
+                        {funded ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : '2'}
+                      </div>
+                      <div className="flex-1">
+                        {fundingStep === 'approved' && (
+                          <button
+                            onClick={handleDepositToEscrow}
+                            className="w-full py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-medium hover:from-emerald-500 hover:to-green-500 transition-all"
+                          >
+                            Deposit to Escrow
+                          </button>
+                        )}
+                        {fundingStep === 'depositing' && (
+                          <div className="flex items-center gap-2 py-2">
+                            <svg className="animate-spin h-4 w-4 text-emerald-400" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            <span className="text-emerald-300 text-sm">Confirm in wallet...</span>
+                          </div>
+                        )}
+                        {funded && (
+                          <span className="text-green-400 text-sm font-medium">Funded</span>
+                        )}
+                        {(fundingStep === 'idle' || fundingStep === 'approving') && (
+                          <span className="text-gray-500 text-sm">Deposit to Escrow</span>
+                        )}
+                      </div>
+                    </div>
                   </>
                 )}
-                {fundingError && (
-                  <p className="text-red-400 text-xs mb-2">{fundingError}</p>
-                )}
-                <button
-                  onClick={handleFundPrizePool}
-                  disabled={fundingPending || !isEscrowConfigured}
-                  className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-medium disabled:opacity-50"
-                >
-                  {fundingPending ? 'Confirm in wallet...' : 'Fund prize pool'}
-                </button>
               </div>
             )}
+
             {createdTournament.pinCode && (
               <div className="bg-gray-800 rounded-xl p-4 border border-yellow-500/30">
                 <p className="text-gray-400 text-sm mb-2">Private Tournament PIN</p>
@@ -889,38 +1113,105 @@ export function TournamentCreator({
                 </div>
                 {prizeType === 'custom' && (
                   <div className="space-y-3 p-4 rounded-xl bg-gray-800/50 border border-gray-700">
+                    {/* Selected token display */}
+                    {selectedToken ? (
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900 border border-cyan-500/30">
+                        {selectedToken.logoUrl && (
+                          <img src={selectedToken.logoUrl} alt="" className="w-8 h-8 rounded-full" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium truncate">
+                            {selectedToken.name} ({selectedToken.symbol})
+                          </p>
+                          <p className="text-gray-500 text-xs font-mono">
+                            {selectedToken.address.slice(0, 10)}...{selectedToken.address.slice(-6)}
+                          </p>
+                          <p className="text-gray-600 text-xs">{selectedToken.decimals} decimals</p>
+                        </div>
+                        <button
+                          onClick={handleClearToken}
+                          className="p-1.5 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      /* Token search input */
+                      <div className="relative" ref={tokenDropdownRef}>
+                        <label className="block text-gray-400 text-xs mb-1">Search token or paste address</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={tokenQuery}
+                            onChange={(e) => handleTokenQueryChange(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleRawAddressSubmit();
+                              }
+                            }}
+                            placeholder="Search by name or paste 0x address..."
+                            className="w-full px-3 py-2 pr-8 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-cyan-500"
+                          />
+                          {tokenSearching && (
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                              <svg className="animate-spin h-4 w-4 text-gray-400" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                        {/* Search results dropdown */}
+                        {tokenSearchResults.length > 0 && (
+                          <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                            {tokenSearchResults.map((result) => (
+                              <button
+                                key={result.address}
+                                onClick={() => handleSelectToken(result)}
+                                className="w-full px-3 py-2.5 text-left hover:bg-gray-700 transition-colors flex items-center gap-3 border-b border-gray-700/50 last:border-0"
+                              >
+                                {result.iconUrl ? (
+                                  <img src={result.iconUrl} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-gray-600 shrink-0" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-white text-sm truncate">{result.name}</p>
+                                  <p className="text-gray-500 text-xs">
+                                    {result.symbol} &middot; {result.address.slice(0, 6)}...{result.address.slice(-4)}
+                                  </p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {/* Hint for raw address */}
+                        {tokenQuery.trim().startsWith('0x') && tokenQuery.trim().length === 42 && tokenSearchResults.length === 0 && !tokenSearching && (
+                          <button
+                            onClick={handleRawAddressSubmit}
+                            className="mt-1 w-full px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-cyan-300 text-xs text-left transition-colors"
+                          >
+                            Use this address: {tokenQuery.trim().slice(0, 10)}...{tokenQuery.trim().slice(-6)}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Prize amount */}
                     <div>
-                      <label className="block text-gray-400 text-xs mb-1">Token contract address</label>
+                      <label className="block text-gray-400 text-xs mb-1">
+                        Prize amount{selectedToken ? ` (${selectedToken.symbol})` : ''}
+                      </label>
                       <input
                         type="text"
-                        value={prizeTokenAddress}
-                        onChange={(e) => setPrizeTokenAddress(e.target.value)}
-                        placeholder="0x..."
-                        className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm font-mono focus:outline-none focus:border-cyan-500"
+                        value={prizeAmountHuman}
+                        onChange={(e) => setPrizeAmountHuman(e.target.value)}
+                        placeholder="e.g. 1000000"
+                        className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-cyan-500"
                       />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-gray-400 text-xs mb-1">Prize amount (human)</label>
-                        <input
-                          type="text"
-                          value={prizeAmountHuman}
-                          onChange={(e) => setPrizeAmountHuman(e.target.value)}
-                          placeholder="e.g. 1000000"
-                          className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-cyan-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-gray-400 text-xs mb-1">Decimals</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={18}
-                          value={prizeTokenDecimals}
-                          onChange={(e) => setPrizeTokenDecimals(Number(e.target.value) || 18)}
-                          className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-cyan-500"
-                        />
-                      </div>
                     </div>
                     <p className="text-gray-500 text-xs">
                       After creating, you will fund the prize pool by approving and depositing this token to the escrow.
