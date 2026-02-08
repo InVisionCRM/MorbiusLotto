@@ -81,28 +81,23 @@ class BlackjackGameService {
                     logger_1.logger.debug('Game hash verified', { gameHash: receivedHash });
                 }
             }
-            // Generate initial cards: 4 values (1-13) + 4 suits (0-3) for Perfect Pairs
-            const dealingSeeds = {
-                serverSeed: session.server_seed,
-                clientSeed,
-                nonce: baseNonce,
-            };
-            const valueRandoms = this.pfService.generateBlackjackRandoms(dealingSeeds, 4);
-            const suitRandoms = this.pfService.generateBlackjackSuits(dealingSeeds, baseNonce + 4, 4);
-            let rngCounter = 8;
-            const encode = (v, s) => this.pfService.encodeCard(v, s);
-            const initialPlayerCards = [encode(valueRandoms[0], suitRandoms[0]), encode(valueRandoms[2], suitRandoms[2])];
-            const dealerCards = [encode(valueRandoms[1], suitRandoms[1]), encode(valueRandoms[3], suitRandoms[3])];
-            // Perfect Pairs: classify first two player cards
-            const perfectPairsResult = this.classifyPerfectPair(initialPlayerCards[0], initialPlayerCards[1]);
+            // V2: Fisher-Yates 52-card deck — gameNumber IS the nonce
+            const shuffledDeck = this.pfService.fisherYatesShuffle(session.server_seed, clientSeed, gameNumber);
+            // Deal order: player, dealer, player, dealer
+            const initialPlayerCards = [shuffledDeck[0], shuffledDeck[2]];
+            const dealerCards = [shuffledDeck[1], shuffledDeck[3]];
+            let rngCounter = 4; // deck position (next card index)
+            // Perfect Pairs: classify first two player cards (v2)
+            const perfectPairsResult = this.classifyPerfectPairV2(initialPlayerCards[0], initialPlayerCards[1]);
             const perfectPairsPayout = this.getPerfectPairsPayout(perfectPairsBet, perfectPairsResult);
-            // Create initial hand
+            // Create initial hand (v2: use card index helpers)
+            const playerHandTotal = this.pfService.calculateHandTotalV2(initialPlayerCards);
             const initialHand = {
                 id: '', // Will be set when created in DB
                 cards: initialPlayerCards,
-                total: this.pfService.calculateHandTotal(initialPlayerCards).total,
-                hasAce: this.pfService.calculateHandTotal(initialPlayerCards).hasAce,
-                isBlackjack: this.pfService.isNaturalBlackjack(initialPlayerCards),
+                total: playerHandTotal.total,
+                hasAce: playerHandTotal.hasAce,
+                isBlackjack: this.pfService.isNaturalBlackjackV2(initialPlayerCards),
                 isBust: false,
                 betAmount: request.betAmount,
                 payout: 0n,
@@ -110,11 +105,11 @@ class BlackjackGameService {
                 canHit: true,
                 canStand: true,
                 canDoubleDown: true,
-                canSplit: this.canSplit(initialPlayerCards)
+                canSplit: this.canSplitV2(initialPlayerCards)
             };
-            // Calculate dealer visible total
-            const dealerVisibleHand = this.pfService.calculateHandTotal([dealerCards[0]]);
-            const dealerBlackjack = this.pfService.isNaturalBlackjack(dealerCards);
+            // Calculate dealer visible total (v2)
+            const dealerVisibleHand = this.pfService.calculateHandTotalV2([dealerCards[0]]);
+            const dealerBlackjack = this.pfService.isNaturalBlackjackV2(dealerCards);
             // Determine game status
             let status = 'player_turn';
             let result;
@@ -145,12 +140,12 @@ class BlackjackGameService {
                 perfectPairsBet: perfectPairsBet.toString()
             });
             const immediatePayout = initialHand.payout + perfectPairsPayout;
-            // Create game record
+            // Create game record (v2: rng_version = 2, rng_counter = deck position)
             const game = await this.dbService.createGame(session.id, {
                 game_number: gameNumber,
                 total_bet_amount: request.betAmount,
                 dealer_cards: dealerCards,
-                dealer_total: this.pfService.calculateHandTotal(dealerCards).total,
+                dealer_total: this.pfService.calculateHandTotalV2(dealerCards).total,
                 result,
                 total_payout: immediatePayout,
                 client_seed_commitment: clientSeed,
@@ -159,6 +154,7 @@ class BlackjackGameService {
                 rng_counter: rngCounter,
                 perfect_pairs_bet_amount: perfectPairsBet,
                 perfect_pairs_payout: perfectPairsPayout,
+                rng_version: 2,
             });
             // Create initial hand record
             const gameHand = await this.dbService.createGameHand(game.id, {
@@ -213,6 +209,7 @@ class BlackjackGameService {
                 perfectPairsResult: perfectPairsResult !== 'none' ? perfectPairsResult : undefined,
                 perfectPairsPayout: perfectPairsPayout > 0n ? perfectPairsPayout : undefined,
                 perfectPairsBetAmount: perfectPairsBet > 0n ? perfectPairsBet : undefined,
+                rngVersion: 2,
             };
             logger_1.logger.info('Game created', {
                 gameId: game.id,
@@ -249,6 +246,29 @@ class BlackjackGameService {
             return 'none';
         const s1 = this.pfService.decodeCardSuit(card1);
         const s2 = this.pfService.decodeCardSuit(card2);
+        return s1 === s2 ? 'perfect' : 'none';
+    }
+    /**
+     * Check if hand can be split — v2 card indices (0-51): same rank
+     */
+    canSplitV2(cards) {
+        if (cards.length !== 2)
+            return false;
+        const r1 = this.pfService.cardIndexToRank(cards[0]);
+        const r2 = this.pfService.cardIndexToRank(cards[1]);
+        return r1 === r2;
+    }
+    /**
+     * Classify Perfect Pairs for v2 card indices (0-51).
+     * Perfect pair = same rank AND same suit.
+     */
+    classifyPerfectPairV2(card1, card2) {
+        const r1 = this.pfService.cardIndexToRank(card1);
+        const r2 = this.pfService.cardIndexToRank(card2);
+        if (r1 !== r2)
+            return 'none';
+        const s1 = this.pfService.cardIndexToSuit(card1);
+        const s2 = this.pfService.cardIndexToSuit(card2);
         return s1 === s2 ? 'perfect' : 'none';
     }
     getPerfectPairsPayout(bet, result) {
@@ -300,10 +320,9 @@ class BlackjackGameService {
                     is_bust: gh.is_bust
                 }))
             });
+            const rngVersion = Number(game.rng_version ?? 1);
             const playerHands = gameHands.map(gh => {
                 const actions = gh.actions || [];
-                // Derive canHit/canStand from action history and hand state
-                // Hand is inactive if: bust, or has a 'stand' action, or has a 'double_down' action
                 const hasStandAction = actions.some((a) => a.type === 'stand');
                 const hasDoubleDownAction = actions.some((a) => a.type === 'double_down');
                 const isHandComplete = gh.is_bust || hasStandAction || hasDoubleDownAction;
@@ -316,6 +335,9 @@ class BlackjackGameService {
                     isHandComplete,
                     canHit: !isHandComplete
                 });
+                const canSplitHand = rngVersion === 2
+                    ? this.canSplitV2(gh.cards)
+                    : this.canSplit(gh.cards);
                 return {
                     id: gh.id,
                     cards: gh.cards,
@@ -330,7 +352,7 @@ class BlackjackGameService {
                     canHit: !isHandComplete,
                     canStand: !isHandComplete,
                     canDoubleDown: !isHandComplete && gh.cards.length === 2,
-                    canSplit: !isHandComplete && this.canSplit(gh.cards)
+                    canSplit: !isHandComplete && canSplitHand
                 };
             });
             // Use nullish coalescing to handle handIndex=0 correctly
@@ -359,23 +381,34 @@ class BlackjackGameService {
                 });
                 throw new Error('This hand has already been completed');
             }
-            // Stake-style: client seed can remain stable; server seed is committed per session.
-            // For blackjack we use a per-game base nonce and a per-draw rng_counter to ensure each draw is unique.
             const clientSeed = game.client_seed_commitment || 'default';
             const serverSeed = session.server_seed;
-            const baseNonce = this.getGameBaseNonce(game.game_number);
             const rngCounter = Number(game.rng_counter ?? 0);
-            const gameSeeds = {
-                serverSeed,
-                clientSeed,
-                nonce: baseNonce + rngCounter, // next draw nonce
-            };
-            // Handle different actions
-            if (request.action === 'split') {
-                return this.handleSplit(request.gameId, game, playerHands, handIndex, gameSeeds);
+            if (rngVersion === 2) {
+                // V2: re-derive shuffled deck, use deck position
+                const deck = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, game.game_number);
+                let deckPosition = rngCounter;
+                if (request.action === 'split') {
+                    return this.handleSplitV2(request.gameId, game, playerHands, handIndex, deck, deckPosition);
+                }
+                else {
+                    return this.handleHandActionV2(request.gameId, game, playerHands, handIndex, request.action, deck, deckPosition);
+                }
             }
             else {
-                return this.handleHandAction(request.gameId, game, playerHands, handIndex, request.action, gameSeeds);
+                // V1: legacy nonce-based drawing
+                const baseNonce = this.getGameBaseNonce(game.game_number);
+                const gameSeeds = {
+                    serverSeed,
+                    clientSeed,
+                    nonce: baseNonce + rngCounter,
+                };
+                if (request.action === 'split') {
+                    return this.handleSplit(request.gameId, game, playerHands, handIndex, gameSeeds);
+                }
+                else {
+                    return this.handleHandAction(request.gameId, game, playerHands, handIndex, request.action, gameSeeds);
+                }
             }
         }
         catch (error) {
@@ -764,6 +797,314 @@ class BlackjackGameService {
             perfectPairsBetAmount: (game.perfect_pairs_bet_amount ?? 0n) > 0n ? game.perfect_pairs_bet_amount : undefined,
         };
     }
+    // ============================================
+    // V2 methods: deck-based card drawing (Fisher-Yates)
+    // ============================================
+    /**
+     * Handle splitting a hand — v2 deck-based
+     */
+    async handleSplitV2(gameId, game, playerHands, handIndex, deck, deckPosition) {
+        const handToSplit = playerHands[handIndex];
+        if (!this.canSplitV2(handToSplit.cards)) {
+            throw new Error('Cannot split this hand');
+        }
+        const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+        const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
+        if (currentBalance < handToSplit.betAmount) {
+            throw new Error(`Insufficient balance to split. Need ${handToSplit.betAmount.toString()}, have ${currentBalance.toString()}`);
+        }
+        const card1 = [handToSplit.cards[0]];
+        const card2 = [handToSplit.cards[1]];
+        // Draw 2 cards from deck
+        const newCard1 = deck[deckPosition++];
+        const newCard2 = deck[deckPosition++];
+        card1.push(newCard1);
+        card2.push(newCard2);
+        const hand1Total = this.pfService.calculateHandTotalV2(card1);
+        const hand2Total = this.pfService.calculateHandTotalV2(card2);
+        const hand1 = {
+            id: '',
+            cards: card1,
+            total: hand1Total.total,
+            hasAce: hand1Total.hasAce,
+            isBlackjack: false,
+            isBust: false,
+            betAmount: handToSplit.betAmount,
+            payout: 0n,
+            actions: [{ type: 'split', timestamp: Date.now(), deckPositions: [deckPosition - 2, deckPosition - 1], cards: [newCard1, newCard2] }],
+            canHit: true,
+            canStand: true,
+            canDoubleDown: true,
+            canSplit: false
+        };
+        const hand2 = {
+            ...hand1,
+            cards: card2,
+            total: hand2Total.total,
+            hasAce: hand2Total.hasAce
+        };
+        const totalBetAmount = game.total_bet_amount + handToSplit.betAmount;
+        await this.dbService.deductPlayerBalance(playerAddress, handToSplit.betAmount);
+        await this.dbService.updateSessionStats(game.session_id, handToSplit.betAmount, 0n, false);
+        hand1.id = handToSplit.id;
+        await this.dbService.updateGameHand(handToSplit.id, {
+            cards: hand1.cards,
+            total: hand1.total,
+            has_ace: hand1.hasAce,
+            is_blackjack: false,
+            is_bust: false,
+            actions: hand1.actions
+        });
+        const gameHand2 = await this.dbService.createGameHand(gameId, {
+            hand_index: playerHands.length,
+            cards: hand2.cards,
+            total: hand2.total,
+            has_ace: hand2.hasAce,
+            is_blackjack: false,
+            is_bust: false,
+            bet_amount: hand2.betAmount,
+            actions: hand2.actions
+        });
+        hand2.id = gameHand2.id;
+        playerHands.splice(handIndex, 1, hand1, hand2);
+        await this.dbService.updateGame(gameId, {
+            hand_count: playerHands.length,
+            total_bet_amount: totalBetAmount,
+            current_hand_index: handIndex,
+            rng_counter: deckPosition,
+        });
+        return {
+            gameId,
+            sessionId: game.session_id,
+            playerHands,
+            dealerCards: game.dealer_cards.slice(0, 1),
+            dealerTotal: this.pfService.calculateHandTotalV2([game.dealer_cards[0]]).total,
+            dealerHasAce: this.pfService.calculateHandTotalV2([game.dealer_cards[0]]).hasAce,
+            status: 'player_turn',
+            totalBetAmount,
+            totalPayout: 0n,
+            actions: [],
+            dealerActions: [],
+            currentHandIndex: handIndex,
+            canSplit: false,
+            isBlackjack: false,
+            rngVersion: 2,
+        };
+    }
+    /**
+     * Handle action on a specific hand — v2 deck-based
+     */
+    async handleHandActionV2(gameId, game, playerHands, handIndex, action, deck, deckPosition) {
+        const currentHand = playerHands[handIndex];
+        if (action === 'hit') {
+            const card = deck[deckPosition++];
+            currentHand.cards.push(card);
+            currentHand.actions.push({ type: 'hit', card, deckPosition: deckPosition - 1, timestamp: Date.now() });
+            const handTotal = this.pfService.calculateHandTotalV2(currentHand.cards);
+            currentHand.total = handTotal.total;
+            currentHand.hasAce = handTotal.hasAce;
+            if (currentHand.total > 21) {
+                currentHand.isBust = true;
+                currentHand.result = 'loss';
+                currentHand.canHit = false;
+                currentHand.canStand = false;
+                currentHand.canDoubleDown = false;
+            }
+            await this.dbService.updateGameHand(currentHand.id, {
+                cards: currentHand.cards,
+                total: currentHand.total,
+                has_ace: currentHand.hasAce,
+                is_bust: currentHand.isBust,
+                result: currentHand.result,
+                actions: currentHand.actions
+            });
+            await this.dbService.updateGame(gameId, { rng_counter: deckPosition });
+        }
+        else if (action === 'stand') {
+            currentHand.actions.push({ type: 'stand', timestamp: Date.now() });
+            currentHand.canHit = false;
+            currentHand.canStand = false;
+            currentHand.canDoubleDown = false;
+            await this.dbService.updateGameHand(currentHand.id, {
+                actions: currentHand.actions
+            });
+        }
+        else if (action === 'double_down') {
+            if (currentHand.cards.length !== 2) {
+                throw new Error('Can only double down on first two cards');
+            }
+            const originalBet = currentHand.betAmount;
+            const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+            const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
+            if (currentBalance < originalBet) {
+                throw new Error(`Insufficient balance to double down. Need ${originalBet.toString()}, have ${currentBalance.toString()}`);
+            }
+            currentHand.betAmount *= 2n;
+            const card = deck[deckPosition++];
+            currentHand.cards.push(card);
+            currentHand.actions.push({ type: 'double_down', card, deckPosition: deckPosition - 1, timestamp: Date.now() });
+            const handTotal = this.pfService.calculateHandTotalV2(currentHand.cards);
+            currentHand.total = handTotal.total;
+            currentHand.hasAce = handTotal.hasAce;
+            if (currentHand.total > 21) {
+                currentHand.isBust = true;
+                currentHand.result = 'loss';
+            }
+            currentHand.canHit = false;
+            currentHand.canStand = false;
+            currentHand.canDoubleDown = false;
+            const totalBetAmount = game.total_bet_amount + originalBet;
+            await this.dbService.deductPlayerBalance(playerAddress, originalBet);
+            await this.dbService.updateSessionStats(game.session_id, originalBet, 0n, false);
+            await this.dbService.updateGame(gameId, { total_bet_amount: totalBetAmount, rng_counter: deckPosition });
+            await this.dbService.updateGameHand(currentHand.id, {
+                cards: currentHand.cards,
+                total: currentHand.total,
+                has_ace: currentHand.hasAce,
+                is_bust: currentHand.isBust,
+                bet_amount: currentHand.betAmount,
+                result: currentHand.result,
+                actions: currentHand.actions
+            });
+            game.total_bet_amount = totalBetAmount;
+        }
+        // Check if all hands are completed
+        const activeHands = playerHands.filter(hand => hand.canHit || hand.canStand);
+        if (activeHands.length === 0) {
+            return this.playDealerAndCompleteV2(gameId, game, playerHands, deck, deckPosition);
+        }
+        const nextHandIndex = playerHands.findIndex(hand => hand.canHit || hand.canStand);
+        if (nextHandIndex !== handIndex) {
+            await this.dbService.updateGame(gameId, { current_hand_index: nextHandIndex });
+        }
+        return {
+            gameId,
+            sessionId: game.session_id,
+            playerHands,
+            dealerCards: game.dealer_cards.slice(0, 1),
+            dealerTotal: this.pfService.calculateHandTotalV2([game.dealer_cards[0]]).total,
+            dealerHasAce: this.pfService.calculateHandTotalV2([game.dealer_cards[0]]).hasAce,
+            status: 'player_turn',
+            totalBetAmount: game.total_bet_amount,
+            totalPayout: 0n,
+            actions: [],
+            dealerActions: [],
+            currentHandIndex: nextHandIndex,
+            canSplit: false,
+            isBlackjack: false,
+            rngVersion: 2,
+        };
+    }
+    /**
+     * Play dealer turn and complete the game — v2 deck-based
+     */
+    async playDealerAndCompleteV2(gameId, game, playerHands, deck, deckPosition) {
+        const dealerCards = [...game.dealer_cards];
+        const dealerActions = [];
+        // Dealer hits on soft 17
+        while (true) {
+            const dealerHand = this.pfService.calculateHandTotalV2(dealerCards);
+            if (dealerHand.total >= 17 && !(dealerHand.total === 17 && dealerHand.hasAce)) {
+                dealerActions.push({ type: 'stand', timestamp: Date.now() });
+                break;
+            }
+            const card = deck[deckPosition++];
+            dealerCards.push(card);
+            dealerActions.push({
+                type: 'hit',
+                card,
+                deckPosition: deckPosition - 1,
+                timestamp: Date.now()
+            });
+        }
+        const finalDealerTotal = this.pfService.calculateHandTotalV2(dealerCards).total;
+        let totalPayout = 0n;
+        for (const hand of playerHands) {
+            if (hand.result === 'blackjack' && hand.isBlackjack) {
+                hand.payout = (hand.betAmount * 5n) / 2n;
+            }
+            else if (hand.isBust) {
+                hand.result = 'loss';
+                hand.payout = 0n;
+            }
+            else if (finalDealerTotal > 21) {
+                hand.result = 'win';
+                hand.payout = hand.betAmount * 2n;
+            }
+            else if (hand.total > finalDealerTotal) {
+                hand.result = 'win';
+                hand.payout = hand.betAmount * 2n;
+            }
+            else if (hand.total < finalDealerTotal) {
+                hand.result = 'loss';
+                hand.payout = 0n;
+            }
+            else {
+                hand.result = 'push';
+                hand.payout = hand.betAmount;
+            }
+            totalPayout += hand.payout;
+            await this.dbService.updateGameHand(hand.id, {
+                result: hand.result,
+                payout: hand.payout,
+                completed_at: new Date()
+            });
+        }
+        const perfectPairsPayout = game.perfect_pairs_payout ?? 0n;
+        const totalPayoutWithSideBet = totalPayout + perfectPairsPayout;
+        const firstHandInitialCards = playerHands[0]?.cards?.slice(0, 2) ?? [];
+        const perfectPairsResult = firstHandInitialCards.length === 2
+            ? this.classifyPerfectPairV2(playerHands[0].cards[0], playerHands[0].cards[1])
+            : undefined;
+        const hasWin = playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
+        const allPush = playerHands.every(h => h.result === 'push');
+        const overallResult = hasWin ? 'win' : allPush ? 'push' : 'loss';
+        const totalStakeForGame = game.total_bet_amount + (game.perfect_pairs_bet_amount ?? 0n);
+        await this.dbService.updateGame(gameId, {
+            dealer_cards: dealerCards,
+            dealer_total: finalDealerTotal,
+            result: overallResult,
+            total_payout: totalPayoutWithSideBet,
+            dealer_actions: dealerActions,
+            rng_counter: deckPosition,
+            completed_at: new Date()
+        });
+        if (totalPayoutWithSideBet > 0n) {
+            const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+            await this.dbService.addPlayerBalance(playerAddress, totalPayoutWithSideBet);
+        }
+        const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
+        if (profit > 0n) {
+            await this.dbService.updateSessionStats(game.session_id, 0n, profit, false);
+        }
+        const session = await this.dbService.getSessionById(game.session_id);
+        if (session?.server_seed) {
+            await this.dbService.revealServerSeed(gameId, session.server_seed_hash, session.server_seed);
+            const newServerSeed = this.pfService.generateServerSeed();
+            const newServerSeedHash = this.pfService.createServerSeedHash(newServerSeed);
+            await this.dbService.setSessionServerSeed(game.session_id, newServerSeed, newServerSeedHash);
+        }
+        return {
+            gameId,
+            sessionId: game.session_id,
+            playerHands,
+            dealerCards,
+            dealerTotal: finalDealerTotal,
+            dealerHasAce: this.pfService.calculateHandTotalV2(dealerCards).hasAce,
+            status: 'completed',
+            totalBetAmount: game.total_bet_amount,
+            totalPayout: totalPayoutWithSideBet,
+            actions: [],
+            dealerActions,
+            currentHandIndex: 0,
+            canSplit: false,
+            isBlackjack: false,
+            perfectPairsResult: perfectPairsResult !== undefined && perfectPairsResult !== 'none' ? perfectPairsResult : undefined,
+            perfectPairsPayout: perfectPairsPayout > 0n ? perfectPairsPayout : undefined,
+            perfectPairsBetAmount: (game.perfect_pairs_bet_amount ?? 0n) > 0n ? game.perfect_pairs_bet_amount : undefined,
+            rngVersion: 2,
+        };
+    }
     /**
      * Verify game result (alias for getGameResult for API compatibility)
      */
@@ -783,6 +1124,7 @@ class BlackjackGameService {
                 return null;
             const hands = await this.dbService.getGameHands(id);
             const seedReveal = await this.dbService.getSeedReveal(id);
+            const rngVersion = Number(game.rng_version ?? 1);
             const baseNonce = this.getGameBaseNonce(game.game_number);
             return {
                 gameId: game.id,
@@ -802,13 +1144,20 @@ class BlackjackGameService {
                 serverSeed: seedReveal?.server_seed,
                 clientSeed: game.client_seed_commitment || 'default',
                 gameNumber: game.game_number,
+                rngVersion,
                 baseNonce,
-                nonce: Number(baseNonce),
-                nonceScheme: {
-                    baseNonceMultiplier: BlackjackGameService.GAME_NONCE_MULTIPLIER,
-                    initialDealOrder: ['player', 'dealer', 'player', 'dealer'],
-                    note: 'Each card draw uses nonce = baseNonce + drawIndex; drawIndex increments globally per game.',
-                },
+                nonce: rngVersion === 2 ? game.game_number : Number(baseNonce),
+                nonceScheme: rngVersion === 2
+                    ? {
+                        type: 'fisher-yates-52',
+                        nonce: game.game_number,
+                        note: 'Fisher-Yates shuffle of 52-card deck. nonce = gameNumber. Cards dealt sequentially from shuffled deck.',
+                    }
+                    : {
+                        baseNonceMultiplier: BlackjackGameService.GAME_NONCE_MULTIPLIER,
+                        initialDealOrder: ['player', 'dealer', 'player', 'dealer'],
+                        note: 'Each card draw uses nonce = baseNonce + drawIndex; drawIndex increments globally per game.',
+                    },
                 actions: game.actions || [],
                 dealerActions: game.dealer_actions || [],
                 result: game.result

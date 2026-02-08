@@ -38,6 +38,8 @@ export interface GameState {
     perfectPairsPayout?: bigint;
     /** Side bet amount (for display). */
     perfectPairsBetAmount?: bigint;
+    /** RNG version: 2 = Fisher-Yates 52-card deck (card indices 0-51). */
+    rngVersion?: number;
 }
 export interface CreateGameRequest {
     playerAddress: string;
@@ -92,6 +94,15 @@ export declare class BlackjackGameService {
      * Classify Perfect Pairs: exact match only (same rank AND same suit).
      */
     private classifyPerfectPair;
+    /**
+     * Check if hand can be split — v2 card indices (0-51): same rank
+     */
+    private canSplitV2;
+    /**
+     * Classify Perfect Pairs for v2 card indices (0-51).
+     * Perfect pair = same rank AND same suit.
+     */
+    private classifyPerfectPairV2;
     private getPerfectPairsPayout;
     /** Draw one encoded card (value*10+suit), consumes 2 nonces. */
     private drawEncodedCard;
@@ -111,6 +122,18 @@ export declare class BlackjackGameService {
      * Play dealer turn and complete the game
      */
     private playDealerAndComplete;
+    /**
+     * Handle splitting a hand — v2 deck-based
+     */
+    private handleSplitV2;
+    /**
+     * Handle action on a specific hand — v2 deck-based
+     */
+    private handleHandActionV2;
+    /**
+     * Play dealer turn and complete the game — v2 deck-based
+     */
+    private playDealerAndCompleteV2;
     /**
      * Verify game result (alias for getGameResult for API compatibility)
      */

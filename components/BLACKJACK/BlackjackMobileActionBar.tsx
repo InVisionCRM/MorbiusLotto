@@ -177,7 +177,7 @@ export function BlackjackMobileActionBar({
           >
             <span style={{ fontSize: '7px', fontWeight: 700, color: perfectPairsBet > 0 ? '#fff' : 'rgba(148,163,184,0.7)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>PAIRS</span>
             <span style={{ fontSize: '11px', fontWeight: 900, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.6)', lineHeight: 1 }}>{perfectPairsBet > 0 ? `${(perfectPairsBet / 1000).toFixed(0)}K` : '—'}</span>
-            <span style={{ fontSize: '6px', color: perfectPairsBet > 0 ? 'rgba(255,255,255,0.7)' : 'rgba(148,163,184,0.5)' }}>10:1</span>
+            <span style={{ fontSize: '6px', color: perfectPairsBet > 0 ? 'rgba(255,255,255,0.7)' : 'rgba(148,163,184,0.5)' }}>5-12:1</span>
           </button>
         )}
         <div className="flex-1 flex rounded-lg sm:rounded-xl overflow-hidden border-2 border-white/10" style={{ boxShadow: '0 4px 0 0 rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.15)' }}>

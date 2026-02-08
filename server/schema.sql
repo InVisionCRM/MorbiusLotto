@@ -49,8 +49,10 @@ CREATE TABLE IF NOT EXISTS games (
     hand_count INTEGER DEFAULT 1, -- number of hands (for splits)
     current_hand_index INTEGER DEFAULT 0, -- current active hand
     -- Number of provably-fair draws already consumed in this game.
-    -- We derive unique nonces as: baseNonce = game_number * 1_000_000; nonce = baseNonce + rng_counter (+ i)
-    rng_counter INTEGER DEFAULT 0
+    -- V1: nonce = baseNonce + rng_counter. V2: deck position in shuffled 52-card deck.
+    rng_counter INTEGER DEFAULT 0,
+    -- RNG version: 1 = legacy infinite deck (HMAC per card), 2 = Fisher-Yates 52-card deck
+    rng_version INTEGER DEFAULT 1
 );
 
 -- Individual hands within a game (for splitting)

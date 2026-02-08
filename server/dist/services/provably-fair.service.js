@@ -170,6 +170,97 @@ class ProvablyFairService {
         }
         return deck;
     }
+    // ============================================
+    // V2 RNG: Fisher-Yates 52-card deck (Stake.com standard)
+    // ============================================
+    /**
+     * HMAC byte stream — core primitive for Fisher-Yates shuffle.
+     * Extracts 4 bytes from a cursor-indexed HMAC-SHA256 byte stream.
+     * message = `${clientSeed}:${nonce}:${Math.floor(cursor / 32)}`
+     * Returns 4 bytes starting at `cursor % 32`, handling 32-byte boundary crossing.
+     */
+    hmacByteStream(serverSeed, clientSeed, nonce, cursor) {
+        const roundIndex = Math.floor(cursor / 32);
+        const byteOffset = cursor % 32;
+        const message = `${clientSeed}:${nonce}:${roundIndex}`;
+        const hmacBuf = crypto_1.default.createHmac(this.ALGORITHM, serverSeed).update(message).digest();
+        if (byteOffset + 4 <= 32) {
+            // All 4 bytes within one HMAC round
+            return hmacBuf.subarray(byteOffset, byteOffset + 4);
+        }
+        // Straddles boundary — get remaining bytes from next round
+        const bytesFromCurrent = 32 - byteOffset;
+        const nextMessage = `${clientSeed}:${nonce}:${roundIndex + 1}`;
+        const nextHmacBuf = crypto_1.default.createHmac(this.ALGORITHM, serverSeed).update(nextMessage).digest();
+        return Buffer.concat([
+            hmacBuf.subarray(byteOffset, 32),
+            nextHmacBuf.subarray(0, 4 - bytesFromCurrent),
+        ]);
+    }
+    /**
+     * Convert 4 bytes to a float in [0, 1) — unbiased mapping.
+     * byte[0]/256 + byte[1]/256^2 + byte[2]/256^3 + byte[3]/256^4
+     */
+    bytesToFloat(bytes) {
+        return (bytes[0] / 256 +
+            bytes[1] / (256 * 256) +
+            bytes[2] / (256 * 256 * 256) +
+            bytes[3] / (256 * 256 * 256 * 256));
+    }
+    /**
+     * Fisher-Yates shuffle of a 52-card deck using cursor-based HMAC byte stream.
+     * One nonce per game. Returns array of card indices 0-51.
+     * Consumes 51 * 4 = 204 bytes (~7 HMAC rounds).
+     */
+    fisherYatesShuffle(serverSeed, clientSeed, nonce) {
+        const deck = Array.from({ length: 52 }, (_, i) => i);
+        let cursor = 0;
+        for (let i = 51; i >= 1; i--) {
+            const bytes = this.hmacByteStream(serverSeed, clientSeed, nonce, cursor);
+            cursor += 4;
+            const float = this.bytesToFloat(bytes);
+            const j = Math.floor(float * (i + 1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        return deck;
+    }
+    /**
+     * Card index (0-51) to rank (1-13). A=1, 2=2, ..., K=13.
+     */
+    cardIndexToRank(idx) {
+        return (idx % 13) + 1;
+    }
+    /**
+     * Card index (0-51) to suit (0-3). 0=hearts, 1=diamonds, 2=clubs, 3=spades.
+     */
+    cardIndexToSuit(idx) {
+        return Math.floor(idx / 13);
+    }
+    /**
+     * Calculate hand total for v2 card indices (0-51).
+     */
+    calculateHandTotalV2(cards) {
+        let total = 0;
+        let aceCount = 0;
+        for (const card of cards) {
+            const rank = this.cardIndexToRank(card);
+            const value = this.getBlackjackValue(rank);
+            total += value;
+            if (rank === 1)
+                aceCount++;
+        }
+        while (total > 21 && aceCount > 0) {
+            total -= 10;
+            aceCount--;
+        }
+        return { total, hasAce: aceCount > 0 };
+    }
+    /**
+     * Check if hand is a natural blackjack for v2 card indices (0-51).
+     */
+    isNaturalBlackjackV2(cards) {
+        return cards.length === 2 && this.calculateHandTotalV2(cards).total === 21;
+    }
     /**
      * Convert card value to blackjack value (1=Ace=11/1, 11-13=10)
      */

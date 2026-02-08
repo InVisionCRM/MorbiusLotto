@@ -77,7 +77,7 @@ interface BlackjackTableProps {
   /** Callback when PP bet changes (cycles 0→1k→2k→...→10k→0). */
   onPerfectPairsBetChange?: (amount: number) => void;
   /** Perfect Pairs result from the completed game — drives PP chip animation. */
-  perfectPairsResult?: 'perfect';
+  perfectPairsResult?: 'perfect' | 'colored' | 'mixed';
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -513,7 +513,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   // PP chip animation — triggers alongside main gameResult when there's a PP bet
   useEffect(() => {
     if (gameResult && gameResult !== prevPpResult.current && ppChipStack.length > 0) {
-      if (perfectPairsResult === 'perfect') {
+      if (perfectPairsResult === 'perfect' || perfectPairsResult === 'colored' || perfectPairsResult === 'mixed') {
         setPpChipAnimationState('win');
         const totalDuration = (ppChipStack.length - 1) * 200 + 3200;
         const timer = setTimeout(() => setPpChipAnimationState('none'), totalDuration);
@@ -761,11 +761,11 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   const getChipImage = (value: number) => {
     switch (value) {
       case 500: return '/PokerChips/tablepokerchip006-ezgif.com-gif-maker.png'; // Green chip
-      case 1000: return '/PokerChips/tablepokerchip011-ezgif.com-gif-maker.png'; // Blue chip
+      case 1000: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Blue chip
       case 2500: return '/PokerChips/tablepokerchip016-ezgif.com-gif-maker.png'; // Red chip
       case 10000: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Black chip
       case 100000: return '/PokerChips/tablepokerchip021-ezgif.com-rotate.png'; // Cyan chip for 100000
-      default: return '/PokerChips/tablepokerchip011-ezgif.com-gif-maker.png';
+      default: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png';
     }
   };
 
@@ -1575,7 +1575,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       )}
 
       {/* Perfect Pairs chip stack + bet circle — left of main chip stack */}
-      {!hideBettingPanel && onPerfectPairsBetChange && (
+      {onPerfectPairsBetChange && (
         <div
           className="absolute z-40 pointer-events-auto flex flex-col items-center"
           style={{
@@ -1614,9 +1614,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   />
                 );
               })}
-              {/* PP winning chips — animate in on perfect pair */}
+              {/* PP winning chips — animate in on pair win */}
               {ppChipAnimationState === 'win' && (() => {
-                const winAmount = perfectPairsBet * 10; // 10:1 payout
+                const ppMultiplier = perfectPairsResult === 'perfect' ? 10 : perfectPairsResult === 'colored' ? 12 : 5;
+                const winAmount = perfectPairsBet * ppMultiplier;
                 const winChips: number[] = [];
                 let rem = winAmount;
                 const chipVals = [100000, 10000, 2500, 1000, 500];
@@ -1648,13 +1649,19 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               {/* PP bet label above stack */}
               <div
                 className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
-                  ppChipAnimationState !== 'none' ? 'opacity-0' : ''
+                  ppChipAnimationState === 'loss' ? 'opacity-0' : ''
                 }`}
                 style={{ top: '-20px', transition: 'opacity 0.3s ease-out' }}
               >
-                <span className="font-black text-xs text-amber-300" style={{ textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9)' }}>
-                  PP {perfectPairsBet >= 1000 ? `${(perfectPairsBet / 1000).toFixed(0)}K` : perfectPairsBet}
-                </span>
+                {ppChipAnimationState === 'win' && perfectPairsResult ? (
+                  <span className="font-black text-xs text-green-300 animate-pulse" style={{ textShadow: '0 0 8px rgba(74, 222, 128, 0.6), 2px 2px 6px rgba(0, 0, 0, 0.9)' }}>
+                    {perfectPairsResult === 'colored' ? 'COLORED 12:1' : perfectPairsResult === 'mixed' ? 'MIXED 5:1' : 'PERFECT 10:1'}
+                  </span>
+                ) : (
+                  <span className="font-black text-xs text-amber-300" style={{ textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9)' }}>
+                    PP {perfectPairsBet >= 1000 ? `${(perfectPairsBet / 1000).toFixed(0)}K` : perfectPairsBet}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -1692,7 +1699,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 {perfectPairsBet > 0 ? `${(perfectPairsBet / 1000).toFixed(0)}K` : '—'}
               </span>
               <span style={{ fontSize: '7px', color: perfectPairsBet > 0 ? 'rgba(255,255,255,0.7)' : 'rgba(148,163,184,0.5)', marginTop: '1px' }}>
-                10:1
+                5-12:1
               </span>
             </button>
           )}

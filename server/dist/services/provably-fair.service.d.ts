@@ -69,6 +69,43 @@ export declare class ProvablyFairService {
      */
     shuffleDeck(seeds: GameSeeds, deckSize?: number): number[];
     /**
+     * HMAC byte stream — core primitive for Fisher-Yates shuffle.
+     * Extracts 4 bytes from a cursor-indexed HMAC-SHA256 byte stream.
+     * message = `${clientSeed}:${nonce}:${Math.floor(cursor / 32)}`
+     * Returns 4 bytes starting at `cursor % 32`, handling 32-byte boundary crossing.
+     */
+    hmacByteStream(serverSeed: string, clientSeed: string, nonce: number, cursor: number): Buffer;
+    /**
+     * Convert 4 bytes to a float in [0, 1) — unbiased mapping.
+     * byte[0]/256 + byte[1]/256^2 + byte[2]/256^3 + byte[3]/256^4
+     */
+    bytesToFloat(bytes: Buffer | Uint8Array): number;
+    /**
+     * Fisher-Yates shuffle of a 52-card deck using cursor-based HMAC byte stream.
+     * One nonce per game. Returns array of card indices 0-51.
+     * Consumes 51 * 4 = 204 bytes (~7 HMAC rounds).
+     */
+    fisherYatesShuffle(serverSeed: string, clientSeed: string, nonce: number): number[];
+    /**
+     * Card index (0-51) to rank (1-13). A=1, 2=2, ..., K=13.
+     */
+    cardIndexToRank(idx: number): number;
+    /**
+     * Card index (0-51) to suit (0-3). 0=hearts, 1=diamonds, 2=clubs, 3=spades.
+     */
+    cardIndexToSuit(idx: number): number;
+    /**
+     * Calculate hand total for v2 card indices (0-51).
+     */
+    calculateHandTotalV2(cards: number[]): {
+        total: number;
+        hasAce: boolean;
+    };
+    /**
+     * Check if hand is a natural blackjack for v2 card indices (0-51).
+     */
+    isNaturalBlackjackV2(cards: number[]): boolean;
+    /**
      * Convert card value to blackjack value (1=Ace=11/1, 11-13=10)
      */
     getBlackjackValue(cardValue: number): number;

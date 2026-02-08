@@ -49,8 +49,8 @@ export interface Game {
   isBlackjack?: boolean;
   /** Perfect Pairs side bet amount (for display). */
   perfectPairsBetAmount?: bigint;
-  /** Perfect Pairs result (exact match only). */
-  perfectPairsResult?: 'perfect';
+  /** Perfect Pairs result: 'perfect' (v1), 'colored' (v2: same color), 'mixed' (v2: different color). */
+  perfectPairsResult?: 'perfect' | 'colored' | 'mixed';
   /** Perfect Pairs payout (stake + winnings). */
   perfectPairsPayout?: bigint;
 }

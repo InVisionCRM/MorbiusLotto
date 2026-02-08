@@ -586,6 +586,15 @@ export default function BlackjackPage() {
   // Ref to track result for chip clearing after animation
   const chipResultRef = useRef<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
 
+  // Pending game completion data — deferred until dealer reveal completes for immersion
+  const pendingGameCompletionRef = useRef<{
+    gameResult: GameResult;
+    chartBetAmount: bigint;
+    chartPayout: bigint;
+    chartMeta: { gameId?: string; result?: string };
+    ppResult?: string;
+  } | null>(null);
+
   // Note: Payment method state no longer needed since only MORBIUS from reserve
 
   // Deposit/Withdraw modal state
@@ -936,13 +945,26 @@ export default function BlackjackPage() {
       const databaseHistory: GameResult[] = gamesWithHands
         .map(({ game, hands }) => {
           const gameId = game.id;
+          const gameRngVersion = Number(game.rng_version ?? 1);
           const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
           const suitFor = (idx: number) => {
             const salt = gameId.length;
             return suits[(idx + salt) % suits.length];
           };
-          const toCard = (value: number, idx: number): Card =>
-            createCard(Number(value), suitFor(idx), false);
+          const toCard = (value: number, idx: number): Card => {
+            const n = Number(value);
+            if (gameRngVersion === 2 && n >= 0 && n <= 51) {
+              const rank = (n % 13) + 1;
+              const suitIndex = Math.floor(n / 13);
+              return createCard(rank, suits[suitIndex % 4], false);
+            }
+            if (n >= 10 && n <= 133) {
+              const v = Math.floor(n / 10);
+              const suitIndex = n % 10;
+              return createCard(v, suits[suitIndex % 4], false);
+            }
+            return createCard(n, suitFor(idx), false);
+          };
 
           // Dealer cards
           const dealerCards: Card[] = Array.isArray(game.dealer_cards)
@@ -1249,9 +1271,17 @@ export default function BlackjackPage() {
       const salt = gameId.length;
       return suits[(idx + salt) % suits.length];
     };
-    // Server may send encoded cards (value*10+suit, 10-133) for Perfect Pairs; else raw value 1-13
+    // Detect RNG version from server state to decode card format
+    const isV2 = serverGameState.rngVersion === 2;
+    // V2: card index 0-51 (rank = idx%13+1, suit = floor(idx/13))
+    // V1: encoded cards value*10+suit (10-133); or raw value 1-13
     const toCard = (raw: number, idx: number, hidden = false): Card => {
       const n = Number(raw);
+      if (isV2 && n >= 0 && n <= 51) {
+        const rank = (n % 13) + 1;
+        const suitIndex = Math.floor(n / 13);
+        return createCard(rank, suits[suitIndex % 4], hidden);
+      }
       if (n >= 10 && n <= 133) {
         const value = Math.floor(n / 10);
         const suitIndex = n % 10;
@@ -1454,11 +1484,7 @@ export default function BlackjackPage() {
       // Store as pending - will be applied after dealer reveal completes
       setPendingChipResult(chipAnimResult);
 
-      // Add to break-even P&L chart (per completed game)
-      chartRef.current?.addGameResult(betAmount, payout, {
-        gameId: data?.gameId ? String(data.gameId) : undefined,
-        result: data?.result ? String(data.result) : undefined,
-      });
+      // Chart + history updates are deferred to handleDealerRevealComplete for immersion
 
       // Extract player and dealer hands from the provided processedGame or gameState or use currentGame
       let playerHand: Hand = createEmptyHand();
@@ -1508,9 +1534,22 @@ export default function BlackjackPage() {
           const salt = gameId.length;
           return suits[(idx + salt) % suits.length];
         };
-        const toCard = (value: number, idx: number, hidden = false): Card =>
-          createCard(Number(value), suitFor(idx), hidden);
-        
+        const completionIsV2 = serverGameState.rngVersion === 2;
+        const toCard = (value: number, idx: number, hidden = false): Card => {
+          const n = Number(value);
+          if (completionIsV2 && n >= 0 && n <= 51) {
+            const rank = (n % 13) + 1;
+            const suitIndex = Math.floor(n / 13);
+            return createCard(rank, suits[suitIndex % 4], hidden);
+          }
+          if (n >= 10 && n <= 133) {
+            const v = Math.floor(n / 10);
+            const suitIndex = n % 10;
+            return createCard(v, suits[suitIndex % 4], hidden);
+          }
+          return createCard(n, suitFor(idx), hidden);
+        };
+
         const toBigIntSafe = (v: any) => {
           try {
             if (typeof v === 'bigint') return v;
@@ -1628,45 +1667,6 @@ export default function BlackjackPage() {
         });
       }
       
-      // If we still don't have cards, schedule an update after state settles
-      if ((playerHand.cards.length === 0 || dealerHand.cards.length === 0) && gameState.currentGame) {
-        // Use requestAnimationFrame to wait for React state to update
-        requestAnimationFrame(() => {
-          setGameState(prev => {
-            const currentGame = prev.currentGame;
-            if (!currentGame) return prev;
-            
-            const existingIndex = prev.history.findIndex(h => h.gameId === String(data?.gameId));
-            if (existingIndex >= 0) {
-              const existingEntry = prev.history[existingIndex];
-              const needsUpdate = 
-                (existingEntry.playerHand.cards.length === 0 && currentGame.playerHand?.cards.length > 0) ||
-                (existingEntry.dealerHand.cards.length === 0 && currentGame.dealerHand?.cards.length > 0);
-              
-              if (needsUpdate) {
-                console.log('handleGameCompletion: Updating history entry with cards from currentGame', {
-                  gameId: data?.gameId,
-                  playerCards: currentGame.playerHand?.cards.map(c => c.value),
-                  dealerCards: currentGame.dealerHand?.cards.map(c => c.value)
-                });
-                
-                const updatedHistory = [...prev.history];
-                updatedHistory[existingIndex] = {
-                  ...existingEntry,
-                  playerHand: currentGame.playerHand || existingEntry.playerHand,
-                  dealerHand: currentGame.dealerHand || existingEntry.dealerHand
-                };
-                return {
-                  ...prev,
-                  history: updatedHistory
-                };
-              }
-            }
-            return prev;
-          });
-        });
-      }
-      
       console.log('handleGameCompletion: Final hands before creating GameResult', {
         playerHandCards: playerHand.cards.map(c => c.value),
         dealerHandCards: dealerHand.cards.map(c => c.value),
@@ -1698,45 +1698,90 @@ export default function BlackjackPage() {
         ...(wasDoubleDown && { wasDoubleDown: true }),
       };
 
-      console.log('handleGameCompletion: Adding to history', {
-        gameId: gameResult.gameId,
-        playerHandCards: gameResult.playerHand.cards.map(c => c.value),
-        dealerHandCards: gameResult.dealerHand.cards.map(c => c.value),
-        playerHandTotal: gameResult.playerHand.total,
-        dealerHandTotal: gameResult.dealerHand.total,
-        betAmount: gameResult.playerHand.betAmount?.toString(),
-        payout: gameResult.payout.toString()
-      });
-      
+      // Store game result + chart data in ref — flushed in handleDealerRevealComplete for immersion
+      pendingGameCompletionRef.current = {
+        gameResult,
+        chartBetAmount: betAmount,
+        chartPayout: payout,
+        chartMeta: {
+          gameId: data?.gameId ? String(data.gameId) : undefined,
+          result: data?.result ? String(data.result) : undefined,
+        },
+        ppResult: data.processedGame?.perfectPairsResult,
+      };
+
+      if (profit > BigInt(0)) {
+        setPendingWinData({
+          amount: profit,
+          isBlackjack: data.result === 'blackjack'
+        });
+      }
+    } catch (error) {
+      console.error('Error in handleGameCompletion:', error);
+      // ignore malformed payload
+    }
+  }, [gameState.currentGame, manageChipStack]);
+
+  // Handle dealer reveal completion - show win notification and trigger chip animation
+  const handleCardsClearComplete = useCallback(() => {
+    setGameState(prev => ({ ...prev, currentGame: null }));
+  }, []);
+
+  const handleDealerRevealComplete = useCallback(() => {
+    // Allow REBET/DEAL only after dealer hand is fully revealed
+    setGameState(prev => ({ ...prev, isPlaying: false }));
+    // Trigger chip animation now that dealer reveal is complete
+    if (pendingChipResult) {
+      chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
+      setCurrentGameResult(pendingChipResult);
+      setPendingChipResult(null);
+      // Play sound: dealer wins (including dealer blackjack)
+      if (soundEnabled && pendingChipResult === 'loss') {
+        playSound('/BlackJack/sounds/DealerWins.mp3');
+      }
+      // Play sound: player wins (including player blackjack — same as any other win)
+      if (soundEnabled && (pendingChipResult === 'win' || pendingChipResult === 'blackjack')) {
+        playSound('/BlackJack/sounds/PlayerWins.mp3');
+      }
+    }
+
+    // Show win notification
+    if (pendingWinData) {
+      setWinAmount(pendingWinData.amount);
+      setIsBlackjackWin(pendingWinData.isBlackjack);
+      setShowWinNotification(true);
+      setPendingWinData(null);
+    }
+
+    // Flush pending game completion to history + chart (deferred for immersion)
+    const pending = pendingGameCompletionRef.current;
+    if (pending) {
+      pendingGameCompletionRef.current = null;
+
+      // Update P&L chart
+      chartRef.current?.addGameResult(pending.chartBetAmount, pending.chartPayout, pending.chartMeta);
+
+      // PP toasts
+      const ppResult = pending.ppResult;
+      if (ppResult === 'perfect') toast.success('Perfect Pair! 10:1', { description: 'Exact match — same rank and suit!' });
+      else if (ppResult === 'colored') toast.success('Colored Pair! 12:1', { description: 'Same rank, same color!' });
+      else if (ppResult === 'mixed') toast.success('Mixed Pair! 5:1', { description: 'Same rank, different color!' });
+
+      // Add to history
+      const gameResult = pending.gameResult;
       setGameState(prev => {
-        // Prevent duplicate entries by checking if gameId already exists
         const existingIndex = prev.history.findIndex(h => h.gameId === gameResult.gameId);
         if (existingIndex >= 0) {
-          // Update existing entry instead of adding duplicate
-          // Only update if the new entry has cards (to avoid overwriting with empty cards)
           const shouldUpdate = gameResult.playerHand.cards.length > 0 || gameResult.dealerHand.cards.length > 0;
           if (shouldUpdate) {
-            console.log('handleGameCompletion: Updating existing history entry', {
-              existingIndex,
-              oldPlayerCards: prev.history[existingIndex].playerHand.cards.map(c => c.value),
-              newPlayerCards: gameResult.playerHand.cards.map(c => c.value)
-            });
             const updatedHistory = [...prev.history];
             updatedHistory[existingIndex] = gameResult;
-            return {
-              ...prev,
-              history: updatedHistory,
-              lastResult: gameResult
-            };
-          } else {
-            // Don't update if new entry has no cards (keep existing)
-            console.log('handleGameCompletion: Skipping update - new entry has no cards');
-            return prev;
+            return { ...prev, history: updatedHistory, lastResult: gameResult };
           }
+          return prev;
         }
-        console.log('handleGameCompletion: Adding new history entry');
         const newHistory = [gameResult, ...prev.history].slice(0, 50);
-        
+
         // Persist to localStorage as backup (keyed by wallet address)
         if (address && typeof window !== 'undefined') {
           try {
@@ -1789,63 +1834,14 @@ export default function BlackjackPage() {
             console.error('Failed to save history to localStorage:', error);
           }
         }
-        
-        return {
-          ...prev,
-          history: newHistory,
-          lastResult: gameResult
-        };
+
+        return { ...prev, history: newHistory, lastResult: gameResult };
       });
-
-      if (profit > BigInt(0)) {
-        setPendingWinData({
-          amount: profit,
-          isBlackjack: data.result === 'blackjack'
-        });
-      }
-
-      const ppResult = data.processedGame?.perfectPairsResult;
-      if (ppResult === 'perfect') toast.success('Perfect Pair! 10:1', { description: 'Exact match — same rank and suit!' });
-    } catch (error) {
-      console.error('Error in handleGameCompletion:', error);
-      // ignore malformed payload
-    }
-  }, [gameState.currentGame, manageChipStack]);
-
-  // Handle dealer reveal completion - show win notification and trigger chip animation
-  const handleCardsClearComplete = useCallback(() => {
-    setGameState(prev => ({ ...prev, currentGame: null }));
-  }, []);
-
-  const handleDealerRevealComplete = useCallback(() => {
-    // Allow REBET/DEAL only after dealer hand is fully revealed
-    setGameState(prev => ({ ...prev, isPlaying: false }));
-    // Trigger chip animation now that dealer reveal is complete
-    if (pendingChipResult) {
-      chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
-      setCurrentGameResult(pendingChipResult);
-      setPendingChipResult(null);
-      // Play sound: dealer wins (including dealer blackjack)
-      if (soundEnabled && pendingChipResult === 'loss') {
-        playSound('/BlackJack/sounds/DealerWins.mp3');
-      }
-      // Play sound: player wins (including player blackjack — same as any other win)
-      if (soundEnabled && (pendingChipResult === 'win' || pendingChipResult === 'blackjack')) {
-        playSound('/BlackJack/sounds/PlayerWins.mp3');
-      }
-    }
-
-    // Show win notification
-    if (pendingWinData) {
-      setWinAmount(pendingWinData.amount);
-      setIsBlackjackWin(pendingWinData.isBlackjack);
-      setShowWinNotification(true);
-      setPendingWinData(null);
     }
 
     // Refresh reserve display only after dealer hand is fully revealed (preserves immersion)
     fetchBalance();
-  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, fetchBalance]);
+  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, fetchBalance, address]);
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {
@@ -2104,6 +2100,8 @@ export default function BlackjackPage() {
         })),
         dealerActions: raw.dealerActions ?? [],
         baseNonce: Number(raw.baseNonce ?? raw.nonce ?? 0),
+        rngVersion: raw.rngVersion,
+        gameNumber: raw.gameNumber,
       };
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {

@@ -63,6 +63,7 @@ export interface Game {
   rng_counter?: number;
   perfect_pairs_bet_amount?: bigint;
   perfect_pairs_payout?: bigint;
+  rng_version?: number;
 }
 
 export interface PlayerStats {
@@ -203,6 +204,7 @@ export class DatabaseService {
       rng_counter: Number(row.rng_counter ?? 0),
       perfect_pairs_bet_amount: row.perfect_pairs_bet_amount != null ? this.toBigInt(row.perfect_pairs_bet_amount) : 0n,
       perfect_pairs_payout: row.perfect_pairs_payout != null ? this.toBigInt(row.perfect_pairs_payout) : 0n,
+      rng_version: Number(row.rng_version ?? 1),
     };
   }
 
@@ -549,9 +551,10 @@ export class DatabaseService {
         current_hand_index,
         rng_counter,
         perfect_pairs_bet_amount,
-        perfect_pairs_payout
+        perfect_pairs_payout,
+        rng_version
       )
-      VALUES ($1, $2, $3::NUMERIC, $4, $5, $6, $7::NUMERIC, $8, $9, $10, $11, $12, $13, $14, $15::NUMERIC, $16::NUMERIC)
+      VALUES ($1, $2, $3::NUMERIC, $4, $5, $6, $7::NUMERIC, $8, $9, $10, $11, $12, $13, $14, $15::NUMERIC, $16::NUMERIC, $17)
       RETURNING *
     `;
 
@@ -572,6 +575,7 @@ export class DatabaseService {
       Number(gameData.rng_counter ?? 0),
       (gameData.perfect_pairs_bet_amount ?? 0n).toString(),
       (gameData.perfect_pairs_payout ?? 0n).toString(),
+      Number(gameData.rng_version ?? 1),
     ];
 
     const result = await this.pool.query(query, values);
@@ -742,6 +746,10 @@ export class DatabaseService {
     if (updates.rng_counter !== undefined) {
       fields.push(`rng_counter = $${paramCount++}`);
       values.push(Number(updates.rng_counter));
+    }
+    if (updates.rng_version !== undefined) {
+      fields.push(`rng_version = $${paramCount++}`);
+      values.push(Number(updates.rng_version));
     }
     if (updates.completed_at !== undefined) {
       fields.push(`completed_at = $${paramCount++}`);

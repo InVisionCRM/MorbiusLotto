@@ -58,6 +58,7 @@ export interface Game {
     rng_counter?: number;
     perfect_pairs_bet_amount?: bigint;
     perfect_pairs_payout?: bigint;
+    rng_version?: number;
 }
 export interface PlayerStats {
     total_games: number;
