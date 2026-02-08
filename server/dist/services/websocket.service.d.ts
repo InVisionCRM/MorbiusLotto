@@ -52,6 +52,7 @@ export declare class WebSocketService {
     private handleGetTournamentInfo;
     private broadcastTournamentLeaderboardUpdate;
     private handleTournamentCreate;
+    private handleCreateFreeroll;
     private handleTournamentList;
     private handleTournamentJoin;
     private handleTournamentRebuy;
@@ -60,6 +61,7 @@ export declare class WebSocketService {
     private handleFreerollRegister;
     private handleFreerollJoin;
     private handleFreerollReentry;
+    private handleTournamentEntriesList;
     private getPrizePercentagesForType;
     shutdown(): void;
 }

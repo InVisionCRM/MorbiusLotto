@@ -6774,3 +6774,4 @@
 {"level":"info","message":"handleFreerollEnd: tournamentId=%s","service":"blackjack-server","timestamp":"2026-02-07T07:30:03.840Z"}
 {"level":"info","message":"handleFreerollEnd: tournament already not active, skipping: %s","service":"blackjack-server","timestamp":"2026-02-07T07:30:03.883Z"}
 {"level":"error","message":"FreerollSchedulerService: poll error: %s","service":"blackjack-server","timestamp":"2026-02-07T14:13:27.671Z"}
+{"level":"error","message":"FreerollSchedulerService: poll error: %s","service":"blackjack-server","timestamp":"2026-02-07T19:47:15.699Z"}

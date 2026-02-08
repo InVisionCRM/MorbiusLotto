@@ -213,8 +213,18 @@ export default function BlackjackPage() {
   // Intro screen state
   const [showIntro, setShowIntro] = useState(true);
 
-  // Provably Fair: client seed (optional, used when starting a game; UI is in sidebar tab)
-  const [clientSeed, setClientSeed] = useState('');
+  // Provably Fair: client seed (auto-generated for player entropy; can be overridden in sidebar)
+  const [clientSeed, setClientSeed] = useState(() => {
+    if (typeof window !== 'undefined' && window.crypto) {
+      const bytes = new Uint8Array(16)
+      window.crypto.getRandomValues(bytes)
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+    }
+    return ''
+  });
+
+  // Perfect Pairs side bet (whole MORBIUS units, 0-10000)
+  const [perfectPairsBet, setPerfectPairsBet] = useState(0);
 
   // Background preference state (persisted per wallet)
   const [theme, setTheme] = useState<BlackjackThemeKind>('video');
@@ -1795,9 +1805,7 @@ export default function BlackjackPage() {
       }
 
       const ppResult = data.processedGame?.perfectPairsResult;
-      if (ppResult === 'perfect') toast.success('Perfect Pair! +25x', { description: 'Same rank and suit.' });
-      else if (ppResult === 'colored') toast.success('Colored Pair! +12x', { description: 'Same rank, same color.' });
-      else if (ppResult === 'mixed') toast.success('Mixed Pair! +5x', { description: 'Same rank, different color.' });
+      if (ppResult === 'perfect') toast.success('Perfect Pair! 10:1', { description: 'Exact match — same rank and suit!' });
     } catch (error) {
       console.error('Error in handleGameCompletion:', error);
       // ignore malformed payload
@@ -2020,8 +2028,9 @@ export default function BlackjackPage() {
         setManualBetAmount(null);
       }
     }
-    handleStartGame(effectiveTotalBetWei, clientSeed);
-  }, [manualBetAmount, effectiveTotalBetWei, clientSeed, handleStartGame, amountToChipStack]);
+    const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
+    handleStartGame(effectiveTotalBetWei, clientSeed, ppBetWei);
+  }, [manualBetAmount, effectiveTotalBetWei, clientSeed, handleStartGame, amountToChipStack, perfectPairsBet]);
 
   // Rebet and deal: same bet as last hand, then start game in one action (must be after handleStartGame)
   const handleRebetAndDeal = useCallback(() => {
@@ -2045,8 +2054,9 @@ export default function BlackjackPage() {
       }
     }
     setChipStack(chips);
-    handleStartGame(lastBetWei, clientSeed);
-  }, [lastBetAmount, clientSeed, handleStartGame]);
+    const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
+    handleStartGame(lastBetWei, clientSeed, ppBetWei);
+  }, [lastBetAmount, clientSeed, handleStartGame, perfectPairsBet]);
 
   // Note: Approval handling no longer needed since bets come from reserve
 
@@ -2085,6 +2095,15 @@ export default function BlackjackPage() {
         payout: BigInt(raw.totalPayout ?? raw.total_payout ?? 0),
         timestamp: raw.timestamp ?? 0,
         actions: raw.actions ?? [],
+        playerHands: hands.map((h: any) => ({
+          cards: h.cards || [],
+          total: h.total || 0,
+          result: h.result || '',
+          payout: BigInt(h.payout ?? 0),
+          actions: h.actions || [],
+        })),
+        dealerActions: raw.dealerActions ?? [],
+        baseNonce: Number(raw.baseNonce ?? raw.nonce ?? 0),
       };
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
@@ -2393,6 +2412,9 @@ export default function BlackjackPage() {
               hideBettingPanel={true}
               completedGameId={currentGame?.state === GameState.COMPLETE ? currentGame?.id : undefined}
               onCardsClearComplete={handleCardsClearComplete}
+              perfectPairsBet={perfectPairsBet}
+              onPerfectPairsBetChange={setPerfectPairsBet}
+              perfectPairsResult={currentGame?.perfectPairsResult}
             />
 
             {/* Win Notification */}
@@ -2408,8 +2430,8 @@ export default function BlackjackPage() {
 
         </div>
 
-          {/* 3. Betting panel (always visible) + tabbed sidebar */}
-          <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2">
+          {/* 3. Betting panel (always visible) + tabbed sidebar — self-contained height so tab content doesn't resize the table */}
+          <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2 md:max-h-[calc(100vh-8rem)] md:overflow-hidden">
           {tournament.tournamentState.inTournament ? (
             <TournamentBetPanel
               chips={tournament.tournamentState.chips}
@@ -2429,7 +2451,10 @@ export default function BlackjackPage() {
           ) : (
             <>
               <BettingPanelMobile
-                onStartGame={(betBigInt, _clientSeed) => handleStartGame(betBigInt, clientSeed)}
+                onStartGame={(betBigInt, _clientSeed) => {
+                  const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
+                  handleStartGame(betBigInt, clientSeed, ppBetWei);
+                }}
                 isPlaying={gameState.isPlaying}
                 reserveBalance={offChainBalance}
                 onBetAmountChange={manageChipStack}
@@ -2456,6 +2481,8 @@ export default function BlackjackPage() {
                 soundEnabled={soundEnabled}
                 onPlaySfx={playSound}
                 alwaysVisible
+                perfectPairsBet={perfectPairsBet}
+                onPerfectPairsBetChange={setPerfectPairsBet}
               />
             </>
           )}

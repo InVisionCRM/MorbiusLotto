@@ -53,7 +53,7 @@ export interface CreateGameRequest {
 }
 
 /** Perfect Pairs result for the first two player cards. */
-export type PerfectPairsResult = 'perfect' | 'colored' | 'mixed' | 'none';
+export type PerfectPairsResult = 'perfect' | 'none';
 
 export interface CreateTournamentGameRequest {
   playerAddress: string;
@@ -77,11 +77,11 @@ export interface PlayerActionRequest {
   clientSeed?: string; // Revealed on first action
 }
 
-/** Perfect Pairs paytable: 25:1 perfect, 12:1 colored, 5:1 mixed (stake returned on win). */
-const PERFECT_PAIRS_MULTIPLIERS = { perfect: 25, colored: 12, mixed: 5 } as const;
+/** Perfect Pairs: exact match (same rank + same suit) pays 10:1 (stake returned on win). */
+const PERFECT_PAIRS_PAYOUT_MULTIPLIER = 10;
 
 export class BlackjackGameService {
-  private static readonly GAME_NONCE_MULTIPLIER = 1_000_000; // avoid collisions within a game
+  private static readonly GAME_NONCE_MULTIPLIER = 10_000_000; // avoid nonce collisions between games
   private tournamentService?: TournamentService;
 
   constructor(
@@ -288,6 +288,11 @@ export class BlackjackGameService {
           });
         }
         await this.dbService.revealServerSeed(game.id, session.server_seed_hash, session.server_seed!);
+
+        // Rotate server seed for next game (per-game isolation)
+        const newServerSeed = this.pfService.generateServerSeed();
+        const newServerSeedHash = this.pfService.createServerSeedHash(newServerSeed);
+        await this.dbService.setSessionServerSeed(session.id, newServerSeed, newServerSeedHash);
       }
 
       const gameState: GameState = {
@@ -338,8 +343,7 @@ export class BlackjackGameService {
   }
 
   /**
-   * Classify Perfect Pairs result from first two player cards (encoded value*10+suit).
-   * Suits: 0=hearts, 1=diamonds (red), 2=clubs, 3=spades (black).
+   * Classify Perfect Pairs: exact match only (same rank AND same suit).
    */
   private classifyPerfectPair(card1: number, card2: number): PerfectPairsResult {
     const v1 = this.pfService.decodeCardValue(card1);
@@ -347,16 +351,12 @@ export class BlackjackGameService {
     if (v1 !== v2) return 'none';
     const s1 = this.pfService.decodeCardSuit(card1);
     const s2 = this.pfService.decodeCardSuit(card2);
-    if (s1 === s2) return 'perfect';
-    const red = (s: number) => s === 0 || s === 1;
-    if (red(s1) === red(s2)) return 'colored';
-    return 'mixed';
+    return s1 === s2 ? 'perfect' : 'none';
   }
 
   private getPerfectPairsPayout(bet: bigint, result: PerfectPairsResult): bigint {
-    if (result === 'none' || bet <= 0n) return 0n;
-    const mult = BigInt(PERFECT_PAIRS_MULTIPLIERS[result]);
-    return bet + bet * mult; // stake + winnings
+    if (result !== 'perfect' || bet <= 0n) return 0n;
+    return bet + bet * BigInt(PERFECT_PAIRS_PAYOUT_MULTIPLIER); // stake + 10x winnings
   }
 
   /** Draw one encoded card (value*10+suit), consumes 2 nonces. */
@@ -919,6 +919,11 @@ export class BlackjackGameService {
     const session = await this.dbService.getSessionById(game.session_id);
     if (session?.server_seed) {
       await this.dbService.revealServerSeed(gameId, session.server_seed_hash, session.server_seed);
+
+      // Rotate server seed for next game (per-game isolation)
+      const newServerSeed = this.pfService.generateServerSeed();
+      const newServerSeedHash = this.pfService.createServerSeedHash(newServerSeed);
+      await this.dbService.setSessionServerSeed(game.session_id, newServerSeed, newServerSeedHash);
     }
 
     return {
@@ -969,7 +974,8 @@ export class BlackjackGameService {
           cards: h.cards,
           total: h.total,
           result: h.result,
-          payout: h.payout
+          payout: h.payout,
+          actions: h.actions || []
         })),
         dealerCards: game.dealer_cards,
         dealerTotal: game.dealer_total,
@@ -1166,6 +1172,11 @@ export class BlackjackGameService {
 
         // Reveal server seed for verification
         await this.dbService.revealServerSeed(game.id, session.server_seed_hash, session.server_seed!);
+
+        // Rotate server seed for next game (per-game isolation)
+        const newServerSeed = this.pfService.generateServerSeed();
+        const newServerSeedHash = this.pfService.createServerSeedHash(newServerSeed);
+        await this.dbService.setSessionServerSeed(session.id, newServerSeed, newServerSeedHash);
       }
 
       // Get updated tournament state

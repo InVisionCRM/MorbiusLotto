@@ -22,6 +22,10 @@ export interface BlackjackMobileActionBarProps {
   onPlaySfx?: (path: string) => void;
   /** When true, show on all screen sizes (e.g. when embedded in sidebar Bet tab). Default false = hidden on md+ */
   alwaysVisible?: boolean;
+  /** Perfect Pairs side bet (whole MORBIUS, 0-10000). */
+  perfectPairsBet?: number;
+  /** Callback when PP bet changes (cycles 0→1k→...→10k→0). */
+  onPerfectPairsBetChange?: (amount: number) => void;
 }
 
 export function BlackjackMobileActionBar({
@@ -41,6 +45,8 @@ export function BlackjackMobileActionBar({
   soundEnabled = true,
   onPlaySfx,
   alwaysVisible = false,
+  perfectPairsBet = 0,
+  onPerfectPairsBetChange,
 }: BlackjackMobileActionBarProps) {
   const playKnock = () => {
     if (soundEnabled) {
@@ -145,8 +151,36 @@ export function BlackjackMobileActionBar({
         </button>
         </div>
 
-        {/* Row 2: REBET | DEAL */}
-        <div className="flex rounded-lg sm:rounded-xl overflow-hidden border-2 border-white/10 w-full" style={{ boxShadow: '0 4px 0 0 rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.15)' }}>
+        {/* Perfect Pairs circle + REBET | DEAL row */}
+        <div className="flex items-center gap-2 w-full">
+        {onPerfectPairsBetChange && (
+          <button
+            type="button"
+            onClick={() => {
+              const next = perfectPairsBet >= 10000 ? 0 : perfectPairsBet + 1000;
+              onPerfectPairsBetChange(next);
+            }}
+            disabled={isPlaying}
+            className="flex-shrink-0 flex flex-col items-center justify-center transition-all active:scale-95"
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: perfectPairsBet > 0
+                ? 'linear-gradient(145deg, #f59e0b, #d97706)'
+                : 'linear-gradient(145deg, rgba(50,60,70,0.9), rgba(30,40,50,0.9))',
+              border: perfectPairsBet > 0 ? '2px solid rgba(251,191,36,0.7)' : '2px dashed rgba(100,116,139,0.5)',
+              boxShadow: perfectPairsBet > 0 ? '0 0 8px rgba(245,158,11,0.3)' : 'inset 0 2px 4px rgba(0,0,0,0.5)',
+              opacity: isPlaying ? 0.3 : 1,
+              cursor: isPlaying ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <span style={{ fontSize: '7px', fontWeight: 700, color: perfectPairsBet > 0 ? '#fff' : 'rgba(148,163,184,0.7)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>PAIRS</span>
+            <span style={{ fontSize: '11px', fontWeight: 900, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.6)', lineHeight: 1 }}>{perfectPairsBet > 0 ? `${(perfectPairsBet / 1000).toFixed(0)}K` : '—'}</span>
+            <span style={{ fontSize: '6px', color: perfectPairsBet > 0 ? 'rgba(255,255,255,0.7)' : 'rgba(148,163,184,0.5)' }}>10:1</span>
+          </button>
+        )}
+        <div className="flex-1 flex rounded-lg sm:rounded-xl overflow-hidden border-2 border-white/10" style={{ boxShadow: '0 4px 0 0 rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.15)' }}>
           {onRebetAndDeal && (
             <button
               type="button"
@@ -183,6 +217,7 @@ export function BlackjackMobileActionBar({
           >
             <span className="text-white font-black text-sm tracking-wider drop-shadow-sm">DEAL</span>
           </button>
+        </div>
         </div>
       </div>
     </section>

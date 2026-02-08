@@ -32,15 +32,12 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
   onDoubleBet
 }) => {
   const [betAmount, setBetAmount] = useState<string>('0');
-  const [perfectPairsBet, setPerfectPairsBet] = useState<string>('0');
 
   const currentBetAmountBigInt = parseEther(currentBetAmount || '0');
-  const perfectPairsBetBigInt = parseEther(perfectPairsBet || '0');
-  const totalStake = currentBetAmountBigInt + perfectPairsBetBigInt;
   const isValidBet = currentBetAmountBigInt >= BET_LIMITS.MIN_BET && currentBetAmountBigInt <= BET_LIMITS.MAX_BET;
-  const hasEnoughBalance = reserveBalance >= totalStake;
+  const hasEnoughBalance = reserveBalance >= currentBetAmountBigInt;
 
-  const remainingBalance = reserveBalance - totalStake;
+  const remainingBalance = reserveBalance - currentBetAmountBigInt;
 
   console.log('BettingPanel validation:', {
     currentBetAmount,
@@ -76,11 +73,6 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
     const chipValueWei = parseEther(chipValue.toString());
     return remainingBalance >= chipValueWei;
   };
-  const isPerfectPairsChipAffordable = (chipValue: number) => {
-    const chipValueWei = parseEther(chipValue.toString());
-    return reserveBalance >= currentBetAmountBigInt + perfectPairsBetBigInt + chipValueWei;
-  };
-
   const getChipImage = (value: number) => {
     switch (value) {
       case 500: return '/PokerChips/greenpokerchip005.png';
@@ -140,7 +132,6 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
           type="button"
           onClick={() => {
             setBetAmount('0');
-            setPerfectPairsBet('0');
             onBetAmountChange?.('', undefined, true);
           }}
           disabled={isPlaying}
@@ -152,36 +143,6 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
         >
           Clear
         </button>
-      </div>
-
-      {/* Perfect Pairs side bet row */}
-      <div className="mt-1.5 sm:mt-2 flex items-center gap-1 sm:gap-2 flex-wrap">
-        <span className="text-[10px] sm:text-xs text-slate-400 font-medium shrink-0">Perfect Pairs</span>
-        <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-          {quickBetAmounts.map(amount => {
-            const chipImage = getChipImage(amount);
-            const affordable = isPerfectPairsChipAffordable(amount);
-            const isCyanChip = amount === 100000;
-            const label = amount >= 1000 ? (amount >= 10000 ? `${amount / 1000}K` : amount) : amount;
-            return (
-              <button
-                key={`pp-${amount}`}
-                onClick={() => {
-                  const next = (parseFloat(perfectPairsBet || '0') + amount).toString();
-                  setPerfectPairsBet(next);
-                }}
-                disabled={isPlaying || !affordable}
-                className={`relative w-6 h-6 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-[8px] sm:text-[10px] transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md overflow-hidden ${!affordable ? 'opacity-50' : ''}`}
-                style={{ background: `url('${chipImage}') center/contain no-repeat`, border: '1px solid rgba(60, 60, 60, 0.5)' }}
-              >
-                <span className={`relative z-10 font-bold ${isCyanChip ? 'text-slate-800' : 'text-white'}`} style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>{label}</span>
-              </button>
-            );
-          })}
-        </div>
-        {parseFloat(perfectPairsBet || '0') > 0 && (
-          <span className="text-[10px] sm:text-xs text-cyan-400/90">= {perfectPairsBet} MORBIUS</span>
-        )}
       </div>
 
       {/* Error Messages */}

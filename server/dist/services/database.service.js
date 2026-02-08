@@ -66,6 +66,8 @@ class DatabaseService {
             current_hand_index: Number(row.current_hand_index ?? 0),
             server_seed_revealed: Boolean(row.server_seed_revealed),
             rng_counter: Number(row.rng_counter ?? 0),
+            perfect_pairs_bet_amount: row.perfect_pairs_bet_amount != null ? this.toBigInt(row.perfect_pairs_bet_amount) : 0n,
+            perfect_pairs_payout: row.perfect_pairs_payout != null ? this.toBigInt(row.perfect_pairs_payout) : 0n,
         };
     }
     normalizeGameHand(row) {
@@ -373,15 +375,17 @@ class DatabaseService {
         dealer_seed,
         hand_count,
         current_hand_index,
-        rng_counter
+        rng_counter,
+        perfect_pairs_bet_amount,
+        perfect_pairs_payout
       )
-      VALUES ($1, $2, $3::NUMERIC, $4, $5, $6, $7::NUMERIC, $8, $9, $10, $11, $12, $13, $14)
+      VALUES ($1, $2, $3::NUMERIC, $4, $5, $6, $7::NUMERIC, $8, $9, $10, $11, $12, $13, $14, $15::NUMERIC, $16::NUMERIC)
       RETURNING *
     `;
         const values = [
             sessionId,
             gameData.game_number || 1,
-            (gameData.total_bet_amount || 0n).toString(), // Convert BigInt to string, cast to NUMERIC then BIGINT
+            (gameData.total_bet_amount || 0n).toString(),
             JSON.stringify(gameData.dealer_cards || []),
             gameData.dealer_total,
             persistedResult,
@@ -393,6 +397,8 @@ class DatabaseService {
             gameData.hand_count || 1,
             gameData.current_hand_index || 0,
             Number(gameData.rng_counter ?? 0),
+            (gameData.perfect_pairs_bet_amount ?? 0n).toString(),
+            (gameData.perfect_pairs_payout ?? 0n).toString(),
         ];
         const result = await this.pool.query(query, values);
         return this.normalizeGame(result.rows[0]);

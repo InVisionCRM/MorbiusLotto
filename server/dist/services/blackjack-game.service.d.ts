@@ -32,13 +32,23 @@ export interface GameState {
     currentHandIndex: number;
     canSplit: boolean;
     isBlackjack: boolean;
+    /** Perfect Pairs side bet result (first two cards). */
+    perfectPairsResult?: PerfectPairsResult;
+    /** Payout for Perfect Pairs (0 if no bet or no pair). */
+    perfectPairsPayout?: bigint;
+    /** Side bet amount (for display). */
+    perfectPairsBetAmount?: bigint;
 }
 export interface CreateGameRequest {
     playerAddress: string;
     betAmount: bigint;
+    /** Optional Perfect Pairs side bet (first two cards). Locked together with main bet. */
+    perfectPairsBetAmount?: bigint;
     clientSeedCommitment?: string;
     gameHash?: string;
 }
+/** Perfect Pairs result for the first two player cards. */
+export type PerfectPairsResult = 'perfect' | 'none';
 export interface CreateTournamentGameRequest {
     playerAddress: string;
     betAmount: number;
@@ -75,9 +85,16 @@ export declare class BlackjackGameService {
      */
     createGame(request: CreateGameRequest): Promise<GameState>;
     /**
-     * Check if hand can be split
+     * Check if hand can be split (same rank 1-13)
      */
     private canSplit;
+    /**
+     * Classify Perfect Pairs: exact match only (same rank AND same suit).
+     */
+    private classifyPerfectPair;
+    private getPerfectPairsPayout;
+    /** Draw one encoded card (value*10+suit), consumes 2 nonces. */
+    private drawEncodedCard;
     /**
      * Handle player action
      */

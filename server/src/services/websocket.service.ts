@@ -446,8 +446,9 @@ export class WebSocketService {
         perfectPairsBetAmount = 0n;
       }
       if (perfectPairsBetAmount < 0n) perfectPairsBetAmount = 0n;
-      if (perfectPairsBetAmount > BET_LIMITS.MAX_BET) {
-        return this.sendError(ws, `Perfect Pairs bet too large. Maximum is ${BET_LIMITS.MAX_BET.toString()}`, message.requestId);
+      const PP_MAX_BET = 10_000n * 10n ** 18n; // 10,000 MORBIUS
+      if (perfectPairsBetAmount > PP_MAX_BET) {
+        return this.sendError(ws, 'Perfect Pairs bet too large. Maximum is 10,000 MORBIUS', message.requestId);
       }
 
       const totalStake = betAmount + perfectPairsBetAmount;

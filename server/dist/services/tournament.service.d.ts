@@ -78,6 +78,36 @@ export interface CreateTournamentParams {
     /** Optional PIN for private tournaments; if provided and valid, used instead of generating */
     pinCode?: string | null;
 }
+/** Create freeroll tournament (no buy-in, scheduled start). */
+export interface CreateFreerollParams {
+    creatorAddress: string;
+    name: string;
+    freerollMode: 'elimination' | 'standard_chip_count';
+    scheduledStartAt: string;
+    registrationOpensAt: string;
+    durationMinutes: number;
+    startingChips: number;
+    maxHands: number;
+    prizeDistributionType: string;
+    customPrizePercentages?: number[];
+    eliminationConfig?: {
+        intervalType: string;
+        intervalValue: number;
+        eliminationPercentage: number;
+        resetChipsAfterRound?: boolean;
+    } | null;
+    reentryConfig: {
+        enabled: boolean;
+        windowMinutes?: number;
+    };
+    actionTimerSeconds: number | null;
+    tiebreakerOrder?: string[];
+    tableTheme: TableTheme;
+    isPrivate: boolean;
+    maxPlayers?: number | null;
+    customImage?: string | null;
+    pinCode?: string | null;
+}
 export interface FreerollListItem {
     id: string;
     name: string;
@@ -117,6 +147,11 @@ export interface TournamentListItem {
     custom_image?: string | null;
     prize_token_address?: string | null;
     prize_token_decimals?: number | null;
+    tournament_type?: string | null;
+    scheduled_start_at?: Date | null;
+    registration_opens_at?: Date | null;
+    current_phase?: string | null;
+    duration_minutes?: number | null;
 }
 export interface TournamentGame {
     id: string;
@@ -226,6 +261,10 @@ export declare class TournamentService {
      */
     distributePrizes(tournamentId: string): Promise<PrizeDistribution[]>;
     /**
+     * Get all entries for a tournament (for detail view player list)
+     */
+    getEntries(tournamentId: string): Promise<LeaderboardEntry[]>;
+    /**
      * Get total number of entries in a tournament
      */
     getTournamentEntryCount(tournamentId: string): Promise<number>;
@@ -256,6 +295,13 @@ export declare class TournamentService {
      * Create a custom tournament
      */
     createTournament(params: CreateTournamentParams): Promise<Tournament>;
+    /**
+     * Create a freeroll tournament (no buy-in, scheduled start).
+     */
+    createFreeroll(params: CreateFreerollParams): Promise<{
+        id: string;
+        pinCode?: string | null;
+    }>;
     /**
      * Validate tournament creation parameters
      */

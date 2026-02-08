@@ -32,6 +32,19 @@ export declare class ProvablyFairService {
      */
     generateBlackjackRandoms(seeds: GameSeeds, numCards?: number): number[];
     /**
+     * Generate suit indices 0-3 for cards (0=hearts, 1=diamonds, 2=clubs, 3=spades).
+     * Used with initial deal for Perfect Pairs (provably fair full card identity).
+     */
+    generateBlackjackSuits(seeds: GameSeeds, startNonce: number, count: number): number[];
+    /**
+     * Decode card to value 1-13. Handles encoded cards (value*10+suit, 10-133) and legacy raw values (1-13).
+     */
+    decodeCardValue(card: number): number;
+    /**
+     * Decode card to suit 0-3. Encoded cards are value*10+suit; legacy cards default to 0.
+     */
+    decodeCardSuit(card: number): number;
+    /**
      * Generate dealer action (hit/stand) decision
      */
     generateDealerAction(seeds: GameSeeds, dealerTotal: number, hasAce: boolean): 'hit' | 'stand';
@@ -60,7 +73,9 @@ export declare class ProvablyFairService {
      */
     getBlackjackValue(cardValue: number): number;
     /**
-     * Calculate optimal hand total considering aces
+     * Calculate optimal hand total considering aces (standard blackjack).
+     * Each ace counts as 11 until we bust, then we treat one ace as 1 (subtract 10); repeat per ace.
+     * Accepts encoded cards (value*10+suit) or raw values 1-13.
      */
     calculateHandTotal(cards: number[]): {
         total: number;
@@ -70,5 +85,10 @@ export declare class ProvablyFairService {
      * Check if hand is a natural blackjack
      */
     isNaturalBlackjack(cards: number[]): boolean;
+    /**
+     * Encode a card as value*10 + suit for storage (value 1-13, suit 0-3).
+     * 0=hearts, 1=diamonds, 2=clubs, 3=spades (red=0,1; black=2,3).
+     */
+    encodeCard(value: number, suit: number): number;
 }
 //# sourceMappingURL=provably-fair.service.d.ts.map

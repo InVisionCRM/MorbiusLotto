@@ -33,6 +33,12 @@ export interface GameVerificationData {
   payout: bigint
   timestamp: number
   actions: any[]
+  /** Per-hand data from the server (cards, actions with nonces) */
+  playerHands?: { cards: number[]; total: number; result: string; payout: bigint; actions: any[] }[]
+  /** Dealer actions with nonces */
+  dealerActions?: any[]
+  /** Base nonce for this game (gameNumber * multiplier) */
+  baseNonce?: number
 }
 
 interface GameVerificationToolsProps {
@@ -137,59 +143,217 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
       .join('')
   }
 
+  // Browser-compatible HMAC-SHA256 hex (Web Crypto API) — matches server's provably-fair algorithm
+  const hmacSha256Hex = async (key: string, message: string): Promise<string> => {
+    const encoder = new TextEncoder()
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(key),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    )
+    const sig = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(message))
+    return Array.from(new Uint8Array(sig))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+  }
+
+  // Generate a provably fair random number — exact replica of server logic
+  const generateRandom = async (
+    serverSeed: string,
+    clientSeed: string,
+    nonce: number,
+    min: number,
+    max: number
+  ): Promise<number> => {
+    const hmac = await hmacSha256Hex(serverSeed, `${clientSeed}:${nonce}`)
+    const hashValue = parseInt(hmac.substring(0, 8), 16)
+    const range = max - min + 1
+    return (hashValue % range) + min
+  }
+
+  // Decode encoded card (value*10+suit) to value 1-13
+  const decodeCardValue = (card: number): number => {
+    if (card >= 10 && card <= 133) return Math.floor(card / 10)
+    return card >= 1 && card <= 13 ? card : 1
+  }
+
   const verifyGame = async (data: GameVerificationData) => {
     const errors: string[] = []
     let isValid = true
+    let cardsVerifiedViaHmac = false
 
     try {
-      // Verify server seed hash (browser-safe). Server may send hash with or without 0x prefix.
+      // 1. Verify server seed hash commitment
       if (data.serverSeed && data.serverSeedHash) {
         const calculatedHash = await sha256Hex(data.serverSeed)
         const expectedHash = (data.serverSeedHash || '').replace(/^0x/i, '')
         if (calculatedHash !== expectedHash) {
-          errors.push('Server seed hash does not match')
+          errors.push('Server seed hash does not match commitment')
           isValid = false
         }
       }
 
-      // Verify card generation (simplified - would need full algorithm)
-      if (data.playerCards && data.dealerCards) {
-        const totalCards = data.playerCards.length + data.dealerCards.length
+      // 2. Full HMAC card regeneration — independently recreate every dealt card
+      if (data.serverSeed && data.clientSeed && data.baseNonce !== undefined) {
+        const serverSeed = data.serverSeed
+        const clientSeed = data.clientSeed
+        const baseNonce = data.baseNonce
 
-        // Check for duplicates (simplified check)
-        const allCards = [...data.playerCards, ...data.dealerCards]
-        const uniqueCards = new Set(allCards)
-
-        if (uniqueCards.size !== allCards.length) {
-          errors.push('Duplicate cards detected')
-          isValid = false
+        // --- Initial deal: 4 values (nonces 0-3) + 4 suits (nonces 4-7) ---
+        const values: number[] = []
+        const suits: number[] = []
+        for (let i = 0; i < 4; i++) {
+          values.push(await generateRandom(serverSeed, clientSeed, baseNonce + i, 1, 13))
+        }
+        for (let i = 0; i < 4; i++) {
+          suits.push(await generateRandom(serverSeed, clientSeed, baseNonce + 4 + i, 0, 3))
         }
 
-        // Check card values are valid (1-13)
-        const invalidCards = allCards.filter(card => card < 1 || card > 13)
-        if (invalidCards.length > 0) {
-          errors.push(`Invalid card values: ${invalidCards.join(', ')}`)
+        // Encode: deal order is player1, dealer1, player2, dealer2
+        const expectedInitialCards = {
+          player: [values[0] * 10 + suits[0], values[2] * 10 + suits[2]],
+          dealer: [values[1] * 10 + suits[1], values[3] * 10 + suits[3]],
+        }
+
+        // Get first hand's initial 2 cards (before any hits)
+        const playerHand0Cards = data.playerHands?.[0]?.cards ?? data.playerCards.slice(0, 2)
+        const dealerAllCards = data.dealerCards
+
+        // Verify initial player cards
+        for (let i = 0; i < 2; i++) {
+          if (playerHand0Cards[i] !== expectedInitialCards.player[i]) {
+            errors.push(
+              `Player initial card ${i + 1} mismatch: expected ${expectedInitialCards.player[i]}, got ${playerHand0Cards[i]}`
+            )
+            isValid = false
+          }
+        }
+        // Verify initial dealer cards
+        for (let i = 0; i < 2; i++) {
+          if (dealerAllCards[i] !== expectedInitialCards.dealer[i]) {
+            errors.push(
+              `Dealer initial card ${i + 1} mismatch: expected ${expectedInitialCards.dealer[i]}, got ${dealerAllCards[i]}`
+            )
+            isValid = false
+          }
+        }
+
+        // --- Verify subsequent cards (hits / double downs) using action nonces ---
+        let rngOk = true
+        const allHands = data.playerHands ?? []
+        for (let hIdx = 0; hIdx < allHands.length; hIdx++) {
+          const hand = allHands[hIdx]
+          if (!hand.actions) continue
+          for (const action of hand.actions) {
+            if ((action.type === 'hit' || action.type === 'double_down') && action.nonce !== undefined && action.card !== undefined) {
+              const nonce = action.nonce
+              // Determine if card is encoded (hit uses drawEncodedCard: 2 nonces) or raw (double_down: 1 nonce)
+              const isEncoded = action.card >= 10 && action.card <= 133
+              if (isEncoded) {
+                // Encoded card: value at nonce, suit at nonce+1
+                const expValue = await generateRandom(serverSeed, clientSeed, nonce, 1, 13)
+                const expSuit = await generateRandom(serverSeed, clientSeed, nonce + 1, 0, 3)
+                const expectedCard = expValue * 10 + expSuit
+                if (action.card !== expectedCard) {
+                  errors.push(
+                    `Hand ${hIdx} ${action.type} card mismatch at nonce ${nonce}: expected ${expectedCard}, got ${action.card}`
+                  )
+                  isValid = false
+                  rngOk = false
+                }
+              } else {
+                // Raw value card (legacy double_down): value at nonce
+                const expValue = await generateRandom(serverSeed, clientSeed, nonce, 1, 13)
+                if (action.card !== expValue) {
+                  errors.push(
+                    `Hand ${hIdx} ${action.type} card mismatch at nonce ${nonce}: expected ${expValue}, got ${action.card}`
+                  )
+                  isValid = false
+                  rngOk = false
+                }
+              }
+            }
+            // Split actions include two drawn cards with nonces
+            if (action.type === 'split' && action.nonce1 !== undefined && action.cards) {
+              for (let ci = 0; ci < action.cards.length; ci++) {
+                const n = ci === 0 ? action.nonce1 : action.nonce2
+                if (n === undefined) continue
+                const card = action.cards[ci]
+                const isEncoded = card >= 10 && card <= 133
+                if (isEncoded) {
+                  const expValue = await generateRandom(serverSeed, clientSeed, n, 1, 13)
+                  const expSuit = await generateRandom(serverSeed, clientSeed, n + 1, 0, 3)
+                  const expectedCard = expValue * 10 + expSuit
+                  if (card !== expectedCard) {
+                    errors.push(`Split card ${ci + 1} mismatch at nonce ${n}: expected ${expectedCard}, got ${card}`)
+                    isValid = false
+                    rngOk = false
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // --- Verify dealer hit cards ---
+        const dealerActions = data.dealerActions ?? []
+        for (const action of dealerActions) {
+          if (action.type === 'hit' && action.nonce !== undefined && action.card !== undefined) {
+            const nonce = action.nonce
+            const isEncoded = action.card >= 10 && action.card <= 133
+            if (isEncoded) {
+              const expValue = await generateRandom(serverSeed, clientSeed, nonce, 1, 13)
+              const expSuit = await generateRandom(serverSeed, clientSeed, nonce + 1, 0, 3)
+              const expectedCard = expValue * 10 + expSuit
+              if (action.card !== expectedCard) {
+                errors.push(`Dealer hit card mismatch at nonce ${nonce}: expected ${expectedCard}, got ${action.card}`)
+                isValid = false
+                rngOk = false
+              }
+            } else {
+              const expValue = await generateRandom(serverSeed, clientSeed, nonce, 1, 13)
+              if (action.card !== expValue) {
+                errors.push(`Dealer hit card mismatch at nonce ${nonce}: expected ${expValue}, got ${action.card}`)
+                isValid = false
+                rngOk = false
+              }
+            }
+          }
+        }
+
+        if (rngOk && !errors.some((e) => e.includes('card'))) {
+          cardsVerifiedViaHmac = true
+        }
+      }
+
+      // 3. Verify card values are in valid range
+      const allCards = [...(data.playerCards ?? []), ...(data.dealerCards ?? [])]
+      for (const card of allCards) {
+        const v = decodeCardValue(card)
+        if (v < 1 || v > 13) {
+          errors.push(`Invalid card value: ${card} (decoded: ${v})`)
           isValid = false
         }
       }
 
-      // Verify payout calculation (single-hand only; split games use per-hand payouts)
-      const isSingleHand = !data.playerCards || data.playerCards.length <= 2
-      if (isSingleHand && data.result && data.payout !== undefined) {
+      // 4. Verify payout calculation
+      if (data.result && data.payout !== undefined && data.betAmount > 0n) {
         let expectedPayout = 0n
-
         if (data.result === 'blackjack') {
-          expectedPayout = (data.betAmount * 3n) / 2n // 3:2 payout
+          expectedPayout = (data.betAmount * 5n) / 2n // 3:2 payout = 2.5x total return
         } else if (data.result === 'win') {
-          expectedPayout = data.betAmount * 2n // 2:1 payout
+          expectedPayout = data.betAmount * 2n
         } else if (data.result === 'push') {
-          expectedPayout = data.betAmount // Return bet
+          expectedPayout = data.betAmount
         } else if (data.result === 'loss') {
-          expectedPayout = 0n // Loss
+          expectedPayout = 0n
         }
-
-        if (expectedPayout !== data.payout) {
-          errors.push(`Payout mismatch. Expected: ${expectedPayout}, Actual: ${data.payout}`)
+        // Only flag mismatch for single-hand, non-split games
+        const isSingleHand = !data.playerHands || data.playerHands.length <= 1
+        if (isSingleHand && expectedPayout !== data.payout) {
+          errors.push(`Payout mismatch: expected ${expectedPayout}, got ${data.payout}`)
           isValid = false
         }
       }
@@ -202,12 +366,12 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
     return {
       isValid,
       details: {
-        cardsVerified: !errors.some(e => e.includes('card')),
-        payoutVerified: !errors.some(e => e.includes('payout')),
-        seedVerified: !errors.some(e => e.includes('seed')),
-        houseEdgeVerified: !errors.some(e => e.includes('edge'))
+        cardsVerified: cardsVerifiedViaHmac || !errors.some((e) => e.includes('card')),
+        payoutVerified: !errors.some((e) => e.includes('payout') || e.includes('Payout')),
+        seedVerified: !errors.some((e) => e.includes('seed') || e.includes('Seed')),
+        hmacVerified: cardsVerifiedViaHmac,
       },
-      errors
+      errors,
     }
   }
 
@@ -217,20 +381,30 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
   }
 
   const formatCards = (cards: number[]) => {
-    const CARD_NAMES = {
+    const CARD_NAMES: Record<number, string> = {
       1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6',
       7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K'
     }
-    const SUITS = ['♠', '♥', '♦', '♣']
+    // Suits: 0=hearts, 1=diamonds, 2=clubs, 3=spades (red=0,1; black=2,3)
+    const SUIT_SYMBOLS = ['♥', '♦', '♣', '♠']
+    const SUIT_COLORS = ['#f87171', '#f87171', '#e2e8f0', '#e2e8f0']
 
     return cards.map((card, index) => {
-      const suitIndex = Math.floor((card - 1) / 13) % 4
-      const rank = ((card - 1) % 13) + 1
+      // Decode: encoded cards are value*10+suit (range 10-133); legacy raw values are 1-13
+      let rank: number
+      let suitIndex: number
+      if (card >= 10 && card <= 133) {
+        rank = Math.floor(card / 10)
+        suitIndex = card % 10
+      } else {
+        rank = card >= 1 && card <= 13 ? card : 1
+        suitIndex = 0
+      }
       return (
         <span key={index} className="inline-flex items-center mx-0.5 px-2 py-1 rounded text-sm border border-slate-600/50" style={{ background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9))' }}>
-          <span className="font-bold mr-1 text-white">{CARD_NAMES[rank as keyof typeof CARD_NAMES]}</span>
-          <span style={{ color: suitIndex % 2 === 0 ? '#e2e8f0' : '#f87171' }}>
-            {SUITS[suitIndex]}
+          <span className="font-bold mr-1 text-white">{CARD_NAMES[rank] ?? '?'}</span>
+          <span style={{ color: SUIT_COLORS[suitIndex] ?? '#e2e8f0' }}>
+            {SUIT_SYMBOLS[suitIndex] ?? '?'}
           </span>
         </span>
       )
@@ -532,11 +706,11 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
                         </div>
                         <div className="text-center">
                           <div className={`text-lg font-bold mb-1 ${
-                            verificationResult.details.houseEdgeVerified ? 'text-green-400' : 'text-red-400'
+                            verificationResult.details.hmacVerified ? 'text-green-400' : 'text-yellow-400'
                           }`}>
-                            {verificationResult.details.houseEdgeVerified ? '✓' : '✗'}
+                            {verificationResult.details.hmacVerified ? '✓' : '—'}
                           </div>
-                          <div className="text-xs text-slate-400">House Edge</div>
+                          <div className="text-xs text-slate-400">HMAC</div>
                         </div>
                       </div>
 

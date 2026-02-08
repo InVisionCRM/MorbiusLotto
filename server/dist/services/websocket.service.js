@@ -18,6 +18,13 @@ const ALLOWED_CHAT_ROOMS = new Set([
     'bigwheel',
     'morb-it'
 ]);
+// Check if a room ID is a tournament chat room (tournament:{uuid})
+function isTournamentRoom(room) {
+    return room.startsWith('tournament:') && room.length > 'tournament:'.length;
+}
+function getTournamentIdFromRoom(room) {
+    return room.slice('tournament:'.length);
+}
 const CHAT_MAX_LENGTH = 500;
 const CHAT_RATE_LIMIT_MS = 2000; // min 2s between messages per connection
 const CHAT_RECENT_MESSAGES_LIMIT = 50;
@@ -53,7 +60,7 @@ class WebSocketService {
             chain: chains_1.pulsechain,
             transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com')
         });
-        this.contractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0xDe2c7a18de8a9d889E18874EA90A42f84FbaA080');
+        this.contractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0x32435e633EB691f7039EB73107FD15EF13125703');
         this.wss.on('connection', this.handleConnection.bind(this));
         // Heartbeat to keep connections alive
         this.heartbeatInterval = setInterval(() => {
@@ -244,6 +251,9 @@ class WebSocketService {
                 case 'tournament_create':
                     await this.handleTournamentCreate(ws, message);
                     break;
+                case 'create_freeroll':
+                    await this.handleCreateFreeroll(ws, message);
+                    break;
                 case 'tournament_list':
                     await this.handleTournamentList(ws, message);
                     break;
@@ -267,6 +277,9 @@ class WebSocketService {
                     break;
                 case 'freeroll_reentry':
                     await this.handleFreerollReentry(ws, message);
+                    break;
+                case 'tournament_entries_list':
+                    await this.handleTournamentEntriesList(ws, message);
                     break;
                 default:
                     this.sendError(ws, 'Unknown message type', message.requestId);
@@ -343,18 +356,33 @@ class WebSocketService {
                 logger_1.logger.error('Invalid betAmount format', { payload, error });
                 return this.sendError(ws, 'Invalid bet amount format', message.requestId);
             }
-            // Validate bet amount is within limits
+            let perfectPairsBetAmount = 0n;
+            try {
+                if (payload.perfectPairsBetAmount != null && payload.perfectPairsBetAmount !== '') {
+                    perfectPairsBetAmount = typeof payload.perfectPairsBetAmount === 'string'
+                        ? BigInt(payload.perfectPairsBetAmount) : BigInt(payload.perfectPairsBetAmount);
+                }
+            }
+            catch {
+                perfectPairsBetAmount = 0n;
+            }
+            if (perfectPairsBetAmount < 0n)
+                perfectPairsBetAmount = 0n;
+            const PP_MAX_BET = 10000n * 10n ** 18n; // 10,000 MORBIUS
+            if (perfectPairsBetAmount > PP_MAX_BET) {
+                return this.sendError(ws, 'Perfect Pairs bet too large. Maximum is 10,000 MORBIUS', message.requestId);
+            }
+            const totalStake = betAmount + perfectPairsBetAmount;
             if (betAmount < BET_LIMITS.MIN_BET) {
                 return this.sendError(ws, `Bet amount too small. Minimum bet is ${BET_LIMITS.MIN_BET.toString()} (1 MORBIUS)`, message.requestId);
             }
             if (betAmount > BET_LIMITS.MAX_BET) {
                 return this.sendError(ws, `Bet amount too large. Maximum bet is ${BET_LIMITS.MAX_BET.toString()} (100,000 MORBIUS)`, message.requestId);
             }
-            // Validate player has sufficient off-chain balance
             try {
                 const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
-                if (balance < betAmount) {
-                    return this.sendError(ws, `Insufficient balance. You have ${balance.toString()}, but need ${betAmount.toString()}`, message.requestId);
+                if (balance < totalStake) {
+                    return this.sendError(ws, `Insufficient balance. You have ${balance.toString()}, but need ${totalStake.toString()} (main + Perfect Pairs)`, message.requestId);
                 }
             }
             catch (error) {
@@ -364,13 +392,13 @@ class WebSocketService {
             logger_1.logger.debug('Creating game', {
                 playerAddress: ws.playerAddress,
                 betAmount: betAmount.toString(),
-                clientSeedCommitment: payload.clientSeedCommitment,
-                gameHash: payload.gameHash,
+                perfectPairsBetAmount: perfectPairsBetAmount.toString(),
                 requestId: message.requestId
             });
             const gameState = await this.gameService.createGame({
                 playerAddress: ws.playerAddress,
                 betAmount,
+                perfectPairsBetAmount: perfectPairsBetAmount > 0n ? perfectPairsBetAmount : undefined,
                 clientSeedCommitment: payload.clientSeedCommitment,
                 gameHash: payload.gameHash
             });
@@ -529,8 +557,20 @@ class WebSocketService {
                 return this.sendError(ws, 'roomId required', message.requestId);
             }
             const normalized = roomId.toLowerCase().trim();
-            if (!ALLOWED_CHAT_ROOMS.has(normalized)) {
+            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized)) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
+            }
+            // Tournament rooms require participant check
+            if (isTournamentRoom(normalized)) {
+                if (!ws.playerAddress) {
+                    return this.sendError(ws, 'Wallet required for tournament chat', message.requestId);
+                }
+                if (this.tournamentService) {
+                    const entry = await this.tournamentService.getTournamentEntry(ws.playerAddress, getTournamentIdFromRoom(normalized));
+                    if (!entry) {
+                        return this.sendError(ws, 'Only participants can join tournament chat', message.requestId);
+                    }
+                }
             }
             if (ws.currentRoom && ws.connectionId) {
                 const prevSet = this.roomToClients.get(ws.currentRoom);
@@ -580,7 +620,7 @@ class WebSocketService {
                 return this.sendError(ws, 'beforeId required', message.requestId);
             }
             const normalized = roomId.toLowerCase().trim();
-            if (!ALLOWED_CHAT_ROOMS.has(normalized)) {
+            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized)) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             const limitNum = typeof limit === 'number' && limit > 0 && limit <= CHAT_RECENT_MESSAGES_LIMIT
@@ -687,8 +727,15 @@ class WebSocketService {
                 return this.sendError(ws, `Message too long (max ${CHAT_MAX_LENGTH})`, message.requestId);
             }
             const normalizedRoom = roomId.toLowerCase().trim();
-            if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom)) {
+            if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom)) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
+            }
+            // Tournament rooms require participant check on send
+            if (isTournamentRoom(normalizedRoom) && this.tournamentService && ws.playerAddress) {
+                const entry = await this.tournamentService.getTournamentEntry(ws.playerAddress, getTournamentIdFromRoom(normalizedRoom));
+                if (!entry) {
+                    return this.sendError(ws, 'Only participants can comment', message.requestId);
+                }
             }
             if (ws.currentRoom !== normalizedRoom) {
                 return this.sendError(ws, 'Not in this room', message.requestId);
@@ -1430,6 +1477,49 @@ class WebSocketService {
             this.sendError(ws, errorMessage, message.requestId);
         }
     }
+    async handleCreateFreeroll(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload;
+            const result = await this.tournamentService.createFreeroll({
+                creatorAddress: ws.playerAddress,
+                name: payload.name,
+                freerollMode: payload.freerollMode,
+                scheduledStartAt: payload.scheduledStartAt,
+                registrationOpensAt: payload.registrationOpensAt,
+                durationMinutes: payload.durationMinutes,
+                startingChips: payload.startingChips,
+                maxHands: payload.maxHands,
+                prizeDistributionType: payload.prizeDistributionType,
+                customPrizePercentages: payload.customPrizePercentages,
+                eliminationConfig: payload.eliminationConfig,
+                reentryConfig: payload.reentryConfig,
+                actionTimerSeconds: payload.actionTimerSeconds,
+                tiebreakerOrder: payload.tiebreakerOrder,
+                tableTheme: payload.tableTheme,
+                isPrivate: payload.isPrivate,
+                maxPlayers: payload.maxPlayers,
+                customImage: payload.customImage,
+                pinCode: payload.pinCode,
+            });
+            this.sendMessage(ws, {
+                type: 'freeroll_created',
+                payload: { tournamentId: result.id, pinCode: result.pinCode ?? undefined },
+                requestId: message.requestId,
+            });
+            logger_1.logger.info('Freeroll created via WebSocket', { tournamentId: result.id, creator: ws.playerAddress });
+        }
+        catch (error) {
+            logger_1.logger.error('Error creating freeroll:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to create freeroll';
+            this.sendError(ws, errorMessage, message.requestId);
+        }
+    }
     async handleTournamentList(ws, message) {
         try {
             if (!this.tournamentService) {
@@ -1458,6 +1548,11 @@ class WebSocketService {
                 prizeTokenDecimals: t.prize_token_decimals ?? null,
                 createdAt: t.created_at.toISOString(),
                 customImage: t.custom_image || null,
+                tournamentType: t.tournament_type ?? 'standard',
+                scheduledStartAt: t.scheduled_start_at?.toISOString() ?? null,
+                registrationOpensAt: t.registration_opens_at?.toISOString() ?? null,
+                currentPhase: t.current_phase ?? null,
+                durationMinutes: t.duration_minutes ?? null,
             }));
             this.sendMessage(ws, {
                 type: 'tournament_list',
@@ -1717,6 +1812,27 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error re-entering freeroll:', error);
             this.sendError(ws, error instanceof Error ? error.message : 'Failed to re-enter', message.requestId);
+        }
+    }
+    async handleTournamentEntriesList(ws, message) {
+        try {
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload;
+            if (!payload?.tournamentId) {
+                return this.sendError(ws, 'Tournament ID required', message.requestId);
+            }
+            const entries = await this.tournamentService.getEntries(payload.tournamentId);
+            this.sendMessage(ws, {
+                type: 'tournament_entries_list',
+                payload: { tournamentId: payload.tournamentId, entries },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error getting tournament entries:', error);
+            this.sendError(ws, 'Failed to get entries', message.requestId);
         }
     }
     // Helper to get prize percentages from type

@@ -56,6 +56,8 @@ export interface Game {
     hand_count: number;
     current_hand_index: number;
     rng_counter?: number;
+    perfect_pairs_bet_amount?: bigint;
+    perfect_pairs_payout?: bigint;
 }
 export interface PlayerStats {
     total_games: number;
