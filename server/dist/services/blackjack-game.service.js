@@ -2,8 +2,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BlackjackGameService = void 0;
 const logger_1 = require("../utils/logger");
-/** Perfect Pairs: exact match (same rank + same suit) pays 10:1 (stake returned on win). */
-const PERFECT_PAIRS_PAYOUT_MULTIPLIER = 10;
+/** Perfect Pairs payout multipliers (stake returned on win).
+ *  V1: perfect (same rank + suit) = 10:1.
+ *  V2: colored (same rank + same color) = 12:1, mixed (same rank + different color) = 5:1.
+ */
+const PERFECT_PAIRS_PAYOUT_MULTIPLIER = 10; // v1 legacy
+const COLORED_PAIR_PAYOUT_MULTIPLIER = 12; // v2: same rank + same color (e.g. both red)
+const MIXED_PAIR_PAYOUT_MULTIPLIER = 5; // v2: same rank + different color
 class BlackjackGameService {
     dbService;
     pfService;
@@ -260,7 +265,9 @@ class BlackjackGameService {
     }
     /**
      * Classify Perfect Pairs for v2 card indices (0-51).
-     * Perfect pair = same rank AND same suit.
+     * With a single 52-card deck, same rank+suit is impossible.
+     * Suits: 0=hearts(red), 1=diamonds(red), 2=clubs(black), 3=spades(black).
+     * Colored pair = same rank + same color. Mixed pair = same rank + different color.
      */
     classifyPerfectPairV2(card1, card2) {
         const r1 = this.pfService.cardIndexToRank(card1);
@@ -269,12 +276,21 @@ class BlackjackGameService {
             return 'none';
         const s1 = this.pfService.cardIndexToSuit(card1);
         const s2 = this.pfService.cardIndexToSuit(card2);
-        return s1 === s2 ? 'perfect' : 'none';
+        // Color: suits 0,1 are red; suits 2,3 are black
+        const color1 = s1 < 2 ? 'red' : 'black';
+        const color2 = s2 < 2 ? 'red' : 'black';
+        return color1 === color2 ? 'colored' : 'mixed';
     }
     getPerfectPairsPayout(bet, result) {
-        if (result !== 'perfect' || bet <= 0n)
+        if (result === 'none' || bet <= 0n)
             return 0n;
-        return bet + bet * BigInt(PERFECT_PAIRS_PAYOUT_MULTIPLIER); // stake + 10x winnings
+        if (result === 'perfect')
+            return bet + bet * BigInt(PERFECT_PAIRS_PAYOUT_MULTIPLIER); // v1: 10:1
+        if (result === 'colored')
+            return bet + bet * BigInt(COLORED_PAIR_PAYOUT_MULTIPLIER); // v2: 12:1
+        if (result === 'mixed')
+            return bet + bet * BigInt(MIXED_PAIR_PAYOUT_MULTIPLIER); // v2: 5:1
+        return 0n;
     }
     /** Draw one encoded card (value*10+suit), consumes 2 nonces. */
     drawEncodedCard(seeds, nonce) {

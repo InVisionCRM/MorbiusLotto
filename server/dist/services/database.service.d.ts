@@ -146,6 +146,12 @@ export declare class DatabaseService {
     updatePlayerBalance(walletAddress: string, amount: bigint, operation: 'add' | 'subtract' | 'set'): Promise<bigint>;
     deductPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
     addPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
+    getActivePendingWithdrawal(walletAddress: string): Promise<{
+        nonce: string;
+        amount: string;
+    } | null>;
+    createPendingWithdrawal(walletAddress: string, nonce: bigint, amount: bigint): Promise<void>;
+    expirePendingWithdrawals(): Promise<number>;
     syncPlayerBalanceWithContract(walletAddress: string, contractBalance: bigint): Promise<void>;
     getPlayerStats(walletAddress: string): Promise<PlayerStats>;
     getPlayerStatsEnhanced(walletAddress: string): Promise<EnhancedPlayerStats>;

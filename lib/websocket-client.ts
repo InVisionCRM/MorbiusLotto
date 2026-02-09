@@ -77,6 +77,28 @@ export interface FreerollEntryPayload {
   startingChips?: number;
 }
 
+/** EIP-712 domain for WebSocket auth (must match server) */
+const AUTH_EIP712_DOMAIN = {
+  name: 'MORBlotto Blackjack' as const,
+  version: '1' as const,
+  chainId: 369,
+};
+
+/** EIP-712 types for WebSocket auth (must match server) */
+const AUTH_EIP712_TYPES = {
+  AuthChallenge: [
+    { name: 'nonce', type: 'string' },
+  ],
+} as const;
+
+/** Function signature that matches wagmi's signTypedDataAsync */
+export type SignTypedDataFn = (params: {
+  domain: typeof AUTH_EIP712_DOMAIN;
+  types: typeof AUTH_EIP712_TYPES;
+  primaryType: 'AuthChallenge';
+  message: { nonce: string };
+}) => Promise<`0x${string}`>;
+
 export class BlackjackWebSocketClient {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -85,20 +107,27 @@ export class BlackjackWebSocketClient {
   private messageHandlers: Map<string, (payload: any) => void> = new Map();
   private requestPromises: Map<string, { resolve: Function; reject: Function }> = new Map();
   private intentionalClose = false;
+  private signTypedData: SignTypedDataFn | null = null;
 
   constructor(
     private serverUrl: string,
-    private playerAddress?: string
+    private playerAddress?: string,
+    signTypedData?: SignTypedDataFn
   ) {
     if (!serverUrl || serverUrl.trim() === '') {
       throw new Error(
         'BlackjackWebSocketClient requires serverUrl (use getWebSocketUrl() from @/lib/api-urls).'
       );
     }
+    this.signTypedData = signTypedData ?? null;
   }
 
   /**
-   * Connect to the WebSocket server
+   * Connect to the WebSocket server.
+   * If a signTypedData function was provided, performs EIP-712 auth and resolves
+   * after auth_success. Otherwise falls back to legacy query-param auth and
+   * resolves once the server sends any initial message (auth_challenge or
+   * connection_established).
    */
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -114,29 +143,87 @@ export class BlackjackWebSocketClient {
         ? `${this.serverUrl}?address=${this.playerAddress}`
         : this.serverUrl;
 
+      const canSign = !!(this.signTypedData && this.playerAddress);
+
       this.ws = new WebSocket(url);
 
+      // Track whether we've resolved/rejected to avoid double-calls
+      let settled = false;
+
       this.ws.onopen = () => {
-        logger.info('WebSocket connected');
+        logger.info('WebSocket connected' + (canSign ? ', waiting for auth challenge...' : ' (legacy mode)'));
         this.reconnectAttempts = 0;
-        resolve();
+        // If we can't sign, we're in legacy mode — don't wait for auth
       };
 
       this.ws.onmessage = (event) => {
-        this.handleMessage(event.data);
+        try {
+          const msg = JSON.parse(event.data as string);
+
+          if (msg.type === 'auth_challenge' && !settled) {
+            if (canSign) {
+              // New auth flow: sign the nonce and send auth_response
+              this.handleAuthChallenge(msg.payload).catch((err) => {
+                if (!settled) {
+                  settled = true;
+                  reject(new Error(`Auth challenge failed: ${err.message}`));
+                }
+              });
+              return;
+            } else {
+              // Legacy mode: server sent challenge but we can't sign.
+              // Server is in grace period — resolve immediately.
+              settled = true;
+              logger.info('WebSocket connected (legacy auth, no EIP-712 signing)');
+              resolve();
+              return;
+            }
+          }
+
+          if (msg.type === 'auth_success' && !settled) {
+            settled = true;
+            logger.info('WebSocket authenticated successfully via EIP-712');
+            resolve();
+            this.handleMessage(event.data as string);
+            return;
+          }
+
+          // Legacy servers that don't send auth_challenge send connection_established
+          if (msg.type === 'connection_established' && !settled) {
+            settled = true;
+            logger.info('WebSocket connected (legacy server, no auth challenge)');
+            resolve();
+            this.handleMessage(event.data as string);
+            return;
+          }
+
+          // If auth failed (error with no requestId during auth phase)
+          if (msg.type === 'error' && !settled) {
+            const errMsg = msg.payload?.message || msg.payload?.error || 'Authentication failed';
+            settled = true;
+            reject(new Error(errMsg));
+            return;
+          }
+        } catch {
+          // Not JSON, fall through
+        }
+
+        this.handleMessage(event.data as string);
       };
 
       this.ws.onclose = () => {
-        // Skip reconnect attempts if this was an intentional close
         if (this.intentionalClose) {
           return;
         }
         logger.info('WebSocket disconnected');
+        if (!settled) {
+          settled = true;
+          reject(new Error('WebSocket closed before authentication completed'));
+        }
         this.attemptReconnect();
       };
 
       this.ws.onerror = (error) => {
-        // Skip logging if this was an intentional close (e.g., during component cleanup)
         if (this.intentionalClose) {
           return;
         }
@@ -149,7 +236,6 @@ export class BlackjackWebSocketClient {
               ? `Connection closed unexpectedly (state: ${ws?.readyState})`
               : `WebSocket error occurred (state: ${ws?.readyState})`;
 
-        // Log only serializable fields (Event objects stringify as {})
         logger.error('WebSocket error', {
           message: errorMessage,
           readyState: ws?.readyState,
@@ -157,9 +243,42 @@ export class BlackjackWebSocketClient {
           eventType: (error as Event)?.type ?? 'error',
         });
 
-        reject(new Error(errorMessage));
+        if (!settled) {
+          settled = true;
+          reject(new Error(errorMessage));
+        }
       };
     });
+  }
+
+  /**
+   * Handle auth challenge from server: sign nonce with EIP-712 and send back
+   */
+  private async handleAuthChallenge(payload: { nonce: string; claimedAddress?: string }): Promise<void> {
+    if (!this.signTypedData) {
+      throw new Error('signTypedData function not provided — cannot authenticate');
+    }
+
+    if (!this.playerAddress) {
+      throw new Error('No player address — cannot authenticate');
+    }
+
+    const signature = await this.signTypedData({
+      domain: AUTH_EIP712_DOMAIN,
+      types: AUTH_EIP712_TYPES,
+      primaryType: 'AuthChallenge',
+      message: { nonce: payload.nonce },
+    });
+
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'auth_response',
+        payload: {
+          address: this.playerAddress,
+          signature,
+        },
+      }));
+    }
   }
 
   /**

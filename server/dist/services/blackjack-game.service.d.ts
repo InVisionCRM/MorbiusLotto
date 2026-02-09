@@ -49,8 +49,12 @@ export interface CreateGameRequest {
     clientSeedCommitment?: string;
     gameHash?: string;
 }
-/** Perfect Pairs result for the first two player cards. */
-export type PerfectPairsResult = 'perfect' | 'none';
+/** Perfect Pairs result for the first two player cards.
+ *  V1 (infinite deck): 'perfect' = same rank + same suit.
+ *  V2 (52-card deck):  'colored' = same rank + same color, 'mixed' = same rank + different color.
+ *  'perfect' is impossible with a single 52-card deck (no duplicate cards).
+ */
+export type PerfectPairsResult = 'perfect' | 'colored' | 'mixed' | 'none';
 export interface CreateTournamentGameRequest {
     playerAddress: string;
     betAmount: number;
@@ -100,7 +104,9 @@ export declare class BlackjackGameService {
     private canSplitV2;
     /**
      * Classify Perfect Pairs for v2 card indices (0-51).
-     * Perfect pair = same rank AND same suit.
+     * With a single 52-card deck, same rank+suit is impossible.
+     * Suits: 0=hearts(red), 1=diamonds(red), 2=clubs(black), 3=spades(black).
+     * Colored pair = same rank + same color. Mixed pair = same rank + different color.
      */
     private classifyPerfectPairV2;
     private getPerfectPairsPayout;

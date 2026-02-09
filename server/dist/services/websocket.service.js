@@ -1,13 +1,28 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WebSocketService = void 0;
 const ws_1 = require("ws");
 const tournament_service_1 = require("./tournament.service");
 const logger_1 = require("../utils/logger");
 const uuid_1 = require("uuid");
+const crypto_1 = __importDefault(require("crypto"));
 const viem_1 = require("viem");
 const chains_1 = require("viem/chains");
 const blackjack_1 = require("../abi/blackjack");
+// EIP-712 domain and types for WebSocket authentication
+const AUTH_EIP712_DOMAIN = {
+    name: 'MORBlotto Blackjack',
+    version: '1',
+    chainId: 369,
+};
+const AUTH_EIP712_TYPES = {
+    AuthChallenge: [
+        { name: 'nonce', type: 'string' },
+    ],
+};
 // Allowed chat rooms: main (home) + per-game
 const ALLOWED_CHAT_ROOMS = new Set([
     'main',
@@ -25,6 +40,9 @@ function isTournamentRoom(room) {
 function getTournamentIdFromRoom(room) {
     return room.slice('tournament:'.length);
 }
+// When false, unauthenticated clients fall back to trusting the query-param address (V1 behavior).
+// Set to "true" in env once all clients support EIP-712 auth.
+const REQUIRE_WS_AUTH = process.env.REQUIRE_WS_AUTH === 'true';
 const CHAT_MAX_LENGTH = 500;
 const CHAT_RATE_LIMIT_MS = 2000; // min 2s between messages per connection
 const CHAT_RECENT_MESSAGES_LIMIT = 50;
@@ -110,9 +128,10 @@ class WebSocketService {
         const connectionId = (0, uuid_1.v4)();
         ws.connectionId = connectionId;
         ws.isAlive = true;
-        // Extract player address from query parameters and normalize to lowercase
+        ws.isAuthenticated = false;
+        // Extract player address from query parameters (used as claimed address, verified via EIP-712)
         const url = new URL(request.url || '', 'http://localhost');
-        const playerAddress = url.searchParams.get('address')?.toLowerCase();
+        const claimedAddress = url.searchParams.get('address')?.toLowerCase();
         // IMPORTANT: attach handlers immediately. If we await DB calls before registering
         // ws.on('message'), early client requests (like get_balance right after connect)
         // can be dropped and will timeout client-side.
@@ -144,28 +163,42 @@ class WebSocketService {
         ws.on('error', (error) => {
             logger_1.logger.error('WebSocket error', { connectionId: ws.connectionId, error });
         });
-        if (playerAddress) {
-            ws.playerAddress = playerAddress;
-            try {
-                // active_connections expects a UUID player_id (players.id), not a wallet address
-                const player = await this.dbService.getOrCreatePlayer(playerAddress);
-                await this.dbService.addActiveConnection(player.id, connectionId);
-                logger_1.logger.info('WebSocket connection established', { connectionId, playerAddress: player.wallet_address, playerId: player.id });
-            }
-            catch (error) {
-                // Don't crash the server if connection tracking fails
-                logger_1.logger.error('Failed to track active connection', { connectionId, playerAddress, error });
-            }
+        this.clients.set(connectionId, ws);
+        if (REQUIRE_WS_AUTH) {
+            // Strict mode: generate auth challenge, client must sign to proceed
+            const authNonce = crypto_1.default.randomBytes(32).toString('hex');
+            ws.authNonce = authNonce;
+            this.sendMessage(ws, {
+                type: 'auth_challenge',
+                payload: { connectionId, nonce: authNonce, claimedAddress }
+            });
         }
         else {
-            logger_1.logger.warn('WebSocket connection without player address', { connectionId });
+            // Grace period: trust query-param address (V1 behavior) but still offer auth
+            const authNonce = crypto_1.default.randomBytes(32).toString('hex');
+            ws.authNonce = authNonce;
+            if (claimedAddress) {
+                // Auto-authenticate with the query-param address (legacy support)
+                ws.playerAddress = claimedAddress;
+                ws.isAuthenticated = true;
+                try {
+                    const player = await this.dbService.getOrCreatePlayer(claimedAddress);
+                    await this.dbService.addActiveConnection(player.id, connectionId);
+                    logger_1.logger.info('WebSocket connection established (legacy auth)', { connectionId, playerAddress: claimedAddress, playerId: player.id });
+                }
+                catch (error) {
+                    logger_1.logger.error('Failed to track active connection', { connectionId, playerAddress: claimedAddress, error });
+                }
+            }
+            else {
+                logger_1.logger.warn('WebSocket connection without player address', { connectionId });
+            }
+            // Still send auth_challenge so new clients can upgrade to EIP-712 auth
+            this.sendMessage(ws, {
+                type: 'auth_challenge',
+                payload: { connectionId, nonce: authNonce, claimedAddress }
+            });
         }
-        this.clients.set(connectionId, ws);
-        // Send welcome message
-        this.sendMessage(ws, {
-            type: 'connection_established',
-            payload: { connectionId, playerAddress }
-        });
     }
     async handleMessage(ws, data) {
         try {
@@ -176,109 +209,180 @@ class WebSocketService {
                 requestId: message.requestId
             });
             switch (message.type) {
-                case 'get_server_seed_hash':
-                    await this.handleGetServerSeedHash(ws, message);
-                    break;
-                case 'create_game':
-                    await this.handleCreateGame(ws, message);
-                    break;
-                case 'player_action':
-                    await this.handlePlayerAction(ws, message);
-                    break;
-                case 'get_game_state':
-                    await this.handleGetGameState(ws, message);
-                    break;
-                case 'sync_balance':
-                    await this.handleSyncBalance(ws, message);
-                    break;
-                case 'get_balance':
-                    await this.handleGetBalance(ws, message);
+                // Auth response is always allowed (unauthenticated clients need it)
+                case 'auth_response':
+                    await this.handleAuthResponse(ws, message);
                     break;
                 case 'ping':
                     this.sendMessage(ws, { type: 'pong', payload: {}, requestId: message.requestId });
                     break;
+                // All handlers below require authentication
+                case 'get_server_seed_hash':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleGetServerSeedHash(ws, message);
+                    break;
+                case 'create_game':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleCreateGame(ws, message);
+                    break;
+                case 'player_action':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePlayerAction(ws, message);
+                    break;
+                case 'get_game_state':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleGetGameState(ws, message);
+                    break;
+                case 'sync_balance':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleSyncBalance(ws, message);
+                    break;
+                case 'get_balance':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleGetBalance(ws, message);
+                    break;
                 case 'join_room':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleJoinRoom(ws, message);
                     break;
                 case 'chat_message':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleChatMessage(ws, message);
                     break;
                 case 'set_display_name':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleSetDisplayName(ws, message);
                     break;
                 case 'get_profile':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleGetProfile(ws, message);
                     break;
                 case 'get_chat_history':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleGetChatHistory(ws, message);
                     break;
                 // Responsible Gaming / Self-Exclusion
                 case 'check_exclusion_status':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleCheckExclusionStatus(ws, message);
                     break;
                 case 'set_exclusion':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleSetExclusion(ws, message);
                     break;
                 case 'get_exclusion_history':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleGetExclusionHistory(ws, message);
                     break;
                 // Tournament Mode
                 case 'tournament_enter':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentEnter(ws, message);
                     break;
                 case 'tournament_leave':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentLeave(ws, message);
                     break;
                 case 'tournament_state':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleGetTournamentState(ws, message);
                     break;
                 case 'tournament_game_start':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentGameStart(ws, message);
                     break;
                 case 'tournament_player_action':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentPlayerAction(ws, message);
                     break;
                 case 'tournament_leaderboard':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentLeaderboard(ws, message);
                     break;
                 case 'tournament_leaderboard_by_id':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentLeaderboardById(ws, message);
                     break;
                 case 'tournament_info':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleGetTournamentInfo(ws, message);
                     break;
                 // Tournament Creator - New handlers
                 case 'tournament_create':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentCreate(ws, message);
                     break;
                 case 'create_freeroll':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleCreateFreeroll(ws, message);
                     break;
                 case 'tournament_list':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentList(ws, message);
                     break;
                 case 'tournament_join':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentJoin(ws, message);
                     break;
                 case 'tournament_rebuy':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentRebuy(ws, message);
                     break;
                 case 'tournament_get_info':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentGetInfo(ws, message);
                     break;
                 case 'freeroll_list':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleFreerollList(ws, message);
                     break;
                 case 'freeroll_register':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleFreerollRegister(ws, message);
                     break;
                 case 'freeroll_join':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleFreerollJoin(ws, message);
                     break;
                 case 'freeroll_reentry':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleFreerollReentry(ws, message);
                     break;
                 case 'tournament_entries_list':
+                    if (!this.requireAuth(ws, message))
+                        return;
                     await this.handleTournamentEntriesList(ws, message);
                     break;
                 default:
@@ -288,6 +392,71 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error handling WebSocket message:', error);
             this.sendError(ws, 'Invalid message format', undefined);
+        }
+    }
+    /**
+     * Check if client is authenticated. If not, send error and return false.
+     * In grace period (REQUIRE_WS_AUTH=false), accepts legacy query-param auth.
+     */
+    requireAuth(ws, message) {
+        if (ws.isAuthenticated) {
+            return true;
+        }
+        // In grace period, having a playerAddress (from query param) is enough
+        if (!REQUIRE_WS_AUTH && ws.playerAddress) {
+            return true;
+        }
+        this.sendError(ws, 'Not authenticated. Please sign the auth challenge first.', message.requestId);
+        return false;
+    }
+    /**
+     * Handle EIP-712 auth response from client.
+     * Client signs the nonce we sent in auth_challenge to prove wallet ownership.
+     */
+    async handleAuthResponse(ws, message) {
+        try {
+            const { address, signature } = message.payload;
+            if (!address || !signature) {
+                return this.sendError(ws, 'address and signature required', message.requestId);
+            }
+            if (!ws.authNonce) {
+                return this.sendError(ws, 'No auth challenge pending', message.requestId);
+            }
+            const normalizedAddress = address.toLowerCase();
+            // Verify EIP-712 typed data signature
+            const valid = await (0, viem_1.verifyTypedData)({
+                address: normalizedAddress,
+                domain: AUTH_EIP712_DOMAIN,
+                types: AUTH_EIP712_TYPES,
+                primaryType: 'AuthChallenge',
+                message: { nonce: ws.authNonce },
+                signature,
+            });
+            if (!valid) {
+                return this.sendError(ws, 'Invalid signature', message.requestId);
+            }
+            // Auth successful
+            ws.playerAddress = normalizedAddress;
+            ws.isAuthenticated = true;
+            ws.authNonce = undefined; // consume nonce
+            // Track active connection
+            try {
+                const player = await this.dbService.getOrCreatePlayer(normalizedAddress);
+                await this.dbService.addActiveConnection(player.id, ws.connectionId);
+                logger_1.logger.info('WebSocket authenticated', { connectionId: ws.connectionId, playerAddress: normalizedAddress, playerId: player.id });
+            }
+            catch (error) {
+                logger_1.logger.error('Failed to track active connection after auth', { connectionId: ws.connectionId, playerAddress: normalizedAddress, error });
+            }
+            this.sendMessage(ws, {
+                type: 'auth_success',
+                payload: { playerAddress: normalizedAddress },
+                requestId: message.requestId
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling auth response:', error);
+            this.sendError(ws, 'Authentication failed', message.requestId);
         }
     }
     async handleGetServerSeedHash(ws, message) {
@@ -433,6 +602,16 @@ class WebSocketService {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
             const payload = message.payload;
+            // Verify game ownership: the game must belong to this player
+            if (payload.gameId) {
+                const game = await this.dbService.getGame(payload.gameId);
+                if (game) {
+                    const gameOwner = await this.dbService.getPlayerAddressFromSession(game.session_id);
+                    if (gameOwner.toLowerCase() !== ws.playerAddress.toLowerCase()) {
+                        return this.sendError(ws, 'Game does not belong to this player', message.requestId);
+                    }
+                }
+            }
             const gameState = await this.gameService.handlePlayerAction(payload);
             this.sendMessage(ws, {
                 type: 'game_updated',
@@ -488,16 +667,21 @@ class WebSocketService {
                 functionName: 'getPlayerReserve',
                 args: [ws.playerAddress]
             });
-            // Sync off-chain balance with contract
-            await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, contractBalance);
-            logger_1.logger.debug('Balance synced', {
+            // Safety: only increase DB balance, never decrease.
+            // This prevents wiping off-chain winnings that exceed the on-chain reserve.
+            const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
+            const newBalance = contractBalance > currentDbBalance ? contractBalance : currentDbBalance;
+            await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
+            logger_1.logger.debug('Balance synced (max-safe)', {
                 playerAddress: ws.playerAddress,
-                contractBalance: contractBalance.toString()
+                contractBalance: contractBalance.toString(),
+                previousDbBalance: currentDbBalance.toString(),
+                newBalance: newBalance.toString(),
             });
             this.sendMessage(ws, {
                 type: 'balance_synced',
                 payload: {
-                    balance: contractBalance.toString()
+                    balance: newBalance.toString()
                 },
                 requestId: message.requestId
             });

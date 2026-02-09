@@ -261,6 +261,18 @@ async function initializeServices() {
         });
         const blackjackContractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0xDe2c7a18de8a9d889E18874EA90A42f84FbaA080');
         const chainId = Number(process.env.BLACKJACK_CHAIN_ID || 369);
+        // Periodic cleanup of expired pending withdrawals (refund balances)
+        setInterval(async () => {
+            try {
+                const expired = await dbService.expirePendingWithdrawals();
+                if (expired > 0) {
+                    logger_1.logger.info(`Expired ${expired} pending withdrawal(s) and refunded balances`);
+                }
+            }
+            catch (err) {
+                logger_1.logger.error('Error expiring pending withdrawals:', err);
+            }
+        }, 60_000); // every minute
         app.post('/api/withdraw/prepare', async (req, res) => {
             try {
                 const { address, requestedAmount } = req.body;
@@ -273,6 +285,15 @@ async function initializeServices() {
                 if (normalizedAddress.length !== 42) {
                     return res.status(400).json({ error: 'Invalid address' });
                 }
+                // Reject if player already has a pending (un-expired) withdrawal
+                const existingPending = await dbService.getActivePendingWithdrawal(normalizedAddress);
+                if (existingPending) {
+                    return res.status(409).json({
+                        error: 'A withdrawal is already pending. Submit or wait for it to expire (10 min).',
+                    });
+                }
+                // Expire any old pending withdrawals first (refunds balances)
+                await dbService.expirePendingWithdrawals();
                 // Get database balance for this specific wallet
                 const dbBalance = await dbService.getPlayerBalance(normalizedAddress);
                 // Get contract reserve for this specific wallet
@@ -298,10 +319,22 @@ async function initializeServices() {
                     logger_1.logger.error('SETTLEMENT_PRIVATE_KEY not set');
                     return res.status(500).json({ error: 'Server configuration error' });
                 }
+                // Atomically deduct balance BEFORE signing (prevents stockpiling)
+                try {
+                    await dbService.deductPlayerBalance(normalizedAddress, amount);
+                }
+                catch (deductErr) {
+                    return res.status(400).json({
+                        error: 'Insufficient balance for withdrawal',
+                        dbBalance: dbBalance.toString(),
+                    });
+                }
                 // Generate unique nonce using timestamp + random
                 const nonce = BigInt(Date.now()) * BigInt(1e6) + BigInt(Math.floor(Math.random() * 1e6));
+                // Track pending withdrawal (so we can refund on expiry)
+                await dbService.createPendingWithdrawal(normalizedAddress, nonce, amount);
                 const payload = await (0, withdraw_sign_1.signWithdrawApproval)(normalizedAddress, amount, nonce, blackjackContractAddress, chainId, privateKey);
-                logger_1.logger.info('Withdrawal prepared', {
+                logger_1.logger.info('Withdrawal prepared (balance deducted)', {
                     address: normalizedAddress,
                     amount: amount.toString(),
                     dbBalance: dbBalance.toString(),

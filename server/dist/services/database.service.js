@@ -208,15 +208,60 @@ class DatabaseService {
         return BigInt(result.rows[0].balance || '0');
     }
     async deductPlayerBalance(walletAddress, amount) {
-        // Check balance first
-        const currentBalance = await this.getPlayerBalance(walletAddress);
-        if (currentBalance < amount) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const query = `
+      UPDATE players SET balance = balance - $2::NUMERIC
+      WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+      RETURNING balance
+    `;
+        const result = await this.pool.query(query, [normalizedAddress, amount.toString()]);
+        if (result.rows.length === 0) {
+            // Either player not found or insufficient balance
+            const currentBalance = await this.getPlayerBalance(walletAddress);
             throw new Error(`Insufficient balance: have ${currentBalance.toString()}, need ${amount.toString()}`);
         }
-        return await this.updatePlayerBalance(walletAddress, amount, 'subtract');
+        return BigInt(result.rows[0].balance || '0');
     }
     async addPlayerBalance(walletAddress, amount) {
         return await this.updatePlayerBalance(walletAddress, amount, 'add');
+    }
+    // ============================================
+    // Pending Withdrawal Methods
+    // ============================================
+    async getActivePendingWithdrawal(walletAddress) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const query = `
+      SELECT nonce, amount FROM pending_withdrawals
+      WHERE wallet_address = $1 AND status = 'pending'
+      ORDER BY created_at DESC LIMIT 1
+    `;
+        const result = await this.pool.query(query, [normalizedAddress]);
+        if (result.rows.length === 0)
+            return null;
+        return { nonce: result.rows[0].nonce, amount: result.rows[0].amount };
+    }
+    async createPendingWithdrawal(walletAddress, nonce, amount) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const query = `
+      INSERT INTO pending_withdrawals (nonce, wallet_address, amount, status)
+      VALUES ($1::NUMERIC, $2, $3::NUMERIC, 'pending')
+    `;
+        await this.pool.query(query, [nonce.toString(), normalizedAddress, amount.toString()]);
+    }
+    async expirePendingWithdrawals() {
+        // Expire pending withdrawals older than 10 minutes and refund balances
+        const query = `
+      UPDATE pending_withdrawals
+      SET status = 'expired'
+      WHERE status = 'pending' AND created_at < NOW() - INTERVAL '10 minutes'
+      RETURNING wallet_address, amount
+    `;
+        const result = await this.pool.query(query);
+        // Refund each expired withdrawal
+        for (const row of result.rows) {
+            await this.addPlayerBalance(row.wallet_address, BigInt(row.amount));
+        }
+        return result.rows.length;
     }
     async syncPlayerBalanceWithContract(walletAddress, contractBalance) {
         const normalizedAddress = this.normalizeAddress(walletAddress);

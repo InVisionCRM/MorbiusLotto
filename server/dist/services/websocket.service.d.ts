@@ -20,6 +20,16 @@ export declare class WebSocketService {
     private checkPerAddressChatLimit;
     private handleConnection;
     private handleMessage;
+    /**
+     * Check if client is authenticated. If not, send error and return false.
+     * In grace period (REQUIRE_WS_AUTH=false), accepts legacy query-param auth.
+     */
+    private requireAuth;
+    /**
+     * Handle EIP-712 auth response from client.
+     * Client signs the nonce we sent in auth_challenge to prove wallet ownership.
+     */
+    private handleAuthResponse;
     private handleGetServerSeedHash;
     private handleCreateGame;
     private handlePlayerAction;

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useAccount, usePublicClient } from 'wagmi';
+import { useAccount, usePublicClient, useSignTypedData } from 'wagmi';
 import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
@@ -209,6 +209,7 @@ const createCard = (value: number, suit: string, hidden = false): Card => ({
 export default function BlackjackPage() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
+  const { signTypedDataAsync } = useSignTypedData();
 
   // Intro screen state
   const [showIntro, setShowIntro] = useState(true);
@@ -788,7 +789,8 @@ export default function BlackjackPage() {
       wsAddressRef.current = normalizedAddress;
       const client = new BlackjackWebSocketClient(
         wsUrl,
-        normalizedAddress
+        normalizedAddress,
+        signTypedDataAsync as any
       );
 
       // Set up event handlers
