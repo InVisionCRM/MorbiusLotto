@@ -175,6 +175,8 @@ export interface CreateTournamentRequest {
   prizeTokenDecimals?: number | null;
   /** Optional PIN for private tournaments; if not set, server generates one */
   pinCode?: string | null;
+  /** Creator fee percentage (0-5%). Deducted from prize pool and paid to creator. */
+  creatorFeePercent?: number;
 }
 
 // Create tournament response
@@ -256,6 +258,9 @@ export interface TournamentListItem {
   registrationOpensAt?: string | null;
   currentPhase?: string | null;
   durationMinutes?: number | null;
+  // Fee fields
+  creatorFeePercent?: number;
+  platformFeePercent?: number;
 }
 
 // Extended tournament info
@@ -280,6 +285,9 @@ export interface TournamentInfoExtended {
   createdAt: string;
   prizeTokenAddress?: string | null;
   prizeTokenDecimals?: number | null;
+  // Fee fields
+  creatorFeePercent?: number;
+  platformFeePercent?: number;
 }
 
 // Rebuy result
@@ -332,23 +340,24 @@ export function validateBuyInAmount(amount: bigint): { valid: boolean; error?: s
 export function calculatePrizeForRank(
   rank: number,
   prizePool: bigint,
-  prizePercentages: number[]
+  prizePercentages: number[],
+  totalFeePercent: number = 16
 ): bigint {
   if (rank < 1 || rank > prizePercentages.length) return 0n;
   const percentage = prizePercentages[rank - 1];
   if (!percentage || percentage === 0) return 0n;
-  // 84% of pool is distributed, 16% goes to house
-  const distributablePool = (prizePool * 84n) / 100n;
+  const distributablePool = (prizePool * BigInt(100 - totalFeePercent)) / 100n;
   return (distributablePool * BigInt(percentage)) / 100n;
 }
 
 // Get example prize distribution for preview
 export function getExamplePrizeDistribution(
   prizePool: bigint,
-  prizePercentages: number[]
+  prizePercentages: number[],
+  totalFeePercent: number = 16
 ): { rank: number; percentage: number; amount: bigint }[] {
   const result: { rank: number; percentage: number; amount: bigint }[] = [];
-  const distributablePool = (prizePool * 84n) / 100n;
+  const distributablePool = (prizePool * BigInt(100 - totalFeePercent)) / 100n;
 
   for (let i = 0; i < prizePercentages.length; i++) {
     const percentage = prizePercentages[i];

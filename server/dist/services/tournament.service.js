@@ -102,6 +102,8 @@ class TournamentService {
             custom_image: row.custom_image || null,
             prize_token_address: row.prize_token_address ?? null,
             prize_token_decimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
+            creator_fee_percent: Number(row.creator_fee_percent ?? 0),
+            platform_fee_percent: Number(row.platform_fee_percent ?? 16),
         };
     }
     normalizeEntry(row) {
@@ -557,6 +559,42 @@ class TournamentService {
                     await client.query(`UPDATE tournament_entries SET final_rank = $1 WHERE id = $2`, [row.final_rank, row.entry_id]);
                 }
             }
+            // Distribute fees to platform wallet and creator
+            const platformFeePercent = tournament.platform_fee_percent;
+            const creatorFeePercent = tournament.creator_fee_percent;
+            const totalPool = tournament.prize_pool;
+            if (platformFeePercent > 0) {
+                const platformFeeAmount = (totalPool * BigInt(platformFeePercent)) / 100n;
+                const platformWallet = process.env.PLATFORM_FEE_WALLET;
+                if (platformFeeAmount > 0n && platformWallet) {
+                    if (useEscrow) {
+                        const result = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, platformWallet, platformFeeAmount);
+                        if (!result.success) {
+                            logger_1.logger.error('Platform fee escrow payout failed', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
+                        }
+                    }
+                    else {
+                        await client.query(`INSERT INTO players (wallet_address, balance) VALUES (LOWER($1), $2::NUMERIC)
+               ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC`, [platformWallet.toLowerCase(), platformFeeAmount.toString()]);
+                    }
+                    logger_1.logger.info('Platform fee distributed', { tournamentId, wallet: platformWallet, amount: platformFeeAmount.toString() });
+                }
+            }
+            if (creatorFeePercent > 0 && tournament.creator_address) {
+                const creatorFeeAmount = (totalPool * BigInt(creatorFeePercent)) / 100n;
+                if (creatorFeeAmount > 0n) {
+                    if (useEscrow) {
+                        const result = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, tournament.creator_address, creatorFeeAmount);
+                        if (!result.success) {
+                            logger_1.logger.error('Creator fee escrow payout failed', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
+                        }
+                    }
+                    else {
+                        await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [creatorFeeAmount.toString(), tournament.creator_address]);
+                    }
+                    logger_1.logger.info('Creator fee distributed', { tournamentId, wallet: tournament.creator_address, amount: creatorFeeAmount.toString() });
+                }
+            }
             // Mark tournament as completed
             await client.query(`UPDATE tournaments SET status = 'completed', ended_at = NOW() WHERE id = $1`, [tournamentId]);
             await client.query('COMMIT');
@@ -564,6 +602,8 @@ class TournamentService {
                 tournamentId,
                 totalDistributed: distributions.reduce((sum, d) => sum + d.prize_amount, 0n).toString(),
                 winners: distributions.length,
+                platformFeePercent,
+                creatorFeePercent,
             });
             return distributions;
         }
@@ -776,6 +816,9 @@ class TournamentService {
         const prizePercentages = this.getPrizePercentages(params.prizeDistributionType, params.customPrizePercentages);
         const hasCustomPrizeToken = params.prizeTokenAddress != null && params.prizeTokenAddress.trim() !== '';
         const initialPrizePool = hasCustomPrizeToken && params.prizeAmount ? params.prizeAmount : '0';
+        // Fee percentages: platform from env (or passed param), creator from request
+        const platformFeePercent = params.platformFeePercent ?? parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
+        const creatorFeePercent = params.creatorFeePercent ?? 0;
         const query = `
       INSERT INTO tournaments (
         name,
@@ -795,8 +838,10 @@ class TournamentService {
         custom_image,
         prize_token_address,
         prize_token_decimals,
-        prize_pool
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        prize_pool,
+        creator_fee_percent,
+        platform_fee_percent
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *
     `;
         const result = await this.pool.query(query, [
@@ -818,6 +863,8 @@ class TournamentService {
             hasCustomPrizeToken ? params.prizeTokenAddress.trim() : null,
             hasCustomPrizeToken && params.prizeTokenDecimals != null ? params.prizeTokenDecimals : null,
             initialPrizePool,
+            creatorFeePercent,
+            platformFeePercent,
         ]);
         const tournament = this.normalizeTournament(result.rows[0]);
         logger_1.logger.info('Custom tournament created', {
@@ -861,6 +908,9 @@ class TournamentService {
         }
         const prizePercentages = this.getPrizePercentages(params.prizeDistributionType, params.customPrizePercentages);
         const rebuyConfig = { enabled: false, maxRebuys: 0 };
+        // Fee percentages
+        const platformFeePercent = params.platformFeePercent ?? parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
+        const creatorFeePercent = params.creatorFeePercent ?? 0;
         const query = `
       INSERT INTO tournaments (
         name,
@@ -890,8 +940,10 @@ class TournamentService {
         action_timer_seconds,
         current_phase,
         current_elimination_round,
-        tiebreaker_order
-      ) VALUES ($1, $2, 0, $3, $4, 2, 'active', 0, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, 'registration', 0, $20)
+        tiebreaker_order,
+        creator_fee_percent,
+        platform_fee_percent
+      ) VALUES ($1, $2, 0, $3, $4, 2, 'active', 0, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, 'registration', 0, $20, $21, $22)
       RETURNING id, pin_code
     `;
         const result = await this.pool.query(query, [
@@ -917,6 +969,8 @@ class TournamentService {
             Array.isArray(params.tiebreakerOrder) && params.tiebreakerOrder.length > 0
                 ? JSON.stringify(params.tiebreakerOrder)
                 : JSON.stringify(['highest_chips', 'blackjacks', 'hands_won', 'entry_time']),
+            creatorFeePercent,
+            platformFeePercent,
         ]);
         const row = result.rows[0];
         const tournamentId = row.id;
@@ -1048,6 +1102,8 @@ class TournamentService {
                 registration_opens_at: row.registration_opens_at ?? null,
                 current_phase: row.current_phase ?? null,
                 duration_minutes: row.duration_minutes != null ? Number(row.duration_minutes) : null,
+                creator_fee_percent: Number(row.creator_fee_percent ?? 0),
+                platform_fee_percent: Number(row.platform_fee_percent ?? 16),
             };
         });
     }

@@ -145,6 +145,9 @@ export function TournamentCreator({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Creator fee (0-5%)
+  const [creatorFeePercent, setCreatorFeePercent] = useState(0);
+
   // Custom prize token (when prize type is 'custom')
   const [prizeType, setPrizeType] = useState<'platform' | 'custom'>('platform');
   const [prizeTokenAddress, setPrizeTokenAddress] = useState('');
@@ -330,10 +333,11 @@ export function TournamentCreator({
 
   // Example prize distribution preview
   const examplePrizePool = buyInAmountWei * 10n; // Simulate 10 players
+  const totalFeePercent = 16 + creatorFeePercent; // platform fee (16 default) + creator fee
   const prizePreview = useMemo(() => {
     if (!selectedPreset) return [];
-    return getExamplePrizeDistribution(examplePrizePool, selectedPreset.percentages);
-  }, [selectedPreset, examplePrizePool]);
+    return getExamplePrizeDistribution(examplePrizePool, selectedPreset.percentages, totalFeePercent);
+  }, [selectedPreset, examplePrizePool, totalFeePercent]);
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'basics', label: 'Basics' },
@@ -424,6 +428,7 @@ export function TournamentCreator({
       prizeDistributionType,
       customImage: customImage || undefined,
       pinCode: isPrivate && manualPin.trim() ? manualPin.trim() : undefined,
+      creatorFeePercent: creatorFeePercent > 0 ? creatorFeePercent : undefined,
     };
     if (prizeType === 'custom' && prizeTokenAddress.trim() && prizeAmountHuman.trim()) {
       const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
@@ -1111,6 +1116,33 @@ export function TournamentCreator({
           {/* Prizes Tab */}
           {activeTab === 'prizes' && (
             <div className="space-y-6">
+              {/* Creator Fee */}
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-1">
+                  Creator Fee: {creatorFeePercent}%
+                </label>
+                <p className="text-gray-500 text-xs mb-2">
+                  Earn a percentage of the prize pool as the tournament creator (0-5%). This is deducted before winner payouts.
+                </p>
+                <input
+                  type="range"
+                  min="0"
+                  max="5"
+                  step="1"
+                  value={creatorFeePercent}
+                  onChange={(e) => setCreatorFeePercent(parseInt(e.target.value, 10))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0%</span>
+                  <span>1%</span>
+                  <span>2%</span>
+                  <span>3%</span>
+                  <span>4%</span>
+                  <span>5%</span>
+                </div>
+              </div>
+
               {/* Prize source: platform vs custom token */}
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
@@ -1253,7 +1285,7 @@ export function TournamentCreator({
                   Prize Distribution
                 </label>
                 <p className="text-gray-500 text-xs mb-3">
-                  Choose how the prize pool is split among top finishers. 84% of the pool goes to winners, 16% to the house.
+                  Choose how the prize pool is split among top finishers. {100 - totalFeePercent}% of the pool goes to winners, {totalFeePercent}% to fees.
                 </p>
                 <div className="space-y-2">
                   {PRIZE_PRESETS.map((preset) => (
@@ -1299,7 +1331,7 @@ export function TournamentCreator({
                     ))}
                   </div>
                   <p className="text-gray-500 text-xs mt-3">
-                    * 84% of prize pool distributed, 16% to house
+                    * {100 - totalFeePercent}% of prize pool distributed, {totalFeePercent}% to fees ({creatorFeePercent > 0 ? `${16}% platform + ${creatorFeePercent}% creator` : '16% platform'})
                   </p>
                 </div>
               )}

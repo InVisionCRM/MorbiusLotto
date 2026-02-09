@@ -41,6 +41,8 @@ export interface Tournament {
     custom_image?: string | null;
     prize_token_address?: string | null;
     prize_token_decimals?: number | null;
+    creator_fee_percent: number;
+    platform_fee_percent: number;
 }
 export interface TournamentEntry {
     id: string;
@@ -77,6 +79,10 @@ export interface CreateTournamentParams {
     prizeTokenDecimals?: number | null;
     /** Optional PIN for private tournaments; if provided and valid, used instead of generating */
     pinCode?: string | null;
+    /** Creator fee percentage (0-5%). Deducted from prize pool and paid to creator. */
+    creatorFeePercent?: number;
+    /** Platform fee percentage. Read from env at creation time. */
+    platformFeePercent?: number;
 }
 /** Create freeroll tournament (no buy-in, scheduled start). */
 export interface CreateFreerollParams {
@@ -107,6 +113,10 @@ export interface CreateFreerollParams {
     maxPlayers?: number | null;
     customImage?: string | null;
     pinCode?: string | null;
+    /** Creator fee percentage (0-5%). */
+    creatorFeePercent?: number;
+    /** Platform fee percentage. Read from env at creation time. */
+    platformFeePercent?: number;
 }
 export interface FreerollListItem {
     id: string;
@@ -152,6 +162,8 @@ export interface TournamentListItem {
     registration_opens_at?: Date | null;
     current_phase?: string | null;
     duration_minutes?: number | null;
+    creator_fee_percent?: number;
+    platform_fee_percent?: number;
 }
 export interface TournamentGame {
     id: string;

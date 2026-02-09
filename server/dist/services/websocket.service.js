@@ -1574,6 +1574,15 @@ class WebSocketService {
             catch {
                 return this.sendError(ws, 'Invalid buy-in amount', message.requestId);
             }
+            // Validate creator fee (0-5%)
+            const creatorFeePercent = typeof payload.creatorFeePercent === 'number'
+                ? Math.floor(payload.creatorFeePercent)
+                : 0;
+            if (creatorFeePercent < 0 || creatorFeePercent > 5) {
+                return this.sendError(ws, 'Creator fee must be 0-5%', message.requestId);
+            }
+            // Read platform fee from env
+            const platformFeePercent = parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
             const tournament = await this.tournamentService.createTournament({
                 creatorAddress: ws.playerAddress,
                 name: payload.name,
@@ -1592,6 +1601,8 @@ class WebSocketService {
                 prizeAmount: payload.prizeAmount,
                 prizeTokenDecimals: payload.prizeTokenDecimals,
                 pinCode: payload.pinCode,
+                creatorFeePercent,
+                platformFeePercent,
             });
             // Determine prize percentages for response
             const prizePercentages = this.getPrizePercentagesForType(tournament.prize_distribution_type, tournament.prize_percentages);
@@ -1678,6 +1689,14 @@ class WebSocketService {
                 return this.sendError(ws, 'Tournament mode not available', message.requestId);
             }
             const payload = message.payload;
+            // Validate creator fee (0-5%)
+            const creatorFeePercent = typeof payload.creatorFeePercent === 'number'
+                ? Math.floor(payload.creatorFeePercent)
+                : 0;
+            if (creatorFeePercent < 0 || creatorFeePercent > 5) {
+                return this.sendError(ws, 'Creator fee must be 0-5%', message.requestId);
+            }
+            const platformFeePercent = parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
             const result = await this.tournamentService.createFreeroll({
                 creatorAddress: ws.playerAddress,
                 name: payload.name,
@@ -1698,6 +1717,8 @@ class WebSocketService {
                 maxPlayers: payload.maxPlayers,
                 customImage: payload.customImage,
                 pinCode: payload.pinCode,
+                creatorFeePercent,
+                platformFeePercent,
             });
             this.sendMessage(ws, {
                 type: 'freeroll_created',
@@ -1745,6 +1766,8 @@ class WebSocketService {
                 registrationOpensAt: t.registration_opens_at?.toISOString() ?? null,
                 currentPhase: t.current_phase ?? null,
                 durationMinutes: t.duration_minutes ?? null,
+                creatorFeePercent: t.creator_fee_percent ?? 0,
+                platformFeePercent: t.platform_fee_percent ?? 16,
             }));
             this.sendMessage(ws, {
                 type: 'tournament_list',
@@ -1886,6 +1909,8 @@ class WebSocketService {
                     createdAt: info.tournament.created_at.toISOString(),
                     prizeTokenAddress: info.tournament.prize_token_address ?? null,
                     prizeTokenDecimals: info.tournament.prize_token_decimals ?? null,
+                    creatorFeePercent: info.tournament.creator_fee_percent ?? 0,
+                    platformFeePercent: info.tournament.platform_fee_percent ?? 16,
                 },
                 requestId: message.requestId
             });
