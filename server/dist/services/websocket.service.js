@@ -51,6 +51,8 @@ const CHAT_PER_ADDRESS_WINDOW_MS = 60_000; // 1 minute
 const CHAT_PER_ADDRESS_CLEANUP_MS = 120_000; // prune stale entries every 2 min
 const CHAT_DISPLAY_NAME_MIN_LEN = 3;
 const CHAT_DISPLAY_NAME_MAX_LEN = 32;
+// Rate limit for create_game (1 game per second per connection)
+const CREATE_GAME_COOLDOWN_MS = 1000;
 // Bet limits (in MORBIUS, 18 decimals)
 const BET_LIMITS = {
     MIN_BET: BigInt('1000000000000000000'), // 1 MORBIUS
@@ -499,6 +501,12 @@ class WebSocketService {
             if (!ws.playerAddress) {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
+            // Rate-limit game creation (1 per second per connection)
+            const now = Date.now();
+            if (ws.lastCreateGameAt && now - ws.lastCreateGameAt < CREATE_GAME_COOLDOWN_MS) {
+                return this.sendError(ws, 'Please wait before starting another game', message.requestId);
+            }
+            ws.lastCreateGameAt = now;
             // Check if player is self-excluded
             const exclusionStatus = await this.dbService.checkExclusionStatus(ws.playerAddress);
             if (exclusionStatus.isExcluded) {

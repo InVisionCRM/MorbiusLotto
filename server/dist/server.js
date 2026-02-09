@@ -80,6 +80,16 @@ async function initializeServices() {
         // Freeroll scheduler (polls pending scheduled events: start, elimination_round, end)
         freerollScheduler = new freeroll_scheduler_service_1.FreerollSchedulerService(dbService.getPool(), tournamentService);
         freerollScheduler.start();
+        // Expire any orphaned pending withdrawals from a previous crash (refunds balances)
+        try {
+            const expired = await dbService.expirePendingWithdrawals();
+            if (expired > 0) {
+                logger_1.logger.info(`Startup: expired ${expired} orphaned pending withdrawal(s) and refunded balances`);
+            }
+        }
+        catch (err) {
+            logger_1.logger.error('Startup: failed to expire pending withdrawals', err);
+        }
         // Chain analytics (on-chain games: Plinko, Keno, Lottery, BigWheel)
         const chainAnalytics = new chain_analytics_service_1.ChainAnalyticsService();
         // API routes
