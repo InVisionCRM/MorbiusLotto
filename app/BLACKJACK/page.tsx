@@ -2106,10 +2106,11 @@ export default function BlackjackPage() {
         gameNumber: raw.gameNumber,
       };
     } catch (err) {
+      console.error('[Verify] fetch failed:', err);
       if (err instanceof Error && err.name === 'AbortError') {
         throw new Error('Verification timed out. Is the game server running?');
       }
-      throw new Error('Could not reach the game server. Is it running and is NEXT_PUBLIC_API_URL correct?');
+      throw err;
     }
   }, []);
 
