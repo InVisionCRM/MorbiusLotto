@@ -112,6 +112,50 @@ export const blackjackAbi = [
         "type": "address"
       },
       {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "feeAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "gameHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "BetFeeCollected",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldFeeBps",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newFeeBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "BetFeeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "player",
+        "type": "address"
+      },
+      {
         "indexed": true,
         "internalType": "bytes32",
         "name": "gameHash",
@@ -194,6 +238,25 @@ export const blackjackAbi = [
       }
     ],
     "name": "EmergencyAdminUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "oldRecipient",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "FeeRecipientUpdated",
     "type": "event"
   },
   {
@@ -410,23 +473,10 @@ export const blackjackAbi = [
   },
   {
     "inputs": [],
-    "name": "WPLS_SWAP_BUFFER_PCT",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "WPLS_TOKEN",
     "outputs": [
       {
-        "internalType": "contract IWrappedPulse",
+        "internalType": "contract IWrappedPulseV2",
         "name": "",
         "type": "address"
       }
@@ -442,6 +492,19 @@ export const blackjackAbi = [
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "betFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -547,6 +610,19 @@ export const blackjackAbi = [
     "name": "emergencyWithdraw",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "feeRecipient",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -826,7 +902,7 @@ export const blackjackAbi = [
     "name": "pulseXRouter",
     "outputs": [
       {
-        "internalType": "contract IPulseXRouter",
+        "internalType": "contract IPulseXRouterV2",
         "name": "",
         "type": "address"
       }
@@ -889,6 +965,19 @@ export const blackjackAbi = [
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "_betFeeBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "setBetFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "_admin",
         "type": "address"
@@ -908,6 +997,19 @@ export const blackjackAbi = [
       }
     ],
     "name": "setEmergencyPause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_feeRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "setFeeRecipient",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -938,6 +1040,19 @@ export const blackjackAbi = [
     "name": "settleGame",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalOffChainPayouts",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {

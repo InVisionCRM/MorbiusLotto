@@ -110,6 +110,10 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     // Used nonces for signature-based withdrawals (prevents replay attacks)
     mapping(uint256 => bool) public usedNonces;
 
+    // Bet fee: percentage taken from every bet, paid to feeRecipient
+    uint256 public betFeeBps;      // 0–1000 (0%–10%), default 0
+    address public feeRecipient;   // receives collected fees
+
     // EIP-712 Domain Separator
     bytes32 public immutable DOMAIN_SEPARATOR;
 
@@ -137,6 +141,9 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     event BetPlaced(address indexed player, bytes32 indexed gameHash, uint256 betAmount, uint256 timestamp);
     event AuthorizedServerUpdated(address indexed oldServer, address indexed newServer);
     event EmergencyAdminUpdated(address indexed oldAdmin, address indexed newAdmin);
+    event BetFeeUpdated(uint256 oldFeeBps, uint256 newFeeBps);
+    event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+    event BetFeeCollected(address indexed player, uint256 feeAmount, bytes32 indexed gameHash);
 
     constructor(
         address _initialOwner,
@@ -310,19 +317,31 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         require(playerReserves[msg.sender] >= betAmount, "Insufficient reserve");
         require(pendingGames[gameHash].player == address(0), "Game hash already used");
 
+        // Deduct full betAmount from player reserves
         playerReserves[msg.sender] -= betAmount;
         totalReserves -= betAmount;
 
+        // Calculate and collect fee
+        uint256 netBet = betAmount;
+        if (betFeeBps > 0 && feeRecipient != address(0)) {
+            uint256 fee = (betAmount * betFeeBps) / BPS_DENOMINATOR;
+            netBet = betAmount - fee;
+            // Credit fee to feeRecipient's reserves (withdrawable via withdraw())
+            playerReserves[feeRecipient] += fee;
+            totalReserves += fee;
+            emit BetFeeCollected(msg.sender, fee, gameHash);
+        }
+
         pendingGames[gameHash] = PendingGame({
             player: msg.sender,
-            betAmount: betAmount,
+            betAmount: netBet,
             timestamp: block.timestamp,
             settled: false
         });
 
         playerPendingGames[msg.sender].push(gameHash);
 
-        emit BetPlaced(msg.sender, gameHash, betAmount, block.timestamp);
+        emit BetPlaced(msg.sender, gameHash, netBet, block.timestamp);
     }
 
     /**
@@ -436,6 +455,17 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     function setEmergencyAdmin(address _admin) external onlyOwner {
         emit EmergencyAdminUpdated(emergencyAdmin, _admin);
         emergencyAdmin = _admin;
+    }
+
+    function setBetFee(uint256 _betFeeBps) external onlyOwner {
+        require(_betFeeBps <= 1000, "Fee cannot exceed 10%");
+        emit BetFeeUpdated(betFeeBps, _betFeeBps);
+        betFeeBps = _betFeeBps;
+    }
+
+    function setFeeRecipient(address _feeRecipient) external onlyOwner {
+        emit FeeRecipientUpdated(feeRecipient, _feeRecipient);
+        feeRecipient = _feeRecipient;
     }
 
     function setEmergencyPause(bool _paused) external onlyEmergencyAdmin {

@@ -369,6 +369,39 @@ export declare class TournamentService {
     private handleFreerollStart;
     /** Run elimination round: eliminate bottom % by chips (with tiebreakers), optionally reset chips for survivors. */
     private handleEliminationRound;
+    /**
+     * Get all tournaments created by an address (active + completed)
+     */
+    getCreatorTournaments(creatorAddress: string): Promise<{
+        id: string;
+        name: string;
+        status: string;
+        buyInAmount: string;
+        prizePool: string;
+        entryCount: number;
+        creatorFeePercent: number;
+        platformFeePercent: number;
+        creatorFeeEarned: string;
+        prizeDistributionType: string;
+        createdAt: string;
+        endedAt: string | null;
+        customImage: string | null;
+        isPrivate: boolean;
+        tournamentType: string;
+        maxHands: number;
+        startingChips: number;
+    }[]>;
+    /**
+     * Get earnings from completed tournaments for a creator
+     */
+    getCreatorEarnings(creatorAddress: string): Promise<{
+        tournamentId: string;
+        tournamentName: string;
+        prizePool: string;
+        feePercent: number;
+        feeEarned: string;
+        completedAt: string;
+    }[]>;
     /** Complete freeroll: distribute prizes (via existing logic) and set current_phase = completed. */
     private handleFreerollEnd;
 }

@@ -108,7 +108,7 @@ export class WebSocketService {
       transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com')
     });
     
-    this.contractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0x32435e633EB691f7039EB73107FD15EF13125703') as `0x${string}`;
+    this.contractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09') as `0x${string}`;
 
     this.wss.on('connection', this.handleConnection.bind(this));
 
@@ -432,6 +432,16 @@ export class WebSocketService {
         case 'tournament_entries_list':
           if (!this.requireAuth(ws, message)) return;
           await this.handleTournamentEntriesList(ws, message);
+          break;
+
+        case 'creator_tournaments':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleCreatorTournaments(ws, message);
+          break;
+
+        case 'creator_earnings':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleCreatorEarnings(ws, message);
           break;
 
         default:
@@ -2324,6 +2334,54 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error getting tournament entries:', error);
       this.sendError(ws, 'Failed to get entries', message.requestId);
+    }
+  }
+
+  private async handleCreatorTournaments(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const address = ws.playerAddress;
+      if (!address) {
+        return this.sendError(ws, 'No address', message.requestId);
+      }
+
+      const tournaments = await this.tournamentService.getCreatorTournaments(address);
+
+      this.sendMessage(ws, {
+        type: 'creator_tournaments',
+        payload: { tournaments },
+        requestId: message.requestId,
+      });
+    } catch (error) {
+      logger.error('Error getting creator tournaments:', error);
+      this.sendError(ws, 'Failed to get creator tournaments', message.requestId);
+    }
+  }
+
+  private async handleCreatorEarnings(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const address = ws.playerAddress;
+      if (!address) {
+        return this.sendError(ws, 'No address', message.requestId);
+      }
+
+      const earnings = await this.tournamentService.getCreatorEarnings(address);
+
+      this.sendMessage(ws, {
+        type: 'creator_earnings',
+        payload: { earnings },
+        requestId: message.requestId,
+      });
+    } catch (error) {
+      logger.error('Error getting creator earnings:', error);
+      this.sendError(ws, 'Failed to get creator earnings', message.requestId);
     }
   }
 

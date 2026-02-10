@@ -395,3 +395,34 @@ export function formatTimeRemaining(endsAt: string | null): string | null {
   }
   return `${minutes}m`;
 }
+
+// ========== Creator Dashboard Types ==========
+
+export interface CreatorTournamentItem {
+  id: string;
+  name: string;
+  status: 'active' | 'completed' | 'cancelled';
+  buyInAmount: string;
+  prizePool: string;
+  entryCount: number;
+  creatorFeePercent: number;
+  platformFeePercent: number;
+  creatorFeeEarned: string;
+  prizeDistributionType: string;
+  createdAt: string;
+  endedAt: string | null;
+  customImage: string | null;
+  isPrivate: boolean;
+  tournamentType: string;
+  maxHands: number;
+  startingChips: number;
+}
+
+export interface CreatorEarning {
+  tournamentId: string;
+  tournamentName: string;
+  prizePool: string;
+  feePercent: number;
+  feeEarned: string;
+  completedAt: string;
+}

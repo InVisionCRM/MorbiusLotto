@@ -1975,6 +1975,94 @@ export class TournamentService {
     }
   }
 
+  // ============================================
+  // Creator Dashboard Methods
+  // ============================================
+
+  /**
+   * Get all tournaments created by an address (active + completed)
+   */
+  async getCreatorTournaments(creatorAddress: string): Promise<{
+    id: string;
+    name: string;
+    status: string;
+    buyInAmount: string;
+    prizePool: string;
+    entryCount: number;
+    creatorFeePercent: number;
+    platformFeePercent: number;
+    creatorFeeEarned: string;
+    prizeDistributionType: string;
+    createdAt: string;
+    endedAt: string | null;
+    customImage: string | null;
+    isPrivate: boolean;
+    tournamentType: string;
+    maxHands: number;
+    startingChips: number;
+  }[]> {
+    const normalizedAddress = this.normalizeAddress(creatorAddress);
+    const result = await this.pool.query('SELECT * FROM get_creator_tournaments($1)', [normalizedAddress]);
+
+    return (result.rows || []).map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      buyInAmount: String(row.buy_in_amount ?? '0'),
+      prizePool: String(row.prize_pool ?? '0'),
+      entryCount: Number(row.entry_count ?? 0),
+      creatorFeePercent: Number(row.creator_fee_percent ?? 0),
+      platformFeePercent: Number(row.platform_fee_percent ?? 16),
+      creatorFeeEarned: String(row.creator_fee_earned ?? '0'),
+      prizeDistributionType: row.prize_distribution_type || 'top_10',
+      createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+      endedAt: row.ended_at ? new Date(row.ended_at).toISOString() : null,
+      customImage: row.custom_image || null,
+      isPrivate: Boolean(row.is_private),
+      tournamentType: row.tournament_type || 'standard',
+      maxHands: Number(row.max_hands ?? 50),
+      startingChips: Number(row.starting_chips ?? 5000),
+    }));
+  }
+
+  /**
+   * Get earnings from completed tournaments for a creator
+   */
+  async getCreatorEarnings(creatorAddress: string): Promise<{
+    tournamentId: string;
+    tournamentName: string;
+    prizePool: string;
+    feePercent: number;
+    feeEarned: string;
+    completedAt: string;
+  }[]> {
+    const normalizedAddress = this.normalizeAddress(creatorAddress);
+    const query = `
+      SELECT
+        t.id AS tournament_id,
+        t.name AS tournament_name,
+        t.prize_pool,
+        COALESCE(t.creator_fee_percent, 0) AS creator_fee_percent,
+        (t.prize_pool * COALESCE(t.creator_fee_percent, 0)) / 100 AS fee_earned,
+        t.ended_at
+      FROM tournaments t
+      WHERE LOWER(t.creator_address) = LOWER($1)
+        AND t.status = 'completed'
+        AND COALESCE(t.creator_fee_percent, 0) > 0
+      ORDER BY t.ended_at DESC
+    `;
+    const result = await this.pool.query(query, [normalizedAddress]);
+
+    return (result.rows || []).map((row: any) => ({
+      tournamentId: row.tournament_id,
+      tournamentName: row.tournament_name,
+      prizePool: String(row.prize_pool ?? '0'),
+      feePercent: Number(row.creator_fee_percent ?? 0),
+      feeEarned: String(row.fee_earned ?? '0'),
+      completedAt: row.ended_at ? new Date(row.ended_at).toISOString() : '',
+    }));
+  }
+
   /** Complete freeroll: distribute prizes (via existing logic) and set current_phase = completed. */
   private async handleFreerollEnd(tournamentId: string): Promise<void> {
     logger.info('handleFreerollEnd: tournamentId=%s', tournamentId);

@@ -32,7 +32,7 @@ import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 
-type TabId = 'basics' | 'rules' | 'prizes' | 'theme';
+type TabId = 'basics' | 'rules' | 'prizes' | 'fees' | 'theme';
 type FundingStep = 'idle' | 'approving' | 'approved' | 'depositing' | 'done';
 
 interface TokenSearchResult {
@@ -343,6 +343,7 @@ export function TournamentCreator({
     { id: 'basics', label: 'Basics' },
     { id: 'rules', label: 'Rules' },
     { id: 'prizes', label: 'Prizes' },
+    { id: 'fees', label: 'Fees' },
     { id: 'theme', label: 'Theme' },
   ];
 
@@ -1116,33 +1117,6 @@ export function TournamentCreator({
           {/* Prizes Tab */}
           {activeTab === 'prizes' && (
             <div className="space-y-6">
-              {/* Creator Fee */}
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-1">
-                  Creator Fee: {creatorFeePercent}%
-                </label>
-                <p className="text-gray-500 text-xs mb-2">
-                  Earn a percentage of the prize pool as the tournament creator (0-5%). This is deducted before winner payouts.
-                </p>
-                <input
-                  type="range"
-                  min="0"
-                  max="5"
-                  step="1"
-                  value={creatorFeePercent}
-                  onChange={(e) => setCreatorFeePercent(parseInt(e.target.value, 10))}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0%</span>
-                  <span>1%</span>
-                  <span>2%</span>
-                  <span>3%</span>
-                  <span>4%</span>
-                  <span>5%</span>
-                </div>
-              </div>
-
               {/* Prize source: platform vs custom token */}
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
@@ -1335,6 +1309,61 @@ export function TournamentCreator({
                   </p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Fees Tab */}
+          {activeTab === 'fees' && (
+            <div className="space-y-6">
+              {/* Creator Fee */}
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-1">
+                  Creator Fee: {creatorFeePercent}%
+                </label>
+                <p className="text-gray-500 text-xs mb-2">
+                  Earn a percentage of the prize pool as the tournament creator (0-5%). This is deducted before winner payouts.
+                </p>
+                <input
+                  type="range"
+                  min="0"
+                  max="5"
+                  step="1"
+                  value={creatorFeePercent}
+                  onChange={(e) => setCreatorFeePercent(parseInt(e.target.value, 10))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0%</span>
+                  <span>1%</span>
+                  <span>2%</span>
+                  <span>3%</span>
+                  <span>4%</span>
+                  <span>5%</span>
+                </div>
+              </div>
+
+              {/* Fee Summary */}
+              <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                <h4 className="text-gray-300 text-sm font-medium mb-3">Fee Breakdown</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Platform fee</span>
+                    <span className="text-white">16%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Your creator fee</span>
+                    <span className="text-purple-400 font-medium">{creatorFeePercent}%</span>
+                  </div>
+                  <div className="border-t border-gray-700 pt-2 flex justify-between">
+                    <span className="text-gray-400">Total fees</span>
+                    <span className="text-white font-medium">{totalFeePercent}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Players receive</span>
+                    <span className="text-green-400 font-medium">{100 - totalFeePercent}%</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

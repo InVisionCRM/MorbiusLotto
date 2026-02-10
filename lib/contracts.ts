@@ -27,8 +27,8 @@ export const PLINKO_ADDRESS = '0x37B1db8F06870BFFeFed862C06535BEFc4383ff8' as co
 // BigWheel contract (7-segment casino wheel game - proportional sizes)
 export const BIGWHEEL_ADDRESS = '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F' as const
 
-// Blackjack contract (6-deck provably fair blackjack game with withdrawWithSignature)
-export const BLACKJACK_ADDRESS = '0x32435e633EB691f7039EB73107FD15EF13125703' as const
+// BlackjackV2 contract (6-deck provably fair blackjack with bet fees)
+export const BLACKJACK_ADDRESS = '0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09' as const
 
 // Tournament Prize Escrow (custom token prize pools for tournaments)
 export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = (

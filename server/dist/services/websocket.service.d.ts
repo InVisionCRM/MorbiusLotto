@@ -72,6 +72,8 @@ export declare class WebSocketService {
     private handleFreerollJoin;
     private handleFreerollReentry;
     private handleTournamentEntriesList;
+    private handleCreatorTournaments;
+    private handleCreatorEarnings;
     private getPrizePercentagesForType;
     shutdown(): void;
 }
