@@ -72,6 +72,7 @@
     "eslint-config-next": "^16.0.7",
     "hardhat": "^2.27.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "webpack": "^5.105.1"
   }
 }

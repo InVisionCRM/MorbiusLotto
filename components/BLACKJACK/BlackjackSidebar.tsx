@@ -125,10 +125,10 @@ export default function BlackjackSidebar({
         ))}
       </div>
 
-      {/* Content — padding only for howto/tournaments/chart/tournament-play/bet; Recent/Top have their own */}
+      {/* Content — padding only for howto/tournaments/chart/tournament-play; Recent/Top have their own */}
       <div
         className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar ${
-          activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'verify' || activeTab === 'tournament-play' || activeTab === 'bet' ? 'p-4' : ''
+          activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'verify' || activeTab === 'tournament-play' ? 'p-4' : ''
         }`}
         style={PANEL_STYLE}
       >
@@ -147,8 +147,7 @@ export default function BlackjackSidebar({
             Hidden when tab is not active so data accumulates across tab switches. */}
         {chartRef != null && (
           <div
-            className={activeTab === 'chart' ? 'h-[320px] min-h-[280px] w-full' : 'hidden'}
-            style={{ minWidth: 0 }}
+            className={`min-w-0 ${activeTab === 'chart' ? 'h-[320px] min-h-[280px] w-full' : 'hidden'}`}
             aria-hidden={activeTab !== 'chart'}
           >
             <BlackjackRealTimeBetChart

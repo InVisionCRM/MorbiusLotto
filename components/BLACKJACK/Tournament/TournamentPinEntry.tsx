@@ -117,6 +117,8 @@ export function TournamentPinEntry({
           <div className="flex justify-center gap-3" onPaste={handlePaste}>
             {pin.map((digit, index) => (
               <input
+                title={`PIN digit ${index + 1}`}
+                placeholder="0"
                 key={index}
                 ref={inputRefs[index]}
                 type="text"

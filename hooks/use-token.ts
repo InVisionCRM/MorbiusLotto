@@ -107,7 +107,7 @@ export function useApproveToken() {
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [LOTTERY_ADDRESS, amount || maxUint256], // Approve infinite by default
-    })
+    } as unknown as Parameters<typeof writeContract>[0])
   }
 
   return {

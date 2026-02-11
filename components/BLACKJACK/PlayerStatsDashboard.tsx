@@ -260,7 +260,10 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
                   formatter={(value: number, _name: string, props: { payload?: Array<{ payload: { display: string } }> }) =>
                     [props.payload?.[0]?.payload?.display ?? String(value), '']
                   }
-                  labelFormatter={(_, payload: Array<{ payload: { name: string } }>) => payload?.[0]?.payload?.name ?? ''}
+                  labelFormatter={(_, payload) => {
+                    const firstPayload = payload?.[0] as { payload?: { name: string } } | undefined;
+                    return firstPayload?.payload?.name ?? '';
+                  }}
                 />
                 <Bar dataKey="normalized" radius={[0, 4, 4, 0]} maxBarSize={28} isAnimationActive>
                   {topSixChartData.map((entry, index) => (

@@ -1067,6 +1067,7 @@ export function TournamentCreator({
                       value={maxHands}
                       onChange={(e) => handleMaxHandsSlider(parseInt(e.target.value, 10))}
                       className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                      aria-label="Maximum hands per player"
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
                       <span>1</span>
@@ -1084,6 +1085,7 @@ export function TournamentCreator({
                       max="200"
                       value={maxHandsInput}
                       onChange={(e) => handleMaxHandsInput(e.target.value)}
+                      aria-label="Maximum hands per player (direct input)"
                       onBlur={handleMaxHandsBlur}
                       className="w-24 px-3 py-2 rounded-xl bg-gray-800 border border-gray-700 text-white text-center focus:outline-none focus:border-cyan-500"
                     />

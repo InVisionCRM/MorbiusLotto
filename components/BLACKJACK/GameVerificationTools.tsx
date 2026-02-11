@@ -39,6 +39,10 @@ export interface GameVerificationData {
   dealerActions?: any[]
   /** Base nonce for this game (gameNumber * multiplier) */
   baseNonce?: number
+  /** RNG version used for this game */
+  rngVersion?: string | number
+  /** Game number for this game */
+  gameNumber?: number
 }
 
 interface GameVerificationToolsProps {
