@@ -269,8 +269,13 @@ async function initializeServices() {
             chain: chains_1.pulsechain,
             transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
         });
-        const blackjackContractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09');
+        const blackjackContractAddress = process.env.BLACKJACK_CONTRACT_ADDRESS;
+        if (!blackjackContractAddress) {
+            throw new Error('BLACKJACK_CONTRACT_ADDRESS env var is required');
+        }
+        console.log('[Server] Using BLACKJACK_CONTRACT_ADDRESS:', blackjackContractAddress);
         const chainId = Number(process.env.BLACKJACK_CHAIN_ID || 369);
+        console.log('[Server] Chain ID:', chainId);
         // Periodic cleanup of expired pending withdrawals (refund balances)
         setInterval(async () => {
             try {

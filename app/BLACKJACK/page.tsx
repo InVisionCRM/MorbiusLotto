@@ -543,14 +543,16 @@ export default function BlackjackPage() {
   const fetchBalance = useCallback(async () => {
     const client = wsClient;
     const connected = wsConnected;
+    console.log('[Balance] fetchBalance called | wsClient:', !!client, '| wsConnected:', connected);
     if (!client || !connected) return;
     try {
       const { balance } = await client.getBalance();
       const balanceBigInt = BigInt(balance);
+      console.log('[Balance] Server returned balance:', balance, '| as BigInt:', balanceBigInt.toString());
       setOffChainBalance(balanceBigInt);
       setGameState(prev => ({ ...prev, balance: balanceBigInt }));
     } catch (error) {
-      console.error('Failed to fetch balance:', error);
+      console.error('[Balance] Failed to fetch balance:', error);
     }
   }, [wsClient, wsConnected]);
 
@@ -870,18 +872,19 @@ export default function BlackjackPage() {
       });
 
       // Connect
+      console.log('[WS Page] Initiating WebSocket connection to', wsUrl, 'for address', normalizedAddress);
       client.connect()
         .then(() => {
           setWsConnected(true);
           setWsClient(client);
-          console.log('Connected to blackjack server');
+          console.log('[WS Page] Connected and authenticated to blackjack server');
           // Fetch initial balance
           fetchBalance();
         })
         .catch((error) => {
           setWsConnected(false);
           const errorMessage = error?.message || 'Failed to connect to game server';
-          console.error('Failed to connect to server:', errorMessage, error);
+          console.error('[WS Page] Connection/auth failed:', errorMessage, error);
           toast.error(errorMessage);
         });
     }

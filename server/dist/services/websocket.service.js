@@ -80,7 +80,13 @@ class WebSocketService {
             chain: chains_1.pulsechain,
             transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com')
         });
-        this.contractAddress = (process.env.BLACKJACK_CONTRACT_ADDRESS || '0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09');
+        const envAddr = process.env.BLACKJACK_CONTRACT_ADDRESS;
+        if (!envAddr) {
+            throw new Error('BLACKJACK_CONTRACT_ADDRESS env var is required');
+        }
+        this.contractAddress = envAddr;
+        console.log('[WebSocketService] Using BLACKJACK_CONTRACT_ADDRESS:', this.contractAddress);
+        console.log('[WebSocketService] REQUIRE_WS_AUTH:', REQUIRE_WS_AUTH);
         this.wss.on('connection', this.handleConnection.bind(this));
         // Heartbeat to keep connections alive
         this.heartbeatInterval = setInterval(() => {
@@ -170,6 +176,7 @@ class WebSocketService {
             // Strict mode: generate auth challenge, client must sign to proceed
             const authNonce = crypto_1.default.randomBytes(32).toString('hex');
             ws.authNonce = authNonce;
+            console.log('[WS Auth] Strict mode: sending auth_challenge', { connectionId, claimedAddress, noncePrefix: authNonce.slice(0, 8) });
             this.sendMessage(ws, {
                 type: 'auth_challenge',
                 payload: { connectionId, nonce: authNonce, claimedAddress }
@@ -179,10 +186,12 @@ class WebSocketService {
             // Grace period: trust query-param address (V1 behavior) but still offer auth
             const authNonce = crypto_1.default.randomBytes(32).toString('hex');
             ws.authNonce = authNonce;
+            console.log('[WS Auth] Grace period mode: claimedAddress=', claimedAddress, 'connectionId=', connectionId);
             if (claimedAddress) {
                 // Auto-authenticate with the query-param address (legacy support)
                 ws.playerAddress = claimedAddress;
                 ws.isAuthenticated = true;
+                console.log('[WS Auth] Legacy auto-auth for', claimedAddress);
                 try {
                     const player = await this.dbService.getOrCreatePlayer(claimedAddress);
                     await this.dbService.addActiveConnection(player.id, connectionId);
@@ -196,6 +205,7 @@ class WebSocketService {
                 logger_1.logger.warn('WebSocket connection without player address', { connectionId });
             }
             // Still send auth_challenge so new clients can upgrade to EIP-712 auth
+            console.log('[WS Auth] Sending auth_challenge (upgrade offer)', { connectionId });
             this.sendMessage(ws, {
                 type: 'auth_challenge',
                 payload: { connectionId, nonce: authNonce, claimedAddress }
@@ -428,13 +438,17 @@ class WebSocketService {
     async handleAuthResponse(ws, message) {
         try {
             const { address, signature } = message.payload;
+            console.log('[WS Auth] Received auth_response', { connectionId: ws.connectionId, address, signaturePrefix: signature?.slice(0, 10) });
             if (!address || !signature) {
+                console.log('[WS Auth] Missing address or signature');
                 return this.sendError(ws, 'address and signature required', message.requestId);
             }
             if (!ws.authNonce) {
+                console.log('[WS Auth] No auth nonce pending for connection', ws.connectionId);
                 return this.sendError(ws, 'No auth challenge pending', message.requestId);
             }
             const normalizedAddress = address.toLowerCase();
+            console.log('[WS Auth] Verifying EIP-712 signature for', normalizedAddress, 'nonce:', ws.authNonce.slice(0, 8));
             // Verify EIP-712 typed data signature
             const valid = await (0, viem_1.verifyTypedData)({
                 address: normalizedAddress,
@@ -445,9 +459,11 @@ class WebSocketService {
                 signature,
             });
             if (!valid) {
+                console.log('[WS Auth] Signature verification FAILED for', normalizedAddress);
                 return this.sendError(ws, 'Invalid signature', message.requestId);
             }
             // Auth successful
+            console.log('[WS Auth] Signature verified, auth successful for', normalizedAddress);
             ws.playerAddress = normalizedAddress;
             ws.isAuthenticated = true;
             ws.authNonce = undefined; // consume nonce
