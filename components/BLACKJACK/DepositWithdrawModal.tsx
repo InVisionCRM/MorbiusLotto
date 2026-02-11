@@ -8,10 +8,10 @@ import { parseEther, formatEther } from 'viem'
 import { useTokenBalance } from '@/hooks/use-token'
 import { useNativeBalance } from '@/hooks/use-native-balance'
 import { usePlsQuote } from '@/hooks/use-pls-quote'
-import { useBlackjackContract } from '@/hooks/use-blackjack-contract'
+import { useBlackjackContract, useLegacyPlayerReserve } from '@/hooks/use-blackjack-contract'
 import { useTokenApproval } from '@/hooks/use-token-approval'
 import { getBlackjackServerUrl } from '@/lib/api-urls'
-import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,9 +50,16 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     depositMORBIISTx,
     deposit,
     depositMORBIUS,
+    withdrawLegacy,
     withdrawWithSignature,
+    withdrawTx,
     withdrawWithSignatureTx,
   } = useBlackjackContract()
+
+  // Legacy contract: balance in previous Blackjack contract (after upgrade)
+  const legacyReserveQuery = useLegacyPlayerReserve()
+  const legacyReserve = (legacyReserveQuery.data ?? BigInt(0)) as bigint
+  const hasLegacyBalance = BLACKJACK_LEGACY_ADDRESS && legacyReserve > BigInt(0)
 
   // Balance hooks
   const { balance: morbiusBalance } = useTokenBalance(address)
@@ -352,6 +359,28 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
   const isDepositLoading = depositTx.isPending || depositMORBIISTx.isPending
   const isWithdrawLoading = isPreparingWithdraw || withdrawWithSignatureTx.isPending
+  const isLegacyWithdrawLoading = withdrawTx.isPending
+
+  const handleWithdrawLegacy = async () => {
+    if (!hasLegacyBalance || legacyReserve <= 0n) return
+    const toastId = toast.loading('Confirm in wallet...', {
+      description: `Withdrawing ${Math.floor(Number(formatEther(legacyReserve))).toLocaleString()} MORBIUS from previous contract`,
+    })
+    try {
+      const txHash = await withdrawLegacy(legacyReserve)
+      toast.loading('Transaction processing...', { id: toastId, description: 'Waiting for confirmation...' })
+      if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash })
+      toast.success('Withdrawal successful', {
+        id: toastId,
+        description: `Withdrew ${Math.floor(Number(formatEther(legacyReserve))).toLocaleString()} MORBIUS from previous contract`,
+        duration: 5000,
+      })
+      legacyReserveQuery.refetch()
+      if (onRefreshBalance) await onRefreshBalance()
+    } catch (e: any) {
+      toast.error(e?.message?.slice(0, 80) || 'Withdrawal failed', { id: toastId })
+    }
+  }
 
   return (
     <>
@@ -389,12 +418,40 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
                 <CardContent className="space-y-6">
                   {/* Transaction Status Indicator */}
-                  {(isDepositLoading || isWithdrawLoading) && (
+                  {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
                     <div className="flex items-center justify-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                       <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
                       <span className="text-sm text-yellow-400 font-medium">
                         Waiting for blockchain confirmation...
                       </span>
+                    </div>
+                  )}
+
+                  {/* Previous contract balance (after upgrade) */}
+                  {hasLegacyBalance && (
+                    <div className="p-4 rounded-lg border border-amber-500/40 bg-amber-950/30 space-y-2">
+                      <div className="text-sm font-medium text-amber-200">
+                        Balance in previous contract
+                      </div>
+                      <p className="text-xs text-amber-200/80">
+                        You have MORBIUS in the previous Blackjack contract. Withdraw it to your wallet (no server needed).
+                      </p>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-lg font-bold text-white">
+                          {Math.floor(Number(formatEther(legacyReserve))).toLocaleString()} MORBIUS
+                        </span>
+                        <Button
+                          onClick={handleWithdrawLegacy}
+                          disabled={isLegacyWithdrawLoading}
+                          className="bg-amber-600 hover:bg-amber-500 text-white shrink-0"
+                        >
+                          {isLegacyWithdrawLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            'Withdraw to wallet'
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   )}
 

@@ -30,6 +30,13 @@ export const BIGWHEEL_ADDRESS = '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F' as 
 // BlackjackV2 contract (6-deck provably fair blackjack with bet fees)
 export const BLACKJACK_ADDRESS = '0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09' as const
 
+// Previous Blackjack contract (if upgraded: players with balance here can withdraw from it)
+export const BLACKJACK_LEGACY_ADDRESS = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS
+    ? process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS
+    : ''
+) as `0x${string}`
+
 // Tournament Prize Escrow (custom token prize pools for tournaments)
 export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = (
   typeof process !== 'undefined' && process.env.NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS

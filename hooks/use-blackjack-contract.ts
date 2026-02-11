@@ -1,7 +1,10 @@
 import { useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi'
 import { blackjackAbi } from '../abi/blackjack'
-import { BLACKJACK_ADDRESS } from '../lib/contracts'
+import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS } from '../lib/contracts'
 import { useAccount } from 'wagmi'
+
+const LEGACY_ZERO = '0x0000000000000000000000000000000000000000'
+const isLegacyConfigured = typeof BLACKJACK_LEGACY_ADDRESS === 'string' && BLACKJACK_LEGACY_ADDRESS !== '' && BLACKJACK_LEGACY_ADDRESS !== LEGACY_ZERO
 
 // ============ Read Hooks ============
 
@@ -73,6 +76,24 @@ export function useDailyWithdrawalInfo() {
     query: {
       enabled: isValidAddress && !!address,
       refetchInterval: 60000, // Check every minute
+    },
+  })
+}
+
+/**
+ * Get player's reserve on the previous (legacy) Blackjack contract.
+ * When the contract was upgraded, balances stayed in the old contract; players can withdraw from it here.
+ */
+export function useLegacyPlayerReserve() {
+  const { address } = useAccount()
+  return useReadContract({
+    address: isLegacyConfigured ? (BLACKJACK_LEGACY_ADDRESS as `0x${string}`) : undefined,
+    abi: blackjackAbi,
+    functionName: 'getPlayerReserve',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: isLegacyConfigured && !!address,
+      refetchInterval: 15000,
     },
   })
 }
@@ -274,6 +295,19 @@ export function useBlackjackContract() {
     })
   }
 
+  /** Withdraw from the previous (legacy) Blackjack contract. Use when balance is stuck there after upgrade. */
+  const withdrawLegacy = async (amount: bigint) => {
+    if (!address) throw new Error('Wallet not connected')
+    if (!isLegacyConfigured) throw new Error('Legacy contract not configured')
+
+    return withdrawContract.writeContractAsync({
+      address: BLACKJACK_LEGACY_ADDRESS as `0x${string}`,
+      abi: blackjackAbi,
+      functionName: 'withdraw',
+      args: [amount],
+    })
+  }
+
   const withdrawWithSignature = async (
     amount: bigint,
     nonce: bigint,
@@ -327,6 +361,7 @@ export function useBlackjackContract() {
     deposit,
     depositMORBIUS,
     withdraw,
+    withdrawLegacy,
     withdrawWithSignature,
     revealServerSeed,
     placeBet,
