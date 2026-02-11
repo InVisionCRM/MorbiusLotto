@@ -118,6 +118,40 @@ function formatMs(ms: number): string {
   return `${seconds}s`;
 }
 
+// Component for countdown timer badge
+function CountdownTimer({ targetDate, label, color, size = 'small' }: { targetDate: string | null | undefined; label: string; color: string; size?: 'small' | 'medium' }) {
+  const [, setTick] = useState(0);
+  
+  useEffect(() => {
+    if (!targetDate) return;
+    const target = new Date(targetDate).getTime();
+    const update = () => {
+      const now = Date.now();
+      if (now < target) {
+        setTick((v) => v + 1);
+      }
+    };
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+  
+  if (!targetDate) return null;
+  const target = new Date(targetDate).getTime();
+  const now = Date.now();
+  const remaining = Math.max(0, target - now);
+  
+  if (remaining === 0 || now >= target) return null;
+  
+  const textSize = size === 'small' ? 'text-[9px]' : 'text-[10px]';
+  const displayText = label ? `${label}: ${formatMs(remaining)}` : formatMs(remaining);
+  
+  return (
+    <span className={`px-2 py-0.5 rounded-full ${color} text-white ${textSize} font-medium shadow-lg`}>
+      {displayText}
+    </span>
+  );
+}
+
 interface TimerInput {
   endsAt: string | null;
   tournamentType?: string | null;
@@ -427,16 +461,18 @@ function ExpandedCardContent({
             {tournament.tournamentType === 'freeroll' && tournament.registrationOpensAt && (
               <>
                 <div className="text-gray-500">Registration Opens</div>
-                <div className="text-gray-200">
-                  {new Date(tournament.registrationOpensAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                <div className="text-gray-200 flex items-center gap-2">
+                  <span>{new Date(tournament.registrationOpensAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  <CountdownTimer targetDate={tournament.registrationOpensAt} label="" color="bg-blue-500/80" size="medium" />
                 </div>
               </>
             )}
             {tournament.tournamentType === 'freeroll' && tournament.scheduledStartAt && (
               <>
                 <div className="text-gray-500">Scheduled Start</div>
-                <div className="text-gray-200">
-                  {new Date(tournament.scheduledStartAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                <div className="text-gray-200 flex items-center gap-2">
+                  <span>{new Date(tournament.scheduledStartAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  <CountdownTimer targetDate={tournament.scheduledStartAt} label="" color="bg-cyan-500/80" size="medium" />
                 </div>
               </>
             )}
@@ -761,6 +797,14 @@ function TournamentCard({
               </span>
             )}
           </div>
+
+          {/* Freeroll timers - registration opens and game starts */}
+          {tournament.tournamentType === 'freeroll' && (
+            <div className="absolute bottom-2.5 left-2.5 flex flex-col gap-1">
+              <CountdownTimer targetDate={tournament.registrationOpensAt} label="Reg" color="bg-blue-500/80" />
+              <CountdownTimer targetDate={tournament.scheduledStartAt} label="Start" color="bg-cyan-500/80" />
+            </div>
+          )}
 
           {/* Quick stats top-left */}
           <div className="absolute top-2.5 left-2.5 flex flex-col gap-1">

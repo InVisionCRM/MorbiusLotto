@@ -1094,30 +1094,32 @@ export function TournamentCreator({
                 </div>
               </div>
 
-              {/* Time Limit */}
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-1">
-                  Time Limit
-                </label>
-                <p className="text-gray-500 text-xs mb-2">
-                  How long the tournament stays open. When time runs out, rankings are finalized. &quot;No Limit&quot; means it ends only when all hands are played.
-                </p>
-                <div className="grid grid-cols-5 gap-2">
-                  {TOURNAMENT_VALIDATION.TIME_LIMIT_OPTIONS.map((limit) => (
-                    <button
-                      key={limit ?? 'none'}
-                      onClick={() => setTimeLimitMinutes(limit)}
-                      className={`py-3 rounded-xl font-medium text-sm transition-colors ${
-                        timeLimitMinutes === limit
-                          ? 'bg-cyan-500 text-white'
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      {TIME_LIMIT_LABELS[limit ?? 'null']}
-                    </button>
-                  ))}
+              {/* Time Limit - Only for standard tournaments, not freerolls */}
+              {tournamentType === 'buyin' && (
+                <div>
+                  <label className="block text-gray-300 text-sm font-medium mb-1">
+                    Time Limit
+                  </label>
+                  <p className="text-gray-500 text-xs mb-2">
+                    How long the tournament stays open. When time runs out, rankings are finalized. &quot;No Limit&quot; means it ends only when all hands are played.
+                  </p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {TOURNAMENT_VALIDATION.TIME_LIMIT_OPTIONS.map((limit) => (
+                      <button
+                        key={limit ?? 'none'}
+                        onClick={() => setTimeLimitMinutes(limit)}
+                        className={`py-3 rounded-xl font-medium text-sm transition-colors ${
+                          timeLimitMinutes === limit
+                            ? 'bg-cyan-500 text-white'
+                            : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        }`}
+                      >
+                        {TIME_LIMIT_LABELS[limit ?? 'null']}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Rebuys */}
               <div className="space-y-4">

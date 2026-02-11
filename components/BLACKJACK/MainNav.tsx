@@ -314,6 +314,15 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
                         )}
                       </button>
                     ))}
+                    {/* Verification Page Link */}
+                    <Link
+                      href="/BLACKJACK/verify"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <i className="fas fa-shield-alt w-4 text-center"></i>
+                      <span className="text-sm font-medium">Verify Game</span>
+                    </Link>
                     {/* Tournament Lobby */}
                     {onTournamentLobby && (
                       <button

@@ -41,6 +41,7 @@ export interface Tournament {
   prize_pool: bigint;
   created_at: Date;
   ended_at?: Date;
+  tournament_type?: string | null;
   // New custom tournament fields
   creator_address?: string;
   time_limit_minutes?: number;
@@ -316,6 +317,7 @@ export class TournamentService {
       prize_token_decimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
       creator_fee_percent: Number(row.creator_fee_percent ?? 0),
       platform_fee_percent: Number(row.platform_fee_percent ?? 16),
+      tournament_type: row.tournament_type ?? null,
     };
   }
 
@@ -831,12 +833,13 @@ export class TournamentService {
           if (useEscrow) {
             const result = await sendEscrowPayout(tournamentId, row.player_address, prizeAmount);
             if (!result.success) {
-              logger.error('Escrow payout failed; tournament may need manual resolution', {
+              logger.error('Escrow payout failed; rolling back tournament completion', {
                 tournamentId,
                 winner: row.player_address,
                 amount: prizeAmount.toString(),
                 error: result.error,
               });
+              throw new Error(`Escrow payout failed for ${row.player_address}: ${result.error || 'Unknown error'}`);
             }
           } else {
             // Add prize to player balance (platform MORBIUS)
@@ -883,7 +886,8 @@ export class TournamentService {
           if (useEscrow) {
             const result = await sendEscrowPayout(tournamentId, platformWallet, platformFeeAmount);
             if (!result.success) {
-              logger.error('Platform fee escrow payout failed', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
+              logger.error('Platform fee escrow payout failed; rolling back tournament completion', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
+              throw new Error(`Platform fee escrow payout failed: ${result.error || 'Unknown error'}`);
             }
           } else {
             await client.query(
@@ -902,7 +906,8 @@ export class TournamentService {
           if (useEscrow) {
             const result = await sendEscrowPayout(tournamentId, tournament.creator_address, creatorFeeAmount);
             if (!result.success) {
-              logger.error('Creator fee escrow payout failed', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
+              logger.error('Creator fee escrow payout failed; rolling back tournament completion', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
+              throw new Error(`Creator fee escrow payout failed: ${result.error || 'Unknown error'}`);
             }
           } else {
             await client.query(
@@ -915,10 +920,19 @@ export class TournamentService {
       }
 
       // Mark tournament as completed
-      await client.query(
-        `UPDATE tournaments SET status = 'completed', ended_at = NOW() WHERE id = $1`,
-        [tournamentId]
-      );
+      // For freerolls, also update current_phase in the same transaction
+      const isFreeroll = tournament.tournament_type === 'freeroll';
+      if (isFreeroll) {
+        await client.query(
+          `UPDATE tournaments SET status = 'completed', ended_at = NOW(), current_phase = 'completed' WHERE id = $1`,
+          [tournamentId]
+        );
+      } else {
+        await client.query(
+          `UPDATE tournaments SET status = 'completed', ended_at = NOW() WHERE id = $1`,
+          [tournamentId]
+        );
+      }
 
       await client.query('COMMIT');
 
@@ -1015,7 +1029,7 @@ export class TournamentService {
     const normalizedAddress = this.normalizeAddress(playerAddress);
 
     const tournamentResult = await this.pool.query(
-      `SELECT id, tournament_type, current_phase, starting_chips, max_players FROM tournaments WHERE id = $1`,
+      `SELECT id, tournament_type, current_phase, starting_chips, max_players, registration_opens_at, scheduled_start_at, ends_at FROM tournaments WHERE id = $1`,
       [tournamentId]
     );
     if (tournamentResult.rows.length === 0) {
@@ -1025,8 +1039,36 @@ export class TournamentService {
     if (t.tournament_type !== 'freeroll') {
       throw new Error('Not a freeroll tournament');
     }
-    if (t.current_phase !== 'registration') {
-      throw new Error('Registration is closed');
+    
+    // Validate registration is open based on time
+    const now = new Date();
+    const registrationOpens = t.registration_opens_at ? new Date(t.registration_opens_at) : null;
+    const scheduledStart = t.scheduled_start_at ? new Date(t.scheduled_start_at) : null;
+    
+    if (!registrationOpens || !scheduledStart) {
+      throw new Error('Tournament timing not configured');
+    }
+    
+    if (now < registrationOpens) {
+      throw new Error('Registration has not opened yet');
+    }
+    
+    if (now >= scheduledStart) {
+      throw new Error('Registration is closed - tournament has started');
+    }
+    
+    // Sync phase if needed
+    const endsAt = t.ends_at ? new Date(t.ends_at) : null;
+    const correctPhase = this.determineFreerollPhase(registrationOpens, scheduledStart, endsAt);
+    
+    if (t.current_phase !== correctPhase) {
+      await this.pool.query(
+        `UPDATE tournaments SET current_phase = $1 WHERE id = $2`,
+        [correctPhase, tournamentId]
+      );
+      if (correctPhase !== 'registration') {
+        throw new Error('Registration is closed');
+      }
     }
 
     const existing = await this.getTournamentEntry(normalizedAddress, tournamentId);
@@ -1262,6 +1304,31 @@ export class TournamentService {
   }
 
   /**
+   * Determine the correct phase for a freeroll tournament based on current time.
+   */
+  private determineFreerollPhase(
+    registrationOpensAt: Date,
+    scheduledStartAt: Date,
+    endsAt: Date | null
+  ): 'registration' | 'active' | 'completed' {
+    const now = new Date();
+    
+    if (endsAt && now >= endsAt) {
+      return 'completed';
+    }
+    
+    if (now >= scheduledStartAt) {
+      return 'active';
+    }
+    
+    if (now >= registrationOpensAt) {
+      return 'registration';
+    }
+    
+    return 'registration';
+  }
+
+  /**
    * Create a freeroll tournament (no buy-in, scheduled start).
    */
   async createFreeroll(params: CreateFreerollParams): Promise<{ id: string; pinCode?: string | null }> {
@@ -1274,6 +1341,9 @@ export class TournamentService {
     const registrationOpens = new Date(params.registrationOpensAt);
     if (isNaN(scheduledStart.getTime()) || isNaN(registrationOpens.getTime())) {
       throw new Error('Invalid scheduled or registration date');
+    }
+    if (registrationOpens >= scheduledStart) {
+      throw new Error('Registration must open before scheduled start time');
     }
     if (params.durationMinutes < 5 || params.durationMinutes > 1440) {
       throw new Error('Duration must be 5–1440 minutes');
@@ -1297,6 +1367,12 @@ export class TournamentService {
     // Fee percentages
     const platformFeePercent = params.platformFeePercent ?? parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
     const creatorFeePercent = params.creatorFeePercent ?? 0;
+
+    // Calculate ends_at
+    const endsAt = new Date(scheduledStart.getTime() + params.durationMinutes * 60 * 1000);
+    
+    // Determine initial phase based on current time
+    const initialPhase = this.determineFreerollPhase(registrationOpens, scheduledStart, endsAt);
 
     const query = `
       INSERT INTO tournaments (
@@ -1329,8 +1405,9 @@ export class TournamentService {
         current_elimination_round,
         tiebreaker_order,
         creator_fee_percent,
-        platform_fee_percent
-      ) VALUES ($1, $2, 0, $3, $4, 2, 'active', 0, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, 'registration', 0, $20, $21, $22)
+        platform_fee_percent,
+        ends_at
+      ) VALUES ($1, $2, 0, $3, $4, 2, 'active', 0, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, $20, 0, $21, $22, $23, $24)
       RETURNING id, pin_code
     `;
     const result = await this.pool.query(query, [
@@ -1353,20 +1430,21 @@ export class TournamentService {
       params.eliminationConfig ? JSON.stringify(params.eliminationConfig) : null,
       JSON.stringify(params.reentryConfig),
       params.actionTimerSeconds,
+      initialPhase,
       Array.isArray(params.tiebreakerOrder) && params.tiebreakerOrder.length > 0
         ? JSON.stringify(params.tiebreakerOrder)
         : JSON.stringify(['highest_chips', 'blackjacks', 'hands_won', 'entry_time']),
       creatorFeePercent,
       platformFeePercent,
+      endsAt.toISOString(),
     ]);
     const row = result.rows[0];
     const tournamentId = row.id;
 
-    const endAt = new Date(scheduledStart.getTime() + params.durationMinutes * 60 * 1000);
     await this.pool.query(
       `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
        VALUES ($1, 'start', $2, 'pending'), ($1, 'end', $3, 'pending')`,
-      [tournamentId, scheduledStart.toISOString(), endAt.toISOString()]
+      [tournamentId, scheduledStart.toISOString(), endsAt.toISOString()]
     );
 
     logger.info('Freeroll tournament created', {
@@ -1374,6 +1452,8 @@ export class TournamentService {
       name,
       creator: normalizedCreator,
       scheduledStartAt: params.scheduledStartAt,
+      initialPhase,
+      endsAt: endsAt.toISOString(),
     });
     return { id: tournamentId, pinCode: row.pin_code };
   }
@@ -1831,7 +1911,7 @@ export class TournamentService {
 
   /**
    * Execute a pending freeroll scheduled event (start, elimination_round, end, reentry_close).
-   * Called by FreerollSchedulerService. Marks the event as executed after handling.
+   * Called by FreerollSchedulerService. Only marks the event as executed on success.
    */
   async executeScheduledEvent(event: {
     id: string;
@@ -1858,18 +1938,50 @@ export class TournamentService {
           break;
         default:
           logger.warn('executeScheduledEvent: unknown event_type %s', eventType);
+          return; // Don't mark unknown events as executed
       }
-    } finally {
+
+      // Only mark as executed if handler succeeded
       await this.pool.query(
         `UPDATE tournament_scheduled_events SET executed_at = NOW(), status = 'executed' WHERE id = $1`,
         [eventId]
       );
+    } catch (error) {
+      logger.error('executeScheduledEvent: failed to execute event %s for tournament %s: %s', eventId, tournamentId, error);
+      // Leave event as 'pending' so it can be retried
+      throw error;
     }
   }
 
   /** Transition freeroll to active and mark no-shows. */
   private async handleFreerollStart(tournamentId: string): Promise<void> {
     logger.info('handleFreerollStart: tournamentId=%s', tournamentId);
+    
+    // Get tournament to ensure ends_at is set
+    const tournamentResult = await this.pool.query(
+      `SELECT scheduled_start_at, duration_minutes, ends_at FROM tournaments WHERE id = $1 AND tournament_type = 'freeroll'`,
+      [tournamentId]
+    );
+    
+    if (tournamentResult.rows.length === 0) {
+      logger.warn('handleFreerollStart: tournament not found: %s', tournamentId);
+      return;
+    }
+    
+    const t = tournamentResult.rows[0];
+    const scheduledStart = t.scheduled_start_at ? new Date(t.scheduled_start_at) : null;
+    const durationMinutes = t.duration_minutes ? Number(t.duration_minutes) : null;
+    
+    // Ensure ends_at is set if not already set
+    let endsAt = t.ends_at ? new Date(t.ends_at) : null;
+    if (!endsAt && scheduledStart && durationMinutes) {
+      endsAt = new Date(scheduledStart.getTime() + durationMinutes * 60 * 1000);
+      await this.pool.query(
+        `UPDATE tournaments SET ends_at = $1 WHERE id = $2`,
+        [endsAt.toISOString(), tournamentId]
+      );
+    }
+    
     await this.pool.query(
       `UPDATE tournaments SET current_phase = 'active' WHERE id = $1 AND tournament_type = 'freeroll'`,
       [tournamentId]
@@ -2084,10 +2196,7 @@ export class TournamentService {
       return;
     }
 
+    // distributePrizes now handles current_phase update for freerolls inside the transaction
     await this.distributePrizes(tournamentId);
-    await this.pool.query(
-      `UPDATE tournaments SET current_phase = 'completed' WHERE id = $1 AND tournament_type = 'freeroll'`,
-      [tournamentId]
-    );
   }
 }

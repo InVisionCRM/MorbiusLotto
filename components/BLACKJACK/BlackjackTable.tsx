@@ -983,9 +983,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             </div>
             {visibleDealerCards > 0 && (
               <div className="flex items-center gap-1 sm:gap-2 ml-2 sm:ml-0 sm:mt-2">
-                <span className="text-white font-black text-lg sm:text-3xl">
-                  {isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal())}
-                </span>
+                <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
+                  gameState === GameState.DEALER_TURN ? 'card-counter-active' : ''
+                }`}
+                style={{
+                  padding: gameState === GameState.DEALER_TURN ? '8px' : '4px',
+                }}>
+                  <span className="text-white font-black text-lg sm:text-3xl relative z-10">
+                    {isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal())}
+                  </span>
+                </div>
                 {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-sm sm:text-base">BUST</span>}
                 {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-sm sm:text-base">BJ</span>}
               </div>
@@ -1039,11 +1046,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
                     {/* Hand Score — above cards on desktop, right of cards on mobile */}
                     <div className="hidden sm:flex items-center gap-2 mb-0">
-                      <span className={`font-black text-3xl ${
-                        isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
-                      }`}>
-                        {hand.total}
-                      </span>
+                      <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
+                        gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
+                      }`}
+                      style={{
+                        padding: gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? '8px' : '4px',
+                      }}>
+                        <span className={`font-black text-3xl relative z-10 ${
+                          isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
+                        }`}>
+                          {hand.total}
+                        </span>
+                      </div>
                       {hand.isBlackjack && <span className="text-yellow-400 font-black text-2xl">BJ!</span>}
                       {hand.isBust && <span className="text-red-400 font-black text-2xl">BUST</span>}
                     </div>
@@ -1087,11 +1101,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                     </div>
                     {/* Mobile score — right of cards */}
                     <div className="flex sm:hidden items-center gap-1 ml-2">
-                      <span className={`font-black text-lg ${
-                        isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
-                      }`}>
-                        {hand.total}
-                      </span>
+                      <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
+                        gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
+                      }`}
+                      style={{
+                        padding: gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? '6px' : '3px',
+                      }}>
+                        <span className={`font-black text-lg relative z-10 ${
+                          isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
+                        }`}>
+                          {hand.total}
+                        </span>
+                      </div>
                       {hand.isBlackjack && <span className="text-yellow-400 font-black text-sm">BJ!</span>}
                       {hand.isBust && <span className="text-red-400 font-black text-sm">BUST</span>}
                     </div>
@@ -1907,17 +1928,39 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           }
         }
 
-        /* Mobile: cards at 50% size (actual dimensions, not transform) */
+        /* Mobile: cards larger size with xs border radius */
         @media (max-width: 640px) {
           .blackjack-table .blackjack-card-player,
           .blackjack-table .blackjack-card-dealer {
-            width: 40px !important;
-            height: 56px !important;
+            width: 56px !important;
+            height: 80px !important;
+            border-radius: 0.125rem !important; /* rounded-xs */
           }
           .blackjack-table .chip-stack-container {
             transform: scale(0.9);
             transform-origin: center bottom;
           }
+        }
+
+        /* Card counter active border animation */
+        @keyframes cyanGlow {
+          0%, 100% {
+            box-shadow: 0 0 8px rgba(34, 211, 238, 0.4),
+                        0 0 16px rgba(34, 211, 238, 0.2),
+                        inset 0 0 8px rgba(34, 211, 238, 0.1);
+            border-color: rgba(34, 211, 238, 0.5);
+          }
+          50% {
+            box-shadow: 0 0 16px rgba(34, 211, 238, 0.6),
+                        0 0 24px rgba(34, 211, 238, 0.3),
+                        inset 0 0 12px rgba(34, 211, 238, 0.15);
+            border-color: rgba(34, 211, 238, 0.7);
+          }
+        }
+
+        .card-counter-active {
+          border: 2px solid rgba(34, 211, 238, 0.5);
+          animation: cyanGlow 2s ease-in-out infinite;
         }
       `}</style>
     </div>

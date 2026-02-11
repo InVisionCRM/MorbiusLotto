@@ -65,6 +65,12 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
   const sizeClasses = size === 'large' ? 'w-28 h-40' : size === 'small' ? 'w-14 h-20' : 'w-20 h-28';
   const imageSize = size === 'large' ? { width: 112, height: 160 } : size === 'small' ? { width: 56, height: 80 } : { width: 80, height: 112 };
 
+  // Initial state for new cards: start hidden and offset
+  const initialStyle = isNewCard && !exiting ? {
+    opacity: 0,
+    transform: 'translateX(100px) translateY(-80px)',
+  } : {};
+
   if (hidden) {
     return (
       <div
@@ -72,6 +78,7 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
         style={{
           boxShadow: getCardShadow(),
           animationDelay: exiting ? `${animationDelay}s` : (isNewCard ? `${animationDelay}s` : '1s'),
+          ...initialStyle,
         }}
       >
         <div className="w-full h-full bg-slate-900 overflow-hidden">
@@ -94,6 +101,7 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
       style={{
         boxShadow: getCardShadow(),
         animationDelay: exiting ? `${animationDelay}s` : (isNewCard ? `${animationDelay}s` : '1s'),
+        ...initialStyle,
       }}
     >
       <Image
