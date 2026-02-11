@@ -8,7 +8,8 @@ import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
 import GlobalWinsFeed from '@/components/BLACKJACK/GlobalWinsFeed'
 import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart'
 import { GameResult } from '@/app/BLACKJACK/types'
-import { GameVerificationTools, type GameVerificationData } from '@/components/BLACKJACK/GameVerificationTools'
+// GameVerificationTools removed - use /BLACKJACK/verify page instead
+type GameVerificationData = any // Type kept for compatibility
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false)
@@ -230,11 +231,13 @@ export default function BlackjackSidebar({
             </div>
             {verifyGameHandler && (
               <div className="pt-2">
-                <GameVerificationTools
-                  onVerify={verifyGameHandler}
-                  initialGameId={sidebarVerifyGameId ?? undefined}
-                  onInitialGameIdConsumed={onSidebarVerifyGameIdConsumed}
-                />
+                <a
+                  href="/BLACKJACK/verify"
+                  className="block w-full px-4 py-2 text-center bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 rounded-lg text-white font-semibold transition-all text-sm"
+                >
+                  <i className="fas fa-shield-alt mr-2"></i>
+                  Open Verification Page
+                </a>
               </div>
             )}
           </div>

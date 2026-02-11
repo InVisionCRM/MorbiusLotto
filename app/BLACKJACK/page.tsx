@@ -14,7 +14,7 @@ import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal'
 import { GameHistory } from '@/components/BLACKJACK/GameHistory';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalyticsDashboard';
-import { GameVerificationTools, type GameVerificationData } from '@/components/BLACKJACK/GameVerificationTools';
+// GameVerificationTools removed - use /BLACKJACK/verify page instead
 import { ContractAddress } from '@/components/ui/contract-address';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
 import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
@@ -2113,8 +2113,8 @@ export default function BlackjackPage() {
     setCurrentView('verify');
   }, []);
 
-  // Fetch game result for verification (Verify tab)
-  const handleVerifyGame = useCallback(async (id: string): Promise<GameVerificationData | null> => {
+  // Fetch game result for verification (Verify tab) - deprecated, use /BLACKJACK/verify page instead
+  const handleVerifyGame = useCallback(async (id: string): Promise<any | null> => {
     const apiUrl = getApiUrlOptional();
     if (!apiUrl) {
       throw new Error('Verification requires the game server. Set NEXT_PUBLIC_API_URL in your environment.');
@@ -2808,14 +2808,18 @@ export default function BlackjackPage() {
 
         {currentView === 'verify' && (
           <div className="max-w-4xl mx-auto space-y-4">
-            <p className="text-center text-cyan-300/80 text-sm">
-              Provably fair seeds (server seed hash, server seed, client seed, nonce) for any hand. Enter a game ID below or open <span className="text-white font-medium">History</span> and click <span className="text-white font-medium">Verify Game</span> on a hand to load it here.
-            </p>
-            <GameVerificationTools
-              onVerify={handleVerifyGame}
-              initialGameId={initialVerifyGameId ?? undefined}
-              onInitialGameIdConsumed={handleInitialVerifyGameIdConsumed}
-            />
+            <div className="text-center space-y-4">
+              <p className="text-cyan-300/80 text-sm">
+                Verify your blackjack games using cryptographic proofs. Enter a game ID to verify fairness.
+              </p>
+              <a
+                href="/BLACKJACK/verify"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 rounded-lg text-white font-semibold transition-all"
+              >
+                <i className="fas fa-shield-alt"></i>
+                Open Verification Page
+              </a>
+            </div>
           </div>
         )}
 
