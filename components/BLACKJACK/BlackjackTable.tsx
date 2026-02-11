@@ -3,12 +3,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { Hand, GameState, Action, GameResult, Card } from '@/app/BLACKJACK/types';
-import { formatEther } from 'viem';
 import PlayingCard from './PlayingCard';
 import { SystemTime } from '@/components/ui/system-time';
 import BettingPanel from './BettingPanel';
 import { NumberTicker } from '@/components/ui/number-ticker';
-import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS } from '@/app/BLACKJACK/constants';
+import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
 import type { BlackjackImageId, BlackjackVideoId } from '@/app/BLACKJACK/constants';
 
 // Background music playlist (all from public/BlackJack/music except Big-Winner)
@@ -92,17 +91,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   canDoubleDown,
   canSplit = false,
   reserveBalance,
-  usePLS,
   newCardIndices = { player: new Set(), dealer: new Set() },
   chipStack = [],
-  onClearBet,
   onStartGame,
   isPlaying = false,
   onDealerRevealComplete,
   gameResult = null,
   displayedResult = null,
   onChipAnimationComplete,
-  history = [],
   onDoubleDownChips,
   onSplitChips,
   onRebet,
@@ -374,8 +370,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         const tableRect = tableContainerRef.current.getBoundingClientRect();
         
         // Convert mouse position to coordinates relative to table container
-        const mouseXRelativeToTable = e.clientX - tableRect.left;
-        const mouseYRelativeToTable = e.clientY - tableRect.top;
+        const mouseXRelativeToTable = clientX - tableRect.left;
+        const mouseYRelativeToTable = clientY - tableRect.top;
         
         // Calculate new position relative to table
         const newX = mouseXRelativeToTable - dragStart.x;
@@ -967,7 +963,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 const isHoleCard = hideHoleCard && index === 1;
                 return (
                   <div
-                    key={`dealer-${card.id || `card-${index}`}`}
+                    key={`dealer-card-${index}`}
                     className={index > 0 ? 'card-overlap-dealer' : ''}
                     style={{ zIndex: index }}
                   >
@@ -1187,7 +1183,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                           {/* Bet amount for this hand */}
                           <span
                             className={`text-white font-bold text-sm mt-1 ${
-                              showHandAnimation && chipAnimationState !== 'none' ? 'opacity-0' : ''
+                              showHandAnimation ? 'opacity-0' : ''
                             }`}
                             style={{
                               textShadow: '1px 1px 3px rgba(0, 0, 0, 0.8)',

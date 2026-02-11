@@ -32,7 +32,7 @@ interface DepositWithdrawModalProps {
 export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefreshBalance, contractReserve, offChainBalance }: DepositWithdrawModalProps) {
   // Display balance: prefer off-chain balance (most up-to-date), fallback to contract reserve
   // Use offChainBalance if available and > 0, otherwise use contractReserve
-  const displayBalance = (offChainBalance !== undefined && offChainBalance !== null && offChainBalance > 0n)
+  const displayBalance = (offChainBalance !== undefined && offChainBalance !== null && offChainBalance > BigInt(0))
     ? offChainBalance
     : (contractReserve !== undefined && contractReserve !== null ? contractReserve : BigInt(0));
   const { address } = useAccount()
@@ -50,8 +50,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     depositMORBIISTx,
     deposit,
     depositMORBIUS,
-    withdraw,
-    withdrawTx,
     withdrawWithSignature,
     withdrawWithSignatureTx,
   } = useBlackjackContract()
@@ -62,14 +60,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
   // PLS quote for MORBIUS deposits
   const { plsValue: plsEquivalent, isLoading: plsQuoteLoading } = usePlsQuote({
-    morbiusCost: depositAmount ? parseEther(depositAmount) : 0n,
+    morbiusCost: depositAmount ? parseEther(depositAmount) : BigInt(0),
     enabled: activeTab === 'deposit' && depositMethod === 'pls' && depositAmount !== ''
   })
 
   // Token approval for MORBIUS deposits
   const requiredMorbiusAmount = depositAmount && depositMethod === 'morbius' 
     ? parseEther(depositAmount) 
-    : 0n
+    : BigInt(0)
 
   const {
     needsApproval,
@@ -77,7 +75,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     isApproving,
     isLoadingAllowance,
     isApprovalSuccess,
-    allowance,
   } = useTokenApproval({
     tokenAddress: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
     spenderAddress: BLACKJACK_ADDRESS as `0x${string}`,
@@ -209,6 +206,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
   // Handle approval from modal
   const handleApprove = (amount: bigint) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DepositWithdrawModal.tsx:209',message:'handleApprove called from modal',data:{amount:amount.toString(),needsApproval,isApproving,hasAddress:!!address},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     approve(amount)
   }
 
@@ -219,7 +219,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     const amountWei = parseEther(withdrawAmount)
 
     // Validate amount is positive
-    if (amountWei <= 0n) {
+    if (amountWei <= BigInt(0)) {
       toast.error('Invalid amount', {
         description: 'Please enter a positive amount to withdraw',
       })

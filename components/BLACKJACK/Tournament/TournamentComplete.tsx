@@ -29,7 +29,7 @@ export function TournamentComplete({
   onRebuy,
   state,
   tournamentName,
-  prizeWon = 0n,
+  prizeWon = BigInt(0),
 }: TournamentCompleteProps) {
   const isBusted = state.status === 'busted';
   const chipChange = state.chips - state.startingChips;
@@ -132,7 +132,7 @@ export function TournamentComplete({
           </div>
 
           {/* Prize Won */}
-          {prizeWon > 0n && (
+          {prizeWon > BigInt(0) && (
             <div className="bg-gradient-to-r from-yellow-900/30 to-orange-900/30 rounded-xl p-3 border border-yellow-500/30 text-center">
               <p className="text-yellow-400 text-[10px] uppercase tracking-widest">Prize Won</p>
               <p className="text-2xl font-bold text-yellow-300 mt-0.5">

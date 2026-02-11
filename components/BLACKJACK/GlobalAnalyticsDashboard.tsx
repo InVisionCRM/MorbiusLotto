@@ -148,7 +148,7 @@ export function GlobalAnalyticsDashboard({
       changeLabel: '24h',
       icon: TrendingUp,
       color: 'text-blue-400',
-      trend: analytics.houseProfit > 0n ? 'up' : 'down'
+      trend: analytics.houseProfit > BigInt(0) ? 'up' : 'down'
     },
     {
       title: 'Active Players',
@@ -285,9 +285,12 @@ export function GlobalAnalyticsDashboard({
         </div>
         <div className="flex items-center gap-4">
           <select
+            id="analytics-time-range"
             value={timeRange}
             onChange={(e) => onTimeRangeChange?.(e.target.value as any)}
             className="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+            title="Time range"
+            aria-label="Time range for analytics"
           >
             <option value="1h">Last Hour</option>
             <option value="24h">Last 24 Hours</option>
@@ -495,13 +498,13 @@ export function GlobalAnalyticsDashboard({
                   <div className="flex justify-between items-center">
                     <span className="text-gray-300">House Profit</span>
                     <span className={`font-bold ${
-                      analytics.houseProfit > 0n ? 'text-green-400' : 'text-red-400'
+                      analytics.houseProfit > BigInt(0) ? 'text-green-400' : 'text-red-400'
                     }`}>
-                      {analytics.houseProfit > 0n ? '+' : ''}{formatCurrency(analytics.houseProfit)} PLS
+                      {analytics.houseProfit > BigInt(0) ? '+' : ''}{formatCurrency(analytics.houseProfit)} PLS
                     </span>
                   </div>
                   <Progress
-                    value={analytics.houseProfit > 0n ?
+                    value={analytics.houseProfit > BigInt(0) ?
                       Number(analytics.houseProfit) / Number(analytics.totalVolume) * 100 : 0
                     }
                     className="mt-4 h-2"
@@ -587,7 +590,7 @@ export function GlobalAnalyticsDashboard({
                   </div>
                 )}
 
-                {analytics.reserveBalance < analytics.totalVolume / 10n && (
+                {analytics.reserveBalance < analytics.totalVolume / BigInt(10) && (
                   <div className="flex items-center gap-3 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
                     <DollarSign className="w-5 h-5 text-blue-400 flex-shrink-0" />
                     <div>

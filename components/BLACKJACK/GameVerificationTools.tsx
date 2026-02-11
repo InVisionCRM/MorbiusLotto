@@ -339,16 +339,16 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
       }
 
       // 4. Verify payout calculation
-      if (data.result && data.payout !== undefined && data.betAmount > 0n) {
-        let expectedPayout = 0n
+      if (data.result && data.payout !== undefined && data.betAmount > BigInt(0)) {
+        let expectedPayout = BigInt(0)
         if (data.result === 'blackjack') {
-          expectedPayout = (data.betAmount * 5n) / 2n // 3:2 payout = 2.5x total return
+          expectedPayout = (data.betAmount * BigInt(5)) / BigInt(2) // 3:2 payout = 2.5x total return
         } else if (data.result === 'win') {
-          expectedPayout = data.betAmount * 2n
+          expectedPayout = data.betAmount * BigInt(2)
         } else if (data.result === 'push') {
           expectedPayout = data.betAmount
         } else if (data.result === 'loss') {
-          expectedPayout = 0n
+          expectedPayout = BigInt(0)
         }
         // Only flag mismatch for single-hand, non-split games
         const isSingleHand = !data.playerHands || data.playerHands.length <= 1
@@ -421,7 +421,7 @@ export function GameVerificationTools({ gameData, onVerify, isLoading, initialGa
 
   // Multiplier = payout / wager (e.g. 2.00x win, 1.50x blackjack, 1.00x push, 0x loss)
   const multiplierDisplay = verificationData
-    ? verificationData.betAmount > 0n
+    ? verificationData.betAmount > BigInt(0)
       ? (Number(verificationData.payout) / Number(verificationData.betAmount)).toFixed(2) + 'x'
       : '0.00x'
     : ''

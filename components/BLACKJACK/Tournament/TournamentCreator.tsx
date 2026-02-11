@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { formatEther, parseEther } from 'viem';
-import { useWriteContract, usePublicClient } from 'wagmi';
+import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import {
   PRIZE_PRESETS,
   TOURNAMENT_VALIDATION,
@@ -102,6 +102,7 @@ export function TournamentCreator({
   const tokenSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenDropdownRef = useRef<HTMLDivElement>(null);
 
+  const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
 
@@ -320,7 +321,7 @@ export function TournamentCreator({
     try {
       return parseEther(buyInAmount || '0');
     } catch {
-      return 0n;
+      return BigInt(0);
     }
   }, [buyInAmount]);
 
@@ -332,7 +333,7 @@ export function TournamentCreator({
   );
 
   // Example prize distribution preview
-  const examplePrizePool = buyInAmountWei * 10n; // Simulate 10 players
+  const examplePrizePool = buyInAmountWei * BigInt(10); // Simulate 10 players
   const totalFeePercent = 16 + creatorFeePercent; // platform fee (16 default) + creator fee
   const prizePreview = useMemo(() => {
     if (!selectedPreset) return [];
@@ -434,7 +435,7 @@ export function TournamentCreator({
     if (prizeType === 'custom' && prizeTokenAddress.trim() && prizeAmountHuman.trim()) {
       const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
       const prizeAmountWei = BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
-      if (prizeAmountWei > 0n) {
+      if (prizeAmountWei > BigInt(0)) {
         params.prizeTokenAddress = prizeTokenAddress.trim();
         params.prizeAmount = prizeAmountWei.toString();
         params.prizeTokenDecimals = dec;
@@ -462,21 +463,33 @@ export function TournamentCreator({
   if (!isOpen) return null;
 
   const handleApproveToken = async () => {
-    if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= 0n) return;
+    if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
     const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
     if (!isEscrowConfigured || escrow === ESCROW_ZERO) {
       setFundingError('Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env.');
+      return;
+    }
+    if (!address) {
+      setFundingError('Please connect your wallet.');
       return;
     }
     setFundingError(null);
     setFundingStep('approving');
     try {
       const token = prizeTokenAddress.trim() as `0x${string}`;
+      const pulseChain = {
+        id: 369,
+        name: 'PulseChain',
+        nativeCurrency: { name: 'Pulse', symbol: 'PLS', decimals: 18 },
+        rpcUrls: { default: { http: ['https://rpc.pulsechain.com'] } }
+      };
       const hash = await writeContractAsync({
         address: token,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [escrow, fundingAmountWei],
+        account: address,
+        chain: pulseChain,
       });
       if (publicClient && hash) {
         await publicClient.waitForTransactionReceipt({ hash });
@@ -490,20 +503,44 @@ export function TournamentCreator({
   };
 
   const handleDepositToEscrow = async () => {
-    if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= 0n) return;
+    if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
     const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
     if (!isEscrowConfigured || escrow === ESCROW_ZERO) return;
     setFundingError(null);
     setFundingStep('depositing');
     try {
+      // Ensure we get the connected user's wallet address dynamically.
+      // Import { useAccount } from 'wagmi' at the top of the file if it's not already imported.
+      // At the top level of your component (not inside a function), ensure you have:
+      //   const { address } = useAccount();
+
       const token = prizeTokenAddress.trim() as `0x${string}`;
       const idBytes32 = tournamentIdToBytes32(createdTournament.id);
+
+      if (!address) {
+        setFundingError('Please connect your wallet.');
+        setFundingStep('approved');
+        return;
+      }
+
+      // PulseChain config for Viem/Wagmi calls (not always required, but explicit here)
+      const pulseChain = {
+        id: 369,
+        name: 'PulseChain',
+        nativeCurrency: { name: 'Pulse', symbol: 'PLS', decimals: 18 },
+        rpcUrls: { default: { http: ['https://rpc.pulsechain.com'] } }
+      };
+
       await writeContractAsync({
         address: escrow as `0x${string}`,
         abi: tournamentPrizeEscrowAbi,
         functionName: 'depositPrizePool',
         args: [idBytes32, token, fundingAmountWei],
+        // Provide the connected address; hooks always get latest wallet
+        account: address,
+        chain: pulseChain,
       });
+
       setFundingStep('done');
     } catch (e) {
       setFundingError(e instanceof Error ? e.message : 'Deposit failed');
@@ -760,32 +797,38 @@ export function TournamentCreator({
                   <p className="text-cyan-300 text-sm font-medium">Schedule</p>
                   <p className="text-gray-500 text-xs">Set when players can register, when the tournament begins, and how long it runs.</p>
                   <div>
-                    <label className="block text-gray-400 text-xs mb-1">Registration opens — players can sign up starting at this time</label>
+                    <label id="registration-opens-label" htmlFor="registration-opens-input" className="block text-gray-400 text-xs mb-1">Registration opens — players can sign up starting at this time</label>
                     <input
+                      id="registration-opens-input"
                       type="datetime-local"
                       value={registrationOpensAt}
                       onChange={(e) => setRegistrationOpensAt(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                      title="Registration opens date and time"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-400 text-xs mb-1">Tournament starts — gameplay begins at this time, registration closes</label>
+                    <label id="scheduled-start-label" htmlFor="scheduled-start-input" className="block text-gray-400 text-xs mb-1">Tournament starts — gameplay begins at this time, registration closes</label>
                     <input
+                      id="scheduled-start-input"
                       type="datetime-local"
                       value={scheduledStartAt}
                       onChange={(e) => setScheduledStartAt(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                      title="Tournament start date and time"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-400 text-xs mb-1">Duration (minutes) — how long the tournament runs after it starts</label>
+                    <label id="duration-minutes-label" htmlFor="duration-minutes-input" className="block text-gray-400 text-xs mb-1">Duration (minutes) — how long the tournament runs after it starts</label>
                     <input
+                      id="duration-minutes-input"
                       type="number"
                       min={FREEROLL_VALIDATION.DURATION_MIN_MINUTES}
                       max={FREEROLL_VALIDATION.DURATION_MAX_MINUTES}
                       value={durationMinutes}
                       onChange={(e) => setDurationMinutes(parseInt(e.target.value, 10) || 60)}
                       className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                      title="Duration in minutes"
                     />
                   </div>
                   <div>
@@ -829,23 +872,28 @@ export function TournamentCreator({
                   </div>
                   {reentryEnabled && (
                     <div>
-                      <label className="block text-gray-400 text-xs mb-1">Re-entry window (minutes) — how long after the start eliminated players can re-enter</label>
+                      <label id="reentry-window-label" htmlFor="reentry-window-minutes-input" className="block text-gray-400 text-xs mb-1">Re-entry window (minutes) — how long after the start eliminated players can re-enter</label>
                       <input
+                        id="reentry-window-minutes-input"
                         type="number"
                         min={1}
                         max={FREEROLL_VALIDATION.REENTRY_WINDOW_MAX_MINUTES}
                         value={reentryWindowMinutes}
                         onChange={(e) => setReentryWindowMinutes(parseInt(e.target.value, 10) || 5)}
                         className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                        title="Re-entry window in minutes"
                       />
                     </div>
                   )}
                   <div>
-                    <label className="block text-gray-400 text-xs mb-1">Action timer (seconds) — time each player has to act per hand. None = no time pressure.</label>
+                    <label id="action-timer-label" htmlFor="action-timer-select" className="block text-gray-400 text-xs mb-1">Action timer (seconds) — time each player has to act per hand. None = no time pressure.</label>
                     <select
+                      id="action-timer-select"
                       value={actionTimerSeconds ?? ''}
                       onChange={(e) => setActionTimerSeconds(e.target.value === '' ? null : parseInt(e.target.value, 10))}
                       className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                      title="Action timer in seconds"
+                      aria-labelledby="action-timer-label"
                     >
                       <option value="">None</option>
                       <option value="10">10</option>
@@ -858,19 +906,21 @@ export function TournamentCreator({
               {/* Buy-in Amount (only for buy-in tournaments) */}
               {tournamentType === 'buyin' && (
                 <div>
-                  <label className="block text-gray-300 text-sm font-medium mb-1">
+                  <label id="buy-in-amount-label" htmlFor="buy-in-amount-input" className="block text-gray-300 text-sm font-medium mb-1">
                     Buy-in Amount (MORBIUS)
                   </label>
                   <p className="text-gray-500 text-xs mb-2">
                     The amount each player pays to enter. All buy-ins go into the prize pool.
                   </p>
                   <input
+                    id="buy-in-amount-input"
                     type="number"
                     value={buyInAmount}
                     onChange={(e) => setBuyInAmount(e.target.value)}
                     min="100"
                     max="1000000"
                     className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
+                    title="Buy-in amount in MORBIUS"
                   />
                   <p className="text-gray-500 text-xs mt-1">
                     Min: 100 | Max: 1,000,000 MORBIUS
@@ -955,11 +1005,14 @@ export function TournamentCreator({
                       <span className="text-gray-500 text-xs">Upload</span>
                     </button>
                     <input
+                      id="tournament-table-image-upload"
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
                       onChange={handleImageUpload}
                       className="hidden"
+                      title="Upload tournament table background image"
+                      aria-label="Upload tournament table background image"
                     />
                     <p className="text-gray-500 text-xs">or leave empty for default</p>
                   </div>
@@ -1317,7 +1370,7 @@ export function TournamentCreator({
             <div className="space-y-6">
               {/* Creator Fee */}
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-1">
+                <label id="creator-fee-range-label" className="block text-gray-300 text-sm font-medium mb-1">
                   Creator Fee: {creatorFeePercent}%
                 </label>
                 <p className="text-gray-500 text-xs mb-2">
@@ -1331,6 +1384,8 @@ export function TournamentCreator({
                   value={creatorFeePercent}
                   onChange={(e) => setCreatorFeePercent(parseInt(e.target.value, 10))}
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                  aria-labelledby="creator-fee-range-label"
+                  title="Creator fee percentage (0–5%)"
                 />
                 <div className="flex justify-between text-xs text-gray-500 mt-1">
                   <span>0%</span>
