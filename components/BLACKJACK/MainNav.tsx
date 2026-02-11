@@ -4,18 +4,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useDisconnect, useBalance } from 'wagmi';
+import { useAccount, useDisconnect } from 'wagmi';
 import { NumberTicker } from '@/components/ui/number-ticker';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
-import { formatEther } from 'viem';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
 import type { BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from '@/app/BLACKJACK/constants';
 import ThemeSelectionModal from '@/components/BLACKJACK/ThemeSelectionModal';
 
 interface MainNavProps {
   onOpenDepositModal?: () => void;
-  onOpenApprovalModal?: () => void;
   reserveBalance?: bigint;
   currentView?: 'game' | 'history' | 'stats' | 'analytics' | 'verify';
   onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics' | 'verify') => void;
@@ -59,7 +57,7 @@ const viewIcons: Record<string, string> = {
   verify: 'fa-check-circle'
 };
 
-export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings }: MainNavProps) {
+export default function MainNav({ onOpenDepositModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings }: MainNavProps) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -72,15 +70,6 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
   const dropdownRef = useRef<HTMLDivElement>(null);
   const walletDropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
-
-  // Get native PLS balance (throttled to reduce RPC load)
-  const { data: plsBalance } = useBalance({
-    address: address ?? undefined,
-    query: {
-      enabled: !!address,
-      refetchInterval: 60_000, // 1 minute when connected
-    },
-  });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -132,45 +121,30 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-1 flex-shrink-0 min-w-0">
-            {/* Balances Display */}
-            {isConnected && (
-              <div className="flex items-center gap-2">
-                {/* PLS Balance - Always visible */}
-                {plsBalance && (
-                  <div className="flex items-center gap-1 bg-slate-900/30 rounded-lg py-1.5 px-3 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.1)] text-xs">
-                    <span className="text-white/80 font-bold">
-                      {Number(formatEther(plsBalance.value)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    </span>
-                    <span className="text-cyan-400 font-bold">PLS</span>
-                  </div>
-                )}
-
-                {/* Morbius Reserve Balance - Hidden on mobile */}
-                {reserveBalance !== undefined && (
-                  <button
-                    onClick={onOpenDepositModal}
-                    className="hidden sm:flex relative items-center justify-start bg-slate-900/30 rounded-lg py-1.5 px-3 pr-8 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.1)] gap-1 text-xs flex-shrink min-w-0 hover:bg-slate-900/50 transition-colors cursor-pointer"
-                    aria-label="MORBIUS reserve balance — click to deposit or withdraw"
-                    title="Deposit/Withdraw"
-                  >
-                    <div className="flex items-center gap-1">
-                      <NumberTicker
-                        value={Math.floor(Number(reserveBalance) / 1e18)}
-                        className="text-white/80 font-bold whitespace-nowrap"
-                        animateOnChange={true}
-                      />
-                      <Image
-                        src="/morbius/MorbiusLogo (3).png"
-                        alt="Morbius Logo"
-                        width={16}
-                        height={16}
-                        className="object-contain"
-                      />
-                    </div>
-                    <i className="fas fa-chevron-down text-white/60 text-xs absolute right-2 top-1/2 transform -translate-y-1/2"></i>
-                  </button>
-                )}
-              </div>
+            {/* Morbius Reserve Balance Display */}
+            {isConnected && reserveBalance !== undefined && (
+              <button
+                onClick={onOpenDepositModal}
+                className="hidden sm:flex relative items-center justify-start bg-slate-900/30 rounded-lg py-1.5 px-3 pr-8 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.1)] gap-1 text-xs flex-shrink min-w-0 hover:bg-slate-900/50 transition-colors cursor-pointer"
+                aria-label="MORBIUS reserve balance — click to deposit or withdraw"
+                title="Deposit/Withdraw"
+              >
+                <div className="flex items-center gap-1">
+                  <NumberTicker
+                    value={Math.floor(Number(reserveBalance) / 1e18)}
+                    className="text-white/80 font-bold whitespace-nowrap"
+                    animateOnChange={true}
+                  />
+                  <Image
+                    src="/morbius/MorbiusLogo (3).png"
+                    alt="Morbius Logo"
+                    width={16}
+                    height={16}
+                    className="object-contain"
+                  />
+                </div>
+                <i className="fas fa-chevron-down text-white/60 text-xs absolute right-2 top-1/2 transform -translate-y-1/2"></i>
+              </button>
             )}
 
             {/* Wallet / Profile */}
@@ -225,18 +199,6 @@ export default function MainNav({ onOpenDepositModal, onOpenApprovalModal, reser
                           >
                             <i className="fas fa-wallet w-4 text-center"></i>
                             <span className="text-sm font-medium">Deposit/Withdraw</span>
-                          </button>
-                        )}
-                        {onOpenApprovalModal && (
-                          <button
-                            onClick={() => {
-                              onOpenApprovalModal();
-                              setIsWalletDropdownOpen(false);
-                            }}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                          >
-                            <i className="fas fa-shield-alt w-4 text-center"></i>
-                            <span className="text-sm font-medium">Approval</span>
                           </button>
                         )}
                         {reserveBalance !== undefined && (

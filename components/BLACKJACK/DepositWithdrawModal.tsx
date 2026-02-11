@@ -410,7 +410,28 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                         <div className="text-xs text-yellow-400">
                           On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()} MORBIUS
                         </div>
-                        {onRefreshBalance && (
+                        {/* If on-chain > display, show Sync button to sync on-chain → DB */}
+                        {onBalanceSync && contractReserve > displayBalance && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              toast.info('Syncing balance...')
+                              try {
+                                await onBalanceSync()
+                                toast.success('Balance synced!', { duration: 3000 })
+                              } catch (error) {
+                                console.error('Sync failed:', error)
+                                toast.error('Sync failed. Please try again.')
+                              }
+                            }}
+                            className="h-6 px-2 text-xs bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
+                          >
+                            Sync
+                          </Button>
+                        )}
+                        {/* Otherwise show Refresh button to just refresh display */}
+                        {onRefreshBalance && contractReserve <= displayBalance && (
                           <Button
                             variant="outline"
                             size="sm"

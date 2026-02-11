@@ -9,6 +9,7 @@
     ],
     "allowJs": true,
     "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
     "strict": false,
     "noImplicitAny": false,
     "noImplicitReturns": false,
@@ -47,7 +48,8 @@
     "**/*.mts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "**/node_modules/**"
   ]
 }
 

@@ -192,6 +192,8 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
           </CardTitle>
           <div className="flex items-center gap-2">
             <select
+              title="Sort by"
+              aria-label="Sort by"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
               className="bg-gray-800 border border-gray-600 rounded px-3 py-1 text-sm text-white"

@@ -916,12 +916,40 @@ export default function BlackjackPage() {
     };
   }, [address, wsClient]);
 
-  // Fetch balance when WebSocket connects
+  // Track if we've done initial sync check per connection to avoid re-running
+  const hasCheckedInitialSync = useRef<string | null>(null);
+
+  // Fetch balance when WebSocket connects, and auto-sync if on-chain > DB (only on initial connection, not during active play)
   useEffect(() => {
-    if (wsConnected && wsClient) {
-      fetchBalance();
+    const connectionKey = `${address}-${wsConnected}`;
+    
+    if (wsConnected && wsClient && address && playerReserve !== undefined && hasCheckedInitialSync.current !== connectionKey) {
+      hasCheckedInitialSync.current = connectionKey;
+      // Store the on-chain balance at connection time
+      const onChainBalanceAtConnection = playerReserve;
+      
+      // First fetch the current DB balance
+      fetchBalance().then(() => {
+        // After fetchBalance completes, check if we need to sync
+        // Use a small delay to ensure state is updated, then re-read current values
+        setTimeout(() => {
+          // Re-read current balance from the getBalance call result
+          // We'll trigger syncBalance which will handle the comparison server-side
+          // But first check if there's an active game
+          if (!currentGameRef.current && onChainBalanceAtConnection > BigInt(0)) {
+            // The server-side sync logic will only increase DB balance if on-chain > DB
+            // So it's safe to call syncBalance here
+            console.log('[Balance] Auto-syncing on connection: on-chain balance detected', {
+              onChain: onChainBalanceAtConnection.toString()
+            });
+            syncBalance();
+          }
+        }, 200);
+      }).catch((error) => {
+        console.error('[Balance] Failed to fetch balance on connection:', error);
+      });
     }
-  }, [wsConnected, wsClient, fetchBalance]);
+  }, [wsConnected, wsClient, address, playerReserve, fetchBalance, syncBalance]);
 
   // Clear profile when wallet changes; fetch when WebSocket connects
   useEffect(() => {
@@ -2275,7 +2303,6 @@ export default function BlackjackPage() {
     >
       <MainNav
         onOpenDepositModal={handleOpenDepositModal}
-        onOpenApprovalModal={() => setShowApprovalModal(true)}
         reserveBalance={offChainBalance}
         currentView={currentView}
         onViewChange={setCurrentView}
