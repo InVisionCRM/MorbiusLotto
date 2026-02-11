@@ -27,7 +27,7 @@ const connectors = connectorsForWallets(
   ],
   {
     appName: 'MORBIUS Lotto',
-    projectId: '21fef48091f12692cad574a6f7753643',
+    projectId: '88a763ec5a64c568fcce729fbe4b87a8',
   }
 )
 
