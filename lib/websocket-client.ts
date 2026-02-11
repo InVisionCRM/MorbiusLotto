@@ -162,7 +162,24 @@ export class BlackjackWebSocketClient {
           const msg = JSON.parse(event.data as string);
 
           if (msg.type === 'auth_challenge' && !settled) {
-            console.log('[WS Client] Received auth_challenge', { nonce: msg.payload?.nonce?.slice(0, 8), canSign });
+            console.log('[WS Client] Received auth_challenge', { nonce: msg.payload?.nonce?.slice(0, 8), canSign, claimedAddress: msg.payload?.claimedAddress });
+            
+            // Check if server is in grace period mode (auto-authenticated via query param)
+            // If claimedAddress matches our playerAddress, server already authenticated us
+            const isGracePeriodAuth = msg.payload?.claimedAddress && 
+                                     this.playerAddress && 
+                                     msg.payload.claimedAddress.toLowerCase() === this.playerAddress.toLowerCase();
+            
+            if (isGracePeriodAuth) {
+              // Server is in grace period and already authenticated us via query param
+              // No need to sign - resolve immediately
+              console.log('[WS Client] Grace period mode detected - server already authenticated via query param, skipping signature');
+              settled = true;
+              logger.info('WebSocket connected (grace period auto-auth, skipping EIP-712 signature)');
+              resolve();
+              return;
+            }
+            
             if (canSign) {
               // New auth flow: sign the nonce and send auth_response
               this.handleAuthChallenge(msg.payload).catch((err) => {

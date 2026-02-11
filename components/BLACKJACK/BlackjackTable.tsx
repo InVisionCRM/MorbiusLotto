@@ -10,14 +10,7 @@ import { NumberTicker } from '@/components/ui/number-ticker';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
 import type { BlackjackImageId, BlackjackVideoId } from '@/app/BLACKJACK/constants';
 
-// Background music playlist (all from public/BlackJack/music except Big-Winner)
-const BLACKJACK_MUSIC_PLAYLIST = [
-  '/BlackJack/music/Winning-Big.mp3',
-  '/BlackJack/music/Lucky-Ducky.mp3',
-  '/BlackJack/music/Smooth-Gains.mp3',
-  '/BlackJack/music/Top-Tier.mp3',
-  '/BlackJack/music/Chances.mp3',
-] as const;
+// Background music playlist moved to page.tsx to avoid duplicate audio instances
 
 interface BlackjackTableProps {
   playerHand: Hand;
@@ -77,6 +70,11 @@ interface BlackjackTableProps {
   onPerfectPairsBetChange?: (amount: number) => void;
   /** Perfect Pairs result from the completed game — drives PP chip animation. */
   perfectPairsResult?: 'perfect' | 'colored' | 'mixed';
+  /** Music player controls (passed from parent to avoid duplicate audio instances) */
+  musicTrackName?: string;
+  isMusicPlaying?: boolean;
+  onToggleMusic?: () => void;
+  onNextTrack?: () => void;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -99,6 +97,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   gameResult = null,
   displayedResult = null,
   onChipAnimationComplete,
+  musicTrackName,
+  isMusicPlaying,
+  onToggleMusic,
+  onNextTrack,
   onDoubleDownChips,
   onSplitChips,
   onRebet,
@@ -147,50 +149,9 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   const prevDealerCardCountRef = useRef(dealerHand.cards.length);
   const lastCompletedGameIdRef = useRef<string | undefined>(undefined);
 
-  // Background music player (top-left of table)
-  const [musicTrackIndex, setMusicTrackIndex] = useState(0);
-  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
-  const [musicVolume, setMusicVolume] = useState(25); // 0–100
-  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    const el = musicAudioRef.current;
-    if (el) el.volume = musicVolume / 100;
-  }, [musicVolume]);
-
-  useEffect(() => {
-    if (musicAudioRef.current && !isMusicPlaying) {
-      musicAudioRef.current.play().then(() => setIsMusicPlaying(true)).catch(() => {});
-    }
-  }, []);
-
-  const handleMusicEnded = useCallback(() => {
-    setMusicTrackIndex((prev) => (prev + 1) % BLACKJACK_MUSIC_PLAYLIST.length);
-    setIsMusicPlaying(false);
-  }, []);
-
-  useEffect(() => {
-    const el = musicAudioRef.current;
-    if (!el) return;
-    el.volume = musicVolume / 100;
-    el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
-  }, [musicTrackIndex]);
-
-  const toggleMusic = useCallback(() => {
-    const el = musicAudioRef.current;
-    if (!el) return;
-    if (isMusicPlaying) {
-      el.pause();
-      setIsMusicPlaying(false);
-    } else {
-      el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
-    }
-  }, [isMusicPlaying]);
-
-  const nextTrack = useCallback(() => {
-    setMusicTrackIndex((prev) => (prev + 1) % BLACKJACK_MUSIC_PLAYLIST.length);
-    setIsMusicPlaying(false);
-  }, []);
+  // Music player state is now managed by parent (page.tsx) to avoid duplicate audio instances
+  // Use props if provided
+  const hasMusicProps = musicTrackName !== undefined && onToggleMusic !== undefined;
 
   // Chip animation state
   const [chipAnimationState, setChipAnimationState] = useState<'none' | 'win' | 'loss'>('none');
@@ -567,10 +528,17 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     const shouldStartReveal = (gameJustCompleted || dealerCardsArrived) && !isRevealing && visibleDealerCards < totalCards;
     
     // When game is COMPLETE and there's nothing to reveal (0–1 cards or all already visible), signal completion immediately so REBET/DEAL unlock (fixes blackjack freeze)
-    const noRevealNeeded = gameState === GameState.COMPLETE && (totalCards < 2 || visibleDealerCards >= totalCards);
+    // BUT: For blackjack scenarios (2 cards), ensure cards are visible first - don't skip reveal if cards haven't been shown yet
+    const noRevealNeeded = gameState === GameState.COMPLETE && (
+      totalCards < 2 || 
+      (visibleDealerCards >= totalCards && totalCards > 0) // Only skip if cards are actually visible
+    );
     if (noRevealNeeded && !hasCalledRevealCompleteRef.current) {
-      hasCalledRevealCompleteRef.current = true;
-      onDealerRevealCompleteRef.current?.();
+      // Small delay to ensure cards are rendered before signaling completion (especially for blackjack)
+      revealTimeoutRef.current = setTimeout(() => {
+        hasCalledRevealCompleteRef.current = true;
+        onDealerRevealCompleteRef.current?.();
+      }, totalCards >= 2 ? 500 : 0); // 500ms delay for 2-card scenarios (blackjack) to ensure cards render
     }
     else if (shouldStartReveal) {
       setIsRevealing(true);
@@ -600,13 +568,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           revealTimeoutRef.current = setTimeout(revealNextCard, 2000);
         }, 1000); // 1 second delay before revealing hole card
       } else {
-        // Only 2 cards: reveal hole card after brief delay, then complete
+        // Only 2 cards (blackjack scenario): ensure first card is visible, then reveal hole card after brief delay
+        // First, ensure at least 1 card is visible if not already
+        if (visibleDealerCards < 1 && totalCards >= 1) {
+          setVisibleDealerCards(1);
+        }
+        // Then reveal hole card after delay to ensure cards are rendered
         revealTimeoutRef.current = setTimeout(() => {
           setVisibleDealerCards(2);
           setIsRevealing(false);
           hasCalledRevealCompleteRef.current = true;
           onDealerRevealCompleteRef.current?.();
-        }, 1000); // 1 second delay before revealing hole card
+        }, 1000); // 1 second delay before revealing hole card - gives time for cards to render
       }
     }
     // During play (WAITING, PLAYER_TURN, DEALER_TURN): Show only first card
@@ -667,10 +640,15 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   }, [visibleDealerCards, dealerHand.cards.length, gameState, isRevealing]);
 
   // 2s after game complete (reveal done), start card exit animation; then call onCardsClearComplete
+  // For blackjack scenarios, ensure cards are actually visible before clearing
   useEffect(() => {
     const revealDone = gameState === GameState.COMPLETE && !isRevealing &&
       dealerHand.cards.length > 0 && visibleDealerCards >= dealerHand.cards.length;
     if (!revealDone || !onCardsClearComplete || cardsExiting) return;
+
+    // Additional check: ensure cards have been visible for at least a brief moment (especially for blackjack)
+    // This prevents cards from being cleared before they're rendered
+    const minDisplayTime = dealerHand.cards.length === 2 ? 1500 : CARD_CLEAR_HOLD_MS; // Extra time for 2-card blackjack scenarios
 
     if (cardsClearTimeoutRef.current) return; // already scheduled
     cardsClearTimeoutRef.current = setTimeout(() => {
@@ -680,7 +658,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         cardsClearCompleteRef.current = null;
         onCardsClearComplete();
       }, CARD_CLEAR_ANIMATION_MS);
-    }, CARD_CLEAR_HOLD_MS);
+    }, minDisplayTime);
 
     return () => {
       if (cardsClearTimeoutRef.current) {
@@ -828,55 +806,52 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         }}
       />
 
-      {/* Background music: hidden audio + player at top-left */}
-      <audio
-        ref={musicAudioRef}
-        src={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex]}
-        onEnded={handleMusicEnded}
-        loop={false}
-        preload="metadata"
-      />
-      <div
-        className="absolute top-2 left-2 sm:top-4 sm:left-4 z-20 flex flex-col gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl border border-cyan-500/30 px-2 py-1.5 sm:px-3 sm:py-2 shadow-lg pointer-events-auto"
-        style={{
-          background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.8))',
-          boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.5)',
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-cyan-400/90 text-xs font-medium max-w-[90px] sm:max-w-[100px] truncate" title={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? ''}>
-            {BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? 'Music'}
-          </span>
-          <button
-            type="button"
-            onClick={toggleMusic}
-            className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-            aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
-          >
-            {isMusicPlaying ? <i className="fas fa-pause text-xs sm:text-sm" /> : <i className="fas fa-play text-xs sm:text-sm" />}
-          </button>
-          <button
-            type="button"
-            onClick={nextTrack}
-            className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-            aria-label="Next track"
-          >
-            <i className="fas fa-forward text-xs sm:text-sm" />
-          </button>
+      {/* Background music player at top-left - Desktop only (mobile shows in MainNav dropdown) */}
+      {hasMusicProps && musicTrackName && onToggleMusic && (
+        <div
+          className="hidden sm:flex absolute top-2 left-2 sm:top-4 sm:left-4 z-20 flex-col gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl border border-cyan-500/30 px-2 py-1.5 sm:px-3 sm:py-2 shadow-lg pointer-events-auto"
+          style={{
+            background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.8))',
+            boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.5)',
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-cyan-400/90 text-xs font-medium max-w-[90px] sm:max-w-[100px] truncate" title={musicTrackName}>
+              {musicTrackName}
+            </span>
+            <button
+              type="button"
+              onClick={onToggleMusic}
+              className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+              aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
+            >
+              {isMusicPlaying ? <i className="fas fa-pause text-xs sm:text-sm" /> : <i className="fas fa-play text-xs sm:text-sm" />}
+            </button>
+            {onNextTrack && (
+              <button
+                type="button"
+                onClick={onNextTrack}
+                className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                aria-label="Next track"
+              >
+                <i className="fas fa-forward text-xs sm:text-sm" />
+              </button>
+            )}
+          </div>
+          {onOpenTableThemeSelector && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenTableThemeSelector();
+              }}
+              className="text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-1 transition-colors cursor-pointer py-0.5 px-0 -mx-0 text-left w-full"
+            >
+              Change Table
+            </button>
+          )}
         </div>
-        {onOpenTableThemeSelector && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenTableThemeSelector();
-            }}
-            className="text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-1 transition-colors cursor-pointer py-0.5 px-0 -mx-0 text-left w-full"
-          >
-            Change Table
-          </button>
-        )}
-      </div>
+      )}
 
       {/* System Time Display (top-right) */}
       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex flex-col items-end gap-0.5 sm:gap-1 pointer-events-auto">

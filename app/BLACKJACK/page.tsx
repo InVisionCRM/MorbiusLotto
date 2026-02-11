@@ -237,6 +237,58 @@ export default function BlackjackPage() {
   const [videoPosition, setVideoPosition] = useState(50); // 0-100, used when sync to clock is off
   const [themeModalOpen, setThemeModalOpen] = useState(false);
 
+  // Background music player state (lifted from BlackjackTable)
+  const BLACKJACK_MUSIC_PLAYLIST = [
+    '/BlackJack/music/Winning-Big.mp3',
+    '/BlackJack/music/Lucky-Ducky.mp3',
+    '/BlackJack/music/Smooth-Gains.mp3',
+    '/BlackJack/music/Top-Tier.mp3',
+    '/BlackJack/music/Chances.mp3',
+  ] as const;
+  const [musicTrackIndex, setMusicTrackIndex] = useState(0);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(25); // 0–100
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const el = musicAudioRef.current;
+    if (el) el.volume = musicVolume / 100;
+  }, [musicVolume]);
+
+  useEffect(() => {
+    if (musicAudioRef.current && !isMusicPlaying) {
+      musicAudioRef.current.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+    }
+  }, []);
+
+  const handleMusicEnded = useCallback(() => {
+    setMusicTrackIndex((prev) => (prev + 1) % BLACKJACK_MUSIC_PLAYLIST.length);
+    setIsMusicPlaying(false);
+  }, []);
+
+  useEffect(() => {
+    const el = musicAudioRef.current;
+    if (!el) return;
+    el.volume = musicVolume / 100;
+    el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+  }, [musicTrackIndex]);
+
+  const toggleMusic = useCallback(() => {
+    const el = musicAudioRef.current;
+    if (!el) return;
+    if (isMusicPlaying) {
+      el.pause();
+      setIsMusicPlaying(false);
+    } else {
+      el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+    }
+  }, [isMusicPlaying]);
+
+  const nextTrack = useCallback(() => {
+    setMusicTrackIndex((prev) => (prev + 1) % BLACKJACK_MUSIC_PLAYLIST.length);
+    setIsMusicPlaying(false);
+  }, []);
+
   const useVideoBackground = theme === 'video';
 
   const TABLE_PREFS_KEY = 'morb_blackjack_table';
@@ -2301,6 +2353,16 @@ export default function BlackjackPage() {
         background: 'linear-gradient(145deg, rgb(10, 15, 20), rgb(16, 26, 35))',
       }}
     >
+      {/* Background music audio element - single instance */}
+      <audio
+        ref={musicAudioRef}
+        src={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex]}
+        onEnded={handleMusicEnded}
+        loop={false}
+        preload="metadata"
+        style={{ display: 'none' }}
+      />
+
       <MainNav
         onOpenDepositModal={handleOpenDepositModal}
         reserveBalance={offChainBalance}
@@ -2324,6 +2386,10 @@ export default function BlackjackPage() {
         profileDisplayName={profileDisplayName}
         profileImageUrl={profileImageUrl}
         onOpenProfileSettings={() => setProfileModalOpen(true)}
+        musicTrackName={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? 'Music'}
+        isMusicPlaying={isMusicPlaying}
+        onToggleMusic={toggleMusic}
+        onNextTrack={nextTrack}
       />
 
       <ProfileSettingsModal
@@ -2444,6 +2510,10 @@ export default function BlackjackPage() {
               onRebetAndDeal={tournament.tournamentState.inTournament ? undefined : handleRebetAndDeal}
               onHalfBet={tournament.tournamentState.inTournament ? () => {} : handleHalfBet}
               onDoubleBet={tournament.tournamentState.inTournament ? () => {} : handleDoubleBet}
+              musicTrackName={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? 'Music'}
+              isMusicPlaying={isMusicPlaying}
+              onToggleMusic={toggleMusic}
+              onNextTrack={nextTrack}
               canDeal={tournament.tournamentState.inTournament
                 ? !gameState.isPlaying && tournament.tournamentState.handsRemaining > 0
                 : !gameState.isPlaying && totalBetAmount > 0}

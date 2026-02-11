@@ -39,6 +39,11 @@ interface MainNavProps {
   profileImageUrl?: string | null;
   /** Opens the profile settings modal when edit icon is clicked */
   onOpenProfileSettings?: () => void;
+  /** Music player controls for mobile dropdown */
+  musicTrackName?: string;
+  isMusicPlaying?: boolean;
+  onToggleMusic?: () => void;
+  onNextTrack?: () => void;
 }
 
 const viewLabels: Record<string, string> = {
@@ -57,7 +62,7 @@ const viewIcons: Record<string, string> = {
   verify: 'fa-check-circle'
 };
 
-export default function MainNav({ onOpenDepositModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings }: MainNavProps) {
+export default function MainNav({ onOpenDepositModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings, musicTrackName, isMusicPlaying, onToggleMusic, onNextTrack }: MainNavProps) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -286,6 +291,39 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
                       <span className="text-sm font-medium">Home</span>
                     </Link>
                   </div>
+                  {/* Music Player - Mobile Only */}
+                  {musicTrackName && onToggleMusic && (
+                    <div className="p-2 border-b border-gray-700/50">
+                      <div className="flex items-center gap-2 text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1 mb-2">
+                        <i className="fas fa-music w-4 text-center" aria-hidden />
+                        Music Player
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-gray-800/50 border border-cyan-500/30">
+                        <span className="text-cyan-400/90 text-xs font-medium flex-1 truncate" title={musicTrackName}>
+                          {musicTrackName}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={onToggleMusic}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                          aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
+                        >
+                          {isMusicPlaying ? <i className="fas fa-pause text-sm" /> : <i className="fas fa-play text-sm" />}
+                        </button>
+                        {onNextTrack && (
+                          <button
+                            type="button"
+                            onClick={onNextTrack}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                            aria-label="Next track"
+                          >
+                            <i className="fas fa-forward text-sm" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Blackjack Views Section */}
                   <div className="p-2 border-b border-gray-700/50">
                     <div className="flex items-center gap-2 text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">

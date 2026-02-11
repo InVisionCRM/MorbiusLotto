@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
+import { useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,7 +52,9 @@ interface GameVerificationData {
 
 export default function BlackjackVerifyPage() {
   const { address } = useAccount()
-  const [gameId, setGameId] = useState('')
+  const searchParams = useSearchParams()
+  const urlGameId = searchParams.get('gameId') || ''
+  const [gameId, setGameId] = useState(urlGameId)
   const [isVerifying, setIsVerifying] = useState(false)
   const [gameData, setGameData] = useState<GameVerificationData | null>(null)
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null)
@@ -150,9 +153,9 @@ export default function BlackjackVerifyPage() {
     return hashHex.toLowerCase() === normalizedHash.toLowerCase()
   }
 
-  // Verify game
-  const verifyGame = async () => {
-    if (!gameId.trim()) {
+  // Verify game (internal function that accepts gameId parameter)
+  const verifyGameWithId = async (idToVerify: string) => {
+    if (!idToVerify.trim()) {
       setError('Please enter a game ID')
       return
     }
@@ -164,7 +167,7 @@ export default function BlackjackVerifyPage() {
 
     try {
       // Fetch game data
-      const res = await fetch(`/api/blackjack/verify/${gameId}`)
+      const res = await fetch(`/api/blackjack/verify/${idToVerify}`)
       const data = await res.json()
 
       if (!res.ok) {
@@ -230,6 +233,23 @@ export default function BlackjackVerifyPage() {
       setIsVerifying(false)
     }
   }
+
+  // Verify game (public function that uses state gameId)
+  const verifyGame = async () => {
+    await verifyGameWithId(gameId)
+  }
+
+  // Auto-fill and auto-verify when gameId is provided in URL
+  useEffect(() => {
+    if (urlGameId && urlGameId.trim() && urlGameId !== gameId) {
+      setGameId(urlGameId)
+      // Auto-trigger verification after setting gameId
+      const timer = setTimeout(() => {
+        verifyGameWithId(urlGameId)
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [urlGameId])
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)

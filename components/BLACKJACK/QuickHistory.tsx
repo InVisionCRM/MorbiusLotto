@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { formatEther } from 'viem'
 import { GameResult } from '@/app/BLACKJACK/types'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -149,15 +150,14 @@ export default function QuickHistory({ history, reserveBalance, onVerifyGame }: 
                   </TableCell>
                 )}
                 <TableCell className={`${cellCls} font-mono text-xs text-white/80`} title={result.gameId}>
-                  {result.gameId && onVerifyGame ? (
-                    <button
-                      type="button"
-                      onClick={() => onVerifyGame(result.gameId!)}
+                  {result.gameId ? (
+                    <Link
+                      href={`/BLACKJACK/verify?gameId=${encodeURIComponent(result.gameId)}`}
                       className="text-cyan-300/90 hover:text-cyan-200 transition-colors underline underline-offset-2"
                       aria-label={`Verify game ${result.gameId}`}
                     >
                       {shortenGameId(result.gameId)}
-                    </button>
+                    </Link>
                   ) : (
                     shortenGameId(result.gameId)
                   )}

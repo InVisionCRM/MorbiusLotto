@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
+import Link from 'next/link'
 import { History, ChevronDown, ChevronUp, Trophy, Target, Clock } from 'lucide-react'
 import { formatEther } from 'viem'
 import { Button } from '@/components/ui/button'
@@ -421,36 +422,35 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                       </div>
 
                       {/* Verification */}
-                      {onVerifyGame && (
-                        <div className="grid grid-cols-[1fr_1fr] gap-4 items-center pt-2 border-t border-gray-700 text-left">
-                          <div className="flex items-center gap-2">
-                            {entry.verified ? (
-                              <>
-                                <div className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></div>
-                                <span className="text-sm text-green-400">Verified</span>
-                              </>
-                            ) : (
-                              <>
-                                <div className="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0"></div>
-                                <span className="text-sm text-yellow-400">Unverified</span>
-                              </>
-                            )}
-                          </div>
-                          <div className="text-left">
+                      <div className="grid grid-cols-[1fr_1fr] gap-4 items-center pt-2 border-t border-gray-700 text-left">
+                        <div className="flex items-center gap-2">
+                          {entry.verified ? (
+                            <>
+                              <div className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                              <span className="text-sm text-green-400">Verified</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0"></div>
+                              <span className="text-sm text-yellow-400">Unverified</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="text-left">
+                          <Link href={`/BLACKJACK/verify?gameId=${encodeURIComponent(entry.gameId)}`}>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onVerifyGame(entry.gameId);
                               }}
                               className="text-xs"
                             >
                               Verify Game
                             </Button>
-                          </div>
+                          </Link>
                         </div>
-                      )}
+                      </div>
                     </div>
                   </motion.div>
                 )}
