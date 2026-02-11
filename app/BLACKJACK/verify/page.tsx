@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useAccount } from 'wagmi'
 import { useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
@@ -50,7 +50,7 @@ interface GameVerificationData {
   result: string
 }
 
-export default function BlackjackVerifyPage() {
+function BlackjackVerifyContent() {
   const { address } = useAccount()
   const searchParams = useSearchParams()
   const urlGameId = searchParams.get('gameId') || ''
@@ -599,5 +599,22 @@ export default function BlackjackVerifyPage() {
 
       <Footer />
     </div>
+  )
+}
+
+export default function BlackjackVerifyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen text-white bg-black flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+            <p className="text-white/70">Loading verifier...</p>
+          </div>
+        </div>
+      }
+    >
+      <BlackjackVerifyContent />
+    </Suspense>
   )
 }
