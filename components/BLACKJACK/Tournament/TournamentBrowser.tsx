@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { formatEther } from 'viem';
 import { AnimatePresence, motion } from 'motion/react';
+import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import {
   TournamentListItem,
   formatTimeRemaining,
@@ -18,6 +19,10 @@ import { getTableThemeInfo } from '@/app/BLACKJACK/constants';
 import { FreerollList } from './FreerollList';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
+import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
+import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
+import { ERC20_ABI } from '@/abi/erc20';
 
 // Cache for resolved token info (shared across all cards)
 interface TokenInfo {
@@ -98,6 +103,135 @@ function useTokenInfo(address?: string | null): TokenInfo | null {
   }, [address]);
 
   return info;
+}
+
+// ============================
+// Fund Tournament Escrow Modal (anyone can fund)
+// ============================
+const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
+const PULSECHAIN = { id: 369, name: 'PulseChain', nativeCurrency: { name: 'Pulse', symbol: 'PLS', decimals: 18 }, rpcUrls: { default: { http: ['https://rpc.pulsechain.com'] } } };
+
+function FundTournamentEscrowModal({
+  tournament,
+  onClose,
+  onSuccess,
+}: {
+  tournament: TournamentListItem;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const tokenInfo = useTokenInfo(tournament.prizeTokenAddress);
+  const { address } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
+  const [step, setStep] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'done'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const amountWei = BigInt(tournament.prizePool);
+  const decimals = tournament.prizeTokenDecimals ?? 18;
+  const token = (tournament.prizeTokenAddress ?? '').trim() as `0x${string}`;
+  const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+  const isEscrowConfigured = escrow !== ESCROW_ZERO;
+
+  const handleApprove = async () => {
+    if (!address || !token || amountWei <= 0n) return;
+    setError(null);
+    setStep('approving');
+    try {
+      const hash = await writeContractAsync({
+        address: token,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [escrow, amountWei],
+        account: address,
+        chain: PULSECHAIN,
+      });
+      if (publicClient && hash) await publicClient.waitForTransactionReceipt({ hash });
+      setStep('approved');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Approval failed');
+      setStep('idle');
+    }
+  };
+
+  const handleDeposit = async () => {
+    if (!address || !token || amountWei <= 0n) return;
+    setError(null);
+    setStep('depositing');
+    try {
+      const idBytes32 = tournamentIdToBytes32(tournament.id);
+      await writeContractAsync({
+        address: escrow as `0x${string}`,
+        abi: tournamentPrizeEscrowAbi,
+        functionName: 'depositPrizePool',
+        args: [idBytes32, token, amountWei],
+        account: address,
+        chain: PULSECHAIN,
+      });
+      setStep('done');
+      onSuccess();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Deposit failed');
+      setStep('approved');
+    }
+  };
+
+  const humanAmount = Number(amountWei / BigInt(10 ** Math.max(0, decimals - 4))) / 10000;
+  const symbol = tokenInfo?.symbol ?? '???';
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-gradient-to-b from-gray-900 to-gray-950 rounded-2xl border border-cyan-500/30 shadow-2xl max-w-sm w-full overflow-hidden">
+        <div className="bg-gradient-to-r from-cyan-600 to-blue-600 p-4 text-center">
+          <h3 className="text-lg font-bold text-white">Fund Prize Pool</h3>
+          <p className="text-cyan-100 text-sm mt-0.5">{tournament.name}</p>
+        </div>
+        <div className="p-4 space-y-4">
+          {!isEscrowConfigured ? (
+            <p className="text-amber-400 text-xs">Prize escrow is not configured.</p>
+          ) : (
+            <>
+              <p className="text-gray-400 text-sm">
+                Required: <span className="text-white font-semibold">{humanAmount.toLocaleString()} {symbol}</span>
+              </p>
+              {error && <p className="text-red-400 text-xs">{error}</p>}
+              {step === 'idle' && (
+                <button onClick={handleApprove} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-medium hover:from-cyan-500 hover:to-blue-500">
+                  Approve Token
+                </button>
+              )}
+              {(step === 'approving' || step === 'approved') && (
+                <>
+                  {step === 'approving' && (
+                    <div className="flex items-center gap-2 py-2 text-cyan-300 text-sm">
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                      Confirm in wallet...
+                    </div>
+                  )}
+                  {step === 'approved' && (
+                    <button onClick={handleDeposit} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-medium hover:from-green-500 hover:to-emerald-500">
+                      Deposit to Escrow
+                    </button>
+                  )}
+                </>
+              )}
+              {step === 'depositing' && (
+                <div className="flex items-center gap-2 py-2 text-cyan-300 text-sm">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  Depositing...
+                </div>
+              )}
+            </>
+          )}
+          <button onClick={onClose} className="w-full py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ============================
@@ -383,6 +517,7 @@ function ExpandedCardContent({
   playerAddress,
   wsClient,
   onJoin,
+  onFundNow,
   entries,
   loadingEntries,
 }: {
@@ -392,12 +527,15 @@ function ExpandedCardContent({
   playerAddress?: string | null;
   wsClient?: BlackjackWebSocketClient | null;
   onJoin: (tournamentId: string, isPrivate: boolean) => void;
+  onFundNow?: (tournament: TournamentListItem) => void;
   entries: LeaderboardEntry[];
   loadingEntries: boolean;
 }) {
   const buyInBigInt = BigInt(tournament.buyInAmount);
   const canAfford = playerBalance >= buyInBigInt;
   const isFull = tournament.maxPlayers !== null && tournament.entryCount >= tournament.maxPlayers;
+  const isCustomToken = Boolean(tournament.prizeTokenAddress);
+  const notFunded = isCustomToken && !tournament.escrowFunded;
 
   // Determine if current player is a participant
   const isParticipant = useMemo(() => {
@@ -454,6 +592,32 @@ function ExpandedCardContent({
             <div className="text-gray-200">
               {tournament.entryCount} {tournament.maxPlayers ? `/ ${tournament.maxPlayers}` : ''}
             </div>
+            {isCustomToken && (
+              <>
+                <div className="text-gray-500">Prize pool</div>
+                <div className="text-gray-200 flex items-center gap-2 flex-wrap">
+                  {notFunded ? (
+                    <>
+                      <span className="text-amber-400 font-medium">Not Funded</span>
+                      {onFundNow && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onFundNow(tournament); }}
+                          className="px-2 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium"
+                        >
+                          Fund Now
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-green-400 font-medium">
+                      {tournament.escrowTotalDeposited && tokenInfo
+                        ? `${Number(BigInt(tournament.escrowTotalDeposited) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} ${tokenInfo.symbol}`
+                        : `${Number(formatEther(BigInt(tournament.prizePool ?? '0'))).toLocaleString()} ${tokenInfo?.symbol ?? 'token'}`}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
             <div className="text-gray-500">Created</div>
             <div className="text-gray-200">
               {new Date(tournament.createdAt).toLocaleDateString()}
@@ -702,21 +866,29 @@ function ExpandedCardContent({
         </div>
       </div>
 
-      {/* h. Join Button - sticky bottom */}
-      <div className="p-4 border-t border-gray-700 bg-gray-900/80">
+      {/* h. Join / Fund Button - sticky bottom */}
+      <div className="p-4 border-t border-gray-700 bg-gray-900/80 space-y-2">
+        {notFunded && onFundNow && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onFundNow(tournament); }}
+            className="w-full py-3 rounded-xl font-semibold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white shadow-lg"
+          >
+            Fund Prize Pool
+          </button>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();
             onJoin(tournament.id, tournament.isPrivate);
           }}
-          disabled={!canAfford || isFull}
+          disabled={!canAfford || isFull || notFunded}
           className={`w-full py-3 rounded-xl font-semibold transition-all ${
-            canAfford && !isFull
+            canAfford && !isFull && !notFunded
               ? 'bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white shadow-lg shadow-cyan-500/20'
               : 'bg-gray-700 text-gray-500 cursor-not-allowed'
           }`}
         >
-          {isFull ? 'Tournament Full' : !canAfford ? 'Insufficient Balance' : 'Join Tournament'}
+          {notFunded ? 'Fund pool first' : isFull ? 'Tournament Full' : !canAfford ? 'Insufficient Balance' : 'Join Tournament'}
         </button>
       </div>
     </div>
@@ -731,17 +903,21 @@ function TournamentCard({
   playerBalance,
   onJoin,
   onSelect,
+  onFundNow,
 }: {
   tournament: TournamentListItem;
   playerBalance: bigint;
   onJoin: (tournamentId: string, isPrivate: boolean) => void;
   onSelect: (tournament: TournamentListItem) => void;
+  onFundNow?: (tournament: TournamentListItem) => void;
 }) {
   const tokenInfo = useTokenInfo(tournament.prizeTokenAddress);
   const timer = useTournamentTimer(tournament);
 
   const buyInBigInt = BigInt(tournament.buyInAmount);
   const tournamentImage = tournament.customImage || getDefaultTourCard(tournament.id);
+  const isCustomToken = Boolean(tournament.prizeTokenAddress);
+  const notFunded = isCustomToken && !tournament.escrowFunded;
 
   return (
     <motion.div
@@ -819,16 +995,34 @@ function TournamentCard({
       </motion.div>
 
       {/* Quick info bar */}
-      <div className="px-3 py-2 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400">
-            Pool:{' '}
+      <div className="px-3 py-2 flex items-center justify-between text-xs flex-wrap gap-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-gray-400">Pool: </span>
+          {isCustomToken ? (
+            notFunded ? (
+              <>
+                <span className="text-amber-400 font-semibold">Not Funded</span>
+                {onFundNow && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onFundNow(tournament); }}
+                    className="px-2 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-medium"
+                  >
+                    Fund Now
+                  </button>
+                )}
+              </>
+            ) : (
+              <span className="text-green-400 font-semibold">
+                {tournament.escrowTotalDeposited && tokenInfo
+                  ? `${Number(BigInt(tournament.escrowTotalDeposited) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} ${tokenInfo.symbol}`
+                  : `${Number(formatEther(BigInt(tournament.prizePool ?? '0'))).toLocaleString()} ${tokenInfo?.symbol ?? 'token'}`}
+              </span>
+            )
+          ) : (
             <span className="text-green-400 font-semibold">
-              {tournament.prizeTokenAddress && tokenInfo
-                ? `${Number(BigInt(tournament.prizePool) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} ${tokenInfo.symbol}`
-                : `${Number(formatEther(BigInt(tournament.prizePool))).toLocaleString()} MORBIUS`}
+              {Number(formatEther(BigInt(tournament.prizePool))).toLocaleString()} MORBIUS
             </span>
-          </span>
+          )}
         </div>
         <span className="text-gray-500">
           {PRIZE_DISTRIBUTION_LABELS[tournament.prizeDistributionType as PrizeDistributionType] ?? tournament.prizeDistributionType.replace(/_/g, ' ')}
@@ -845,6 +1039,7 @@ function ExpandedCard({
   tournament,
   onClose,
   onJoin,
+  onFundNow,
   playerBalance,
   playerAddress,
   wsClient,
@@ -852,6 +1047,7 @@ function ExpandedCard({
   tournament: TournamentListItem;
   onClose: () => void;
   onJoin: (tournamentId: string, isPrivate: boolean) => void;
+  onFundNow?: (tournament: TournamentListItem) => void;
   playerBalance: bigint;
   playerAddress?: string | null;
   wsClient?: BlackjackWebSocketClient | null;
@@ -990,11 +1186,48 @@ function ExpandedCard({
             playerAddress={playerAddress}
             wsClient={wsClient}
             onJoin={onJoin}
+            onFundNow={onFundNow}
             entries={entries}
             loadingEntries={loadingEntries}
           />
         </motion.div>
       </motion.div>
+    </div>
+  );
+}
+
+// ============================
+// How Payouts Work (collapsible info)
+// ============================
+function HowPayoutsWork() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-t border-gray-700 bg-gray-800/40 shadow-inner">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-4 py-2.5 flex items-center justify-between text-left text-sm text-gray-300 hover:text-cyan-300 transition-colors"
+      >
+        <span className="font-medium">How payouts work</span>
+        <svg
+          className={`w-4 h-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-4 pb-3 pt-0 text-xs text-gray-400 space-y-1.5 border-t border-gray-700/50">
+          <ul className="list-disc list-inside space-y-1 text-gray-300">
+            <li><strong className="text-cyan-400/90">MORBIUS pools:</strong> Prize pool is the sum of buy-ins. When the tournament ends, winners are ranked by chips; each gets a share of the pool (e.g. 40% / 20% / 10% for top 3). Payouts are added to your platform balance.</li>
+            <li><strong className="text-cyan-400/90">Custom token pools:</strong> The creator (or anyone) funds the prize escrow on-chain. Same ranking and percentages apply; payouts are sent in that token from the escrow contract to your wallet.</li>
+            <li><strong className="text-cyan-400/90">Fees:</strong> A small platform fee (and optional creator fee) is taken from the prize pool before player shares are calculated. You see the net distributable pool in the prize structure.</li>
+            <li><strong className="text-cyan-400/90">When:</strong> Payouts run automatically once every player has finished (busted or completed max hands). No action needed from you.</li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -1019,6 +1252,7 @@ export function TournamentBrowser({
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<LobbyTab>('join');
   const [activeTournament, setActiveTournament] = useState<TournamentListItem | null>(null);
+  const [fundModalTournament, setFundModalTournament] = useState<TournamentListItem | null>(null);
 
   // Auto-refresh on open for Browse and My Tournaments
   useEffect(() => {
@@ -1122,6 +1356,9 @@ export function TournamentBrowser({
           )}
         </div>
 
+        {/* How payouts work - collapsible */}
+        <HowPayoutsWork />
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
           {activeTab === 'freeroll' && wsClient ? (
@@ -1160,6 +1397,7 @@ export function TournamentBrowser({
                   playerBalance={playerBalance}
                   onJoin={onJoin}
                   onSelect={setActiveTournament}
+                  onFundNow={(t) => setFundModalTournament(t)}
                 />
               ))}
             </div>
@@ -1200,6 +1438,7 @@ export function TournamentBrowser({
               tournament={activeTournament}
               onClose={() => setActiveTournament(null)}
               onJoin={onJoin}
+              onFundNow={(t) => setFundModalTournament(t)}
               playerBalance={playerBalance}
               playerAddress={playerAddress}
               wsClient={wsClient}
@@ -1207,6 +1446,15 @@ export function TournamentBrowser({
           </>
         )}
       </AnimatePresence>
+
+      {/* Fund tournament escrow modal (anyone can fund) */}
+      {fundModalTournament && (
+        <FundTournamentEscrowModal
+          tournament={fundModalTournament}
+          onClose={() => setFundModalTournament(null)}
+          onSuccess={handleRefresh}
+        />
+      )}
     </div>
   );
 }

@@ -261,6 +261,10 @@ export interface TournamentListItem {
   // Fee fields
   creatorFeePercent?: number;
   platformFeePercent?: number;
+  // Escrow funding (custom-token tournaments only)
+  escrowFunded?: boolean;
+  escrowTotalDeposited?: string;
+  escrowToken?: string | null;
 }
 
 // Extended tournament info

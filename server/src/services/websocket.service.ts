@@ -2061,6 +2061,9 @@ export class WebSocketService {
         durationMinutes: t.duration_minutes ?? null,
         creatorFeePercent: t.creator_fee_percent ?? 0,
         platformFeePercent: t.platform_fee_percent ?? 16,
+        escrowFunded: t.escrow_funded ?? false,
+        escrowTotalDeposited: t.escrow_total_deposited ?? '0',
+        escrowToken: t.escrow_token ?? null,
       }));
 
       this.sendMessage(ws, {

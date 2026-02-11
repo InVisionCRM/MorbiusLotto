@@ -1493,25 +1493,19 @@ export class BlackjackGameService {
       const gameNumber = session.game_count + 1;
       const baseNonce = this.getGameBaseNonce(gameNumber);
 
-      // Generate initial cards
-      const dealingSeeds: GameSeeds = {
-        serverSeed: session.server_seed!,
-        clientSeed,
-        nonce: baseNonce,
-      };
-      const randoms = this.pfService.generateBlackjackRandoms(dealingSeeds, 4);
+      // V2: Fisher-Yates 52-card deck (same as regular blackjack for consistency and verification)
+      const shuffledDeck = this.pfService.fisherYatesShuffle(session.server_seed!, clientSeed, gameNumber);
+      const initialPlayerCards = [shuffledDeck[0], shuffledDeck[2]];
+      const dealerCards = [shuffledDeck[1], shuffledDeck[3]];
       let rngCounter = 4;
 
-      const initialPlayerCards = [randoms[0], randoms[2]];
-      const dealerCards = [randoms[1], randoms[3]];
-
-      // Create initial hand
+      // Create initial hand (V2 helpers for 52-card deck)
       const initialHand: Hand = {
         id: '',
         cards: initialPlayerCards,
-        total: this.pfService.calculateHandTotal(initialPlayerCards).total,
-        hasAce: this.pfService.calculateHandTotal(initialPlayerCards).hasAce,
-        isBlackjack: this.pfService.isNaturalBlackjack(initialPlayerCards),
+        total: this.pfService.calculateHandTotalV2(initialPlayerCards).total,
+        hasAce: this.pfService.calculateHandTotalV2(initialPlayerCards).hasAce,
+        isBlackjack: this.pfService.isNaturalBlackjackV2(initialPlayerCards),
         isBust: false,
         betAmount: BigInt(request.betAmount), // Store as bigint for compatibility
         payout: 0n,
@@ -1522,8 +1516,8 @@ export class BlackjackGameService {
         canSplit: this.canSplit(initialPlayerCards) && tournamentState.chips >= request.betAmount * 2
       };
 
-      const dealerVisibleHand = this.pfService.calculateHandTotal([dealerCards[0]]);
-      const dealerBlackjack = this.pfService.isNaturalBlackjack(dealerCards);
+      const dealerVisibleHand = this.pfService.calculateHandTotalV2([dealerCards[0]]);
+      const dealerBlackjack = this.pfService.isNaturalBlackjackV2(dealerCards);
 
       let status: GameState['status'] = 'player_turn';
       let result: Game['result'];
@@ -1551,18 +1545,19 @@ export class BlackjackGameService {
         chipDelta = -request.betAmount;
       }
 
-      // Create game record (use 0 for bet amount since this is tournament mode)
+      // Create game record (use 0 for bet amount since this is tournament mode; V2 RNG)
       const game = await this.dbService.createGame(session.id, {
         game_number: gameNumber,
         total_bet_amount: 0n, // Tournament games don't use real MORBIUS
         dealer_cards: dealerCards,
-        dealer_total: this.pfService.calculateHandTotal(dealerCards).total,
+        dealer_total: this.pfService.calculateHandTotalV2(dealerCards).total,
         result,
         total_payout: 0n,
         client_seed_commitment: clientSeed,
         hand_count: 1,
         current_hand_index: 0,
         rng_counter: rngCounter,
+        rng_version: 2,
       });
 
       // Create initial hand record

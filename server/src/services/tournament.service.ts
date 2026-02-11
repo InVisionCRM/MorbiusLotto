@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import { logger } from '../utils/logger';
 import { sendEscrowPayout } from '../utils/escrow-payout';
+import { getEscrowPoolStatus } from '../utils/escrow-status';
 
 // Tournament constants
 export const TOURNAMENT_CONFIG = {
@@ -184,6 +185,10 @@ export interface TournamentListItem {
   // Fee fields
   creator_fee_percent?: number;
   platform_fee_percent?: number;
+  // Escrow funding (custom-token tournaments only)
+  escrow_funded?: boolean;
+  escrow_total_deposited?: string;
+  escrow_token?: string | null;
 }
 
 export interface TournamentGame {
@@ -1547,7 +1552,7 @@ export class TournamentService {
     const query = `SELECT * FROM list_active_tournaments($1)`;
     const result = await this.pool.query(query, [includePrivate]);
 
-    return result.rows.map(row => {
+    const list: TournamentListItem[] = result.rows.map(row => {
       // Parse JSONB fields
       let rebuyConfig: RebuyConfig = { enabled: false, maxRebuys: 0 };
       if (row.rebuy_config) {
@@ -1592,6 +1597,23 @@ export class TournamentService {
         platform_fee_percent: Number(row.platform_fee_percent ?? 16),
       };
     });
+
+    // For custom-token tournaments, fetch escrow funding status from chain
+    await Promise.all(list.map(async (item) => {
+      if (!item.prize_token_address) return;
+      const pool = await getEscrowPoolStatus(item.id);
+      if (pool) {
+        item.escrow_funded = pool.totalDeposited > 0n;
+        item.escrow_total_deposited = pool.totalDeposited.toString();
+        item.escrow_token = pool.token;
+      } else {
+        item.escrow_funded = false;
+        item.escrow_total_deposited = '0';
+        item.escrow_token = item.prize_token_address;
+      }
+    }));
+
+    return list;
   }
 
   /**
@@ -1617,6 +1639,14 @@ export class TournamentService {
     // Check time limit
     if (tournament.ends_at && new Date(tournament.ends_at) <= new Date()) {
       throw new Error('Tournament has ended');
+    }
+
+    // Custom-token tournaments: must be funded before anyone can join
+    if (tournament.prize_token_address) {
+      const pool = await getEscrowPoolStatus(tournamentId);
+      if (!pool || pool.totalDeposited <= 0n) {
+        throw new Error('Tournament prize pool is not funded yet. No one can join until the pool is funded.');
+      }
     }
 
     // Check PIN for private tournaments
