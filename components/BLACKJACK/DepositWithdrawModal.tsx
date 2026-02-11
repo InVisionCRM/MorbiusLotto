@@ -61,9 +61,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const legacyReserve = (legacyReserveQuery.data ?? BigInt(0)) as bigint
   const hasLegacyBalance = BLACKJACK_LEGACY_ADDRESS && legacyReserve > BigInt(0)
 
-  // Balance hooks
+  // Balance hooks (pass address so PLS balance is actually fetched)
   const { balance: morbiusBalance } = useTokenBalance(address)
-  const { balance: plsBalance } = useNativeBalance()
+  const { balance: plsBalance } = useNativeBalance(address ?? undefined)
 
   // PLS quote for MORBIUS deposits
   const { plsValue: plsEquivalent, isLoading: plsQuoteLoading } = usePlsQuote({

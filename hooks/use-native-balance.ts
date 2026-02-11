@@ -1,13 +1,16 @@
 import { useRef } from 'react'
 import { useBalance } from 'wagmi'
 import { formatEther } from 'viem'
+import { pulsechain } from '@/lib/chains'
 
 /**
- * Hook to get native PLS balance for connected wallet
+ * Hook to get native PLS balance for connected wallet on PulseChain.
+ * Pass address so the query runs; without it enabled is false and balance stays 0.
  */
 export function useNativeBalance(address?: `0x${string}`) {
   const { data, error, isLoading, refetch } = useBalance({
     address,
+    chainId: pulsechain.id, // Always query PulseChain (369) for PLS
     query: {
       enabled: !!address,
       refetchInterval: 10000, // Refetch every 10 seconds
