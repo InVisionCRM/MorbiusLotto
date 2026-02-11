@@ -17,4 +17,18 @@ export const tournamentPrizeEscrowAbi = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [{ name: 'tournamentId', type: 'bytes32' }, { name: 'to', type: 'address' }],
+    name: 'payoutRemainderTo',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'tournamentId', type: 'bytes32' }, { name: 'to', type: 'address' }],
+    name: 'reclaimUnclaimed',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 ] as const;

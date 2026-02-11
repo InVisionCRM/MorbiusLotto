@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import {
   TournamentListItem,
+  PlayerTournamentHistoryItem,
   formatTimeRemaining,
   getDefaultTourCard,
   getExamplePrizeDistribution,
@@ -42,7 +43,7 @@ interface LeaderboardEntry {
   current_rank: number;
 }
 
-type LobbyTab = 'join' | 'my' | 'freeroll';
+type LobbyTab = 'join' | 'my' | 'freeroll' | 'history';
 
 interface TournamentBrowserProps {
   isOpen: boolean;
@@ -59,6 +60,10 @@ interface TournamentBrowserProps {
   /** Required to show Freeroll tab; when user joins a freeroll this is called */
   wsClient?: BlackjackWebSocketClient | null;
   onFreerollJoined?: (tournamentId: string) => void;
+  /** My History tab: past tournaments this player entered */
+  tournamentHistory?: PlayerTournamentHistoryItem[];
+  isHistoryLoading?: boolean;
+  onFetchHistory?: () => Promise<void | PlayerTournamentHistoryItem[]>;
 }
 
 // ============================
@@ -1197,6 +1202,140 @@ function ExpandedCard({
 }
 
 // ============================
+// My History content (past tournaments this player entered)
+// ============================
+function MyHistoryContent({
+  history,
+  isLoading,
+  playerAddress,
+  onFetchHistory,
+}: {
+  history: PlayerTournamentHistoryItem[];
+  isLoading: boolean;
+  playerAddress?: string | null;
+  onFetchHistory?: () => Promise<void | PlayerTournamentHistoryItem[]>;
+}) {
+  // Re-render every minute so "time remaining" for in-progress entries stays current (hooks at top)
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const hasInProgress = history.some((h) => h.entryStatus === 'playing' && h.endsAt);
+    if (!hasInProgress) return;
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, [history]);
+
+  if (!playerAddress) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <p className="text-gray-400">Connect your wallet to see your tournament history.</p>
+      </div>
+    );
+  }
+  if (isLoading && history.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <svg className="animate-spin h-8 w-8 text-cyan-400 mx-auto mb-4" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <p className="text-gray-400">Loading history...</p>
+        </div>
+      </div>
+    );
+  }
+  if (history.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="text-6xl mb-4">📋</div>
+        <p className="text-gray-400">You haven&apos;t entered any tournaments yet.</p>
+        <p className="text-gray-500 text-sm mt-1">Join one from the Browse tab to see it here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-400 mb-2">
+        Every tournament you&apos;ve entered. Prizes are paid automatically when the tournament ends.
+      </p>
+      {history.map((item) => {
+        const hasPrize = BigInt(item.prizeWon) > 0n;
+        const prizeHuman = formatEther(BigInt(item.prizeWon));
+        const isCustomToken = Boolean(item.prizeTokenAddress);
+        const outcome =
+          item.entryStatus === 'busted'
+            ? 'Busted out'
+            : item.entryStatus === 'completed' && item.finalRank != null
+              ? `Rank #${item.finalRank}`
+              : item.entryStatus === 'playing'
+                ? 'In progress'
+                : 'Completed';
+        const dateStr = item.boughtInAt
+          ? new Date(item.boughtInAt).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '';
+        const timeRemaining =
+          item.entryStatus === 'playing' && item.endsAt ? formatTimeRemaining(item.endsAt) : null;
+        return (
+          <div
+            key={item.entryId}
+            className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-slate-900/90 to-slate-800/90 p-4 shadow-lg"
+            style={{
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            <div className="flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-semibold text-white truncate">{item.tournamentName}</h3>
+                <span
+                  className={`shrink-0 text-xs px-2 py-0.5 rounded ${
+                    item.tournamentStatus === 'completed'
+                      ? 'bg-slate-600 text-gray-300'
+                      : item.tournamentStatus === 'active'
+                        ? 'bg-cyan-500/20 text-cyan-300'
+                        : 'bg-gray-600 text-gray-400'
+                  }`}
+                >
+                  {item.tournamentStatus}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-300">
+                <span>Your result: <strong className="text-white">{outcome}</strong></span>
+                {item.handsPlayed > 0 && (
+                  <span>{item.handsPlayed} hands</span>
+                )}
+                {timeRemaining && (
+                  <span className="text-cyan-300/90">Time left: {timeRemaining}</span>
+                )}
+                {dateStr && <span className="text-gray-500">{dateStr}</span>}
+              </div>
+              {hasPrize && (
+                <div className="mt-1 pt-2 border-t border-gray-600/50">
+                  <p className="text-sm text-green-400 font-medium">
+                    Prize: {Number(prizeHuman).toLocaleString()} {isCustomToken ? 'tokens' : 'MORBIUS'}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {isCustomToken
+                      ? 'Sent to your wallet when the tournament ended.'
+                      : 'Added to your platform balance.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================
 // How Payouts Work (collapsible info)
 // ============================
 function HowPayoutsWork() {
@@ -1248,6 +1387,9 @@ export function TournamentBrowser({
   playerAddress,
   wsClient,
   onFreerollJoined,
+  tournamentHistory = [],
+  isHistoryLoading = false,
+  onFetchHistory,
 }: TournamentBrowserProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<LobbyTab>('join');
@@ -1260,6 +1402,13 @@ export function TournamentBrowser({
       handleRefresh();
     }
   }, [isOpen, activeTab]);
+
+  // Fetch My History when opening that tab
+  useEffect(() => {
+    if (isOpen && activeTab === 'history' && onFetchHistory) {
+      onFetchHistory();
+    }
+  }, [isOpen, activeTab, onFetchHistory]);
 
   // Close expanded card when browser closes
   useEffect(() => {
@@ -1354,6 +1503,14 @@ export function TournamentBrowser({
               Freeroll
             </button>
           )}
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors ${
+              activeTab === 'history' ? 'bg-gray-800 text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            My History
+          </button>
         </div>
 
         {/* How payouts work - collapsible */}
@@ -1363,6 +1520,13 @@ export function TournamentBrowser({
         <div className="flex-1 overflow-y-auto p-4">
           {activeTab === 'freeroll' && wsClient ? (
             <FreerollList wsClient={wsClient} onJoined={onFreerollJoined} />
+          ) : activeTab === 'history' ? (
+            <MyHistoryContent
+              history={tournamentHistory}
+              isLoading={isHistoryLoading}
+              playerAddress={playerAddress}
+              onFetchHistory={onFetchHistory}
+            />
           ) : isLoading && displayList.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">

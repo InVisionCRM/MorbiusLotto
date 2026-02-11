@@ -430,3 +430,25 @@ export interface CreatorEarning {
   feeEarned: string;
   completedAt: string;
 }
+
+// ========== My History (player's past tournaments) ==========
+
+export interface PlayerTournamentHistoryItem {
+  tournamentId: string;
+  tournamentName: string;
+  tournamentStatus: 'active' | 'completed' | 'cancelled';
+  tournamentType: string;
+  prizeTokenAddress: string | null;
+  endedAt: string | null;
+  /** When the tournament is scheduled to end (time limit). Used for "time remaining" when in progress. */
+  endsAt: string | null;
+  entryId: string;
+  entryStatus: 'playing' | 'busted' | 'completed';
+  finalRank: number | null;
+  prizeWon: string;
+  boughtInAt: string;
+  finishedAt: string | null;
+  handsPlayed: number;
+  highestChipCount: number;
+  chipsRemaining: number;
+}

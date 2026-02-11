@@ -272,6 +272,23 @@ async function initializeServices() {
       }
     });
 
+    app.get('/api/tournament/player/:address/history', async (req, res) => {
+      try {
+        const { address } = req.params;
+        if (!address || address.length < 20) {
+          return res.status(400).json({ error: 'Valid player address required' });
+        }
+        const history = await tournamentService.getPlayerTournamentHistory(address);
+        sendJson(res, history.map((item) => ({
+          ...item,
+          prizeWon: item.prizeWon.toString(),
+        })));
+      } catch (error) {
+        logger.error('Error fetching player tournament history:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Withdraw prepare: server signs withdrawal approval (amount = min(DB balance, contract reserve))
     const withdrawPublicClient = createPublicClient({
       chain: pulsechain,

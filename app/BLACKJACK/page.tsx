@@ -2763,6 +2763,9 @@ export default function BlackjackPage() {
             setIsTournamentMode(true);
             toast.success('Joined freeroll!');
           }}
+          tournamentHistory={tournament.tournamentHistory}
+          isHistoryLoading={tournament.isHistoryLoading}
+          onFetchHistory={() => tournament.fetchTournamentHistory()}
         />
 
         {/* Tournament Creator Modal */}

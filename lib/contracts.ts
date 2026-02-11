@@ -30,12 +30,31 @@ export const BIGWHEEL_ADDRESS = '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F' as 
 // BlackjackV2 contract (6-deck provably fair blackjack with bet fees)
 export const BLACKJACK_ADDRESS = '0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09' as const
 
-// Previous Blackjack contract (if upgraded: players with balance here can withdraw from it)
+// Previous Blackjack contracts (if upgraded: players with balance here can withdraw from them)
 export const BLACKJACK_LEGACY_ADDRESS = (
   typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS
     ? process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS
     : ''
 ) as `0x${string}`
+
+export const BLACKJACK_LEGACY_ADDRESS_2 = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_2
+    ? process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_2
+    : ''
+) as `0x${string}`
+
+/** All Blackjack contract addresses: current + legacy (for reserve/withdraw UI and scripts) */
+export const ALL_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
+  BLACKJACK_ADDRESS,
+  ...(BLACKJACK_LEGACY_ADDRESS ? [BLACKJACK_LEGACY_ADDRESS] : []),
+  ...(BLACKJACK_LEGACY_ADDRESS_2 ? [BLACKJACK_LEGACY_ADDRESS_2] : []),
+]
+
+/** Legacy-only (previous contracts from which players can withdraw reserves) */
+export const LEGACY_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
+  ...(BLACKJACK_LEGACY_ADDRESS ? [BLACKJACK_LEGACY_ADDRESS] : []),
+  ...(BLACKJACK_LEGACY_ADDRESS_2 ? [BLACKJACK_LEGACY_ADDRESS_2] : []),
+]
 
 // Tournament Prize Escrow (custom token prize pools for tournaments)
 export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = (

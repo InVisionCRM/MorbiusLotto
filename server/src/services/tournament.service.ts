@@ -1,6 +1,6 @@
 import { Pool, PoolClient } from 'pg';
 import { logger } from '../utils/logger';
-import { sendEscrowPayout } from '../utils/escrow-payout';
+import { sendEscrowPayout, sendEscrowRemainderToReclaimWallet } from '../utils/escrow-payout';
 import { getEscrowPoolStatus } from '../utils/escrow-status';
 
 // Tournament constants
@@ -78,6 +78,28 @@ export interface TournamentEntry {
   // Rebuy tracking
   rebuy_count: number;
   total_buy_in: bigint;
+}
+
+  /** One row for "My History" — a tournament the player entered and its outcome */
+  export interface PlayerTournamentHistoryItem {
+  tournamentId: string;
+  tournamentName: string;
+  tournamentStatus: 'active' | 'completed' | 'cancelled';
+  tournamentType: string;
+  prizeTokenAddress: string | null;
+  /** When the tournament actually ended (set on completion) */
+  endedAt: Date | null;
+  /** When the tournament is scheduled to end (time limit; null = no limit). Use for "time remaining" when in progress. */
+  endsAt: Date | null;
+  entryId: string;
+  entryStatus: 'playing' | 'busted' | 'completed';
+  finalRank: number | null;
+  prizeWon: bigint;
+  boughtInAt: Date;
+  finishedAt: Date | null;
+  handsPlayed: number;
+  highestChipCount: number;
+  chipsRemaining: number;
 }
 
 // Create tournament parameters
@@ -941,6 +963,17 @@ export class TournamentService {
 
       await client.query('COMMIT');
 
+      // Reclaim any remaining escrow balance so funds never sit after tournament ends
+      if (useEscrow) {
+        const reclaimResult = await sendEscrowRemainderToReclaimWallet(tournamentId);
+        if (!reclaimResult.success && reclaimResult.error) {
+          logger.warn('Escrow remainder reclaim failed (tournament already completed)', {
+            tournamentId,
+            error: reclaimResult.error,
+          });
+        }
+      }
+
       logger.info('Tournament completed and prizes distributed', {
         tournamentId,
         totalDistributed: distributions.reduce((sum, d) => sum + d.prize_amount, 0n).toString(),
@@ -995,6 +1028,56 @@ export class TournamentService {
     const query = `SELECT COUNT(*) FROM tournament_entries WHERE tournament_id = $1`;
     const result = await this.pool.query(query, [tournamentId]);
     return Number(result.rows[0].count);
+  }
+
+  /**
+   * Get all tournaments a player has entered, with outcome (for "My History" UI).
+   * Returns entries ordered by bought_in_at descending (most recent first).
+   */
+  async getPlayerTournamentHistory(playerAddress: string): Promise<PlayerTournamentHistoryItem[]> {
+    const normalized = this.normalizeAddress(playerAddress);
+    const query = `
+      SELECT
+        t.id AS tournament_id,
+        t.name AS tournament_name,
+        t.status AS tournament_status,
+        t.tournament_type,
+        t.prize_token_address,
+        t.ended_at,
+        t.ends_at,
+        te.id AS entry_id,
+        te.status AS entry_status,
+        te.final_rank,
+        te.prize_won,
+        te.bought_in_at,
+        te.finished_at,
+        te.hands_played,
+        te.highest_chip_count,
+        te.chips_remaining
+      FROM tournament_entries te
+      JOIN tournaments t ON t.id = te.tournament_id
+      WHERE LOWER(te.player_address) = $1
+      ORDER BY te.bought_in_at DESC
+    `;
+    const result = await this.pool.query(query, [normalized]);
+    return result.rows.map((row: any) => ({
+      tournamentId: row.tournament_id,
+      tournamentName: row.tournament_name,
+      tournamentStatus: row.tournament_status,
+      tournamentType: row.tournament_type ?? 'standard',
+      prizeTokenAddress: row.prize_token_address ?? null,
+      endedAt: row.ended_at ?? null,
+      endsAt: row.ends_at ?? null,
+      entryId: row.entry_id,
+      entryStatus: row.entry_status,
+      finalRank: row.final_rank != null ? Number(row.final_rank) : null,
+      prizeWon: this.toBigInt(row.prize_won),
+      boughtInAt: row.bought_in_at,
+      finishedAt: row.finished_at ?? null,
+      handsPlayed: Number(row.hands_played ?? 0),
+      highestChipCount: Number(row.highest_chip_count ?? 0),
+      chipsRemaining: Number(row.chips_remaining ?? 0),
+    }));
   }
 
   // ============================================

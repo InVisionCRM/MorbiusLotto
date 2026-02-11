@@ -8,9 +8,11 @@ import {
   CreateTournamentRequest,
   CreateFreerollRequest,
   TournamentListItem,
+  PlayerTournamentHistoryItem,
   RebuyConfig,
   TableTheme,
 } from '@/lib/tournament-types';
+import { getApiUrl } from '@/lib/api-urls';
 
 // Tournament configuration (matches server defaults)
 export const TOURNAMENT_CONFIG = {
@@ -150,6 +152,9 @@ export function useTournament(options: UseTournamentOptions) {
   // Tournament creator state
   const [tournamentList, setTournamentList] = useState<TournamentListItem[]>([]);
   const [createdTournament, setCreatedTournament] = useState<CreatedTournament | null>(null);
+  // My History (past tournaments this player entered)
+  const [tournamentHistory, setTournamentHistory] = useState<PlayerTournamentHistoryItem[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   // Track chips before each hand to calculate per-hand win
   const chipsBeforeHandRef = useRef<number>(0);
@@ -657,6 +662,27 @@ export function useTournament(options: UseTournamentOptions) {
   }, [wsClient]);
 
   /**
+   * Fetch this player's tournament history (all tournaments they entered + outcome).
+   */
+  const fetchTournamentHistory = useCallback(async (): Promise<PlayerTournamentHistoryItem[]> => {
+    if (!address) return [];
+    setIsHistoryLoading(true);
+    try {
+      const base = getApiUrl().replace(/\/$/, '');
+      const res = await fetch(`${base}/api/tournament/player/${encodeURIComponent(address)}/history`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      setTournamentHistory(Array.isArray(data) ? data : []);
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Failed to fetch tournament history:', err);
+      return [];
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, [address]);
+
+  /**
    * Join a specific tournament by ID
    */
   const joinTournament = useCallback(async (
@@ -828,6 +854,11 @@ export function useTournament(options: UseTournamentOptions) {
     // Tournament Creator State
     tournamentList,
     createdTournament,
+
+    // My History
+    tournamentHistory,
+    isHistoryLoading,
+    fetchTournamentHistory,
 
     // Actions
     enterTournament,

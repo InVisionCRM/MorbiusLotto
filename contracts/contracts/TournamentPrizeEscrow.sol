@@ -25,6 +25,7 @@ contract TournamentPrizeEscrow is Ownable, ReentrancyGuard {
 
     event PrizePoolDeposited(bytes32 indexed tournamentId, address indexed token, uint256 amount, address depositor);
     event Payout(bytes32 indexed tournamentId, address indexed winner, uint256 amount);
+    event RemainderReclaimed(bytes32 indexed tournamentId, address indexed to, uint256 amount);
 
     modifier onlyAuthorizedServer() {
         require(msg.sender == authorizedServer, "Not authorized server");
@@ -87,5 +88,36 @@ contract TournamentPrizeEscrow is Ownable, ReentrancyGuard {
     function getPool(bytes32 tournamentId) external view returns (address token, uint256 totalDeposited, uint256 amountPaidOut) {
         Pool storage pool = pools[tournamentId];
         return (pool.token, pool.totalDeposited, pool.amountPaidOut);
+    }
+
+    /**
+     * @notice Send remaining (unclaimed) prize tokens for a tournament to an address.
+     * Callable by authorized server only (e.g. after distributePrizes to sweep remainder).
+     * Use so escrow never holds leftover funds after a tournament ends.
+     */
+    function payoutRemainderTo(bytes32 tournamentId, address to) external onlyAuthorizedServer nonReentrant {
+        require(to != address(0), "Invalid recipient");
+        Pool storage pool = pools[tournamentId];
+        require(pool.token != address(0), "No pool");
+        uint256 remaining = pool.totalDeposited - pool.amountPaidOut;
+        require(remaining > 0, "No remainder");
+        pool.amountPaidOut = pool.totalDeposited;
+        IERC20(pool.token).safeTransfer(to, remaining);
+        emit RemainderReclaimed(tournamentId, to, remaining);
+    }
+
+    /**
+     * @notice Owner can reclaim unclaimed prize tokens for a tournament (e.g. old/cancelled tournaments).
+     * Use when the server did not call payoutRemainderTo or for one-off recovery.
+     */
+    function reclaimUnclaimed(bytes32 tournamentId, address to) external onlyOwner nonReentrant {
+        require(to != address(0), "Invalid recipient");
+        Pool storage pool = pools[tournamentId];
+        require(pool.token != address(0), "No pool");
+        uint256 remaining = pool.totalDeposited - pool.amountPaidOut;
+        require(remaining > 0, "No remainder");
+        pool.amountPaidOut = pool.totalDeposited;
+        IERC20(pool.token).safeTransfer(to, remaining);
+        emit RemainderReclaimed(tournamentId, to, remaining);
     }
 }
