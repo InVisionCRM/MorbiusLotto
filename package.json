@@ -1,10 +1,10 @@
 {
-  "name": "MORBIUS_lotto",
-  "version": "0.1.0",
+  "name": "MORBIUS_GAMING",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix"

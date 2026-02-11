@@ -1,0 +1,21 @@
+# Ignore test files and directories
+**/test/**
+**/*.test.js
+**/*.test.ts
+**/*.test.tsx
+**/*.test.mjs
+**/*.test.cjs
+**/close-on-gc.js
+**/create-and-exit.js
+
+# Ignore dev dependencies
+**/node_modules/tap/**
+**/node_modules/tape/**
+**/node_modules/desm/**
+**/node_modules/fastbench/**
+**/node_modules/pino-elasticsearch/**
+**/node_modules/why-is-node-running/**
+**/node_modules/pino-pretty/**
+**/node_modules/thread-stream/test/**
+**/node_modules/pino/**
+**/node_modules/winston/**
