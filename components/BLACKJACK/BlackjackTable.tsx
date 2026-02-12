@@ -1568,6 +1568,26 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             transform: 'translateX(-100%)',
           }}
         >
+          {/* Red X button to remove PP bet - shown above PP bet circle when bet is placed */}
+          {perfectPairsBet > 0 && !isPlaying && ppChipAnimationState === 'none' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPerfectPairsBetChange(0);
+              }}
+              className="mb-2 w-6 h-6 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+              style={{
+                background: 'linear-gradient(145deg, #ef4444, #dc2626)',
+                border: '2px solid rgba(239, 68, 68, 0.8)',
+                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.2)',
+                cursor: 'pointer',
+              }}
+              title="Remove Perfect Pairs bet"
+            >
+              <span className="text-white font-black text-xs leading-none" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>×</span>
+            </button>
+          )}
           {/* PP chip stack (visible when bet is placed and game is active or animation is running) */}
           {ppChipStack.length > 0 && (isPlaying || ppChipAnimationState !== 'none') && (
             <div

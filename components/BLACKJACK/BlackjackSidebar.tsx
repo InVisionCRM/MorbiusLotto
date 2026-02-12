@@ -139,7 +139,7 @@ export default function BlackjackSidebar({
   }
 
   return (
-    <div className="w-full min-w-0 flex flex-col h-full min-h-0">
+    <div className="w-full min-w-0 flex flex-col h-full min-h-[600px]">
       {/* Tabs — ensure always on top and clickable */}
       <div className="flex overflow-x-auto no-scrollbar bg-slate-800/60 rounded-t-xs shrink-0 relative z-10">
         {tabs.map(({ id, label, icon: Icon }) => (
