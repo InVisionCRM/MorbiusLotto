@@ -75,6 +75,19 @@ interface BlackjackTableProps {
   isMusicPlaying?: boolean;
   onToggleMusic?: () => void;
   onNextTrack?: () => void;
+  /** When set, show a centered tournament hand summary (rank, winnings, stats) after a hand completes */
+  tournamentHandSummary?: {
+    chipDelta: number;
+    chips: number;
+    rank: number;
+    handsRemaining: number;
+    handsPlayed: number;
+    result: 'win' | 'loss' | 'push' | 'blackjack';
+  } | null;
+  /** Dismiss the tournament hand summary overlay */
+  onDismissTournamentSummary?: () => void;
+  /** Open tournament history (e.g. from summary overlay) */
+  onOpenTournamentHistory?: () => void;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -127,6 +140,9 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   perfectPairsBet = 0,
   onPerfectPairsBetChange,
   perfectPairsResult,
+  tournamentHandSummary,
+  onDismissTournamentSummary,
+  onOpenTournamentHistory,
 }) => {
   const videoSrc = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const imageSrc = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
@@ -175,6 +191,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   }
   const tableVideoRef = useRef<HTMLVideoElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [showBlackjackVideo, setShowBlackjackVideo] = useState(false);
+  const blackjackVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Draggable widget state (all screens)
   const [widgetPosition, setWidgetPosition] = useState({ x: 0, y: 0 }); // Will be set from saved or default
@@ -466,6 +484,23 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     }
     prevGameResult.current = gameResult;
   }, [gameResult, onChipAnimationComplete, chipStack.length]);
+
+  // Handle blackjack celebration video
+  useEffect(() => {
+    if (gameResult === 'blackjack') {
+      setShowBlackjackVideo(true);
+      // Play video after a short delay to ensure it's visible
+      setTimeout(() => {
+        blackjackVideoRef.current?.play().catch(console.error);
+      }, 100);
+    } else {
+      setShowBlackjackVideo(false);
+    }
+  }, [gameResult]);
+
+  const handleBlackjackVideoEnd = () => {
+    setShowBlackjackVideo(false);
+  };
 
   // PP chip animation — triggers alongside main gameResult when there's a PP bet
   useEffect(() => {
@@ -862,6 +897,20 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         <SystemTime className="!static pointer-events-none" />
       </div>
 
+      {/* Blackjack Celebration Video */}
+      {showBlackjackVideo && gameResult === 'blackjack' && (
+        <div className="absolute inset-0 z-[35] flex items-center justify-center pointer-events-none">
+          <video
+            ref={blackjackVideoRef}
+            src="/BlackJack/VIDEOS/AnimatedBLACKJACK .mp4"
+            className="max-w-full max-h-full object-contain"
+            onEnded={handleBlackjackVideoEnd}
+            playsInline
+            muted={false}
+          />
+        </div>
+      )}
+
       {/* Game Result Banner - Shows when game is complete until next deal */}
       {gameState === GameState.COMPLETE && displayedResult && (
         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex justify-center pointer-events-none">
@@ -926,6 +975,69 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                  displayedResult === 'loss' ? 'Better luck next time' :
                  'Bet returned'}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tournament hand summary — rank, winnings, stats (centered below result banner) */}
+      {tournamentHandSummary && (
+        <div className="absolute inset-x-0 top-[58%] -translate-y-1/2 z-30 flex justify-center px-4 pointer-events-auto">
+          <div
+            className="w-full max-w-sm rounded-2xl border-2 border-cyan-500/30 shadow-2xl overflow-hidden animate-result-banner"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.85))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 0 24px rgba(34, 211, 238, 0.25), 0 4px 20px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(34, 211, 238, 0.35)',
+            }}
+          >
+            <div className="p-4 sm:p-5 space-y-3">
+              <div className="text-center">
+                <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider">Tournament hand</p>
+                <p className="text-white font-bold text-lg mt-0.5">
+                  Rank #{tournamentHandSummary.rank}
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-4 text-sm">
+                <span className="text-gray-400">This hand:</span>
+                <span className={
+                  tournamentHandSummary.chipDelta > 0 ? 'text-green-400 font-semibold' :
+                  tournamentHandSummary.chipDelta < 0 ? 'text-red-400 font-semibold' :
+                  'text-gray-300'
+                }>
+                  {tournamentHandSummary.chipDelta > 0 ? '+' : ''}{tournamentHandSummary.chipDelta} chips
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm text-gray-300">
+                <div className="rounded-lg bg-black/20 px-3 py-2">
+                  <span className="text-gray-500 text-xs">Chips</span>
+                  <p className="font-semibold text-white">{tournamentHandSummary.chips.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg bg-black/20 px-3 py-2">
+                  <span className="text-gray-500 text-xs">Hands</span>
+                  <p className="font-semibold text-white">{tournamentHandSummary.handsPlayed} played · {tournamentHandSummary.handsRemaining} left</p>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                {onOpenTournamentHistory && (
+                  <button
+                    type="button"
+                    onClick={onOpenTournamentHistory}
+                    className="flex-1 py-2 px-3 rounded-lg text-xs font-medium bg-slate-700/80 hover:bg-slate-600/80 text-cyan-300 border border-cyan-500/30 transition-colors"
+                  >
+                    View tournament history
+                  </button>
+                )}
+                {onDismissTournamentSummary && (
+                  <button
+                    type="button"
+                    onClick={onDismissTournamentSummary}
+                    className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white transition-colors"
+                  >
+                    Continue
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

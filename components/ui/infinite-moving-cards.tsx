@@ -13,6 +13,7 @@ export type QuoteCardItem = {
 export type ImageCardItem = {
   src?: string;
   name: string;
+  href?: string;
 };
 
 export const InfiniteMovingCards = ({
@@ -101,37 +102,47 @@ export const InfiniteMovingCards = ({
               "relative shrink-0 rounded-2xl border border-b-0 overflow-hidden",
               variant === "quote"
                 ? "w-[350px] max-w-full px-8 py-6 md:w-[450px] border-zinc-200 bg-[linear-gradient(180deg,#fafafa,#f5f5f5)] dark:border-zinc-700 dark:bg-[linear-gradient(180deg,#27272a,#18181b)]"
-                : "w-[280px] md:w-[320px] border-cyan-500/30 bg-gradient-to-b from-slate-900/95 to-slate-800/95 dark:border-cyan-500/30",
+                : "w-[280px] md:w-[320px] border-cyan-500/30 bg-gradient-to-b from-slate-950 to-slate-900 dark:border-cyan-500/30",
             )}
             key={variant === "image" ? (item as ImageCardItem).name + idx : (item as QuoteCardItem).name + idx}
           >
             {variant === "image" ? (
-              <div className="flex flex-col h-full">
-                {(item as ImageCardItem).src ? (
-                  <>
-                    <div className="relative aspect-[4/3] w-full bg-black/40">
-                      <Image
-                        src={(item as ImageCardItem).src!}
-                        alt={(item as ImageCardItem).name}
-                        fill
-                        className="object-cover object-center"
-                        sizes="(max-width: 768px) 280px, 320px"
-                      />
-                    </div>
-                    <div className="px-4 py-3 text-center">
-                      <span className="text-sm font-semibold text-white">
-                        {(item as ImageCardItem).name}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-1 min-h-[140px] items-center justify-center p-6">
-                    <span className="text-xl md:text-2xl font-bold text-cyan-300/90 text-center">
-                      {(item as ImageCardItem).name}
-                    </span>
+              (() => {
+                const imageItem = item as ImageCardItem;
+                const content = (
+                  <div className="flex flex-col h-full">
+                    {imageItem.src ? (
+                      <>
+                        <div className="relative aspect-[4/3] w-full bg-black/40">
+                          <Image
+                            src={imageItem.src}
+                            alt={imageItem.name}
+                            fill
+                            className="object-cover object-center"
+                            sizes="(max-width: 768px) 280px, 320px"
+                          />
+                        </div>
+                        <div className="px-4 py-3 text-center">
+                          <span className="text-sm font-semibold text-white">
+                            {imageItem.name}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-1 min-h-[140px] items-center justify-center p-6">
+                        <span className="text-xl md:text-2xl font-bold text-cyan-300/90 text-center">
+                          {imageItem.name}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+                return imageItem.href ? (
+                  <a href={imageItem.href} className="block h-full w-full">
+                    {content}
+                  </a>
+                ) : content;
+              })()
             ) : (
               <blockquote>
                 <div

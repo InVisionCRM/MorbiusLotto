@@ -92,6 +92,10 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
     return num.toLocaleString()
   }
 
+  // profitLoss is already in MORBIUS (human units) from the API transform — do not use formatCurrency
+  const formatProfitLoss = (amount: number) =>
+    amount.toLocaleString(undefined, { maximumFractionDigits: 2 })
+
   const getProfitColor = (amount: number) => {
     if (amount > 0) return 'text-green-400'
     if (amount < 0) return 'text-red-400'
@@ -122,7 +126,7 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
     },
     {
       title: 'Profit/Loss',
-      value: `${stats.profitLoss > 0 ? '+' : ''}${formatCurrency(stats.profitLoss)} MORBIUS`,
+      value: `${stats.profitLoss > 0 ? '+' : ''}${formatProfitLoss(stats.profitLoss)} MORBIUS`,
       icon: stats.profitLoss >= 0 ? TrendingUp : TrendingDown,
       subtitle: `${stats.roi > 0 ? '+' : ''}${Math.round(stats.roi)}% ROI`,
       color: getProfitColor(stats.profitLoss)

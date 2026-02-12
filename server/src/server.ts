@@ -162,6 +162,22 @@ async function initializeServices() {
       }
     });
 
+    // Top player by category (for infinite moving cards)
+    app.get('/api/analytics/top-player-by-category', async (req, res) => {
+      try {
+        const category = req.query.category as string;
+        if (!category || !['games', 'profit_loss', 'wagered', 'win_rate', 'total_won', 'win_streak'].includes(category)) {
+          res.status(400).json({ error: 'Invalid category' });
+          return;
+        }
+        const topPlayer = await dbService.getTopPlayersByCategory(category as any);
+        sendJson(res, topPlayer);
+      } catch (error) {
+        logger.error('Error fetching top player by category:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Platform analytics: Blackjack (DB) + Plinko, Keno, Lottery, BigWheel (chain)
     app.get('/api/analytics/platform', async (req, res) => {
       try {

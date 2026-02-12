@@ -488,6 +488,174 @@ export class DatabaseService {
     };
   }
 
+  async getTopPlayersByCategory(category: 'games' | 'profit_loss' | 'wagered' | 'win_rate' | 'total_won' | 'win_streak'): Promise<Array<{
+    wallet_address: string;
+    display_name?: string;
+    profile_image_url?: string | null;
+    value: string;
+    label: string;
+    created_at?: Date;
+  }>> {
+    let orderBy: string;
+    let valueField: string;
+    let label: string;
+
+    switch (category) {
+      case 'games':
+        orderBy = 'total_games DESC';
+        valueField = 'total_games::TEXT';
+        label = 'Most Games';
+        break;
+      case 'profit_loss':
+        orderBy = 'profit_loss DESC';
+        valueField = 'profit_loss::TEXT';
+        label = 'Top P/L';
+        break;
+      case 'wagered':
+        orderBy = 'total_bet DESC';
+        valueField = 'total_bet::TEXT';
+        label = 'Top Wagered';
+        break;
+      case 'win_rate':
+        orderBy = 'win_rate DESC';
+        valueField = 'ROUND(win_rate, 2)::TEXT';
+        label = 'Top Win %';
+        break;
+      case 'total_won':
+        orderBy = 'total_win DESC';
+        valueField = 'total_win::TEXT';
+        label = 'Top Total Won';
+        break;
+      case 'win_streak':
+        orderBy = 'best_streak DESC';
+        valueField = 'best_streak::TEXT';
+        label = 'Highest Win Streak';
+        break;
+      default:
+        throw new Error(`Unknown category: ${category}`);
+    }
+
+    // For win_streak, we need to calculate it dynamically
+    const streakCalculation = category === 'win_streak' ? `
+      WITH player_games AS (
+        SELECT 
+          p.id as player_id,
+          p.wallet_address,
+          p.created_at,
+          g.result,
+          g.created_at as game_time,
+          ROW_NUMBER() OVER (PARTITION BY p.id ORDER BY g.created_at DESC) as rn
+        FROM players p
+        JOIN game_sessions gs ON gs.player_id = p.id
+        JOIN games g ON g.session_id = gs.id
+        WHERE g.result IS NOT NULL AND g.result != 'ongoing'
+      ),
+      streak_calc AS (
+        SELECT 
+          player_id,
+          wallet_address,
+          created_at,
+          result,
+          rn,
+          CASE 
+            WHEN result IN ('win', 'blackjack') THEN 1
+            ELSE -1
+          END as result_value,
+          rn - ROW_NUMBER() OVER (PARTITION BY player_id, CASE WHEN result IN ('win', 'blackjack') THEN 1 ELSE -1 END ORDER BY rn) as streak_group
+        FROM player_games
+      ),
+      streak_lengths AS (
+        SELECT 
+          player_id,
+          result_value,
+          streak_group,
+          COUNT(*) as streak_length
+        FROM streak_calc
+        WHERE result_value = 1
+        GROUP BY player_id, result_value, streak_group
+      ),
+      best_streaks AS (
+        SELECT 
+          player_id,
+          COALESCE(MAX(streak_length), 0) as best_streak
+        FROM streak_lengths
+        GROUP BY player_id
+      ),
+      agg AS (
+        SELECT
+          p.wallet_address,
+          p.created_at,
+          COUNT(g.*)::BIGINT AS total_games,
+          COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(g.total_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(g.*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE g.result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate,
+          COALESCE(bs.best_streak, 0) AS best_streak
+        FROM players p
+        LEFT JOIN game_sessions gs ON gs.player_id = p.id
+        LEFT JOIN games g ON g.session_id = gs.id AND g.result IS NOT NULL AND g.result != 'ongoing'
+        LEFT JOIN best_streaks bs ON bs.player_id = p.id
+        GROUP BY p.id, p.wallet_address, p.created_at, bs.best_streak
+        HAVING COUNT(g.*) > 0
+      )
+      SELECT 
+        agg.wallet_address,
+        agg.created_at,
+        ${valueField} AS value,
+        cdn.display_name,
+        cdn.profile_image_url
+      FROM agg
+      LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(agg.wallet_address)
+      ORDER BY ${orderBy}
+      LIMIT 1
+    ` : `
+      WITH agg AS (
+        SELECT
+          p.wallet_address,
+          p.created_at,
+          COUNT(g.*)::BIGINT AS total_games,
+          COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(g.total_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(g.*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE g.result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate
+        FROM players p
+        LEFT JOIN game_sessions gs ON gs.player_id = p.id
+        LEFT JOIN games g ON g.session_id = gs.id AND g.result IS NOT NULL AND g.result != 'ongoing'
+        GROUP BY p.id, p.wallet_address, p.created_at
+        HAVING COUNT(g.*) > 0
+      )
+      SELECT 
+        agg.wallet_address,
+        agg.created_at,
+        ${valueField} AS value,
+        cdn.display_name,
+        cdn.profile_image_url
+      FROM agg
+      LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(agg.wallet_address)
+      ORDER BY ${orderBy}
+      LIMIT 1
+    `;
+
+    const result = await this.pool.query(streakCalculation);
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    const row = result.rows[0];
+    return [{
+      wallet_address: row.wallet_address ?? '',
+      display_name: row.display_name ?? undefined,
+      profile_image_url: row.profile_image_url ?? null,
+      value: row.value ?? '0',
+      label,
+      created_at: row.created_at ? new Date(row.created_at) : undefined,
+    }];
+  }
+
   async getPlayerGames(walletAddress: string, limit: number = 50, offset: number = 0): Promise<Game[]> {
     const normalizedAddress = this.normalizeAddress(walletAddress);
     const query = `

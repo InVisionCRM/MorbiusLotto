@@ -110,6 +110,16 @@ export interface TournamentGameState {
   currentRank: number;
 }
 
+/** Summary shown in the table overlay after each tournament hand completes */
+export interface TournamentHandSummary {
+  chipDelta: number;
+  chips: number;
+  rank: number;
+  handsRemaining: number;
+  handsPlayed: number;
+  result: 'win' | 'loss' | 'push' | 'blackjack';
+}
+
 interface UseTournamentOptions {
   wsClient: BlackjackWebSocketClient | null;
   onBusted?: () => void;
@@ -156,9 +166,41 @@ export function useTournament(options: UseTournamentOptions) {
   const [tournamentHistory, setTournamentHistory] = useState<PlayerTournamentHistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
+  /** Shown in table overlay after each tournament hand completes; cleared on next deal or after timeout */
+  const [lastHandSummary, setLastHandSummary] = useState<TournamentHandSummary | null>(null);
+  const lastHandSummaryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  /** Displayed state (chips, rank, hands) lags until dealer reveal completes so player doesn't see win/loss early */
+  const [displayedTournamentState, setDisplayedTournamentState] = useState<TournamentState>({
+    inTournament: false,
+    entryId: null,
+    tournamentId: null,
+    chips: 0,
+    handsPlayed: 0,
+    handsRemaining: TOURNAMENT_CONFIG.MAX_HANDS,
+    highestChips: 0,
+    currentRank: 0,
+    status: null,
+    maxHands: TOURNAMENT_CONFIG.MAX_HANDS,
+    startingChips: TOURNAMENT_CONFIG.STARTING_CHIPS,
+    rebuyCount: 0,
+    totalBuyIn: '0',
+    canRebuy: false,
+    maxRebuys: 0,
+    rebuyEnabled: false,
+    biggestBet: 0,
+    biggestWin: 0,
+  });
+
   // Track chips before each hand to calculate per-hand win
   const chipsBeforeHandRef = useRef<number>(0);
   const currentHandBetRef = useRef<number>(0);
+
+  // Keep ref in sync with tournamentState so commitDisplayState can read latest
+  const tournamentStateRef = useRef<TournamentState>(tournamentState);
+  useEffect(() => {
+    tournamentStateRef.current = tournamentState;
+  }, [tournamentState]);
 
   // Refs for callbacks
   const onBustedRef = useRef(onBusted);
@@ -183,13 +225,16 @@ export function useTournament(options: UseTournamentOptions) {
 
     // Tournament busted
     const handleTournamentBusted = (payload: any) => {
-      setTournamentState(prev => ({
-        ...prev,
-        status: 'busted',
-        chips: 0,
-        // Can rebuy if rebuys are enabled and under max limit
-        canRebuy: prev.rebuyEnabled && (prev.maxRebuys === 0 || prev.rebuyCount < prev.maxRebuys),
-      }));
+      setTournamentState(prev => {
+        const next: TournamentState = {
+          ...prev,
+          status: 'busted',
+          chips: 0,
+          canRebuy: prev.rebuyEnabled && (prev.maxRebuys === 0 || prev.rebuyCount < prev.maxRebuys),
+        };
+        setDisplayedTournamentState(next);
+        return next;
+      });
       setCurrentGame(null);
       onBustedRef.current?.();
     };
@@ -207,12 +252,16 @@ export function useTournament(options: UseTournamentOptions) {
 
     // Tournament completed
     const handleTournamentCompleted = (payload: any) => {
-      setTournamentState(prev => ({
-        ...prev,
-        status: 'completed',
-        chips: payload.finalChips,
-        currentRank: payload.currentRank,
-      }));
+      setTournamentState(prev => {
+        const next: TournamentState = {
+          ...prev,
+          status: 'completed',
+          chips: payload.finalChips,
+          currentRank: payload.currentRank,
+        };
+        setDisplayedTournamentState(next);
+        return next;
+      });
       setCurrentGame(null);
       onCompletedRef.current?.(payload.finalChips, payload.currentRank);
     };
@@ -249,22 +298,30 @@ export function useTournament(options: UseTournamentOptions) {
       const response = await wsClient.sendRequest('tournament_state', {});
 
       if (response.inTournament) {
-        setTournamentState(prev => ({
-          ...prev,
-          inTournament: true,
-          entryId: response.entryId,
-          tournamentId: response.tournamentId,
-          chips: response.chips,
-          handsPlayed: response.handsPlayed,
-          handsRemaining: response.handsRemaining,
-          highestChips: response.highestChips,
-          currentRank: response.currentRank,
-          status: response.status,
-          maxHands: response.maxHands,
-          startingChips: response.startingChips,
-        }));
+        setTournamentState(prev => {
+          const next = {
+            ...prev,
+            inTournament: true,
+            entryId: response.entryId,
+            tournamentId: response.tournamentId,
+            chips: response.chips,
+            handsPlayed: response.handsPlayed,
+            handsRemaining: response.handsRemaining,
+            highestChips: response.highestChips,
+            currentRank: response.currentRank,
+            status: response.status,
+            maxHands: response.maxHands,
+            startingChips: response.startingChips,
+          };
+          setDisplayedTournamentState(next);
+          return next;
+        });
       } else {
-        setTournamentState(prev => ({ ...prev, inTournament: false }));
+        setTournamentState(prev => {
+          const next = { ...prev, inTournament: false };
+          setDisplayedTournamentState(next);
+          return next;
+        });
       }
     } catch (err) {
       console.error('Failed to fetch tournament state:', err);
@@ -309,8 +366,8 @@ export function useTournament(options: UseTournamentOptions) {
     try {
       const response = await wsClient.sendRequest('tournament_enter', {});
 
-      setTournamentState(prev => ({
-        ...prev,
+      const nextState: TournamentState = {
+        ...tournamentStateRef.current,
         inTournament: true,
         entryId: response.entryId,
         tournamentId: response.tournamentId,
@@ -324,7 +381,9 @@ export function useTournament(options: UseTournamentOptions) {
         startingChips: response.startingChips,
         biggestBet: 0,
         biggestWin: 0,
-      }));
+      };
+      setTournamentState(nextState);
+      setDisplayedTournamentState(nextState);
 
       // Update tournament info with new prize pool
       if (response.prizePool) {
@@ -358,7 +417,7 @@ export function useTournament(options: UseTournamentOptions) {
     try {
       await wsClient.sendRequest('tournament_leave', {});
 
-      setTournamentState({
+      const leftState: TournamentState = {
         inTournament: false,
         entryId: null,
         tournamentId: null,
@@ -377,8 +436,15 @@ export function useTournament(options: UseTournamentOptions) {
         rebuyEnabled: false,
         biggestBet: 0,
         biggestWin: 0,
-      });
+      };
+      setTournamentState(leftState);
+      setDisplayedTournamentState(leftState);
       setCurrentGame(null);
+      if (lastHandSummaryTimeoutRef.current) {
+        clearTimeout(lastHandSummaryTimeoutRef.current);
+        lastHandSummaryTimeoutRef.current = null;
+      }
+      setLastHandSummary(null);
 
       return true;
     } catch (err: any) {
@@ -390,6 +456,25 @@ export function useTournament(options: UseTournamentOptions) {
   }, [wsClient]);
 
   /**
+   * Clear the last-hand summary overlay (e.g. when user dismisses or starts next hand)
+   */
+  const clearLastHandSummary = useCallback(() => {
+    if (lastHandSummaryTimeoutRef.current) {
+      clearTimeout(lastHandSummaryTimeoutRef.current);
+      lastHandSummaryTimeoutRef.current = null;
+    }
+    setLastHandSummary(null);
+  }, []);
+
+  /**
+   * Commit displayed tournament state (chips, rank, hands) after dealer reveal completes.
+   * Call this from handleDealerRevealComplete so the sidebar doesn't show chip change until then.
+   */
+  const commitDisplayState = useCallback(() => {
+    setDisplayedTournamentState(tournamentStateRef.current);
+  }, []);
+
+  /**
    * Start a tournament game
    */
   const startTournamentGame = useCallback(async (betAmount: number): Promise<TournamentGameState | null> => {
@@ -397,6 +482,9 @@ export function useTournament(options: UseTournamentOptions) {
       setError('Not in tournament');
       return null;
     }
+
+    // Clear any previous hand summary when starting a new hand
+    clearLastHandSummary();
 
     // Validate bet
     if (betAmount < TOURNAMENT_CONFIG.MIN_BET) {
@@ -428,15 +516,42 @@ export function useTournament(options: UseTournamentOptions) {
       chipsBeforeHandRef.current = tournamentState.chips;
       currentHandBetRef.current = betAmount;
 
-      // Update tournament state (including biggestBet)
-      setTournamentState(prev => ({
-        ...prev,
-        chips: response.tournamentChips,
-        handsPlayed: response.handsPlayed,
-        handsRemaining: response.handsRemaining,
-        currentRank: response.currentRank,
-        biggestBet: Math.max(prev.biggestBet, betAmount),
-      }));
+      // Update tournament state (including biggestBet). Don't update displayed state until dealer reveal (commitDisplayState).
+      setTournamentState(prev => {
+        const next = {
+          ...prev,
+          chips: response.tournamentChips,
+          handsPlayed: response.handsPlayed,
+          handsRemaining: response.handsRemaining,
+          currentRank: response.currentRank,
+          biggestBet: Math.max(prev.biggestBet, betAmount),
+        };
+        if (response.status !== 'completed') setDisplayedTournamentState(next);
+        return next;
+      });
+
+      // If game completed immediately (e.g. blackjack), show hand summary
+      if (response.status === 'completed') {
+        const chipDelta = response.tournamentChips - tournamentState.chips;
+        const hasBlackjack = (response.playerHands || []).some((h: any) => h.result === 'blackjack');
+        const hasWin = (response.playerHands || []).some((h: any) => h.result === 'win' || h.result === 'blackjack');
+        const allPush = Array.isArray(response.playerHands) && response.playerHands.length > 0
+          && response.playerHands.every((h: any) => h.result === 'push');
+        const result: TournamentHandSummary['result'] = hasBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
+        if (lastHandSummaryTimeoutRef.current) clearTimeout(lastHandSummaryTimeoutRef.current);
+        setLastHandSummary({
+          chipDelta,
+          chips: response.tournamentChips,
+          rank: response.currentRank,
+          handsRemaining: response.handsRemaining,
+          handsPlayed: response.handsPlayed,
+          result,
+        });
+        lastHandSummaryTimeoutRef.current = setTimeout(() => {
+          setLastHandSummary(null);
+          lastHandSummaryTimeoutRef.current = null;
+        }, 10000);
+      }
 
       return gameState;
     } catch (err: any) {
@@ -445,7 +560,7 @@ export function useTournament(options: UseTournamentOptions) {
     } finally {
       setIsLoading(false);
     }
-  }, [wsClient, tournamentState]);
+  }, [wsClient, tournamentState, clearLastHandSummary]);
 
   /**
    * Perform player action in tournament game
@@ -486,24 +601,49 @@ export function useTournament(options: UseTournamentOptions) {
       const handWin = gameState.status === 'completed'
         ? Math.max(0, response.tournamentChips - chipsBeforeHandRef.current)
         : 0;
+      const chipDelta = gameState.status === 'completed'
+        ? response.tournamentChips - chipsBeforeHandRef.current
+        : 0;
 
-      // Update tournament state
-      setTournamentState(prev => ({
-        ...prev,
-        chips: response.tournamentChips,
-        handsPlayed: response.handsPlayed,
-        handsRemaining: response.handsRemaining,
-        currentRank: response.currentRank,
-        status: response.tournamentChips <= 0 ? 'busted'
-          : response.handsRemaining <= 0 ? 'completed'
-          : 'playing',
-        biggestBet: Math.max(prev.biggestBet, currentHandBetRef.current),
-        biggestWin: Math.max(prev.biggestWin, handWin),
-      }));
+      // Update tournament state. Don't update displayed state until dealer reveal (commitDisplayState).
+      setTournamentState(prev => {
+        const next: TournamentState = {
+          ...prev,
+          chips: response.tournamentChips,
+          handsPlayed: response.handsPlayed,
+          handsRemaining: response.handsRemaining,
+          currentRank: response.currentRank,
+          status: (response.tournamentChips <= 0 ? 'busted'
+            : response.handsRemaining <= 0 ? 'completed'
+            : 'playing') as TournamentState['status'],
+          biggestBet: Math.max(prev.biggestBet, currentHandBetRef.current),
+          biggestWin: Math.max(prev.biggestWin, handWin),
+        };
+        if (gameState.status !== 'completed') setDisplayedTournamentState(next);
+        return next;
+      });
 
-      // Clear game if completed
+      // Clear game if completed and set hand summary for table overlay
       if (gameState.status === 'completed') {
         setCurrentGame(null);
+        const hasBlackjack = (response.playerHands || []).some((h: any) => h.result === 'blackjack');
+        const hasWin = (response.playerHands || []).some((h: any) => h.result === 'win' || h.result === 'blackjack');
+        const allPush = Array.isArray(response.playerHands) && response.playerHands.length > 0
+          && response.playerHands.every((h: any) => h.result === 'push');
+        const result: TournamentHandSummary['result'] = hasBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
+        if (lastHandSummaryTimeoutRef.current) clearTimeout(lastHandSummaryTimeoutRef.current);
+        setLastHandSummary({
+          chipDelta,
+          chips: response.tournamentChips,
+          rank: response.currentRank,
+          handsRemaining: response.handsRemaining,
+          handsPlayed: response.handsPlayed,
+          result,
+        });
+        lastHandSummaryTimeoutRef.current = setTimeout(() => {
+          setLastHandSummary(null);
+          lastHandSummaryTimeoutRef.current = null;
+        }, 10000);
       }
 
       return gameState;
@@ -845,11 +985,18 @@ export function useTournament(options: UseTournamentOptions) {
   return {
     // State
     tournamentState,
+    /** Displayed in sidebar/HUD; lags until dealer reveal (commitDisplayState) so chip/rank don't spoil the hand */
+    displayedTournamentState,
+    commitDisplayState,
     tournamentInfo,
     leaderboard,
     currentGame,
     isLoading,
     error,
+
+    // Last hand summary (for table overlay when a tournament hand completes)
+    lastHandSummary,
+    clearLastHandSummary,
 
     // Tournament Creator State
     tournamentList,

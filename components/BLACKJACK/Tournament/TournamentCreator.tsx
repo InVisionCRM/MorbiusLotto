@@ -405,6 +405,14 @@ export function TournamentCreator({
         setError('Min players cannot exceed max players');
         return;
       }
+      const resolvedTableTheme: TableTheme = themeKind === 'video'
+        ? (BLACKJACK_VIDEO_BACKGROUNDS.find((b) => b.id === themeId)
+          ? { kind: 'video', id: themeId }
+          : { kind: 'video', id: BLACKJACK_VIDEO_BACKGROUNDS[0].id })
+        : (BLACKJACK_IMAGE_BACKGROUNDS.find((b) => b.id === themeId)
+          ? { kind: 'image', id: themeId }
+          : { kind: 'image', id: BLACKJACK_IMAGE_BACKGROUNDS[0].id });
+
       const freerollParams: CreateFreerollRequest = {
         name: trimmedName,
         freerollMode,
@@ -416,7 +424,7 @@ export function TournamentCreator({
         prizeDistributionType,
         reentryConfig: { enabled: reentryEnabled, windowMinutes: reentryEnabled ? reentryWindowMinutes : 0 },
         actionTimerSeconds,
-        tableTheme: { kind: themeKind, id: themeId },
+        tableTheme: resolvedTableTheme,
         isPrivate,
         minPlayers: minP,
         maxPlayers: maxP,
@@ -452,6 +460,16 @@ export function TournamentCreator({
       return;
     }
 
+    // Resolve table theme: ensure id exists for current kind (user may have switched steps and id could be stale)
+    const resolvedTableTheme: TableTheme = (() => {
+      if (themeKind === 'video') {
+        const found = BLACKJACK_VIDEO_BACKGROUNDS.find((b) => b.id === themeId);
+        return { kind: 'video', id: found ? found.id : BLACKJACK_VIDEO_BACKGROUNDS[0].id };
+      }
+      const found = BLACKJACK_IMAGE_BACKGROUNDS.find((b) => b.id === themeId);
+      return { kind: 'image', id: found ? found.id : BLACKJACK_IMAGE_BACKGROUNDS[0].id };
+    })();
+
     const params: CreateTournamentRequest = {
       name: trimmedName,
       buyInAmount: buyInAmountWei.toString(),
@@ -462,10 +480,7 @@ export function TournamentCreator({
         enabled: rebuyEnabled,
         maxRebuys: rebuyEnabled ? maxRebuys : 0,
       },
-      tableTheme: {
-        kind: themeKind,
-        id: themeId,
-      },
+      tableTheme: resolvedTableTheme,
       isPrivate,
       prizeDistributionType,
       customImage: customImage || undefined,
@@ -1241,6 +1256,7 @@ export function TournamentCreator({
                 {tournamentType === 'buyin' && <p><span className="text-gray-500">Buy-in:</span> <span className="text-white">{buyInAmount} MORBIUS</span></p>}
                 {tournamentType === 'freeroll' && <p><span className="text-gray-500">Players:</span> <span className="text-white">{minPlayersFreeroll} – {maxPlayersUnlimited ? '∞' : maxPlayersFreeroll}</span></p>}
                 <p><span className="text-gray-500">Private:</span> <span className="text-white">{isPrivate ? 'Yes' : 'No'}</span></p>
+                <p><span className="text-gray-500">Table:</span> <span className="text-white">{themeKind === 'video' ? (BLACKJACK_VIDEO_BACKGROUNDS.find(b => b.id === themeId)?.label ?? themeId) : (BLACKJACK_IMAGE_BACKGROUNDS.find(b => b.id === themeId)?.label ?? themeId)}</span></p>
               </div>
               <p className="text-gray-500 text-xs">Use the steps above to change anything, then click Create below.</p>
             </section>

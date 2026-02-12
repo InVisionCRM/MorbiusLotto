@@ -79,6 +79,8 @@ interface BlackjackSidebarProps {
   playerBalance?: bigint
   /** Player address for Join button state */
   playerAddress?: string | null
+  /** Open tournament lobby to "My History" tab */
+  onOpenTournamentHistory?: () => void
 }
 
 export default function BlackjackSidebar({
@@ -104,6 +106,7 @@ export default function BlackjackSidebar({
   onJoinTournament,
   playerBalance,
   playerAddress,
+  onOpenTournamentHistory,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'chart')
@@ -210,6 +213,16 @@ export default function BlackjackSidebar({
         )}
         {activeTab === 'tournaments' && (
           <div className="flex flex-col flex-1 min-h-0 text-sm text-white/90">
+            {onOpenTournamentHistory && (
+              <button
+                type="button"
+                onClick={onOpenTournamentHistory}
+                className="mb-2 w-full py-2 px-3 rounded-lg text-xs font-medium bg-slate-700/60 hover:bg-slate-600/60 text-cyan-300 border border-cyan-500/20 transition-colors flex items-center justify-center gap-2"
+              >
+                <History className="w-3.5 h-3.5" />
+                View all tournament history
+              </button>
+            )}
             <TournamentListSidebar
               tournaments={tournaments}
               isLoading={tournamentsLoading}

@@ -47,6 +47,8 @@ type LobbyTab = 'join' | 'my' | 'freeroll' | 'history';
 
 interface TournamentBrowserProps {
   isOpen: boolean;
+  /** When opening, switch to this tab (e.g. 'history' to open directly to My History) */
+  initialTab?: LobbyTab;
   onClose: () => void;
   onJoin: (tournamentId: string, isPrivate: boolean) => void;
   onCreateNew: () => void;
@@ -1376,6 +1378,7 @@ function HowPayoutsWork() {
 // ============================
 export function TournamentBrowser({
   isOpen,
+  initialTab = 'join',
   onClose,
   onJoin,
   onCreateNew,
@@ -1395,6 +1398,13 @@ export function TournamentBrowser({
   const [activeTab, setActiveTab] = useState<LobbyTab>('join');
   const [activeTournament, setActiveTournament] = useState<TournamentListItem | null>(null);
   const [fundModalTournament, setFundModalTournament] = useState<TournamentListItem | null>(null);
+
+  // When modal opens, switch to initialTab so e.g. "View tournament history" opens to History tab
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   // Auto-refresh on open for Browse and My Tournaments
   useEffect(() => {

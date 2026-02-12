@@ -5,6 +5,8 @@ import { useAccount, usePublicClient, useSignTypedData } from 'wagmi';
 import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
+import { BlackjackTopPlayersCarousel } from '@/components/BLACKJACK/BlackjackTopPlayersCarousel';
+import { TableProfile } from '@/components/BLACKJACK/TableProfile';
 import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
 import MainNav from '@/components/BLACKJACK/MainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
@@ -558,6 +560,7 @@ export default function BlackjackPage() {
 
   // Tournament creator/browser state
   const [showTournamentBrowser, setShowTournamentBrowser] = useState(false);
+  const [tournamentBrowserInitialTab, setTournamentBrowserInitialTab] = useState<'join' | 'my' | 'freeroll' | 'history'>('join');
   const [showTournamentCreator, setShowTournamentCreator] = useState(false);
   const [showTournamentPinEntry, setShowTournamentPinEntry] = useState(false);
   const [pendingJoinTournamentId, setPendingJoinTournamentId] = useState<string | null>(null);
@@ -1858,6 +1861,10 @@ export default function BlackjackPage() {
   }, []);
 
   const handleDealerRevealComplete = useCallback(() => {
+    // Commit displayed tournament state (chips, rank, hands) so sidebar doesn't show change until now
+    if (tournament.tournamentState.inTournament) {
+      tournament.commitDisplayState();
+    }
     // Allow REBET/DEAL only after dealer hand is fully revealed
     setGameState(prev => ({ ...prev, isPlaying: false }));
     // Trigger chip animation now that dealer reveal is complete
@@ -1971,7 +1978,7 @@ export default function BlackjackPage() {
 
     // Refresh reserve display only after dealer hand is fully revealed (preserves immersion)
     fetchBalance();
-  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, fetchBalance, address]);
+  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, fetchBalance, address, tournament]);
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {
@@ -2437,7 +2444,10 @@ export default function BlackjackPage() {
         onSoundChange={setSoundEnabled}
         themeModalOpen={themeModalOpen}
         onThemeModalOpenChange={setThemeModalOpen}
-        onTournamentLobby={() => setShowTournamentBrowser(true)}
+        onTournamentLobby={() => {
+          setTournamentBrowserInitialTab('join');
+          setShowTournamentBrowser(true);
+        }}
         profileDisplayName={profileDisplayName}
         profileImageUrl={profileImageUrl}
         onOpenProfileSettings={() => setProfileModalOpen(true)}
@@ -2545,7 +2555,7 @@ export default function BlackjackPage() {
               canStand={canStand}
               canDoubleDown={canDoubleDown && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
               canSplit={canSplit && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
-              reserveBalance={tournament.tournamentState.inTournament ? BigInt(tournament.tournamentState.chips) : offChainBalance}
+              reserveBalance={tournament.tournamentState.inTournament ? BigInt((tournament.displayedTournamentState ?? tournament.tournamentState).chips) : offChainBalance}
               usePLS={false}
               newCardIndices={newCardIndices}
               chipStack={tournament.tournamentState.inTournament ? tournamentChipStack : chipStack}
@@ -2570,7 +2580,7 @@ export default function BlackjackPage() {
               onToggleMusic={toggleMusic}
               onNextTrack={nextTrack}
               canDeal={tournament.tournamentState.inTournament
-                ? !gameState.isPlaying && tournament.tournamentState.handsRemaining > 0
+                ? !gameState.isPlaying && (tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining > 0
                 : !gameState.isPlaying && totalBetAmount > 0}
               onBetAmountChange={tournament.tournamentState.inTournament ? () => {} : manageChipStack}
               currentBetAmount={tournament.tournamentState.inTournament ? String(TOURNAMENT_CONFIG.MIN_BET) : displayBetAmount}
@@ -2590,6 +2600,12 @@ export default function BlackjackPage() {
               perfectPairsBet={perfectPairsBet}
               onPerfectPairsBetChange={setPerfectPairsBet}
               perfectPairsResult={currentGame?.perfectPairsResult}
+              tournamentHandSummary={tournament.tournamentState.inTournament ? tournament.lastHandSummary : null}
+              onDismissTournamentSummary={tournament.clearLastHandSummary}
+              onOpenTournamentHistory={() => {
+                setTournamentBrowserInitialTab('history');
+                setShowTournamentBrowser(true);
+              }}
             />
 
             {/* Win Notification */}
@@ -2609,10 +2625,10 @@ export default function BlackjackPage() {
           <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2 md:max-h-[calc(100vh-8rem)] md:overflow-hidden">
           {tournament.tournamentState.inTournament ? (
             <TournamentBetPanel
-              chips={tournament.tournamentState.chips}
+              chips={(tournament.displayedTournamentState ?? tournament.tournamentState).chips}
               onStartGame={handleStartTournamentGame}
               isPlaying={gameState.isPlaying}
-              handsRemaining={tournament.tournamentState.handsRemaining}
+              handsRemaining={(tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining}
               gameResult={currentGameResult}
               onHit={() => handleTournamentPlayerAction(Action.HIT)}
               onStand={() => handleTournamentPlayerAction(Action.STAND)}
@@ -2620,8 +2636,8 @@ export default function BlackjackPage() {
               onSplit={() => handleTournamentPlayerAction(Action.SPLIT)}
               canHit={canHit}
               canStand={canStand}
-              canDoubleDown={canDoubleDown && tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
-              canSplit={canSplit && tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
+              canDoubleDown={canDoubleDown && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
+              canSplit={canSplit && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
             />
           ) : (
             <>
@@ -2665,7 +2681,10 @@ export default function BlackjackPage() {
             history={gameState.history}
             reserveBalance={offChainBalance}
             onQuickJoinTournament={() => setShowTournamentEntry(true)}
-            onTournamentLobby={() => setShowTournamentBrowser(true)}
+            onTournamentLobby={() => {
+          setTournamentBrowserInitialTab('join');
+          setShowTournamentBrowser(true);
+        }}
             chartRef={chartRef}
             chartSessionStartTime={chartSessionStartTime.current}
             wsClient={wsClient}
@@ -2696,10 +2715,14 @@ export default function BlackjackPage() {
             }}
             playerBalance={offChainBalance}
             playerAddress={address ?? null}
+            onOpenTournamentHistory={() => {
+              setTournamentBrowserInitialTab('history');
+              setShowTournamentBrowser(true);
+            }}
             tournamentTabContent={
               tournament.tournamentState.inTournament ? (
                 <TournamentHUD
-                  state={tournament.tournamentState}
+                  state={tournament.displayedTournamentState ?? tournament.tournamentState}
                   onLeave={async () => {
                     const success = await tournament.leaveTournament();
                     if (success) {
@@ -2724,6 +2747,12 @@ export default function BlackjackPage() {
           />
         </div>
         </div>
+
+        {/* Top Players Carousel */}
+        <BlackjackTopPlayersCarousel />
+
+        {/* Table token profile (token for this table: logo, morbius.io iframe, DexScreener links, buy) */}
+        <TableProfile />
 
         {/* Tournament Leaderboard (shown when in tournament) */}
         {tournament.tournamentState.inTournament && (
@@ -2820,6 +2849,7 @@ export default function BlackjackPage() {
         {/* Tournament Browser Modal */}
         <TournamentBrowser
           isOpen={showTournamentBrowser}
+          initialTab={tournamentBrowserInitialTab}
           onClose={() => setShowTournamentBrowser(false)}
           onJoin={(tournamentId, isPrivate) => {
             if (isPrivate) {
