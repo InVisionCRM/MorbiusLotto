@@ -9,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX } from 'lucide-react';
 import AdminTablesTab from '@/components/admin/AdminTablesTab';
+import AdminHealthTab from '@/components/admin/AdminHealthTab';
+import AdminMetricsTab from '@/components/admin/AdminMetricsTab';
+import AdminConfigTab from '@/components/admin/AdminConfigTab';
 
 export default function AdminPage() {
   const { address } = useAccount();
@@ -68,36 +71,15 @@ export default function AdminPage() {
           </TabsContent>
 
           <TabsContent value="health" className="mt-3 focus-visible:outline-none">
-            <Card className="bg-slate-900/60 border-slate-700/50">
-              <CardHeader className="py-2 px-3">
-                <CardTitle className="text-xs font-medium text-slate-200">Game health</CardTitle>
-              </CardHeader>
-              <CardContent className="py-2 px-3 text-xs text-slate-500">
-                API, WebSocket, RPC status. MORBIUS reserves per contract; Blackjack addresses with reserve &gt; 0. (Health UI next.)
-              </CardContent>
-            </Card>
+            <AdminHealthTab />
           </TabsContent>
 
           <TabsContent value="metrics" className="mt-3 focus-visible:outline-none">
-            <Card className="bg-slate-900/60 border-slate-700/50">
-              <CardHeader className="py-2 px-3">
-                <CardTitle className="text-xs font-medium text-slate-200">Metrics</CardTitle>
-              </CardHeader>
-              <CardContent className="py-2 px-3 text-xs text-slate-500">
-                Volume (MORBIUS), games/hour, active players, PnL, tournament entries. Time range: 24h / 7d / 30d / All. (Charts next.)
-              </CardContent>
-            </Card>
+            <AdminMetricsTab />
           </TabsContent>
 
           <TabsContent value="config" className="mt-3 focus-visible:outline-none">
-            <Card className="bg-slate-900/60 border-slate-700/50">
-              <CardHeader className="py-2 px-3">
-                <CardTitle className="text-xs font-medium text-slate-200">Config</CardTitle>
-              </CardHeader>
-              <CardContent className="py-2 px-3 text-xs text-slate-500">
-                Min/max bet, fee %, feature flags per game. (Config form next.)
-              </CardContent>
-            </Card>
+            <AdminConfigTab />
           </TabsContent>
         </Tabs>
       </main>

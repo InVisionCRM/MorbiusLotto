@@ -15,7 +15,12 @@ import { WebSocketService } from './services/websocket.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
+import { getPublicClient } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
+
+const ERC20_BALANCE_OF_ABI = [
+  { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+] as const;
 
 // Load environment variables
 dotenv.config();
@@ -420,6 +425,142 @@ async function initializeServices() {
         res.status(204).send();
       } catch (error) {
         logger.error('Error deleting blackjack table:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves)
+    app.get('/api/admin/health', async (req, res) => {
+      try {
+        const client = getPublicClient();
+        const blackjackAddress = process.env.BLACKJACK_CONTRACT_ADDRESS as `0x${string}` | undefined;
+
+        const api = 'ok';
+        const ws = 'up'; // same process
+
+        const games: Record<string, { rpc: 'ok' | 'fail'; error?: string }> = {};
+        const morbius: Record<string, string> = {};
+        let blackjackReserves: { totalMorbiusInContract: string; addressesWithReserve: Array<{ address: string; reserve: string }> } = { totalMorbiusInContract: '0', addressesWithReserve: [] };
+
+        // Blackjack: MORBIUS balance of contract + sample of addresses with reserve > 0
+        if (blackjackAddress) {
+          try {
+            const tokenAddress = await client.readContract({ address: blackjackAddress, abi: blackjackAbi, functionName: 'MORBIUS_TOKEN' }) as `0x${string}`;
+            const balance = await client.readContract({ address: tokenAddress, abi: ERC20_BALANCE_OF_ABI, functionName: 'balanceOf', args: [blackjackAddress] }) as bigint;
+            morbius.blackjack = balance.toString();
+            games.blackjack = { rpc: 'ok' };
+
+            const addresses = await dbService.getPlayerAddressesForReserveCheck(50);
+            const reserves = await Promise.all(
+              addresses.map(async (addr) => {
+                const a = addr.startsWith('0x') ? addr as `0x${string}` : `0x${addr}` as `0x${string}`;
+                try {
+                  const r = await client.readContract({ address: blackjackAddress, abi: blackjackAbi, functionName: 'getPlayerReserve', args: [a] }) as bigint;
+                  return { address: addr, reserve: r };
+                } catch {
+                  return { address: addr, reserve: 0n };
+                }
+              })
+            );
+            blackjackReserves = {
+              totalMorbiusInContract: balance.toString(),
+              addressesWithReserve: reserves.filter((r) => r.reserve > 0n).map((r) => ({ address: r.address, reserve: r.reserve.toString() })),
+            };
+          } catch (err: any) {
+            games.blackjack = { rpc: 'fail', error: err?.message || 'RPC/contract read failed' };
+            morbius.blackjack = '0';
+          }
+        } else {
+          games.blackjack = { rpc: 'fail', error: 'BLACKJACK_CONTRACT_ADDRESS not set' };
+        }
+
+        // Plinko, Keno, Lottery (exclude Big Wheel per scope)
+        try {
+          const plinkoStats = await chainAnalytics.getPlinkoStats();
+          games.plinko = plinkoStats ? { rpc: 'ok' } : { rpc: 'fail', error: 'No data' };
+          morbius.plinko = plinkoStats?.contractReserve?.toString() ?? '0';
+        } catch (err: any) {
+          games.plinko = { rpc: 'fail', error: err?.message || 'RPC failed' };
+          morbius.plinko = '0';
+        }
+        try {
+          const kenoStats = await chainAnalytics.getKenoStats();
+          games.keno = kenoStats ? { rpc: 'ok' } : { rpc: 'fail', error: 'No data' };
+          morbius.keno = '0'; // Keno getGlobalStats doesn't expose reserve
+        } catch (err: any) {
+          games.keno = { rpc: 'fail', error: err?.message || 'RPC failed' };
+          morbius.keno = '0';
+        }
+        try {
+          const lotteryStats = await chainAnalytics.getLotteryStats();
+          games.lottery = lotteryStats ? { rpc: 'ok' } : { rpc: 'fail', error: 'No data' };
+          morbius.lottery = lotteryStats?.totalCollected?.toString() ?? '0';
+        } catch (err: any) {
+          games.lottery = { rpc: 'fail', error: err?.message || 'RPC failed' };
+          morbius.lottery = '0';
+        }
+
+        sendJson(res, { api, ws, games, morbius, blackjackReserves });
+      } catch (error) {
+        logger.error('Error in admin health:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Admin: game config (key-value; min/max bet, fee %, feature flags)
+    app.get('/api/admin/config', async (req, res) => {
+      try {
+        const config = await dbService.getAdminGameConfig();
+        sendJson(res, config);
+      } catch (error) {
+        logger.error('Error fetching admin config:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.put('/api/admin/config', async (req, res) => {
+      try {
+        const body = req.body as Record<string, string> | { config?: Record<string, string> };
+        const config = body?.config && typeof body.config === 'object' ? body.config : body;
+        if (!config || typeof config !== 'object') {
+          res.status(400).json({ error: 'Body must be { config: { key: value, ... } } or { key: value, ... }' });
+          return;
+        }
+        for (const [key, value] of Object.entries(config)) {
+          if (typeof key !== 'string' || key.length > 128) continue;
+          await dbService.setAdminGameConfigKey(key, value == null ? '' : String(value));
+        }
+        const updated = await dbService.getAdminGameConfig();
+        sendJson(res, updated);
+      } catch (error) {
+        logger.error('Error updating admin config:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all)
+    app.get('/api/admin/metrics', async (req, res) => {
+      try {
+        const range = (req.query.range as string) || '24h';
+        if (!['24h', '7d', '30d', 'all'].includes(range)) {
+          res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
+          return;
+        }
+        const [aggregates, series] = await Promise.all([
+          dbService.getMetricsAggregates(range as '24h' | '7d' | '30d' | 'all'),
+          dbService.getMetricsSeries(range as '24h' | '7d' | '30d' | 'all'),
+        ]);
+        sendJson(res, {
+          range,
+          volume: aggregates.volume.toString(),
+          games: aggregates.games,
+          activePlayers: aggregates.activePlayers,
+          pnl: aggregates.pnl.toString(),
+          tournamentEntries: aggregates.tournamentEntries,
+          series,
+        });
+      } catch (error) {
+        logger.error('Error in admin metrics:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });

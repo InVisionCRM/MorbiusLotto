@@ -1334,6 +1334,96 @@ export class DatabaseService {
 
   // --- Blackjack tables (admin-managed) ---
 
+  /** Admin metrics aggregates for a time range (Blackjack only). */
+  async getMetricsAggregates(range: '24h' | '7d' | '30d' | 'all'): Promise<{
+    volume: bigint;
+    games: number;
+    activePlayers: number;
+    pnl: bigint;
+    tournamentEntries: number;
+  }> {
+    const interval = range === '24h' ? "INTERVAL '24 hours'" : range === '7d' ? "INTERVAL '7 days'" : range === '30d' ? "INTERVAL '30 days'" : null;
+    const gamesFilter = interval ? `AND COALESCE(g.completed_at, g.created_at) >= NOW() - ${interval}` : '';
+
+    const volQuery = `
+      SELECT
+        COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC AS volume,
+        COUNT(*)::INT AS games,
+        (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC AS pnl
+      FROM games g
+      WHERE g.result IS NOT NULL AND g.result != 'ongoing' ${gamesFilter}
+    `;
+    const activeQuery = interval
+      ? `SELECT COUNT(DISTINCT gs.player_id)::INT AS cnt FROM game_sessions gs JOIN games g ON g.session_id = gs.id WHERE g.result IS NOT NULL AND g.result != 'ongoing' AND COALESCE(g.completed_at, g.created_at) >= NOW() - ${interval}`
+      : `SELECT COUNT(DISTINCT gs.player_id)::INT AS cnt FROM game_sessions gs JOIN games g ON g.session_id = gs.id WHERE g.result IS NOT NULL AND g.result != 'ongoing'`;
+    const entriesQuery = interval
+      ? `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te WHERE te.created_at >= NOW() - ${interval}`
+      : `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te`;
+
+    const [volRes, activeRes, entriesRes] = await Promise.all([
+      this.pool.query(volQuery),
+      this.pool.query(activeQuery),
+      this.pool.query(entriesQuery),
+    ]);
+
+    const volume = this.toBigInt(volRes.rows[0]?.volume ?? 0);
+    const games = Number(volRes.rows[0]?.games ?? 0);
+    const pnl = this.toBigInt(volRes.rows[0]?.pnl ?? 0);
+    const activePlayers = Number(activeRes.rows[0]?.cnt ?? 0);
+    const tournamentEntries = Number(entriesRes.rows[0]?.cnt ?? 0);
+
+    return { volume, games, activePlayers, pnl, tournamentEntries };
+  }
+
+  /** Admin metrics time-series (hourly or daily buckets) for charts. */
+  async getMetricsSeries(range: '24h' | '7d' | '30d' | 'all'): Promise<Array<{ period: string; volume: string; games: number }>> {
+    const bucket = range === '24h' ? 'hour' : 'day';
+    const interval = range === '24h' ? "INTERVAL '24 hours'" : range === '7d' ? "INTERVAL '7 days'" : range === '30d' ? "INTERVAL '30 days'" : "INTERVAL '90 days'";
+    const query = `
+      SELECT
+        date_trunc('${bucket}', COALESCE(g.completed_at, g.created_at))::TEXT AS period,
+        COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC AS volume,
+        COUNT(*)::INT AS games
+      FROM games g
+      WHERE g.result IS NOT NULL AND g.result != 'ongoing'
+        AND COALESCE(g.completed_at, g.created_at) >= NOW() - ${interval}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+    const result = await this.pool.query(query);
+    return result.rows.map((r: any) => ({
+      period: r.period,
+      volume: String(r.volume ?? 0),
+      games: Number(r.games ?? 0),
+    }));
+  }
+
+  /** Admin game config: get all key-value pairs. */
+  async getAdminGameConfig(): Promise<Record<string, string>> {
+    const result = await this.pool.query(`SELECT key, value FROM admin_game_config`);
+    const out: Record<string, string> = {};
+    for (const row of result.rows) out[row.key] = row.value ?? '';
+    return out;
+  }
+
+  /** Admin game config: set one key. */
+  async setAdminGameConfigKey(key: string, value: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO admin_game_config (key, value, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [key, value]
+    );
+  }
+
+  /** Up to N player wallet addresses (by recent activity) for admin reserve sampling. */
+  async getPlayerAddressesForReserveCheck(limit: number = 100): Promise<string[]> {
+    const result = await this.pool.query(
+      `SELECT wallet_address FROM players ORDER BY last_seen DESC NULLS LAST LIMIT $1`,
+      [limit]
+    );
+    return result.rows.map((r: any) => r.wallet_address);
+  }
+
   async getBlackjackTables(enabledOnly: boolean = false): Promise<BlackjackTableRow[]> {
     const query = enabledOnly
       ? `SELECT id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at
