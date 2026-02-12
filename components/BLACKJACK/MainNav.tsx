@@ -15,8 +15,8 @@ import ThemeSelectionModal from '@/components/BLACKJACK/ThemeSelectionModal';
 interface MainNavProps {
   onOpenDepositModal?: () => void;
   reserveBalance?: bigint;
-  currentView?: 'game' | 'history' | 'stats' | 'analytics' | 'verify';
-  onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics' | 'verify') => void;
+  currentView?: 'game' | 'history' | 'stats' | 'analytics';
+  onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics') => void;
   theme?: BlackjackThemeKind;
   onThemeChange?: (theme: BlackjackThemeKind) => void;
   imageSource?: BlackjackImageId;
@@ -50,16 +50,14 @@ const viewLabels: Record<string, string> = {
   game: 'Play',
   history: 'History',
   stats: 'My Stats',
-  analytics: 'Analytics',
-  verify: 'Provably Fair'
+  analytics: 'Analytics'
 };
 
 const viewIcons: Record<string, string> = {
   game: 'fa-play',
   history: 'fa-history',
   stats: 'fa-chart-bar',
-  analytics: 'fa-chart-line',
-  verify: 'fa-check-circle'
+  analytics: 'fa-chart-line'
 };
 
 export default function MainNav({ onOpenDepositModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings, musicTrackName, isMusicPlaying, onToggleMusic, onNextTrack }: MainNavProps) {
@@ -95,9 +93,9 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
   const isDeployer = Boolean(
     address && BLACKJACK_DEPLOYER_WALLET && address.toLowerCase() === BLACKJACK_DEPLOYER_WALLET
   );
-  const views: Array<'game' | 'history' | 'stats' | 'analytics' | 'verify'> = isDeployer
-    ? ['game', 'history', 'stats', 'analytics', 'verify']
-    : ['game', 'history', 'stats', 'verify'];
+  const views: Array<'game' | 'history' | 'stats' | 'analytics'> = isDeployer
+    ? ['game', 'history', 'stats', 'analytics']
+    : ['game', 'history', 'stats'];
 
   return (
     <nav
@@ -250,15 +248,6 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
                         )}
                       </button>
                     ))}
-                    {/* Verification Page Link */}
-                    <Link
-                      href="/BLACKJACK/verify"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-shield-alt w-4 text-center"></i>
-                      <span className="text-sm font-medium">Verify Game</span>
-                    </Link>
                     {/* Tournament Lobby */}
                     {onTournamentLobby && (
                       <button

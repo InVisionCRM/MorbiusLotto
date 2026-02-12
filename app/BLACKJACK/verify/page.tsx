@@ -213,12 +213,42 @@ function BlackjackVerifyContent() {
           data.gameNumber
         )
 
-        // Collect all cards in deal order
+        // Collect all cards in deal order: player[0], dealer[0], player[1], dealer[1], then any additional cards
         const allCards: number[] = []
-        data.playerHands.forEach((hand: any) => {
+        
+        // Initial deal order: player card 1, dealer card 1, player card 2, dealer card 2
+        const firstPlayerHand = data.playerHands[0]
+        if (firstPlayerHand && firstPlayerHand.cards.length >= 2) {
+          allCards.push(firstPlayerHand.cards[0]) // shuffledDeck[0] - player card 1
+          if (data.dealerCards.length >= 1) {
+            allCards.push(data.dealerCards[0]) // shuffledDeck[1] - dealer card 1
+          }
+          allCards.push(firstPlayerHand.cards[1]) // shuffledDeck[2] - player card 2
+          if (data.dealerCards.length >= 2) {
+            allCards.push(data.dealerCards[1]) // shuffledDeck[3] - dealer card 2
+          }
+        }
+        
+        // Additional player cards (hits, splits) - in order they were dealt
+        // Start from card index 2 (third card) of first hand, then any split hands
+        if (firstPlayerHand && firstPlayerHand.cards.length > 2) {
+          for (let i = 2; i < firstPlayerHand.cards.length; i++) {
+            allCards.push(firstPlayerHand.cards[i])
+          }
+        }
+        
+        // Additional split hands (if any) - all cards from each split hand
+        for (let handIdx = 1; handIdx < data.playerHands.length; handIdx++) {
+          const hand = data.playerHands[handIdx]
           allCards.push(...hand.cards)
-        })
-        allCards.push(...data.dealerCards)
+        }
+        
+        // Additional dealer cards (hits) - start from card index 2 (third card)
+        if (data.dealerCards.length > 2) {
+          for (let i = 2; i < data.dealerCards.length; i++) {
+            allCards.push(data.dealerCards[i])
+          }
+        }
 
         // Verify cards match
         cardsVerified = true
