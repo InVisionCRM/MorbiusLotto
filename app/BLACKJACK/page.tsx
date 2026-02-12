@@ -1537,13 +1537,19 @@ export default function BlackjackPage() {
       if (soundEnabled) playSound('/BlackJack/sounds/cards.wav');
       setNewCardIndices(prev => ({ ...prev, player: newIndices }));
       // Clear animation flags after animation completes
+      // Account for staggered delay (250ms per card index) + animation duration (600ms) + buffer (100ms)
+      const indicesArray = Array.from(newIndices);
+      const maxIndex = indicesArray.length > 0 ? Math.max(...indicesArray) : 0;
+      const animationDelay = maxIndex * 250; // Staggered delay in ms
+      const animationDuration = ANIMATION_TIMINGS.CARD_DEAL;
+      const totalTime = animationDelay + animationDuration + 100; // 100ms buffer
       setTimeout(() => {
         setNewCardIndices(prev => {
           const updated = new Set(prev.player);
           newIndices.forEach(idx => updated.delete(idx));
           return { ...prev, player: updated };
         });
-      }, 1000);
+      }, totalTime);
     }
     
     if (currentDealerCardCount > prevDealerCardCount.current) {
@@ -1554,13 +1560,19 @@ export default function BlackjackPage() {
       if (soundEnabled) playSound('/BlackJack/sounds/cards.wav');
       setNewCardIndices(prev => ({ ...prev, dealer: newIndices }));
       // Clear animation flags after animation completes
+      // Account for staggered delay (250ms per card index) + animation duration (600ms) + buffer (100ms)
+      const indicesArray = Array.from(newIndices);
+      const maxIndex = indicesArray.length > 0 ? Math.max(...indicesArray) : 0;
+      const animationDelay = maxIndex * 250; // Staggered delay in ms
+      const animationDuration = ANIMATION_TIMINGS.CARD_DEAL;
+      const totalTime = animationDelay + animationDuration + 100; // 100ms buffer
       setTimeout(() => {
         setNewCardIndices(prev => {
           const updated = new Set(prev.dealer);
           newIndices.forEach(idx => updated.delete(idx));
           return { ...prev, dealer: updated };
         });
-      }, 1000);
+      }, totalTime);
     }
     
     prevPlayerCardCount.current = currentPlayerCardCount;

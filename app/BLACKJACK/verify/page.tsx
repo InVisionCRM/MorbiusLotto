@@ -93,13 +93,15 @@ function BlackjackVerifyContent() {
   }
 
   // HMAC-SHA256 byte stream for Fisher-Yates shuffle
+  // Extracts 4 bytes from a cursor-indexed HMAC-SHA256 byte stream.
+  // Handles 32-byte boundary crossing exactly like server implementation.
   const hmacByteStream = async (serverSeed: string, clientSeed: string, nonce: number, cursor: number): Promise<Uint8Array> => {
     const roundIndex = Math.floor(cursor / 32)
-    const message = `${clientSeed}:${nonce}:${roundIndex}`
+    const byteOffset = cursor % 32
     
     const encoder = new TextEncoder()
     const keyData = encoder.encode(serverSeed)
-    const messageData = encoder.encode(message)
+    const messageData = encoder.encode(`${clientSeed}:${nonce}:${roundIndex}`)
     
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
@@ -109,18 +111,34 @@ function BlackjackVerifyContent() {
       ['sign']
     )
     
-    const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
-    return new Uint8Array(signature)
+    const hmacBuf = new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, messageData))
+    
+    if (byteOffset + 4 <= 32) {
+      // All 4 bytes within one HMAC round
+      return hmacBuf.subarray(byteOffset, byteOffset + 4)
+    }
+    
+    // Straddles boundary — get remaining bytes from next round
+    const bytesFromCurrent = 32 - byteOffset
+    const nextMessageData = encoder.encode(`${clientSeed}:${nonce}:${roundIndex + 1}`)
+    const nextHmacBuf = new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, nextMessageData))
+    
+    // Concatenate bytes from both rounds
+    const result = new Uint8Array(4)
+    result.set(hmacBuf.subarray(byteOffset, 32), 0)
+    result.set(nextHmacBuf.subarray(0, 4 - bytesFromCurrent), bytesFromCurrent)
+    return result
   }
 
-  // Convert bytes to float [0, 1)
-  const bytesToFloat = (bytes: Uint8Array, offset: number = 0): number => {
-    const byte1 = bytes[offset % bytes.length]
-    const byte2 = bytes[(offset + 1) % bytes.length]
-    const byte3 = bytes[(offset + 2) % bytes.length]
-    const byte4 = bytes[(offset + 3) % bytes.length]
-    const combined = (byte1 << 24) | (byte2 << 16) | (byte3 << 8) | byte4
-    return (combined >>> 0) / 0xFFFFFFFF
+  // Convert bytes to float [0, 1) — unbiased mapping matching server implementation
+  // byte[0]/256 + byte[1]/256^2 + byte[2]/256^3 + byte[3]/256^4
+  const bytesToFloat = (bytes: Uint8Array): number => {
+    return (
+      bytes[0] / 256 +
+      bytes[1] / (256 * 256) +
+      bytes[2] / (256 * 256 * 256) +
+      bytes[3] / (256 * 256 * 256 * 256)
+    )
   }
 
   // Fisher-Yates shuffle (client-side implementation)
@@ -131,7 +149,7 @@ function BlackjackVerifyContent() {
     for (let i = 51; i >= 1; i--) {
       const bytes = await hmacByteStream(serverSeed, clientSeed, nonce, cursor)
       cursor += 4
-      const float = bytesToFloat(bytes, 0)
+      const float = bytesToFloat(bytes)
       const j = Math.floor(float * (i + 1))
       ;[deck[i], deck[j]] = [deck[j], deck[i]]
     }

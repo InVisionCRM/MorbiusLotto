@@ -7,7 +7,7 @@ import PlayingCard from './PlayingCard';
 import { SystemTime } from '@/components/ui/system-time';
 import BettingPanel from './BettingPanel';
 import { NumberTicker } from '@/components/ui/number-ticker';
-import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
+import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
 import type { BlackjackImageId, BlackjackVideoId } from '@/app/BLACKJACK/constants';
 
 // Background music playlist moved to page.tsx to avoid duplicate audio instances
@@ -1795,7 +1795,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         }
 
         .card-slide-in {
-          animation: cardSlideIn 0.4s ease-out both;
+          animation: cardSlideIn 0.6s ease-out both;
         }
 
         /* Card clear: fade + slide down (collect) */
