@@ -10,7 +10,8 @@ interface TopPlayerCard {
   wallet_address: string
   display_name?: string
   profile_image_url?: string | null
-  value: string
+  /** From API: string (wei/count) or number (e.g. win_rate 55.56) */
+  value: string | number
   label: string
   /** From API: ISO string; normalize to Date when needed */
   created_at?: Date | string
@@ -26,21 +27,25 @@ const categories: Array<'games' | 'profit_loss' | 'wagered' | 'win_rate' | 'tota
   'win_streak',
 ]
 
-function formatValue(category: string, value: string): string {
-  const numValue = BigInt(value || '0')
+function formatValue(category: string, value: string | number): string {
   switch (category) {
     case 'games':
       return `${Number(value)} games`
     case 'profit_loss':
     case 'wagered':
-    case 'total_won':
-      return `${Math.floor(Number(formatEther(numValue))).toLocaleString()} MORBIUS`
+    case 'total_won': {
+      // Wei amounts: API sends integer string; BigInt() rejects decimals (e.g. win_rate 55.56)
+      const raw = value ?? '0'
+      const str = typeof raw === 'number' ? String(Math.floor(raw)) : String(raw)
+      const wei = /^\d+$/.test(str) ? BigInt(str) : BigInt(0)
+      return `${Math.floor(Number(formatEther(wei))).toLocaleString()} MORBIUS`
+    }
     case 'win_rate':
       return `${Number(value).toFixed(1)}%`
     case 'win_streak':
       return `${value} wins`
     default:
-      return value
+      return String(value)
   }
 }
 
