@@ -8,7 +8,6 @@ import { SystemTime } from '@/components/ui/system-time';
 import BettingPanel from './BettingPanel';
 import { NumberTicker } from '@/components/ui/number-ticker';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
-import type { BlackjackImageId, BlackjackVideoId } from '@/app/BLACKJACK/constants';
 
 // Background music playlist moved to page.tsx to avoid duplicate audio instances
 
@@ -49,8 +48,12 @@ interface BlackjackTableProps {
   currentBetAmount?: string;
   lastBetAmount?: string;
   useVideoBackground?: boolean;
-  imageSource?: BlackjackImageId;
-  videoSource?: BlackjackVideoId;
+  imageSource?: string;
+  videoSource?: string;
+  /** When set, overrides lookup from constants (e.g. when using API table list). */
+  imageSrc?: string;
+  /** When set, overrides lookup from constants (e.g. when using API table list). */
+  videoSrc?: string;
   videoSyncToClock?: boolean;
   videoPosition?: number;
   onOpenDepositModal?: () => void;
@@ -128,6 +131,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   useVideoBackground = true,
   imageSource = DEFAULT_BLACKJACK_IMAGE_ID,
   videoSource = 'glowingTable',
+  imageSrc: imageSrcProp,
+  videoSrc: videoSrcProp,
   videoSyncToClock = true,
   videoPosition = 50,
   onOpenDepositModal,
@@ -144,8 +149,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onDismissTournamentSummary,
   onOpenTournamentHistory,
 }) => {
-  const videoSrc = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
-  const imageSrc = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
+  const videoSrc = videoSrcProp ?? BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
+  const imageSrc = imageSrcProp ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
   // State for progressive dealer card reveal
   // Industry standard: Show only first card during play, reveal all when game completes
   const [visibleDealerCards, setVisibleDealerCards] = useState(() => {

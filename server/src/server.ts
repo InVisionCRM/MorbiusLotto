@@ -20,6 +20,17 @@ import { blackjackAbi } from './abi/blackjack';
 // Load environment variables
 dotenv.config();
 
+// Admin: comma-separated wallet addresses (server-side, for /api/admin/*)
+const ADMIN_WALLETS: string[] = (process.env.ADMIN_WALLETS || '')
+  .split(',')
+  .map((a) => a.trim().toLowerCase())
+  .filter(Boolean);
+
+function isAdminWallet(addr: string | undefined): boolean {
+  if (!addr) return false;
+  return ADMIN_WALLETS.includes(addr.toLowerCase());
+}
+
 const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 3001;
@@ -50,6 +61,16 @@ app.use('/api/', limiter);
 // Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Admin API: require x-admin-wallet header and that it's in ADMIN_WALLETS
+app.use('/api/admin', (req, res, next) => {
+  const wallet = (req.headers['x-admin-wallet'] as string)?.trim();
+  if (!wallet || !isAdminWallet(wallet)) {
+    res.status(403).json({ error: 'Forbidden', message: 'Admin wallet required' });
+    return;
+  }
+  next();
+});
 
 // JSON helper that serializes BigInt values (Express res.json cannot)
 const jsonReplacer = (_key: string, value: any) => (typeof value === 'bigint' ? value.toString() : value);
@@ -301,6 +322,104 @@ async function initializeServices() {
         })));
       } catch (error) {
         logger.error('Error fetching player tournament history:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Public: Blackjack table list (for picker; enabled only)
+    app.get('/api/blackjack/tables', async (req, res) => {
+      try {
+        const enabledOnly = (req.query.enabledOnly as string) !== 'false';
+        const rows = await dbService.getBlackjackTables(enabledOnly);
+        sendJson(res, rows.map((r) => ({
+          id: r.id,
+          kind: r.kind,
+          name: r.name,
+          src: r.src,
+          description: r.description,
+          token_contract_address: r.token_contract_address,
+          sort_order: r.sort_order,
+          enabled: r.enabled,
+        })));
+      } catch (error) {
+        logger.error('Error fetching blackjack tables:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Admin: Blackjack tables CRUD (requires x-admin-wallet in allowed list)
+    app.get('/api/admin/tables', async (req, res) => {
+      try {
+        const enabledOnly = (req.query.enabledOnly as string) === 'true';
+        const rows = await dbService.getBlackjackTables(enabledOnly);
+        sendJson(res, rows);
+      } catch (error) {
+        logger.error('Error fetching admin blackjack tables:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.post('/api/admin/tables', async (req, res) => {
+      try {
+        const { kind, name, src, description, token_contract_address, sort_order, enabled } = req.body;
+        if (!kind || !name || !src) {
+          res.status(400).json({ error: 'Missing required fields: kind, name, src' });
+          return;
+        }
+        if (kind !== 'image' && kind !== 'video') {
+          res.status(400).json({ error: 'kind must be image or video' });
+          return;
+        }
+        const row = await dbService.createBlackjackTable({
+          kind,
+          name,
+          src,
+          description: description ?? null,
+          token_contract_address: token_contract_address ?? null,
+          sort_order: typeof sort_order === 'number' ? sort_order : 0,
+          enabled: enabled !== false,
+        });
+        sendJson(res, row);
+      } catch (error) {
+        logger.error('Error creating blackjack table:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.put('/api/admin/tables/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updates = req.body;
+        const row = await dbService.updateBlackjackTable(id, {
+          name: updates.name,
+          src: updates.src,
+          description: updates.description,
+          token_contract_address: updates.token_contract_address,
+          sort_order: updates.sort_order,
+          enabled: updates.enabled,
+        });
+        if (!row) {
+          res.status(404).json({ error: 'Table not found' });
+          return;
+        }
+        sendJson(res, row);
+      } catch (error) {
+        logger.error('Error updating blackjack table:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.delete('/api/admin/tables/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const ok = await dbService.deleteBlackjackTable(id);
+        if (!ok) {
+          res.status(404).json({ error: 'Table not found' });
+          return;
+        }
+        res.status(204).send();
+      } catch (error) {
+        logger.error('Error deleting blackjack table:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });

@@ -12,7 +12,8 @@ interface TopPlayerCard {
   profile_image_url?: string | null
   value: string
   label: string
-  created_at?: Date
+  /** From API: ISO string; normalize to Date when needed */
+  created_at?: Date | string
   category: string
 }
 
@@ -48,10 +49,12 @@ function formatAddress(address: string): string {
   return address.slice(-4)
 }
 
-function formatPlayingDuration(createdAt?: Date): string {
-  if (!createdAt) return 'Unknown'
+function formatPlayingDuration(createdAt?: Date | string): string {
+  if (createdAt == null) return 'Unknown'
+  const date = typeof createdAt === 'string' ? new Date(createdAt) : createdAt
+  if (Number.isNaN(date.getTime())) return 'Unknown'
   const now = new Date()
-  const diffMs = now.getTime() - createdAt.getTime()
+  const diffMs = now.getTime() - date.getTime()
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
   
   if (diffDays < 1) return 'Today'

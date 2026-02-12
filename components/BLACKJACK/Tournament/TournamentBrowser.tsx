@@ -17,6 +17,7 @@ import {
   MAX_REBUYS_LABELS,
 } from '@/lib/tournament-types';
 import { getTableThemeInfo } from '@/app/BLACKJACK/constants';
+import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 import { FreerollList } from './FreerollList';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
@@ -66,6 +67,8 @@ interface TournamentBrowserProps {
   tournamentHistory?: PlayerTournamentHistoryItem[];
   isHistoryLoading?: boolean;
   onFetchHistory?: () => Promise<void | PlayerTournamentHistoryItem[]>;
+  /** When provided, used to resolve table theme (kind + id) to label/src (e.g. from API tables). */
+  getThemeInfo?: (theme: { kind: 'image' | 'video'; id: string }) => TableThemeInfo;
 }
 
 // ============================
@@ -527,6 +530,7 @@ function ExpandedCardContent({
   onFundNow,
   entries,
   loadingEntries,
+  getThemeInfo,
 }: {
   tournament: TournamentListItem;
   tokenInfo: TokenInfo | null;
@@ -537,6 +541,7 @@ function ExpandedCardContent({
   onFundNow?: (tournament: TournamentListItem) => void;
   entries: LeaderboardEntry[];
   loadingEntries: boolean;
+  getThemeInfo?: (theme: { kind: 'image' | 'video'; id: string }) => TableThemeInfo;
 }) {
   const buyInBigInt = BigInt(tournament.buyInAmount);
   const canAfford = playerBalance >= buyInBigInt;
@@ -558,8 +563,8 @@ function ExpandedCardContent({
   const prizeDistribution = getExamplePrizeDistribution(prizePool, prizePercentages);
   const decimals = tournament.prizeTokenDecimals ?? 18;
 
-  // Table theme info
-  const themeInfo = getTableThemeInfo(tournament.tableTheme);
+  // Table theme info (use hook resolver when provided, else static constants)
+  const themeInfo = getThemeInfo ? getThemeInfo(tournament.tableTheme) : getTableThemeInfo(tournament.tableTheme);
 
   // Time limit label
   const timeLimitLabel =
@@ -1050,6 +1055,7 @@ function ExpandedCard({
   playerBalance,
   playerAddress,
   wsClient,
+  getThemeInfo,
 }: {
   tournament: TournamentListItem;
   onClose: () => void;
@@ -1058,6 +1064,7 @@ function ExpandedCard({
   playerBalance: bigint;
   playerAddress?: string | null;
   wsClient?: BlackjackWebSocketClient | null;
+  getThemeInfo?: (theme: { kind: 'image' | 'video'; id: string }) => TableThemeInfo;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const tokenInfo = useTokenInfo(tournament.prizeTokenAddress);
@@ -1196,6 +1203,7 @@ function ExpandedCard({
             onFundNow={onFundNow}
             entries={entries}
             loadingEntries={loadingEntries}
+            getThemeInfo={getThemeInfo}
           />
         </motion.div>
       </motion.div>
@@ -1393,6 +1401,7 @@ export function TournamentBrowser({
   tournamentHistory = [],
   isHistoryLoading = false,
   onFetchHistory,
+  getThemeInfo,
 }: TournamentBrowserProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<LobbyTab>('join');
@@ -1616,6 +1625,7 @@ export function TournamentBrowser({
               playerBalance={playerBalance}
               playerAddress={playerAddress}
               wsClient={wsClient}
+              getThemeInfo={getThemeInfo}
             />
           </>
         )}

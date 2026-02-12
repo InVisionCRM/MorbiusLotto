@@ -35,7 +35,7 @@ import {
   TournamentPinEntry,
 } from '@/components/BLACKJACK/Tournament';
 import { CreateTournamentRequest } from '@/lib/tournament-types';
-import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from './constants';
+import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -45,6 +45,7 @@ import { formatEther, parseEther } from 'viem';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
 import { useTokenApproval } from '@/hooks/use-token-approval';
 import { useAudio } from '@/hooks/use-audio';
+import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 
 // Intro screen component
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -229,12 +230,13 @@ export default function BlackjackPage() {
   // Perfect Pairs side bet (whole MORBIUS units, 0-10000)
   const [perfectPairsBet, setPerfectPairsBet] = useState(0);
 
-  // Background preference state (persisted per wallet)
+  // Background preference state (persisted per wallet). imageSource/videoSource can be static id or API table UUID.
+  const { imageOptions, videoOptions, getThemeInfo } = useBlackjackTables();
   const [theme, setTheme] = useState<BlackjackThemeKind>('video');
-  const [imageSource, setImageSource] = useState<BlackjackImageId>(DEFAULT_BLACKJACK_IMAGE_ID);
+  const [imageSource, setImageSource] = useState<string>(DEFAULT_BLACKJACK_IMAGE_ID);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const { playSound } = useAudio(soundEnabled);
-  const [videoSource, setVideoSource] = useState<BlackjackVideoId>('glowingTable');
+  const [videoSource, setVideoSource] = useState<string>('glowingTable');
   const [videoSyncToClock, setVideoSyncToClock] = useState(true);
   const [videoPosition, setVideoPosition] = useState(50); // 0-100, used when sync to clock is off
   const [themeModalOpen, setThemeModalOpen] = useState(false);
@@ -294,8 +296,8 @@ export default function BlackjackPage() {
   const useVideoBackground = theme === 'video';
 
   const TABLE_PREFS_KEY = 'morb_blackjack_table';
-  const validImageIds = useMemo(() => new Set(BLACKJACK_IMAGE_BACKGROUNDS.map((x) => x.id)), []);
-  const validVideoIds = useMemo(() => new Set(BLACKJACK_VIDEO_BACKGROUNDS.map((x) => x.id)), []);
+  const validImageIds = useMemo(() => new Set(imageOptions.map((x) => x.id)), [imageOptions]);
+  const validVideoIds = useMemo(() => new Set(videoOptions.map((x) => x.id)), [videoOptions]);
 
   // Load table background preference for this wallet
   useEffect(() => {
@@ -306,12 +308,8 @@ export default function BlackjackPage() {
       if (!raw) return;
       const prefs = JSON.parse(raw) as { theme?: string; imageSource?: string; videoSource?: string };
       if (prefs.theme === 'image' || prefs.theme === 'video') setTheme(prefs.theme);
-      if (prefs.imageSource && validImageIds.has(prefs.imageSource as BlackjackImageId)) {
-        setImageSource(prefs.imageSource as BlackjackImageId);
-      }
-      if (prefs.videoSource && validVideoIds.has(prefs.videoSource as BlackjackVideoId)) {
-        setVideoSource(prefs.videoSource as BlackjackVideoId);
-      }
+      if (prefs.imageSource && validImageIds.has(prefs.imageSource)) setImageSource(prefs.imageSource);
+      if (prefs.videoSource && validVideoIds.has(prefs.videoSource)) setVideoSource(prefs.videoSource);
     } catch {
       // ignore invalid stored prefs
     }
@@ -331,7 +329,7 @@ export default function BlackjackPage() {
     }
   }, [address, theme, imageSource, videoSource]);
 
-  const handleVideoSourceChange = useCallback((id: BlackjackVideoId) => {
+  const handleVideoSourceChange = useCallback((id: string) => {
     setVideoSource(id);
     toast.info('Video background updated.');
   }, []);
@@ -2436,6 +2434,8 @@ export default function BlackjackPage() {
         onImageSourceChange={setImageSource}
         videoSource={videoSource}
         onVideoSourceChange={handleVideoSourceChange}
+        imageOptions={imageOptions}
+        videoOptions={videoOptions}
         videoSyncToClock={videoSyncToClock}
         onVideoSyncToClockChange={setVideoSyncToClock}
         videoPosition={videoPosition}
@@ -2588,6 +2588,8 @@ export default function BlackjackPage() {
               useVideoBackground={useVideoBackground}
               imageSource={imageSource}
               videoSource={videoSource}
+              imageSrc={getThemeInfo({ kind: 'image', id: imageSource }).src}
+              videoSrc={getThemeInfo({ kind: 'video', id: videoSource }).src}
               videoSyncToClock={videoSyncToClock}
               videoPosition={videoPosition}
               onOpenDepositModal={handleOpenDepositModal}
@@ -2851,6 +2853,7 @@ export default function BlackjackPage() {
           isOpen={showTournamentBrowser}
           initialTab={tournamentBrowserInitialTab}
           onClose={() => setShowTournamentBrowser(false)}
+          getThemeInfo={getThemeInfo}
           onJoin={(tournamentId, isPrivate) => {
             if (isPrivate) {
               setPendingJoinTournamentId(tournamentId);

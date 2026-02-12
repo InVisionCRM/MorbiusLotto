@@ -133,6 +133,19 @@ export interface ChatMessage {
   created_at: Date;
 }
 
+export interface BlackjackTableRow {
+  id: string;
+  kind: 'image' | 'video';
+  name: string;
+  src: string;
+  description: string | null;
+  token_contract_address: string | null;
+  sort_order: number;
+  enabled: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export class DatabaseService {
   private pool: Pool;
 
@@ -1317,5 +1330,94 @@ export class DatabaseService {
       deactivatedAt: row.deactivated_at ? new Date(row.deactivated_at) : null,
       deactivatedReason: row.deactivated_reason
     }));
+  }
+
+  // --- Blackjack tables (admin-managed) ---
+
+  async getBlackjackTables(enabledOnly: boolean = false): Promise<BlackjackTableRow[]> {
+    const query = enabledOnly
+      ? `SELECT id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at
+         FROM blackjack_tables WHERE enabled = true ORDER BY sort_order ASC, created_at ASC`
+      : `SELECT id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at
+         FROM blackjack_tables ORDER BY sort_order ASC, created_at ASC`;
+    const result = await this.pool.query(query);
+    return result.rows.map((r: any) => ({
+      id: r.id,
+      kind: r.kind,
+      name: r.name,
+      src: r.src,
+      description: r.description ?? null,
+      token_contract_address: r.token_contract_address ?? null,
+      sort_order: r.sort_order,
+      enabled: r.enabled,
+      created_at: new Date(r.created_at),
+      updated_at: new Date(r.updated_at),
+    }));
+  }
+
+  async createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow> {
+    const r = await this.pool.query(
+      `INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, sort_order, enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at`,
+      [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.sort_order, row.enabled]
+    );
+    const x = r.rows[0];
+    return {
+      id: x.id,
+      kind: x.kind,
+      name: x.name,
+      src: x.src,
+      description: x.description ?? null,
+      token_contract_address: x.token_contract_address ?? null,
+      sort_order: x.sort_order,
+      enabled: x.enabled,
+      created_at: new Date(x.created_at),
+      updated_at: new Date(x.updated_at),
+    };
+  }
+
+  async updateBlackjackTable(
+    id: string,
+    updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'sort_order' | 'enabled'>>
+  ): Promise<BlackjackTableRow | null> {
+    const fields: string[] = [];
+    const values: any[] = [];
+    let i = 1;
+    if (updates.name !== undefined) { fields.push(`name = $${i++}`); values.push(updates.name); }
+    if (updates.src !== undefined) { fields.push(`src = $${i++}`); values.push(updates.src); }
+    if (updates.description !== undefined) { fields.push(`description = $${i++}`); values.push(updates.description); }
+    if (updates.token_contract_address !== undefined) { fields.push(`token_contract_address = $${i++}`); values.push(updates.token_contract_address); }
+    if (updates.sort_order !== undefined) { fields.push(`sort_order = $${i++}`); values.push(updates.sort_order); }
+    if (updates.enabled !== undefined) { fields.push(`enabled = $${i++}`); values.push(updates.enabled); }
+    if (fields.length === 0) {
+      const existing = await this.getBlackjackTables().then((rows) => rows.find((r) => r.id === id));
+      return existing ?? null;
+    }
+    fields.push(`updated_at = NOW()`);
+    values.push(id);
+    const r = await this.pool.query(
+      `UPDATE blackjack_tables SET ${fields.join(', ')} WHERE id = $${i} RETURNING id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at`,
+      values
+    );
+    if (r.rows.length === 0) return null;
+    const x = r.rows[0];
+    return {
+      id: x.id,
+      kind: x.kind,
+      name: x.name,
+      src: x.src,
+      description: x.description ?? null,
+      token_contract_address: x.token_contract_address ?? null,
+      sort_order: x.sort_order,
+      enabled: x.enabled,
+      created_at: new Date(x.created_at),
+      updated_at: new Date(x.updated_at),
+    };
+  }
+
+  async deleteBlackjackTable(id: string): Promise<boolean> {
+    const r = await this.pool.query('DELETE FROM blackjack_tables WHERE id = $1', [id]);
+    return (r.rowCount ?? 0) > 0;
   }
 }

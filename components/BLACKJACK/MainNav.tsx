@@ -9,7 +9,9 @@ import { NumberTicker } from '@/components/ui/number-ticker';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
-import type { BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from '@/app/BLACKJACK/constants';
+import { isAdminWallet } from '@/lib/admin';
+import type { BlackjackThemeKind } from '@/app/BLACKJACK/constants';
+import type { TableOption } from '@/hooks/use-blackjack-tables';
 import ThemeSelectionModal from '@/components/BLACKJACK/ThemeSelectionModal';
 
 interface MainNavProps {
@@ -19,10 +21,13 @@ interface MainNavProps {
   onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics') => void;
   theme?: BlackjackThemeKind;
   onThemeChange?: (theme: BlackjackThemeKind) => void;
-  imageSource?: BlackjackImageId;
-  onImageSourceChange?: (id: BlackjackImageId) => void;
-  videoSource?: BlackjackVideoId;
-  onVideoSourceChange?: (id: BlackjackVideoId) => void;
+  imageSource?: string;
+  onImageSourceChange?: (id: string) => void;
+  videoSource?: string;
+  onVideoSourceChange?: (id: string) => void;
+  /** Table options from API (when provided, theme modal uses these instead of static list). */
+  imageOptions?: TableOption[];
+  videoOptions?: TableOption[];
   videoSyncToClock?: boolean;
   onVideoSyncToClockChange?: (sync: boolean) => void;
   videoPosition?: number;
@@ -60,7 +65,7 @@ const viewIcons: Record<string, string> = {
   analytics: 'fa-chart-line'
 };
 
-export default function MainNav({ onOpenDepositModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings, musicTrackName, isMusicPlaying, onToggleMusic, onNextTrack }: MainNavProps) {
+export default function MainNav({ onOpenDepositModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, imageOptions, videoOptions, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings, musicTrackName, isMusicPlaying, onToggleMusic, onNextTrack }: MainNavProps) {
   const { address, isConnected } = useAccount();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -93,6 +98,7 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
   const isDeployer = Boolean(
     address && BLACKJACK_DEPLOYER_WALLET && address.toLowerCase() === BLACKJACK_DEPLOYER_WALLET
   );
+  const isAdmin = isAdminWallet(address);
   const views: Array<'game' | 'history' | 'stats' | 'analytics'> = isDeployer
     ? ['game', 'history', 'stats', 'analytics']
     : ['game', 'history', 'stats'];
@@ -343,6 +349,16 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
                       <i className="fas fa-crown w-4 text-center"></i>
                       <span className="text-sm font-medium">Creator Dashboard</span>
                     </Link>
+                    {isAdmin && (
+                      <Link
+                        href="/admin"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <i className="fas fa-cog w-4 text-center" aria-hidden />
+                        <span className="text-sm font-medium">Admin</span>
+                      </Link>
+                    )}
                   </div>
 
                   {/* Morbius Stats Section */}
@@ -375,6 +391,8 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
         onThemeChange={onThemeChange ?? (() => {})}
         onImageSourceChange={onImageSourceChange ?? (() => {})}
         onVideoSourceChange={onVideoSourceChange ?? (() => {})}
+        imageOptions={imageOptions}
+        videoOptions={videoOptions}
         videoSyncToClock={videoSyncToClock}
         onVideoSyncToClockChange={onVideoSyncToClockChange}
         videoPosition={videoPosition}

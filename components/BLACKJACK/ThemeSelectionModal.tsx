@@ -8,7 +8,8 @@ import {
   BLACKJACK_IMAGE_BACKGROUNDS,
   BLACKJACK_VIDEO_BACKGROUNDS,
 } from '@/app/BLACKJACK/constants'
-import type { BlackjackImageId, BlackjackThemeKind, BlackjackVideoId } from '@/app/BLACKJACK/constants'
+import type { BlackjackThemeKind } from '@/app/BLACKJACK/constants'
+import type { TableOption } from '@/hooks/use-blackjack-tables'
 
 const PANEL_STYLE = {
   background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.9))',
@@ -20,15 +21,18 @@ export interface ThemeSelectionModalProps {
   open: boolean
   onClose: () => void
   theme: BlackjackThemeKind
-  imageSource: BlackjackImageId
-  videoSource: BlackjackVideoId
+  imageSource: string
+  videoSource: string
   onThemeChange: (theme: BlackjackThemeKind) => void
-  onImageSourceChange: (id: BlackjackImageId) => void
-  onVideoSourceChange: (id: BlackjackVideoId) => void
+  onImageSourceChange: (id: string) => void
+  onVideoSourceChange: (id: string) => void
   videoSyncToClock?: boolean
   onVideoSyncToClockChange?: (sync: boolean) => void
   videoPosition?: number
   onVideoPositionChange?: (position: number) => void
+  /** When provided, use these instead of static constants (e.g. from API). */
+  imageOptions?: TableOption[]
+  videoOptions?: TableOption[]
 }
 
 export default function ThemeSelectionModal({
@@ -44,6 +48,8 @@ export default function ThemeSelectionModal({
   onVideoSyncToClockChange,
   videoPosition = 50,
   onVideoPositionChange,
+  imageOptions: imageOptionsProp,
+  videoOptions: videoOptionsProp,
 }: ThemeSelectionModalProps) {
   const [activeTab, setActiveTab] = useState<'images' | 'videos'>('images')
   const [expandSrc, setExpandSrc] = useState<string | null>(null)
@@ -53,8 +59,11 @@ export default function ThemeSelectionModal({
   const [sortOrder, setSortOrder] = useState<'a-z' | 'z-a'>('a-z')
   useEffect(() => setMounted(true), [])
 
+  const imageList = imageOptionsProp ?? BLACKJACK_IMAGE_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src }))
+  const videoList = videoOptionsProp ?? BLACKJACK_VIDEO_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src }))
+
   const filteredImages = React.useMemo(() => {
-    let list = [...BLACKJACK_IMAGE_BACKGROUNDS]
+    let list = [...imageList]
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter((img) => img.label.toLowerCase().includes(q) || img.id.toLowerCase().includes(q))
@@ -64,10 +73,10 @@ export default function ThemeSelectionModal({
       return sortOrder === 'a-z' ? cmp : -cmp
     })
     return list
-  }, [search, sortOrder])
+  }, [imageList, search, sortOrder])
 
   const filteredVideos = React.useMemo(() => {
-    let list = [...BLACKJACK_VIDEO_BACKGROUNDS]
+    let list = [...videoList]
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter((v) => v.label.toLowerCase().includes(q) || v.id.toLowerCase().includes(q))
@@ -77,19 +86,19 @@ export default function ThemeSelectionModal({
       return sortOrder === 'a-z' ? cmp : -cmp
     })
     return list
-  }, [search, sortOrder])
+  }, [videoList, search, sortOrder])
 
-  const handleSelectImage = (id: BlackjackImageId) => {
+  const handleSelectImage = (id: string) => {
     onThemeChange('image')
     onImageSourceChange(id)
-    const label = BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === id)?.label ?? id
+    const label = imageList.find((img) => img.id === id)?.label ?? id
     toast.success(`Table background applied: ${label}`)
   }
 
-  const handleSelectVideo = (id: BlackjackVideoId) => {
+  const handleSelectVideo = (id: string) => {
     onThemeChange('video')
     onVideoSourceChange(id)
-    const label = BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === id)?.label ?? id
+    const label = videoList.find((v) => v.id === id)?.label ?? id
     toast.success(`Table background applied: ${label}`)
   }
 
