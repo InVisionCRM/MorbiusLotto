@@ -106,7 +106,7 @@ export default function BlackjackSidebar({
   playerAddress,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
-  const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'recent')
+  const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'chart')
   const [sidebarVerifyGameId, setSidebarVerifyGameId] = useState<string | null>(null)
   const onSidebarVerifyGameIdConsumed = useCallback(() => setSidebarVerifyGameId(null), [])
 
@@ -114,12 +114,12 @@ export default function BlackjackSidebar({
     ? [...BASE_TABS, TOURNAMENT_PLAY_TAB]
     : BASE_TABS
 
-  // When entering a tournament, switch to tournament tab; when leaving, switch off it
+  // When entering a tournament, switch to tournament tab; when leaving, switch to chart tab
   useEffect(() => {
     if (inTournament) {
       setActiveTab('tournament-play')
     } else {
-      setActiveTab((prev) => (prev === 'tournament-play' ? 'recent' : prev))
+      setActiveTab((prev) => (prev === 'tournament-play' ? 'chart' : prev))
     }
   }, [inTournament])
 

@@ -1989,7 +1989,23 @@ export default function BlackjackPage() {
       const gameState = await tournament.startTournamentGame(betAmount);
       if (gameState) {
         // Convert tournament game state to local game state format
-        updateGameStateFromServer(gameState);
+        const processedGame = updateGameStateFromServer(gameState);
+        
+        // If game completed immediately (e.g., blackjack), handle completion (including chart update)
+        if (gameState.status === 'completed' && processedGame) {
+          // Tournament games use chips, convert to wei-equivalent for chart (1 chip = 1e18 wei for display)
+          const betAmountWei = gameState.totalBetAmount ? gameState.totalBetAmount * BigInt(1e18) : BigInt(betAmount) * BigInt(1e18);
+          const payoutWei = gameState.totalPayout ? gameState.totalPayout * BigInt(1e18) : BigInt(0);
+          
+          handleGameCompletion({
+            gameId: processedGame.id,
+            betAmount: betAmountWei,
+            payout: payoutWei,
+            result: processedGame.playerHand?.result || (payoutWei > betAmountWei ? 'win' : payoutWei < betAmountWei ? 'loss' : 'push'),
+            processedGame,
+            gameState: gameState,
+          });
+        }
         // If game completed, isPlaying is set to false in handleDealerRevealComplete after dealer reveal
       } else {
         setGameState(prev => ({ ...prev, isPlaying: false }));
@@ -1999,7 +2015,7 @@ export default function BlackjackPage() {
       toast.error(error.message || 'Failed to start game');
       setGameState(prev => ({ ...prev, isPlaying: false }));
     }
-  }, [tournament, updateGameStateFromServer]);
+  }, [tournament, updateGameStateFromServer, handleGameCompletion]);
 
   // Handle tournament player action
   const handleTournamentPlayerAction = useCallback(async (action: Action) => {
@@ -2008,10 +2024,23 @@ export default function BlackjackPage() {
     try {
       const gameStateResult = await tournament.performAction(action);
       if (gameStateResult) {
-        updateGameStateFromServer(gameStateResult);
+        const processedGame = updateGameStateFromServer(gameStateResult);
 
-        // If game completed, update playing state
-        if (gameStateResult.status === 'completed') {
+        // If game completed, handle completion (including chart update)
+        if (gameStateResult.status === 'completed' && processedGame) {
+          // Tournament games use chips, convert to wei-equivalent for chart (1 chip = 1e18 wei for display)
+          const betAmountWei = gameStateResult.totalBetAmount ? gameStateResult.totalBetAmount * BigInt(1e18) : BigInt(0);
+          const payoutWei = gameStateResult.totalPayout ? gameStateResult.totalPayout * BigInt(1e18) : BigInt(0);
+          
+          handleGameCompletion({
+            gameId: processedGame.id,
+            betAmount: betAmountWei,
+            payout: payoutWei,
+            result: processedGame.playerHand?.result || (payoutWei > betAmountWei ? 'win' : payoutWei < betAmountWei ? 'loss' : 'push'),
+            processedGame,
+            gameState: gameStateResult,
+          });
+          
           setGameState(prev => ({ ...prev, isPlaying: false }));
         }
       }
@@ -2019,7 +2048,7 @@ export default function BlackjackPage() {
       console.error('Failed to perform tournament action:', error);
       toast.error(error.message || 'Failed to perform action');
     }
-  }, [gameState.currentGame, tournament, updateGameStateFromServer]);
+  }, [gameState.currentGame, tournament, updateGameStateFromServer, handleGameCompletion]);
 
   // Handle starting a new game (optional Perfect Pairs side bet)
   const handleStartGame = useCallback(async (betAmount: bigint, _clientSeedFromPanel: string, perfectPairsBetAmount?: bigint) => {
