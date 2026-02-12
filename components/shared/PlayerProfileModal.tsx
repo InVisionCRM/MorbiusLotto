@@ -114,7 +114,7 @@ export function PlayerProfileModal({ isOpen, onClose, address }: PlayerProfileMo
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
               </div>
             ) : dashboardStats ? (
-              <PlayerStatsDashboard stats={dashboardStats} isLoading={false} />
+              <PlayerStatsDashboard stats={dashboardStats} isLoading={false} playerAddress={address} />
             ) : (
               <div className="text-center py-12 text-white/60">
                 <p>No stats available for this address</p>

@@ -703,7 +703,7 @@ export default function BlackjackPage() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   // View state
-  const [currentView, setCurrentView] = useState<'game' | 'history' | 'stats' | 'analytics' | 'verify'>('game');
+  const [currentView, setCurrentView] = useState<'game' | 'history' | 'stats' | 'analytics'>('game');
   // When user clicks "Verify Game" in History, open Verify tab with this game ID pre-filled
   const [initialVerifyGameId, setInitialVerifyGameId] = useState<string | null>(null);
 
@@ -2217,7 +2217,7 @@ export default function BlackjackPage() {
 
   const openVerifyView = useCallback((gameId: string) => {
     setInitialVerifyGameId(gameId);
-    setCurrentView('verify');
+    // Verify view removed - navigation handled elsewhere
   }, []);
 
   // Fetch game result for verification (Verify tab) - deprecated, use /BLACKJACK/verify page instead
@@ -2934,7 +2934,7 @@ export default function BlackjackPage() {
                 </button>
               </div>
             ) : playerStats ? (
-              <PlayerStatsDashboard stats={playerStats} isLoading={playerStatsLoading} />
+              <PlayerStatsDashboard stats={playerStats} isLoading={playerStatsLoading} playerAddress={address ?? null} wsClient={wsConnected ? wsClient : null} />
             ) : (
               <div className="text-center py-12 text-cyan-300">No statistics available. Play some games to see your stats!</div>
             )}
@@ -2968,23 +2968,6 @@ export default function BlackjackPage() {
             ) : (
               <div className="text-center py-12 text-cyan-300">No analytics available yet.</div>
             )}
-          </div>
-        )}
-
-        {currentView === 'verify' && (
-          <div className="max-w-4xl mx-auto space-y-4">
-            <div className="text-center space-y-4">
-              <p className="text-cyan-300/80 text-sm">
-                Verify your blackjack games using cryptographic proofs. Enter a game ID to verify fairness.
-              </p>
-              <a
-                href="/BLACKJACK/verify"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 rounded-lg text-white font-semibold transition-all"
-              >
-                <i className="fas fa-shield-alt"></i>
-                Open Verification Page
-              </a>
-            </div>
           </div>
         )}
 

@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
+import { usePlayerProfileGames } from '@/hooks/use-player-profile'
 import {
   TrendingUp,
   TrendingDown,
@@ -12,20 +13,25 @@ import {
   BarChart3,
   PieChart,
   Calendar,
-  Clock
+  Clock,
+  Crown
 } from 'lucide-react'
 import { formatEther } from 'viem'
 import {
-  Bar,
-  BarChart,
-  Cell,
+  Area,
+  AreaChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
+  Legend,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { GameHistory } from '@/components/BLACKJACK/GameHistory'
+import { CreatorDashboard } from '@/components/Creators/CreatorDashboard'
+import type { BlackjackWebSocketClient } from '@/lib/websocket-client'
+import type { GameHistoryEntry } from '@/components/BLACKJACK/GameHistory'
 
 export interface PlayerStats {
   totalGames: number
@@ -50,9 +56,12 @@ export interface PlayerStats {
 interface PlayerStatsDashboardProps {
   stats: PlayerStats
   isLoading?: boolean
+  playerAddress?: string | null // Optional: if provided, fetch game history for cumulative chart
+  wsClient?: BlackjackWebSocketClient | null // Optional: if provided, show Creator tab
 }
 
-export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardProps) {
+export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient }: PlayerStatsDashboardProps) {
+  const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'creator'>('stats')
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -141,25 +150,91 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
     }
   ]
 
-  // Top 6 stats for Recharts bar chart (normalized 0–100 for comparable bar height)
-  const topSixChartData = useMemo(() => {
-    const totalBetNum = Math.max(1, Math.floor(Number(formatEther(stats.totalBet))))
-    const totalWinNum = Math.floor(Number(formatEther(stats.totalWin)))
-    const profitLossAbs = Math.abs(stats.profitLoss)
-    const raw = [
-      { key: 'Games', name: 'Games', value: stats.totalGames, display: stats.totalGames.toLocaleString(), color: '#60a5fa' },
-      { key: 'Win%', name: 'Win %', value: stats.winRate, display: `${Math.round(stats.winRate)}%`, color: '#34d399' },
-      { key: 'P/L', name: 'P/L', value: profitLossAbs, display: `${stats.profitLoss >= 0 ? '+' : ''}${formatCurrency(stats.profitLoss)} M`, color: stats.profitLoss >= 0 ? '#34d399' : '#f87171' },
-      { key: 'Wagered', name: 'Wagered', value: totalBetNum, display: `${formatCurrency(stats.totalBet)} M`, color: '#a78bfa' },
-      { key: 'Won', name: 'Won', value: totalWinNum, display: `${formatCurrency(stats.totalWin)} M`, color: '#34d399' },
-      { key: 'Streak', name: 'Streak', value: Math.abs(stats.currentStreak), display: `${stats.currentStreak >= 0 ? '+' : ''}${stats.currentStreak}`, color: stats.currentStreak >= 0 ? '#34d399' : '#f87171' },
+  // Fetch game history for cumulative chart and history tab
+  const { data: games, isLoading: gamesLoading } = usePlayerProfileGames(playerAddress, 1000) // Fetch up to 1000 games for all-time data
+
+  // Convert games to GameHistoryEntry format for History tab
+  const historyEntries: GameHistoryEntry[] = useMemo(() => {
+    if (!games) return []
+    return games
+      .filter((g) => g.result && g.completed_at)
+      .map((game) => ({
+        id: game.id,
+        gameId: game.game_id,
+        timestamp: new Date(game.completed_at || game.created_at).getTime(),
+        betAmount: game.total_bet_amount,
+        payout: game.total_payout,
+        result: game.result as 'win' | 'loss' | 'push' | 'blackjack',
+        playerHands: [],
+        dealerCards: [],
+        dealerTotal: 0,
+        verified: false,
+      }))
+  }, [games])
+
+  // Build cumulative area chart data from game history
+  const cumulativeChartData = useMemo(() => {
+    if (!games || games.length === 0) {
+      // If no game history, create a simple representation with current totals
+      return [
+        {
+          game: 0,
+          date: 'Start',
+          totalInvested: 0,
+          totalWon: 0,
+        },
+        {
+          game: stats.totalGames,
+          date: 'Now',
+          totalInvested: Math.floor(Number(formatEther(stats.totalBet))),
+          totalWon: Math.floor(Number(formatEther(stats.totalWin))),
+        },
+      ]
+    }
+
+    // Sort games by completion time (oldest first)
+    const sortedGames = [...games]
+      .filter((g) => g.completed_at && g.result)
+      .sort((a, b) => {
+        const timeA = new Date(a.completed_at || a.created_at).getTime()
+        const timeB = new Date(b.completed_at || b.created_at).getTime()
+        return timeA - timeB
+      })
+
+    // Build cumulative data points
+    let cumulativeInvested = 0
+    let cumulativeWon = 0
+    const dataPoints: Array<{
+      game: number
+      date: string
+      totalInvested: number
+      totalWon: number
+    }> = [
+      {
+        game: 0,
+        date: sortedGames.length > 0 ? new Date(sortedGames[0].created_at).toLocaleDateString() : 'Start',
+        totalInvested: 0,
+        totalWon: 0,
+      },
     ]
-    const maxVal = Math.max(1, ...raw.map((d) => (d.key === 'Win%' ? d.value : Number(d.value))))
-    return raw.map((d) => ({
-      ...d,
-      normalized: d.key === 'Win%' ? d.value : (Number(d.value) / maxVal) * 100,
-    }))
-  }, [stats])
+
+    sortedGames.forEach((game, index) => {
+      cumulativeInvested += Math.floor(Number(formatEther(game.total_bet_amount)))
+      cumulativeWon += Math.floor(Number(formatEther(game.total_payout)))
+      
+      // Add data point every 10 games or at the end
+      if ((index + 1) % 10 === 0 || index === sortedGames.length - 1) {
+        dataPoints.push({
+          game: index + 1,
+          date: new Date(game.completed_at || game.created_at).toLocaleDateString(),
+          totalInvested: cumulativeInvested,
+          totalWon: cumulativeWon,
+        })
+      }
+    })
+
+    return dataPoints
+  }, [games, stats])
 
   const recordStats = [
     {
@@ -182,8 +257,38 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
     }
   ]
 
+  // Determine available tabs
+  const availableTabs = [
+    { id: 'stats' as const, label: 'Stats', icon: BarChart3 },
+    { id: 'history' as const, label: 'History', icon: Activity },
+    ...(wsClient && playerAddress ? [{ id: 'creator' as const, label: 'Creator', icon: Crown }] : []),
+  ]
+
   return (
     <div className="space-y-6">
+      {/* Tabs */}
+      {availableTabs.length > 1 && (
+        <div className="flex gap-2 border-b border-white/10 mb-6">
+          {availableTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2 font-semibold transition-colors flex items-center gap-2 ${
+                activeTab === tab.id
+                  ? 'text-cyan-400 border-b-2 border-cyan-400'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Stats Tab */}
+      {activeTab === 'stats' && (
+        <>
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {statsCards.map((stat, index) => (
@@ -222,56 +327,94 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
         ))}
       </div>
 
-      {/* Top 6 Stats Chart */}
+      {/* Cumulative Investment vs Winnings Chart */}
       <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-cyan-400" />
-            Top 6 Stats at a Glance
+            All-Time Performance
           </CardTitle>
           <p className="text-xs text-gray-500 mt-1">
-            Bar height = relative scale (tooltip shows actual value)
+            Cumulative total invested vs total won over time
           </p>
         </CardHeader>
         <CardContent>
-          <div className="h-[280px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={topSixChartData}
-                margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
-                layout="vertical"
-              >
-                <XAxis type="number" domain={[0, 100]} hide />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={72}
-                  tick={{ fill: 'rgb(156, 163, 175)', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: 'rgba(17, 24, 39, 0.95)',
-                    border: '1px solid rgba(75, 85, 99, 0.5)',
-                    borderRadius: '8px',
-                  }}
-                  labelStyle={{ color: 'rgb(209, 213, 219)' }}
-                  formatter={(value: number, _name: string, props: { payload?: Array<{ payload: { display: string } }> }) =>
-                    [props.payload?.[0]?.payload?.display ?? String(value), '']
-                  }
-                  labelFormatter={(_, payload) => {
-                    const firstPayload = payload?.[0] as { payload?: { name: string } } | undefined;
-                    return firstPayload?.payload?.name ?? '';
-                  }}
-                />
-                <Bar dataKey="normalized" radius={[0, 4, 4, 0]} maxBarSize={28} isAnimationActive>
-                  {topSixChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-[320px] w-full min-w-0">
+            {gamesLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
+              </div>
+            ) : cumulativeChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={cumulativeChartData}
+                  margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
+                >
+                  <defs>
+                    <linearGradient id="colorInvested" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#a855f7" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#a855f7" stopOpacity={0.1} />
+                    </linearGradient>
+                    <linearGradient id="colorWon" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.1} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: 'rgb(156, 163, 175)', fontSize: 11 }}
+                    axisLine={{ stroke: 'rgba(156, 163, 175, 0.3)' }}
+                    tickLine={{ stroke: 'rgba(156, 163, 175, 0.3)' }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fill: 'rgb(156, 163, 175)', fontSize: 11 }}
+                    axisLine={{ stroke: 'rgba(156, 163, 175, 0.3)' }}
+                    tickLine={{ stroke: 'rgba(156, 163, 175, 0.3)' }}
+                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'rgba(17, 24, 39, 0.95)',
+                      border: '1px solid rgba(75, 85, 99, 0.5)',
+                      borderRadius: '8px',
+                    }}
+                    labelStyle={{ color: 'rgb(209, 213, 219)' }}
+                    formatter={(value: number, name: string) => [
+                      `${value.toLocaleString()} MORBIUS`,
+                      name === 'totalInvested' ? 'Total Invested' : 'Total Won',
+                    ]}
+                  />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="line"
+                    formatter={(value) => (value === 'totalInvested' ? 'Total Invested' : 'Total Won')}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="totalInvested"
+                    stroke="#a855f7"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorInvested)"
+                    name="totalInvested"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="totalWon"
+                    stroke="#22d3ee"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorWon)"
+                    name="totalWon"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-white/60">
+                <p>No game data available for chart</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -374,6 +517,42 @@ export function PlayerStatsDashboard({ stats, isLoading }: PlayerStatsDashboardP
           </div>
         </CardContent>
       </Card>
+        </>
+      )}
+
+      {/* History Tab */}
+      {activeTab === 'history' && (
+        <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Activity className="w-5 h-5 text-cyan-400" />
+              Game History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {gamesLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
+              </div>
+            ) : historyEntries.length > 0 ? (
+              <GameHistory history={historyEntries} isLoading={false} />
+            ) : (
+              <div className="text-center py-12 text-white/60">
+                <p>No game history available</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Creator Tab */}
+      {activeTab === 'creator' && wsClient && playerAddress && (
+        <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
+          <CardContent className="p-6">
+            <CreatorDashboard wsClient={wsClient} address={playerAddress} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
