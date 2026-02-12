@@ -4,6 +4,13 @@ import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { formatEther, parseEther } from 'viem';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   PRIZE_PRESETS,
   TOURNAMENT_VALIDATION,
   FREEROLL_VALIDATION,
@@ -32,7 +39,6 @@ import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 
-type TabId = 'basics' | 'rules' | 'prizes' | 'fees' | 'theme';
 type FundingStep = 'idle' | 'approving' | 'approved' | 'depositing' | 'done';
 
 interface TokenSearchResult {
@@ -87,7 +93,6 @@ export function TournamentCreator({
   isLoading,
   playerBalance,
 }: TournamentCreatorProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('basics');
   const [error, setError] = useState<string | null>(null);
   const [createdTournament, setCreatedTournament] = useState<{ id: string; pinCode?: string } | null>(null);
   const [fundingStep, setFundingStep] = useState<FundingStep>('idle');
@@ -105,6 +110,10 @@ export function TournamentCreator({
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+
+  // Wizard: 1=Basics, 2=When & Rules, 3=Prizes & Entry, 4=Options, 5=Review
+  const [wizardStep, setWizardStep] = useState(1);
+  const TOTAL_WIZARD_STEPS = 5;
 
   // Tournament type: buy-in or freeroll
   const [tournamentType, setTournamentType] = useState<'buyin' | 'freeroll'>('buyin');
@@ -140,6 +149,17 @@ export function TournamentCreator({
   const [reentryEnabled, setReentryEnabled] = useState(false);
   const [reentryWindowMinutes, setReentryWindowMinutes] = useState<number>(5);
   const [actionTimerSeconds, setActionTimerSeconds] = useState<number | null>(null);
+  // Elimination mode
+  const [eliminationIntervalType, setEliminationIntervalType] = useState<'time' | 'hands'>('time');
+  const [eliminationIntervalValue, setEliminationIntervalValue] = useState<number>(10);
+  const [eliminationPercentage, setEliminationPercentage] = useState<number>(20);
+  const [resetChipsAfterRound, setResetChipsAfterRound] = useState(false);
+  const [eliminationRoundsMin, setEliminationRoundsMin] = useState<number>(1);
+  const [eliminationRoundsMax, setEliminationRoundsMax] = useState<number>(10);
+  // Freeroll player limits
+  const [minPlayersFreeroll, setMinPlayersFreeroll] = useState<number>(2);
+  const [maxPlayersFreeroll, setMaxPlayersFreeroll] = useState<number>(100);
+  const [maxPlayersUnlimited, setMaxPlayersUnlimited] = useState<boolean>(false);
 
   // Custom image upload state
   const [customImage, setCustomImage] = useState<string | null>(null);
@@ -340,26 +360,16 @@ export function TournamentCreator({
     return getExamplePrizeDistribution(examplePrizePool, selectedPreset.percentages, totalFeePercent);
   }, [selectedPreset, examplePrizePool, totalFeePercent]);
 
-  const tabs: { id: TabId; label: string }[] = [
-    { id: 'basics', label: 'Basics' },
-    { id: 'rules', label: 'Rules' },
-    { id: 'prizes', label: 'Prizes' },
-    { id: 'fees', label: 'Fees' },
-    { id: 'theme', label: 'Theme' },
-  ];
-
   const handleCreate = async () => {
     setError(null);
 
     const trimmedName = name.trim();
     if (trimmedName.length < TOURNAMENT_VALIDATION.NAME_MIN_LENGTH) {
       setError(`Name must be at least ${TOURNAMENT_VALIDATION.NAME_MIN_LENGTH} characters`);
-      setActiveTab('basics');
       return;
     }
     if (trimmedName.length > TOURNAMENT_VALIDATION.NAME_MAX_LENGTH) {
       setError(`Name must be at most ${TOURNAMENT_VALIDATION.NAME_MAX_LENGTH} characters`);
-      setActiveTab('basics');
       return;
     }
 
@@ -367,13 +377,32 @@ export function TournamentCreator({
       const regOpens = fromDatetimeLocal(registrationOpensAt);
       const startAt = fromDatetimeLocal(scheduledStartAt);
       if (!regOpens || !startAt) {
-        setError('Set registration opens and scheduled start date/time');
-        setActiveTab('basics');
+        setError('Set Registration start and Game start date/time in the Timing section.');
         return;
       }
       if (durationMinutes < FREEROLL_VALIDATION.DURATION_MIN_MINUTES || durationMinutes > FREEROLL_VALIDATION.DURATION_MAX_MINUTES) {
-        setError(`Duration must be ${FREEROLL_VALIDATION.DURATION_MIN_MINUTES}–${FREEROLL_VALIDATION.DURATION_MAX_MINUTES} minutes`);
-        setActiveTab('basics');
+        setError(`Tournament time limit (duration) must be ${FREEROLL_VALIDATION.DURATION_MIN_MINUTES}–${FREEROLL_VALIDATION.DURATION_MAX_MINUTES} minutes`);
+        return;
+      }
+      if (freerollMode === 'elimination') {
+        if (eliminationRoundsMin > eliminationRoundsMax) {
+          setError('Elimination rounds min cannot exceed max');
+          return;
+        }
+        const pct = Math.min(FREEROLL_VALIDATION.ELIMINATION_PERCENTAGE_MAX, Math.max(FREEROLL_VALIDATION.ELIMINATION_PERCENTAGE_MIN, eliminationPercentage));
+        const interval =
+          eliminationIntervalType === 'time'
+            ? Math.min(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MAX_MINUTES, Math.max(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MIN_MINUTES, eliminationIntervalValue))
+            : Math.min(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MAX_HANDS, Math.max(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MIN_HANDS, eliminationIntervalValue));
+        if (interval < 1) {
+          setError('Elimination interval must be at least 1');
+          return;
+        }
+      }
+      const minP = Math.min(FREEROLL_VALIDATION.MIN_PLAYERS_MAX, Math.max(FREEROLL_VALIDATION.MIN_PLAYERS_MIN, minPlayersFreeroll));
+      const maxP = maxPlayersUnlimited ? null : Math.min(FREEROLL_VALIDATION.MAX_PLAYERS_MAX, Math.max(FREEROLL_VALIDATION.MAX_PLAYERS_MIN, maxPlayersFreeroll));
+      if (maxP != null && minP > maxP) {
+        setError('Min players cannot exceed max players');
         return;
       }
       const freerollParams: CreateFreerollRequest = {
@@ -389,10 +418,23 @@ export function TournamentCreator({
         actionTimerSeconds,
         tableTheme: { kind: themeKind, id: themeId },
         isPrivate,
-        maxPlayers: undefined,
+        minPlayers: minP,
+        maxPlayers: maxP,
         customImage: customImage || undefined,
         pinCode: isPrivate && manualPin.trim() ? manualPin.trim() : undefined,
       };
+      if (freerollMode === 'elimination') {
+        freerollParams.eliminationConfig = {
+          intervalType: eliminationIntervalType,
+          intervalValue: eliminationIntervalType === 'time'
+            ? Math.min(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MAX_MINUTES, Math.max(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MIN_MINUTES, eliminationIntervalValue))
+            : Math.min(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MAX_HANDS, Math.max(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MIN_HANDS, eliminationIntervalValue)),
+          eliminationPercentage: Math.min(FREEROLL_VALIDATION.ELIMINATION_PERCENTAGE_MAX, Math.max(FREEROLL_VALIDATION.ELIMINATION_PERCENTAGE_MIN, eliminationPercentage)),
+          resetChipsAfterRound,
+          eliminationRoundsMin: Math.min(FREEROLL_VALIDATION.ELIMINATION_ROUNDS_MAX, Math.max(FREEROLL_VALIDATION.ELIMINATION_ROUNDS_MIN, eliminationRoundsMin)),
+          eliminationRoundsMax: Math.min(FREEROLL_VALIDATION.ELIMINATION_ROUNDS_MAX, Math.max(FREEROLL_VALIDATION.ELIMINATION_ROUNDS_MIN, eliminationRoundsMax)),
+        };
+      }
       const result = await onCreateFreeroll(freerollParams);
       if (result) {
         setCreatedTournament({ id: result.tournamentId, pinCode: result.pinCode });
@@ -403,12 +445,10 @@ export function TournamentCreator({
     // Buy-in validation
     if (buyInAmountWei < TOURNAMENT_VALIDATION.BUY_IN_MIN) {
       setError('Minimum buy-in is 100 MORBIUS');
-      setActiveTab('basics');
       return;
     }
     if (buyInAmountWei > TOURNAMENT_VALIDATION.BUY_IN_MAX) {
       setError('Maximum buy-in is 1,000,000 MORBIUS');
-      setActiveTab('basics');
       return;
     }
 
@@ -459,6 +499,21 @@ export function TournamentCreator({
     const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
     return BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
   }, [prizeAmountHuman, prizeTokenDecimals]);
+
+  // Reset wizard when opening
+  useEffect(() => {
+    if (isOpen && !createdTournament) setWizardStep(1);
+  }, [isOpen, createdTournament]);
+
+  /** Preset: Start freeroll in 1 min (for testing). */
+  const applyStartInOneMinute = useCallback(() => {
+    const now = new Date();
+    const reg = new Date(now.getTime() - 2 * 60 * 1000); // registration "opened" 2 min ago
+    const start = new Date(now.getTime() + 1 * 60 * 1000); // game start in 1 min
+    setRegistrationOpensAt(toDatetimeLocal(reg.toISOString()));
+    setScheduledStartAt(toDatetimeLocal(start.toISOString()));
+    setDurationMinutes(15);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -703,123 +758,137 @@ export function TournamentCreator({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
-      <div className="relative bg-gradient-to-b from-gray-900 to-gray-950 rounded-2xl border border-purple-500/30 shadow-2xl shadow-purple-500/20 max-w-2xl w-full mx-4 overflow-hidden max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-cyan-600 p-4">
-          <h2 className="text-2xl font-bold text-white text-center">Create Tournament</h2>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 border-cyan-500/30 bg-gradient-to-b from-gray-900 to-gray-950 overflow-hidden">
+        <DialogHeader className="p-4 pb-0 border-b border-gray-700 bg-gradient-to-r from-purple-600 to-cyan-600">
+          <DialogTitle className="text-xl font-bold text-white text-center">Create Tournament</DialogTitle>
+          <div className="flex justify-center gap-1.5 pt-3 pb-2">
+            {[1, 2, 3, 4, 5].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setWizardStep(s)}
+                className={`h-2 rounded-full transition-all ${
+                  wizardStep === s ? 'w-6 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'
+                }`}
+                aria-label={`Step ${s}`}
+              />
+            ))}
+          </div>
+        </DialogHeader>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-700">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'text-cyan-400 border-b-2 border-cyan-400 bg-gray-800/50'
-                  : 'text-gray-400 hover:text-gray-300'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-900/30 border border-red-500/30 text-red-400 text-sm">
+            <div className="p-3 rounded-lg bg-red-900/30 border border-red-500/30 text-red-400 text-sm mb-4">
               {error}
             </div>
           )}
 
-          {/* Basics Tab */}
-          {activeTab === 'basics' && (
-            <div className="space-y-6">
-              {/* Tournament type: Buy-in or Freeroll */}
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-1">
-                  Tournament type
-                </label>
-                <p className="text-gray-500 text-xs mb-2">
-                  Buy-in tournaments require MORBIUS to enter. Freerolls are free to join with scheduled start times.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTournamentType('buyin')}
-                    className={`flex-1 py-2.5 rounded-xl font-medium transition-colors ${
-                      tournamentType === 'buyin'
-                        ? 'bg-cyan-500 text-white'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                    }`}
-                  >
-                    Buy-in
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTournamentType('freeroll')}
-                    className={`flex-1 py-2.5 rounded-xl font-medium transition-colors ${
-                      tournamentType === 'freeroll'
-                        ? 'bg-cyan-500 text-white'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                    }`}
-                  >
-                    Freeroll
-                  </button>
-                </div>
+          {/* Step 1: Basics */}
+          {wizardStep === 1 && (
+            <section className="space-y-6 max-w-lg mx-auto">
+              <h3 className="text-lg font-semibold text-cyan-300">What kind of tournament?</h3>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTournamentType('buyin')}
+                  className={`flex-1 py-4 rounded-xl font-medium transition-colors border-2 ${
+                    tournamentType === 'buyin'
+                      ? 'bg-cyan-500/20 border-cyan-500 text-white'
+                      : 'bg-gray-800/50 border-gray-600 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  <span className="block text-lg">Buy-in</span>
+                  <span className="text-xs opacity-80">Players pay to enter</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTournamentType('freeroll')}
+                  className={`flex-1 py-4 rounded-xl font-medium transition-colors border-2 ${
+                    tournamentType === 'freeroll'
+                      ? 'bg-cyan-500/20 border-cyan-500 text-white'
+                      : 'bg-gray-800/50 border-gray-600 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  <span className="block text-lg">Freeroll</span>
+                  <span className="text-xs opacity-80">Free to join, scheduled start</span>
+                </button>
               </div>
 
-              {/* Name */}
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
-                  Tournament Name
-                </label>
+                <label className="block text-gray-300 font-medium mb-2">Tournament name</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="My Tournament"
+                  placeholder="e.g. Friday Night Blitz"
                   maxLength={TOURNAMENT_VALIDATION.NAME_MAX_LENGTH}
                   className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
                 />
-                <p className="text-gray-500 text-xs mt-1">
-                  {name.length}/{TOURNAMENT_VALIDATION.NAME_MAX_LENGTH} characters
-                </p>
+                <p className="text-gray-500 text-xs mt-1">{name.length}/{TOURNAMENT_VALIDATION.NAME_MAX_LENGTH}</p>
               </div>
+            </section>
+          )}
 
-              {/* Freeroll-only: schedule */}
-              {tournamentType === 'freeroll' && (
-                <div className="space-y-4 p-4 rounded-xl bg-gray-800/50 border border-cyan-500/20">
-                  <p className="text-cyan-300 text-sm font-medium">Schedule</p>
-                  <p className="text-gray-500 text-xs">Set when players can register, when the tournament begins, and how long it runs.</p>
+          {/* Step 2: When & Rules */}
+          {wizardStep === 2 && (
+            <section className="space-y-6 max-w-lg mx-auto">
+              <h3 className="text-lg font-semibold text-cyan-300">
+                {tournamentType === 'freeroll' ? 'When does it run?' : 'Time limit & rules'}
+              </h3>
+
+              {tournamentType === 'freeroll' ? (
+                <>
                   <div>
-                    <label id="registration-opens-label" htmlFor="registration-opens-input" className="block text-gray-400 text-xs mb-1">Registration opens — players can sign up starting at this time</label>
+                    <label className="block text-gray-400 text-xs mb-2">Quick presets</label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={applyStartInOneMinute}
+                        className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-cyan-600 text-gray-300 hover:text-white text-sm font-medium transition-colors border border-gray-600"
+                      >
+                        Start in 1 min (test)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const reg = new Date(now.getTime());
+                          const start = new Date(now.getTime() + 30 * 60 * 1000);
+                          setRegistrationOpensAt(toDatetimeLocal(reg.toISOString()));
+                          setScheduledStartAt(toDatetimeLocal(start.toISOString()));
+                          setDurationMinutes(60);
+                        }}
+                        className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-cyan-600 text-gray-300 hover:text-white text-sm font-medium transition-colors border border-gray-600"
+                      >
+                        Start in 30 min
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label id="registration-opens-label" className="block text-gray-300 text-sm font-medium mb-1">Registration opens</label>
                     <input
                       id="registration-opens-input"
                       type="datetime-local"
                       value={registrationOpensAt}
                       onChange={(e) => setRegistrationOpensAt(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
-                      title="Registration opens date and time"
+                      className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm"
+                      aria-labelledby="registration-opens-label"
                     />
                   </div>
                   <div>
-                    <label id="scheduled-start-label" htmlFor="scheduled-start-input" className="block text-gray-400 text-xs mb-1">Tournament starts — gameplay begins at this time, registration closes</label>
+                    <label id="scheduled-start-label" className="block text-gray-300 text-sm font-medium mb-1">Game start</label>
                     <input
                       id="scheduled-start-input"
                       type="datetime-local"
                       value={scheduledStartAt}
                       onChange={(e) => setScheduledStartAt(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
-                      title="Tournament start date and time"
+                      className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm"
+                      aria-labelledby="scheduled-start-label"
                     />
                   </div>
                   <div>
-                    <label id="duration-minutes-label" htmlFor="duration-minutes-input" className="block text-gray-400 text-xs mb-1">Duration (minutes) — how long the tournament runs after it starts</label>
+                    <label id="duration-minutes-label" className="block text-gray-300 text-sm font-medium mb-1">Duration (minutes)</label>
                     <input
                       id="duration-minutes-input"
                       type="number"
@@ -827,291 +896,22 @@ export function TournamentCreator({
                       max={FREEROLL_VALIDATION.DURATION_MAX_MINUTES}
                       value={durationMinutes}
                       onChange={(e) => setDurationMinutes(parseInt(e.target.value, 10) || 60)}
-                      className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
-                      title="Duration in minutes"
+                      className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm"
+                      aria-labelledby="duration-minutes-label"
                     />
                   </div>
-                  <div>
-                    <label className="block text-gray-400 text-xs mb-1">Mode</label>
-                    <p className="text-gray-500 text-xs mb-2">
-                      Chip count: highest chip total at the end wins. Elimination: bottom players are removed in rounds until a winner remains.
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setFreerollMode('standard_chip_count')}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium ${
-                          freerollMode === 'standard_chip_count' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'
-                        }`}
-                      >
-                        Chip count
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFreerollMode('elimination')}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium ${
-                          freerollMode === 'elimination' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'
-                        }`}
-                      >
-                        Elimination
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-gray-400 text-sm">Re-entry window</span>
-                      <p className="text-gray-500 text-xs">Allow eliminated players to rejoin within a time window after tournament start</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setReentryEnabled(!reentryEnabled)}
-                      className={`relative w-12 h-6 rounded-full transition-colors ${reentryEnabled ? 'bg-cyan-500' : 'bg-gray-600'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${reentryEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                  {reentryEnabled && (
-                    <div>
-                      <label id="reentry-window-label" htmlFor="reentry-window-minutes-input" className="block text-gray-400 text-xs mb-1">Re-entry window (minutes) — how long after the start eliminated players can re-enter</label>
-                      <input
-                        id="reentry-window-minutes-input"
-                        type="number"
-                        min={1}
-                        max={FREEROLL_VALIDATION.REENTRY_WINDOW_MAX_MINUTES}
-                        value={reentryWindowMinutes}
-                        onChange={(e) => setReentryWindowMinutes(parseInt(e.target.value, 10) || 5)}
-                        className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
-                        title="Re-entry window in minutes"
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <label id="action-timer-label" htmlFor="action-timer-select" className="block text-gray-400 text-xs mb-1">Action timer (seconds) — time each player has to act per hand. None = no time pressure.</label>
-                    <select
-                      id="action-timer-select"
-                      value={actionTimerSeconds ?? ''}
-                      onChange={(e) => setActionTimerSeconds(e.target.value === '' ? null : parseInt(e.target.value, 10))}
-                      className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
-                      title="Action timer in seconds"
-                      aria-labelledby="action-timer-label"
-                    >
-                      <option value="">None</option>
-                      <option value="10">10</option>
-                      <option value="15">15</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {/* Buy-in Amount (only for buy-in tournaments) */}
-              {tournamentType === 'buyin' && (
+                </>
+              ) : (
                 <div>
-                  <label id="buy-in-amount-label" htmlFor="buy-in-amount-input" className="block text-gray-300 text-sm font-medium mb-1">
-                    Buy-in Amount (MORBIUS)
-                  </label>
-                  <p className="text-gray-500 text-xs mb-2">
-                    The amount each player pays to enter. All buy-ins go into the prize pool.
-                  </p>
-                  <input
-                    id="buy-in-amount-input"
-                    type="number"
-                    value={buyInAmount}
-                    onChange={(e) => setBuyInAmount(e.target.value)}
-                    min="100"
-                    max="1000000"
-                    className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
-                    title="Buy-in amount in MORBIUS"
-                  />
-                  <p className="text-gray-500 text-xs mt-1">
-                    Min: 100 | Max: 1,000,000 MORBIUS
-                  </p>
-                </div>
-              )}
-
-              {/* Private Toggle */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-700">
-                <div>
-                  <p className="text-white font-medium">Private Tournament</p>
-                  <p className="text-gray-400 text-sm">Requires PIN to join</p>
-                </div>
-                <button
-                  onClick={() => setIsPrivate(!isPrivate)}
-                  className={`relative w-14 h-8 rounded-full transition-colors ${
-                    isPrivate ? 'bg-purple-500' : 'bg-gray-600'
-                  }`}
-                >
-                  <div
-                    className={`absolute top-1 w-6 h-6 rounded-full bg-white transition-transform ${
-                      isPrivate ? 'translate-x-7' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Manual PIN (optional) when private */}
-              {isPrivate && (
-                <div className="p-4 rounded-xl bg-gray-800/50 border border-gray-700">
-                  <label className="block text-gray-300 text-sm font-medium mb-2">PIN (optional)</label>
-                  <p className="text-gray-500 text-xs mb-2">Set your own 4–12 digit code, or leave blank for auto-generated</p>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={12}
-                    value={manualPin}
-                    onChange={(e) => setManualPin(e.target.value.replace(/\D/g, ''))}
-                    placeholder="e.g. 1234"
-                    className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-                  />
-                </div>
-              )}
-
-              {/* Custom Tournament Image Upload (compact) */}
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">
-                  Tournament Card Image
-                </label>
-                <p className="text-gray-500 text-xs mb-2">
-                  Optional (3:2 recommended, max 2MB)
-                </p>
-
-                {imagePreview ? (
-                  <div className="relative inline-block max-w-[200px]">
-                    <div className="aspect-[3/2] max-h-28 rounded-lg overflow-hidden border-2 border-cyan-500/50">
-                      <img
-                        src={imagePreview}
-                        alt="Tournament card preview"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <button
-                      onClick={handleRemoveImage}
-                      className="absolute top-1 right-1 p-1.5 rounded-full bg-red-500/80 hover:bg-red-500 text-white transition-colors"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-32 h-20 rounded-lg border-2 border-dashed border-gray-600 hover:border-cyan-500/50 bg-gray-800/50 hover:bg-gray-800 transition-colors flex flex-col items-center justify-center gap-1 shrink-0"
-                    >
-                      <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <span className="text-gray-500 text-xs">Upload</span>
-                    </button>
-                    <input
-                      id="tournament-table-image-upload"
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                      title="Upload tournament table background image"
-                      aria-label="Upload tournament table background image"
-                    />
-                    <p className="text-gray-500 text-xs">or leave empty for default</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Rules Tab */}
-          {activeTab === 'rules' && (
-            <div className="space-y-6">
-              {/* Starting Chips */}
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-1">
-                  Starting Chips
-                </label>
-                <p className="text-gray-500 text-xs mb-2">
-                  How many chips each player begins with. More chips means longer games with more strategic depth.
-                </p>
-                <div className="grid grid-cols-4 gap-2">
-                  {TOURNAMENT_VALIDATION.STARTING_CHIPS_OPTIONS.map((chips) => (
-                    <button
-                      key={chips}
-                      onClick={() => setStartingChips(chips)}
-                      className={`py-3 rounded-xl font-medium transition-colors ${
-                        startingChips === chips
-                          ? 'bg-cyan-500 text-white'
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      {chips.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Max Hands - Slider + Direct Input */}
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-1">
-                  Maximum Hands
-                </label>
-                <p className="text-gray-500 text-xs mb-2">
-                  The max number of hands each player can play. Once reached, their score is final. Lower = quicker games.
-                </p>
-                <div className="space-y-3">
-                  {/* Slider */}
-                  <div className="relative">
-                    <input
-                      type="range"
-                      min="1"
-                      max="200"
-                      value={maxHands}
-                      onChange={(e) => handleMaxHandsSlider(parseInt(e.target.value, 10))}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-                      aria-label="Maximum hands per player"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>1</span>
-                      <span>50</span>
-                      <span>100</span>
-                      <span>150</span>
-                      <span>200</span>
-                    </div>
-                  </div>
-                  {/* Direct Input */}
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      min="1"
-                      max="200"
-                      value={maxHandsInput}
-                      onChange={(e) => handleMaxHandsInput(e.target.value)}
-                      aria-label="Maximum hands per player (direct input)"
-                      onBlur={handleMaxHandsBlur}
-                      className="w-24 px-3 py-2 rounded-xl bg-gray-800 border border-gray-700 text-white text-center focus:outline-none focus:border-cyan-500"
-                    />
-                    <span className="text-gray-400 text-sm">hands (1-200)</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Time Limit - Only for standard tournaments, not freerolls */}
-              {tournamentType === 'buyin' && (
-                <div>
-                  <label className="block text-gray-300 text-sm font-medium mb-1">
-                    Time Limit
-                  </label>
-                  <p className="text-gray-500 text-xs mb-2">
-                    How long the tournament stays open. When time runs out, rankings are finalized. &quot;No Limit&quot; means it ends only when all hands are played.
-                  </p>
-                  <div className="grid grid-cols-5 gap-2">
+                  <label className="block text-gray-300 text-sm font-medium mb-2">Time limit</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {TOURNAMENT_VALIDATION.TIME_LIMIT_OPTIONS.map((limit) => (
                       <button
                         key={limit ?? 'none'}
+                        type="button"
                         onClick={() => setTimeLimitMinutes(limit)}
                         className={`py-3 rounded-xl font-medium text-sm transition-colors ${
-                          timeLimitMinutes === limit
-                            ? 'bg-cyan-500 text-white'
-                            : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                          timeLimitMinutes === limit ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                         }`}
                       >
                         {TIME_LIMIT_LABELS[limit ?? 'null']}
@@ -1121,438 +921,361 @@ export function TournamentCreator({
                 </div>
               )}
 
-              {/* Rebuys */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-700">
-                  <div>
-                    <p className="text-white font-medium">Enable Rebuys</p>
-                    <p className="text-gray-400 text-sm">Allow players to buy back in after losing all chips. Each rebuy costs the same as the original buy-in and adds to the prize pool.</p>
-                  </div>
-                  <button
-                    onClick={() => setRebuyEnabled(!rebuyEnabled)}
-                    className={`relative w-14 h-8 rounded-full transition-colors ${
-                      rebuyEnabled ? 'bg-green-500' : 'bg-gray-600'
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-1 w-6 h-6 rounded-full bg-white transition-transform ${
-                        rebuyEnabled ? 'translate-x-7' : 'translate-x-1'
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2">Starting chips</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {TOURNAMENT_VALIDATION.STARTING_CHIPS_OPTIONS.map((chips) => (
+                    <button
+                      key={chips}
+                      onClick={() => setStartingChips(chips)}
+                      className={`py-3 rounded-xl font-medium transition-colors ${
+                        startingChips === chips ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                       }`}
-                    />
-                  </button>
+                    >
+                      {chips.toLocaleString()}
+                    </button>
+                  ))}
                 </div>
-
-                {rebuyEnabled && (
-                  <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-1">
-                      Max Rebuys per Player
-                    </label>
-                    <p className="text-gray-500 text-xs mb-2">
-                      Limit how many times a player can rebuy. &quot;Unlimited&quot; means no cap.
-                    </p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {TOURNAMENT_VALIDATION.MAX_REBUYS_OPTIONS.map((max) => (
-                        <button
-                          key={max}
-                          onClick={() => setMaxRebuys(max)}
-                          className={`py-3 rounded-xl font-medium transition-colors ${
-                            maxRebuys === max
-                              ? 'bg-green-500 text-white'
-                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                          }`}
-                        >
-                          {MAX_REBUYS_LABELS[max]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2">Max hands per player</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min="1"
+                    max="200"
+                    value={maxHands}
+                    onChange={(e) => handleMaxHandsSlider(parseInt(e.target.value, 10))}
+                    className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    aria-label="Max hands per player"
+                  />
+                  <span className="text-white font-medium w-12">{maxHands}</span>
+                </div>
+              </div>
+            </section>
           )}
 
-          {/* Prizes Tab */}
-          {activeTab === 'prizes' && (
-            <div className="space-y-6">
-              {/* Prize source: platform vs custom token */}
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-1">
-                  Prize source
-                </label>
-                <p className="text-gray-500 text-xs mb-2">
-                  Platform: prizes are paid from MORBIUS buy-ins. Custom token: you fund the prize pool with any PRC-20 token of your choice.
-                </p>
-                <div className="flex gap-2 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => setPrizeType('platform')}
-                    className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
-                      prizeType === 'platform' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    }`}
-                  >
-                    Platform (MORBIUS from buy-ins)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPrizeType('custom')}
-                    className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
-                      prizeType === 'custom' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    }`}
-                  >
-                    Custom token
-                  </button>
-                </div>
-                {prizeType === 'custom' && (
-                  <div className="space-y-3 p-4 rounded-xl bg-gray-800/50 border border-gray-700">
-                    {/* Selected token display */}
-                    {selectedToken ? (
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900 border border-cyan-500/30">
-                        {selectedToken.logoUrl && (
-                          <img src={selectedToken.logoUrl} alt="" className="w-8 h-8 rounded-full" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-medium truncate">
-                            {selectedToken.name} ({selectedToken.symbol})
-                          </p>
-                          <p className="text-gray-500 text-xs font-mono">
-                            {selectedToken.address.slice(0, 10)}...{selectedToken.address.slice(-6)}
-                          </p>
-                          <p className="text-gray-600 text-xs">{selectedToken.decimals} decimals</p>
-                        </div>
-                        <button
-                          onClick={handleClearToken}
-                          className="p-1.5 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ) : (
-                      /* Token search input */
-                      <div className="relative" ref={tokenDropdownRef}>
-                        <label className="block text-gray-400 text-xs mb-1">Search token or paste address</label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={tokenQuery}
-                            onChange={(e) => handleTokenQueryChange(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleRawAddressSubmit();
-                              }
-                            }}
-                            placeholder="Search by name or paste 0x address..."
-                            className="w-full px-3 py-2 pr-8 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-cyan-500"
-                          />
-                          {tokenSearching && (
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                              <svg className="animate-spin h-4 w-4 text-gray-400" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                        {/* Search results dropdown */}
-                        {tokenSearchResults.length > 0 && (
-                          <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                            {tokenSearchResults.map((result) => (
-                              <button
-                                key={result.address}
-                                onClick={() => handleSelectToken(result)}
-                                className="w-full px-3 py-2.5 text-left hover:bg-gray-700 transition-colors flex items-center gap-3 border-b border-gray-700/50 last:border-0"
-                              >
-                                {result.iconUrl ? (
-                                  <img src={result.iconUrl} alt="" className="w-6 h-6 rounded-full shrink-0" />
-                                ) : (
-                                  <div className="w-6 h-6 rounded-full bg-gray-600 shrink-0" />
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-white text-sm truncate">{result.name}</p>
-                                  <p className="text-gray-500 text-xs">
-                                    {result.symbol} &middot; {result.address.slice(0, 6)}...{result.address.slice(-4)}
-                                  </p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {/* Hint for raw address */}
-                        {tokenQuery.trim().startsWith('0x') && tokenQuery.trim().length === 42 && tokenSearchResults.length === 0 && !tokenSearching && (
-                          <button
-                            onClick={handleRawAddressSubmit}
-                            className="mt-1 w-full px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-cyan-300 text-xs text-left transition-colors"
-                          >
-                            Use this address: {tokenQuery.trim().slice(0, 10)}...{tokenQuery.trim().slice(-6)}
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Prize amount */}
-                    <div>
-                      <label className="block text-gray-400 text-xs mb-1">
-                        Prize amount{selectedToken ? ` (${selectedToken.symbol})` : ''}
-                      </label>
-                      <input
-                        type="text"
-                        value={prizeAmountHuman}
-                        onChange={(e) => setPrizeAmountHuman(e.target.value)}
-                        placeholder="e.g. 1000000"
-                        className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-cyan-500"
-                      />
-                    </div>
-                    <p className="text-gray-500 text-xs">
-                      After creating, you will fund the prize pool by approving and depositing this token to the escrow.
-                    </p>
-                  </div>
-                )}
-              </div>
+          {/* Step 3: Prizes & Entry */}
+          {wizardStep === 3 && (
+            <section className="space-y-6 max-w-lg mx-auto">
+              <h3 className="text-lg font-semibold text-cyan-300">Prizes & entry</h3>
 
               <div>
-                <label className="block text-gray-300 text-sm font-medium mb-1">
-                  Prize Distribution
-                </label>
-                <p className="text-gray-500 text-xs mb-3">
-                  Choose how the prize pool is split among top finishers. {100 - totalFeePercent}% of the pool goes to winners, {totalFeePercent}% to fees.
-                </p>
+                <label className="block text-gray-300 text-sm font-medium mb-2">Prize distribution</label>
+                <p className="text-gray-500 text-xs mb-2">How the prize pool is split among top finishers.</p>
                 <div className="space-y-2">
-                  {PRIZE_PRESETS.map((preset) => (
+                  {PRIZE_PRESETS.filter((p) => p.id !== 'custom').map((preset) => (
                     <button
                       key={preset.id}
                       onClick={() => setPrizeDistributionType(preset.id)}
-                      className={`w-full p-4 rounded-xl text-left transition-colors ${
+                      className={`w-full p-3 rounded-xl text-left transition-colors border ${
                         prizeDistributionType === preset.id
-                          ? 'bg-yellow-500/20 border-2 border-yellow-500'
-                          : 'bg-gray-800 border border-gray-700 hover:border-gray-600'
+                          ? 'bg-cyan-500/20 border-cyan-500'
+                          : 'bg-gray-800/50 border-gray-600 hover:border-gray-500'
                       }`}
                     >
-                      <div className="flex justify-between items-center">
-                        <span className="text-white font-medium">{preset.name}</span>
-                        <span className="text-gray-400 text-sm">{preset.description}</span>
-                      </div>
+                      <span className="text-white font-medium">{preset.name}</span>
+                      <span className="text-gray-400 text-xs block mt-0.5">{preset.description}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Prize Preview */}
-              {selectedPreset && (
-                <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-                  <h4 className="text-gray-300 text-sm font-medium mb-3">
-                    Prize Preview (10 players example)
-                  </h4>
-                  <div className="space-y-2">
-                    {prizePreview.slice(0, 5).map((prize) => (
-                      <div key={prize.rank} className="flex justify-between text-sm">
-                        <span className={`${
-                          prize.rank === 1 ? 'text-yellow-400' :
-                          prize.rank === 2 ? 'text-gray-300' :
-                          prize.rank === 3 ? 'text-orange-400' :
-                          'text-gray-500'
-                        }`}>
-                          {prize.rank === 1 ? '🥇' : prize.rank === 2 ? '🥈' : prize.rank === 3 ? '🥉' : `#${prize.rank}`} {prize.percentage}%
-                        </span>
-                        <span className="text-white">
-                          {Number(formatEther(prize.amount)).toLocaleString()} MORBIUS
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-gray-500 text-xs mt-3">
-                    * {100 - totalFeePercent}% of prize pool distributed, {totalFeePercent}% to fees ({creatorFeePercent > 0 ? `${16}% platform + ${creatorFeePercent}% creator` : '16% platform'})
-                  </p>
+              {tournamentType === 'buyin' && (
+                <div>
+                  <label id="buy-in-amount-label" htmlFor="buy-in-amount-input" className="block text-gray-300 text-sm font-medium mb-1">Buy-in (MORBIUS)</label>
+                  <input
+                    id="buy-in-amount-input"
+                    type="number"
+                    value={buyInAmount}
+                    onChange={(e) => setBuyInAmount(e.target.value)}
+                    min="100"
+                    max="1000000"
+                    step="1"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-cyan-500"
+                    aria-labelledby="buy-in-amount-label"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">Min 100 · Max 1,000,000 MORBIUS</p>
                 </div>
               )}
-            </div>
+
+              {tournamentType === 'freeroll' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="min-players-freeroll" className="block text-gray-300 text-sm mb-1">Min players</label>
+                    <input
+                      id="min-players-freeroll"
+                      type="number"
+                      min={FREEROLL_VALIDATION.MIN_PLAYERS_MIN}
+                      max={FREEROLL_VALIDATION.MIN_PLAYERS_MAX}
+                      value={minPlayersFreeroll}
+                      onChange={(e) => setMinPlayersFreeroll(parseInt(e.target.value, 10) || 2)}
+                      className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-300 text-sm mb-1">Max players</label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        id="max-players-freeroll"
+                        type="number"
+                        min={FREEROLL_VALIDATION.MAX_PLAYERS_MIN}
+                        max={FREEROLL_VALIDATION.MAX_PLAYERS_MAX}
+                        value={maxPlayersFreeroll}
+                        disabled={maxPlayersUnlimited}
+                        onChange={(e) => setMaxPlayersFreeroll(parseInt(e.target.value, 10) || 2)}
+                        className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm disabled:opacity-50"
+                        title="Max players (or check Unlimited)"
+                      />
+                      <label className="flex items-center gap-1.5 whitespace-nowrap text-gray-400 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={maxPlayersUnlimited}
+                          onChange={(e) => setMaxPlayersUnlimited(e.target.checked)}
+                          className="rounded border-gray-600"
+                          aria-label="Unlimited max players"
+                        />
+                        Unlimited
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
           )}
 
-          {/* Fees Tab */}
-          {activeTab === 'fees' && (
-            <div className="space-y-6">
-              {/* Creator Fee */}
+          {/* Step 4: Options */}
+          {wizardStep === 4 && (
+            <section className="space-y-6 max-w-lg mx-auto">
+              <h3 className="text-lg font-semibold text-cyan-300">Options</h3>
+
+              <div className="flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-700">
+                <div>
+                  <p className="text-white font-medium">Private tournament</p>
+                  <p className="text-gray-400 text-sm">Requires PIN to join</p>
+                </div>
+                <button
+                  onClick={() => setIsPrivate(!isPrivate)}
+                  className={`relative w-14 h-8 rounded-full transition-colors ${isPrivate ? 'bg-purple-500' : 'bg-gray-600'}`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 rounded-full bg-white transition-transform ${isPrivate ? 'translate-x-7' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {isPrivate && (
+                <div>
+                  <label className="block text-gray-300 text-sm mb-1">PIN (optional)</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={12}
+                    value={manualPin}
+                    onChange={(e) => setManualPin(e.target.value.replace(/\D/g, ''))}
+                    placeholder="e.g. 1234"
+                    className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm"
+                  />
+                </div>
+              )}
+
               <div>
-                <label id="creator-fee-range-label" className="block text-gray-300 text-sm font-medium mb-1">
-                  Creator Fee: {creatorFeePercent}%
-                </label>
-                <p className="text-gray-500 text-xs mb-2">
-                  Earn a percentage of the prize pool as the tournament creator (0-5%). This is deducted before winner payouts.
-                </p>
-                <input
-                  type="range"
-                  min="0"
-                  max="5"
-                  step="1"
-                  value={creatorFeePercent}
-                  onChange={(e) => setCreatorFeePercent(parseInt(e.target.value, 10))}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                  aria-labelledby="creator-fee-range-label"
-                  title="Creator fee percentage (0–5%)"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0%</span>
-                  <span>1%</span>
-                  <span>2%</span>
-                  <span>3%</span>
-                  <span>4%</span>
-                  <span>5%</span>
+                <label className="block text-gray-300 text-sm font-medium mb-2">Card image (optional)</label>
+                {imagePreview ? (
+                  <div className="relative inline-block max-w-[200px]">
+                    <div className="aspect-[3/2] max-h-28 rounded-lg overflow-hidden border-2 border-cyan-500/50">
+                      <img src={imagePreview} alt="Card preview" className="w-full h-full object-cover" />
+                    </div>
+                    <button onClick={handleRemoveImage} className="absolute top-1 right-1 p-1.5 rounded-full bg-red-500/80 hover:bg-red-500 text-white">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => fileInputRef.current?.click()} className="w-32 h-20 rounded-lg border-2 border-dashed border-gray-600 hover:border-cyan-500/50 bg-gray-800/50 flex flex-col items-center justify-center gap-1">
+                      <span className="text-gray-500 text-xs">Upload</span>
+                    </button>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" aria-label="Upload card image" />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2">Table theme</label>
+                <div className="flex gap-2 mb-2">
+                  <button type="button" onClick={() => { setThemeKind('image'); setThemeId(BLACKJACK_IMAGE_BACKGROUNDS[0].id); }} className={`flex-1 py-2 rounded-lg text-sm font-medium ${themeKind === 'image' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Image</button>
+                  <button type="button" onClick={() => { setThemeKind('video'); setThemeId(BLACKJACK_VIDEO_BACKGROUNDS[0].id); }} className={`flex-1 py-2 rounded-lg text-sm font-medium ${themeKind === 'video' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Video</button>
                 </div>
-              </div>
-
-              {/* Fee Summary */}
-              <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-                <h4 className="text-gray-300 text-sm font-medium mb-3">Fee Breakdown</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Platform fee</span>
-                    <span className="text-white">16%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Your creator fee</span>
-                    <span className="text-purple-400 font-medium">{creatorFeePercent}%</span>
-                  </div>
-                  <div className="border-t border-gray-700 pt-2 flex justify-between">
-                    <span className="text-gray-400">Total fees</span>
-                    <span className="text-white font-medium">{totalFeePercent}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Players receive</span>
-                    <span className="text-green-400 font-medium">{100 - totalFeePercent}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Theme Tab */}
-          {activeTab === 'theme' && (
-            <div className="space-y-6">
-              <p className="text-gray-500 text-xs">
-                Pick the table background players will see during the tournament. This is purely cosmetic.
-              </p>
-              {/* Theme Type */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setThemeKind('image');
-                    setThemeId(BLACKJACK_IMAGE_BACKGROUNDS[0].id);
-                  }}
-                  className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
-                    themeKind === 'image'
-                      ? 'bg-cyan-500 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  Image Themes
-                </button>
-                <button
-                  onClick={() => {
-                    setThemeKind('video');
-                    setThemeId(BLACKJACK_VIDEO_BACKGROUNDS[0].id);
-                  }}
-                  className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
-                    themeKind === 'video'
-                      ? 'bg-cyan-500 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  Video Themes
-                </button>
-              </div>
-
-              {/* Theme Grid */}
-              {themeKind === 'image' && (
-                <div className="grid grid-cols-3 gap-3">
-                  {BLACKJACK_IMAGE_BACKGROUNDS.map((bg) => (
-                    <button
-                      key={bg.id}
-                      onClick={() => setThemeId(bg.id)}
-                      className={`relative aspect-video rounded-xl overflow-hidden border-2 transition-all ${
-                        themeId === bg.id
-                          ? 'border-cyan-500 ring-2 ring-cyan-500/50'
-                          : 'border-gray-700 hover:border-gray-600'
-                      }`}
-                    >
-                      <img
-                        src={bg.src}
-                        alt={bg.label}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 py-1 px-2">
-                        <p className="text-white text-xs truncate">{bg.label}</p>
-                      </div>
+                <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                  {themeKind === 'image' && BLACKJACK_IMAGE_BACKGROUNDS.map((bg) => (
+                    <button key={bg.id} type="button" onClick={() => setThemeId(bg.id)} className={`relative aspect-video rounded-lg overflow-hidden border-2 ${themeId === bg.id ? 'border-cyan-500' : 'border-gray-600'}`}>
+                      <img src={bg.src} alt={bg.label} className="w-full h-full object-cover" />
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 px-1"><p className="text-white text-xs truncate">{bg.label}</p></div>
+                    </button>
+                  ))}
+                  {themeKind === 'video' && BLACKJACK_VIDEO_BACKGROUNDS.map((bg) => (
+                    <button key={bg.id} type="button" onClick={() => setThemeId(bg.id)} className={`relative aspect-video rounded-lg overflow-hidden border-2 ${themeId === bg.id ? 'border-cyan-500' : 'border-gray-600'}`}>
+                      <video src={bg.src} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 px-1"><p className="text-white text-xs truncate">{bg.label}</p></div>
                     </button>
                   ))}
                 </div>
-              )}
+              </div>
 
-              {themeKind === 'video' && (
-                <div className="grid grid-cols-3 gap-3">
-                  {BLACKJACK_VIDEO_BACKGROUNDS.map((bg) => (
-                    <button
-                      key={bg.id}
-                      onClick={() => setThemeId(bg.id)}
-                      className={`relative aspect-video rounded-xl overflow-hidden border-2 transition-all ${
-                        themeId === bg.id
-                          ? 'border-cyan-500 ring-2 ring-cyan-500/50'
-                          : 'border-gray-700 hover:border-gray-600'
-                      }`}
-                    >
-                      <video
-                        src={bg.src}
-                        className="w-full h-full object-cover"
-                        muted
-                        loop
-                        autoPlay
-                        playsInline
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 py-1 px-2">
-                        <p className="text-white text-xs truncate">{bg.label}</p>
+              {tournamentType === 'freeroll' && (
+                <div className="space-y-4 p-4 rounded-xl bg-gray-800/50 border border-cyan-500/20">
+                  <h4 className="text-sm font-semibold text-cyan-400">Freeroll options</h4>
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">Mode</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setFreerollMode('standard_chip_count')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${freerollMode === 'standard_chip_count' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'}`}>Chip count</button>
+                      <button type="button" onClick={() => setFreerollMode('elimination')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${freerollMode === 'elimination' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'}`}>Elimination</button>
+                    </div>
+                  </div>
+                  {freerollMode === 'elimination' && (
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        <label className="block text-gray-400 text-xs mb-1">Trigger</label>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setEliminationIntervalType('time')} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${eliminationIntervalType === 'time' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'}`}>Every N min</button>
+                          <button type="button" onClick={() => setEliminationIntervalType('hands')} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${eliminationIntervalType === 'hands' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'}`}>Every N hands</button>
+                        </div>
                       </div>
-                    </button>
-                  ))}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-gray-400 text-xs mb-1">{eliminationIntervalType === 'time' ? 'Interval (min)' : 'Interval (hands)'}</label>
+                          <input type="number" min={1} value={eliminationIntervalValue} onChange={(e) => setEliminationIntervalValue(parseInt(e.target.value, 10) || 1)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" aria-label="Elimination interval" />
+                        </div>
+                        <div>
+                          <label className="block text-gray-400 text-xs mb-1">Bottom % out</label>
+                          <input type="number" min={5} max={50} value={eliminationPercentage} onChange={(e) => setEliminationPercentage(parseInt(e.target.value, 10) || 20)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" aria-label="Bottom percent eliminated" />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400 text-xs">Reset chips after round</span>
+                        <button type="button" onClick={() => setResetChipsAfterRound(!resetChipsAfterRound)} className={`relative w-10 h-5 rounded-full ${resetChipsAfterRound ? 'bg-cyan-500' : 'bg-gray-600'}`}><div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${resetChipsAfterRound ? 'translate-x-5' : 'translate-x-1'}`} /></button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="number" min={1} max={50} value={eliminationRoundsMin} onChange={(e) => setEliminationRoundsMin(parseInt(e.target.value, 10) || 1)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" placeholder="Rounds min" aria-label="Elimination rounds minimum" />
+                        <input type="number" min={1} max={50} value={eliminationRoundsMax} onChange={(e) => setEliminationRoundsMax(parseInt(e.target.value, 10) || 10)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" placeholder="Rounds max" aria-label="Elimination rounds maximum" />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 text-sm">Re-entry window</span>
+                    <button type="button" onClick={() => setReentryEnabled(!reentryEnabled)} className={`relative w-12 h-6 rounded-full ${reentryEnabled ? 'bg-cyan-500' : 'bg-gray-600'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${reentryEnabled ? 'translate-x-7' : 'translate-x-1'}`} /></button>
+                  </div>
+                  {reentryEnabled && <input type="number" min={1} max={60} value={reentryWindowMinutes} onChange={(e) => setReentryWindowMinutes(parseInt(e.target.value, 10) || 5)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" aria-label="Re-entry window minutes" />}
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">Action timer (sec)</label>
+                    <select value={actionTimerSeconds ?? ''} onChange={(e) => setActionTimerSeconds(e.target.value === '' ? null : parseInt(e.target.value, 10))} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" aria-label="Action timer seconds">
+                      <option value="">None</option><option value="10">10</option><option value="15">15</option>
+                    </select>
+                  </div>
                 </div>
               )}
-            </div>
+
+              {tournamentType === 'buyin' && (
+                <>
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-700">
+                    <div><p className="text-white font-medium">Rebuys</p><p className="text-gray-400 text-xs">Buy back in after busting</p></div>
+                    <button onClick={() => setRebuyEnabled(!rebuyEnabled)} className={`relative w-12 h-6 rounded-full ${rebuyEnabled ? 'bg-green-500' : 'bg-gray-600'}`}><div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${rebuyEnabled ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+                  </div>
+                  {rebuyEnabled && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {TOURNAMENT_VALIDATION.MAX_REBUYS_OPTIONS.map((max) => (
+                        <button key={max} onClick={() => setMaxRebuys(max)} className={`py-2 rounded-lg text-sm font-medium ${maxRebuys === max ? 'bg-green-500 text-white' : 'bg-gray-800 text-gray-400'}`}>{MAX_REBUYS_LABELS[max]}</button>
+                      ))}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-gray-300 text-sm mb-1">Creator fee: {creatorFeePercent}%</label>
+                    <input type="range" min="0" max="5" step="1" value={creatorFeePercent} onChange={(e) => setCreatorFeePercent(parseInt(e.target.value, 10))} className="w-full h-2 bg-gray-700 rounded-lg accent-purple-500" aria-label="Creator fee percent" />
+                  </div>
+                  <div>
+                    <label className="block text-gray-300 text-sm font-medium mb-1">Prize source</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setPrizeType('platform')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${prizeType === 'platform' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Platform (MORBIUS)</button>
+                      <button type="button" onClick={() => setPrizeType('custom')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${prizeType === 'custom' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Custom token</button>
+                    </div>
+                  </div>
+                  {prizeType === 'custom' && (
+                    <div className="space-y-2 p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                      {selectedToken ? (
+                        <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-900">
+                          <span className="text-white text-sm truncate">{selectedToken.symbol}</span>
+                          <button onClick={handleClearToken} className="ml-auto text-gray-400 hover:text-white">Clear</button>
+                        </div>
+                      ) : (
+                        <div ref={tokenDropdownRef}>
+                          <input type="text" value={tokenQuery} onChange={(e) => handleTokenQueryChange(e.target.value)} placeholder="Search or paste token address" className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" />
+                          {tokenSearchResults.length > 0 && (
+                            <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-gray-600 bg-gray-800">
+                              {tokenSearchResults.map((r) => (
+                                <button key={r.address} type="button" onClick={() => handleSelectToken(r)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2">
+                                  <span className="text-white truncate">{r.symbol}</span><span className="text-gray-500 text-xs">{r.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <input type="text" value={prizeAmountHuman} onChange={(e) => setPrizeAmountHuman(e.target.value)} placeholder="Prize amount" className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" />
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
           )}
+
+          {/* Step 5: Review */}
+          {wizardStep === 5 && (
+            <section className="space-y-4 max-w-lg mx-auto">
+              <h3 className="text-lg font-semibold text-cyan-300">Review</h3>
+              <div className="rounded-xl bg-gray-800/50 border border-gray-700 p-4 space-y-3 text-sm">
+                <p><span className="text-gray-500">Name:</span> <span className="text-white font-medium">{name || '—'}</span></p>
+                <p><span className="text-gray-500">Type:</span> <span className="text-white">{tournamentType === 'buyin' ? 'Buy-in' : 'Freeroll'}</span></p>
+                {tournamentType === 'freeroll' && (
+                  <p><span className="text-gray-500">Start:</span> <span className="text-white">{scheduledStartAt ? new Date(fromDatetimeLocal(scheduledStartAt)).toLocaleString() : '—'}</span></p>
+                )}
+                <p><span className="text-gray-500">Chips:</span> <span className="text-white">{startingChips.toLocaleString()}</span> · <span className="text-gray-500">Max hands:</span> <span className="text-white">{maxHands}</span></p>
+                <p><span className="text-gray-500">Prizes:</span> <span className="text-white">{PRIZE_PRESETS.find(p => p.id === prizeDistributionType)?.name ?? prizeDistributionType}</span></p>
+                {tournamentType === 'buyin' && <p><span className="text-gray-500">Buy-in:</span> <span className="text-white">{buyInAmount} MORBIUS</span></p>}
+                {tournamentType === 'freeroll' && <p><span className="text-gray-500">Players:</span> <span className="text-white">{minPlayersFreeroll} – {maxPlayersUnlimited ? '∞' : maxPlayersFreeroll}</span></p>}
+                <p><span className="text-gray-500">Private:</span> <span className="text-white">{isPrivate ? 'Yes' : 'No'}</span></p>
+              </div>
+              <p className="text-gray-500 text-xs">Use the steps above to change anything, then click Create below.</p>
+            </section>
+          )}
+
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-700 bg-gray-900/50">
-          <div className="flex gap-3">
-            <button
-              onClick={handleClose}
-              className="flex-1 py-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-semibold transition-colors"
-            >
-              Cancel
+        <DialogFooter className="p-4 border-t border-gray-700 bg-gray-900/50 flex-row gap-3">
+          <button type="button" onClick={handleClose} className="py-3 px-4 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors">
+            Cancel
+          </button>
+          {wizardStep > 1 && (
+            <button type="button" onClick={() => { setWizardStep((s) => s - 1); setError(null); }} className="py-3 px-4 rounded-xl bg-gray-600 hover:bg-gray-500 text-white font-medium transition-colors">
+              Back
             </button>
-            <button
-              onClick={handleCreate}
-              disabled={isLoading || !name.trim()}
-              className={`flex-1 py-3 rounded-xl font-semibold transition-all ${
-                !isLoading && name.trim()
-                  ? 'bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-400 hover:to-cyan-400 text-white shadow-lg shadow-purple-500/30'
-                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              }`}
-            >
+          )}
+          {wizardStep < TOTAL_WIZARD_STEPS ? (
+            <button type="button" onClick={() => { setWizardStep((s) => s + 1); setError(null); }} disabled={wizardStep === 1 && !name.trim()} className="flex-1 py-3 rounded-xl font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              Next
+            </button>
+          ) : (
+            <button type="button" onClick={handleCreate} disabled={isLoading || !name.trim()} className={`flex-1 py-3 rounded-xl font-semibold transition-all ${!isLoading && name.trim() ? 'bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-400 hover:to-cyan-400 text-white shadow-lg shadow-purple-500/30' : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`}>
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
                   Creating...
                 </span>
               ) : (
                 'Create Tournament'
               )}
             </button>
-          </div>
-        </div>
-      </div>
-    </div>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

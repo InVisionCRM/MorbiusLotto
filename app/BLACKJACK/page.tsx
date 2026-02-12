@@ -697,7 +697,10 @@ export default function BlackjackPage() {
 
   // Fetch real analytics data
   const { data: playerStatsData, isLoading: playerStatsLoading, refetch: refetchPlayerStats, error: playerStatsError } = usePlayerStatsEnhanced();
-  const { data: globalAnalyticsData, isLoading: globalAnalyticsLoading, refetch: refetchGlobalAnalytics, error: globalAnalyticsError } = useGlobalAnalytics();
+  // Only fetch global analytics when deployer is viewing the analytics tab (reduces server cost)
+  const { data: globalAnalyticsData, isLoading: globalAnalyticsLoading, refetch: refetchGlobalAnalytics, error: globalAnalyticsError } = useGlobalAnalytics({
+    enabled: isDeployer && currentView === 'analytics',
+  });
   
   // Fetch player game history from database
   const { data: playerGamesData, isLoading: playerGamesLoading } = usePlayerGames(50, 0);
@@ -756,22 +759,6 @@ export default function BlackjackPage() {
     largestBet: globalAnalyticsData.largest_bet || BigInt(0),
     largestPayout: globalAnalyticsData.largest_payout || BigInt(0)
   } : null;
-
-  // Debug: Log errors and data (moved after variable declarations)
-  useEffect(() => {
-    if (playerStatsError) {
-      console.error('Player stats error:', playerStatsError);
-    }
-    if (globalAnalyticsError) {
-      console.error('Global analytics error:', globalAnalyticsError);
-    }
-    if (globalAnalyticsData) {
-      console.log('Global analytics data received:', globalAnalyticsData);
-    }
-    if (globalAnalytics) {
-      console.log('Global analytics transformed:', globalAnalytics);
-    }
-  }, [playerStatsError, globalAnalyticsError, globalAnalyticsData, globalAnalytics]);
 
   // Approval modal state - needed for depositing MORBIUS directly
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -895,12 +882,16 @@ export default function BlackjackPage() {
         }
       });
 
-      client.on('game_updated', (gameState: ServerGameState) => {
+      client.on('game_updated', (payload: ServerGameState) => {
+        // Only apply if this update is for the current game (avoid overwriting with another game's or stale state)
+        const payloadGameId = String((payload as any)?.gameId ?? (payload as any)?.id ?? '');
+        const currentId = currentGameRef.current?.id ?? null;
+        if (currentId != null && payloadGameId !== '' && currentId !== payloadGameId) return;
         // Update game state and get the processed localGame
-        const processedGame = updateGameStateFromServer(gameState);
+        const processedGame = updateGameStateFromServer(payload);
         
         // If game is completed, handle completion with the processed game data
-        if ((gameState as any)?.status === 'completed' && processedGame) {
+        if ((payload as any)?.status === 'completed' && processedGame) {
           const betAmount = processedGame.totalBetAmount ?? BigInt(0);
           const payout = processedGame.totalPayout ?? BigInt(0);
           const hasWin = Array.isArray(processedGame.playerHands) && 
@@ -1375,8 +1366,8 @@ export default function BlackjackPage() {
       const salt = gameId.length;
       return suits[(idx + salt) % suits.length];
     };
-    // Detect RNG version from server state to decode card format
-    const isV2 = serverGameState.rngVersion === 2;
+    // Detect RNG version from server state to decode card format (default 2 so 0-51 indices decode correctly)
+    const isV2 = (serverGameState.rngVersion ?? 2) === 2;
     // V2: card index 0-51 (rank = idx%13+1, suit = floor(idx/13))
     // V1: encoded cards value*10+suit (10-133); or raw value 1-13
     const toCard = (raw: number, idx: number, hidden = false): Card => {
@@ -2621,6 +2612,26 @@ export default function BlackjackPage() {
             onVerifyGameRequest={openVerifyView}
             verifyGameHandler={handleVerifyGame}
             inTournament={tournament.tournamentState.inTournament}
+            tournaments={tournament.tournamentList}
+            onRefreshTournaments={() => tournament.fetchTournamentList()}
+            tournamentsLoading={tournament.isLoading}
+            onCreateTournament={() => setShowTournamentCreator(true)}
+            onJoinTournament={(tournamentId, isPrivate) => {
+              if (isPrivate) {
+                setPendingJoinTournamentId(tournamentId);
+                setShowTournamentPinEntry(true);
+              } else {
+                tournament.joinTournament(tournamentId).then(success => {
+                  if (success) {
+                    setIsTournamentMode(true);
+                    toast.success('Joined tournament!');
+                    fetchBalance();
+                  }
+                });
+              }
+            }}
+            playerBalance={offChainBalance}
+            playerAddress={address ?? null}
             tournamentTabContent={
               tournament.tournamentState.inTournament ? (
                 <div className="space-y-3">

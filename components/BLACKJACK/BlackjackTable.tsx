@@ -930,49 +930,55 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       <div className="relative z-10 flex flex-col" style={{ height: '100%' }}>
         {/* Play Area */}
         <div className="flex-1 relative w-full z-10" style={{ minHeight: '340px' }}>
-          {/* Dealer Area */}
-          <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 flex flex-row sm:flex-col items-center">
-            <div className="flex gap-1 sm:gap-0">
-              {dealerHand.cards.map((card, index) => {
-                if (index >= visibleDealerCards) return null;
-                const isHoleCard = hideHoleCard && index === 1;
-                return (
-                  <div
-                    key={`dealer-card-${index}`}
-                    className={index > 0 ? 'card-overlap-dealer' : ''}
-                    style={{ zIndex: index }}
-                  >
-                    <PlayingCard
-                      card={card}
-                      owner="dealer"
-                      hidden={isHoleCard}
-                      className=""
-                      index={index}
-                      isNewCard={index >= 2 && index === visibleDealerCards - 1}
-                      exiting={cardsExiting}
-                      exitDelay={0}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            {visibleDealerCards > 0 && (
-              <div className="flex items-center gap-1 sm:gap-2 ml-2 sm:ml-0 sm:mt-2">
-                <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
-                  gameState === GameState.DEALER_TURN ? 'card-counter-active' : ''
-                }`}
-                style={{
-                  padding: gameState === GameState.DEALER_TURN ? '8px' : '4px',
-                }}>
-                  <span className="text-white font-black text-lg sm:text-3xl relative z-10">
-                    {isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal())}
-                  </span>
+          {/* Dealer Area — cards then counter always to the right */}
+          {(() => {
+            const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
+            const dealerIsWinner = gameCompleteAndRevealed && gameResult === 'loss';
+            return (
+              <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 flex flex-row items-center">
+                <div className="flex gap-1 sm:gap-0">
+                  {dealerHand.cards.map((card, index) => {
+                    if (index >= visibleDealerCards) return null;
+                    const isHoleCard = hideHoleCard && index === 1;
+                    return (
+                      <div
+                        key={`dealer-card-${index}`}
+                        className={index > 0 ? 'card-overlap-dealer' : ''}
+                        style={{ zIndex: index }}
+                      >
+                        <PlayingCard
+                          card={card}
+                          owner="dealer"
+                          hidden={isHoleCard}
+                          className=""
+                          index={index}
+                          isNewCard={index >= 2 && index === visibleDealerCards - 1}
+                          exiting={cardsExiting}
+                          exitDelay={0}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
-                {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-sm sm:text-base">BUST</span>}
-                {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-sm sm:text-base">BJ</span>}
+                {visibleDealerCards > 0 && (
+                  <div className={`flex items-center gap-1 sm:gap-2 ml-2 sm:ml-3 transition-transform duration-300 ${dealerIsWinner ? 'card-counter-winner' : ''}`}>
+                    <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
+                      gameState === GameState.DEALER_TURN ? 'card-counter-active' : ''
+                    }`}
+                    style={{
+                      padding: gameState === GameState.DEALER_TURN ? '8px' : '4px',
+                    }}>
+                      <span className="text-white font-black text-lg sm:text-3xl relative z-10">
+                        {isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal())}
+                      </span>
+                    </div>
+                    {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-sm sm:text-base">BUST</span>}
+                    {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-sm sm:text-base">BJ</span>}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Player Area */}
           <div className="absolute bottom-36 sm:bottom-55 left-1/2 -translate-x-1/2 flex flex-col gap-2 sm:gap-4 items-center">
@@ -1019,79 +1025,61 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                       </div>
                     )}
 
-                    {/* Hand Score — above cards on desktop, right of cards on mobile */}
-                    <div className="hidden sm:flex items-center gap-2 mb-0">
-                      <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
-                        gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
-                      }`}
-                      style={{
-                        padding: gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? '8px' : '4px',
-                      }}>
-                        <span className={`font-black text-3xl relative z-10 ${
-                          isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
-                        }`}>
-                          {hand.total}
-                        </span>
-                      </div>
-                      {hand.isBlackjack && <span className="text-yellow-400 font-black text-2xl">BJ!</span>}
-                      {hand.isBust && <span className="text-red-400 font-black text-2xl">BUST</span>}
-                    </div>
-
-                    {/* Cards row + mobile score */}
-                    <div className="flex items-center">
-                    <div className={`flex ${hasSplit ? 'gap-1' : 'gap-1 sm:gap-0'}`}>
-                      {hand.cards.map((card, cardIndex) => {
-                        // Determine if card is new
-                        let isNewCard = false;
-                        if (Array.isArray(newCardIndices.player)) {
-                          isNewCard = handIndex < newCardIndices.player.length && newCardIndices.player[handIndex].has(cardIndex);
-                        } else {
-                          isNewCard = newCardIndices.player.has(cardIndex);
-                        }
-
-                        // Player cards: normal size (reduced from large)
-                        const cardSize = 'normal';
-
-                        return (
-                          <div
-                            key={`player-${handIndex}-${cardIndex}`}
-                            className={!hasSplit && cardIndex > 0 ? 'card-overlap-player' : ''}
-                            style={{
-                              zIndex: cardIndex
-                            }}
-                          >
-                            <PlayingCard
-                              card={card}
-                              owner="player"
-                              className=""
-                              index={cardIndex}
-                              isNewCard={isNewCard}
-                              size={cardSize}
-                              exiting={cardsExiting}
-                              exitDelay={0.15}
-                            />
+                    {/* Cards row + score always to the right of cards */}
+                    {(() => {
+                      const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
+                      const handIsWinner = gameCompleteAndRevealed && (hand.result === 'win' || hand.result === 'blackjack');
+                      return (
+                        <div className="flex items-center">
+                          <div className={`flex ${hasSplit ? 'gap-1' : 'gap-1 sm:gap-0'}`}>
+                            {hand.cards.map((card, cardIndex) => {
+                              let isNewCard = false;
+                              if (Array.isArray(newCardIndices.player)) {
+                                isNewCard = handIndex < newCardIndices.player.length && newCardIndices.player[handIndex].has(cardIndex);
+                              } else {
+                                isNewCard = newCardIndices.player.has(cardIndex);
+                              }
+                              const cardSize = 'normal';
+                              return (
+                                <div
+                                  key={`player-${handIndex}-${cardIndex}`}
+                                  className={!hasSplit && cardIndex > 0 ? 'card-overlap-player' : ''}
+                                  style={{ zIndex: cardIndex }}
+                                >
+                                  <PlayingCard
+                                    card={card}
+                                    owner="player"
+                                    className=""
+                                    index={cardIndex}
+                                    isNewCard={isNewCard}
+                                    size={cardSize}
+                                    exiting={cardsExiting}
+                                    exitDelay={0.15}
+                                  />
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
-                    </div>
-                    {/* Mobile score — right of cards */}
-                    <div className="flex sm:hidden items-center gap-1 ml-2">
-                      <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
-                        gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
-                      }`}
-                      style={{
-                        padding: gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? '6px' : '3px',
-                      }}>
-                        <span className={`font-black text-lg relative z-10 ${
-                          isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
-                        }`}>
-                          {hand.total}
-                        </span>
-                      </div>
-                      {hand.isBlackjack && <span className="text-yellow-400 font-black text-sm">BJ!</span>}
-                      {hand.isBust && <span className="text-red-400 font-black text-sm">BUST</span>}
-                    </div>
-                    </div>
+                          {/* Score — always to the right of cards */}
+                          <div className={`flex items-center gap-1 ml-2 sm:ml-3 transition-transform duration-300 ${handIsWinner ? 'card-counter-winner' : ''}`}>
+                            <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
+                              gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
+                            }`}
+                            style={{
+                              padding: gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? '6px' : '3px',
+                            }}>
+                              <span className={`font-black text-lg sm:text-3xl relative z-10 ${
+                                isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
+                              }`}>
+                                {hand.total}
+                              </span>
+                            </div>
+                            {hand.isBlackjack && <span className="text-yellow-400 font-black text-sm sm:text-2xl">BJ!</span>}
+                            {hand.isBust && <span className="text-red-400 font-black text-sm sm:text-2xl">BUST</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Chip Stack Under Each Split Hand */}
                     {hasSplit && chipStack.length > 0 && (() => {
@@ -1936,6 +1924,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         .card-counter-active {
           border: 2px solid rgba(34, 211, 238, 0.5);
           animation: cyanGlow 2s ease-in-out infinite;
+        }
+
+        .card-counter-winner {
+          transform: scale(1.25);
         }
       `}</style>
     </div>

@@ -141,12 +141,20 @@ export interface CreateFreerollParams {
   maxHands: number;
   prizeDistributionType: string;
   customPrizePercentages?: number[];
-  eliminationConfig?: { intervalType: string; intervalValue: number; eliminationPercentage: number; resetChipsAfterRound?: boolean } | null;
+  eliminationConfig?: {
+    intervalType: string;
+    intervalValue: number;
+    eliminationPercentage: number;
+    resetChipsAfterRound?: boolean;
+    eliminationRoundsMin?: number;
+    eliminationRoundsMax?: number;
+  } | null;
   reentryConfig: { enabled: boolean; windowMinutes?: number };
   actionTimerSeconds: number | null;
   tiebreakerOrder?: string[];
   tableTheme: TableTheme;
   isPrivate: boolean;
+  minPlayers?: number;
   maxPlayers?: number | null;
   customImage?: string | null;
   pinCode?: string | null;
@@ -1443,6 +1451,27 @@ export class TournamentService {
     if (params.maxHands < 1 || params.maxHands > 200) {
       throw new Error('Max hands must be 1–200');
     }
+    const minPlayers = Math.min(100, Math.max(2, params.minPlayers ?? 2));
+    const maxPlayers = params.maxPlayers != null
+      ? Math.min(1000, Math.max(2, params.maxPlayers))
+      : null;
+    if (maxPlayers != null && minPlayers > maxPlayers) {
+      throw new Error('Min players cannot exceed max players');
+    }
+    if (params.freerollMode === 'elimination') {
+      const ec = params.eliminationConfig;
+      if (!ec || typeof ec.intervalType !== 'string' || typeof ec.intervalValue !== 'number') {
+        throw new Error('Elimination mode requires eliminationConfig with intervalType and intervalValue');
+      }
+      const roundsMin = ec.eliminationRoundsMin ?? 1;
+      const roundsMax = ec.eliminationRoundsMax ?? 20;
+      if (roundsMin < 1 || roundsMax < 1 || roundsMin > roundsMax) {
+        throw new Error('Elimination rounds min/max must be 1+ and min <= max');
+      }
+      if (ec.intervalValue < 1) {
+        throw new Error('Elimination interval must be at least 1');
+      }
+    }
     let pinCode: string | null = null;
     if (params.isPrivate) {
       pinCode = (params.pinCode?.trim() && /^\d{4,12}$/.test(params.pinCode.trim()))
@@ -1495,7 +1524,7 @@ export class TournamentService {
         creator_fee_percent,
         platform_fee_percent,
         ends_at
-      ) VALUES ($1, $2, 0, $3, $4, 2, 'active', 0, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, $20, 0, $21, $22, $23, $24)
+      ) VALUES ($1, $2, 0, $3, $4, $25, 'active', 0, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, $20, 0, $21, $22, $23, $24)
       RETURNING id, pin_code
     `;
     const result = await this.pool.query(query, [
@@ -1509,7 +1538,7 @@ export class TournamentService {
       pinCode,
       params.prizeDistributionType,
       JSON.stringify(prizePercentages),
-      params.maxPlayers,
+      maxPlayers,
       params.customImage || null,
       scheduledStart.toISOString(),
       registrationOpens.toISOString(),
@@ -1525,6 +1554,7 @@ export class TournamentService {
       creatorFeePercent,
       platformFeePercent,
       endsAt.toISOString(),
+      minPlayers,
     ]);
     const row = result.rows[0];
     const tournamentId = row.id;
@@ -1534,6 +1564,41 @@ export class TournamentService {
        VALUES ($1, 'start', $2, 'pending'), ($1, 'end', $3, 'pending')`,
       [tournamentId, scheduledStart.toISOString(), endsAt.toISOString()]
     );
+
+    // Time-based elimination: schedule elimination_round events
+    if (params.freerollMode === 'elimination' && params.eliminationConfig?.intervalType === 'time') {
+      const ec = params.eliminationConfig;
+      const intervalMins = Math.max(1, ec.intervalValue);
+      const roundsMin = ec.eliminationRoundsMin ?? 1;
+      const roundsMax = ec.eliminationRoundsMax ?? 20;
+      const possibleByTime = Math.floor(params.durationMinutes / intervalMins);
+      const numRounds = Math.min(roundsMax, Math.max(roundsMin, possibleByTime));
+      if (numRounds >= 1) {
+        const eventRows: { tournament_id: string; event_type: string; scheduled_at: string; status: string; metadata: string }[] = [];
+        for (let r = 1; r <= numRounds; r++) {
+          const at = new Date(scheduledStart.getTime() + r * intervalMins * 60 * 1000);
+          if (at < endsAt) {
+            eventRows.push({
+              tournament_id: tournamentId,
+              event_type: 'elimination_round',
+              scheduled_at: at.toISOString(),
+              status: 'pending',
+              metadata: JSON.stringify({ round_number: r }),
+            });
+          }
+        }
+        if (eventRows.length > 0) {
+          const values = eventRows
+            .map((_, i) => `($${1 + i * 5}, $${2 + i * 5}, $${3 + i * 5}, $${4 + i * 5}, $${5 + i * 5}::jsonb)`)
+            .join(', ');
+          const flatParams = eventRows.flatMap((e) => [e.tournament_id, e.event_type, e.scheduled_at, e.status, e.metadata]);
+          await this.pool.query(
+            `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status, metadata) VALUES ${values}`,
+            flatParams
+          );
+        }
+      }
+    }
 
     logger.info('Freeroll tournament created', {
       tournamentId,
@@ -2192,6 +2257,10 @@ export class TournamentService {
 
       await client.query('COMMIT');
       logger.info('handleEliminationRound: tournamentId=%s round=%s eliminated=%s survivors=%s', tournamentId, roundNumber, eliminatedEntryIds.length, survivorCount);
+
+      if (survivorCount <= 1) {
+        await this.distributePrizes(tournamentId);
+      }
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;

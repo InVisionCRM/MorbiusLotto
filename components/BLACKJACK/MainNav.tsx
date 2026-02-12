@@ -3,8 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useDisconnect } from 'wagmi';
+import { useAccount } from 'wagmi';
+import { WalletMenu } from '@/components/shared/WalletMenu';
 import { NumberTicker } from '@/components/ui/number-ticker';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
@@ -64,16 +64,13 @@ const viewIcons: Record<string, string> = {
 
 export default function MainNav({ onOpenDepositModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings, musicTrackName, isMusicPlaying, onToggleMusic, onNextTrack }: MainNavProps) {
   const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [internalThemeModalOpen, setInternalThemeModalOpen] = useState(false);
   const isThemeModalControlled = onThemeModalOpenChange !== undefined;
   const themeModalOpen = isThemeModalControlled ? (themeModalOpenProp ?? false) : internalThemeModalOpen;
   const setThemeModalOpen = isThemeModalControlled ? onThemeModalOpenChange : setInternalThemeModalOpen;
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const walletDropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -81,22 +78,19 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
-      if (walletDropdownRef.current && !walletDropdownRef.current.contains(event.target as Node)) {
-        setIsWalletDropdownOpen(false);
-      }
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
         setIsMobileMenuOpen(false);
       }
     };
 
-    if (isDropdownOpen || isWalletDropdownOpen || isMobileMenuOpen) {
+    if (isDropdownOpen || isMobileMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isDropdownOpen, isWalletDropdownOpen, isMobileMenuOpen]);
+  }, [isDropdownOpen, isMobileMenuOpen]);
 
   const isDeployer = Boolean(
     address && BLACKJACK_DEPLOYER_WALLET && address.toLowerCase() === BLACKJACK_DEPLOYER_WALLET
@@ -152,110 +146,14 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
               </button>
             )}
 
-            {/* Wallet / Profile */}
-            <div className="flex items-center flex-shrink-0 relative" ref={walletDropdownRef}>
-              {isConnected && address ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setIsWalletDropdownOpen(!isWalletDropdownOpen)}
-                    className="flex items-center gap-2 px-2 py-1 rounded-sm text-white text-sm font-bold transition-all hover:bg-white/5"
-                    style={{
-                      background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))',
-                    }}
-                    aria-label={isWalletDropdownOpen ? 'Close wallet menu' : 'Open wallet menu'}
-                  >
-                    <div className="w-7 h-7 rounded-full bg-slate-700 border border-cyan-500/30 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                      {profileImageUrl ? (
-                        <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-gray-400 text-xs">?</span>
-                      )}
-                    </div>
-                    <span className="text-white max-w-[80px] truncate">
-                      {profileDisplayName || `…${address.slice(-4)}`}
-                    </span>
-                    <i className={`fas fa-chevron-down text-white text-sm transition-transform ${isWalletDropdownOpen ? 'rotate-180' : ''}`} aria-hidden />
-                  </button>
-
-                  {/* Wallet dropdown — same style as hamburger; fixed + high z so it stays visible above table/sidebar */}
-                  {isWalletDropdownOpen && (
-                    <div
-                      className="fixed right-2 top-14 w-64 rounded-lg overflow-hidden shadow-xl"
-                      style={{
-                        zIndex: 9999,
-                        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-                        border: '1px solid rgba(6, 182, 212, 0.3)',
-                        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <div className="p-2">
-                        <div className="flex items-center gap-2 text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">
-                          <i className="fas fa-wallet w-4 text-center" aria-hidden />
-                          Wallet
-                        </div>
-                        {onOpenDepositModal && (
-                          <button
-                            onClick={() => {
-                              onOpenDepositModal();
-                              setIsWalletDropdownOpen(false);
-                            }}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                          >
-                            <i className="fas fa-wallet w-4 text-center"></i>
-                            <span className="text-sm font-medium">Deposit/Withdraw</span>
-                          </button>
-                        )}
-                        {reserveBalance !== undefined && (
-                          <div className="flex items-center gap-3 px-3 py-2 text-gray-400">
-                            <i className="fas fa-coins w-4 text-center"></i>
-                            <span className="text-sm">Balance: {Math.floor(Number(reserveBalance) / 1e18)} MORBIUS</span>
-                          </div>
-                        )}
-                        {onOpenProfileSettings && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onOpenProfileSettings();
-                              setIsWalletDropdownOpen(false);
-                            }}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                          >
-                            <i className="fas fa-pen w-4 text-center" aria-hidden />
-                            <span className="text-sm font-medium">Edit profile</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            disconnect();
-                            setIsWalletDropdownOpen(false);
-                          }}
-                          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-red-400 hover:bg-red-500/10 transition-colors"
-                        >
-                          <i className="fas fa-sign-out-alt w-4 text-center"></i>
-                          <span className="text-sm font-medium">Disconnect</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <ConnectButton.Custom>
-                  {({ openConnectModal }) => (
-                    <button
-                      onClick={openConnectModal}
-                      className="flex items-center gap-2 px-3 py-1 rounded-sm text-white/50 text-sm font-bold transition-all hover:scale-105 active:scale-95"
-                      style={{
-                        background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))',
-                      }}
-                    >
-                      <span className="text-cyan-400">Connect</span>
-                      <i className="fas fa-chevron-down text-cyan-400 text-xs"></i>
-                    </button>
-                  )}
-                </ConnectButton.Custom>
-              )}
-            </div>
+            {/* Wallet / Profile — shared WalletMenu (same UX globally) */}
+            <WalletMenu
+              onOpenDepositModal={onOpenDepositModal}
+              reserveBalance={reserveBalance}
+              profileDisplayName={profileDisplayName}
+              profileImageUrl={profileImageUrl}
+              onOpenProfileSettings={onOpenProfileSettings}
+            />
 
             {/* Hamburger Menu - Always visible */}
             <div className="relative z-50" ref={mobileMenuRef}>

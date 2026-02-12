@@ -8,6 +8,8 @@ import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
 import GlobalWinsFeed from '@/components/BLACKJACK/GlobalWinsFeed'
 import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart'
 import { GameResult } from '@/app/BLACKJACK/types'
+import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar'
+import type { TournamentListItem } from '@/lib/tournament-types'
 // GameVerificationTools removed - use /BLACKJACK/verify page instead
 type GameVerificationData = any // Type kept for compatibility
 
@@ -63,6 +65,20 @@ interface BlackjackSidebarProps {
   inTournament?: boolean
   /** Content for the tournament tab (TournamentHUD + TournamentBetPanel) */
   tournamentTabContent?: React.ReactNode
+  /** Tournament list for sidebar "Tournaments" tab (expandable table + pagination) */
+  tournaments?: TournamentListItem[]
+  /** Refetch tournament list (e.g. when user opens Tournaments tab) */
+  onRefreshTournaments?: () => void | Promise<void | TournamentListItem[]>
+  /** Whether tournament list is loading */
+  tournamentsLoading?: boolean
+  /** Open create tournament flow from sidebar */
+  onCreateTournament?: () => void
+  /** Join tournament from sidebar expanded view (tournamentId, isPrivate) */
+  onJoinTournament?: (tournamentId: string, isPrivate: boolean) => void
+  /** Player balance for Join button state */
+  playerBalance?: bigint
+  /** Player address for Join button state */
+  playerAddress?: string | null
 }
 
 export default function BlackjackSidebar({
@@ -81,6 +97,13 @@ export default function BlackjackSidebar({
   verifyGameHandler,
   inTournament = false,
   tournamentTabContent,
+  tournaments = [],
+  onRefreshTournaments,
+  tournamentsLoading = false,
+  onCreateTournament,
+  onJoinTournament,
+  playerBalance,
+  playerAddress,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'recent')
@@ -91,13 +114,23 @@ export default function BlackjackSidebar({
     ? [...BASE_TABS, TOURNAMENT_PLAY_TAB]
     : BASE_TABS
 
+  // When entering a tournament, switch to tournament tab; when leaving, switch off it
   useEffect(() => {
     if (inTournament) {
       setActiveTab('tournament-play')
-    } else if (activeTab === 'tournament-play') {
-      setActiveTab('recent')
+    } else {
+      setActiveTab((prev) => (prev === 'tournament-play' ? 'recent' : prev))
     }
-  }, [inTournament, isDesktop, activeTab])
+  }, [inTournament])
+
+  // Refresh tournament list when user opens Tournaments tab (only when tab becomes active)
+  const onRefreshTournamentsRef = useRef(onRefreshTournaments)
+  onRefreshTournamentsRef.current = onRefreshTournaments
+  useEffect(() => {
+    if (activeTab === 'tournaments') {
+      onRefreshTournamentsRef.current?.()
+    }
+  }, [activeTab])
 
   const handleQuickHistoryVerify = (gameId: string) => {
     setSidebarVerifyGameId(gameId)
@@ -106,9 +139,9 @@ export default function BlackjackSidebar({
   }
 
   return (
-    <div className="w-full min-w-0 flex flex-col h-full">
-      {/* Tabs */}
-      <div className="flex overflow-x-auto no-scrollbar bg-slate-800/60 rounded-t-xs">
+    <div className="w-full min-w-0 flex flex-col h-full min-h-0">
+      {/* Tabs — ensure always on top and clickable */}
+      <div className="flex overflow-x-auto no-scrollbar bg-slate-800/60 rounded-t-xs shrink-0 relative z-10">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -128,9 +161,9 @@ export default function BlackjackSidebar({
 
       {/* Content — padding only for howto/tournaments/chart/tournament-play; Recent/Top have their own */}
       <div
-        className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar ${
+        className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar relative ${
           activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'verify' || activeTab === 'tournament-play' ? 'p-4' : ''
-        }`}
+        } ${activeTab === 'tournaments' ? 'flex flex-col' : ''}`}
         style={PANEL_STYLE}
       >
         {activeTab === 'recent' && (
@@ -176,30 +209,17 @@ export default function BlackjackSidebar({
           </div>
         )}
         {activeTab === 'tournaments' && (
-          <div className="text-sm text-white/90 space-y-4">
-            <p className="text-white/80">
-              Join or create Blackjack tournaments. Quick Join uses a fixed buy-in; the Lobby lets you browse or create custom events.
-            </p>
-            <div className="flex flex-col gap-2">
-              {onQuickJoinTournament && (
-                <button
-                  type="button"
-                  onClick={onQuickJoinTournament}
-                  className="w-full px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold text-sm transition-colors border border-cyan-500/30"
-                >
-                  Quick Join Tournament
-                </button>
-              )}
-              {onTournamentLobby && (
-                <button
-                  type="button"
-                  onClick={onTournamentLobby}
-                  className="w-full px-4 py-2.5 rounded-lg bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600 text-white font-semibold text-sm transition-colors border border-cyan-500/30"
-                >
-                  Tournament Lobby
-                </button>
-              )}
-            </div>
+          <div className="flex flex-col flex-1 min-h-0 text-sm text-white/90">
+            <TournamentListSidebar
+              tournaments={tournaments}
+              isLoading={tournamentsLoading}
+              onRefresh={onRefreshTournaments ?? (() => {})}
+              onTournamentLobby={onTournamentLobby ?? (() => {})}
+              onCreateTournament={onCreateTournament}
+              onJoin={onJoinTournament}
+              playerBalance={playerBalance}
+              playerAddress={playerAddress}
+            />
           </div>
         )}
         {activeTab === 'tournament-play' && inTournament && tournamentTabContent != null && (

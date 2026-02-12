@@ -98,6 +98,22 @@ export function useLegacyPlayerReserve() {
   })
 }
 
+/**
+ * Whether the legacy Blackjack contract is emergency-paused.
+ * If true, withdraw() reverts with "Emergency pause active"; owner/emergencyAdmin must unpause.
+ */
+export function useLegacyEmergencyPaused() {
+  return useReadContract({
+    address: isLegacyConfigured ? (BLACKJACK_LEGACY_ADDRESS as `0x${string}`) : undefined,
+    abi: blackjackAbi,
+    functionName: 'emergencyPaused',
+    query: {
+      enabled: isLegacyConfigured,
+      refetchInterval: 15000,
+    },
+  })
+}
+
 // ============ Write Hooks ============
 
 /**

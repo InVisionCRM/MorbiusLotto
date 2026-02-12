@@ -72,12 +72,14 @@ export type TournamentPhase = 'registration' | 'active' | 'elimination_round' | 
 
 export type TiebreakerMetric = 'blackjacks' | 'hands_won' | 'highest_chips' | 'entry_time';
 
-/** Elimination mode: interval (time or hands), % to eliminate, chip reset after round */
+/** Elimination mode: interval (time or hands), % to eliminate, chip reset, min/max rounds */
 export interface EliminationConfig {
   intervalType: 'time' | 'hands';
-  intervalValue: number;           // minutes or number of hands
+  intervalValue: number;           // minutes (time) or number of hands (hands)
   eliminationPercentage: number;   // e.g. 20 = bottom 20% eliminated
   resetChipsAfterRound: boolean;
+  eliminationRoundsMin: number;    // at least this many rounds if duration allows
+  eliminationRoundsMax: number;    // cap on number of elimination events
 }
 
 /** Re-entry: allowed within a time window from tournament start */
@@ -97,6 +99,16 @@ export const FREEROLL_VALIDATION = {
   DURATION_MAX_MINUTES: 1440,      // 24h
   ELIMINATION_PERCENTAGE_MIN: 5,
   ELIMINATION_PERCENTAGE_MAX: 50,
+  ELIMINATION_ROUNDS_MIN: 1,
+  ELIMINATION_ROUNDS_MAX: 50,
+  ELIMINATION_INTERVAL_MIN_MINUTES: 1,
+  ELIMINATION_INTERVAL_MAX_MINUTES: 120,
+  ELIMINATION_INTERVAL_MIN_HANDS: 1,
+  ELIMINATION_INTERVAL_MAX_HANDS: 100,
+  MIN_PLAYERS_MIN: 2,
+  MIN_PLAYERS_MAX: 100,
+  MAX_PLAYERS_MIN: 2,
+  MAX_PLAYERS_MAX: 1000,
   REENTRY_WINDOW_MAX_MINUTES: 60,
   TIEBREAKER_ORDER_DEFAULT: ['highest_chips', 'blackjacks', 'hands_won', 'entry_time'] as TiebreakerMetric[],
 };
@@ -117,7 +129,8 @@ export interface CreateFreerollRequest {
   tiebreakerOrder?: TiebreakerMetric[];   // For elimination mode
   tableTheme: TableTheme;
   isPrivate: boolean;
-  maxPlayers?: number | null;
+  minPlayers?: number;             // 2–100, default 2; minimum to start / payout
+  maxPlayers?: number | null;     // null = unlimited, else e.g. 2–1000
   customImage?: string | null;
   /** Optional PIN for private freerolls; if not set, server generates one */
   pinCode?: string | null;

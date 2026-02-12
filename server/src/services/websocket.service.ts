@@ -1966,12 +1966,20 @@ export class WebSocketService {
         maxHands: number;
         prizeDistributionType: string;
         customPrizePercentages?: number[];
-        eliminationConfig?: { intervalType: string; intervalValue: number; eliminationPercentage: number; resetChipsAfterRound?: boolean } | null;
+        eliminationConfig?: {
+          intervalType: string;
+          intervalValue: number;
+          eliminationPercentage: number;
+          resetChipsAfterRound?: boolean;
+          eliminationRoundsMin?: number;
+          eliminationRoundsMax?: number;
+        } | null;
         reentryConfig: { enabled: boolean; windowMinutes?: number };
         actionTimerSeconds: number | null;
         tiebreakerOrder?: string[];
         tableTheme: { kind: 'image' | 'video'; id: string };
         isPrivate: boolean;
+        minPlayers?: number;
         maxPlayers?: number | null;
         customImage?: string | null;
         pinCode?: string | null;
@@ -2005,6 +2013,7 @@ export class WebSocketService {
         tiebreakerOrder: payload.tiebreakerOrder,
         tableTheme: payload.tableTheme,
         isPrivate: payload.isPrivate,
+        minPlayers: payload.minPlayers,
         maxPlayers: payload.maxPlayers,
         customImage: payload.customImage,
         pinCode: payload.pinCode,

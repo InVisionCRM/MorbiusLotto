@@ -3,8 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useDisconnect } from 'wagmi';
+import { useAccount } from 'wagmi';
+import { WalletMenu } from '@/components/shared/WalletMenu';
 import HowToPlayModal from './HowToPlayModal';
 import SwapModal from './SwapModal';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
@@ -25,11 +25,10 @@ export default function MainNav({
   onShowHistory,
   onShowPayouts,
 }: MainNavProps) {
+  const { isConnected } = useAccount();
   const [howToPlayOpen, setHowToPlayOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -91,34 +90,7 @@ export default function MainNav({
 
             {/* Right Section: Wallet + Hamburger */}
             <div className="flex items-center gap-2">
-              {/* Custom Wallet Button */}
-              {isConnected && address ? (
-                <button
-                  onClick={() => disconnect()}
-                  className="flex items-center border-slate-900 gap-2 px-4 py-1 rounded-sm text-white text-sm font-bold transition-all hover:scale-105 active:scale-95"
-                  style={{
-                    background: 'linear-gradient(145deg,rgba(44, 148, 156, 0.72),rgba(87, 107, 113, 0))',
-                  }}
-                >
-                  <span className="text-white">{address.slice(-4)}</span>
-                  <i className="fas fa-chevron-down text-white text-sm"></i>
-                </button>
-              ) : (
-                <ConnectButton.Custom>
-                  {({ openConnectModal }) => (
-                    <button
-                      onClick={openConnectModal}
-                      className="flex items-center gap-2 px-3 py-1 rounded-sm text-white/50 text-sm font-bold transition-all hover:scale-105 active:scale-95"
-                      style={{
-                        background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))',
-                      }}
-                    >
-                      <span className="text-cyan-400">Connect</span>
-                      <i className="fas fa-chevron-down text-cyan-400 text-xs"></i>
-                    </button>
-                  )}
-                </ConnectButton.Custom>
-              )}
+              <WalletMenu />
 
               {/* Hamburger Menu */}
               <div className="relative z-50" ref={menuRef}>

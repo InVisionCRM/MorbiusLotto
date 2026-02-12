@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useAccount, useDisconnect } from 'wagmi'
+import { useAccount } from 'wagmi'
+import { WalletMenu } from '@/components/shared/WalletMenu'
 import { useAuth } from '@/hooks/use-auth'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,6 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
 
   const { isAuthenticated, signIn, signOut, isSigning, address } = useAuth()
   const { isConnected } = useAccount()
-  const { disconnect } = useDisconnect()
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -105,36 +104,8 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
               </div>
             )}
 
-            {/* Wallet Connection */}
-            <div className="flex items-center flex-shrink-0">
-              {isConnected && address ? (
-                <button
-                  onClick={() => disconnect()}
-                  className="flex items-center gap-2 px-4 py-1 rounded-sm text-white text-sm font-bold transition-all hover:scale-105 active:scale-95"
-                  style={{
-                    background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))',
-                  }}
-                >
-                  <span className="text-white">{address.slice(-4)}</span>
-                  <i className="fas fa-chevron-down text-white text-sm"></i>
-                </button>
-              ) : (
-                <ConnectButton.Custom>
-                  {({ openConnectModal }) => (
-                    <button
-                      onClick={openConnectModal}
-                      className="flex items-center gap-2 px-3 py-1 rounded-sm text-white/50 text-sm font-bold transition-all hover:scale-105 active:scale-95"
-                      style={{
-                        background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))',
-                      }}
-                    >
-                      <span className="text-cyan-400">Connect</span>
-                      <i className="fas fa-chevron-down text-cyan-400 text-xs"></i>
-                    </button>
-                  )}
-                </ConnectButton.Custom>
-              )}
-            </div>
+            {/* Wallet — shared WalletMenu (same as BLACKJACK / other games) */}
+            <WalletMenu />
 
             {/* Hamburger Menu */}
             <div className="relative z-50" ref={menuRef}>
@@ -296,23 +267,6 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
                       <span className="text-sm font-medium">Keno</span>
                     </Link>
                   </div>
-
-                  {/* Account Section */}
-                  {isConnected && (
-                    <div className="p-2 border-b border-gray-700/50">
-                      <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Account</div>
-                      <button
-                        onClick={() => {
-                          disconnect()
-                          setMenuOpen(false)
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-red-400 hover:bg-red-500/10 transition-colors"
-                      >
-                        <i className="fas fa-sign-out-alt w-4 text-center"></i>
-                        <span className="text-sm font-medium">Disconnect</span>
-                      </button>
-                    </div>
-                  )}
 
                   {/* Morbius Stats Section */}
                   <div className="p-2">

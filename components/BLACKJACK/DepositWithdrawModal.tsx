@@ -8,7 +8,7 @@ import { parseEther, formatEther } from 'viem'
 import { useTokenBalance } from '@/hooks/use-token'
 import { useNativeBalance } from '@/hooks/use-native-balance'
 import { usePlsQuote } from '@/hooks/use-pls-quote'
-import { useBlackjackContract, useLegacyPlayerReserve } from '@/hooks/use-blackjack-contract'
+import { useBlackjackContract, useLegacyPlayerReserve, useLegacyEmergencyPaused } from '@/hooks/use-blackjack-contract'
 import { useTokenApproval } from '@/hooks/use-token-approval'
 import { getBlackjackServerUrl } from '@/lib/api-urls'
 import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
@@ -59,7 +59,10 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   // Legacy contract: balance in previous Blackjack contract (after upgrade)
   const legacyReserveQuery = useLegacyPlayerReserve()
   const legacyReserve = (legacyReserveQuery.data ?? BigInt(0)) as bigint
+  const legacyPausedQuery = useLegacyEmergencyPaused()
+  const legacyEmergencyPaused = legacyPausedQuery.data === true
   const hasLegacyBalance = BLACKJACK_LEGACY_ADDRESS && legacyReserve > BigInt(0)
+  const canWithdrawLegacy = hasLegacyBalance && !legacyEmergencyPaused
 
   // Balance hooks (pass address so PLS balance is actually fetched)
   const { balance: morbiusBalance } = useTokenBalance(address)
@@ -362,7 +365,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const isLegacyWithdrawLoading = withdrawTx.isPending
 
   const handleWithdrawLegacy = async () => {
-    if (!hasLegacyBalance || legacyReserve <= 0n) return
+    if (!canWithdrawLegacy || legacyReserve <= 0n) return
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Withdrawing ${Math.floor(Number(formatEther(legacyReserve))).toLocaleString()} MORBIUS from previous contract`,
     })
@@ -378,7 +381,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       legacyReserveQuery.refetch()
       if (onRefreshBalance) await onRefreshBalance()
     } catch (e: any) {
-      toast.error(e?.message?.slice(0, 80) || 'Withdrawal failed', { id: toastId })
+      const msg =
+        e?.shortMessage ??
+        (typeof e?.message === 'string' ? e.message : null) ??
+        (e?.cause?.message ?? null) ??
+        'Withdrawal failed'
+      const reason = String(msg).slice(0, 120)
+      toast.error(reason, { id: toastId, duration: 6000 })
     }
   }
 
@@ -433,20 +442,28 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                       <div className="text-sm font-medium text-amber-200">
                         Balance in previous contract
                       </div>
-                      <p className="text-xs text-amber-200/80">
-                        You have MORBIUS in the previous Blackjack contract. Withdraw it to your wallet (no server needed).
-                      </p>
+                      {legacyEmergencyPaused ? (
+                        <p className="text-sm text-amber-300">
+                          Withdrawals from the previous contract are temporarily paused. Contact support to re-enable.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-200/80">
+                          You have MORBIUS in the previous Blackjack contract. Withdraw it to your wallet (no server needed).
+                        </p>
+                      )}
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-lg font-bold text-white">
                           {Math.floor(Number(formatEther(legacyReserve))).toLocaleString()} MORBIUS
                         </span>
                         <Button
                           onClick={handleWithdrawLegacy}
-                          disabled={isLegacyWithdrawLoading}
-                          className="bg-amber-600 hover:bg-amber-500 text-white shrink-0"
+                          disabled={!canWithdrawLegacy || isLegacyWithdrawLoading}
+                          className="bg-amber-600 hover:bg-amber-500 text-white shrink-0 disabled:opacity-60"
                         >
                           {isLegacyWithdrawLoading ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : legacyEmergencyPaused ? (
+                            'Paused'
                           ) : (
                             'Withdraw to wallet'
                           )}

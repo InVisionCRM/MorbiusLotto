@@ -119,12 +119,15 @@ function defaultGlobalAnalytics(): GlobalAnalytics {
 }
 
 /**
- * Hook to fetch global analytics
+ * Hook to fetch global analytics.
+ * Only fetches when enabled (e.g. when deployer is viewing analytics tab) to reduce server load.
  */
-export function useGlobalAnalytics() {
+export function useGlobalAnalytics(options?: { enabled?: boolean }) {
   const apiUrl = getApiUrlOptional();
+  const enabled = options?.enabled !== false;
   return useQuery<GlobalAnalytics>({
     queryKey: ['globalAnalytics', !!apiUrl],
+    enabled: enabled && !!apiUrl,
     queryFn: async () => {
       if (!apiUrl) return defaultGlobalAnalytics();
       try {
@@ -160,7 +163,7 @@ export function useGlobalAnalytics() {
         throw error;
       }
     },
-    refetchInterval: 60000, // Refetch every minute
+    refetchInterval: 180000, // Refetch every 3 minutes when enabled (reduces server load)
     retry: 1, // Only retry once
   });
 }
