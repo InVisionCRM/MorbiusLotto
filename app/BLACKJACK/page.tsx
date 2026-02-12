@@ -367,6 +367,7 @@ export default function BlackjackPage() {
   // Last bet amount for rebet functionality
   const [lastBetAmount, setLastBetAmount] = useState<string>('0');
 
+
   // Game result for chip animations
   const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
 
@@ -576,6 +577,28 @@ export default function BlackjackPage() {
       console.log('Leaderboard updated:', leaderboard);
     },
   });
+
+  // Tournament chip stack - derived from current game bet amount
+  // In tournament mode, betAmount is in chips (not MORBIUS), so we use it directly
+  const tournamentChipStack = useMemo(() => {
+    if (!tournament.tournamentState.inTournament || !gameState.currentGame?.playerHand?.betAmount) {
+      return [];
+    }
+    // Convert BigInt betAmount to number (it's already in chips for tournament)
+    const betAmount = Number(gameState.currentGame.playerHand.betAmount);
+    // For tournament, we want to show chips as individual units, so use smaller denominations
+    // Convert to chip stack using tournament chip values (50, 100, 250, 500, 1000)
+    const TOURNAMENT_CHIP_VALUES = [1000, 500, 250, 100, 50];
+    const chips: number[] = [];
+    let remaining = Math.floor(betAmount);
+    for (const chipValue of TOURNAMENT_CHIP_VALUES) {
+      while (remaining >= chipValue) {
+        chips.push(chipValue);
+        remaining -= chipValue;
+      }
+    }
+    return chips;
+  }, [tournament.tournamentState.inTournament, gameState.currentGame?.playerHand?.betAmount]);
 
   // Real-time P&L chart (Stake-style break-even line)
   const chartRef = useRef<BlackjackRealTimeBetChartRef>(null);
@@ -2484,7 +2507,7 @@ export default function BlackjackPage() {
               reserveBalance={tournament.tournamentState.inTournament ? BigInt(tournament.tournamentState.chips) : offChainBalance}
               usePLS={false}
               newCardIndices={newCardIndices}
-              chipStack={tournament.tournamentState.inTournament ? [] : chipStack}
+              chipStack={tournament.tournamentState.inTournament ? tournamentChipStack : chipStack}
               onClearBet={tournament.tournamentState.inTournament ? () => {} : () => manageChipStack('', undefined, true)}
               onStartGame={tournament.tournamentState.inTournament
                 ? () => handleStartTournamentGame(TOURNAMENT_CONFIG.MIN_BET)
@@ -2634,19 +2657,27 @@ export default function BlackjackPage() {
             playerAddress={address ?? null}
             tournamentTabContent={
               tournament.tournamentState.inTournament ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Chips</span>
-                    <span className="text-yellow-400 font-bold">{tournament.tournamentState.chips.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Hands remaining</span>
-                    <span className="text-cyan-400 font-bold">{tournament.tournamentState.handsRemaining}</span>
-                  </div>
-                  <p className="text-gray-500 text-xs text-center pt-2">
-                    Use the betting panel above to place bets and deal.
-                  </p>
-                </div>
+                <TournamentHUD
+                  state={tournament.tournamentState}
+                  onLeave={async () => {
+                    const success = await tournament.leaveTournament();
+                    if (success) {
+                      setShowTournamentComplete(false);
+                      setIsTournamentMode(false);
+                      fetchBalance(); // Refresh balance after leaving
+                      toast.success('Left tournament successfully');
+                    } else {
+                      toast.error('Failed to leave tournament');
+                    }
+                  }}
+                  onRebuy={async () => {
+                    const success = await tournament.requestRebuy();
+                    if (success) {
+                      toast.success('Rebuy successful! Back in the game.');
+                    }
+                  }}
+                  isRebuyLoading={tournament.isLoading}
+                />
               ) : null
             }
           />
@@ -2713,7 +2744,16 @@ export default function BlackjackPage() {
         {/* Tournament Complete Modal */}
         <TournamentComplete
           isOpen={showTournamentComplete}
-          onClose={() => {
+          onClose={async () => {
+            // If still in tournament, actually leave it
+            if (tournament.tournamentState.inTournament) {
+              const success = await tournament.leaveTournament();
+              if (success) {
+                toast.success('Left tournament successfully');
+              } else {
+                toast.error('Failed to leave tournament');
+              }
+            }
             setShowTournamentComplete(false);
             setIsTournamentMode(false);
             fetchBalance(); // Refresh balance after tournament ends

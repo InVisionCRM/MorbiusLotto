@@ -732,15 +732,19 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
   // Map chip values to PNG images for table display
   // Color mapping: Green=500, Blue=1000, Red=2500, Black=10000, Cyan=100000
+  // Use the new poker chip image for all tournament chips
   const getChipImage = (value: number) => {
-    switch (value) {
-      case 500: return '/PokerChips/tablepokerchip006-ezgif.com-gif-maker.png'; // Green chip
-      case 1000: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Blue chip
-      case 2500: return '/PokerChips/tablepokerchip016-ezgif.com-gif-maker.png'; // Red chip
-      case 10000: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Black chip
-      case 100000: return '/PokerChips/tablepokerchip021-ezgif.com-rotate.png'; // Cyan chip for 100000
-      default: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png';
-    }
+    // Use the new poker chip image for tournament mode (or all chips)
+    return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png';
+    // Original mapping kept for reference:
+    // switch (value) {
+    //   case 500: return '/PokerChips/tablepokerchip006-ezgif.com-gif-maker.png'; // Green chip
+    //   case 1000: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Blue chip
+    //   case 2500: return '/PokerChips/tablepokerchip016-ezgif.com-gif-maker.png'; // Red chip
+    //   case 10000: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Black chip
+    //   case 100000: return '/PokerChips/tablepokerchip021-ezgif.com-rotate.png'; // Cyan chip for 100000
+    //   default: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png';
+    // }
   };
 
   // Debug logging (removed dealer card exposure)
@@ -1683,6 +1687,27 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               </span>
             </button>
           )}
+        </div>
+      )}
+
+      {/* Result Text Overlay - Center of table */}
+      {displayedResult && gameState === GameState.COMPLETE && (
+        <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div
+            className={`text-6xl font-black animate-pulse ${
+              displayedResult === 'win' || displayedResult === 'blackjack'
+                ? 'text-green-400'
+                : displayedResult === 'loss'
+                ? 'text-red-400'
+                : 'text-yellow-400'
+            }`}
+            style={{
+              textShadow: '0 0 20px rgba(0, 0, 0, 0.9), 0 0 40px currentColor, 0 0 60px currentColor',
+              animation: 'pulse 1s ease-in-out infinite',
+            }}
+          >
+            {displayedResult === 'blackjack' ? 'BLACKJACK' : displayedResult.toUpperCase()}
+          </div>
         </div>
       )}
 

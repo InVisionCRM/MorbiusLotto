@@ -1,0 +1,89 @@
+'use client'
+
+import { useQuery } from '@tanstack/react-query'
+import { formatEther } from 'viem'
+
+export interface PlayerProfileStats {
+  total_games: number
+  total_bet: bigint
+  total_win: bigint
+  profit_loss: bigint
+  win_rate: number
+  biggest_win: bigint
+  biggest_loss: bigint
+  favorite_bet_amount: bigint
+  blackjack_count?: number
+  current_streak?: number
+  best_streak?: number
+}
+
+export interface PlayerProfileGame {
+  id: string
+  game_id: string
+  result: 'win' | 'loss' | 'push' | 'blackjack' | null
+  total_bet_amount: bigint
+  total_payout: bigint
+  created_at: string
+  completed_at: string | null
+}
+
+/**
+ * Hook to fetch player stats for any address
+ */
+export function usePlayerProfileStats(address: string | null) {
+  return useQuery<PlayerProfileStats>({
+    queryKey: ['playerProfileStats', address],
+    queryFn: async () => {
+      if (!address) throw new Error('Address required')
+
+      const response = await fetch(`/api/player/${address}/stats`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch player stats')
+      }
+      const data = await response.json()
+      return {
+        total_games: data.total_games || 0,
+        total_bet: BigInt(data.total_bet || 0),
+        total_win: BigInt(data.total_win || 0),
+        profit_loss: BigInt(data.profit_loss || 0),
+        win_rate: data.win_rate || 0,
+        biggest_win: BigInt(data.biggest_win || 0),
+        biggest_loss: BigInt(data.biggest_loss || 0),
+        favorite_bet_amount: BigInt(data.favorite_bet_amount || 0),
+        blackjack_count: data.blackjack_count || 0,
+        current_streak: data.current_streak || 0,
+        best_streak: data.best_streak || 0,
+      }
+    },
+    enabled: !!address,
+    refetchInterval: 30000,
+  })
+}
+
+/**
+ * Hook to fetch player game history for any address
+ */
+export function usePlayerProfileGames(address: string | null, limit: number = 50) {
+  return useQuery<PlayerProfileGame[]>({
+    queryKey: ['playerProfileGames', address, limit],
+    queryFn: async () => {
+      if (!address) throw new Error('Address required')
+
+      const response = await fetch(`/api/player/${address}/games?limit=${limit}&offset=0`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch player games')
+      }
+      const data = await response.json()
+      return data.map((game: any) => ({
+        id: game.id || game.game_id,
+        game_id: game.game_id || game.id,
+        result: game.result,
+        total_bet_amount: BigInt(game.total_bet_amount || 0),
+        total_payout: BigInt(game.total_payout || 0),
+        created_at: game.created_at || game.createdAt,
+        completed_at: game.completed_at || game.completedAt,
+      }))
+    },
+    enabled: !!address,
+  })
+}

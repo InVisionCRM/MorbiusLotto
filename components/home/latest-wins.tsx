@@ -1,9 +1,10 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { AnimatedList } from '@/components/ui/animated-list'
 import { formatEther } from 'viem'
 import { useLatestWins, WinEntry } from '@/hooks/use-latest-wins'
+import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000)
@@ -16,7 +17,12 @@ function timeAgo(timestamp: number): string {
   return `${days}d ago`
 }
 
-function WinNotification({ address, amount, game, timestamp }: { address: string; amount: bigint; game: string; timestamp: number }) {
+function formatAddress(address: string): string {
+  if (!address || address.length < 8) return address
+  return address.slice(-4)
+}
+
+function WinNotification({ address, amount, game, timestamp, onAddressClick }: { address: string; amount: bigint; game: string; timestamp: number; onAddressClick: (address: string) => void }) {
   const formattedAmount = Math.floor(Number(formatEther(amount))).toLocaleString()
 
   return (
@@ -27,9 +33,15 @@ function WinNotification({ address, amount, game, timestamp }: { address: string
       }}
     >
       <span className="text-white text-sm">
-        {address} won{' '}
+        <button
+          onClick={() => onAddressClick(address)}
+          className="text-cyan-400 hover:text-cyan-300 underline font-mono transition-colors"
+        >
+          {formatAddress(address)}
+        </button>
+        {' won '}
         <span className="text-green-500 font-bold">{formattedAmount} MORBIUS</span>
-        {' '}playing{' '}
+        {' playing '}
         <span className="text-blue-500 font-bold">{game}</span>
       </span>
       <span className="text-white/40 text-xs whitespace-nowrap">{timeAgo(timestamp)}</span>
@@ -63,44 +75,54 @@ function EmptyState() {
 
 export function LatestWins() {
   const { wins, isLoading } = useLatestWins()
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
 
   return (
-    <div className="relative flex flex-col overflow-hidden h-full min-h-0">
-      {/* Header */}
-      <div className="text-center mb-4 flex-shrink-0">
-        <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-white mb-2">
-          Latest Wins
-        </h2>
-        <p className="text-white/50 text-sm">Real-time winner feed</p>
+    <>
+      <div className="relative flex flex-col overflow-hidden h-full min-h-0">
+        {/* Header */}
+        <div className="text-center mb-4 flex-shrink-0">
+          <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-white mb-2">
+            Latest Wins
+          </h2>
+          <p className="text-white/50 text-sm">Real-time winner feed</p>
+        </div>
+
+        {/* Animated Win List — fills remaining space so no gap at bottom of grid */}
+        <div className="relative flex-1 h-200 overflow-hidden">
+          {/* Gradient overlay at top */}
+          <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black to-transparent z-10 pointer-events-none" />
+
+          {/* Content */}
+          {isLoading ? (
+            <LoadingSkeleton />
+          ) : wins.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <AnimatedList className="gap-3" delay={2500}>
+              {wins.slice(0, 15).map((win) => (
+                <WinNotification
+                  key={win.id}
+                  address={win.address}
+                  amount={win.amount}
+                  game={win.game}
+                  timestamp={win.timestamp}
+                  onAddressClick={setSelectedAddress}
+                />
+              ))}
+            </AnimatedList>
+          )}
+
+          {/* Gradient overlay at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black to-transparent z-10 pointer-events-none" />
+        </div>
       </div>
 
-      {/* Animated Win List — fills remaining space so no gap at bottom of grid */}
-      <div className="relative flex-1 h-200 overflow-hidden">
-        {/* Gradient overlay at top */}
-        <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black to-transparent z-10 pointer-events-none" />
-
-        {/* Content */}
-        {isLoading ? (
-          <LoadingSkeleton />
-        ) : wins.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <AnimatedList className="gap-3" delay={2500}>
-            {wins.slice(0, 15).map((win) => (
-              <WinNotification
-                key={win.id}
-                address={win.address}
-                amount={win.amount}
-                game={win.game}
-                timestamp={win.timestamp}
-              />
-            ))}
-          </AnimatedList>
-        )}
-
-        {/* Gradient overlay at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black to-transparent z-10 pointer-events-none" />
-      </div>
-    </div>
+      <PlayerProfileModal
+        isOpen={!!selectedAddress}
+        onClose={() => setSelectedAddress(null)}
+        address={selectedAddress}
+      />
+    </>
   )
 }

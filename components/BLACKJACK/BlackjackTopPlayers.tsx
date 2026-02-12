@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { formatEther } from 'viem'
 import { useBlackjackTopPlayers, type TopPlayerEntry } from '@/hooks/use-blackjack-stats'
 import {
@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 
 const TOP_N = 10
 
@@ -23,13 +24,14 @@ function formatMorbius(wei: bigint): string {
   return Math.floor(Number(formatEther(wei))).toLocaleString()
 }
 
-function truncateAddress(addr: string): string {
-  if (!addr || addr.length < 12) return addr
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+function formatAddress(addr: string): string {
+  if (!addr || addr.length < 8) return addr
+  return addr.slice(-4)
 }
 
 export default function BlackjackTopPlayers() {
   const { data: players, isLoading, error } = useBlackjackTopPlayers(TOP_N)
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
 
   if (error) {
     const message = error instanceof Error ? error.message : 'Failed to load leaderboard.'
@@ -61,44 +63,57 @@ export default function BlackjackTopPlayers() {
   }
 
   return (
-    <Table className={tableCls}>
-      <TableHeader>
-        <TableRow className={rowCls}>
-          <TableHead className={headCls}>#</TableHead>
-          <TableHead className={headCls}>Player</TableHead>
-          <TableHead className={headCls}>Games</TableHead>
-          <TableHead className={headCls}>Wagered</TableHead>
-          <TableHead className={headCls}>P/L</TableHead>
-          <TableHead className={headCls}>Win %</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {list.map((entry: TopPlayerEntry) => {
-          const isProfit = entry.profit_loss >= BigInt(0)
-          return (
-            <TableRow key={entry.wallet_address} className={rowCls}>
-              <TableCell className={cellCls}>
-                <span
-                  className={`inline-flex w-7 h-7 items-center justify-center rounded text-xs font-bold font-poppins ${
-                    entry.rank <= 3 ? 'text-amber-300' : 'text-white/70'
-                  }`}
-                >
-                  {entry.rank}
-                </span>
-              </TableCell>
-              <TableCell className={`${cellCls} font-mono text-sm text-white/90 truncate max-w-[100px]`} title={entry.wallet_address}>
-                {truncateAddress(entry.wallet_address)}
-              </TableCell>
-              <TableCell className={`${cellCls} tabular-nums`}>{entry.total_games}</TableCell>
-              <TableCell className={`${cellCls} tabular-nums text-white/80`}>{formatMorbius(entry.total_bet)} M</TableCell>
-              <TableCell className={`${cellCls} tabular-nums font-poppins ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                {isProfit ? '+' : ''}{formatMorbius(entry.profit_loss)} M
-              </TableCell>
-              <TableCell className={`${cellCls} tabular-nums text-white/80`}>{entry.win_rate.toFixed(1)}%</TableCell>
-            </TableRow>
-          )
-        })}
-      </TableBody>
-    </Table>
+    <>
+      <Table className={tableCls}>
+        <TableHeader>
+          <TableRow className={rowCls}>
+            <TableHead className={headCls}>#</TableHead>
+            <TableHead className={headCls}>Player</TableHead>
+            <TableHead className={headCls}>Games</TableHead>
+            <TableHead className={headCls}>Wagered</TableHead>
+            <TableHead className={headCls}>P/L</TableHead>
+            <TableHead className={headCls}>Win %</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {list.map((entry: TopPlayerEntry) => {
+            const isProfit = entry.profit_loss >= BigInt(0)
+            return (
+              <TableRow key={entry.wallet_address} className={rowCls}>
+                <TableCell className={cellCls}>
+                  <span
+                    className={`inline-flex w-7 h-7 items-center justify-center rounded text-xs font-bold font-poppins ${
+                      entry.rank <= 3 ? 'text-amber-300' : 'text-white/70'
+                    }`}
+                  >
+                    {entry.rank}
+                  </span>
+                </TableCell>
+                <TableCell className={`${cellCls} font-mono text-sm text-white/90 truncate max-w-[100px]`} title={entry.wallet_address}>
+                  <button
+                    onClick={() => setSelectedAddress(entry.wallet_address)}
+                    className="text-cyan-400 hover:text-cyan-300 underline transition-colors"
+                  >
+                    {formatAddress(entry.wallet_address)}
+                  </button>
+                </TableCell>
+                <TableCell className={`${cellCls} tabular-nums`}>{entry.total_games}</TableCell>
+                <TableCell className={`${cellCls} tabular-nums text-white/80`}>{formatMorbius(entry.total_bet)} M</TableCell>
+                <TableCell className={`${cellCls} tabular-nums font-poppins ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {isProfit ? '+' : ''}{formatMorbius(entry.profit_loss)} M
+                </TableCell>
+                <TableCell className={`${cellCls} tabular-nums text-white/80`}>{entry.win_rate.toFixed(1)}%</TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+
+      <PlayerProfileModal
+        isOpen={!!selectedAddress}
+        onClose={() => setSelectedAddress(null)}
+        address={selectedAddress}
+      />
+    </>
   )
 }
