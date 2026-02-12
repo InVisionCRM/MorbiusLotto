@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import Image from 'next/image'
 import { formatEther } from 'viem'
 import { useBlackjackTopPlayers, type TopPlayerEntry } from '@/hooks/use-blackjack-stats'
 import {
@@ -98,9 +99,25 @@ export default function BlackjackTopPlayers() {
                   </button>
                 </TableCell>
                 <TableCell className={`${cellCls} tabular-nums`}>{entry.total_games}</TableCell>
-                <TableCell className={`${cellCls} tabular-nums text-white/80`}>{formatMorbius(entry.total_bet)} M</TableCell>
-                <TableCell className={`${cellCls} tabular-nums font-poppins ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {isProfit ? '+' : ''}{formatMorbius(entry.profit_loss)} M
+                <TableCell className={`${cellCls} tabular-nums text-white/80 flex items-center gap-1`}>
+                  {formatMorbius(entry.total_bet)}{' '}
+                  <Image
+                    src="/morbius/MorbiusLogo (3).png"
+                    alt="MORBIUS"
+                    width={16}
+                    height={16}
+                    className="object-contain inline-block"
+                  />
+                </TableCell>
+                <TableCell className={`${cellCls} tabular-nums font-poppins ${isProfit ? 'text-emerald-400' : 'text-red-400'} flex items-center gap-1`}>
+                  {isProfit ? '+' : ''}{formatMorbius(entry.profit_loss)}{' '}
+                  <Image
+                    src="/morbius/MorbiusLogo (3).png"
+                    alt="MORBIUS"
+                    width={16}
+                    height={16}
+                    className="object-contain inline-block"
+                  />
                 </TableCell>
                 <TableCell className={`${cellCls} tabular-nums text-white/80`}>{entry.win_rate.toFixed(1)}%</TableCell>
               </TableRow>

@@ -454,6 +454,11 @@ export class WebSocketService {
           await this.handleCreatorEarnings(ws, message);
           break;
 
+        case 'recent_global_wins':
+          // No auth required for public global wins feed
+          await this.handleRecentGlobalWins(ws, message);
+          break;
+
         default:
           this.sendError(ws, 'Unknown message type', message.requestId);
       }
@@ -2435,6 +2440,57 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error getting creator earnings:', error);
       this.sendError(ws, 'Failed to get creator earnings', message.requestId);
+    }
+  }
+
+  private async handleRecentGlobalWins(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      const limit = Math.min(parseInt(message.payload?.limit) || 20, 100)
+      
+      // Query database for recent completed games
+      const query = `
+        SELECT 
+          g.id as game_id,
+          g.total_bet_amount,
+          g.total_payout,
+          g.result,
+          g.completed_at,
+          p.wallet_address as player_address
+        FROM games g
+        JOIN game_sessions gs ON g.session_id = gs.id
+        JOIN players p ON gs.player_id = p.id
+        WHERE g.result IS NOT NULL 
+          AND g.result != 'ongoing'
+          AND g.completed_at IS NOT NULL
+        ORDER BY g.completed_at DESC
+        LIMIT $1
+      `
+      
+      const result = await this.dbService.getPool().query(query, [limit])
+      
+      const wins = result.rows.map((row: any) => {
+        // Calculate overall result from game result
+        const hasWin = row.result === 'win' || row.result === 'blackjack'
+        const overallResult = hasWin ? row.result : row.result === 'push' ? 'push' : 'loss'
+        
+        return {
+          gameId: row.game_id,
+          playerAddress: row.player_address || '',
+          result: overallResult,
+          betAmount: row.total_bet_amount?.toString() || '0',
+          payout: row.total_payout?.toString() || '0',
+          timestamp: row.completed_at ? new Date(row.completed_at).getTime() : Date.now(),
+        }
+      })
+      
+      this.sendMessage(ws, {
+        type: 'recent_global_wins',
+        payload: { wins },
+        requestId: message.requestId,
+      })
+    } catch (error) {
+      logger.error('Error fetching recent global wins:', error)
+      this.sendError(ws, 'Failed to fetch recent wins', message.requestId)
     }
   }
 

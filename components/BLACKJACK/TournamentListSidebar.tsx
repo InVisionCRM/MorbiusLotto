@@ -182,7 +182,18 @@ export function TournamentListSidebar({
                       <td className="py-1.5 px-1 whitespace-nowrap">{formatBuyIn(t)}</td>
                       <td className="py-1.5 px-1 whitespace-nowrap">{formatPrize(t)}</td>
                       <td className="py-1.5 px-1 whitespace-nowrap">{formatChipCount(t)}</td>
-                      <td className="py-1.5 px-1 font-mono text-white/70">{truncAddr(t.creatorAddress)}</td>
+                      <td className="py-1.5 px-1 font-mono text-white/70">
+                        <a
+                          href={`/player/${t.creatorAddress}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                          className="hover:text-cyan-400 hover:underline transition-colors"
+                          title={`View ${truncAddr(t.creatorAddress)} profile and stats`}
+                        >
+                          {truncAddr(t.creatorAddress)}
+                        </a>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -276,7 +287,16 @@ export function TournamentListSidebar({
                   <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 [scrollbar-width:thin] text-xs">
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-white/90">
                       <span className="text-white/50">Creator</span>
-                      <span className="font-mono">{truncAddr(active.creatorAddress)}</span>
+                      <a
+                        href={`/player/${active.creatorAddress}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="font-mono hover:text-cyan-400 hover:underline transition-colors"
+                        title={`View ${truncAddr(active.creatorAddress)} profile and stats`}
+                      >
+                        {truncAddr(active.creatorAddress)}
+                      </a>
                       <span className="text-white/50">Type</span>
                       <span>{active.tournamentType === 'freeroll' ? 'Freeroll' : 'Standard'}</span>
                       <span className="text-white/50">Registration</span>
@@ -311,25 +331,43 @@ export function TournamentListSidebar({
                     )}
                   </div>
                   <div className="p-3 border-t border-white/10 space-y-2 bg-slate-900/60">
-                    {onJoin && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onJoin(active.id, active.isPrivate);
-                          setActive(null);
-                        }}
-                        disabled={
-                          active.tournamentType === 'freeroll'
-                            ? false
-                            : playerBalance < BigInt(active.buyInAmount) ||
-                              (active.maxPlayers != null && active.entryCount >= active.maxPlayers)
-                        }
-                        className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-white font-semibold text-xs transition-colors"
-                      >
-                        {active.isPrivate ? 'Join (PIN required)' : 'Join Tournament'}
-                      </button>
-                    )}
+                    {onJoin && (() => {
+                      const isFull = active.maxPlayers != null && active.entryCount >= active.maxPlayers;
+                      const canAfford = active.tournamentType === 'freeroll' || playerBalance >= BigInt(active.buyInAmount);
+                      const isDisabled = !canAfford || isFull;
+                      
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isDisabled) {
+                              onJoin(active.id, active.isPrivate);
+                              setActive(null);
+                            }
+                          }}
+                          disabled={isDisabled}
+                          className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-semibold text-xs transition-colors"
+                          title={
+                            isFull
+                              ? 'Tournament is full'
+                              : !canAfford && active.tournamentType !== 'freeroll'
+                              ? `Insufficient balance. Need ${formatBuyIn(active)}`
+                              : active.isPrivate
+                              ? 'Click to join (PIN required)'
+                              : 'Click to join tournament'
+                          }
+                        >
+                          {isFull
+                            ? 'Tournament Full'
+                            : !canAfford && active.tournamentType !== 'freeroll'
+                            ? 'Insufficient Balance'
+                            : active.isPrivate
+                            ? 'Join (PIN required)'
+                            : 'Join Tournament'}
+                        </button>
+                      );
+                    })()}
                     <button
                       type="button"
                       onClick={(e) => {

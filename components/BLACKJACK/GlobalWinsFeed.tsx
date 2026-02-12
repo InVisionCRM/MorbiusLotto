@@ -49,6 +49,41 @@ function formatAddress(address: string): string {
 export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: GlobalWinsFeedProps) {
   const [entries, setEntries] = useState<GlobalWinEntry[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch recent wins when WebSocket connects
+  useEffect(() => {
+    if (!wsClient || !wsConnected) {
+      setIsLoading(false)
+      return
+    }
+
+    const fetchRecentWins = async () => {
+      try {
+        setIsLoading(true)
+        // Request recent global wins via WebSocket
+        const response = await wsClient.sendRequest('recent_global_wins', { limit: 20 })
+        if (response && Array.isArray(response.wins)) {
+          const recentEntries: GlobalWinEntry[] = response.wins.map((win: any) => ({
+            id: win.gameId || `${win.timestamp}-${Math.random().toString(36).slice(2)}`,
+            playerAddress: win.playerAddress || '0x0000...0000',
+            result: win.result || 'loss',
+            amount: BigInt(String(win.betAmount || '0')),
+            payout: BigInt(String(win.payout || '0')),
+            timestamp: win.timestamp || Date.now(),
+          }))
+          setEntries(recentEntries)
+        }
+      } catch (error) {
+        console.error('Error fetching recent wins:', error)
+        // Continue with empty list if fetch fails
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchRecentWins()
+  }, [wsClient, wsConnected])
 
   useEffect(() => {
     if (!wsClient || !wsConnected) return
@@ -84,14 +119,27 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
     })
   }, [])
 
-  if (entries.length === 0) {
-    return null
+  if (isLoading) {
+    return (
+      <div className={className}>
+        <p className="text-white/60 text-xs font-poppins font-bold uppercase tracking-wider mb-2">Live Results</p>
+        <div className="flex items-center justify-center gap-2 py-4">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          <p className="text-white/60 text-sm font-poppins">Loading wins...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <>
       <div className={className}>
         <p className="text-white/60 text-xs font-poppins font-bold uppercase tracking-wider mb-2">Live Results</p>
+        {entries.length === 0 ? (
+          <p className="text-white/50 text-sm font-poppins text-center py-4">
+            No recent wins to display.
+          </p>
+        ) : (
         <Table className={tableCls}>
           <TableHeader>
             <TableRow className={rowCls}>
@@ -155,6 +203,7 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
             })}
           </TableBody>
         </Table>
+        )}
       </div>
 
       <PlayerProfileModal
