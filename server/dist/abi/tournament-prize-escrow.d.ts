@@ -31,5 +31,29 @@ export declare const tournamentPrizeEscrowAbi: readonly [{
     }];
     readonly stateMutability: "view";
     readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly name: "to";
+        readonly type: "address";
+    }];
+    readonly name: "payoutRemainderTo";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly name: "to";
+        readonly type: "address";
+    }];
+    readonly name: "reclaimUnclaimed";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
 }];
 //# sourceMappingURL=tournament-prize-escrow.d.ts.map

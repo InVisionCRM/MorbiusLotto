@@ -28,6 +28,7 @@ export interface Tournament {
     prize_pool: bigint;
     created_at: Date;
     ended_at?: Date;
+    tournament_type?: string | null;
     creator_address?: string;
     time_limit_minutes?: number;
     rebuy_config: RebuyConfig;
@@ -58,6 +59,27 @@ export interface TournamentEntry {
     finished_at?: Date;
     rebuy_count: number;
     total_buy_in: bigint;
+}
+/** One row for "My History" — a tournament the player entered and its outcome */
+export interface PlayerTournamentHistoryItem {
+    tournamentId: string;
+    tournamentName: string;
+    tournamentStatus: 'active' | 'completed' | 'cancelled';
+    tournamentType: string;
+    prizeTokenAddress: string | null;
+    /** When the tournament actually ended (set on completion) */
+    endedAt: Date | null;
+    /** When the tournament is scheduled to end (time limit; null = no limit). Use for "time remaining" when in progress. */
+    endsAt: Date | null;
+    entryId: string;
+    entryStatus: 'playing' | 'busted' | 'completed';
+    finalRank: number | null;
+    prizeWon: bigint;
+    boughtInAt: Date;
+    finishedAt: Date | null;
+    handsPlayed: number;
+    highestChipCount: number;
+    chipsRemaining: number;
 }
 export interface CreateTournamentParams {
     creatorAddress: string;
@@ -101,6 +123,8 @@ export interface CreateFreerollParams {
         intervalValue: number;
         eliminationPercentage: number;
         resetChipsAfterRound?: boolean;
+        eliminationRoundsMin?: number;
+        eliminationRoundsMax?: number;
     } | null;
     reentryConfig: {
         enabled: boolean;
@@ -110,6 +134,7 @@ export interface CreateFreerollParams {
     tiebreakerOrder?: string[];
     tableTheme: TableTheme;
     isPrivate: boolean;
+    minPlayers?: number;
     maxPlayers?: number | null;
     customImage?: string | null;
     pinCode?: string | null;
@@ -164,6 +189,9 @@ export interface TournamentListItem {
     duration_minutes?: number | null;
     creator_fee_percent?: number;
     platform_fee_percent?: number;
+    escrow_funded?: boolean;
+    escrow_total_deposited?: string;
+    escrow_token?: string | null;
 }
 export interface TournamentGame {
     id: string;
@@ -281,6 +309,11 @@ export declare class TournamentService {
      */
     getTournamentEntryCount(tournamentId: string): Promise<number>;
     /**
+     * Get all tournaments a player has entered, with outcome (for "My History" UI).
+     * Returns entries ordered by bought_in_at descending (most recent first).
+     */
+    getPlayerTournamentHistory(playerAddress: string): Promise<PlayerTournamentHistoryItem[]>;
+    /**
      * List freeroll tournaments (from list_freeroll_tournaments).
      */
     listFreerollTournaments(includePast?: boolean): Promise<FreerollListItem[]>;
@@ -307,6 +340,10 @@ export declare class TournamentService {
      * Create a custom tournament
      */
     createTournament(params: CreateTournamentParams): Promise<Tournament>;
+    /**
+     * Determine the correct phase for a freeroll tournament based on current time.
+     */
+    private determineFreerollPhase;
     /**
      * Create a freeroll tournament (no buy-in, scheduled start).
      */
@@ -356,7 +393,7 @@ export declare class TournamentService {
     }) | null>;
     /**
      * Execute a pending freeroll scheduled event (start, elimination_round, end, reentry_close).
-     * Called by FreerollSchedulerService. Marks the event as executed after handling.
+     * Called by FreerollSchedulerService. Only marks the event as executed on success.
      */
     executeScheduledEvent(event: {
         id: string;

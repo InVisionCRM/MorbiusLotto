@@ -27,6 +27,50 @@ class BlackjackGameService {
     getGameBaseNonce(gameNumber) {
         return gameNumber * BlackjackGameService.GAME_NONCE_MULTIPLIER;
     }
+    /** Resolve Blackjack fee % and fee wallet from admin config + env. Fee applies to profit only. */
+    async getBlackjackFeeConfig() {
+        let feePercent = 0;
+        try {
+            const config = await this.dbService.getAdminGameConfig();
+            const raw = config.blackjack_fee_percent?.trim();
+            if (raw !== undefined && raw !== '') {
+                const n = parseInt(raw, 10);
+                if (!Number.isNaN(n) && n >= 0 && n <= 100)
+                    feePercent = n;
+            }
+        }
+        catch (err) {
+            logger_1.logger.warn('Failed to load blackjack_fee_percent from admin config', { error: err });
+        }
+        const feeWallet = process.env.BLACKJACK_FEE_WALLET?.trim() || null;
+        if (feePercent > 0 && !feeWallet) {
+            logger_1.logger.warn('blackjack_fee_percent is set but BLACKJACK_FEE_WALLET is not; fee will not be collected');
+        }
+        return { feePercent, feeWallet };
+    }
+    /** Apply fee on profit (if configured); credit player (payout - fee) and fee wallet (fee). Returns fee amount applied. */
+    async creditPayoutWithFee(playerAddress, totalStake, grossPayout) {
+        if (grossPayout <= 0n)
+            return 0n;
+        const { feePercent, feeWallet } = await this.getBlackjackFeeConfig();
+        const profit = grossPayout > totalStake ? grossPayout - totalStake : 0n;
+        if (feePercent > 0 && feeWallet && profit > 0n) {
+            const feeAmount = (profit * BigInt(feePercent)) / 100n;
+            const playerGets = grossPayout - feeAmount;
+            await this.dbService.addPlayerBalance(playerAddress, playerGets);
+            await this.dbService.addBalanceToAddress(feeWallet, feeAmount);
+            logger_1.logger.debug('Blackjack payout with fee', {
+                playerAddress,
+                grossPayout: grossPayout.toString(),
+                feePercent,
+                feeAmount: feeAmount.toString(),
+                playerGets: playerGets.toString(),
+            });
+            return feeAmount;
+        }
+        await this.dbService.addPlayerBalance(playerAddress, grossPayout);
+        return 0n;
+    }
     ensureSessionSeed(session) {
         // game_sessions now stores server_seed (secret) + server_seed_hash (commitment).
         // Older rows may have only the hash; we self-heal by generating a new seed and updating the session.
@@ -178,12 +222,12 @@ class BlackjackGameService {
             await this.dbService.updateSessionStats(session.id, totalStake, 0n, true);
             // If the game completed immediately, record profit + credit payout (main + Perfect Pairs) + reveal server seed
             if (result) {
-                const profit = immediatePayout > totalStake ? immediatePayout - totalStake : 0n;
-                if (profit > 0n) {
-                    await this.dbService.updateSessionStats(session.id, 0n, profit, false);
-                }
                 if (immediatePayout > 0n) {
-                    await this.dbService.addPlayerBalance(request.playerAddress, immediatePayout);
+                    const feeApplied = await this.creditPayoutWithFee(request.playerAddress, totalStake, immediatePayout);
+                    const profit = immediatePayout > totalStake ? immediatePayout - totalStake : 0n;
+                    if (profit > 0n) {
+                        await this.dbService.updateSessionStats(session.id, 0n, profit - feeApplied, false);
+                    }
                     logger_1.logger.debug('Added winnings to balance', {
                         playerAddress: request.playerAddress,
                         payout: immediatePayout.toString(),
@@ -768,21 +812,21 @@ class BlackjackGameService {
             rng_counter: rngCounter,
             completed_at: new Date()
         });
-        // Add winnings to off-chain balance (main hand(s) + Perfect Pairs)
+        // Add winnings to off-chain balance (main hand(s) + Perfect Pairs), applying fee on profit if configured
         if (totalPayoutWithSideBet > 0n) {
             const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
-            await this.dbService.addPlayerBalance(playerAddress, totalPayoutWithSideBet);
+            const feeApplied = await this.creditPayoutWithFee(playerAddress, totalStakeForGame, totalPayoutWithSideBet);
             logger_1.logger.debug('Added game winnings to balance', {
                 playerAddress,
                 totalPayout: totalPayoutWithSideBet.toString(),
                 perfectPairsPayout: perfectPairsPayout.toString(),
                 gameId
             });
-        }
-        // Update session win stats (profit only; do NOT increment game_count)
-        const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
-        if (profit > 0n) {
-            await this.dbService.updateSessionStats(game.session_id, 0n, profit, false);
+            // Update session win stats (net profit after fee; do NOT increment game_count)
+            const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
+            if (profit > 0n) {
+                await this.dbService.updateSessionStats(game.session_id, 0n, profit - feeApplied, false);
+            }
         }
         // Reveal server seed commitment for verification
         const session = await this.dbService.getSessionById(game.session_id);
@@ -1087,11 +1131,11 @@ class BlackjackGameService {
         });
         if (totalPayoutWithSideBet > 0n) {
             const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
-            await this.dbService.addPlayerBalance(playerAddress, totalPayoutWithSideBet);
-        }
-        const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
-        if (profit > 0n) {
-            await this.dbService.updateSessionStats(game.session_id, 0n, profit, false);
+            const feeApplied = await this.creditPayoutWithFee(playerAddress, totalStakeForGame, totalPayoutWithSideBet);
+            const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
+            if (profit > 0n) {
+                await this.dbService.updateSessionStats(game.session_id, 0n, profit - feeApplied, false);
+            }
         }
         const session = await this.dbService.getSessionById(game.session_id);
         if (session?.server_seed) {
@@ -1228,23 +1272,18 @@ class BlackjackGameService {
             const clientSeed = request.clientSeedCommitment || 'default';
             const gameNumber = session.game_count + 1;
             const baseNonce = this.getGameBaseNonce(gameNumber);
-            // Generate initial cards
-            const dealingSeeds = {
-                serverSeed: session.server_seed,
-                clientSeed,
-                nonce: baseNonce,
-            };
-            const randoms = this.pfService.generateBlackjackRandoms(dealingSeeds, 4);
+            // V2: Fisher-Yates 52-card deck (same as regular blackjack for consistency and verification)
+            const shuffledDeck = this.pfService.fisherYatesShuffle(session.server_seed, clientSeed, gameNumber);
+            const initialPlayerCards = [shuffledDeck[0], shuffledDeck[2]];
+            const dealerCards = [shuffledDeck[1], shuffledDeck[3]];
             let rngCounter = 4;
-            const initialPlayerCards = [randoms[0], randoms[2]];
-            const dealerCards = [randoms[1], randoms[3]];
-            // Create initial hand
+            // Create initial hand (V2 helpers for 52-card deck)
             const initialHand = {
                 id: '',
                 cards: initialPlayerCards,
-                total: this.pfService.calculateHandTotal(initialPlayerCards).total,
-                hasAce: this.pfService.calculateHandTotal(initialPlayerCards).hasAce,
-                isBlackjack: this.pfService.isNaturalBlackjack(initialPlayerCards),
+                total: this.pfService.calculateHandTotalV2(initialPlayerCards).total,
+                hasAce: this.pfService.calculateHandTotalV2(initialPlayerCards).hasAce,
+                isBlackjack: this.pfService.isNaturalBlackjackV2(initialPlayerCards),
                 isBust: false,
                 betAmount: BigInt(request.betAmount), // Store as bigint for compatibility
                 payout: 0n,
@@ -1254,8 +1293,8 @@ class BlackjackGameService {
                 canDoubleDown: tournamentState.chips >= request.betAmount * 2,
                 canSplit: this.canSplit(initialPlayerCards) && tournamentState.chips >= request.betAmount * 2
             };
-            const dealerVisibleHand = this.pfService.calculateHandTotal([dealerCards[0]]);
-            const dealerBlackjack = this.pfService.isNaturalBlackjack(dealerCards);
+            const dealerVisibleHand = this.pfService.calculateHandTotalV2([dealerCards[0]]);
+            const dealerBlackjack = this.pfService.isNaturalBlackjackV2(dealerCards);
             let status = 'player_turn';
             let result;
             let chipDelta = 0;
@@ -1282,18 +1321,19 @@ class BlackjackGameService {
                 initialHand.payout = 0n;
                 chipDelta = -request.betAmount;
             }
-            // Create game record (use 0 for bet amount since this is tournament mode)
+            // Create game record (use 0 for bet amount since this is tournament mode; V2 RNG)
             const game = await this.dbService.createGame(session.id, {
                 game_number: gameNumber,
                 total_bet_amount: 0n, // Tournament games don't use real MORBIUS
                 dealer_cards: dealerCards,
-                dealer_total: this.pfService.calculateHandTotal(dealerCards).total,
+                dealer_total: this.pfService.calculateHandTotalV2(dealerCards).total,
                 result,
                 total_payout: 0n,
                 client_seed_commitment: clientSeed,
                 hand_count: 1,
                 current_hand_index: 0,
                 rng_counter: rngCounter,
+                rng_version: 2,
             });
             // Create initial hand record
             const gameHand = await this.dbService.createGameHand(game.id, {

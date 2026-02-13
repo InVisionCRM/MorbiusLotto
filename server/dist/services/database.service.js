@@ -182,12 +182,22 @@ class DatabaseService {
     // Off-chain balance operations
     async getPlayerBalance(walletAddress) {
         const normalizedAddress = this.normalizeAddress(walletAddress);
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'database.service.ts:331', message: 'getPlayerBalance query', data: { walletAddress, normalizedAddress }, timestamp: Date.now(), runId: 'run1', hypothesisId: 'D' }) }).catch(() => { });
+        // #endregion
         const query = `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`;
         const result = await this.pool.query(query, [normalizedAddress]);
         if (result.rows.length === 0) {
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'database.service.ts:334', message: 'Player not found in DB', data: { walletAddress, normalizedAddress }, timestamp: Date.now(), runId: 'run1', hypothesisId: 'D' }) }).catch(() => { });
+            // #endregion
             return 0n;
         }
-        return BigInt(result.rows[0].balance || '0');
+        const balance = BigInt(result.rows[0].balance || '0');
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'database.service.ts:337', message: 'getPlayerBalance result', data: { walletAddress, normalizedAddress, balance: balance.toString(), rawBalance: result.rows[0].balance }, timestamp: Date.now(), runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
+        // #endregion
+        return balance;
     }
     async updatePlayerBalance(walletAddress, amount, operation) {
         const normalizedAddress = this.normalizeAddress(walletAddress);
@@ -224,6 +234,14 @@ class DatabaseService {
     }
     async addPlayerBalance(walletAddress, amount) {
         return await this.updatePlayerBalance(walletAddress, amount, 'add');
+    }
+    /** Credit an address (e.g. fee wallet). Upserts a player row if missing. */
+    async addBalanceToAddress(walletAddress, amount) {
+        if (amount <= 0n)
+            return;
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        await this.pool.query(`INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
+       ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`, [normalizedAddress, amount.toString()]);
     }
     // ============================================
     // Pending Withdrawal Methods
@@ -319,6 +337,162 @@ class DatabaseService {
             profit_loss: this.toBigInt(row.profit_loss),
             win_rate: Number(row.win_rate ?? 0),
         };
+    }
+    async getTopPlayersByCategory(category) {
+        let orderBy;
+        let valueField;
+        let label;
+        switch (category) {
+            case 'games':
+                orderBy = 'total_games DESC';
+                valueField = 'total_games::TEXT';
+                label = 'Most Games';
+                break;
+            case 'profit_loss':
+                orderBy = 'profit_loss DESC';
+                valueField = 'profit_loss::TEXT';
+                label = 'Top P/L';
+                break;
+            case 'wagered':
+                orderBy = 'total_bet DESC';
+                valueField = 'total_bet::TEXT';
+                label = 'Top Wagered';
+                break;
+            case 'win_rate':
+                orderBy = 'win_rate DESC';
+                valueField = 'ROUND(win_rate, 2)::TEXT';
+                label = 'Top Win %';
+                break;
+            case 'total_won':
+                orderBy = 'total_win DESC';
+                valueField = 'total_win::TEXT';
+                label = 'Top Total Won';
+                break;
+            case 'win_streak':
+                orderBy = 'best_streak DESC';
+                valueField = 'best_streak::TEXT';
+                label = 'Highest Win Streak';
+                break;
+            default:
+                throw new Error(`Unknown category: ${category}`);
+        }
+        // For win_streak, we need to calculate it dynamically
+        const streakCalculation = category === 'win_streak' ? `
+      WITH player_games AS (
+        SELECT 
+          p.id as player_id,
+          p.wallet_address,
+          p.created_at,
+          g.result,
+          g.created_at as game_time,
+          ROW_NUMBER() OVER (PARTITION BY p.id ORDER BY g.created_at DESC) as rn
+        FROM players p
+        JOIN game_sessions gs ON gs.player_id = p.id
+        JOIN games g ON g.session_id = gs.id
+        WHERE g.result IS NOT NULL AND g.result != 'ongoing'
+      ),
+      streak_calc AS (
+        SELECT 
+          player_id,
+          wallet_address,
+          created_at,
+          result,
+          rn,
+          CASE 
+            WHEN result IN ('win', 'blackjack') THEN 1
+            ELSE -1
+          END as result_value,
+          rn - ROW_NUMBER() OVER (PARTITION BY player_id, CASE WHEN result IN ('win', 'blackjack') THEN 1 ELSE -1 END ORDER BY rn) as streak_group
+        FROM player_games
+      ),
+      streak_lengths AS (
+        SELECT 
+          player_id,
+          result_value,
+          streak_group,
+          COUNT(*) as streak_length
+        FROM streak_calc
+        WHERE result_value = 1
+        GROUP BY player_id, result_value, streak_group
+      ),
+      best_streaks AS (
+        SELECT 
+          player_id,
+          COALESCE(MAX(streak_length), 0) as best_streak
+        FROM streak_lengths
+        GROUP BY player_id
+      ),
+      agg AS (
+        SELECT
+          p.wallet_address,
+          p.created_at,
+          COUNT(g.*)::BIGINT AS total_games,
+          COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(g.total_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(g.*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE g.result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate,
+          COALESCE(bs.best_streak, 0) AS best_streak
+        FROM players p
+        LEFT JOIN game_sessions gs ON gs.player_id = p.id
+        LEFT JOIN games g ON g.session_id = gs.id AND g.result IS NOT NULL AND g.result != 'ongoing'
+        LEFT JOIN best_streaks bs ON bs.player_id = p.id
+        GROUP BY p.id, p.wallet_address, p.created_at, bs.best_streak
+        HAVING COUNT(g.*) > 0
+      )
+      SELECT 
+        agg.wallet_address,
+        agg.created_at,
+        ${valueField} AS value,
+        cdn.display_name,
+        cdn.profile_image_url
+      FROM agg
+      LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(agg.wallet_address)
+      ORDER BY ${orderBy}
+      LIMIT 1
+    ` : `
+      WITH agg AS (
+        SELECT
+          p.wallet_address,
+          p.created_at,
+          COUNT(g.*)::BIGINT AS total_games,
+          COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(g.total_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(g.*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE g.result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate
+        FROM players p
+        LEFT JOIN game_sessions gs ON gs.player_id = p.id
+        LEFT JOIN games g ON g.session_id = gs.id AND g.result IS NOT NULL AND g.result != 'ongoing'
+        GROUP BY p.id, p.wallet_address, p.created_at
+        HAVING COUNT(g.*) > 0
+      )
+      SELECT 
+        agg.wallet_address,
+        agg.created_at,
+        ${valueField} AS value,
+        cdn.display_name,
+        cdn.profile_image_url
+      FROM agg
+      LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(agg.wallet_address)
+      ORDER BY ${orderBy}
+      LIMIT 1
+    `;
+        const result = await this.pool.query(streakCalculation);
+        if (result.rows.length === 0) {
+            return [];
+        }
+        const row = result.rows[0];
+        return [{
+                wallet_address: row.wallet_address ?? '',
+                display_name: row.display_name ?? undefined,
+                profile_image_url: row.profile_image_url ?? null,
+                value: row.value ?? '0',
+                label,
+                created_at: row.created_at ? new Date(row.created_at) : undefined,
+            }];
     }
     async getPlayerGames(walletAddress, limit = 50, offset = 0) {
         const normalizedAddress = this.normalizeAddress(walletAddress);
@@ -896,6 +1070,303 @@ class DatabaseService {
             deactivatedAt: row.deactivated_at ? new Date(row.deactivated_at) : null,
             deactivatedReason: row.deactivated_reason
         }));
+    }
+    // --- Blackjack tables (admin-managed) ---
+    /** Admin metrics aggregates for a time range (Blackjack only). Returns zeros if tables are missing. */
+    async getMetricsAggregates(range) {
+        const zero = () => ({ volume: 0n, games: 0, activePlayers: 0, pnl: 0n, tournamentEntries: 0 });
+        const interval = range === '24h' ? "INTERVAL '24 hours'" : range === '7d' ? "INTERVAL '7 days'" : range === '30d' ? "INTERVAL '30 days'" : null;
+        const gamesFilter = interval ? `AND COALESCE(g.completed_at, g.created_at) >= NOW() - ${interval}` : '';
+        const volQuery = `
+      SELECT
+        (COALESCE(SUM(g.total_bet_amount), 0))::BIGINT AS volume,
+        COUNT(*)::INT AS games,
+        ((COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0)))::BIGINT AS pnl
+      FROM games g
+      WHERE g.result IS NOT NULL AND g.result != 'ongoing' ${gamesFilter}
+    `;
+        const activeQuery = interval
+            ? `SELECT COUNT(DISTINCT gs.player_id)::INT AS cnt FROM game_sessions gs JOIN games g ON g.session_id = gs.id WHERE g.result IS NOT NULL AND g.result != 'ongoing' AND COALESCE(g.completed_at, g.created_at) >= NOW() - ${interval}`
+            : `SELECT COUNT(DISTINCT gs.player_id)::INT AS cnt FROM game_sessions gs JOIN games g ON g.session_id = gs.id WHERE g.result IS NOT NULL AND g.result != 'ongoing'`;
+        const entriesQuery = interval
+            ? `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te WHERE te.created_at >= NOW() - ${interval}`
+            : `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te`;
+        try {
+            const [volRes, activeRes, entriesRes] = await Promise.all([
+                this.pool.query(volQuery),
+                this.pool.query(activeQuery),
+                this.pool.query(entriesQuery),
+            ]);
+            const volume = this.toBigInt(volRes.rows[0]?.volume ?? 0);
+            const games = Number(volRes.rows[0]?.games ?? 0);
+            const pnl = this.toBigInt(volRes.rows[0]?.pnl ?? 0);
+            const activePlayers = Number(activeRes.rows[0]?.cnt ?? 0);
+            const tournamentEntries = Number(entriesRes.rows[0]?.cnt ?? 0);
+            return { volume, games, activePlayers, pnl, tournamentEntries };
+        }
+        catch (err) {
+            const missing = err?.code === '42P01' || err?.code === '42703' || (typeof err?.message === 'string' && /relation .* does not exist|column .* does not exist/i.test(err.message));
+            if (missing)
+                return zero();
+            throw err;
+        }
+    }
+    /** Admin metrics time-series (hourly or daily buckets) for charts. Returns [] if games table missing. */
+    async getMetricsSeries(range) {
+        const bucket = range === '24h' ? 'hour' : 'day';
+        const interval = range === '24h' ? "INTERVAL '24 hours'" : range === '7d' ? "INTERVAL '7 days'" : range === '30d' ? "INTERVAL '30 days'" : "INTERVAL '90 days'";
+        const query = `
+      SELECT
+        date_trunc('${bucket}', COALESCE(g.completed_at, g.created_at))::TEXT AS period,
+        (COALESCE(SUM(g.total_bet_amount), 0))::BIGINT AS volume,
+        COUNT(*)::INT AS games
+      FROM games g
+      WHERE g.result IS NOT NULL AND g.result != 'ongoing'
+        AND COALESCE(g.completed_at, g.created_at) >= NOW() - ${interval}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+        try {
+            const result = await this.pool.query(query);
+            return result.rows.map((r) => ({
+                period: r.period,
+                volume: String(r.volume ?? 0),
+                games: Number(r.games ?? 0),
+            }));
+        }
+        catch (err) {
+            const missing = err?.code === '42P01' || err?.code === '42703' || (typeof err?.message === 'string' && /relation .* does not exist|column .* does not exist/i.test(err.message));
+            if (missing)
+                return [];
+            throw err;
+        }
+    }
+    /** Recent Blackjack wins (for public latest-wins feed). Only win/blackjack results. */
+    async getRecentGlobalWins(limit = 20) {
+        const query = `
+      SELECT
+        g.id AS game_id,
+        g.total_bet_amount,
+        g.total_payout,
+        g.result,
+        g.completed_at,
+        p.wallet_address AS player_address
+      FROM games g
+      JOIN game_sessions gs ON g.session_id = gs.id
+      JOIN players p ON gs.player_id = p.id
+      WHERE g.result IN ('win', 'blackjack')
+        AND g.completed_at IS NOT NULL
+      ORDER BY g.completed_at DESC
+      LIMIT $1
+    `;
+        const result = await this.pool.query(query, [limit]);
+        return result.rows.map((r) => ({
+            gameId: r.game_id,
+            playerAddress: r.player_address ?? '',
+            result: r.result === 'blackjack' ? 'blackjack' : 'win',
+            betAmount: String(r.total_bet_amount ?? '0'),
+            payout: String(r.total_payout ?? '0'),
+            timestamp: r.completed_at ? new Date(r.completed_at).getTime() : Date.now(),
+        }));
+    }
+    /** Admin game config: get all key-value pairs. */
+    async getAdminGameConfig() {
+        const result = await this.pool.query(`SELECT key, value FROM admin_game_config`);
+        const out = {};
+        for (const row of result.rows)
+            out[row.key] = row.value ?? '';
+        return out;
+    }
+    /** Admin game config: set one key. */
+    async setAdminGameConfigKey(key, value) {
+        await this.pool.query(`INSERT INTO admin_game_config (key, value, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`, [key, value]);
+    }
+    /** Up to N player wallet addresses (by recent activity) for admin reserve sampling. */
+    async getPlayerAddressesForReserveCheck(limit = 100) {
+        const result = await this.pool.query(`SELECT wallet_address FROM players ORDER BY last_seen DESC NULLS LAST LIMIT $1`, [limit]);
+        return result.rows.map((r) => r.wallet_address);
+    }
+    async getBlackjackTables(enabledOnly = false) {
+        const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
+        const colsBase = 'id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at';
+        const whereOrder = enabledOnly
+            ? ' WHERE enabled = true ORDER BY sort_order ASC, created_at ASC'
+            : ' ORDER BY sort_order ASC, created_at ASC';
+        const mapRow = (r, withExtended) => ({
+            id: r.id,
+            kind: r.kind,
+            name: r.name,
+            src: r.src,
+            description: r.description ?? null,
+            token_contract_address: r.token_contract_address ?? null,
+            logo_url: withExtended ? (r.logo_url ?? null) : null,
+            ticker: withExtended ? (r.ticker ?? null) : null,
+            iframe_url: withExtended ? (r.iframe_url ?? null) : null,
+            sort_order: r.sort_order,
+            enabled: r.enabled,
+            created_at: new Date(r.created_at),
+            updated_at: new Date(r.updated_at),
+        });
+        try {
+            const result = await this.pool.query(`SELECT ${colsExtended} FROM blackjack_tables${whereOrder}`);
+            return result.rows.map((r) => mapRow(r, true));
+        }
+        catch (err) {
+            const isMissingColumn = err?.code === '42703' || (typeof err?.message === 'string' && err.message.includes('column') && err.message.includes('does not exist'));
+            if (isMissingColumn) {
+                const result = await this.pool.query(`SELECT ${colsBase} FROM blackjack_tables${whereOrder}`);
+                return result.rows.map((r) => mapRow(r, false));
+            }
+            throw err;
+        }
+    }
+    async createBlackjackTable(row) {
+        const withExtended = async () => {
+            const r = await this.pool.query(`INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at`, [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.logo_url ?? null, row.ticker ?? null, row.iframe_url ?? null, row.sort_order, row.enabled]);
+            const x = r.rows[0];
+            return { x, extended: true };
+        };
+        const withBase = async () => {
+            const r = await this.pool.query(`INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, sort_order, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at`, [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.sort_order, row.enabled]);
+            const x = r.rows[0];
+            return { x, extended: false };
+        };
+        try {
+            const { x, extended } = await withExtended();
+            return {
+                id: x.id,
+                kind: x.kind,
+                name: x.name,
+                src: x.src,
+                description: x.description ?? null,
+                token_contract_address: x.token_contract_address ?? null,
+                logo_url: extended ? (x.logo_url ?? null) : null,
+                ticker: extended ? (x.ticker ?? null) : null,
+                iframe_url: extended ? (x.iframe_url ?? null) : null,
+                sort_order: x.sort_order,
+                enabled: x.enabled,
+                created_at: new Date(x.created_at),
+                updated_at: new Date(x.updated_at),
+            };
+        }
+        catch (err) {
+            const isMissingColumn = err?.code === '42703' || (typeof err?.message === 'string' && err.message.includes('column') && err.message.includes('does not exist'));
+            if (!isMissingColumn)
+                throw err;
+            const { x, extended } = await withBase();
+            return {
+                id: x.id,
+                kind: x.kind,
+                name: x.name,
+                src: x.src,
+                description: x.description ?? null,
+                token_contract_address: x.token_contract_address ?? null,
+                logo_url: extended ? (x.logo_url ?? null) : null,
+                ticker: extended ? (x.ticker ?? null) : null,
+                iframe_url: extended ? (x.iframe_url ?? null) : null,
+                sort_order: x.sort_order,
+                enabled: x.enabled,
+                created_at: new Date(x.created_at),
+                updated_at: new Date(x.updated_at),
+            };
+        }
+    }
+    async updateBlackjackTable(id, updates) {
+        const buildUpdate = (includeExtended) => {
+            const fields = [];
+            const values = [];
+            let i = 1;
+            if (updates.name !== undefined) {
+                fields.push(`name = $${i++}`);
+                values.push(updates.name);
+            }
+            if (updates.src !== undefined) {
+                fields.push(`src = $${i++}`);
+                values.push(updates.src);
+            }
+            if (updates.description !== undefined) {
+                fields.push(`description = $${i++}`);
+                values.push(updates.description);
+            }
+            if (updates.token_contract_address !== undefined) {
+                fields.push(`token_contract_address = $${i++}`);
+                values.push(updates.token_contract_address);
+            }
+            if (includeExtended && updates.logo_url !== undefined) {
+                fields.push(`logo_url = $${i++}`);
+                values.push(updates.logo_url);
+            }
+            if (includeExtended && updates.ticker !== undefined) {
+                fields.push(`ticker = $${i++}`);
+                values.push(updates.ticker);
+            }
+            if (includeExtended && updates.iframe_url !== undefined) {
+                fields.push(`iframe_url = $${i++}`);
+                values.push(updates.iframe_url);
+            }
+            if (updates.sort_order !== undefined) {
+                fields.push(`sort_order = $${i++}`);
+                values.push(updates.sort_order);
+            }
+            if (updates.enabled !== undefined) {
+                fields.push(`enabled = $${i++}`);
+                values.push(updates.enabled);
+            }
+            return { fields, values, i };
+        };
+        const { fields: f, values: v, i } = buildUpdate(true);
+        if (f.length === 0) {
+            const existing = await this.getBlackjackTables().then((rows) => rows.find((r) => r.id === id));
+            return existing ?? null;
+        }
+        const fields = [...f, 'updated_at = NOW()'];
+        const values = [...v, id];
+        const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
+        const colsBase = 'id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at';
+        const mapReturn = (x, extended) => ({
+            id: x.id,
+            kind: x.kind,
+            name: x.name,
+            src: x.src,
+            description: x.description ?? null,
+            token_contract_address: x.token_contract_address ?? null,
+            logo_url: extended ? (x.logo_url ?? null) : null,
+            ticker: extended ? (x.ticker ?? null) : null,
+            iframe_url: extended ? (x.iframe_url ?? null) : null,
+            sort_order: x.sort_order,
+            enabled: x.enabled,
+            created_at: new Date(x.created_at),
+            updated_at: new Date(x.updated_at),
+        });
+        try {
+            const r = await this.pool.query(`UPDATE blackjack_tables SET ${fields.join(', ')} WHERE id = $${values.length} RETURNING ${colsExtended}`, values);
+            if (r.rows.length === 0)
+                return null;
+            return mapReturn(r.rows[0], true);
+        }
+        catch (err) {
+            const isMissingColumn = err?.code === '42703' || (typeof err?.message === 'string' && err.message.includes('column') && err.message.includes('does not exist'));
+            if (!isMissingColumn)
+                throw err;
+            const { fields: fBase, values: vBase, i: iBase } = buildUpdate(false);
+            if (fBase.length === 0)
+                return this.getBlackjackTables().then((rows) => rows.find((r) => r.id === id) ?? null);
+            const fieldsBase = [...fBase, 'updated_at = NOW()'];
+            const valuesBase = [...vBase, id];
+            const r = await this.pool.query(`UPDATE blackjack_tables SET ${fieldsBase.join(', ')} WHERE id = $${valuesBase.length} RETURNING ${colsBase}`, valuesBase);
+            if (r.rows.length === 0)
+                return null;
+            return mapReturn(r.rows[0], false);
+        }
+    }
+    async deleteBlackjackTable(id) {
+        const r = await this.pool.query('DELETE FROM blackjack_tables WHERE id = $1', [id]);
+        return (r.rowCount ?? 0) > 0;
     }
 }
 exports.DatabaseService = DatabaseService;

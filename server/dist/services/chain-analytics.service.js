@@ -46,19 +46,22 @@ class ChainAnalyticsService {
         }
     }
     async getLotteryStats() {
-        try {
-            const client = (0, chain_client_1.getPublicClient)();
-            const [totalTicketsEver, totalCollected, totalClaimed] = await Promise.all([
-                client.readContract({ address: contracts_1.LOTTERY_ADDRESS, abi: contracts_1.LOTTERY_STATS_ABI, functionName: 'totalTicketsEver' }),
-                client.readContract({ address: contracts_1.LOTTERY_ADDRESS, abi: contracts_1.LOTTERY_STATS_ABI, functionName: 'totalMORBIUSEverCollected' }),
-                client.readContract({ address: contracts_1.LOTTERY_ADDRESS, abi: contracts_1.LOTTERY_STATS_ABI, functionName: 'totalMORBIUSEverClaimed' }),
-            ]);
-            return { totalTicketsEver, totalCollected, totalClaimed };
-        }
-        catch (err) {
-            console.error('ChainAnalyticsService getLotteryStats:', err);
-            return null;
-        }
+        const client = (0, chain_client_1.getPublicClient)();
+        const read = async (fn) => {
+            try {
+                const result = await client.readContract({ address: contracts_1.LOTTERY_ADDRESS, abi: contracts_1.LOTTERY_STATS_ABI, functionName: fn });
+                return result;
+            }
+            catch {
+                return 0n;
+            }
+        };
+        const [totalTicketsEver, totalCollected, totalClaimed] = await Promise.all([
+            read('totalTicketsEver'),
+            read('totalMORBIUSEverCollected'),
+            read('totalMORBIUSEverClaimed'),
+        ]);
+        return { totalTicketsEver, totalCollected, totalClaimed };
     }
     async getBigWheelStats() {
         try {

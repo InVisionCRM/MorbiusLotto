@@ -85,6 +85,10 @@ export declare class BlackjackGameService {
      */
     setTournamentService(tournamentService: TournamentService): void;
     private getGameBaseNonce;
+    /** Resolve Blackjack fee % and fee wallet from admin config + env. Fee applies to profit only. */
+    private getBlackjackFeeConfig;
+    /** Apply fee on profit (if configured); credit player (payout - fee) and fee wallet (fee). Returns fee amount applied. */
+    private creditPayoutWithFee;
     private ensureSessionSeed;
     /**
      * Create a new blackjack game

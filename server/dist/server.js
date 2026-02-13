@@ -20,12 +20,30 @@ const websocket_service_1 = require("./services/websocket.service");
 const chain_analytics_service_1 = require("./services/chain-analytics.service");
 const logger_1 = require("./utils/logger");
 const withdraw_sign_1 = require("./utils/withdraw-sign");
+const chain_client_1 = require("./utils/chain-client");
 const blackjack_1 = require("./abi/blackjack");
+const contracts_1 = require("./config/contracts");
+const ERC20_BALANCE_OF_ABI = [
+    { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+];
 // Load environment variables
 dotenv_1.default.config();
+// Admin: comma-separated wallet addresses (server-side, for /api/admin/*)
+const ADMIN_WALLETS = (process.env.ADMIN_WALLETS || '')
+    .split(',')
+    .map((a) => a.trim().toLowerCase())
+    .filter(Boolean);
+function isAdminWallet(addr) {
+    if (!addr)
+        return false;
+    return ADMIN_WALLETS.includes(addr.toLowerCase());
+}
 const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
 const PORT = process.env.PORT || 3001;
+// Trust proxy when behind a reverse proxy (Railway, nginx, etc.) so rate-limit sees real client IP.
+// Avoids ERR_ERL_UNEXPECTED_X_FORWARDED_FOR when X-Forwarded-For is set.
+app.set('trust proxy', process.env.TRUST_PROXY !== '0' ? 1 : 0);
 // CORS: allow frontend origin(s). Set FRONTEND_URL on Railway to your app URL (comma-separated for multiple).
 const allowedOrigins = (process.env.FRONTEND_URL || 'https://win.morbius.io')
     .split(',')
@@ -52,6 +70,15 @@ app.use('/api/', limiter);
 // Body parsing
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
+// Admin API: require x-admin-wallet header and that it's in ADMIN_WALLETS
+app.use('/api/admin', (req, res, next) => {
+    const wallet = req.headers['x-admin-wallet']?.trim();
+    if (!wallet || !isAdminWallet(wallet)) {
+        res.status(403).json({ error: 'Forbidden', message: 'Admin wallet required' });
+        return;
+    }
+    next();
+});
 // JSON helper that serializes BigInt values (Express res.json cannot)
 const jsonReplacer = (_key, value) => (typeof value === 'bigint' ? value.toString() : value);
 const sendJson = (res, data) => {
@@ -93,6 +120,17 @@ async function initializeServices() {
         // Chain analytics (on-chain games: Plinko, Keno, Lottery, BigWheel)
         const chainAnalytics = new chain_analytics_service_1.ChainAnalyticsService();
         // API routes
+        app.get('/api/player/:address/profile', async (req, res) => {
+            try {
+                const { address } = req.params;
+                const profile = await dbService.getProfile(address);
+                sendJson(res, profile ?? { displayName: null, profileImageUrl: null });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching player profile:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         app.get('/api/player/:address/stats', async (req, res) => {
             try {
                 const { address } = req.params;
@@ -154,6 +192,22 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
+        // Top player by category (for infinite moving cards)
+        app.get('/api/analytics/top-player-by-category', async (req, res) => {
+            try {
+                const category = req.query.category;
+                if (!category || !['games', 'profit_loss', 'wagered', 'win_rate', 'total_won', 'win_streak'].includes(category)) {
+                    res.status(400).json({ error: 'Invalid category' });
+                    return;
+                }
+                const topPlayer = await dbService.getTopPlayersByCategory(category);
+                sendJson(res, topPlayer);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching top player by category:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         // Platform analytics: Blackjack (DB) + Plinko, Keno, Lottery, BigWheel (chain)
         app.get('/api/analytics/platform', async (req, res) => {
             try {
@@ -192,6 +246,34 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error fetching platform analytics:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Public: recent Blackjack wins (for Latest Wins feed)
+        app.get('/api/analytics/recent-wins', async (req, res) => {
+            try {
+                const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+                const wins = await dbService.getRecentGlobalWins(limit);
+                sendJson(res, { wins });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching recent wins:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Public: metrics time-series for charts (24h hourly, 7d/30d/all daily)
+        app.get('/api/analytics/series', async (req, res) => {
+            try {
+                const range = (req.query.range || '24h');
+                if (!['24h', '7d', '30d', 'all'].includes(range)) {
+                    res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
+                    return;
+                }
+                const series = await dbService.getMetricsSeries(range);
+                sendJson(res, { range, series });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching metrics series:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
@@ -262,6 +344,347 @@ async function initializeServices() {
             catch (error) {
                 logger_1.logger.error('Error fetching player tournament state:', error);
                 res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/tournament/player/:address/history', async (req, res) => {
+            try {
+                const { address } = req.params;
+                if (!address || address.length < 20) {
+                    return res.status(400).json({ error: 'Valid player address required' });
+                }
+                const history = await tournamentService.getPlayerTournamentHistory(address);
+                sendJson(res, history.map((item) => ({
+                    ...item,
+                    prizeWon: item.prizeWon.toString(),
+                })));
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching player tournament history:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Public: Blackjack table list (for picker; enabled only)
+        app.get('/api/blackjack/tables', async (req, res) => {
+            try {
+                const enabledOnly = req.query.enabledOnly !== 'false';
+                const rows = await dbService.getBlackjackTables(enabledOnly);
+                sendJson(res, rows.map((r) => ({
+                    id: r.id,
+                    kind: r.kind,
+                    name: r.name,
+                    src: r.src,
+                    description: r.description,
+                    token_contract_address: r.token_contract_address,
+                    logo_url: r.logo_url,
+                    ticker: r.ticker,
+                    iframe_url: r.iframe_url,
+                    sort_order: r.sort_order,
+                    enabled: r.enabled,
+                })));
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching blackjack tables:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Public: effective Blackjack bet limits from admin config (for UI; same logic as WS validation)
+        const DEFAULT_MIN_BET = '1000000000000000000';
+        const DEFAULT_MAX_BET = '100000000000000000000000';
+        app.get('/api/blackjack/limits', async (req, res) => {
+            try {
+                const config = await dbService.getAdminGameConfig();
+                let minBet = DEFAULT_MIN_BET;
+                let maxBet = DEFAULT_MAX_BET;
+                const minStr = config.blackjack_min_bet?.trim();
+                const maxStr = config.blackjack_max_bet?.trim();
+                if (minStr) {
+                    try {
+                        const parsed = BigInt(minStr);
+                        if (parsed >= 0n)
+                            minBet = parsed.toString();
+                    }
+                    catch {
+                        /* keep default */
+                    }
+                }
+                if (maxStr) {
+                    try {
+                        const parsed = BigInt(maxStr);
+                        if (parsed > 0n)
+                            maxBet = parsed.toString();
+                    }
+                    catch {
+                        /* keep default */
+                    }
+                }
+                if (BigInt(minBet) > BigInt(maxBet)) {
+                    minBet = DEFAULT_MIN_BET;
+                    maxBet = DEFAULT_MAX_BET;
+                }
+                sendJson(res, { minBet, maxBet });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching blackjack limits:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Admin: Blackjack tables CRUD (requires x-admin-wallet in allowed list)
+        const dbSchemaError = (err) => {
+            const msg = err && typeof err.message === 'string' ? err.message : '';
+            const code = err?.code;
+            if (code === '42703' || code === '42P01' || /column .* does not exist|relation .* does not exist/i.test(msg)) {
+                return 'Database schema outdated. Run server migrations 026 and 028 (blackjack_tables).';
+            }
+            return null;
+        };
+        app.get('/api/admin/tables', async (req, res) => {
+            try {
+                const enabledOnly = req.query.enabledOnly === 'true';
+                const rows = await dbService.getBlackjackTables(enabledOnly);
+                sendJson(res, rows);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching admin blackjack tables:', error);
+                const msg = dbSchemaError(error);
+                res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
+            }
+        });
+        app.post('/api/admin/tables', async (req, res) => {
+            try {
+                const { kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled } = req.body;
+                if (!kind || !name || !src) {
+                    res.status(400).json({ error: 'Missing required fields: kind, name, src' });
+                    return;
+                }
+                if (kind !== 'image' && kind !== 'video') {
+                    res.status(400).json({ error: 'kind must be image or video' });
+                    return;
+                }
+                const row = await dbService.createBlackjackTable({
+                    kind,
+                    name,
+                    src,
+                    description: description ?? null,
+                    token_contract_address: token_contract_address ?? null,
+                    logo_url: logo_url ?? null,
+                    ticker: ticker ?? null,
+                    iframe_url: iframe_url ?? null,
+                    sort_order: typeof sort_order === 'number' ? sort_order : 0,
+                    enabled: enabled !== false,
+                });
+                sendJson(res, row);
+            }
+            catch (error) {
+                logger_1.logger.error('Error creating blackjack table:', error);
+                const msg = dbSchemaError(error);
+                res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
+            }
+        });
+        app.put('/api/admin/tables/:id', async (req, res) => {
+            try {
+                const { id } = req.params;
+                const updates = req.body;
+                const row = await dbService.updateBlackjackTable(id, {
+                    name: updates.name,
+                    src: updates.src,
+                    description: updates.description,
+                    token_contract_address: updates.token_contract_address,
+                    logo_url: updates.logo_url,
+                    ticker: updates.ticker,
+                    iframe_url: updates.iframe_url,
+                    sort_order: updates.sort_order,
+                    enabled: updates.enabled,
+                });
+                if (!row) {
+                    res.status(404).json({ error: 'Table not found' });
+                    return;
+                }
+                sendJson(res, row);
+            }
+            catch (error) {
+                logger_1.logger.error('Error updating blackjack table:', error);
+                const msg = dbSchemaError(error);
+                res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
+            }
+        });
+        app.delete('/api/admin/tables/:id', async (req, res) => {
+            try {
+                const { id } = req.params;
+                const ok = await dbService.deleteBlackjackTable(id);
+                if (!ok) {
+                    res.status(404).json({ error: 'Table not found' });
+                    return;
+                }
+                res.status(204).send();
+            }
+            catch (error) {
+                logger_1.logger.error('Error deleting blackjack table:', error);
+                const msg = dbSchemaError(error);
+                res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
+            }
+        });
+        // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves)
+        // MORBIUS in contract = MORBIUS_TOKEN.balanceOf(gameContract) for each game (canonical addresses in config/contracts.ts).
+        app.get('/api/admin/health', async (req, res) => {
+            try {
+                const client = (0, chain_client_1.getPublicClient)();
+                const blackjackAddress = contracts_1.BLACKJACK_ADDRESS;
+                const api = 'ok';
+                const ws = 'up'; // same process
+                const games = {};
+                const morbius = {};
+                let blackjackReserves = { totalMorbiusInContract: '0', addressesWithReserve: [] };
+                const readMorbiusBalance = async (contractAddress) => {
+                    return client.readContract({ address: contracts_1.MORBIUS_TOKEN_ADDRESS, abi: ERC20_BALANCE_OF_ABI, functionName: 'balanceOf', args: [contractAddress] });
+                };
+                // Blackjack: MORBIUS balance of contract + sample of addresses with reserve > 0
+                try {
+                    const balance = await readMorbiusBalance(blackjackAddress);
+                    morbius.blackjack = balance.toString();
+                    games.blackjack = { rpc: 'ok' };
+                    const addresses = await dbService.getPlayerAddressesForReserveCheck(50);
+                    const reserves = await Promise.all(addresses.map(async (addr) => {
+                        const a = addr.startsWith('0x') ? addr : `0x${addr}`;
+                        try {
+                            const r = await client.readContract({ address: blackjackAddress, abi: blackjack_1.blackjackAbi, functionName: 'getPlayerReserve', args: [a] });
+                            return { address: addr, reserve: r };
+                        }
+                        catch {
+                            return { address: addr, reserve: 0n };
+                        }
+                    }));
+                    blackjackReserves = {
+                        totalMorbiusInContract: balance.toString(),
+                        addressesWithReserve: reserves.filter((r) => r.reserve > 0n).map((r) => ({ address: r.address, reserve: r.reserve.toString() })),
+                    };
+                }
+                catch (err) {
+                    games.blackjack = { rpc: 'fail', error: err?.message || 'RPC/contract read failed' };
+                    morbius.blackjack = '0';
+                }
+                // Plinko: MORBIUS balance held by Plinko contract
+                try {
+                    const balance = await readMorbiusBalance(contracts_1.PLINKO_ADDRESS);
+                    morbius.plinko = balance.toString();
+                    const plinkoStats = await chainAnalytics.getPlinkoStats();
+                    games.plinko = plinkoStats ? { rpc: 'ok' } : { rpc: 'ok' };
+                }
+                catch (err) {
+                    games.plinko = { rpc: 'fail', error: err?.message || 'RPC failed' };
+                    morbius.plinko = '0';
+                }
+                // Keno: MORBIUS balance held by Keno contract
+                try {
+                    const balance = await readMorbiusBalance(contracts_1.KENO_ADDRESS);
+                    morbius.keno = balance.toString();
+                    const kenoStats = await chainAnalytics.getKenoStats();
+                    games.keno = kenoStats ? { rpc: 'ok' } : { rpc: 'ok' };
+                }
+                catch (err) {
+                    games.keno = { rpc: 'fail', error: err?.message || 'RPC failed' };
+                    morbius.keno = '0';
+                }
+                // Lottery: MORBIUS balance held by Lottery contract
+                try {
+                    const balance = await readMorbiusBalance(contracts_1.LOTTERY_ADDRESS);
+                    morbius.lottery = balance.toString();
+                    const lotteryStats = await chainAnalytics.getLotteryStats();
+                    games.lottery = lotteryStats ? { rpc: 'ok' } : { rpc: 'ok' };
+                }
+                catch (err) {
+                    games.lottery = { rpc: 'fail', error: err?.message || 'RPC failed' };
+                    morbius.lottery = '0';
+                }
+                const contractAddresses = {
+                    blackjack: blackjackAddress,
+                    plinko: contracts_1.PLINKO_ADDRESS,
+                    keno: contracts_1.KENO_ADDRESS,
+                    lottery: contracts_1.LOTTERY_ADDRESS,
+                };
+                sendJson(res, { api, ws, games, morbius, blackjackReserves, contractAddresses });
+            }
+            catch (error) {
+                logger_1.logger.error('Error in admin health:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Admin: game config (key-value; min/max bet, fee %, feature flags)
+        app.get('/api/admin/config', async (req, res) => {
+            try {
+                const config = await dbService.getAdminGameConfig();
+                sendJson(res, config);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching admin config:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.put('/api/admin/config', async (req, res) => {
+            try {
+                const body = req.body;
+                const config = body?.config && typeof body.config === 'object' ? body.config : body;
+                if (!config || typeof config !== 'object') {
+                    res.status(400).json({ error: 'Body must be { config: { key: value, ... } } or { key: value, ... }' });
+                    return;
+                }
+                for (const [key, value] of Object.entries(config)) {
+                    if (typeof key !== 'string' || key.length > 128)
+                        continue;
+                    await dbService.setAdminGameConfigKey(key, value == null ? '' : String(value));
+                }
+                const updated = await dbService.getAdminGameConfig();
+                sendJson(res, updated);
+            }
+            catch (error) {
+                logger_1.logger.error('Error updating admin config:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all). Source: Blackjack games DB.
+        // On any DB or serialization error we return 200 with zeros so the tab always loads; errors are logged.
+        app.get('/api/admin/metrics', async (req, res) => {
+            const range = req.query.range || '24h';
+            const validRange = ['24h', '7d', '30d', 'all'].includes(range) ? range : '24h';
+            const zeroPayload = {
+                range: validRange,
+                volume: '0',
+                games: 0,
+                activePlayers: 0,
+                pnl: '0',
+                tournamentEntries: 0,
+                series: [],
+            };
+            try {
+                if (!['24h', '7d', '30d', 'all'].includes(range)) {
+                    res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
+                    return;
+                }
+                let aggregates;
+                let series;
+                try {
+                    [aggregates, series] = await Promise.all([
+                        dbService.getMetricsAggregates(range),
+                        dbService.getMetricsSeries(range),
+                    ]);
+                }
+                catch (dbError) {
+                    logger_1.logger.error('Admin metrics DB query failed', { error: dbError });
+                    sendJson(res, zeroPayload);
+                    return;
+                }
+                sendJson(res, {
+                    range,
+                    volume: aggregates.volume.toString(),
+                    games: aggregates.games,
+                    activePlayers: aggregates.activePlayers,
+                    pnl: aggregates.pnl.toString(),
+                    tournamentEntries: aggregates.tournamentEntries,
+                    series,
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error in admin metrics:', error);
+                sendJson(res, zeroPayload);
             }
         });
         // Withdraw prepare: server signs withdrawal approval (amount = min(DB balance, contract reserve))

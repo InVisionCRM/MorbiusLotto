@@ -1,10 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendEscrowPayout = sendEscrowPayout;
+exports.sendEscrowRemainderToReclaimWallet = sendEscrowRemainderToReclaimWallet;
 const viem_1 = require("viem");
 const accounts_1 = require("viem/accounts");
 const chains_1 = require("viem/chains");
 const tournament_prize_escrow_1 = require("../abi/tournament-prize-escrow");
+const escrow_status_1 = require("./escrow-status");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const logger_1 = require("./logger");
 const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS;
@@ -59,6 +61,50 @@ async function sendEscrowPayout(tournamentId, winnerAddress, amount) {
             if (attempt === maxRetries) {
                 return { success: false, error: msg };
             }
+        }
+    }
+    return { success: false, error: 'Max retries exceeded' };
+}
+const RECLAIM_WALLET = (process.env.ESCROW_REMAINDER_WALLET || process.env.PLATFORM_FEE_WALLET);
+/**
+ * Send any remaining (unclaimed) escrow balance for a tournament to the configured reclaim wallet.
+ * Call after distributePrizes so escrow never holds leftover funds.
+ * Uses same authorized server key as payouts. Set ESCROW_REMAINDER_WALLET or PLATFORM_FEE_WALLET.
+ */
+async function sendEscrowRemainderToReclaimWallet(tournamentId) {
+    if (!ESCROW_ADDRESS)
+        return { success: false, error: 'Escrow not configured' };
+    if (!RECLAIM_WALLET || !RECLAIM_WALLET.startsWith('0x')) {
+        logger_1.logger.warn('ESCROW_REMAINDER_WALLET / PLATFORM_FEE_WALLET not set; skipping escrow remainder reclaim');
+        return { success: false, error: 'Reclaim wallet not configured' };
+    }
+    const status = await (0, escrow_status_1.getEscrowPoolStatus)(tournamentId);
+    if (!status)
+        return { success: false, error: 'Could not read pool status' };
+    const remaining = status.totalDeposited - status.amountPaidOut;
+    if (remaining <= 0n)
+        return { success: true };
+    const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const client = getWalletClient();
+            const hash = await client.writeContract({
+                account: client.account,
+                chain: chains_1.pulsechain,
+                address: ESCROW_ADDRESS,
+                abi: tournament_prize_escrow_1.tournamentPrizeEscrowAbi,
+                functionName: 'payoutRemainderTo',
+                args: [idBytes32, RECLAIM_WALLET],
+            });
+            logger_1.logger.info('Escrow remainder reclaimed', { tournamentId, to: RECLAIM_WALLET, amount: remaining.toString(), txHash: hash });
+            return { success: true, txHash: hash };
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger_1.logger.error('Escrow remainder reclaim failed', { attempt, tournamentId, error: msg });
+            if (attempt === maxRetries)
+                return { success: false, error: msg };
         }
     }
     return { success: false, error: 'Max retries exceeded' };

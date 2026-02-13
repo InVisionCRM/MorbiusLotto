@@ -13,9 +13,12 @@ export declare class WebSocketService {
     private publicClient;
     private contractAddress;
     private tournamentService?;
+    private betLimitsCache;
     constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService, tournamentService?: TournamentService);
     /** Prune addresses with no timestamps in the current window to avoid unbounded map growth. */
     private cleanupChatRateLimitMap;
+    /** Resolve Blackjack min/max bet from admin config (cached). Uses defaults if missing/invalid. */
+    private getBetLimits;
     /** Returns false if over per-address limit; otherwise records the message and returns true. */
     private checkPerAddressChatLimit;
     private handleConnection;
@@ -74,6 +77,7 @@ export declare class WebSocketService {
     private handleTournamentEntriesList;
     private handleCreatorTournaments;
     private handleCreatorEarnings;
+    private handleRecentGlobalWins;
     private getPrizePercentagesForType;
     shutdown(): void;
 }

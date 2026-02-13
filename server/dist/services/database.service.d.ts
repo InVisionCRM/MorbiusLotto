@@ -122,6 +122,21 @@ export interface ChatMessage {
     text: string;
     created_at: Date;
 }
+export interface BlackjackTableRow {
+    id: string;
+    kind: 'image' | 'video';
+    name: string;
+    src: string;
+    description: string | null;
+    token_contract_address: string | null;
+    logo_url: string | null;
+    ticker: string | null;
+    iframe_url: string | null;
+    sort_order: number;
+    enabled: boolean;
+    created_at: Date;
+    updated_at: Date;
+}
 export declare class DatabaseService {
     private pool;
     /**
@@ -146,6 +161,8 @@ export declare class DatabaseService {
     updatePlayerBalance(walletAddress: string, amount: bigint, operation: 'add' | 'subtract' | 'set'): Promise<bigint>;
     deductPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
     addPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
+    /** Credit an address (e.g. fee wallet). Upserts a player row if missing. */
+    addBalanceToAddress(walletAddress: string, amount: bigint): Promise<void>;
     getActivePendingWithdrawal(walletAddress: string): Promise<{
         nonce: string;
         amount: string;
@@ -158,6 +175,14 @@ export declare class DatabaseService {
     getGlobalAnalytics(): Promise<GlobalAnalytics>;
     getTopPlayers(limit?: number): Promise<TopPlayerEntry[]>;
     private normalizeTopPlayerEntry;
+    getTopPlayersByCategory(category: 'games' | 'profit_loss' | 'wagered' | 'win_rate' | 'total_won' | 'win_streak'): Promise<Array<{
+        wallet_address: string;
+        display_name?: string;
+        profile_image_url?: string | null;
+        value: string;
+        label: string;
+        created_at?: Date;
+    }>>;
     getPlayerGames(walletAddress: string, limit?: number, offset?: number): Promise<Game[]>;
     createGameSession(playerId: string, serverSeed: string, serverSeedHash: string): Promise<GameSession>;
     getActiveSession(playerId: string): Promise<GameSession | null>;
@@ -212,5 +237,38 @@ export declare class DatabaseService {
         deactivatedAt: Date | null;
         deactivatedReason: string | null;
     }>>;
+    /** Admin metrics aggregates for a time range (Blackjack only). Returns zeros if tables are missing. */
+    getMetricsAggregates(range: '24h' | '7d' | '30d' | 'all'): Promise<{
+        volume: bigint;
+        games: number;
+        activePlayers: number;
+        pnl: bigint;
+        tournamentEntries: number;
+    }>;
+    /** Admin metrics time-series (hourly or daily buckets) for charts. Returns [] if games table missing. */
+    getMetricsSeries(range: '24h' | '7d' | '30d' | 'all'): Promise<Array<{
+        period: string;
+        volume: string;
+        games: number;
+    }>>;
+    /** Recent Blackjack wins (for public latest-wins feed). Only win/blackjack results. */
+    getRecentGlobalWins(limit?: number): Promise<Array<{
+        gameId: string;
+        playerAddress: string;
+        result: string;
+        betAmount: string;
+        payout: string;
+        timestamp: number;
+    }>>;
+    /** Admin game config: get all key-value pairs. */
+    getAdminGameConfig(): Promise<Record<string, string>>;
+    /** Admin game config: set one key. */
+    setAdminGameConfigKey(key: string, value: string): Promise<void>;
+    /** Up to N player wallet addresses (by recent activity) for admin reserve sampling. */
+    getPlayerAddressesForReserveCheck(limit?: number): Promise<string[]>;
+    getBlackjackTables(enabledOnly?: boolean): Promise<BlackjackTableRow[]>;
+    createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow>;
+    updateBlackjackTable(id: string, updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'sort_order' | 'enabled'>>): Promise<BlackjackTableRow | null>;
+    deleteBlackjackTable(id: string): Promise<boolean>;
 }
 //# sourceMappingURL=database.service.d.ts.map

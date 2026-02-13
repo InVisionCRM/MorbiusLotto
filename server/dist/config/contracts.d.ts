@@ -1,11 +1,11 @@
-/**
- * Contract addresses and minimal ABIs for platform analytics (Plinko, Keno, Lottery, BigWheel).
- * Addresses match lib/contracts.ts on PulseChain mainnet.
- */
+type LotteryAbi = readonly unknown[];
+export declare const MORBIUS_TOKEN_ADDRESS: `0x${string}`;
 export declare const PLINKO_ADDRESS: `0x${string}`;
 export declare const KENO_ADDRESS: `0x${string}`;
 export declare const LOTTERY_ADDRESS: `0x${string}`;
 export declare const BIGWHEEL_ADDRESS: `0x${string}`;
+/** Blackjack V2; use BLACKJACK_CONTRACT_ADDRESS in .env if different. */
+export declare const BLACKJACK_ADDRESS: `0x${string}`;
 /** Minimal ABI: getGlobalStats() -> (totalDrops, totalBallsSold, totalRevenue, totalPayouts, contractReserve) */
 export declare const PLINKO_GET_GLOBAL_STATS_ABI: readonly [{
     readonly inputs: readonly [];
@@ -58,38 +58,8 @@ export declare const KENO_GET_GLOBAL_STATS_ABI: readonly [{
     readonly stateMutability: "view";
     readonly type: "function";
 }];
-/** Minimal ABI: totalTicketsEver(), totalMORBIUSEverCollected(), totalMORBIUSEverClaimed() */
-export declare const LOTTERY_STATS_ABI: readonly [{
-    readonly inputs: readonly [];
-    readonly name: "totalTicketsEver";
-    readonly outputs: readonly [{
-        readonly internalType: "uint256";
-        readonly name: "";
-        readonly type: "uint256";
-    }];
-    readonly stateMutability: "view";
-    readonly type: "function";
-}, {
-    readonly inputs: readonly [];
-    readonly name: "totalMORBIUSEverCollected";
-    readonly outputs: readonly [{
-        readonly internalType: "uint256";
-        readonly name: "";
-        readonly type: "uint256";
-    }];
-    readonly stateMutability: "view";
-    readonly type: "function";
-}, {
-    readonly inputs: readonly [];
-    readonly name: "totalMORBIUSEverClaimed";
-    readonly outputs: readonly [{
-        readonly internalType: "uint256";
-        readonly name: "";
-        readonly type: "uint256";
-    }];
-    readonly stateMutability: "view";
-    readonly type: "function";
-}];
+/** Full Lottery 6-of-55 V2 ABI from contracts/abi/lottery6of55-v2.json. */
+export declare const LOTTERY_STATS_ABI: LotteryAbi;
 /** Minimal ABI: getGlobalStats() -> (spins, volume, payouts, contractBalance, contractReserveBalance) */
 export declare const BIGWHEEL_GET_GLOBAL_STATS_ABI: readonly [{
     readonly inputs: readonly [];
@@ -118,4 +88,5 @@ export declare const BIGWHEEL_GET_GLOBAL_STATS_ABI: readonly [{
     readonly stateMutability: "view";
     readonly type: "function";
 }];
+export {};
 //# sourceMappingURL=contracts.d.ts.map

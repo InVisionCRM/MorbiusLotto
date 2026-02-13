@@ -53,11 +53,12 @@ const CHAT_DISPLAY_NAME_MIN_LEN = 3;
 const CHAT_DISPLAY_NAME_MAX_LEN = 32;
 // Rate limit for create_game (1 game per second per connection)
 const CREATE_GAME_COOLDOWN_MS = 1000;
-// Bet limits (in MORBIUS, 18 decimals)
-const BET_LIMITS = {
+// Default bet limits (in MORBIUS, 18 decimals) when admin config is missing
+const DEFAULT_BET_LIMITS = {
     MIN_BET: BigInt('1000000000000000000'), // 1 MORBIUS
     MAX_BET: BigInt('100000000000000000000000'), // 100,000 MORBIUS
 };
+const CONFIG_CACHE_TTL_MS = 60_000; // 1 minute
 class WebSocketService {
     gameService;
     dbService;
@@ -70,6 +71,7 @@ class WebSocketService {
     publicClient;
     contractAddress;
     tournamentService;
+    betLimitsCache = null;
     constructor(server, gameService, dbService, tournamentService) {
         this.gameService = gameService;
         this.dbService = dbService;
@@ -117,6 +119,50 @@ class WebSocketService {
             else {
                 this.chatMessageTimestampsByAddress.set(address, kept);
             }
+        }
+    }
+    /** Resolve Blackjack min/max bet from admin config (cached). Uses defaults if missing/invalid. */
+    async getBetLimits() {
+        const now = Date.now();
+        if (this.betLimitsCache && now - this.betLimitsCache.cachedAt < CONFIG_CACHE_TTL_MS) {
+            return { minBet: this.betLimitsCache.minBet, maxBet: this.betLimitsCache.maxBet };
+        }
+        try {
+            const config = await this.dbService.getAdminGameConfig();
+            let minBet = DEFAULT_BET_LIMITS.MIN_BET;
+            let maxBet = DEFAULT_BET_LIMITS.MAX_BET;
+            const minStr = config.blackjack_min_bet?.trim();
+            const maxStr = config.blackjack_max_bet?.trim();
+            if (minStr) {
+                try {
+                    const parsed = BigInt(minStr);
+                    if (parsed >= 0n)
+                        minBet = parsed;
+                }
+                catch {
+                    /* keep default */
+                }
+            }
+            if (maxStr) {
+                try {
+                    const parsed = BigInt(maxStr);
+                    if (parsed > 0n)
+                        maxBet = parsed;
+                }
+                catch {
+                    /* keep default */
+                }
+            }
+            if (minBet > maxBet) {
+                minBet = DEFAULT_BET_LIMITS.MIN_BET;
+                maxBet = DEFAULT_BET_LIMITS.MAX_BET;
+            }
+            this.betLimitsCache = { minBet, maxBet, cachedAt: now };
+            return { minBet, maxBet };
+        }
+        catch (err) {
+            logger_1.logger.warn('Failed to load admin game config for bet limits, using defaults', { error: err });
+            return { minBet: DEFAULT_BET_LIMITS.MIN_BET, maxBet: DEFAULT_BET_LIMITS.MAX_BET };
         }
     }
     /** Returns false if over per-address limit; otherwise records the message and returns true. */
@@ -407,6 +453,10 @@ class WebSocketService {
                         return;
                     await this.handleCreatorEarnings(ws, message);
                     break;
+                case 'recent_global_wins':
+                    // No auth required for public global wins feed
+                    await this.handleRecentGlobalWins(ws, message);
+                    break;
                 default:
                     this.sendError(ws, 'Unknown message type', message.requestId);
             }
@@ -576,11 +626,12 @@ class WebSocketService {
                 return this.sendError(ws, 'Perfect Pairs bet too large. Maximum is 10,000 MORBIUS', message.requestId);
             }
             const totalStake = betAmount + perfectPairsBetAmount;
-            if (betAmount < BET_LIMITS.MIN_BET) {
-                return this.sendError(ws, `Bet amount too small. Minimum bet is ${BET_LIMITS.MIN_BET.toString()} (1 MORBIUS)`, message.requestId);
+            const { minBet, maxBet } = await this.getBetLimits();
+            if (betAmount < minBet) {
+                return this.sendError(ws, `Bet amount too small. Minimum bet is ${minBet.toString()}`, message.requestId);
             }
-            if (betAmount > BET_LIMITS.MAX_BET) {
-                return this.sendError(ws, `Bet amount too large. Maximum bet is ${BET_LIMITS.MAX_BET.toString()} (100,000 MORBIUS)`, message.requestId);
+            if (betAmount > maxBet) {
+                return this.sendError(ws, `Bet amount too large. Maximum bet is ${maxBet.toString()}`, message.requestId);
             }
             try {
                 const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
@@ -694,6 +745,9 @@ class WebSocketService {
             if (!ws.playerAddress) {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'websocket.service.ts:773', message: 'handleSyncBalance entry', data: { playerAddress: ws.playerAddress, requestId: message.requestId }, timestamp: Date.now(), runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
+            // #endregion
             // Get contract reserve balance
             const contractBalance = await this.publicClient.readContract({
                 address: this.contractAddress,
@@ -701,11 +755,20 @@ class WebSocketService {
                 functionName: 'getPlayerReserve',
                 args: [ws.playerAddress]
             });
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'websocket.service.ts:780', message: 'Contract balance read', data: { contractBalance: contractBalance.toString(), contractAddress: this.contractAddress, playerAddress: ws.playerAddress }, timestamp: Date.now(), runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
+            // #endregion
             // Safety: only increase DB balance, never decrease.
             // This prevents wiping off-chain winnings that exceed the on-chain reserve.
             const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'websocket.service.ts:785', message: 'DB balance read before sync', data: { currentDbBalance: currentDbBalance.toString(), contractBalance: contractBalance.toString(), comparison: contractBalance > currentDbBalance ? 'contract > DB' : 'DB >= contract' }, timestamp: Date.now(), runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
+            // #endregion
             const newBalance = contractBalance > currentDbBalance ? contractBalance : currentDbBalance;
             await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'websocket.service.ts:789', message: 'Balance synced result', data: { newBalance: newBalance.toString(), wasUpdated: newBalance !== currentDbBalance }, timestamp: Date.now(), runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
+            // #endregion
             logger_1.logger.debug('Balance synced (max-safe)', {
                 playerAddress: ws.playerAddress,
                 contractBalance: contractBalance.toString(),
@@ -731,8 +794,14 @@ class WebSocketService {
             if (!ws.playerAddress) {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'websocket.service.ts:815', message: 'handleGetBalance entry', data: { playerAddress: ws.playerAddress, requestId: message.requestId }, timestamp: Date.now(), runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
+            // #endregion
             // Get off-chain balance
             const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'websocket.service.ts:820', message: 'getBalance returning DB balance', data: { balance: balance.toString(), playerAddress: ws.playerAddress }, timestamp: Date.now(), runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
+            // #endregion
             this.sendMessage(ws, {
                 type: 'balance',
                 payload: {
@@ -1740,6 +1809,7 @@ class WebSocketService {
                 tiebreakerOrder: payload.tiebreakerOrder,
                 tableTheme: payload.tableTheme,
                 isPrivate: payload.isPrivate,
+                minPlayers: payload.minPlayers,
                 maxPlayers: payload.maxPlayers,
                 customImage: payload.customImage,
                 pinCode: payload.pinCode,
@@ -1794,6 +1864,9 @@ class WebSocketService {
                 durationMinutes: t.duration_minutes ?? null,
                 creatorFeePercent: t.creator_fee_percent ?? 0,
                 platformFeePercent: t.platform_fee_percent ?? 16,
+                escrowFunded: t.escrow_funded ?? false,
+                escrowTotalDeposited: t.escrow_total_deposited ?? '0',
+                escrowToken: t.escrow_token ?? null,
             }));
             this.sendMessage(ws, {
                 type: 'tournament_list',
@@ -2118,6 +2191,52 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error getting creator earnings:', error);
             this.sendError(ws, 'Failed to get creator earnings', message.requestId);
+        }
+    }
+    async handleRecentGlobalWins(ws, message) {
+        try {
+            const limit = Math.min(parseInt(message.payload?.limit) || 20, 100);
+            // Query database for recent completed games
+            const query = `
+        SELECT 
+          g.id as game_id,
+          g.total_bet_amount,
+          g.total_payout,
+          g.result,
+          g.completed_at,
+          p.wallet_address as player_address
+        FROM games g
+        JOIN game_sessions gs ON g.session_id = gs.id
+        JOIN players p ON gs.player_id = p.id
+        WHERE g.result IS NOT NULL 
+          AND g.result != 'ongoing'
+          AND g.completed_at IS NOT NULL
+        ORDER BY g.completed_at DESC
+        LIMIT $1
+      `;
+            const result = await this.dbService.getPool().query(query, [limit]);
+            const wins = result.rows.map((row) => {
+                // Calculate overall result from game result
+                const hasWin = row.result === 'win' || row.result === 'blackjack';
+                const overallResult = hasWin ? row.result : row.result === 'push' ? 'push' : 'loss';
+                return {
+                    gameId: row.game_id,
+                    playerAddress: row.player_address || '',
+                    result: overallResult,
+                    betAmount: row.total_bet_amount?.toString() || '0',
+                    payout: row.total_payout?.toString() || '0',
+                    timestamp: row.completed_at ? new Date(row.completed_at).getTime() : Date.now(),
+                };
+            });
+            this.sendMessage(ws, {
+                type: 'recent_global_wins',
+                payload: { wins },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error fetching recent global wins:', error);
+            this.sendError(ws, 'Failed to fetch recent wins', message.requestId);
         }
     }
     // Helper to get prize percentages from type
