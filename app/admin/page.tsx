@@ -7,11 +7,12 @@ import { isAdminWallet } from '@/lib/admin';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode } from 'lucide-react';
 import AdminTablesTab from '@/components/admin/AdminTablesTab';
 import AdminHealthTab from '@/components/admin/AdminHealthTab';
 import AdminMetricsTab from '@/components/admin/AdminMetricsTab';
 import AdminConfigTab from '@/components/admin/AdminConfigTab';
+import AdminContractsTab from '@/components/admin/AdminContractsTab';
 
 export default function AdminPage() {
   const { address } = useAccount();
@@ -51,7 +52,7 @@ export default function AdminPage() {
 
       <main className="container mx-auto px-3 py-3 max-w-6xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="h-8 w-full grid grid-cols-4 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
+          <TabsList className="h-8 w-full grid grid-cols-5 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
             <TabsTrigger value="tables" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <LayoutGrid className="w-3 h-3 mr-1 hidden sm:inline" /> Tables
             </TabsTrigger>
@@ -63,6 +64,9 @@ export default function AdminPage() {
             </TabsTrigger>
             <TabsTrigger value="config" className="rounded data-[state=active]:bg-amber-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <Settings className="w-3 h-3 mr-1 hidden sm:inline" /> Config
+            </TabsTrigger>
+            <TabsTrigger value="contracts" className="rounded data-[state=active]:bg-blue-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
+              <FileCode className="w-3 h-3 mr-1 hidden sm:inline" /> Contracts
             </TabsTrigger>
           </TabsList>
 
@@ -80,6 +84,10 @@ export default function AdminPage() {
 
           <TabsContent value="config" className="mt-3 focus-visible:outline-none">
             <AdminConfigTab />
+          </TabsContent>
+
+          <TabsContent value="contracts" className="mt-3 focus-visible:outline-none">
+            <AdminContractsTab />
           </TabsContent>
         </Tabs>
       </main>

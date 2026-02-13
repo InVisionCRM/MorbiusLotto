@@ -4,12 +4,17 @@ export interface PlinkoChainStats {
     totalRevenue: bigint;
     totalPayouts: bigint;
     contractReserve: bigint;
+    minWagerPerBall?: bigint;
+    maxWagerPerBall?: bigint;
 }
 export interface KenoChainStats {
     totalWagered: bigint;
     totalWon: bigint;
     ticketCount: bigint;
     activeRoundId: bigint;
+    feeBps?: bigint;
+    burnThreshold?: bigint;
+    currentRoundPoolBalance?: bigint;
 }
 export interface LotteryChainStats {
     totalTicketsEver: bigint;

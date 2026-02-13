@@ -16,6 +16,8 @@ export interface PlinkoChainStats {
   totalRevenue: bigint;
   totalPayouts: bigint;
   contractReserve: bigint;
+  minWagerPerBall?: bigint;
+  maxWagerPerBall?: bigint;
 }
 
 export interface KenoChainStats {
@@ -23,6 +25,9 @@ export interface KenoChainStats {
   totalWon: bigint;
   ticketCount: bigint;
   activeRoundId: bigint;
+  feeBps?: bigint;
+  burnThreshold?: bigint;
+  currentRoundPoolBalance?: bigint;
 }
 
 export interface LotteryChainStats {
@@ -43,17 +48,27 @@ export class ChainAnalyticsService {
   async getPlinkoStats(): Promise<PlinkoChainStats | null> {
     try {
       const client = getPublicClient();
-      const result = await client.readContract({
-        address: PLINKO_ADDRESS,
-        abi: PLINKO_GET_GLOBAL_STATS_ABI,
-        functionName: 'getGlobalStats',
-      });
+      const [globalStats, wagerLimits] = await Promise.all([
+        client.readContract({
+          address: PLINKO_ADDRESS,
+          abi: PLINKO_GET_GLOBAL_STATS_ABI,
+          functionName: 'getGlobalStats',
+        }) as Promise<[bigint, bigint, bigint, bigint, bigint]>,
+        client.readContract({
+          address: PLINKO_ADDRESS,
+          abi: PLINKO_GET_GLOBAL_STATS_ABI,
+          functionName: 'getWagerLimits',
+        }).catch(() => null) as Promise<{ min: bigint; max: bigint } | null>,
+      ]);
+      
       return {
-        totalDrops: result[0],
-        totalBallsSold: result[1],
-        totalRevenue: result[2],
-        totalPayouts: result[3],
-        contractReserve: result[4],
+        totalDrops: globalStats[0],
+        totalBallsSold: globalStats[1],
+        totalRevenue: globalStats[2],
+        totalPayouts: globalStats[3],
+        contractReserve: globalStats[4],
+        minWagerPerBall: wagerLimits?.min,
+        maxWagerPerBall: wagerLimits?.max,
       };
     } catch (err) {
       console.error('ChainAnalyticsService getPlinkoStats:', err);
@@ -64,16 +79,53 @@ export class ChainAnalyticsService {
   async getKenoStats(): Promise<KenoChainStats | null> {
     try {
       const client = getPublicClient();
-      const result = await client.readContract({
-        address: KENO_ADDRESS,
-        abi: KENO_GET_GLOBAL_STATS_ABI,
-        functionName: 'getGlobalStats',
-      });
+      const [globalStats, currentRoundId, feeBps, burnThreshold] = await Promise.all([
+        client.readContract({
+          address: KENO_ADDRESS,
+          abi: KENO_GET_GLOBAL_STATS_ABI,
+          functionName: 'getGlobalStats',
+        }) as Promise<[bigint, bigint, bigint, bigint]>,
+        client.readContract({
+          address: KENO_ADDRESS,
+          abi: KENO_GET_GLOBAL_STATS_ABI,
+          functionName: 'currentRoundId',
+        }).catch(() => null) as Promise<bigint | null>,
+        client.readContract({
+          address: KENO_ADDRESS,
+          abi: KENO_GET_GLOBAL_STATS_ABI,
+          functionName: 'feeBps',
+        }).catch(() => null) as Promise<bigint | null>,
+        client.readContract({
+          address: KENO_ADDRESS,
+          abi: KENO_GET_GLOBAL_STATS_ABI,
+          functionName: 'burnThreshold',
+        }).catch(() => null) as Promise<bigint | null>,
+      ]);
+
+      // Get current round pool balance if round exists
+      let currentRoundPoolBalance: bigint | undefined;
+      if (currentRoundId !== null && currentRoundId > 0n) {
+        try {
+          const round = await client.readContract({
+            address: KENO_ADDRESS,
+            abi: KENO_GET_GLOBAL_STATS_ABI,
+            functionName: 'getRound',
+            args: [currentRoundId],
+          }) as any;
+          currentRoundPoolBalance = round?.poolBalance;
+        } catch {
+          // Round might not exist or be finalized yet
+        }
+      }
+
       return {
-        totalWagered: result[0],
-        totalWon: result[1],
-        ticketCount: result[2],
-        activeRoundId: result[3],
+        totalWagered: globalStats[0],
+        totalWon: globalStats[1],
+        ticketCount: globalStats[2],
+        activeRoundId: globalStats[3],
+        feeBps: feeBps ?? undefined,
+        burnThreshold: burnThreshold ?? undefined,
+        currentRoundPoolBalance,
       };
     } catch (err) {
       console.error('ChainAnalyticsService getKenoStats:', err);

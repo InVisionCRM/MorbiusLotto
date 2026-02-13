@@ -3,11 +3,6 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_initialOwner",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
         "name": "_morbiusToken",
         "type": "address"
       },
@@ -23,13 +18,18 @@
       },
       {
         "internalType": "address",
-        "name": "_authorizedServer",
+        "name": "_deployerRecipient",
         "type": "address"
       },
       {
-        "internalType": "address",
-        "name": "_emergencyAdmin",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "_minWager",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_maxWager",
+        "type": "uint256"
       }
     ],
     "stateMutability": "nonpayable",
@@ -42,7 +42,52 @@
   },
   {
     "inputs": [],
+    "name": "ExceedsReserve",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "ExpectedPause",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InsufficientBalls",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InsufficientContractBalance",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InsufficientPLS",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InsufficientSwapOutput",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidMultipliers",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidRecipient",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidRiskLevel",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidWagerAmount",
     "type": "error"
   },
   {
@@ -89,17 +134,54 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "oldServer",
+        "name": "player",
         "type": "address"
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "newServer",
-        "type": "address"
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "seed",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "bucket",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "multiplier",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "payout",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "riskLevel",
+        "type": "uint8"
       }
     ],
-    "name": "AuthorizedServerUpdated",
+    "name": "BallDropped",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newPrice",
+        "type": "uint256"
+      }
+    ],
+    "name": "BallPriceUpdated",
     "type": "event"
   },
   {
@@ -112,25 +194,25 @@
         "type": "address"
       },
       {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "gameHash",
-        "type": "bytes32"
-      },
-      {
         "indexed": false,
         "internalType": "uint256",
-        "name": "betAmount",
+        "name": "count",
         "type": "uint256"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "timestamp",
+        "name": "totalCost",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "usedPLS",
+        "type": "bool"
       }
     ],
-    "name": "BetPlaced",
+    "name": "BallsPurchased",
     "type": "event"
   },
   {
@@ -139,32 +221,7 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "morbiusAmount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "plsAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "Deposit",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
+        "name": "funder",
         "type": "address"
       },
       {
@@ -174,26 +231,46 @@
         "type": "uint256"
       }
     ],
-    "name": "DepositMORBIUS",
+    "name": "ContractFunded",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
+        "indexed": false,
         "internalType": "address",
-        "name": "oldAdmin",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "newAdmin",
+        "name": "newRecipient",
         "type": "address"
       }
     ],
-    "name": "EmergencyAdminUpdated",
+    "name": "DeployerRecipientUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "EmergencyWithdraw",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newMaxPrice",
+        "type": "uint256"
+      }
+    ],
+    "name": "MaxBallPriceUpdated",
     "type": "event"
   },
   {
@@ -207,18 +284,37 @@
       },
       {
         "indexed": false,
-        "internalType": "int256",
-        "name": "amount",
-        "type": "int256"
+        "internalType": "uint256",
+        "name": "count",
+        "type": "uint256"
       },
       {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "gameHash",
-        "type": "bytes32"
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "totalPayout",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "riskLevel",
+        "type": "uint8"
       }
     ],
-    "name": "GameSettled",
+    "name": "MultiBallsDropped",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256[17]",
+        "name": "newMultipliers",
+        "type": "uint256[17]"
+      }
+    ],
+    "name": "MultipliersUpdated",
     "type": "event"
   },
   {
@@ -257,25 +353,6 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "serverSeedHash",
-        "type": "bytes32"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "serverSeed",
-        "type": "bytes32"
-      }
-    ],
-    "name": "ServerSeedRevealed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
         "indexed": false,
         "internalType": "address",
         "name": "account",
@@ -283,25 +360,6 @@
       }
     ],
     "name": "Unpaused",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "Withdrawal",
     "type": "event"
   },
   {
@@ -319,7 +377,64 @@
   },
   {
     "inputs": [],
-    "name": "HOUSE_EDGE_BPS",
+    "name": "DEPLOYER_FEE_BPS",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "HIGH_RISK_MULTIPLIERS",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "LOW_RISK_MULTIPLIERS",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "MEDIUM_RISK_MULTIPLIERS",
     "outputs": [
       {
         "internalType": "uint256",
@@ -332,33 +447,7 @@
   },
   {
     "inputs": [],
-    "name": "MAX_DAILY_WITHDRAWAL",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "MIN_DEPOSIT",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "MIN_WITHDRAWAL",
+    "name": "MIN_BALL_PRICE",
     "outputs": [
       {
         "internalType": "uint256",
@@ -377,6 +466,58 @@
         "internalType": "contract IERC20",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "RISK_HIGH",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "RISK_LOW",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "RISK_MEDIUM",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "TOTAL_BUCKETS",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
       }
     ],
     "stateMutability": "view",
@@ -409,64 +550,47 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "authorizedServer",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "count",
         "type": "uint256"
-      }
-    ],
-    "name": "dailyWithdrawalTotals",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "wagerPerBall",
         "type": "uint256"
-      }
-    ],
-    "name": "dailyWithdrawals",
-    "outputs": [
+      },
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
+        "internalType": "uint8",
+        "name": "riskLevel",
+        "type": "uint8"
       }
     ],
-    "stateMutability": "view",
+    "name": "buyBallsAndDrop",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "deposit",
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "ballCount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "wagerPerBall",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "riskLevel",
+        "type": "uint8"
+      }
+    ],
+    "name": "buyBallsWithPLSAndDrop",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
@@ -475,23 +599,26 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "amount",
+        "name": "wagerAmount",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "bucketIndex",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "riskLevel",
+        "type": "uint8"
       }
     ],
-    "name": "depositMORBIUS",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "emergencyAdmin",
+    "name": "calculatePayout",
     "outputs": [
       {
-        "internalType": "address",
+        "internalType": "uint256",
         "name": "",
-        "type": "address"
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -499,12 +626,25 @@
   },
   {
     "inputs": [],
-    "name": "emergencyPaused",
+    "name": "contractReserve",
     "outputs": [
       {
-        "internalType": "bool",
+        "internalType": "uint256",
         "name": "",
-        "type": "bool"
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "deployerRecipient",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -526,99 +666,38 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      }
-    ],
-    "name": "getDailyWithdrawalInfo",
-    "outputs": [
-      {
         "internalType": "uint256",
-        "name": "today",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "playerWithdrawnToday",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "totalWithdrawnToday",
+        "name": "amount",
         "type": "uint256"
       }
     ],
-    "stateMutability": "view",
+    "name": "fundContract",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "gameHash",
-        "type": "bytes32"
+        "internalType": "uint8",
+        "name": "riskLevel",
+        "type": "uint8"
       }
     ],
-    "name": "getPendingGame",
+    "name": "getBucketMultipliers",
     "outputs": [
       {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "betAmount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "settled",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "index",
-        "type": "uint256"
-      }
-    ],
-    "name": "getPendingGameHash",
-    "outputs": [
-      {
-        "internalType": "bytes32",
+        "internalType": "uint256[17]",
         "name": "",
-        "type": "bytes32"
+        "type": "uint256[17]"
       }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      }
-    ],
-    "name": "getPendingGamesCount",
+    "inputs": [],
+    "name": "getContractReserve",
     "outputs": [
       {
         "internalType": "uint256",
@@ -630,6 +709,78 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "getGlobalStats",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "_totalDrops",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_totalBallsSold",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_totalRevenue",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_totalPayouts",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_contractReserve",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getHighRiskMultipliers",
+    "outputs": [
+      {
+        "internalType": "uint256[17]",
+        "name": "",
+        "type": "uint256[17]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getLowRiskMultipliers",
+    "outputs": [
+      {
+        "internalType": "uint256[17]",
+        "name": "",
+        "type": "uint256[17]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getMediumRiskMultipliers",
+    "outputs": [
+      {
+        "internalType": "uint256[17]",
+        "name": "",
+        "type": "uint256[17]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -637,7 +788,7 @@
         "type": "address"
       }
     ],
-    "name": "getPlayerReserve",
+    "name": "getPlayerBallBalance",
     "outputs": [
       {
         "internalType": "uint256",
@@ -651,17 +802,81 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "seedHash",
-        "type": "bytes32"
+        "internalType": "address",
+        "name": "player",
+        "type": "address"
       }
     ],
-    "name": "isSeedRevealed",
+    "name": "getPlayerInfo",
     "outputs": [
       {
-        "internalType": "bool",
+        "internalType": "uint256",
+        "name": "ballBalance",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "totalDrops_",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "totalWon",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "biggestWin",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "totalPurchased",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getWagerLimits",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "min",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "max",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "maxWagerPerBall",
+    "outputs": [
+      {
+        "internalType": "uint256",
         "name": "",
-        "type": "bool"
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "minWagerPerBall",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -703,74 +918,17 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "name": "pendingGames",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "betAmount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "settled",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "gameHash",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "uint256",
-        "name": "betAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "placeBet",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
         "name": "",
         "type": "address"
-      },
+      }
+    ],
+    "name": "playerBallBalance",
+    "outputs": [
       {
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
-      }
-    ],
-    "name": "playerPendingGames",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
       }
     ],
     "stateMutability": "view",
@@ -784,7 +942,64 @@
         "type": "address"
       }
     ],
-    "name": "playerReserves",
+    "name": "playerBiggestWin",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "playerTotalDrops",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "playerTotalPurchased",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "playerTotalWon",
     "outputs": [
       {
         "internalType": "uint256",
@@ -818,44 +1033,17 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "serverSeed",
-        "type": "bytes32"
-      }
-    ],
-    "name": "revealServerSeed",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
+        "internalType": "uint8",
+        "name": "riskLevel",
+        "type": "uint8"
+      },
       {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
+        "internalType": "uint256[17]",
+        "name": "newMultipliers",
+        "type": "uint256[17]"
       }
     ],
-    "name": "revealedSeeds",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_server",
-        "type": "address"
-      }
-    ],
-    "name": "setAuthorizedServer",
+    "name": "setBucketMultipliers",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -864,11 +1052,11 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_admin",
+        "name": "newRecipient",
         "type": "address"
       }
     ],
-    "name": "setEmergencyAdmin",
+    "name": "setDeployerRecipient",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -876,12 +1064,12 @@
   {
     "inputs": [
       {
-        "internalType": "bool",
-        "name": "_paused",
-        "type": "bool"
+        "internalType": "uint256",
+        "name": "newMax",
+        "type": "uint256"
       }
     ],
-    "name": "setEmergencyPause",
+    "name": "setMaxWager",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -889,34 +1077,58 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "internalType": "int256",
-        "name": "amount",
-        "type": "int256"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "gameHash",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "bytes",
-        "name": "gameData",
-        "type": "bytes"
+        "internalType": "uint256",
+        "name": "newMin",
+        "type": "uint256"
       }
     ],
-    "name": "settleGame",
+    "name": "setMinWager",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "totalReserves",
+    "name": "totalBallsSold",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalDrops",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalPayouts",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalRevenue",
     "outputs": [
       {
         "internalType": "uint256",
@@ -943,19 +1155,6 @@
   {
     "inputs": [],
     "name": "unpause",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "withdraw",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

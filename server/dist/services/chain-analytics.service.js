@@ -7,17 +7,26 @@ class ChainAnalyticsService {
     async getPlinkoStats() {
         try {
             const client = (0, chain_client_1.getPublicClient)();
-            const result = await client.readContract({
-                address: contracts_1.PLINKO_ADDRESS,
-                abi: contracts_1.PLINKO_GET_GLOBAL_STATS_ABI,
-                functionName: 'getGlobalStats',
-            });
+            const [globalStats, wagerLimits] = await Promise.all([
+                client.readContract({
+                    address: contracts_1.PLINKO_ADDRESS,
+                    abi: contracts_1.PLINKO_GET_GLOBAL_STATS_ABI,
+                    functionName: 'getGlobalStats',
+                }),
+                client.readContract({
+                    address: contracts_1.PLINKO_ADDRESS,
+                    abi: contracts_1.PLINKO_GET_GLOBAL_STATS_ABI,
+                    functionName: 'getWagerLimits',
+                }).catch(() => null),
+            ]);
             return {
-                totalDrops: result[0],
-                totalBallsSold: result[1],
-                totalRevenue: result[2],
-                totalPayouts: result[3],
-                contractReserve: result[4],
+                totalDrops: globalStats[0],
+                totalBallsSold: globalStats[1],
+                totalRevenue: globalStats[2],
+                totalPayouts: globalStats[3],
+                contractReserve: globalStats[4],
+                minWagerPerBall: wagerLimits?.min,
+                maxWagerPerBall: wagerLimits?.max,
             };
         }
         catch (err) {
@@ -28,16 +37,52 @@ class ChainAnalyticsService {
     async getKenoStats() {
         try {
             const client = (0, chain_client_1.getPublicClient)();
-            const result = await client.readContract({
-                address: contracts_1.KENO_ADDRESS,
-                abi: contracts_1.KENO_GET_GLOBAL_STATS_ABI,
-                functionName: 'getGlobalStats',
-            });
+            const [globalStats, currentRoundId, feeBps, burnThreshold] = await Promise.all([
+                client.readContract({
+                    address: contracts_1.KENO_ADDRESS,
+                    abi: contracts_1.KENO_GET_GLOBAL_STATS_ABI,
+                    functionName: 'getGlobalStats',
+                }),
+                client.readContract({
+                    address: contracts_1.KENO_ADDRESS,
+                    abi: contracts_1.KENO_GET_GLOBAL_STATS_ABI,
+                    functionName: 'currentRoundId',
+                }).catch(() => null),
+                client.readContract({
+                    address: contracts_1.KENO_ADDRESS,
+                    abi: contracts_1.KENO_GET_GLOBAL_STATS_ABI,
+                    functionName: 'feeBps',
+                }).catch(() => null),
+                client.readContract({
+                    address: contracts_1.KENO_ADDRESS,
+                    abi: contracts_1.KENO_GET_GLOBAL_STATS_ABI,
+                    functionName: 'burnThreshold',
+                }).catch(() => null),
+            ]);
+            // Get current round pool balance if round exists
+            let currentRoundPoolBalance;
+            if (currentRoundId !== null && currentRoundId > 0n) {
+                try {
+                    const round = await client.readContract({
+                        address: contracts_1.KENO_ADDRESS,
+                        abi: contracts_1.KENO_GET_GLOBAL_STATS_ABI,
+                        functionName: 'getRound',
+                        args: [currentRoundId],
+                    });
+                    currentRoundPoolBalance = round?.poolBalance;
+                }
+                catch {
+                    // Round might not exist or be finalized yet
+                }
+            }
             return {
-                totalWagered: result[0],
-                totalWon: result[1],
-                ticketCount: result[2],
-                activeRoundId: result[3],
+                totalWagered: globalStats[0],
+                totalWon: globalStats[1],
+                ticketCount: globalStats[2],
+                activeRoundId: globalStats[3],
+                feeBps: feeBps ?? undefined,
+                burnThreshold: burnThreshold ?? undefined,
+                currentRoundPoolBalance,
             };
         }
         catch (err) {

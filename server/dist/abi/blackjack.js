@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.blackjackAbi = void 0;
-/** Re-export from canonical location: contracts/abi/blackjack-v2.json */
-const blackjack_v2_json_1 = __importDefault(require("../../../contracts/abi/blackjack-v2.json"));
+/** Re-export from local copy (also available at contracts/abi/blackjack-v2.json) */
+const blackjack_v2_json_1 = __importDefault(require("./blackjack-v2.json"));
 exports.blackjackAbi = blackjack_v2_json_1.default.abi;
 //# sourceMappingURL=blackjack.js.map
