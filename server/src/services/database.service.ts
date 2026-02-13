@@ -1396,6 +1396,66 @@ export class DatabaseService {
     }
   }
 
+  /** Tournament metrics aggregates for a time range. Returns zeros if tables are missing. */
+  async getTournamentMetrics(range: '24h' | '7d' | '30d' | 'all'): Promise<{
+    totalTournaments: number;
+    activeTournaments: number;
+    completedTournaments: number;
+    totalEntries: number;
+    totalPrizePool: bigint;
+    totalBuyIns: bigint;
+  }> {
+    const zero = () => ({ totalTournaments: 0, activeTournaments: 0, completedTournaments: 0, totalEntries: 0, totalPrizePool: 0n, totalBuyIns: 0n });
+    const interval = range === '24h' ? "INTERVAL '24 hours'" : range === '7d' ? "INTERVAL '7 days'" : range === '30d' ? "INTERVAL '30 days'" : null;
+    const timeFilter = interval ? `WHERE t.created_at >= NOW() - ${interval}` : '';
+
+    const tournamentsQuery = `
+      SELECT
+        COUNT(*)::INT AS total,
+        COUNT(*) FILTER (WHERE t.status = 'active')::INT AS active,
+        COUNT(*) FILTER (WHERE t.status = 'completed')::INT AS completed,
+        (COALESCE(SUM(t.prize_pool), 0))::BIGINT AS total_prize_pool
+      FROM tournaments t
+      ${timeFilter}
+    `;
+    const buyInsQuery = interval
+      ? `
+        SELECT (COALESCE(SUM(t.buy_in_amount), 0))::BIGINT AS total_buy_ins
+        FROM tournaments t
+        JOIN tournament_entries te ON te.tournament_id = t.id
+        WHERE t.created_at >= NOW() - ${interval}
+      `
+      : `
+        SELECT (COALESCE(SUM(t.buy_in_amount), 0))::BIGINT AS total_buy_ins
+        FROM tournaments t
+        JOIN tournament_entries te ON te.tournament_id = t.id
+      `;
+    const entriesQuery = interval
+      ? `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te WHERE te.created_at >= NOW() - ${interval}`
+      : `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te`;
+
+    try {
+      const [tournamentsRes, buyInsRes, entriesRes] = await Promise.all([
+        this.pool.query(tournamentsQuery),
+        this.pool.query(buyInsQuery),
+        this.pool.query(entriesQuery),
+      ]);
+
+      const totalTournaments = Number(tournamentsRes.rows[0]?.total ?? 0);
+      const activeTournaments = Number(tournamentsRes.rows[0]?.active ?? 0);
+      const completedTournaments = Number(tournamentsRes.rows[0]?.completed ?? 0);
+      const totalPrizePool = this.toBigInt(tournamentsRes.rows[0]?.total_prize_pool ?? 0);
+      const totalBuyIns = this.toBigInt(buyInsRes.rows[0]?.total_buy_ins ?? 0);
+      const totalEntries = Number(entriesRes.rows[0]?.cnt ?? 0);
+
+      return { totalTournaments, activeTournaments, completedTournaments, totalEntries, totalPrizePool, totalBuyIns };
+    } catch (err: any) {
+      const missing = err?.code === '42P01' || err?.code === '42703' || (typeof err?.message === 'string' && /relation .* does not exist|column .* does not exist/i.test(err.message));
+      if (missing) return zero();
+      throw err;
+    }
+  }
+
   /** Admin metrics time-series (hourly or daily buckets) for charts. Returns [] if games table missing. */
   async getMetricsSeries(range: '24h' | '7d' | '30d' | 'all'): Promise<Array<{ period: string; volume: string; games: number }>> {
     const bucket = range === '24h' ? 'hour' : 'day';

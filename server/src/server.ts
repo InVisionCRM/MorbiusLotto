@@ -667,18 +667,55 @@ async function initializeServices() {
       }
     });
 
-    // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all). Source: Blackjack games DB.
+    // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all).
+    // Includes: Blackjack (DB), Plinko/Keno/Lottery/BigWheel (chain), and Tournament metrics.
     // On any DB or serialization error we return 200 with zeros so the tab always loads; errors are logged.
     app.get('/api/admin/metrics', async (req, res) => {
       const range = (req.query.range as string) || '24h';
       const validRange = ['24h', '7d', '30d', 'all'].includes(range) ? range : '24h';
       const zeroPayload = {
         range: validRange,
-        volume: '0',
-        games: 0,
-        activePlayers: 0,
-        pnl: '0',
-        tournamentEntries: 0,
+        // Blackjack metrics
+        blackjack: {
+          volume: '0',
+          games: 0,
+          activePlayers: 0,
+          pnl: '0',
+        },
+        // Chain-based game metrics (all-time, not filtered by range)
+        plinko: {
+          totalDrops: '0',
+          totalBallsSold: '0',
+          totalRevenue: '0',
+          totalPayouts: '0',
+          contractReserve: '0',
+        },
+        keno: {
+          totalWagered: '0',
+          totalWon: '0',
+          ticketCount: '0',
+          activeRoundId: '0',
+        },
+        lottery: {
+          totalTicketsEver: '0',
+          totalCollected: '0',
+          totalClaimed: '0',
+        },
+        bigWheel: {
+          spins: '0',
+          volume: '0',
+          payouts: '0',
+          contractBalance: '0',
+        },
+        // Tournament metrics
+        tournaments: {
+          totalTournaments: 0,
+          activeTournaments: 0,
+          completedTournaments: 0,
+          totalEntries: 0,
+          totalPrizePool: '0',
+          totalBuyIns: '0',
+        },
         series: [] as Array<{ period: string; volume: string; games: number }>,
       };
       try {
@@ -687,24 +724,64 @@ async function initializeServices() {
           return;
         }
         let aggregates: { volume: bigint; games: number; activePlayers: number; pnl: bigint; tournamentEntries: number };
+        let tournamentMetrics: { totalTournaments: number; activeTournaments: number; completedTournaments: number; totalEntries: number; totalPrizePool: bigint; totalBuyIns: bigint };
         let series: Array<{ period: string; volume: string; games: number }>;
+        let chainStats: { plinko: any; keno: any; lottery: any; bigWheel: any };
         try {
-          [aggregates, series] = await Promise.all([
+          [aggregates, tournamentMetrics, series, chainStats] = await Promise.all([
             dbService.getMetricsAggregates(range as '24h' | '7d' | '30d' | 'all'),
+            dbService.getTournamentMetrics(range as '24h' | '7d' | '30d' | 'all'),
             dbService.getMetricsSeries(range as '24h' | '7d' | '30d' | 'all'),
+            chainAnalytics.getAllChainStats(),
           ]);
         } catch (dbError) {
-          logger.error('Admin metrics DB query failed', { error: dbError });
+          logger.error('Admin metrics query failed', { error: dbError });
           sendJson(res, zeroPayload);
           return;
         }
         sendJson(res, {
           range,
-          volume: aggregates.volume.toString(),
-          games: aggregates.games,
-          activePlayers: aggregates.activePlayers,
-          pnl: aggregates.pnl.toString(),
-          tournamentEntries: aggregates.tournamentEntries,
+          // Blackjack metrics
+          blackjack: {
+            volume: aggregates.volume.toString(),
+            games: aggregates.games,
+            activePlayers: aggregates.activePlayers,
+            pnl: aggregates.pnl.toString(),
+          },
+          // Chain-based game metrics
+          plinko: {
+            totalDrops: chainStats.plinko?.totalDrops?.toString() ?? '0',
+            totalBallsSold: chainStats.plinko?.totalBallsSold?.toString() ?? '0',
+            totalRevenue: chainStats.plinko?.totalRevenue?.toString() ?? '0',
+            totalPayouts: chainStats.plinko?.totalPayouts?.toString() ?? '0',
+            contractReserve: chainStats.plinko?.contractReserve?.toString() ?? '0',
+          },
+          keno: {
+            totalWagered: chainStats.keno?.totalWagered?.toString() ?? '0',
+            totalWon: chainStats.keno?.totalWon?.toString() ?? '0',
+            ticketCount: chainStats.keno?.ticketCount?.toString() ?? '0',
+            activeRoundId: chainStats.keno?.activeRoundId?.toString() ?? '0',
+          },
+          lottery: {
+            totalTicketsEver: chainStats.lottery?.totalTicketsEver?.toString() ?? '0',
+            totalCollected: chainStats.lottery?.totalCollected?.toString() ?? '0',
+            totalClaimed: chainStats.lottery?.totalClaimed?.toString() ?? '0',
+          },
+          bigWheel: {
+            spins: chainStats.bigWheel?.spins?.toString() ?? '0',
+            volume: chainStats.bigWheel?.volume?.toString() ?? '0',
+            payouts: chainStats.bigWheel?.payouts?.toString() ?? '0',
+            contractBalance: chainStats.bigWheel?.contractBalance?.toString() ?? '0',
+          },
+          // Tournament metrics
+          tournaments: {
+            totalTournaments: tournamentMetrics.totalTournaments,
+            activeTournaments: tournamentMetrics.activeTournaments,
+            completedTournaments: tournamentMetrics.completedTournaments,
+            totalEntries: tournamentMetrics.totalEntries,
+            totalPrizePool: tournamentMetrics.totalPrizePool.toString(),
+            totalBuyIns: tournamentMetrics.totalBuyIns.toString(),
+          },
           series,
         });
       } catch (error) {

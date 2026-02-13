@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatEther } from 'viem';
 import { Activity, RefreshCw, CheckCircle, XCircle, Copy } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export interface AdminHealthData {
   api: string;
@@ -32,6 +33,23 @@ function formatMorbius(wei: string): string {
 
 function copyToClipboard(text: string) {
   void navigator.clipboard.writeText(text);
+}
+
+// Colors for pie chart segments
+const PIE_COLORS = [
+  'rgba(34, 211, 238, 0.8)',   // cyan
+  'rgba(139, 92, 246, 0.8)',   // violet
+  'rgba(59, 130, 246, 0.8)',   // blue
+  'rgba(16, 185, 129, 0.8)',   // emerald
+  'rgba(251, 146, 60, 0.8)',   // orange
+  'rgba(236, 72, 153, 0.8)',   // pink
+  'rgba(168, 85, 247, 0.8)',   // purple
+  'rgba(34, 197, 94, 0.8)',    // green
+];
+
+function truncateAddress(address: string, start = 6, end = 4): string {
+  if (address.length <= start + end) return address;
+  return `${address.slice(0, start)}...${address.slice(-end)}`;
 }
 
 export default function AdminHealthTab() {
@@ -62,6 +80,17 @@ export default function AdminHealthTab() {
   useEffect(() => {
     fetchHealth();
   }, [fetchHealth]);
+
+  // Prepare pie chart data
+  const pieChartData = useMemo(() => {
+    if (!data?.blackjackReserves?.addressesWithReserve) return [];
+    return data.blackjackReserves.addressesWithReserve.map(({ address, reserve }) => ({
+      name: truncateAddress(address),
+      value: Number(formatEther(BigInt(reserve))),
+      address,
+      reserve: formatMorbius(reserve),
+    }));
+  }, [data?.blackjackReserves?.addressesWithReserve]);
 
   if (!address) {
     return (
@@ -154,19 +183,63 @@ export default function AdminHealthTab() {
             )}
             <div>
               <p className="text-slate-500 mb-1">Blackjack: addresses with reserve &gt; 0 (sample)</p>
-              <p className="text-slate-400 text-[10px] mb-1">
+              <p className="text-slate-400 text-[10px] mb-2">
                 Total MORBIUS in contract: {formatMorbius(data.blackjackReserves?.totalMorbiusInContract ?? '0')} MORBIUS
               </p>
               {data.blackjackReserves?.addressesWithReserve?.length === 0 ? (
                 <p className="text-slate-500 text-[10px]">None in sample.</p>
               ) : (
-                <ul className="max-h-32 overflow-y-auto space-y-0.5 text-[10px] font-mono text-slate-400">
-                  {(data.blackjackReserves?.addressesWithReserve ?? []).map(({ address: addr, reserve }) => (
-                    <li key={addr}>
-                      {addr.slice(0, 10)}…{addr.slice(-8)} — {formatMorbius(reserve)} MORBIUS
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-3">
+                  {/* Pie Chart */}
+                  <div className="rounded border border-slate-700/50 p-3 bg-slate-800/30">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={pieChartData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {pieChartData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number, name: string, props: any) => [
+                            `${props.payload.reserve} MORBIUS`,
+                            props.payload.name,
+                          ]}
+                          contentStyle={{
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            border: '1px solid rgba(100, 116, 139, 0.5)',
+                            borderRadius: '6px',
+                            color: '#e2e8f0',
+                            fontSize: '11px',
+                          }}
+                        />
+                        <Legend
+                          formatter={(value, entry: any) => {
+                            const data = entry.payload;
+                            return `${data.name}: ${data.reserve}`;
+                          }}
+                          wrapperStyle={{ fontSize: '10px', color: '#94a3b8' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* Address List */}
+                  <ul className="max-h-32 overflow-y-auto space-y-0.5 text-[10px] font-mono text-slate-400">
+                    {(data.blackjackReserves?.addressesWithReserve ?? []).map(({ address: addr, reserve }) => (
+                      <li key={addr}>
+                        {addr.slice(0, 10)}…{addr.slice(-8)} — {formatMorbius(reserve)} MORBIUS
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           </div>
