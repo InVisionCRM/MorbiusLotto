@@ -5,12 +5,13 @@ import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { DottedGlowBackground } from '@/components/ui/dotted-glow-background'
 import { BuyMorbiusModal } from './buy-morbius-modal'
+import { Theme } from '@/lib/theme'
 
 export function HeroSection() {
   const [buyMorbiusModalOpen, setBuyMorbiusModalOpen] = useState(false)
 
   return (
-    <section className="relative w-full min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-6 pt-16 pb-24">
+    <section className="relative w-full min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-6 pt-16 pb-24" style={{ background: Theme.greyGradient.background }}>
       {/* Background Image with top-to-bottom fade */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"

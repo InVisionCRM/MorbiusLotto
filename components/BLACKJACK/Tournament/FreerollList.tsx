@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { useFreeroll, UseFreerollOptions } from '@/hooks/use-freeroll';
 import type { FreerollListItemPayload } from '@/lib/websocket-client';
+import { Theme } from '@/lib/theme';
 
 function formatPhase(phase: string | null): string {
   if (!phase) return '—';
@@ -87,7 +88,7 @@ export function FreerollList({
   };
 
   return (
-    <div className="rounded-xl overflow-hidden font-poppins text-white bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 shadow-[inset_0_3px_6px_rgba(0,0,0,0.8),inset_0_-3px_6px_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.5)]">
+    <div className="rounded-xl overflow-hidden font-poppins text-white border-2 border-cyan-500/30" style={Theme.panel.base}>
       <div className="p-3 border-b border-white/10">
         <h3 className="text-lg font-semibold text-white">Freeroll Tournaments</h3>
       </div>

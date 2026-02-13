@@ -467,6 +467,52 @@ async function initializeServices() {
       }
     });
 
+    // Cancel tournament (creator only)
+    app.post('/api/tournament/:tournamentId/cancel', async (req, res) => {
+      try {
+        const { tournamentId } = req.params;
+        const { cancellerAddress } = req.body;
+        
+        if (!cancellerAddress || typeof cancellerAddress !== 'string') {
+          return res.status(400).json({ error: 'cancellerAddress is required' });
+        }
+
+        await tournamentService.cancelTournament(tournamentId, cancellerAddress);
+        sendJson(res, { success: true, message: 'Tournament cancelled successfully' });
+      } catch (error: any) {
+        logger.error('Error cancelling tournament:', error);
+        const status = error.message?.includes('not found') ? 404 :
+                      error.message?.includes('Only the tournament creator') ? 403 :
+                      error.message?.includes('Cannot cancel') ? 400 : 500;
+        res.status(status).json({ error: error.message || 'Internal server error' });
+      }
+    });
+
+    // Creator reclaim funds from cancelled tournament
+    app.post('/api/tournament/:tournamentId/reclaim', async (req, res) => {
+      try {
+        const { tournamentId } = req.params;
+        const { creatorAddress } = req.body;
+        
+        if (!creatorAddress || typeof creatorAddress !== 'string') {
+          return res.status(400).json({ error: 'creatorAddress is required' });
+        }
+
+        const result = await tournamentService.creatorReclaimFunds(tournamentId, creatorAddress);
+        if (result.success) {
+          sendJson(res, { success: true, txHash: result.txHash, message: 'Funds reclaimed successfully' });
+        } else {
+          res.status(400).json({ error: result.error || 'Failed to reclaim funds' });
+        }
+      } catch (error: any) {
+        logger.error('Error reclaiming tournament funds:', error);
+        const status = error.message?.includes('not found') ? 404 :
+                      error.message?.includes('Only the tournament creator') ? 403 :
+                      error.message?.includes('must be cancelled') ? 400 : 500;
+        res.status(status).json({ error: error.message || 'Internal server error' });
+      }
+    });
+
     // Public: Blackjack table list (for picker; enabled only)
     app.get('/api/blackjack/tables', async (req, res) => {
       try {
@@ -749,6 +795,85 @@ async function initializeServices() {
     // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all).
     // Includes: Blackjack (DB), Plinko/Keno/Lottery/BigWheel (chain), and Tournament metrics.
     // On any DB or serialization error we return 200 with zeros so the tab always loads; errors are logged.
+    // Admin: Escrow oversight endpoints
+    app.get('/api/admin/escrow/summary', async (req, res) => {
+      try {
+        const { getEscrowSummary } = await import('./utils/escrow-oversight');
+        const summary = await getEscrowSummary();
+        if (!summary) {
+          return res.status(503).json({ error: 'Escrow not configured' });
+        }
+        sendJson(res, {
+          ...summary,
+          totalValueLocked: summary.totalValueLocked.toString(),
+        });
+      } catch (error) {
+        logger.error('Error fetching escrow summary:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.get('/api/admin/escrow/pools', async (req, res) => {
+      try {
+        const { getPoolsByDepositor, getActivePools, getPoolDetails } = await import('./utils/escrow-oversight');
+        const depositor = req.query.depositor as `0x${string}` | undefined;
+        const tournamentId = req.query.tournamentId as string | undefined;
+        
+        if (tournamentId) {
+          const details = await getPoolDetails(tournamentId);
+          if (!details) {
+            return res.status(404).json({ error: 'Tournament pool not found' });
+          }
+          sendJson(res, {
+            ...details,
+            totalDeposited: details.totalDeposited.toString(),
+            amountPaidOut: details.amountPaidOut.toString(),
+            remainingBalance: details.remainingBalance.toString(),
+            depositedAt: details.depositedAt.toString(),
+          });
+        } else if (depositor) {
+          const pools = await getPoolsByDepositor(depositor);
+          sendJson(res, pools.map(p => ({
+            ...p,
+            totalDeposited: p.totalDeposited.toString(),
+            amountPaidOut: p.amountPaidOut.toString(),
+            remainingBalance: p.remainingBalance.toString(),
+            depositedAt: p.depositedAt.toString(),
+          })));
+        } else {
+          const activePools = await getActivePools();
+          sendJson(res, activePools.map(p => ({
+            tournamentId: p.tournamentId,
+            balance: p.balance.toString(),
+          })));
+        }
+      } catch (error) {
+        logger.error('Error fetching escrow pools:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.get('/api/admin/escrow/tournament/:tournamentId', async (req, res) => {
+      try {
+        const { tournamentId } = req.params;
+        const { getPoolDetails } = await import('./utils/escrow-oversight');
+        const details = await getPoolDetails(tournamentId);
+        if (!details) {
+          return res.status(404).json({ error: 'Tournament pool not found' });
+        }
+        sendJson(res, {
+          ...details,
+          totalDeposited: details.totalDeposited.toString(),
+          amountPaidOut: details.amountPaidOut.toString(),
+          remainingBalance: details.remainingBalance.toString(),
+          depositedAt: details.depositedAt.toString(),
+        });
+      } catch (error) {
+        logger.error('Error fetching tournament escrow details:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     app.get('/api/admin/metrics', async (req, res) => {
       const range = (req.query.range as string) || '24h';
       const validRange = ['24h', '7d', '30d', 'all'].includes(range) ? range : '24h';

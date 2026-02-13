@@ -1,7 +1,10 @@
+import { Theme } from '@/lib/theme'
+
 export function SocialsSection() {
   return (
     <section className="py-4 px-4">
       <div className="container mx-auto max-w-4xl">
+        <div className="rounded-2xl p-8" style={Theme.panel.base}>
         <div className="text-center mb-8">
           <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
             Join the Community
@@ -43,6 +46,7 @@ export function SocialsSection() {
               Telegram
             </span>
           </a>
+        </div>
         </div>
       </div>
     </section>

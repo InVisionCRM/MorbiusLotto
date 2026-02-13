@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
+import { Theme } from '@/lib/theme';
 
 interface TournamentBetPanelProps {
   chips: number;
@@ -22,19 +23,6 @@ interface TournamentBetPanelProps {
 }
 
 const PRESETS = [50, 100, 250, 500, 1000];
-
-const PANEL_STYLE = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-  boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3)',
-  border: '1px solid rgba(6, 182, 212, 0.2)',
-  borderRadius: '8px',
-};
-
-const INPUT_STYLE = {
-  background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.9), rgba(40, 40, 40, 0.6))',
-  boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3)',
-  minHeight: '36px',
-};
 
 export function TournamentBetPanel({
   chips,
@@ -67,7 +55,7 @@ export function TournamentBetPanel({
   if (handsRemaining <= 0) return null;
 
   return (
-    <section className="w-full max-w-md mx-auto px-2 py-1.5" style={PANEL_STYLE}>
+    <section className="w-full max-w-md mx-auto px-2 py-1.5 rounded-lg" style={Theme.panel.base}>
       <div className="flex flex-col gap-1 w-full">
         {/* Row 1: Chips remaining | bet amount + 1/2 & 2x | hands left */}
         <div className="flex items-center gap-2">
@@ -76,7 +64,7 @@ export function TournamentBetPanel({
           </span>
           <div
             className="flex-1 flex items-center rounded-lg overflow-hidden border border-cyan-500/20"
-            style={INPUT_STYLE}
+            style={Theme.panel.base}
           >
             <div className="flex-1 flex items-center gap-2 pl-3 pr-2 min-w-0">
               <span className="text-white font-bold text-sm tabular-nums">{betAmount.toLocaleString()}</span>

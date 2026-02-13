@@ -10,6 +10,7 @@ import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTi
 import { GameResult } from '@/app/BLACKJACK/types'
 import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar'
 import type { TournamentListItem } from '@/lib/tournament-types'
+import { Theme } from '@/lib/theme'
 // GameVerificationTools removed - use /BLACKJACK/verify page instead
 type GameVerificationData = any // Type kept for compatibility
 
@@ -27,11 +28,6 @@ function useIsDesktop() {
 }
 
 const PANEL_CLASS = 'rounded-xl'
-const PANEL_STYLE: React.CSSProperties = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-  boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.8), inset 0 -2px 4px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.5)',
-  border: '1px inset rgba(60, 60, 60, 0.5)',
-}
 
 const BASE_TABS = [
   { id: 'recent', label: 'Recent Games', icon: History },
@@ -167,7 +163,7 @@ export default function BlackjackSidebar({
         className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar relative ${
           activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'verify' || activeTab === 'tournament-play' ? 'p-4' : ''
         } ${activeTab === 'tournaments' ? 'flex flex-col' : ''}`}
-        style={PANEL_STYLE}
+        style={Theme.panel.sidebar}
       >
         {activeTab === 'recent' && (
           <QuickHistory

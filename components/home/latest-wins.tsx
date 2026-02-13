@@ -5,6 +5,7 @@ import { AnimatedList } from '@/components/ui/animated-list'
 import { formatEther } from 'viem'
 import { useLatestWins, WinEntry } from '@/hooks/use-latest-wins'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
+import { Theme } from '@/lib/theme'
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000)
@@ -28,9 +29,7 @@ function WinNotification({ address, amount, game, timestamp, onAddressClick }: {
   return (
     <div
       className="flex items-center justify-between gap-2 px-4 py-3 rounded-lg w-full max-w-md"
-      style={{
-        background: 'rgba(15, 23, 42, 0.5)',
-      }}
+      style={Theme.panel.base}
     >
       <span className="text-white text-sm">
         <button
@@ -52,11 +51,11 @@ function WinNotification({ address, amount, game, timestamp, onAddressClick }: {
 function LoadingSkeleton() {
   return (
     <div className="space-y-3">
-      {[...Array(5)].map((_, i) => (
+      {[...Array(7)].map((_, i) => (
         <div
           key={i}
           className="flex items-center gap-2 px-4 py-3 rounded-lg w-full max-w-md animate-pulse"
-          style={{ background: 'rgba(15, 23, 42, 0.5)' }}
+          style={Theme.panel.base}
         >
           <div className="h-4 bg-white/10 rounded w-full" />
         </div>
@@ -100,7 +99,7 @@ export function LatestWins() {
             <EmptyState />
           ) : (
             <AnimatedList className="gap-3" delay={2500}>
-              {wins.slice(0, 15).map((win) => (
+              {wins.slice(0, 7).map((win) => (
                 <WinNotification
                   key={win.id}
                   address={win.address}

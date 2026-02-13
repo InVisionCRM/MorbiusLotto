@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { TournamentState } from '@/hooks/use-tournament';
+import { Theme } from '@/lib/theme';
 
 interface TournamentHUDProps {
   state: TournamentState;
@@ -75,7 +76,7 @@ export function TournamentHUD({ state, onLeave, onRebuy, isRebuyLoading = false,
   }
 
   return (
-    <div className="bg-gradient-to-b from-gray-900/95 to-gray-950/95 rounded-xl border border-purple-500/40 shadow-xl shadow-purple-500/10 p-4 space-y-4">
+    <div className="rounded-xl border border-purple-500/40 shadow-xl shadow-purple-500/10 p-4 space-y-4" style={Theme.panel.base}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

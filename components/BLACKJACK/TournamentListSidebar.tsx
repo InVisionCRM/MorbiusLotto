@@ -10,6 +10,7 @@ import {
   type PrizeDistributionType,
 } from '@/lib/tournament-types';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { Theme } from '@/lib/theme';
 
 const PAGE_SIZE = 10;
 
@@ -227,7 +228,7 @@ export function TournamentListSidebar({
       </div>
 
       {/* Sticky bottom: 2-col grid — Create Tournament Now! + Tournament Lobby; stays in place when expanded (overlay covers it) */}
-      <div className="sticky bottom-0 shrink-0 pt-3 border-t border-white/10 bg-[linear-gradient(145deg,rgb(16,26,35),rgb(35,36,41))] rounded-b-xl">
+      <div className="sticky bottom-0 shrink-0 pt-3 border-t border-white/10 rounded-b-xl" style={Theme.panel.sidebar}>
         <div className="grid gap-0 grid-cols-2">
           {onCreateTournament && (
             <button

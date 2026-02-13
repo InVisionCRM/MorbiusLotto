@@ -497,6 +497,16 @@ export class WebSocketService {
           await this.handleCreatorEarnings(ws, message);
           break;
 
+        case 'tournament_cancel':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleTournamentCancel(ws, message);
+          break;
+
+        case 'tournament_reclaim':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleTournamentReclaim(ws, message);
+          break;
+
         case 'recent_global_wins':
           // No auth required for public global wins feed
           await this.handleRecentGlobalWins(ws, message);
@@ -2484,6 +2494,75 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error getting creator earnings:', error);
       this.sendError(ws, 'Failed to get creator earnings', message.requestId);
+    }
+  }
+
+  private async handleTournamentCancel(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const address = ws.playerAddress;
+      if (!address) {
+        return this.sendError(ws, 'No address', message.requestId);
+      }
+
+      const { tournamentId } = message.payload || {};
+      if (!tournamentId || typeof tournamentId !== 'string') {
+        return this.sendError(ws, 'tournamentId is required', message.requestId);
+      }
+
+      await this.tournamentService.cancelTournament(tournamentId, address);
+
+      this.sendMessage(ws, {
+        type: 'tournament_cancelled',
+        payload: { tournamentId, success: true },
+        requestId: message.requestId,
+      });
+
+      // Broadcast to all clients in the tournament room
+      const roomId = `tournament:${tournamentId}`;
+      this.broadcastToRoom(roomId, {
+        type: 'tournament_cancelled',
+        payload: { tournamentId },
+      });
+    } catch (error: any) {
+      logger.error('Error cancelling tournament:', error);
+      this.sendError(ws, error.message || 'Failed to cancel tournament', message.requestId);
+    }
+  }
+
+  private async handleTournamentReclaim(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.tournamentService) {
+        return this.sendError(ws, 'Tournament mode not available', message.requestId);
+      }
+
+      const address = ws.playerAddress;
+      if (!address) {
+        return this.sendError(ws, 'No address', message.requestId);
+      }
+
+      const { tournamentId } = message.payload || {};
+      if (!tournamentId || typeof tournamentId !== 'string') {
+        return this.sendError(ws, 'tournamentId is required', message.requestId);
+      }
+
+      const result = await this.tournamentService.creatorReclaimFunds(tournamentId, address);
+
+      if (result.success) {
+        this.sendMessage(ws, {
+          type: 'tournament_reclaimed',
+          payload: { tournamentId, txHash: result.txHash, success: true },
+          requestId: message.requestId,
+        });
+      } else {
+        this.sendError(ws, result.error || 'Failed to reclaim funds', message.requestId);
+      }
+    } catch (error: any) {
+      logger.error('Error reclaiming tournament funds:', error);
+      this.sendError(ws, error.message || 'Failed to reclaim funds', message.requestId);
     }
   }
 

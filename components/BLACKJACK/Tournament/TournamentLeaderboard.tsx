@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { LeaderboardEntry } from '@/hooks/use-tournament';
+import { Theme } from '@/lib/theme';
 
 interface TournamentLeaderboardProps {
   leaderboard: LeaderboardEntry[];
@@ -58,7 +59,7 @@ export function TournamentLeaderboard({
   };
 
   return (
-    <div className="bg-gradient-to-b from-gray-900/95 to-gray-950/95 rounded-xl border border-purple-500/30 shadow-xl overflow-hidden">
+    <div className="rounded-xl border border-purple-500/30 shadow-xl overflow-hidden" style={Theme.panel.base}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-purple-600/30 to-cyan-600/30 border-b border-gray-700">
         <h3 className="text-lg font-bold text-white">Leaderboard</h3>

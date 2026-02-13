@@ -2,6 +2,7 @@ import { createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
 import { tournamentPrizeEscrowAbi } from '../abi/tournament-prize-escrow';
+import { tournamentPrizeEscrowV2Abi } from '../abi/tournament-prize-escrow-v2';
 import { getEscrowPoolStatus } from './escrow-status';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
 import { logger } from './logger';
@@ -112,4 +113,54 @@ export async function sendEscrowRemainderToReclaimWallet(tournamentId: string): 
     }
   }
   return { success: false, error: 'Max retries exceeded' };
+}
+
+/**
+ * Cancel a tournament in the escrow contract. Only callable by authorized server.
+ * Marks the tournament as cancelled so creator can reclaim funds.
+ */
+export async function cancelTournamentInEscrow(tournamentId: string): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  if (!ESCROW_ADDRESS) return { success: false, error: 'Escrow not configured' };
+
+  const idBytes32 = tournamentIdToBytes32(tournamentId);
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const client = getWalletClient();
+      // Use V2 ABI (has cancelTournament function)
+      const hash = await client.writeContract({
+        account: client.account!,
+        chain: pulsechain,
+        address: ESCROW_ADDRESS,
+        abi: tournamentPrizeEscrowV2Abi,
+        functionName: 'cancelTournament',
+        args: [idBytes32],
+      });
+      logger.info('Tournament cancelled in escrow', { tournamentId, txHash: hash });
+      return { success: true, txHash: hash };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('Escrow cancel tournament attempt failed', { attempt, tournamentId, error: msg });
+      if (attempt === maxRetries) {
+        return { success: false, error: msg };
+      }
+    }
+  }
+  return { success: false, error: 'Max retries exceeded' };
+}
+
+/**
+ * Creator reclaims funds from a cancelled tournament.
+ * Note: This function provides instructions. The creator must call creatorReclaim() 
+ * directly on the escrow contract using their wallet, as it requires their signature.
+ */
+export async function creatorReclaimFromEscrow(tournamentId: string, creatorAddress: string): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  // The creator needs to call the contract function directly from their wallet.
+  // This is a security feature - only the creator (depositor) can reclaim.
+  // We return instructions here, but the actual call must be made client-side.
+  
+  return {
+    success: false,
+    error: 'Creator must call creatorReclaim() directly on the escrow contract using their wallet. Use the tournament ID bytes32 hash.',
+  };
 }

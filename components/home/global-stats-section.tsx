@@ -3,14 +3,9 @@
 import Image from 'next/image'
 import { usePlatformAnalytics } from '@/hooks/use-platform-analytics'
 import { formatMORBIUS } from '@/lib/format-utils'
+import { Theme } from '@/lib/theme'
 
 const MORBIUS_LOGO_SRC = '/morbius/MorbiusLogo (3).png'
-
-const PANEL_STYLE = {
-  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-  border: '1px inset rgba(60, 60, 60, 0.5)',
-}
 
 function StatRow({ label, value, showMorbiusLogo = false }: { label: string; value: string; showMorbiusLogo?: boolean }) {
   return (
@@ -50,7 +45,7 @@ export function GlobalStatsSection() {
     return (
       <section className="w-full max-w-2xl mx-auto">
         {sectionHeader}
-        <div className="rounded-2xl border border-red-500/30 p-6" style={PANEL_STYLE}>
+        <div className="rounded-2xl border border-red-500/30 p-6" style={Theme.panel.base}>
           <p className="text-white/50 text-sm">Error loading stats: {error.message}</p>
         </div>
       </section>
@@ -61,7 +56,7 @@ export function GlobalStatsSection() {
     return (
       <section className="w-full max-w-2xl mx-auto">
         {sectionHeader}
-        <div className="rounded-2xl border border-cyan-500/30 p-6" style={PANEL_STYLE}>
+        <div className="rounded-2xl border border-cyan-500/30 p-6" style={Theme.panel.base}>
           <p className="text-white/50 text-sm">Loading…</p>
         </div>
       </section>
@@ -77,7 +72,7 @@ export function GlobalStatsSection() {
   return (
     <section className="w-full max-w-2xl mx-auto">
       {sectionHeader}
-      <div className="rounded-2xl border border-cyan-500/30 p-6 space-y-6" style={PANEL_STYLE}>
+      <div className="rounded-2xl border border-cyan-500/30 p-6 space-y-6" style={Theme.panel.base}>
         {/* Combined */}
         <div className="space-y-1">
           <p className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2">All games</p>

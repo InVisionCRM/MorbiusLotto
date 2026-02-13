@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { Theme } from '@/lib/theme';
 
 interface TournamentPinEntryProps {
   isOpen: boolean;
@@ -96,9 +97,9 @@ export function TournamentPinEntry({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-gradient-to-b from-gray-900 to-gray-950 rounded-2xl border border-purple-500/30 shadow-2xl shadow-purple-500/20 max-w-sm w-full mx-4 overflow-hidden">
+      <div className="relative rounded-2xl border border-purple-500/30 shadow-2xl shadow-purple-500/20 max-w-sm w-full mx-4 overflow-hidden" style={Theme.panel.base}>
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 text-center">
           <h2 className="text-xl font-bold text-white">Enter PIN</h2>

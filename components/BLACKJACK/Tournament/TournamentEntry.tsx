@@ -3,6 +3,7 @@
 import React from 'react';
 import { formatEther } from 'viem';
 import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
+import { Theme } from '@/lib/theme';
 
 interface TournamentEntryProps {
   isOpen: boolean;
@@ -39,7 +40,7 @@ export function TournamentEntry({
       />
 
       {/* Modal */}
-      <div className="relative bg-gradient-to-b from-gray-900 to-gray-950 rounded-2xl border border-cyan-500/30 shadow-2xl shadow-cyan-500/20 max-w-md w-full mx-4 overflow-hidden">
+      <div className="relative rounded-2xl border border-cyan-500/30 shadow-2xl shadow-cyan-500/20 max-w-md w-full mx-4 overflow-hidden" style={Theme.panel.base}>
         {/* Header */}
         <div className="bg-gradient-to-r from-cyan-600 to-purple-600 p-4">
           <h2 className="text-2xl font-bold text-white text-center">
@@ -53,7 +54,7 @@ export function TournamentEntry({
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* Buy-in Details */}
-          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+          <div className="rounded-xl p-4 border border-gray-700" style={Theme.panel.base}>
             <h3 className="text-lg font-semibold text-white mb-3">Entry Details</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
@@ -91,7 +92,7 @@ export function TournamentEntry({
           </div>
 
           {/* Prize Distribution */}
-          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+          <div className="rounded-xl p-4 border border-gray-700" style={Theme.panel.base}>
             <h3 className="text-lg font-semibold text-white mb-3">Prize Distribution</h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="flex justify-between">

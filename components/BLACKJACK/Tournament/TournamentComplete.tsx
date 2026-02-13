@@ -11,6 +11,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Theme } from '@/lib/theme';
 
 interface TournamentCompleteProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export function TournamentComplete({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={`bg-gradient-to-b from-gray-900 to-gray-950 border-2 text-white max-w-md p-0 gap-0 overflow-hidden [&>button]:text-white/70 [&>button]:hover:text-white ${isBusted ? 'border-red-500/30' : 'border-cyan-500/30'}`}>
+      <DialogContent className={`border-2 text-white max-w-md p-0 gap-0 overflow-hidden [&>button]:text-white/70 [&>button]:hover:text-white ${isBusted ? 'border-red-500/30' : 'border-cyan-500/30'}`} style={Theme.panel.base}>
         {/* Header */}
         <div className={`px-6 pt-6 pb-4 text-center ${
           isBusted
@@ -187,7 +188,7 @@ export function TournamentComplete({
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
   return (
-    <div className="bg-gray-800/50 rounded-lg p-3 text-center border border-white/5">
+    <div className="rounded-lg p-3 text-center border border-white/5" style={Theme.panel.base}>
       <p className="text-gray-500 text-[10px] uppercase tracking-wider">{label}</p>
       <p className={`text-lg font-bold ${color} mt-0.5`}>{value}</p>
       {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}

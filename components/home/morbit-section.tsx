@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { CometCard } from '@/components/ui/comet-card'
+import { Theme } from '@/lib/theme'
 
 const fadeIn = {
   hidden: { opacity: 0, y: 30 },
@@ -39,8 +39,7 @@ export function MorbItSection() {
           viewport={{ once: true }}
           variants={fadeIn}
         >
-          <CometCard>
-            <div className="p-8 md:p-12 bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10">
+          <div className="p-8 md:p-12 rounded-2xl" style={Theme.panel.base}>
               {/* Community Message */}
               <div className="text-center mb-10">
                 <h3 className="text-2xl md:text-3xl font-russo-one font-normal text-white mb-6">
@@ -111,7 +110,7 @@ export function MorbItSection() {
                 </Link>
               </div>
             </div>
-          </CometCard>
+          </div>
         </motion.div>
 
         {/* Bottom tagline */}

@@ -4,7 +4,7 @@ import { useRef } from 'react'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { CometCard } from '@/components/ui/comet-card'
+import { Theme } from '@/lib/theme'
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay'
 import { AnimatedBeam } from '@/components/ui/animated-beam'
 
@@ -30,11 +30,11 @@ function TokenConversionCard() {
       viewport={{ once: true }}
       variants={fadeIn}
     >
-      <CometCard>
-        <div
-          ref={containerRef}
-          className="relative p-6 md:p-8 bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10"
-        >
+      <div
+        ref={containerRef}
+        className="relative p-6 md:p-8 rounded-2xl"
+        style={Theme.panel.base}
+      >
           <h3 className="text-xl md:text-2xl font-russo-one font-normal text-white mb-6 text-center">
             Don't have any MORBIUS yet? No problem! You can just use PLS to bet! All bets made with PLS are converted to Morbius so it's a win-win for everyone.
           </h3>
@@ -84,8 +84,7 @@ function TokenConversionCard() {
           <p className="text-center text-white text-lg font-bold font-prosto-one mt-6 pt-6 border-t border-white/10">
             Instant swap via PulseX DEX
           </p>
-        </div>
-      </CometCard>
+      </div>
     </motion.div>
   )
 }
@@ -142,15 +141,13 @@ export function TokenomicsSection() {
           ].map((game) => (
             <motion.div key={game.name} variants={fadeIn}>
               <Link href={game.href}>
-                <CometCard className="h-full">
-                  <div className="p-2 text-center bg-black/60 backdrop-blur-sm rounded-2xl border-3 border-gradient-to-r from-purple-500 to-cyan-500 hover:border-purple-500/50 transition-colors">
-                    <div className="text-4xl font-black border-3 border-white rounded-2xl bg-gradient-to-l from-purple-700 to-purple-1-0 via-purple-500/10 mb-2">
-                      10%
-                    </div>
-                    <div className="text-lg font-medium text-white mb-1">{game.name}</div>
-                    <div className="text-sm text-white/40">Burned per bet</div>
+                <div className="h-full p-2 text-center rounded-2xl transition-colors" style={Theme.panel.base}>
+                  <div className="text-4xl font-black border-3 border-white rounded-2xl bg-gradient-to-l from-purple-700 to-purple-1-0 via-purple-500/10 mb-2">
+                    10%
                   </div>
-                </CometCard>
+                  <div className="text-lg font-medium text-white mb-1">{game.name}</div>
+                  <div className="text-sm text-white/40">Burned per bet</div>
+                </div>
               </Link>
             </motion.div>
           ))}

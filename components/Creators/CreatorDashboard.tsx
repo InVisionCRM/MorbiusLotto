@@ -112,7 +112,7 @@ export function CreatorDashboard({ wsClient, address }: CreatorDashboardProps) {
 
           {/* Tab content */}
           {activeTab === 'tournaments' && (
-            <CreatorTournamentList tournaments={tournaments} />
+            <CreatorTournamentList tournaments={tournaments} wsClient={wsClient} onRefresh={fetchData} creatorAddress={address} />
           )}
           {activeTab === 'earnings' && (
             <CreatorEarnings earnings={earnings} />

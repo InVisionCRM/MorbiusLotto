@@ -15,11 +15,12 @@ import { MorbiusInfoSection } from '@/components/home/morbius-info-section'
 import { PulseChainSection } from '@/components/home/pulsechain-section'
 import { MorbItSection } from '@/components/home/morbit-section'
 import Footer from '@/components/PLINKO/Footer'
+import { Theme } from '@/lib/theme'
 
 export default function HomePage() {
 
   return (
-    <div className="min-h-screen text-white bg-black flex flex-col items-center relative">
+    <div className="min-h-screen text-white flex flex-col items-center relative" style={{ background: Theme.greyGradient.background }}>
       <style jsx global>{`
         ::-webkit-scrollbar {
           width: 4px;

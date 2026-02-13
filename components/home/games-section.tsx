@@ -2,7 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { PaymentBadges } from '@/components/home/payment-badges'
-import { CometCard } from '@/components/ui/comet-card'
+import { Theme } from '@/lib/theme'
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 40 },
@@ -48,9 +48,8 @@ export function GamesSection() {
 
         {/* Lottery Card */}
         <motion.div variants={fadeInUp}>
-          <CometCard>
           <Link href="/lottery" className="group block">
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/20 to-purple-600/20 backdrop-blur-sm border border-purple-500/30 hover:border-transparent transition-all duration-300 hover:scale-105 w-full aspect-square max-w-xs group-hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] before:absolute before:inset-0 before:rounded-2xl before:p-[2px] before:bg-gradient-to-r before:from-cyan-500 before:via-purple-500 before:to-cyan-500 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300">
+          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
             <div className="relative h-full w-full rounded-2xl overflow-hidden">
               <Image
                 src="/morbius/Lottoscreenshot.png"
@@ -67,14 +66,12 @@ export function GamesSection() {
             </div>
           </div>
         </Link>
-        </CometCard>
         </motion.div>
 
         {/* Keno Card */}
         <motion.div variants={fadeInUp}>
-          <CometCard>
           <Link href="/keno" className="group block">
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-900/20 to-cyan-600/20 backdrop-blur-sm border border-cyan-500/30 hover:border-transparent transition-all duration-300 hover:scale-105 w-full aspect-square max-w-xs group-hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] before:absolute before:inset-0 before:rounded-2xl before:p-[2px] before:bg-gradient-to-r before:from-cyan-500 before:via-purple-500 before:to-cyan-500 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300">
+          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
             <div className="relative h-full w-full rounded-2xl overflow-hidden">
               <Image
                 src="/morbius/KENOscreenshot.png"
@@ -91,14 +88,12 @@ export function GamesSection() {
             </div>
           </div>
         </Link>
-        </CometCard>
         </motion.div>
 
         {/* Plinko Card */}
         <motion.div variants={fadeInUp}>
-          <CometCard>
           <Link href="/PLINKO" className="group block">
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-900/20 to-cyan-600/20 backdrop-blur-sm border border-cyan-500/30 hover:border-transparent transition-all duration-300 hover:scale-105 w-full aspect-square max-w-xs group-hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] before:absolute before:inset-0 before:rounded-2xl before:p-[2px] before:bg-gradient-to-r before:from-cyan-500 before:via-purple-500 before:to-cyan-500 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300">
+          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
             {/* NEW! Badge */}
             <div className="absolute top-2 right-2 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg border border-cyan-300/50">
               NEW!
@@ -119,14 +114,12 @@ export function GamesSection() {
             </div>
           </div>
         </Link>
-        </CometCard>
         </motion.div>
 
         {/* BlackJack Card */}
         <motion.div variants={fadeInUp}>
-          <CometCard>
           <div className="group block relative">
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/20 to-purple-600/20 backdrop-blur-sm border border-purple-500/30 w-full aspect-square max-w-xs">
+          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs" style={Theme.panel.base}>
             <div className="relative h-full w-full rounded-2xl overflow-hidden">
               <Image
                 src="/BlackJack/TableBackground1.png"
@@ -153,14 +146,12 @@ export function GamesSection() {
             </div>
           </div>
         </div>
-        </CometCard>
         </motion.div>
 
         {/* Dice Card - Coming Soon */}
         <motion.div variants={fadeInUp}>
-          <CometCard>
           <div className="group block relative">
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-900/10 to-purple-900/20 backdrop-blur-md border border-cyan-500/20 w-full aspect-square max-w-xs">
+          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs" style={Theme.panel.base}>
             <div className="relative h-full w-full rounded-2xl overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               <div className="absolute inset-0 flex items-center justify-center">
@@ -176,7 +167,6 @@ export function GamesSection() {
             </div>
           </div>
         </div>
-        </CometCard>
         </motion.div>
 
       </motion.div>

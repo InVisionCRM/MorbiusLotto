@@ -19,6 +19,7 @@ import {
 import { getTableThemeInfo } from '@/app/BLACKJACK/constants';
 import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 import { FreerollList } from './FreerollList';
+import { TournamentCancelReclaim } from './TournamentCancelReclaim';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
@@ -838,7 +839,26 @@ function ExpandedCardContent({
           )}
         </div>
 
-        {/* f. Share Section */}
+        {/* f. Creator Actions (Cancel/Reclaim) */}
+        {tournament.creatorAddress && playerAddress && 
+         tournament.creatorAddress.toLowerCase() === playerAddress.toLowerCase() && (
+          <div>
+            <SectionHeader>Creator Actions</SectionHeader>
+            <TournamentCancelReclaim
+              tournamentId={tournament.id}
+              tournamentName={tournament.name}
+              status={tournament.status as 'active' | 'completed' | 'cancelled'}
+              creatorAddress={tournament.creatorAddress}
+              playerAddress={playerAddress}
+              prizeTokenAddress={tournament.prizeTokenAddress}
+              prizePool={tournament.prizePool}
+              entryCount={tournament.entryCount}
+              wsClient={wsClient ?? null}
+            />
+          </div>
+        )}
+
+        {/* g. Share Section */}
         <div>
           <SectionHeader>Share</SectionHeader>
           <div className="flex gap-2">
@@ -867,7 +887,7 @@ function ExpandedCardContent({
           </div>
         </div>
 
-        {/* g. Comments Section */}
+        {/* h. Comments Section */}
         <div>
           <SectionHeader>Comments</SectionHeader>
           <TournamentComments
@@ -878,7 +898,7 @@ function ExpandedCardContent({
         </div>
       </div>
 
-      {/* h. Join / Fund Button - sticky bottom */}
+      {/* i. Join / Fund Button - sticky bottom */}
       <div className="p-4 border-t border-gray-700 bg-gray-900/80 space-y-2">
         {notFunded && onFundNow && (
           <button

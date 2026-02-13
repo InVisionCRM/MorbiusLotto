@@ -2,6 +2,7 @@
 
 import { InfiniteMovingCards } from '@/components/ui/infinite-moving-cards'
 import type { ImageCardItem } from '@/components/ui/infinite-moving-cards'
+import { Theme } from '@/lib/theme'
 
 const PULSECHAIN_CARDS: ImageCardItem[] = [
   { src: '/BlackJack/BrandedTable/EMIT.png', name: 'EMIT' },
@@ -20,19 +21,19 @@ const PULSECHAIN_CARDS: ImageCardItem[] = [
 
 export function PulseChainSection() {
   return (
-    <section className="relative py-16 px-4 overflow-hidden">
+    <section className="relative py-16 px-4 sm:px-6 overflow-hidden" style={{ background: Theme.greyGradient.background }}>
       <div className="container mx-auto max-w-6xl relative z-10">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
+        <div className="text-center mb-8 px-2 sm:px-0">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2 break-words">
             We Support PulseChain!
           </h2>
-          <p className="text-white/50 text-sm max-w-3xl mx-auto">
+          <p className="text-white/50 text-sm max-w-3xl mx-auto break-words hyphens-auto">
             We want to build relationships with the top projects on PulseChain. Here are some of the projects we align with and decided to make custom UI for! If you would like a custom table or slot machine (future release), please reach out to{' '}
             <a
               href="https://x.com/kccrypto369"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cyan-400 hover:text-cyan-300 font-semibold underline underline-offset-2"
+              className="text-cyan-400 hover:text-cyan-300 font-semibold underline underline-offset-2 break-all"
             >
               @kccrypto369
             </a>
@@ -40,14 +41,16 @@ export function PulseChainSection() {
           </p>
         </div>
 
-        <InfiniteMovingCards
-          items={PULSECHAIN_CARDS}
-          variant="image"
-          direction="left"
-          speed="normal"
-          pauseOnHover
-          className="[mask-image:linear-gradient(to_right,transparent,white_10%,white_90%,transparent)]"
-        />
+        <div className="w-full overflow-hidden px-2 sm:px-0">
+          <InfiniteMovingCards
+            items={PULSECHAIN_CARDS}
+            variant="image"
+            direction="left"
+            speed="normal"
+            pauseOnHover
+            className="[mask-image:linear-gradient(to_right,transparent,white_10%,white_90%,transparent)]"
+          />
+        </div>
       </div>
     </section>
   )

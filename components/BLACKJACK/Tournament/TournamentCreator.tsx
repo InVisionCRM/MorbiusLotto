@@ -32,6 +32,7 @@ import {
   BlackjackVideoId,
 } from '@/app/BLACKJACK/constants';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
+import { Theme } from '@/lib/theme';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const isEscrowConfigured = TOURNAMENT_PRIZE_ESCROW_ADDRESS !== ESCROW_ZERO;
@@ -625,7 +626,7 @@ export function TournamentCreator({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
-        <div className="relative bg-gradient-to-b from-gray-900 to-gray-950 rounded-2xl border border-green-500/30 shadow-2xl shadow-green-500/20 max-w-md w-full mx-4 overflow-hidden">
+        <div className="relative rounded-2xl border border-green-500/30 shadow-2xl shadow-green-500/20 max-w-md w-full mx-4 overflow-hidden" style={Theme.panel.base}>
           <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-4 text-center">
             <h2 className="text-2xl font-bold text-white">Tournament Created!</h2>
           </div>
@@ -635,7 +636,7 @@ export function TournamentCreator({
 
             {/* Two-step funding UI */}
             {(needsFunding || funded) && (
-              <div className="bg-gray-800 rounded-xl p-4 border border-cyan-500/30 text-left space-y-4">
+              <div className="rounded-xl p-4 text-left space-y-4" style={Theme.panel.base}>
                 {/* Token info header */}
                 <div className="flex items-center gap-3">
                   {selectedToken?.logoUrl && (
@@ -752,7 +753,7 @@ export function TournamentCreator({
             )}
 
             {createdTournament.pinCode && (
-              <div className="bg-gray-800 rounded-xl p-4 border border-yellow-500/30">
+              <div className="rounded-xl p-4 border border-yellow-500/30" style={Theme.panel.base}>
                 <p className="text-gray-400 text-sm mb-2">Private Tournament PIN</p>
                 <p className="text-4xl font-mono font-bold text-yellow-400 tracking-wider">
                   {createdTournament.pinCode}
@@ -774,7 +775,7 @@ export function TournamentCreator({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 border-cyan-500/30 bg-gradient-to-b from-gray-900 to-gray-950 overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 border-cyan-500/30 overflow-hidden" style={Theme.panel.base}>
         <DialogHeader className="p-4 pb-0 border-b border-gray-700 bg-gradient-to-r from-purple-600 to-cyan-600">
           <DialogTitle className="text-xl font-bold text-white text-center">Create Tournament</DialogTitle>
           <div className="flex justify-center gap-1.5 pt-3 pb-2">
@@ -1064,7 +1065,7 @@ export function TournamentCreator({
             <section className="space-y-6 max-w-lg mx-auto">
               <h3 className="text-lg font-semibold text-cyan-300">Options</h3>
 
-              <div className="flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-700">
+              <div className="flex items-center justify-between p-4 rounded-xl border border-gray-700" style={Theme.panel.base}>
                 <div>
                   <p className="text-white font-medium">Private tournament</p>
                   <p className="text-gray-400 text-sm">Requires PIN to join</p>
@@ -1136,7 +1137,7 @@ export function TournamentCreator({
               </div>
 
               {tournamentType === 'freeroll' && (
-                <div className="space-y-4 p-4 rounded-xl bg-gray-800/50 border border-cyan-500/20">
+                <div className="space-y-4 p-4 rounded-xl border border-cyan-500/20" style={Theme.panel.base}>
                   <h4 className="text-sm font-semibold text-cyan-400">Freeroll options</h4>
                   <div>
                     <label className="block text-gray-400 text-xs mb-1">Mode</label>
@@ -1190,7 +1191,7 @@ export function TournamentCreator({
 
               {tournamentType === 'buyin' && (
                 <>
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-gray-800/50 border border-gray-700">
+                  <div className="flex items-center justify-between p-4 rounded-xl border border-gray-700" style={Theme.panel.base}>
                     <div><p className="text-white font-medium">Rebuys</p><p className="text-gray-400 text-xs">Buy back in after busting</p></div>
                     <button onClick={() => setRebuyEnabled(!rebuyEnabled)} className={`relative w-12 h-6 rounded-full ${rebuyEnabled ? 'bg-green-500' : 'bg-gray-600'}`}><div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${rebuyEnabled ? 'translate-x-6' : 'translate-x-1'}`} /></button>
                   </div>
@@ -1213,7 +1214,7 @@ export function TournamentCreator({
                     </div>
                   </div>
                   {prizeType === 'custom' && (
-                    <div className="space-y-2 p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                    <div className="space-y-2 p-3 rounded-lg border border-gray-700" style={Theme.panel.base}>
                       {selectedToken ? (
                         <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-900">
                           <span className="text-white text-sm truncate">{selectedToken.symbol}</span>
@@ -1245,7 +1246,7 @@ export function TournamentCreator({
           {wizardStep === 5 && (
             <section className="space-y-4 max-w-lg mx-auto">
               <h3 className="text-lg font-semibold text-cyan-300">Review</h3>
-              <div className="rounded-xl bg-gray-800/50 border border-gray-700 p-4 space-y-3 text-sm">
+              <div className="rounded-xl border border-gray-700 p-4 space-y-3 text-sm" style={Theme.panel.base}>
                 <p><span className="text-gray-500">Name:</span> <span className="text-white font-medium">{name || '—'}</span></p>
                 <p><span className="text-gray-500">Type:</span> <span className="text-white">{tournamentType === 'buyin' ? 'Buy-in' : 'Freeroll'}</span></p>
                 {tournamentType === 'freeroll' && (
@@ -1264,7 +1265,7 @@ export function TournamentCreator({
 
         </div>
 
-        <DialogFooter className="p-4 border-t border-gray-700 bg-gray-900/50 flex-row gap-3">
+        <DialogFooter className="p-4 border-t border-gray-700 flex-row gap-3" style={Theme.panel.base}>
           <button type="button" onClick={handleClose} className="py-3 px-4 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors">
             Cancel
           </button>
