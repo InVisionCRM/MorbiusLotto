@@ -1,11 +1,15 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatEther } from 'viem';
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { BarChart3, RefreshCw } from 'lucide-react';
+import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BIGWHEEL_ADDRESS } from '@/lib/contracts';
+import { PLINKO_ABI } from '@/abi/plinko';
+import { KENO_ABI } from '@/lib/keno-abi';
+import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2';
 
 type Range = '24h' | '7d' | '30d' | 'all';
 
@@ -16,30 +20,6 @@ export interface AdminMetricsData {
     games: number;
     activePlayers: number;
     pnl: string;
-  };
-  plinko: {
-    totalDrops: string;
-    totalBallsSold: string;
-    totalRevenue: string;
-    totalPayouts: string;
-    contractReserve: string;
-  };
-  keno: {
-    totalWagered: string;
-    totalWon: string;
-    ticketCount: string;
-    activeRoundId: string;
-  };
-  lottery: {
-    totalTicketsEver: string;
-    totalCollected: string;
-    totalClaimed: string;
-  };
-  bigWheel: {
-    spins: string;
-    volume: string;
-    payouts: string;
-    contractBalance: string;
   };
   tournaments: {
     totalTournaments: number;
@@ -52,10 +32,11 @@ export interface AdminMetricsData {
   series: Array<{ period: string; volume: string; games: number }>;
 }
 
-function formatMorbius(wei: string): string {
-  if (wei == null || wei === '') return '0';
+function formatMorbius(wei: string | bigint | number): string {
+  if (wei == null) return '0';
   try {
-    const n = Number(formatEther(BigInt(wei)));
+    const bigintValue = typeof wei === 'bigint' ? wei : typeof wei === 'string' ? BigInt(wei || '0') : BigInt(wei || 0);
+    const n = Number(formatEther(bigintValue));
     if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
     if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
     return n.toFixed(2);
@@ -64,8 +45,9 @@ function formatMorbius(wei: string): string {
   }
 }
 
-function formatNumber(num: string | number): string {
-  const n = typeof num === 'string' ? Number(num) : num;
+function formatNumber(num: string | number | bigint): string {
+  const n = typeof num === 'bigint' ? Number(num) : typeof num === 'string' ? Number(num) : num;
+  if (isNaN(n)) return '0';
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
   return n.toLocaleString();
@@ -78,12 +60,81 @@ const RANGES: { value: Range; label: string }[] = [
   { value: 'all', label: 'All' },
 ];
 
+// BigWheel ABI for getGlobalStats
+const BIGWHEEL_GET_GLOBAL_STATS_ABI = [
+  {
+    inputs: [],
+    name: 'getGlobalStats',
+    outputs: [
+      { internalType: 'uint256', name: 'spins', type: 'uint256' },
+      { internalType: 'uint256', name: 'volume', type: 'uint256' },
+      { internalType: 'uint256', name: 'payouts', type: 'uint256' },
+      { internalType: 'uint256', name: 'contractBalance', type: 'uint256' },
+      { internalType: 'uint256', name: 'contractReserveBalance', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
 export default function AdminMetricsTab() {
   const { address } = useAccount();
   const [range, setRange] = useState<Range>('24h');
   const [data, setData] = useState<AdminMetricsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Plinko stats
+  const { data: plinkoStats } = useReadContract({
+    address: PLINKO_ADDRESS,
+    abi: PLINKO_ABI,
+    functionName: 'getGlobalStats',
+  }) as { data: [bigint, bigint, bigint, bigint, bigint] | undefined };
+
+  const { data: plinkoWagerLimits } = useReadContract({
+    address: PLINKO_ADDRESS,
+    abi: PLINKO_ABI,
+    functionName: 'getWagerLimits',
+  }) as { data: { min: bigint; max: bigint } | undefined };
+
+  // Keno stats
+  const { data: kenoStats } = useReadContract({
+    address: KENO_ADDRESS,
+    abi: KENO_ABI,
+    functionName: 'getGlobalStats',
+  }) as { data: [bigint, bigint, bigint, bigint] | undefined };
+
+  const { data: kenoCurrentRoundId } = useReadContract({
+    address: KENO_ADDRESS,
+    abi: KENO_ABI,
+    functionName: 'currentRoundId',
+  }) as { data: bigint | undefined };
+
+  // Lottery stats
+  const { data: lotteryTickets } = useReadContract({
+    address: LOTTERY_ADDRESS,
+    abi: LOTTERY_6OF55_V2_ABI,
+    functionName: 'totalTicketsEver',
+  }) as { data: bigint | undefined };
+
+  const { data: lotteryCollected } = useReadContract({
+    address: LOTTERY_ADDRESS,
+    abi: LOTTERY_6OF55_V2_ABI,
+    functionName: 'totalMORBIUSEverCollected',
+  }) as { data: bigint | undefined };
+
+  const { data: lotteryClaimed } = useReadContract({
+    address: LOTTERY_ADDRESS,
+    abi: LOTTERY_6OF55_V2_ABI,
+    functionName: 'totalMORBIUSEverClaimed',
+  }) as { data: bigint | undefined };
+
+  // BigWheel stats
+  const { data: bigWheelStats } = useReadContract({
+    address: BIGWHEEL_ADDRESS,
+    abi: BIGWHEEL_GET_GLOBAL_STATS_ABI,
+    functionName: 'getGlobalStats',
+  }) as { data: [bigint, bigint, bigint, bigint, bigint] | undefined };
 
   const fetchMetrics = useCallback(async () => {
     if (!address) return;
@@ -124,6 +175,35 @@ export default function AdminMetricsTab() {
     label: p.period ? new Date(p.period).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: range === '24h' ? '2-digit' : undefined }) : p.period,
   }));
 
+  // Extract chain stats from hooks
+  const plinkoData = plinkoStats ? {
+    totalDrops: plinkoStats[0],
+    totalBallsSold: plinkoStats[1],
+    totalRevenue: plinkoStats[2],
+    totalPayouts: plinkoStats[3],
+    contractReserve: plinkoStats[4],
+  } : null;
+
+  const kenoData = kenoStats ? {
+    totalWagered: kenoStats[0],
+    totalWon: kenoStats[1],
+    ticketCount: kenoStats[2],
+    activeRoundId: kenoStats[3],
+  } : null;
+
+  const lotteryData = {
+    totalTicketsEver: lotteryTickets ?? 0n,
+    totalCollected: lotteryCollected ?? 0n,
+    totalClaimed: lotteryClaimed ?? 0n,
+  };
+
+  const bigWheelData = bigWheelStats ? {
+    spins: bigWheelStats[0],
+    volume: bigWheelStats[1],
+    payouts: bigWheelStats[2],
+    contractBalance: bigWheelStats[3],
+  } : null;
+
   return (
     <div className="space-y-3">
       <Card className="bg-slate-900/60 border-slate-700/50">
@@ -157,32 +237,34 @@ export default function AdminMetricsTab() {
         <CardContent className="py-2 px-3">
           {error && <p className="text-[11px] text-red-400 mb-2">{error}</p>}
           {loading && !data && <p className="text-[11px] text-slate-500">Loading…</p>}
-          {data && (
+          {(data || plinkoData || kenoData || lotteryData || bigWheelData) && (
             <div className="space-y-4 text-[11px]">
               {/* Blackjack Metrics */}
-              <div>
-                <h3 className="text-xs font-semibold text-slate-300 mb-2">Blackjack</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Volume</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.blackjack?.volume || '0')} MORBIUS</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Games</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.blackjack?.games || 0)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Active Players</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.blackjack?.activePlayers || 0)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">PnL</p>
-                    <p className={`font-mono ${Number(data.blackjack?.pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {formatMorbius(data.blackjack?.pnl || '0')} MORBIUS
-                    </p>
+              {data && (
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-300 mb-2">Blackjack</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">Volume</p>
+                      <p className="text-slate-200 font-mono">{formatMorbius(data.blackjack?.volume || '0')} MORBIUS</p>
+                    </div>
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">Games</p>
+                      <p className="text-slate-200 font-mono">{formatNumber(data.blackjack?.games || 0)}</p>
+                    </div>
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">Active Players</p>
+                      <p className="text-slate-200 font-mono">{formatNumber(data.blackjack?.activePlayers || 0)}</p>
+                    </div>
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">PnL</p>
+                      <p className={`font-mono ${Number(data.blackjack?.pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatMorbius(data.blackjack?.pnl || '0')} MORBIUS
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Plinko Metrics */}
               <div>
@@ -190,23 +272,23 @@ export default function AdminMetricsTab() {
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Total Drops</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.plinko?.totalDrops || '0')}</p>
+                    <p className="text-slate-200 font-mono">{formatNumber(plinkoData?.totalDrops ?? 0n)}</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Balls Sold</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.plinko?.totalBallsSold || '0')}</p>
+                    <p className="text-slate-200 font-mono">{formatNumber(plinkoData?.totalBallsSold ?? 0n)}</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Revenue</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.plinko?.totalRevenue || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(plinkoData?.totalRevenue ?? 0n)} MORBIUS</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Payouts</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.plinko?.totalPayouts || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(plinkoData?.totalPayouts ?? 0n)} MORBIUS</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Reserve</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.plinko?.contractReserve || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(plinkoData?.contractReserve ?? 0n)} MORBIUS</p>
                   </div>
                 </div>
               </div>
@@ -217,19 +299,19 @@ export default function AdminMetricsTab() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Total Wagered</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.keno?.totalWagered || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(kenoData?.totalWagered ?? 0n)} MORBIUS</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Total Won</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.keno?.totalWon || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(kenoData?.totalWon ?? 0n)} MORBIUS</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Tickets</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.keno?.ticketCount || '0')}</p>
+                    <p className="text-slate-200 font-mono">{formatNumber(kenoData?.ticketCount ?? 0n)}</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Active Round</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.keno?.activeRoundId || '0')}</p>
+                    <p className="text-slate-200 font-mono">{formatNumber(kenoData?.activeRoundId ?? 0n)}</p>
                   </div>
                 </div>
               </div>
@@ -240,15 +322,15 @@ export default function AdminMetricsTab() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Total Tickets</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.lottery?.totalTicketsEver || '0')}</p>
+                    <p className="text-slate-200 font-mono">{formatNumber(lotteryData.totalTicketsEver)}</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Total Collected</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.lottery?.totalCollected || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(lotteryData.totalCollected)} MORBIUS</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Total Claimed</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.lottery?.totalClaimed || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(lotteryData.totalClaimed)} MORBIUS</p>
                   </div>
                 </div>
               </div>
@@ -259,56 +341,58 @@ export default function AdminMetricsTab() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Spins</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.bigWheel?.spins || '0')}</p>
+                    <p className="text-slate-200 font-mono">{formatNumber(bigWheelData?.spins ?? 0n)}</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Volume</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.bigWheel?.volume || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(bigWheelData?.volume ?? 0n)} MORBIUS</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Payouts</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.bigWheel?.payouts || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(bigWheelData?.payouts ?? 0n)} MORBIUS</p>
                   </div>
                   <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                     <p className="text-slate-500 text-[10px]">Balance</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.bigWheel?.contractBalance || '0')} MORBIUS</p>
+                    <p className="text-slate-200 font-mono">{formatMorbius(bigWheelData?.contractBalance ?? 0n)} MORBIUS</p>
                   </div>
                 </div>
               </div>
 
               {/* Tournament Metrics */}
-              <div>
-                <h3 className="text-xs font-semibold text-slate-300 mb-2">Tournaments</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Total</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.tournaments?.totalTournaments || 0)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Active</p>
-                    <p className="text-emerald-400 font-mono">{formatNumber(data.tournaments?.activeTournaments || 0)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Completed</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.tournaments?.completedTournaments || 0)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Total Entries</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(data.tournaments?.totalEntries || 0)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Prize Pool</p>
-                    <p className="text-yellow-400 font-mono">{formatMorbius(data.tournaments?.totalPrizePool || '0')} MORBIUS</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Total Buy-Ins</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(data.tournaments?.totalBuyIns || '0')} MORBIUS</p>
+              {data && (
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-300 mb-2">Tournaments</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">Total</p>
+                      <p className="text-slate-200 font-mono">{formatNumber(data.tournaments?.totalTournaments || 0)}</p>
+                    </div>
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">Active</p>
+                      <p className="text-emerald-400 font-mono">{formatNumber(data.tournaments?.activeTournaments || 0)}</p>
+                    </div>
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">Completed</p>
+                      <p className="text-slate-200 font-mono">{formatNumber(data.tournaments?.completedTournaments || 0)}</p>
+                    </div>
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">Total Entries</p>
+                      <p className="text-slate-200 font-mono">{formatNumber(data.tournaments?.totalEntries || 0)}</p>
+                    </div>
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">Prize Pool</p>
+                      <p className="text-yellow-400 font-mono">{formatMorbius(data.tournaments?.totalPrizePool || '0')} MORBIUS</p>
+                    </div>
+                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
+                      <p className="text-slate-500 text-[10px]">Total Buy-Ins</p>
+                      <p className="text-slate-200 font-mono">{formatMorbius(data.tournaments?.totalBuyIns || '0')} MORBIUS</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Volume Chart (Blackjack only) */}
-              {chartData.length > 0 && (
+              {data && chartData.length > 0 && (
                 <div className="rounded border border-slate-700/50 p-2 bg-slate-800/30 h-40">
                   <p className="text-slate-500 text-[10px] mb-1">Blackjack Volume over time</p>
                   <ResponsiveContainer width="100%" height="90%">
