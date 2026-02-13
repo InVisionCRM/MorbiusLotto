@@ -1,6 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
+import { useAccount } from 'wagmi'
 import { formatEther } from 'viem'
 
 export interface PlayerProfileStats {
@@ -25,6 +26,39 @@ export interface PlayerProfileGame {
   total_payout: bigint
   created_at: string
   completed_at: string | null
+}
+
+export interface DisplayProfile {
+  displayName: string | null
+  profileImageUrl: string | null
+}
+
+/**
+ * Hook to fetch display profile (name + avatar) for the connected wallet.
+ * Use for WalletMenu on any nav so avatar and name show consistently.
+ */
+export function useProfile() {
+  const { address } = useAccount()
+  const query = useQuery<DisplayProfile>({
+    queryKey: ['playerProfile', address],
+    queryFn: async () => {
+      if (!address) return { displayName: null, profileImageUrl: null }
+      const res = await fetch(`/api/player/${address}/profile`)
+      if (!res.ok) return { displayName: null, profileImageUrl: null }
+      const data = await res.json()
+      return {
+        displayName: data.displayName ?? null,
+        profileImageUrl: data.profileImageUrl ?? null,
+      }
+    },
+    enabled: !!address,
+    staleTime: 60_000,
+  })
+  return {
+    profileDisplayName: query.data?.displayName ?? null,
+    profileImageUrl: query.data?.profileImageUrl ?? null,
+    isLoading: query.isLoading,
+  }
 }
 
 /**

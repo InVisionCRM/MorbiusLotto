@@ -3,8 +3,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
+import { useAccount, useDisconnect } from 'wagmi';
 import { WalletMenu } from '@/components/shared/WalletMenu';
+import { useProfile } from '@/hooks/use-player-profile';
 import SwapModal from '@/components/PLINKO/SwapModal';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
@@ -16,6 +17,8 @@ interface LotteryMainNavProps {
 
 export default function LotteryMainNav({ onShowHistory, onShowDashboard }: LotteryMainNavProps) {
   const { isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+  const { profileDisplayName, profileImageUrl } = useProfile();
   const [swapOpen, setSwapOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -77,7 +80,10 @@ export default function LotteryMainNav({ onShowHistory, onShowDashboard }: Lotte
 
             {/* Right Section: Wallet + Hamburger */}
             <div className="flex items-center gap-2">
-              <WalletMenu />
+              <WalletMenu
+                profileDisplayName={profileDisplayName}
+                profileImageUrl={profileImageUrl}
+              />
 
 
               {/* Hamburger Menu */}

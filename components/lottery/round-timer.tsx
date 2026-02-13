@@ -79,6 +79,30 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
   const progressRef = useRef(0)
   const animationRef = useRef<number | null>(null)
 
+  // Live countdown display (ticks every second, synced from contract timeRemaining)
+  const [displaySecondsRemaining, setDisplaySecondsRemaining] = useState(() => Math.max(0, Number(fallbackRemaining)))
+  useEffect(() => {
+    setDisplaySecondsRemaining((prev) => {
+      const fromContract = Math.max(0, Number(fallbackRemaining))
+      if (fromContract === 0 || (fromContract > 0 && Math.abs(prev - fromContract) > 2)) return fromContract
+      return prev
+    })
+  }, [fallbackRemaining])
+  useEffect(() => {
+    if (displaySecondsRemaining <= 0) return
+    const interval = setInterval(() => {
+      setDisplaySecondsRemaining((s) => Math.max(0, s - 1))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [displaySecondsRemaining])
+
+  const formatCountdown = (seconds: number) => {
+    if (seconds <= 0) return 'Next draw soon…'
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
   // Calculate target progress for timer-based border (assuming 5-minute rounds = 300 seconds)
   const totalRoundTime = 300 // 5 minutes in seconds
   const timeRemainingNum = Number(fallbackRemaining) // Convert BigInt to number
@@ -254,10 +278,13 @@ export function RoundTimer({ endTime, fallbackRemaining = BigInt(0), roundId, to
 
 
       {/* Ball Draw Simulator - Integrated */}
-      {/* Round Winning Numbers Title */}
-      <div className="absolute top-10 left-0 right-0 flex justify-center mt-1 z-10">
+      {/* Round Winning Numbers Title + Next draw countdown */}
+      <div className="absolute top-10 left-0 right-0 flex flex-col items-center justify-center mt-1 z-10 gap-0.5">
         <div className="text-sm sm:text-sm text-white/70 font-bold uppercase tracking-wide text-center">
           Round <span className="text-lg sm:text-lg text-cyan-500 font-extrabold">{previousRoundId || roundId || '?'}</span> Winning Numbers
+        </div>
+        <div className="text-xs sm:text-sm text-cyan-400/90 font-medium tabular-nums" title="Time until next draw">
+          Next draw in <span className="text-cyan-300 font-bold">{formatCountdown(displaySecondsRemaining)}</span>
         </div>
       </div>
 

@@ -48,6 +48,9 @@ export interface BlackjackTableRow {
   src: string;
   description: string | null;
   token_contract_address: string | null;
+  logo_url: string | null;
+  ticker: string | null;
+  iframe_url: string | null;
   sort_order: number;
   enabled: boolean;
   created_at?: string;
@@ -270,6 +273,11 @@ function AddTableDialog({
 }) {
   const [name, setName] = useState('');
   const [kind, setKind] = useState<'image' | 'video'>('image');
+  const [description, setDescription] = useState('');
+  const [tokenContract, setTokenContract] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [ticker, setTicker] = useState('');
+  const [iframeUrl, setIframeUrl] = useState('');
   const [files, setFiles] = useState<File[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -293,7 +301,17 @@ function AddTableDialog({
       const createRes = await fetch('/api/admin/tables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-wallet': address },
-        body: JSON.stringify({ kind, name: name.trim(), src: path, enabled: true }),
+        body: JSON.stringify({
+          kind,
+          name: name.trim(),
+          src: path,
+          description: description.trim() || null,
+          token_contract_address: tokenContract.trim() || null,
+          logo_url: logoUrl.trim() || null,
+          ticker: ticker.trim() || null,
+          iframe_url: iframeUrl.trim() || null,
+          enabled: true,
+        }),
       });
       if (!createRes.ok) {
         const d = await createRes.json().catch(() => ({}));
@@ -301,6 +319,11 @@ function AddTableDialog({
       }
       onSuccess();
       setName('');
+      setDescription('');
+      setTokenContract('');
+      setLogoUrl('');
+      setTicker('');
+      setIframeUrl('');
       setFiles([]);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed');
@@ -341,6 +364,51 @@ function AddTableDialog({
               <option value="image">Image</option>
               <option value="video">Video</option>
             </select>
+          </div>
+          <div>
+            <Label className="text-[11px] text-slate-400">Description</Label>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+              placeholder="Optional"
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-slate-400">Token contract (DexScreener)</Label>
+            <Input
+              value={tokenContract}
+              onChange={(e) => setTokenContract(e.target.value)}
+              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600 font-mono"
+              placeholder="0x… (optional)"
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-slate-400">Logo URL</Label>
+            <Input
+              value={logoUrl}
+              onChange={(e) => setLogoUrl(e.target.value)}
+              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+              placeholder="https://… (optional)"
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-slate-400">Ticker</Label>
+            <Input
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value)}
+              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+              placeholder="e.g. MORBIUS (optional)"
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-slate-400">Morbius.io / Norbius.io iframe URL</Label>
+            <Input
+              value={iframeUrl}
+              onChange={(e) => setIframeUrl(e.target.value)}
+              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+              placeholder="https://morbius.io/geicko?address=0x… (optional)"
+            />
           </div>
           <div>
             <Label className="text-[11px] text-slate-400">File</Label>
@@ -401,12 +469,18 @@ function EditTableDialog({
   const [name, setName] = useState(row.name);
   const [description, setDescription] = useState(row.description ?? '');
   const [tokenContract, setTokenContract] = useState(row.token_contract_address ?? '');
+  const [logoUrl, setLogoUrl] = useState(row.logo_url ?? '');
+  const [ticker, setTicker] = useState(row.ticker ?? '');
+  const [iframeUrl, setIframeUrl] = useState(row.iframe_url ?? '');
   const [enabled, setEnabled] = useState(row.enabled);
 
   useEffect(() => {
     setName(row.name);
     setDescription(row.description ?? '');
     setTokenContract(row.token_contract_address ?? '');
+    setLogoUrl(row.logo_url ?? '');
+    setTicker(row.ticker ?? '');
+    setIframeUrl(row.iframe_url ?? '');
     setEnabled(row.enabled);
   }, [row]);
 
@@ -421,6 +495,9 @@ function EditTableDialog({
           name: name.trim(),
           description: description.trim() || null,
           token_contract_address: tokenContract.trim() || null,
+          logo_url: logoUrl.trim() || null,
+          ticker: ticker.trim() || null,
+          iframe_url: iframeUrl.trim() || null,
           enabled,
         }),
       });
@@ -471,6 +548,33 @@ function EditTableDialog({
               onChange={(e) => setTokenContract(e.target.value)}
               className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600 font-mono"
               placeholder="0x…"
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-slate-400">Logo URL</Label>
+            <Input
+              value={logoUrl}
+              onChange={(e) => setLogoUrl(e.target.value)}
+              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+              placeholder="https://… (optional)"
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-slate-400">Ticker</Label>
+            <Input
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value)}
+              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+              placeholder="e.g. MORBIUS (optional)"
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-slate-400">Morbius.io / Norbius.io iframe URL</Label>
+            <Input
+              value={iframeUrl}
+              onChange={(e) => setIframeUrl(e.target.value)}
+              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+              placeholder="https://morbius.io/geicko?address=0x… (optional)"
             />
           </div>
           <div className="flex items-center gap-2">

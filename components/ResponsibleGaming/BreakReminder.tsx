@@ -6,6 +6,8 @@ import { useAccount } from 'wagmi';
 const REMINDER_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
 const STORAGE_KEY = 'morblotto_session_start';
 const SNOOZE_KEY = 'morblotto_reminder_snoozed_until';
+/** If last activity was more than this ago, treat as new session (avoid reminder on fresh load). */
+const SESSION_STALE_MS = 10 * 60 * 1000; // 10 minutes
 
 interface BreakReminderProps {
   /** Override the default 60 minute interval (in milliseconds) */
@@ -22,11 +24,18 @@ export function BreakReminder({ intervalMs = REMINDER_INTERVAL_MS }: BreakRemind
   useEffect(() => {
     if (!isConnected || typeof window === 'undefined') return;
 
-    // Get or set session start time
+    // Get or set session start time. If stored start is too old, treat as new session.
+    const now = Date.now();
     let sessionStart = localStorage.getItem(STORAGE_KEY);
     if (!sessionStart) {
-      sessionStart = Date.now().toString();
+      sessionStart = now.toString();
       localStorage.setItem(STORAGE_KEY, sessionStart);
+    } else {
+      const storedStart = parseInt(sessionStart, 10);
+      if (now - storedStart > SESSION_STALE_MS) {
+        sessionStart = now.toString();
+        localStorage.setItem(STORAGE_KEY, sessionStart);
+      }
     }
 
     const checkTime = () => {

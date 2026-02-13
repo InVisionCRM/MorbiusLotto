@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { WalletMenu } from '@/components/shared/WalletMenu';
+import { useProfile } from '@/hooks/use-player-profile';
 import HowToPlayModal from './HowToPlayModal';
 import SwapModal from './SwapModal';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
@@ -26,6 +27,7 @@ export default function MainNav({
   onShowPayouts,
 }: MainNavProps) {
   const { isConnected } = useAccount();
+  const { profileDisplayName, profileImageUrl } = useProfile();
   const [howToPlayOpen, setHowToPlayOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -90,7 +92,10 @@ export default function MainNav({
 
             {/* Right Section: Wallet + Hamburger */}
             <div className="flex items-center gap-2">
-              <WalletMenu />
+              <WalletMenu
+                profileDisplayName={profileDisplayName}
+                profileImageUrl={profileImageUrl}
+              />
 
               {/* Hamburger Menu */}
               <div className="relative z-50" ref={menuRef}>

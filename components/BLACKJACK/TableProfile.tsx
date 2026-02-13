@@ -36,6 +36,10 @@ export interface TableProfileProps {
   geickoIframeUrl?: string
   /** Buy link (default: /swap - Internet Money Swap) */
   buyLink?: string
+  /** Optional logo URL (overrides DexScreener when set) */
+  logoUrl?: string
+  /** Optional ticker/symbol override (overrides DexScreener when set) */
+  ticker?: string
 }
 
 export function TableProfile({
@@ -44,6 +48,8 @@ export function TableProfile({
   description,
   geickoIframeUrl = MORBIUS_GEICKO_IFRAME,
   buyLink = SWAP_PAGE_URL,
+  logoUrl: logoUrlProp,
+  ticker: tickerProp,
 }: TableProfileProps) {
   const [data, setData] = useState<DexScreenerTokenResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -79,9 +85,9 @@ export function TableProfile({
   const uniqueUrls = Array.from(
     new Map(tokenPairs.map((p) => [p.url ?? p.pairAddress, p]).filter(([, p]) => p.url)).values()
   ).slice(0, 6)
-  const logoUrl = tokenPairs[0]?.info?.imageUrl
-  const name = tokenPairs[0]?.baseToken?.name ?? tokenSymbol ?? 'Token'
-  const symbol = tokenPairs[0]?.baseToken?.symbol ?? tokenSymbol ?? '—'
+  const logoUrl = logoUrlProp ?? tokenPairs[0]?.info?.imageUrl
+  const name = tokenPairs[0]?.baseToken?.name ?? tokenSymbol ?? tickerProp ?? 'Token'
+  const symbol = tickerProp ?? tokenPairs[0]?.baseToken?.symbol ?? tokenSymbol ?? '—'
 
   const panelStyle = {
     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
@@ -95,68 +101,72 @@ export function TableProfile({
         className="rounded-2xl overflow-hidden border-2 border-cyan-500/30 max-w-4xl mx-auto"
         style={panelStyle}
       >
-        <div className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3 border-b border-cyan-500/20">
-          <div className="flex items-center gap-3">
-            {loading ? (
-              <div className="w-12 h-12 rounded-full bg-slate-700 animate-pulse shrink-0" />
-            ) : logoUrl ? (
-              <img
-                src={logoUrl}
-                alt=""
-                className="w-12 h-12 rounded-full object-cover border border-cyan-500/30 shrink-0"
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center text-cyan-400 font-bold shrink-0">
-                {(symbol || name).slice(0, 1)}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 min-h-[320px]">
+          {/* Left: info (logo, name, ticker, description, buy + dex links) */}
+          <div className="p-3 sm:p-4 flex flex-col justify-center gap-3 border-b md:border-b-0 md:border-r border-cyan-500/20">
+            <div className="flex items-center gap-3">
+              {loading && !logoUrlProp ? (
+                <div className="w-12 h-12 rounded-full bg-slate-700 animate-pulse shrink-0" />
+              ) : logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt=""
+                  className="w-12 h-12 rounded-full object-cover border border-cyan-500/30 shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center text-cyan-400 font-bold shrink-0">
+                  {(symbol || name).slice(0, 1)}
+                </div>
+              )}
+              <div>
+                <h2 className="text-lg font-semibold text-white">{name}</h2>
+                <p className="text-cyan-400/90 text-sm">{symbol}</p>
               </div>
+            </div>
+            {description && (
+              <p className="text-gray-400 text-sm max-w-md">{description}</p>
             )}
-            <div>
-              <h2 className="text-lg font-semibold text-white">{name}</h2>
-              <p className="text-cyan-400/90 text-sm">{symbol}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href={buyLink}
+                target={buyLink.startsWith('http') ? '_blank' : undefined}
+                rel={buyLink.startsWith('http') ? 'noopener noreferrer' : undefined}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-sm font-medium transition-colors"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Buy (Internet Money Swap)
+              </a>
+              {uniqueUrls.slice(0, 4).map((pair) => (
+                <a
+                  key={pair.url ?? pair.pairAddress}
+                  href={pair.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700/80 hover:bg-slate-600/80 text-cyan-300 text-sm border border-cyan-500/30 transition-colors"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span className="capitalize">{pair.dexId ?? 'Dex'}</span>
+                  {Array.isArray(pair.labels) && pair.labels[0] && (
+                    <span className="text-xs text-gray-400">{pair.labels[0]}</span>
+                  )}
+                  <ExternalLink className="w-3 h-3 opacity-70" />
+                </a>
+              ))}
+              {error && (
+                <span className="text-red-400/80 text-xs">Links unavailable</span>
+              )}
             </div>
           </div>
-          {description && (
-            <p className="text-gray-400 text-sm max-w-md">{description}</p>
-          )}
-          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-            <a
-              href={buyLink}
-              target={buyLink.startsWith('http') ? '_blank' : undefined}
-              rel={buyLink.startsWith('http') ? 'noopener noreferrer' : undefined}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-sm font-medium transition-colors"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              Buy (Internet Money Swap)
-            </a>
-            {uniqueUrls.slice(0, 4).map((pair) => (
-              <a
-                key={pair.url ?? pair.pairAddress}
-                href={pair.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700/80 hover:bg-slate-600/80 text-cyan-300 text-sm border border-cyan-500/30 transition-colors"
-              >
-                <BarChart3 className="w-4 h-4" />
-                <span className="capitalize">{pair.dexId ?? 'Dex'}</span>
-                {Array.isArray(pair.labels) && pair.labels[0] && (
-                  <span className="text-xs text-gray-400">{pair.labels[0]}</span>
-                )}
-                <ExternalLink className="w-3 h-3 opacity-70" />
-              </a>
-            ))}
-            {error && (
-              <span className="text-red-400/80 text-xs">Links unavailable</span>
-            )}
-          </div>
-        </div>
 
-        <div className="relative w-full aspect-video min-h-[320px] bg-black/30">
-          <iframe
-            src={geickoIframeUrl}
-            title={`${name} token profile`}
-            className="absolute inset-0 w-full h-full border-0"
-            sandbox="allow-scripts allow-same-origin allow-popups"
-          />
+          {/* Right: Morbius.io / Norbius.io iframe */}
+          <div className="relative w-full min-h-[280px] md:min-h-[320px] bg-black/30">
+            <iframe
+              src={geickoIframeUrl}
+              title={`${name} token profile`}
+              className="absolute inset-0 w-full h-full border-0"
+              sandbox="allow-scripts allow-same-origin allow-popups"
+            />
+          </div>
         </div>
       </div>
     </section>

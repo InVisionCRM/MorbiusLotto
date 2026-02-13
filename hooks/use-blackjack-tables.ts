@@ -14,6 +14,17 @@ export interface TableOption {
   src: string;
   description?: string | null;
   token_contract_address?: string | null;
+  logo_url?: string | null;
+  ticker?: string | null;
+  iframe_url?: string | null;
+}
+
+export interface TableProfileData {
+  description?: string | null;
+  token_contract_address?: string | null;
+  logo_url?: string | null;
+  ticker?: string | null;
+  iframe_url?: string | null;
 }
 
 export interface TableThemeInfo {
@@ -45,10 +56,20 @@ export function useBlackjackTables() {
     setLoading(true);
     fetch(`${apiBase}/api/blackjack/tables?enabledOnly=true`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
-      .then((rows: Array<{ id: string; kind: string; name: string; src: string; description?: string; token_contract_address?: string }>) => {
+      .then((rows: Array<{ id: string; kind: string; name: string; src: string; description?: string; token_contract_address?: string; logo_url?: string; ticker?: string; iframe_url?: string }>) => {
         if (cancelled || !Array.isArray(rows)) return;
-        const images = rows.filter((r) => r.kind === 'image').map((r) => ({ id: r.id, label: r.name, src: r.src, description: r.description ?? null, token_contract_address: r.token_contract_address ?? null }));
-        const videos = rows.filter((r) => r.kind === 'video').map((r) => ({ id: r.id, label: r.name, src: r.src, description: r.description ?? null, token_contract_address: r.token_contract_address ?? null }));
+        const mapRow = (r: (typeof rows)[0]) => ({
+          id: r.id,
+          label: r.name,
+          src: r.src,
+          description: r.description ?? null,
+          token_contract_address: r.token_contract_address ?? null,
+          logo_url: r.logo_url ?? null,
+          ticker: r.ticker ?? null,
+          iframe_url: r.iframe_url ?? null,
+        });
+        const images = rows.filter((r) => r.kind === 'image').map(mapRow);
+        const videos = rows.filter((r) => r.kind === 'video').map(mapRow);
         if (images.length > 0 || videos.length > 0) {
           setImageOptions(images.length > 0 ? images : BLACKJACK_IMAGE_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src })));
           setVideoOptions(videos.length > 0 ? videos : BLACKJACK_VIDEO_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src })));
@@ -82,5 +103,21 @@ export function useBlackjackTables() {
     [imageOptions, videoOptions]
   );
 
-  return { imageOptions, videoOptions, loading, getThemeInfo };
+  const getTableProfile = useCallback(
+    (kind: 'image' | 'video', id: string): TableProfileData | null => {
+      const options = kind === 'video' ? videoOptions : imageOptions;
+      const row = options.find((x) => x.id === id);
+      if (!row) return null;
+      return {
+        description: row.description ?? null,
+        token_contract_address: row.token_contract_address ?? null,
+        logo_url: row.logo_url ?? null,
+        ticker: row.ticker ?? null,
+        iframe_url: row.iframe_url ?? null,
+      };
+    },
+    [imageOptions, videoOptions]
+  );
+
+  return { imageOptions, videoOptions, loading, getThemeInfo, getTableProfile };
 }

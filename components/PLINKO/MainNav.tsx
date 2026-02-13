@@ -3,8 +3,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
+import { useAccount, useDisconnect } from 'wagmi';
 import { WalletMenu } from '@/components/shared/WalletMenu';
+import { useProfile } from '@/hooks/use-player-profile';
 import HowToPlayModal from './HowToPlayModal';
 import SwapModal from './SwapModal';
 import { RiskLevel } from '@/app/PLINKO/types';
@@ -24,6 +25,8 @@ interface MainNavProps {
 
 export default function MainNav({ balance, soundEnabled, onSoundToggle, freePlayEnabled, onFreePlayToggle, onShowHistory, onBuyBalls, ballCount }: MainNavProps) {
   const { isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+  const { profileDisplayName, profileImageUrl } = useProfile();
   const [howToPlayOpen, setHowToPlayOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -86,7 +89,10 @@ export default function MainNav({ balance, soundEnabled, onSoundToggle, freePlay
 
             {/* Right Section: Wallet + Drop Ball + Hamburger */}
             <div className="flex items-center gap-2">
-              <WalletMenu />
+              <WalletMenu
+                profileDisplayName={profileDisplayName}
+                profileImageUrl={profileImageUrl}
+              />
 
 
               {/* Hamburger Menu */}

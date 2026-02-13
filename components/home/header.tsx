@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useAccount } from 'wagmi'
 import { WalletMenu } from '@/components/shared/WalletMenu'
+import { useProfile } from '@/hooks/use-player-profile'
 import { useAuth } from '@/hooks/use-auth'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,7 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
 
   const { isAuthenticated, signIn, signOut, isSigning, address } = useAuth()
   const { isConnected } = useAccount()
+  const { profileDisplayName, profileImageUrl } = useProfile()
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -105,7 +107,10 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
             )}
 
             {/* Wallet — shared WalletMenu (same as BLACKJACK / other games) */}
-            <WalletMenu />
+            <WalletMenu
+              profileDisplayName={profileDisplayName}
+              profileImageUrl={profileImageUrl}
+            />
 
             {/* Hamburger Menu */}
             <div className="relative z-50" ref={menuRef}>

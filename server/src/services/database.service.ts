@@ -140,6 +140,9 @@ export interface BlackjackTableRow {
   src: string;
   description: string | null;
   token_contract_address: string | null;
+  logo_url: string | null;
+  ticker: string | null;
+  iframe_url: string | null;
   sort_order: number;
   enabled: boolean;
   created_at: Date;
@@ -1465,11 +1468,10 @@ export class DatabaseService {
   }
 
   async getBlackjackTables(enabledOnly: boolean = false): Promise<BlackjackTableRow[]> {
+    const cols = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
     const query = enabledOnly
-      ? `SELECT id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at
-         FROM blackjack_tables WHERE enabled = true ORDER BY sort_order ASC, created_at ASC`
-      : `SELECT id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at
-         FROM blackjack_tables ORDER BY sort_order ASC, created_at ASC`;
+      ? `SELECT ${cols} FROM blackjack_tables WHERE enabled = true ORDER BY sort_order ASC, created_at ASC`
+      : `SELECT ${cols} FROM blackjack_tables ORDER BY sort_order ASC, created_at ASC`;
     const result = await this.pool.query(query);
     return result.rows.map((r: any) => ({
       id: r.id,
@@ -1478,6 +1480,9 @@ export class DatabaseService {
       src: r.src,
       description: r.description ?? null,
       token_contract_address: r.token_contract_address ?? null,
+      logo_url: r.logo_url ?? null,
+      ticker: r.ticker ?? null,
+      iframe_url: r.iframe_url ?? null,
       sort_order: r.sort_order,
       enabled: r.enabled,
       created_at: new Date(r.created_at),
@@ -1487,10 +1492,10 @@ export class DatabaseService {
 
   async createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow> {
     const r = await this.pool.query(
-      `INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, sort_order, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at`,
-      [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.sort_order, row.enabled]
+      `INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at`,
+      [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.logo_url ?? null, row.ticker ?? null, row.iframe_url ?? null, row.sort_order, row.enabled]
     );
     const x = r.rows[0];
     return {
@@ -1500,6 +1505,9 @@ export class DatabaseService {
       src: x.src,
       description: x.description ?? null,
       token_contract_address: x.token_contract_address ?? null,
+      logo_url: x.logo_url ?? null,
+      ticker: x.ticker ?? null,
+      iframe_url: x.iframe_url ?? null,
       sort_order: x.sort_order,
       enabled: x.enabled,
       created_at: new Date(x.created_at),
@@ -1509,7 +1517,7 @@ export class DatabaseService {
 
   async updateBlackjackTable(
     id: string,
-    updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'sort_order' | 'enabled'>>
+    updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'sort_order' | 'enabled'>>
   ): Promise<BlackjackTableRow | null> {
     const fields: string[] = [];
     const values: any[] = [];
@@ -1518,6 +1526,9 @@ export class DatabaseService {
     if (updates.src !== undefined) { fields.push(`src = $${i++}`); values.push(updates.src); }
     if (updates.description !== undefined) { fields.push(`description = $${i++}`); values.push(updates.description); }
     if (updates.token_contract_address !== undefined) { fields.push(`token_contract_address = $${i++}`); values.push(updates.token_contract_address); }
+    if (updates.logo_url !== undefined) { fields.push(`logo_url = $${i++}`); values.push(updates.logo_url); }
+    if (updates.ticker !== undefined) { fields.push(`ticker = $${i++}`); values.push(updates.ticker); }
+    if (updates.iframe_url !== undefined) { fields.push(`iframe_url = $${i++}`); values.push(updates.iframe_url); }
     if (updates.sort_order !== undefined) { fields.push(`sort_order = $${i++}`); values.push(updates.sort_order); }
     if (updates.enabled !== undefined) { fields.push(`enabled = $${i++}`); values.push(updates.enabled); }
     if (fields.length === 0) {
@@ -1526,8 +1537,9 @@ export class DatabaseService {
     }
     fields.push(`updated_at = NOW()`);
     values.push(id);
+    const cols = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
     const r = await this.pool.query(
-      `UPDATE blackjack_tables SET ${fields.join(', ')} WHERE id = $${i} RETURNING id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at`,
+      `UPDATE blackjack_tables SET ${fields.join(', ')} WHERE id = $${i} RETURNING ${cols}`,
       values
     );
     if (r.rows.length === 0) return null;
@@ -1539,6 +1551,9 @@ export class DatabaseService {
       src: x.src,
       description: x.description ?? null,
       token_contract_address: x.token_contract_address ?? null,
+      logo_url: x.logo_url ?? null,
+      ticker: x.ticker ?? null,
+      iframe_url: x.iframe_url ?? null,
       sort_order: x.sort_order,
       enabled: x.enabled,
       created_at: new Date(x.created_at),

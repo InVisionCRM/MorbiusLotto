@@ -1,5 +1,12 @@
 export const tournamentPrizeEscrowAbi = [
   {
+    inputs: [{ name: '_authorizedServer', type: 'address' }],
+    name: 'setAuthorizedServer',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [
       { name: 'tournamentId', type: 'bytes32' },
       { name: 'token', type: 'address' },
@@ -17,6 +24,26 @@ export const tournamentPrizeEscrowAbi = [
       { name: 'amount', type: 'uint256' },
     ],
     name: 'payout',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'tournamentId', type: 'bytes32' },
+      { name: 'to', type: 'address' },
+    ],
+    name: 'payoutRemainderTo',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'tournamentId', type: 'bytes32' },
+      { name: 'to', type: 'address' },
+    ],
+    name: 'reclaimUnclaimed',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',

@@ -231,7 +231,7 @@ export default function BlackjackPage() {
   const [perfectPairsBet, setPerfectPairsBet] = useState(0);
 
   // Background preference state (persisted per wallet). imageSource/videoSource can be static id or API table UUID.
-  const { imageOptions, videoOptions, getThemeInfo } = useBlackjackTables();
+  const { imageOptions, videoOptions, getThemeInfo, getTableProfile } = useBlackjackTables();
   const [theme, setTheme] = useState<BlackjackThemeKind>('video');
   const [imageSource, setImageSource] = useState<string>(DEFAULT_BLACKJACK_IMAGE_ID);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -333,6 +333,19 @@ export default function BlackjackPage() {
     setVideoSource(id);
     toast.info('Video background updated.');
   }, []);
+
+  const tableProfileFromTable = useMemo(() => {
+    const p = getTableProfile(theme, theme === 'video' ? videoSource : imageSource);
+    return p
+      ? {
+          description: p.description ?? undefined,
+          tokenAddress: p.token_contract_address as `0x${string}` | undefined,
+          geickoIframeUrl: p.iframe_url ?? undefined,
+          logoUrl: p.logo_url ?? undefined,
+          ticker: p.ticker ?? undefined,
+        }
+      : {};
+  }, [getTableProfile, theme, videoSource, imageSource]);
 
   // Splash screen dismissal state
   const [splashDismissed, setSplashDismissed] = useState(false);
@@ -2753,8 +2766,8 @@ export default function BlackjackPage() {
         {/* Top Players Carousel */}
         <BlackjackTopPlayersCarousel />
 
-        {/* Table token profile (token for this table: logo, morbius.io iframe, DexScreener links, buy) */}
-        <TableProfile />
+        {/* Table token profile (token for this table: logo, morbius.io/norbius.io iframe, DexScreener links, buy) */}
+        <TableProfile {...tableProfileFromTable} />
 
         {/* Tournament Leaderboard (shown when in tournament) */}
         {tournament.tournamentState.inTournament && (

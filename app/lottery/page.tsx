@@ -94,6 +94,23 @@ export default function LotteryPage() {
   const roundState = roundData?.[7] || 0
   const isMegaMillionsRound = false // MegaMillions not used in V2
 
+  // Live countdown for header (ticks every second, synced from contract timeRemaining)
+  const [headerCountdown, setHeaderCountdown] = useState(0)
+  useEffect(() => {
+    setHeaderCountdown(Math.max(0, Number(timeRemaining)))
+  }, [timeRemaining])
+  useEffect(() => {
+    if (headerCountdown <= 0) return
+    const interval = setInterval(() => setHeaderCountdown((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(interval)
+  }, [headerCountdown])
+  const formatCountdown = (seconds: number) => {
+    if (seconds <= 0) return 'Soon'
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
   // Debug round state
   console.log('🎰 Round state:', {
     roundId: roundId.toString(),
@@ -454,7 +471,7 @@ export default function LotteryPage() {
                 </div>
               )}
 
-              {/* Round */}
+              {/* Round + countdown */}
               {roundId !== undefined && (
                 <div
                   className="rounded-lg p-3"
@@ -466,6 +483,9 @@ export default function LotteryPage() {
                 >
                   <div className="text-xs sm:text-sm text-white/60 mb-1">Next Round</div>
                   <div className="text-lg sm:text-xl font-bold text-white">#{Number(roundId)}</div>
+                  <div className="text-xs text-cyan-400/90 font-medium tabular-nums mt-0.5" title="Time until next draw">
+                    {formatCountdown(headerCountdown)}
+                  </div>
                 </div>
               )}
             </div>
