@@ -43,7 +43,15 @@ const server = (0, http_1.createServer)(app);
 const PORT = process.env.PORT || 3001;
 // Trust proxy when behind a reverse proxy (Railway, nginx, etc.) so rate-limit sees real client IP.
 // Avoids ERR_ERL_UNEXPECTED_X_FORWARDED_FOR when X-Forwarded-For is set.
-app.set('trust proxy', process.env.TRUST_PROXY !== '0' ? 1 : 0);
+// Default to trusting proxy (1) unless explicitly disabled with TRUST_PROXY=0
+const trustProxyEnv = (process.env.TRUST_PROXY || '').trim().toLowerCase();
+const trustProxyValue = trustProxyEnv === '0' || trustProxyEnv === 'false' ? 0 : 1;
+app.set('trust proxy', trustProxyValue);
+// Use console.log for trust proxy status so it always appears in logs (logger might not output in production)
+console.log(`[Server] Trust proxy setting: ${trustProxyValue} (TRUST_PROXY="${process.env.TRUST_PROXY || 'unset'}")`);
+if (trustProxyValue === 0) {
+    console.warn(`[Server] WARNING: Trust proxy is DISABLED - rate limiter will fail behind reverse proxy if X-Forwarded-For header is present.`);
+}
 // CORS: allow frontend origin(s). Set FRONTEND_URL on Railway to your app URL (comma-separated for multiple).
 const allowedOrigins = (process.env.FRONTEND_URL || 'https://win.morbius.io')
     .split(',')
@@ -64,7 +72,12 @@ app.use((0, cors_1.default)({
 const limiter = (0, express_rate_limit_1.default)({
     windowMs: 1 * 60 * 1000, // 1 minute
     max: 1000, // limit each IP to 1000 requests per minute
-    message: 'Too many requests from this IP, please try again later.'
+    message: 'Too many requests from this IP, please try again later.',
+    // Disable X-Forwarded-For validation to prevent ERR_ERL_UNEXPECTED_X_FORWARDED_FOR errors
+    // Trust proxy is already set above, but this prevents validation errors if there's any timing/configuration issue
+    validate: {
+        xForwardedForHeader: false,
+    },
 });
 app.use('/api/', limiter);
 // Body parsing
