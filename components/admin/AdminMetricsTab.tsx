@@ -119,6 +119,9 @@ export default function AdminMetricsTab() {
           {loading && !data && <p className="text-[11px] text-slate-500">Loading…</p>}
           {data && (
             <div className="space-y-3 text-[11px]">
+              {Number(data.volume || 0) === 0 && data.games === 0 && data.activePlayers === 0 && (
+                <p className="text-slate-500 italic">No Blackjack activity in this range. Metrics are from completed Blackjack games only.</p>
+              )}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
                   <p className="text-slate-500 text-[10px]">Volume</p>

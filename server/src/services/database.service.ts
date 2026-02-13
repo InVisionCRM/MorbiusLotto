@@ -1468,97 +1468,172 @@ export class DatabaseService {
   }
 
   async getBlackjackTables(enabledOnly: boolean = false): Promise<BlackjackTableRow[]> {
-    const cols = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
-    const query = enabledOnly
-      ? `SELECT ${cols} FROM blackjack_tables WHERE enabled = true ORDER BY sort_order ASC, created_at ASC`
-      : `SELECT ${cols} FROM blackjack_tables ORDER BY sort_order ASC, created_at ASC`;
-    const result = await this.pool.query(query);
-    return result.rows.map((r: any) => ({
+    const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
+    const colsBase = 'id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at';
+    const whereOrder = enabledOnly
+      ? ' WHERE enabled = true ORDER BY sort_order ASC, created_at ASC'
+      : ' ORDER BY sort_order ASC, created_at ASC';
+
+    const mapRow = (r: any, withExtended: boolean): BlackjackTableRow => ({
       id: r.id,
       kind: r.kind,
       name: r.name,
       src: r.src,
       description: r.description ?? null,
       token_contract_address: r.token_contract_address ?? null,
-      logo_url: r.logo_url ?? null,
-      ticker: r.ticker ?? null,
-      iframe_url: r.iframe_url ?? null,
+      logo_url: withExtended ? (r.logo_url ?? null) : null,
+      ticker: withExtended ? (r.ticker ?? null) : null,
+      iframe_url: withExtended ? (r.iframe_url ?? null) : null,
       sort_order: r.sort_order,
       enabled: r.enabled,
       created_at: new Date(r.created_at),
       updated_at: new Date(r.updated_at),
-    }));
+    });
+
+    try {
+      const result = await this.pool.query(
+        `SELECT ${colsExtended} FROM blackjack_tables${whereOrder}`
+      );
+      return result.rows.map((r: any) => mapRow(r, true));
+    } catch (err: any) {
+      const isMissingColumn = err?.code === '42703' || (typeof err?.message === 'string' && err.message.includes('column') && err.message.includes('does not exist'));
+      if (isMissingColumn) {
+        const result = await this.pool.query(
+          `SELECT ${colsBase} FROM blackjack_tables${whereOrder}`
+        );
+        return result.rows.map((r: any) => mapRow(r, false));
+      }
+      throw err;
+    }
   }
 
   async createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow> {
-    const r = await this.pool.query(
-      `INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at`,
-      [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.logo_url ?? null, row.ticker ?? null, row.iframe_url ?? null, row.sort_order, row.enabled]
-    );
-    const x = r.rows[0];
-    return {
-      id: x.id,
-      kind: x.kind,
-      name: x.name,
-      src: x.src,
-      description: x.description ?? null,
-      token_contract_address: x.token_contract_address ?? null,
-      logo_url: x.logo_url ?? null,
-      ticker: x.ticker ?? null,
-      iframe_url: x.iframe_url ?? null,
-      sort_order: x.sort_order,
-      enabled: x.enabled,
-      created_at: new Date(x.created_at),
-      updated_at: new Date(x.updated_at),
+    const withExtended = async () => {
+      const r = await this.pool.query(
+        `INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at`,
+        [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.logo_url ?? null, row.ticker ?? null, row.iframe_url ?? null, row.sort_order, row.enabled]
+      );
+      const x = r.rows[0];
+      return { x, extended: true };
     };
+    const withBase = async () => {
+      const r = await this.pool.query(
+        `INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, sort_order, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at`,
+        [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.sort_order, row.enabled]
+      );
+      const x = r.rows[0];
+      return { x, extended: false };
+    };
+    try {
+      const { x, extended } = await withExtended();
+      return {
+        id: x.id,
+        kind: x.kind,
+        name: x.name,
+        src: x.src,
+        description: x.description ?? null,
+        token_contract_address: x.token_contract_address ?? null,
+        logo_url: extended ? (x.logo_url ?? null) : null,
+        ticker: extended ? (x.ticker ?? null) : null,
+        iframe_url: extended ? (x.iframe_url ?? null) : null,
+        sort_order: x.sort_order,
+        enabled: x.enabled,
+        created_at: new Date(x.created_at),
+        updated_at: new Date(x.updated_at),
+      };
+    } catch (err: any) {
+      const isMissingColumn = err?.code === '42703' || (typeof err?.message === 'string' && err.message.includes('column') && err.message.includes('does not exist'));
+      if (!isMissingColumn) throw err;
+      const { x, extended } = await withBase();
+      return {
+        id: x.id,
+        kind: x.kind,
+        name: x.name,
+        src: x.src,
+        description: x.description ?? null,
+        token_contract_address: x.token_contract_address ?? null,
+        logo_url: extended ? (x.logo_url ?? null) : null,
+        ticker: extended ? (x.ticker ?? null) : null,
+        iframe_url: extended ? (x.iframe_url ?? null) : null,
+        sort_order: x.sort_order,
+        enabled: x.enabled,
+        created_at: new Date(x.created_at),
+        updated_at: new Date(x.updated_at),
+      };
+    }
   }
 
   async updateBlackjackTable(
     id: string,
     updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'sort_order' | 'enabled'>>
   ): Promise<BlackjackTableRow | null> {
-    const fields: string[] = [];
-    const values: any[] = [];
-    let i = 1;
-    if (updates.name !== undefined) { fields.push(`name = $${i++}`); values.push(updates.name); }
-    if (updates.src !== undefined) { fields.push(`src = $${i++}`); values.push(updates.src); }
-    if (updates.description !== undefined) { fields.push(`description = $${i++}`); values.push(updates.description); }
-    if (updates.token_contract_address !== undefined) { fields.push(`token_contract_address = $${i++}`); values.push(updates.token_contract_address); }
-    if (updates.logo_url !== undefined) { fields.push(`logo_url = $${i++}`); values.push(updates.logo_url); }
-    if (updates.ticker !== undefined) { fields.push(`ticker = $${i++}`); values.push(updates.ticker); }
-    if (updates.iframe_url !== undefined) { fields.push(`iframe_url = $${i++}`); values.push(updates.iframe_url); }
-    if (updates.sort_order !== undefined) { fields.push(`sort_order = $${i++}`); values.push(updates.sort_order); }
-    if (updates.enabled !== undefined) { fields.push(`enabled = $${i++}`); values.push(updates.enabled); }
-    if (fields.length === 0) {
+    const buildUpdate = (includeExtended: boolean) => {
+      const fields: string[] = [];
+      const values: any[] = [];
+      let i = 1;
+      if (updates.name !== undefined) { fields.push(`name = $${i++}`); values.push(updates.name); }
+      if (updates.src !== undefined) { fields.push(`src = $${i++}`); values.push(updates.src); }
+      if (updates.description !== undefined) { fields.push(`description = $${i++}`); values.push(updates.description); }
+      if (updates.token_contract_address !== undefined) { fields.push(`token_contract_address = $${i++}`); values.push(updates.token_contract_address); }
+      if (includeExtended && updates.logo_url !== undefined) { fields.push(`logo_url = $${i++}`); values.push(updates.logo_url); }
+      if (includeExtended && updates.ticker !== undefined) { fields.push(`ticker = $${i++}`); values.push(updates.ticker); }
+      if (includeExtended && updates.iframe_url !== undefined) { fields.push(`iframe_url = $${i++}`); values.push(updates.iframe_url); }
+      if (updates.sort_order !== undefined) { fields.push(`sort_order = $${i++}`); values.push(updates.sort_order); }
+      if (updates.enabled !== undefined) { fields.push(`enabled = $${i++}`); values.push(updates.enabled); }
+      return { fields, values, i };
+    };
+
+    const { fields: f, values: v, i } = buildUpdate(true);
+    if (f.length === 0) {
       const existing = await this.getBlackjackTables().then((rows) => rows.find((r) => r.id === id));
       return existing ?? null;
     }
-    fields.push(`updated_at = NOW()`);
-    values.push(id);
-    const cols = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
-    const r = await this.pool.query(
-      `UPDATE blackjack_tables SET ${fields.join(', ')} WHERE id = $${i} RETURNING ${cols}`,
-      values
-    );
-    if (r.rows.length === 0) return null;
-    const x = r.rows[0];
-    return {
+    const fields = [...f, 'updated_at = NOW()'];
+    const values = [...v, id];
+    const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
+    const colsBase = 'id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at';
+
+    const mapReturn = (x: any, extended: boolean): BlackjackTableRow => ({
       id: x.id,
       kind: x.kind,
       name: x.name,
       src: x.src,
       description: x.description ?? null,
       token_contract_address: x.token_contract_address ?? null,
-      logo_url: x.logo_url ?? null,
-      ticker: x.ticker ?? null,
-      iframe_url: x.iframe_url ?? null,
+      logo_url: extended ? (x.logo_url ?? null) : null,
+      ticker: extended ? (x.ticker ?? null) : null,
+      iframe_url: extended ? (x.iframe_url ?? null) : null,
       sort_order: x.sort_order,
       enabled: x.enabled,
       created_at: new Date(x.created_at),
       updated_at: new Date(x.updated_at),
-    };
+    });
+
+    try {
+      const r = await this.pool.query(
+        `UPDATE blackjack_tables SET ${fields.join(', ')} WHERE id = $${values.length} RETURNING ${colsExtended}`,
+        values
+      );
+      if (r.rows.length === 0) return null;
+      return mapReturn(r.rows[0], true);
+    } catch (err: any) {
+      const isMissingColumn = err?.code === '42703' || (typeof err?.message === 'string' && err.message.includes('column') && err.message.includes('does not exist'));
+      if (!isMissingColumn) throw err;
+      const { fields: fBase, values: vBase, i: iBase } = buildUpdate(false);
+      if (fBase.length === 0) return this.getBlackjackTables().then((rows) => rows.find((r) => r.id === id) ?? null);
+      const fieldsBase = [...fBase, 'updated_at = NOW()'];
+      const valuesBase = [...vBase, id];
+      const r = await this.pool.query(
+        `UPDATE blackjack_tables SET ${fieldsBase.join(', ')} WHERE id = $${valuesBase.length} RETURNING ${colsBase}`,
+        valuesBase
+      );
+      if (r.rows.length === 0) return null;
+      return mapReturn(r.rows[0], false);
+    }
   }
 
   async deleteBlackjackTable(id: string): Promise<boolean> {

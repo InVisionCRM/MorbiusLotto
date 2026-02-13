@@ -433,6 +433,15 @@ async function initializeServices() {
     });
 
     // Admin: Blackjack tables CRUD (requires x-admin-wallet in allowed list)
+    const dbSchemaError = (err: unknown): string | null => {
+      const msg = err && typeof (err as any).message === 'string' ? (err as any).message : '';
+      const code = (err as any)?.code;
+      if (code === '42703' || code === '42P01' || /column .* does not exist|relation .* does not exist/i.test(msg)) {
+        return 'Database schema outdated. Run server migrations 026 and 028 (blackjack_tables).';
+      }
+      return null;
+    };
+
     app.get('/api/admin/tables', async (req, res) => {
       try {
         const enabledOnly = (req.query.enabledOnly as string) === 'true';
@@ -440,7 +449,8 @@ async function initializeServices() {
         sendJson(res, rows);
       } catch (error) {
         logger.error('Error fetching admin blackjack tables:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        const msg = dbSchemaError(error);
+        res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
       }
     });
 
@@ -470,7 +480,8 @@ async function initializeServices() {
         sendJson(res, row);
       } catch (error) {
         logger.error('Error creating blackjack table:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        const msg = dbSchemaError(error);
+        res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
       }
     });
 
@@ -496,7 +507,8 @@ async function initializeServices() {
         sendJson(res, row);
       } catch (error) {
         logger.error('Error updating blackjack table:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        const msg = dbSchemaError(error);
+        res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
       }
     });
 
@@ -511,7 +523,8 @@ async function initializeServices() {
         res.status(204).send();
       } catch (error) {
         logger.error('Error deleting blackjack table:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        const msg = dbSchemaError(error);
+        res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
       }
     });
 
@@ -637,7 +650,7 @@ async function initializeServices() {
       }
     });
 
-    // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all)
+    // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all). Source: Blackjack games DB.
     app.get('/api/admin/metrics', async (req, res) => {
       try {
         const range = (req.query.range as string) || '24h';
@@ -653,9 +666,9 @@ async function initializeServices() {
             dbService.getMetricsSeries(range as '24h' | '7d' | '30d' | 'all'),
           ]);
         } catch (dbError) {
-          logger.warn('Metrics DB query failed, returning empty metrics', { error: dbError });
-          aggregates = { volume: 0n, games: 0, activePlayers: 0, pnl: 0n, tournamentEntries: 0 };
-          series = [];
+          logger.error('Admin metrics DB query failed', { error: dbError });
+          res.status(503).json({ error: 'Metrics unavailable', message: 'Database query failed. Check server logs.' });
+          return;
         }
         sendJson(res, {
           range,

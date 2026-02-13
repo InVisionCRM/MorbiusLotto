@@ -83,13 +83,16 @@ function LotteryAdminSection() {
   const [roundDuration, setRoundDuration] = useState('');
   const [morbiusPrice, setMorbiusPrice] = useState('');
   const [plsPrice, setPlsPrice] = useState('');
-  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
 
   useEffect(() => {
     if (isSuccess) toast.success('Transaction confirmed');
     if (isError) toast.error('Transaction failed');
   }, [isSuccess, isError]);
+  useEffect(() => {
+    if (writeError) toast.error(writeError.message || 'Transaction rejected or failed');
+  }, [writeError]);
 
   const run = useCallback(
     (fn: () => void) => {
@@ -113,12 +116,16 @@ function LotteryAdminSection() {
       </WriteRow>
       <WriteRow
         label="updateRoundDuration(uint256)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!roundDuration.trim()) {
+            toast.error('Enter round duration (seconds)');
+            return;
+          }
           run(() => {
-            const d = BigInt(roundDuration);
+            const d = BigInt(roundDuration.trim());
             writeContract({ address: LOTTERY_ADDRESS as `0x${string}`, abi: LOTTERY_6OF55_V2_ABI, functionName: 'updateRoundDuration', args: [d] });
-          })
-        }
+          });
+        }}
         loading={isPending || isConfirming}
       >
         <Input
@@ -130,13 +137,17 @@ function LotteryAdminSection() {
       </WriteRow>
       <WriteRow
         label="updateTicketPrices(uint256 newMORBIUSPrice, uint256 newPlsPrice)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!morbiusPrice.trim() || !plsPrice.trim()) {
+            toast.error('Enter both MORBIUS and PLS price (wei)');
+            return;
+          }
           run(() => {
-            const m = BigInt(morbiusPrice);
-            const p = BigInt(plsPrice);
+            const m = BigInt(morbiusPrice.trim());
+            const p = BigInt(plsPrice.trim());
             writeContract({ address: LOTTERY_ADDRESS as `0x${string}`, abi: LOTTERY_6OF55_V2_ABI, functionName: 'updateTicketPrices', args: [m, p] });
-          })
-        }
+          });
+        }}
         loading={isPending || isConfirming}
       >
         <Input
@@ -173,13 +184,16 @@ function KenoAdminSection() {
   const [revealRoundId, setRevealRoundId] = useState('');
   const [seed, setSeed] = useState('');
   const [burnThreshold, setBurnThreshold] = useState('');
-  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
 
   useEffect(() => {
     if (isSuccess) toast.success('Transaction confirmed');
     if (isError) toast.error('Transaction failed');
   }, [isSuccess, isError]);
+  useEffect(() => {
+    if (writeError) toast.error(writeError.message || 'Transaction rejected or failed');
+  }, [writeError]);
 
   const run = useCallback(
     (fn: () => void) => {
@@ -198,7 +212,11 @@ function KenoAdminSection() {
     <ContractSection title="CryptoKeno">
       <WriteRow
         label="setPaytable(uint8 spotSize, uint8 hits, uint256 multiplier)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!spotSize.trim() || !hits.trim() || !multiplier.trim()) {
+            toast.error('Enter spotSize, hits, and multiplier');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -206,8 +224,8 @@ function KenoAdminSection() {
               functionName: 'setPaytable',
               args: [Number(spotSize), Number(hits), BigInt(multiplier)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={spotSize} onChange={(e) => setSpotSize(e.target.value)} placeholder="spotSize" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
@@ -216,7 +234,11 @@ function KenoAdminSection() {
       </WriteRow>
       <WriteRow
         label="setFee(uint256 feeBps, address recipient)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!feeBps.trim() || !feeRecipient.trim() || !feeRecipient.startsWith('0x')) {
+            toast.error('Enter fee (bps) and valid 0x recipient address');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -224,8 +246,8 @@ function KenoAdminSection() {
               functionName: 'setFee',
               args: [BigInt(feeBps), feeRecipient as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={feeBps} onChange={(e) => setFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
@@ -233,7 +255,11 @@ function KenoAdminSection() {
       </WriteRow>
       <WriteRow
         label="setRandomnessProvider(address)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!randomnessProvider.trim() || !randomnessProvider.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -241,15 +267,19 @@ function KenoAdminSection() {
               functionName: 'setRandomnessProvider',
               args: [randomnessProvider as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={randomnessProvider} onChange={(e) => setRandomnessProvider(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setRoundDuration(uint256)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!roundDuration.trim()) {
+            toast.error('Enter round duration (seconds)');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -257,15 +287,19 @@ function KenoAdminSection() {
               functionName: 'setRoundDuration',
               args: [BigInt(roundDuration)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={roundDuration} onChange={(e) => setRoundDuration(e.target.value)} placeholder="seconds" className="h-7 text-xs w-28 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setMaxWagerPerDraw(uint256)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!maxWager.trim()) {
+            toast.error('Enter max wager (wei)');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -273,8 +307,8 @@ function KenoAdminSection() {
               functionName: 'setMaxWagerPerDraw',
               args: [BigInt(maxWager)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={maxWager} onChange={(e) => setMaxWager(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
@@ -290,7 +324,11 @@ function KenoAdminSection() {
       <WriteRow label="unpause()" onExecute={() => run(() => writeContract({ address: addr, abi: KENO_ABI, functionName: 'unpause' }))} loading={isPending || isConfirming} />
       <WriteRow
         label="withdrawBankroll(uint256 amount, address to)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!withdrawAmount.trim() || !withdrawTo.trim() || !withdrawTo.startsWith('0x')) {
+            toast.error('Enter amount and valid 0x recipient');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -298,8 +336,8 @@ function KenoAdminSection() {
               functionName: 'withdrawBankroll',
               args: [BigInt(withdrawAmount), withdrawTo as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="amount" className="h-7 text-xs w-32 bg-slate-800 border-slate-600 font-mono" />
@@ -307,7 +345,11 @@ function KenoAdminSection() {
       </WriteRow>
       <WriteRow
         label="reclaimExpiredPrizes(uint256 roundId)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!reclaimRoundId.trim()) {
+            toast.error('Enter round ID');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -315,15 +357,19 @@ function KenoAdminSection() {
               functionName: 'reclaimExpiredPrizes',
               args: [BigInt(reclaimRoundId)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={reclaimRoundId} onChange={(e) => setReclaimRoundId(e.target.value)} placeholder="roundId" className="h-7 text-xs w-28 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="commitRandom(uint256 roundId, bytes32 commitment)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!commitRoundId.trim() || !commitment.trim() || !commitment.startsWith('0x')) {
+            toast.error('Enter round ID and 0x commitment (32 bytes)');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -331,8 +377,8 @@ function KenoAdminSection() {
               functionName: 'commitRandom',
               args: [BigInt(commitRoundId), commitment as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={commitRoundId} onChange={(e) => setCommitRoundId(e.target.value)} placeholder="roundId" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
@@ -340,7 +386,11 @@ function KenoAdminSection() {
       </WriteRow>
       <WriteRow
         label="revealRandom(uint256 roundId, bytes32 seed)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!revealRoundId.trim() || !seed.trim() || !seed.startsWith('0x')) {
+            toast.error('Enter round ID and 0x seed');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -348,8 +398,8 @@ function KenoAdminSection() {
               functionName: 'revealRandom',
               args: [BigInt(revealRoundId), seed as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={revealRoundId} onChange={(e) => setRevealRoundId(e.target.value)} placeholder="roundId" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
@@ -357,7 +407,11 @@ function KenoAdminSection() {
       </WriteRow>
       <WriteRow
         label="updateBurnThreshold(uint256)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!burnThreshold.trim()) {
+            toast.error('Enter burn threshold (wei)');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -365,8 +419,8 @@ function KenoAdminSection() {
               functionName: 'updateBurnThreshold',
               args: [BigInt(burnThreshold)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={burnThreshold} onChange={(e) => setBurnThreshold(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
@@ -380,13 +434,16 @@ function PlinkoAdminSection() {
   const [maxWager, setMaxWager] = useState('');
   const [emergencyAmount, setEmergencyAmount] = useState('');
   const [fundAmount, setFundAmount] = useState('');
-  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
 
   useEffect(() => {
     if (isSuccess) toast.success('Transaction confirmed');
     if (isError) toast.error('Transaction failed');
   }, [isSuccess, isError]);
+  useEffect(() => {
+    if (writeError) toast.error(writeError.message || 'Transaction rejected or failed');
+  }, [writeError]);
 
   const run = useCallback(
     (fn: () => void) => {
@@ -405,7 +462,11 @@ function PlinkoAdminSection() {
     <ContractSection title="Plinko">
       <WriteRow
         label="setMinWager(uint256)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!minWager.trim()) {
+            toast.error('Enter min wager (wei)');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -413,15 +474,19 @@ function PlinkoAdminSection() {
               functionName: 'setMinWager',
               args: [BigInt(minWager)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={minWager} onChange={(e) => setMinWager(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setMaxWager(uint256)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!maxWager.trim()) {
+            toast.error('Enter max wager (wei)');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -429,8 +494,8 @@ function PlinkoAdminSection() {
               functionName: 'setMaxWager',
               args: [BigInt(maxWager)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={maxWager} onChange={(e) => setMaxWager(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
@@ -439,7 +504,11 @@ function PlinkoAdminSection() {
       <WriteRow label="unpause()" onExecute={() => run(() => writeContract({ address: addr, abi: PLINKO_ABI, functionName: 'unpause' }))} loading={isPending || isConfirming} />
       <WriteRow
         label="emergencyWithdraw(uint256 amount)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!emergencyAmount.trim()) {
+            toast.error('Enter amount (wei)');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -447,15 +516,19 @@ function PlinkoAdminSection() {
               functionName: 'emergencyWithdraw',
               args: [BigInt(emergencyAmount)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={emergencyAmount} onChange={(e) => setEmergencyAmount(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="fundContract(uint256 amount)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!fundAmount.trim()) {
+            toast.error('Enter amount (wei). Approve MORBIUS first.');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -463,8 +536,8 @@ function PlinkoAdminSection() {
               functionName: 'fundContract',
               args: [BigInt(fundAmount)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} placeholder="wei (approve first)" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
@@ -480,13 +553,16 @@ function BlackjackAdminSection() {
   const [feeRecipient, setFeeRecipient] = useState('');
   const [emergencyPause, setEmergencyPause] = useState('true');
   const [emergencyAmount, setEmergencyAmount] = useState('');
-  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
 
   useEffect(() => {
     if (isSuccess) toast.success('Transaction confirmed');
     if (isError) toast.error('Transaction failed');
   }, [isSuccess, isError]);
+  useEffect(() => {
+    if (writeError) toast.error(writeError.message || 'Transaction rejected or failed');
+  }, [writeError]);
 
   const run = useCallback(
     (fn: () => void) => {
@@ -505,7 +581,11 @@ function BlackjackAdminSection() {
     <ContractSection title="Blackjack V2">
       <WriteRow
         label="setAuthorizedServer(address)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!authorizedServer.trim() || !authorizedServer.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -513,15 +593,19 @@ function BlackjackAdminSection() {
               functionName: 'setAuthorizedServer',
               args: [authorizedServer as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={authorizedServer} onChange={(e) => setAuthorizedServer(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setEmergencyAdmin(address)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!emergencyAdmin.trim() || !emergencyAdmin.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -529,15 +613,19 @@ function BlackjackAdminSection() {
               functionName: 'setEmergencyAdmin',
               args: [emergencyAdmin as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={emergencyAdmin} onChange={(e) => setEmergencyAdmin(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setBetFee(uint256 bps)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!betFeeBps.trim()) {
+            toast.error('Enter basis points');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -545,15 +633,19 @@ function BlackjackAdminSection() {
               functionName: 'setBetFee',
               args: [BigInt(betFeeBps)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={betFeeBps} onChange={(e) => setBetFeeBps(e.target.value)} placeholder="basis points" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setFeeRecipient(address)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!feeRecipient.trim() || !feeRecipient.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -561,8 +653,8 @@ function BlackjackAdminSection() {
               functionName: 'setFeeRecipient',
               args: [feeRecipient as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={feeRecipient} onChange={(e) => setFeeRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
@@ -593,7 +685,11 @@ function BlackjackAdminSection() {
       </WriteRow>
       <WriteRow
         label="emergencyWithdraw(uint256) — emergency admin only"
-        onExecute={() =>
+        onExecute={() => {
+          if (!emergencyAmount.trim()) {
+            toast.error('Enter amount (wei)');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -601,8 +697,8 @@ function BlackjackAdminSection() {
               functionName: 'emergencyWithdraw',
               args: [BigInt(emergencyAmount)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={emergencyAmount} onChange={(e) => setEmergencyAmount(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
@@ -622,13 +718,16 @@ function EscrowAdminSection() {
   const [payoutAmount, setPayoutAmount] = useState('');
   const [remainderTo, setRemainderTo] = useState('');
   const [reclaimTo, setReclaimTo] = useState('');
-  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
 
   useEffect(() => {
     if (isSuccess) toast.success('Transaction confirmed');
     if (isError) toast.error('Transaction failed');
   }, [isSuccess, isError]);
+  useEffect(() => {
+    if (writeError) toast.error(writeError.message || 'Transaction rejected or failed');
+  }, [writeError]);
 
   const run = useCallback(
     (fn: () => void) => {
@@ -659,7 +758,11 @@ function EscrowAdminSection() {
     <ContractSection title="Tournament Prize Escrow">
       <WriteRow
         label="setAuthorizedServer(address)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!authServer.trim() || !authServer.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -667,15 +770,19 @@ function EscrowAdminSection() {
               functionName: 'setAuthorizedServer',
               args: [authServer as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={authServer} onChange={(e) => setAuthServer(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="depositPrizePool(bytes32 tournamentId, address token, uint256 amount)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!token.trim() || !token.startsWith('0x') || !amount.trim()) {
+            toast.error('Enter tournamentId, valid token 0x address, and amount. Approve token first.');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -683,8 +790,8 @@ function EscrowAdminSection() {
               functionName: 'depositPrizePool',
               args: [tid, token as `0x${string}`, BigInt(amount)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={tournamentIdHex} onChange={(e) => setTournamentIdHex(e.target.value)} placeholder="0x… or UTF-8 string" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
@@ -693,7 +800,11 @@ function EscrowAdminSection() {
       </WriteRow>
       <WriteRow
         label="payout(bytes32 tournamentId, address winner, uint256 amount)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!winner.trim() || !winner.startsWith('0x') || !payoutAmount.trim()) {
+            toast.error('Enter tournamentId, valid winner 0x address, and amount');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -701,8 +812,8 @@ function EscrowAdminSection() {
               functionName: 'payout',
               args: [tid, winner as `0x${string}`, BigInt(payoutAmount)],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={tournamentIdHex} onChange={(e) => setTournamentIdHex(e.target.value)} placeholder="tournamentId" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
@@ -711,7 +822,11 @@ function EscrowAdminSection() {
       </WriteRow>
       <WriteRow
         label="payoutRemainderTo(bytes32 tournamentId, address to)"
-        onExecute={() =>
+        onExecute={() => {
+          if (!remainderTo.trim() || !remainderTo.startsWith('0x')) {
+            toast.error('Enter tournamentId and valid 0x recipient');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -719,8 +834,8 @@ function EscrowAdminSection() {
               functionName: 'payoutRemainderTo',
               args: [tid, remainderTo as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={tournamentIdHex} onChange={(e) => setTournamentIdHex(e.target.value)} placeholder="tournamentId" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
@@ -728,7 +843,11 @@ function EscrowAdminSection() {
       </WriteRow>
       <WriteRow
         label="reclaimUnclaimed(bytes32 tournamentId, address to) — owner only"
-        onExecute={() =>
+        onExecute={() => {
+          if (!reclaimTo.trim() || !reclaimTo.startsWith('0x')) {
+            toast.error('Enter tournamentId and valid 0x recipient');
+            return;
+          }
           run(() =>
             writeContract({
               address: addr,
@@ -736,8 +855,8 @@ function EscrowAdminSection() {
               functionName: 'reclaimUnclaimed',
               args: [tid, reclaimTo as `0x${string}`],
             })
-          )
-        }
+          );
+        }}
         loading={isPending || isConfirming}
       >
         <Input value={tournamentIdHex} onChange={(e) => setTournamentIdHex(e.target.value)} placeholder="tournamentId" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
@@ -853,7 +972,7 @@ export default function AdminConfigTab() {
         </CardContent>
       </Card>
 
-      <div className="text-xs font-medium text-slate-400 pt-2 border-t border-slate-700/50">Contract admin (owner / authorized only)</div>
+      <div className="text-xs font-medium text-slate-400 pt-2 border-t border-slate-700/50">Contract admin: ensure wallet is on PulseChain. Only contract owner (or authorized) can execute these functions.</div>
 
       <LotteryAdminSection />
       <KenoAdminSection />
