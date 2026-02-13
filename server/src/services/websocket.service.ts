@@ -76,11 +76,13 @@ const CHAT_DISPLAY_NAME_MAX_LEN = 32;
 // Rate limit for create_game (1 game per second per connection)
 const CREATE_GAME_COOLDOWN_MS = 1000;
 
-// Bet limits (in MORBIUS, 18 decimals)
-const BET_LIMITS = {
+// Default bet limits (in MORBIUS, 18 decimals) when admin config is missing
+const DEFAULT_BET_LIMITS = {
   MIN_BET: BigInt('1000000000000000000'),         // 1 MORBIUS
   MAX_BET: BigInt('100000000000000000000000'),    // 100,000 MORBIUS
 };
+
+const CONFIG_CACHE_TTL_MS = 60_000; // 1 minute
 
 export class WebSocketService {
   private wss: WebSocketServer;
@@ -92,6 +94,7 @@ export class WebSocketService {
   private publicClient: any;
   private contractAddress: `0x${string}`;
   private tournamentService?: TournamentService;
+  private betLimitsCache: { minBet: bigint; maxBet: bigint; cachedAt: number } | null = null;
 
   constructor(
     server: any,
@@ -150,6 +153,46 @@ export class WebSocketService {
       } else {
         this.chatMessageTimestampsByAddress.set(address, kept);
       }
+    }
+  }
+
+  /** Resolve Blackjack min/max bet from admin config (cached). Uses defaults if missing/invalid. */
+  private async getBetLimits(): Promise<{ minBet: bigint; maxBet: bigint }> {
+    const now = Date.now();
+    if (this.betLimitsCache && now - this.betLimitsCache.cachedAt < CONFIG_CACHE_TTL_MS) {
+      return { minBet: this.betLimitsCache.minBet, maxBet: this.betLimitsCache.maxBet };
+    }
+    try {
+      const config = await this.dbService.getAdminGameConfig();
+      let minBet = DEFAULT_BET_LIMITS.MIN_BET;
+      let maxBet = DEFAULT_BET_LIMITS.MAX_BET;
+      const minStr = config.blackjack_min_bet?.trim();
+      const maxStr = config.blackjack_max_bet?.trim();
+      if (minStr) {
+        try {
+          const parsed = BigInt(minStr);
+          if (parsed >= 0n) minBet = parsed;
+        } catch {
+          /* keep default */
+        }
+      }
+      if (maxStr) {
+        try {
+          const parsed = BigInt(maxStr);
+          if (parsed > 0n) maxBet = parsed;
+        } catch {
+          /* keep default */
+        }
+      }
+      if (minBet > maxBet) {
+        minBet = DEFAULT_BET_LIMITS.MIN_BET;
+        maxBet = DEFAULT_BET_LIMITS.MAX_BET;
+      }
+      this.betLimitsCache = { minBet, maxBet, cachedAt: now };
+      return { minBet, maxBet };
+    } catch (err) {
+      logger.warn('Failed to load admin game config for bet limits, using defaults', { error: err });
+      return { minBet: DEFAULT_BET_LIMITS.MIN_BET, maxBet: DEFAULT_BET_LIMITS.MAX_BET };
     }
   }
 
@@ -643,11 +686,12 @@ export class WebSocketService {
       }
 
       const totalStake = betAmount + perfectPairsBetAmount;
-      if (betAmount < BET_LIMITS.MIN_BET) {
-        return this.sendError(ws, `Bet amount too small. Minimum bet is ${BET_LIMITS.MIN_BET.toString()} (1 MORBIUS)`, message.requestId);
+      const { minBet, maxBet } = await this.getBetLimits();
+      if (betAmount < minBet) {
+        return this.sendError(ws, `Bet amount too small. Minimum bet is ${minBet.toString()}`, message.requestId);
       }
-      if (betAmount > BET_LIMITS.MAX_BET) {
-        return this.sendError(ws, `Bet amount too large. Maximum bet is ${BET_LIMITS.MAX_BET.toString()} (100,000 MORBIUS)`, message.requestId);
+      if (betAmount > maxBet) {
+        return this.sendError(ws, `Bet amount too large. Maximum bet is ${maxBet.toString()}`, message.requestId);
       }
 
       try {

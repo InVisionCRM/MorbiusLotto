@@ -352,6 +352,43 @@ async function initializeServices() {
       }
     });
 
+    // Public: effective Blackjack bet limits from admin config (for UI; same logic as WS validation)
+    const DEFAULT_MIN_BET = '1000000000000000000';
+    const DEFAULT_MAX_BET = '100000000000000000000000';
+    app.get('/api/blackjack/limits', async (req, res) => {
+      try {
+        const config = await dbService.getAdminGameConfig();
+        let minBet = DEFAULT_MIN_BET;
+        let maxBet = DEFAULT_MAX_BET;
+        const minStr = config.blackjack_min_bet?.trim();
+        const maxStr = config.blackjack_max_bet?.trim();
+        if (minStr) {
+          try {
+            const parsed = BigInt(minStr);
+            if (parsed >= 0n) minBet = parsed.toString();
+          } catch {
+            /* keep default */
+          }
+        }
+        if (maxStr) {
+          try {
+            const parsed = BigInt(maxStr);
+            if (parsed > 0n) maxBet = parsed.toString();
+          } catch {
+            /* keep default */
+          }
+        }
+        if (BigInt(minBet) > BigInt(maxBet)) {
+          minBet = DEFAULT_MIN_BET;
+          maxBet = DEFAULT_MAX_BET;
+        }
+        sendJson(res, { minBet, maxBet });
+      } catch (error) {
+        logger.error('Error fetching blackjack limits:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Admin: Blackjack tables CRUD (requires x-admin-wallet in allowed list)
     app.get('/api/admin/tables', async (req, res) => {
       try {

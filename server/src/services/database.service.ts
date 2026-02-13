@@ -397,6 +397,17 @@ export class DatabaseService {
     return await this.updatePlayerBalance(walletAddress, amount, 'add');
   }
 
+  /** Credit an address (e.g. fee wallet). Upserts a player row if missing. */
+  async addBalanceToAddress(walletAddress: string, amount: bigint): Promise<void> {
+    if (amount <= 0n) return;
+    const normalizedAddress = this.normalizeAddress(walletAddress);
+    await this.pool.query(
+      `INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
+       ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`,
+      [normalizedAddress, amount.toString()]
+    );
+  }
+
   // ============================================
   // Pending Withdrawal Methods
   // ============================================

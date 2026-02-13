@@ -111,6 +111,53 @@ export class BlackjackGameService {
     return gameNumber * BlackjackGameService.GAME_NONCE_MULTIPLIER;
   }
 
+  /** Resolve Blackjack fee % and fee wallet from admin config + env. Fee applies to profit only. */
+  private async getBlackjackFeeConfig(): Promise<{ feePercent: number; feeWallet: string | null }> {
+    let feePercent = 0;
+    try {
+      const config = await this.dbService.getAdminGameConfig();
+      const raw = config.blackjack_fee_percent?.trim();
+      if (raw !== undefined && raw !== '') {
+        const n = parseInt(raw, 10);
+        if (!Number.isNaN(n) && n >= 0 && n <= 100) feePercent = n;
+      }
+    } catch (err) {
+      logger.warn('Failed to load blackjack_fee_percent from admin config', { error: err });
+    }
+    const feeWallet = (process.env.BLACKJACK_FEE_WALLET as string | undefined)?.trim() || null;
+    if (feePercent > 0 && !feeWallet) {
+      logger.warn('blackjack_fee_percent is set but BLACKJACK_FEE_WALLET is not; fee will not be collected');
+    }
+    return { feePercent, feeWallet };
+  }
+
+  /** Apply fee on profit (if configured); credit player (payout - fee) and fee wallet (fee). Returns fee amount applied. */
+  private async creditPayoutWithFee(
+    playerAddress: string,
+    totalStake: bigint,
+    grossPayout: bigint
+  ): Promise<bigint> {
+    if (grossPayout <= 0n) return 0n;
+    const { feePercent, feeWallet } = await this.getBlackjackFeeConfig();
+    const profit = grossPayout > totalStake ? grossPayout - totalStake : 0n;
+    if (feePercent > 0 && feeWallet && profit > 0n) {
+      const feeAmount = (profit * BigInt(feePercent)) / 100n;
+      const playerGets = grossPayout - feeAmount;
+      await this.dbService.addPlayerBalance(playerAddress, playerGets);
+      await this.dbService.addBalanceToAddress(feeWallet, feeAmount);
+      logger.debug('Blackjack payout with fee', {
+        playerAddress,
+        grossPayout: grossPayout.toString(),
+        feePercent,
+        feeAmount: feeAmount.toString(),
+        playerGets: playerGets.toString(),
+      });
+      return feeAmount;
+    }
+    await this.dbService.addPlayerBalance(playerAddress, grossPayout);
+    return 0n;
+  }
+
   private ensureSessionSeed(session: any): { serverSeed: string; serverSeedHash: string } {
     // game_sessions now stores server_seed (secret) + server_seed_hash (commitment).
     // Older rows may have only the hash; we self-heal by generating a new seed and updating the session.
@@ -281,12 +328,12 @@ export class BlackjackGameService {
 
       // If the game completed immediately, record profit + credit payout (main + Perfect Pairs) + reveal server seed
       if (result) {
-        const profit = immediatePayout > totalStake ? immediatePayout - totalStake : 0n;
-        if (profit > 0n) {
-          await this.dbService.updateSessionStats(session.id, 0n, profit, false);
-        }
         if (immediatePayout > 0n) {
-          await this.dbService.addPlayerBalance(request.playerAddress, immediatePayout);
+          const feeApplied = await this.creditPayoutWithFee(request.playerAddress, totalStake, immediatePayout);
+          const profit = immediatePayout > totalStake ? immediatePayout - totalStake : 0n;
+          if (profit > 0n) {
+            await this.dbService.updateSessionStats(session.id, 0n, profit - feeApplied, false);
+          }
           logger.debug('Added winnings to balance', {
             playerAddress: request.playerAddress,
             payout: immediatePayout.toString(),
@@ -948,22 +995,22 @@ export class BlackjackGameService {
       completed_at: new Date()
     });
 
-    // Add winnings to off-chain balance (main hand(s) + Perfect Pairs)
+    // Add winnings to off-chain balance (main hand(s) + Perfect Pairs), applying fee on profit if configured
     if (totalPayoutWithSideBet > 0n) {
       const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
-      await this.dbService.addPlayerBalance(playerAddress, totalPayoutWithSideBet);
+      const feeApplied = await this.creditPayoutWithFee(playerAddress, totalStakeForGame, totalPayoutWithSideBet);
       logger.debug('Added game winnings to balance', {
         playerAddress,
         totalPayout: totalPayoutWithSideBet.toString(),
         perfectPairsPayout: perfectPairsPayout.toString(),
         gameId
       });
-    }
 
-    // Update session win stats (profit only; do NOT increment game_count)
-    const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
-    if (profit > 0n) {
-      await this.dbService.updateSessionStats(game.session_id, 0n, profit, false);
+      // Update session win stats (net profit after fee; do NOT increment game_count)
+      const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
+      if (profit > 0n) {
+        await this.dbService.updateSessionStats(game.session_id, 0n, profit - feeApplied, false);
+      }
     }
 
     // Reveal server seed commitment for verification
@@ -1335,12 +1382,11 @@ export class BlackjackGameService {
 
     if (totalPayoutWithSideBet > 0n) {
       const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
-      await this.dbService.addPlayerBalance(playerAddress, totalPayoutWithSideBet);
-    }
-
-    const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
-    if (profit > 0n) {
-      await this.dbService.updateSessionStats(game.session_id, 0n, profit, false);
+      const feeApplied = await this.creditPayoutWithFee(playerAddress, totalStakeForGame, totalPayoutWithSideBet);
+      const profit = totalPayoutWithSideBet > totalStakeForGame ? totalPayoutWithSideBet - totalStakeForGame : 0n;
+      if (profit > 0n) {
+        await this.dbService.updateSessionStats(game.session_id, 0n, profit - feeApplied, false);
+      }
     }
 
     const session = await this.dbService.getSessionById(game.session_id);
