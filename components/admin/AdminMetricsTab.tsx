@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { getApiUrlOptional } from '@/lib/api-urls';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatEther } from 'viem';
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
@@ -41,18 +40,17 @@ const RANGES: { value: Range; label: string }[] = [
 
 export default function AdminMetricsTab() {
   const { address } = useAccount();
-  const apiBase = getApiUrlOptional();
   const [range, setRange] = useState<Range>('24h');
   const [data, setData] = useState<AdminMetricsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMetrics = useCallback(async () => {
-    if (!apiBase || !address) return;
+    if (!address) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/admin/metrics?range=${range}`, {
+      const res = await fetch(`/api/admin/metrics?range=${range}`, {
         headers: { 'x-admin-wallet': address },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -64,17 +62,17 @@ export default function AdminMetricsTab() {
     } finally {
       setLoading(false);
     }
-  }, [apiBase, address, range]);
+  }, [address, range]);
 
   useEffect(() => {
     fetchMetrics();
   }, [fetchMetrics]);
 
-  if (!apiBase) {
+  if (!address) {
     return (
       <Card className="bg-slate-900/60 border-slate-700/50">
         <CardContent className="py-4 px-3 text-xs text-slate-500">
-          Backend not configured (NEXT_PUBLIC_API_URL).
+          Connect wallet to load metrics.
         </CardContent>
       </Card>
     );

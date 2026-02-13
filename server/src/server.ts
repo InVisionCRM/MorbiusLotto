@@ -17,6 +17,7 @@ import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
+import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS } from './config/contracts';
 
 const ERC20_BALANCE_OF_ABI = [
   { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
@@ -565,7 +566,13 @@ async function initializeServices() {
           morbius.lottery = '0';
         }
 
-        sendJson(res, { api, ws, games, morbius, blackjackReserves });
+        const contractAddresses: Record<string, string> = {
+          blackjack: blackjackAddress || '',
+          plinko: PLINKO_ADDRESS,
+          keno: KENO_ADDRESS,
+          lottery: LOTTERY_ADDRESS,
+        };
+        sendJson(res, { api, ws, games, morbius, blackjackReserves, contractAddresses });
       } catch (error) {
         logger.error('Error in admin health:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -611,10 +618,18 @@ async function initializeServices() {
           res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
           return;
         }
-        const [aggregates, series] = await Promise.all([
-          dbService.getMetricsAggregates(range as '24h' | '7d' | '30d' | 'all'),
-          dbService.getMetricsSeries(range as '24h' | '7d' | '30d' | 'all'),
-        ]);
+        let aggregates: { volume: bigint; games: number; activePlayers: number; pnl: bigint; tournamentEntries: number };
+        let series: Array<{ period: string; volume: string; games: number }>;
+        try {
+          [aggregates, series] = await Promise.all([
+            dbService.getMetricsAggregates(range as '24h' | '7d' | '30d' | 'all'),
+            dbService.getMetricsSeries(range as '24h' | '7d' | '30d' | 'all'),
+          ]);
+        } catch (dbError) {
+          logger.warn('Metrics DB query failed, returning empty metrics', { error: dbError });
+          aggregates = { volume: 0n, games: 0, activePlayers: 0, pnl: 0n, tournamentEntries: 0 };
+          series = [];
+        }
         sendJson(res, {
           range,
           volume: aggregates.volume.toString(),

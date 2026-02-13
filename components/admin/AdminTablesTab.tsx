@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { getApiUrlOptional } from '@/lib/api-urls';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { FileUpload } from '@/components/ui/file-upload';
-import { Plus, Pencil, Trash2, ExternalLink, ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, ExternalLink, ImageIcon, Copy } from 'lucide-react';
 import Image from 'next/image';
 
 /** Canonical reference image for table viewpoint. New table images should match this perspective so chips and cards align. */
@@ -57,7 +56,6 @@ export interface BlackjackTableRow {
 
 export default function AdminTablesTab() {
   const { address } = useAccount();
-  const apiBase = getApiUrlOptional();
   const [tables, setTables] = useState<BlackjackTableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,16 +65,16 @@ export default function AdminTablesTab() {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchTables = useCallback(async () => {
-    if (!apiBase || !address) return;
+    if (!address) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/admin/tables`, {
+      const res = await fetch('/api/admin/tables', {
         headers: { 'x-admin-wallet': address },
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || `HTTP ${res.status}`);
+        throw new Error(data.message || data.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
       setTables(Array.isArray(data) ? data : []);
@@ -86,17 +84,17 @@ export default function AdminTablesTab() {
     } finally {
       setLoading(false);
     }
-  }, [apiBase, address]);
+  }, [address]);
 
   useEffect(() => {
     fetchTables();
   }, [fetchTables]);
 
-  if (!apiBase) {
+  if (!address) {
     return (
       <Card className="bg-slate-900/60 border-slate-700/50">
         <CardContent className="py-4 px-3 text-xs text-slate-500">
-          Backend not configured (NEXT_PUBLIC_API_URL). Tables are stored on the game server.
+          Connect wallet to load tables.
         </CardContent>
       </Card>
     );
@@ -167,14 +165,28 @@ export default function AdminTablesTab() {
                     </TableCell>
                     <TableCell className="py-1.5">
                       {row.token_contract_address ? (
-                        <a
-                          href={`https://dexscreener.com/pulsechain/${row.token_contract_address}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] text-cyan-400 hover:underline flex items-center gap-0.5"
-                        >
-                          {row.token_contract_address.slice(0, 6)}… <ExternalLink className="w-2.5 h-2.5" />
-                        </a>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="font-mono text-[10px] text-slate-400" title={row.token_contract_address}>
+                            {row.token_contract_address}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(row.token_contract_address!)}
+                            className="p-0.5 rounded text-slate-500 hover:text-cyan-400 hover:bg-slate-700/50"
+                            title="Copy address"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                          <a
+                            href={`https://dexscreener.com/pulsechain/${row.token_contract_address}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-400 hover:underline"
+                            title="DexScreener"
+                          >
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
                       ) : (
                         <span className="text-[11px] text-slate-500">—</span>
                       )}
@@ -226,7 +238,6 @@ export default function AdminTablesTab() {
           onOpenChange={(open) => !open && setEditRow(null)}
           onSuccess={() => { setEditRow(null); fetchTables(); }}
           address={address ?? ''}
-          apiBase={apiBase}
           submitting={submitting}
           setSubmitting={setSubmitting}
         />
@@ -237,7 +248,6 @@ export default function AdminTablesTab() {
         onClose={() => setDeleteId(null)}
         onSuccess={() => { setDeleteId(null); fetchTables(); }}
         address={address ?? ''}
-        apiBase={apiBase}
       />
     </>
   );
@@ -280,9 +290,7 @@ function AddTableDialog({
         throw new Error(d.error || 'Upload failed');
       }
       const { path } = await uploadRes.json();
-      const apiBase = getApiUrlOptional();
-      if (!apiBase) throw new Error('Backend not configured');
-      const createRes = await fetch(`${apiBase}/api/admin/tables`, {
+      const createRes = await fetch('/api/admin/tables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-wallet': address },
         body: JSON.stringify({ kind, name: name.trim(), src: path, enabled: true }),
@@ -379,7 +387,6 @@ function EditTableDialog({
   onOpenChange,
   onSuccess,
   address,
-  apiBase,
   submitting,
   setSubmitting,
 }: {
@@ -388,7 +395,6 @@ function EditTableDialog({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   address: string;
-  apiBase: string;
   submitting: boolean;
   setSubmitting: (v: boolean) => void;
 }) {
@@ -408,7 +414,7 @@ function EditTableDialog({
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch(`${apiBase}/api/admin/tables/${row.id}`, {
+      const res = await fetch(`/api/admin/tables/${row.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'x-admin-wallet': address },
         body: JSON.stringify({
@@ -490,13 +496,11 @@ function DeleteConfirmDialog({
   onClose,
   onSuccess,
   address,
-  apiBase,
 }: {
   id: string | null;
   onClose: () => void;
   onSuccess: () => void;
   address: string;
-  apiBase: string;
 }) {
   const [deleting, setDeleting] = useState(false);
 
@@ -504,7 +508,7 @@ function DeleteConfirmDialog({
     if (!id) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${apiBase}/api/admin/tables/${id}`, {
+      const res = await fetch(`/api/admin/tables/${id}`, {
         method: 'DELETE',
         headers: { 'x-admin-wallet': address },
       });

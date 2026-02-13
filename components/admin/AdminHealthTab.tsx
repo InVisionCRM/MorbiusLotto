@@ -2,10 +2,9 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { getApiUrlOptional } from '@/lib/api-urls';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatEther } from 'viem';
-import { Activity, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { Activity, RefreshCw, CheckCircle, XCircle, Copy } from 'lucide-react';
 
 export interface AdminHealthData {
   api: string;
@@ -16,6 +15,7 @@ export interface AdminHealthData {
     totalMorbiusInContract: string;
     addressesWithReserve: Array<{ address: string; reserve: string }>;
   };
+  contractAddresses?: Record<string, string>;
 }
 
 function formatMorbius(wei: string): string {
@@ -30,19 +30,22 @@ function formatMorbius(wei: string): string {
   }
 }
 
+function copyToClipboard(text: string) {
+  void navigator.clipboard.writeText(text);
+}
+
 export default function AdminHealthTab() {
   const { address } = useAccount();
-  const apiBase = getApiUrlOptional();
   const [data, setData] = useState<AdminHealthData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchHealth = useCallback(async () => {
-    if (!apiBase || !address) return;
+    if (!address) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/admin/health`, {
+      const res = await fetch('/api/admin/health', {
         headers: { 'x-admin-wallet': address },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -54,17 +57,17 @@ export default function AdminHealthTab() {
     } finally {
       setLoading(false);
     }
-  }, [apiBase, address]);
+  }, [address]);
 
   useEffect(() => {
     fetchHealth();
   }, [fetchHealth]);
 
-  if (!apiBase) {
+  if (!address) {
     return (
       <Card className="bg-slate-900/60 border-slate-700/50">
         <CardContent className="py-4 px-3 text-xs text-slate-500">
-          Backend not configured (NEXT_PUBLIC_API_URL).
+          Connect wallet to load health.
         </CardContent>
       </Card>
     );
@@ -124,6 +127,31 @@ export default function AdminHealthTab() {
                 ))}
               </div>
             </div>
+            {data.contractAddresses && Object.keys(data.contractAddresses).length > 0 && (
+              <div>
+                <p className="text-slate-500 mb-1">Contract addresses (click to copy)</p>
+                <div className="space-y-1.5">
+                  {(['blackjack', 'plinko', 'keno', 'lottery'] as const).map((game) => {
+                    const addr = data.contractAddresses?.[game];
+                    if (!addr) return null;
+                    return (
+                      <div key={game} className="flex items-center gap-2 flex-wrap">
+                        <span className="capitalize text-slate-400 w-20 shrink-0">{game}</span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(addr)}
+                          className="font-mono text-[10px] text-cyan-300/90 hover:text-cyan-200 break-all text-left bg-slate-800/80 px-2 py-1 rounded border border-slate-600 hover:border-cyan-500/40 flex items-center gap-1.5 max-w-full"
+                          title="Copy full address"
+                        >
+                          <Copy className="w-3 h-3 shrink-0" />
+                          {addr}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div>
               <p className="text-slate-500 mb-1">Blackjack: addresses with reserve &gt; 0 (sample)</p>
               <p className="text-slate-400 text-[10px] mb-1">

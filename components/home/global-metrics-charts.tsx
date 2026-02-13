@@ -99,17 +99,12 @@ export function GlobalMetricsCharts() {
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-red-500/30 p-6 mb-6" style={PANEL_STYLE}>
-          <p className="text-red-400/90 text-sm">{error}</p>
-        </div>
+        <p className="text-red-400/90 text-sm mb-3 text-center">
+          {error}
+        </p>
       )}
 
-      {loading && chartData.length === 0 ? (
-        <div className="rounded-2xl border border-cyan-500/30 p-6" style={PANEL_STYLE}>
-          <p className="text-white/50 text-sm">Loading…</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Volume */}
           <div
             className="rounded-2xl border border-cyan-500/30 p-4 h-52 flex flex-col"
@@ -118,7 +113,9 @@ export function GlobalMetricsCharts() {
             <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-2">
               Volume (MORBIUS)
             </p>
-            {chartData.length > 0 ? (
+            {loading && chartData.length === 0 ? (
+              <p className="text-white/50 text-xs">Loading…</p>
+            ) : chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <XAxis dataKey="label" tick={{ fontSize: 9 }} stroke="#94a3b8" />
@@ -149,7 +146,9 @@ export function GlobalMetricsCharts() {
             <p className="text-purple-400/90 text-xs font-medium uppercase tracking-wider mb-2">
               Games
             </p>
-            {chartData.length > 0 ? (
+            {loading && chartData.length === 0 ? (
+              <p className="text-white/50 text-xs">Loading…</p>
+            ) : chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <XAxis dataKey="label" tick={{ fontSize: 9 }} stroke="#94a3b8" />
@@ -176,7 +175,9 @@ export function GlobalMetricsCharts() {
             <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-2">
               Avg bet (MORBIUS)
             </p>
-            {chartData.length > 0 ? (
+            {loading && chartData.length === 0 ? (
+              <p className="text-white/50 text-xs">Loading…</p>
+            ) : chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <XAxis dataKey="label" tick={{ fontSize: 9 }} stroke="#94a3b8" />
@@ -199,7 +200,6 @@ export function GlobalMetricsCharts() {
             )}
           </div>
         </div>
-      )}
     </section>
   )
 }

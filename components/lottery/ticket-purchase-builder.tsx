@@ -473,16 +473,7 @@ export function TicketPurchaseBuilder({
       }
     }
 
-    // Check if signature verification is needed for high-value transactions
-    const totalCost = paymentMethod === 'PLS' ? plsValueWei : MORBIUSCost
-    const isHighValue = Number(totalCost) > 100 * 10**18 // > 100 MORBIUS or equivalent PLS
-
-    if (isHighValue) {
-      setShowSignaturePrompt(true)
-      return // Wait for signature confirmation
-    }
-
-    // If we reach here, either it's not a high-value transaction or signature was already confirmed
+    // Large-purchase confirmation popup disabled; proceed directly to purchase
     await executePurchaseAfterSignature()
   }
 

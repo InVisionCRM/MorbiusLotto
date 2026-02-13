@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import Image from "next/image";
 import React, { useEffect, useState } from "react";
 
 export type QuoteCardItem = {
@@ -11,8 +10,11 @@ export type QuoteCardItem = {
 };
 
 export type ImageCardItem = {
+  /** Optional image URL; when omitted, card is text-only (no image). */
   src?: string;
   name: string;
+  /** Optional second line (e.g. value + duration). */
+  subtitle?: string;
   href?: string;
 };
 
@@ -91,7 +93,7 @@ export const InfiniteMovingCards = ({
       <ul
         ref={scrollerRef}
         className={cn(
-          "flex w-max min-w-full shrink-0 flex-nowrap gap-4 py-4",
+          "flex w-max min-w-full shrink-0 flex-nowrap gap-3 py-3",
           start && "animate-scroll",
           pauseOnHover && "hover:[animation-play-state:paused]",
         )}
@@ -99,10 +101,10 @@ export const InfiniteMovingCards = ({
         {items.map((item, idx) => (
           <li
             className={cn(
-              "relative shrink-0 rounded-2xl border border-b-0 overflow-hidden",
+              "relative shrink-0 rounded-xl border overflow-hidden",
               variant === "quote"
                 ? "w-[350px] max-w-full px-8 py-6 md:w-[450px] border-zinc-200 bg-[linear-gradient(180deg,#fafafa,#f5f5f5)] dark:border-zinc-700 dark:bg-[linear-gradient(180deg,#27272a,#18181b)]"
-                : "w-[280px] md:w-[320px] border-cyan-500/30 bg-gradient-to-b from-slate-950 to-slate-900 dark:border-cyan-500/30",
+                : "w-[200px] md:w-[240px] border-cyan-500/20 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(15,23,42,0.85))] dark:border-cyan-500/20",
             )}
             key={variant === "image" ? (item as ImageCardItem).name + idx : (item as QuoteCardItem).name + idx}
           >
@@ -110,35 +112,39 @@ export const InfiniteMovingCards = ({
               (() => {
                 const imageItem = item as ImageCardItem;
                 const content = (
-                  <div className="flex flex-col h-full">
+                  <div className="flex flex-col h-full min-h-0">
                     {imageItem.src ? (
                       <>
-                        <div className="relative aspect-[4/3] w-full bg-black/40">
-                          <Image
+                        <div className="relative aspect-[4/3] w-full bg-black/30 shrink-0">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
                             src={imageItem.src}
                             alt={imageItem.name}
-                            fill
-                            className="object-cover object-center"
-                            sizes="(max-width: 768px) 280px, 320px"
+                            className="w-full h-full object-cover object-center"
                           />
                         </div>
-                        <div className="px-4 py-3 text-center">
-                          <span className="text-sm font-semibold text-white">
+                        <div className="px-3 py-2 text-center shrink-0">
+                          <span className="text-xs font-medium text-white">
                             {imageItem.name}
                           </span>
                         </div>
                       </>
                     ) : (
-                      <div className="flex flex-1 min-h-[140px] items-center justify-center p-6">
-                        <span className="text-xl md:text-2xl font-bold text-cyan-300/90 text-center">
+                      <div className="flex flex-1 flex-col justify-center px-4 py-3 min-h-[72px]">
+                        <span className="text-xs font-semibold text-cyan-300/95 leading-tight">
                           {imageItem.name}
                         </span>
+                        {imageItem.subtitle && (
+                          <span className="text-[11px] text-white/60 mt-0.5 leading-tight tabular-nums">
+                            {imageItem.subtitle}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
                 );
                 return imageItem.href ? (
-                  <a href={imageItem.href} className="block h-full w-full">
+                  <a href={imageItem.href} className="block h-full w-full hover:bg-white/[0.03] transition-colors">
                     {content}
                   </a>
                 ) : content;

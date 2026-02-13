@@ -126,27 +126,26 @@ export function BlackjackTopPlayersCarousel() {
   }
 
   const cardItems: ImageCardItem[] = playerCards.map((result) => {
-    const displayName = result.display_name || formatAddress(result.wallet_address)
-    const addressSuffix = result.display_name ? `...${formatAddress(result.wallet_address)}` : displayName
+    const displayName = result.display_name || `...${formatAddress(result.wallet_address)}`
     const value = formatValue(result.category, result.value)
     const duration = formatPlayingDuration(result.created_at)
-    
+    const label = result.label.replace(/_/g, ' ')
     return {
-      src: result.profile_image_url || undefined,
-      name: `${result.label}: ${addressSuffix} • ${value} • Playing ${duration}`,
+      name: `${label} · ${displayName}`,
+      subtitle: `${value} · ${duration}`,
       href: `/player/${result.wallet_address}`,
     }
   })
 
   return (
-    <div className="w-full py-4 bg-gradient-to-b from-slate-950 to-slate-900">
+    <div className="w-full py-3 bg-gradient-to-b from-slate-950/95 to-slate-900/95">
       <InfiniteMovingCards
         items={cardItems}
         variant="image"
         direction="left"
         speed="normal"
         pauseOnHover={true}
-        className="[&_span]:text-white [&_a]:cursor-pointer [&_a:hover]:opacity-90"
+        className="max-w-5xl mx-auto [&_span]:text-inherit [&_a]:cursor-pointer"
       />
     </div>
   )
