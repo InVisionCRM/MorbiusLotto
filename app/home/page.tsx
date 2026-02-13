@@ -7,6 +7,7 @@ import { HeroSection } from '@/components/home/hero-section'
 import { LatestWins } from '@/components/home/latest-wins'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import { GlobalStatsSection } from '@/components/home/global-stats-section'
+import { GlobalMetricsCharts } from '@/components/home/global-metrics-charts'
 import { AcesParallaxSection } from '@/components/home/aces-parallax-section'
 import { GamesSection } from '@/components/home/games-section'
 import { RoadMap } from '@/components/home/RoadMap'
@@ -55,6 +56,9 @@ export default function Page() {
 
       {/* Platform stats: Blackjack + Plinko, Keno, Lottery, Big Wheel */}
       <GlobalStatsSection />
+
+      {/* Global metrics: 3-col area charts (volume, games, avg bet) */}
+      <GlobalMetricsCharts />
 
       {/* Roadmap: Tournaments, Slot Machines, Texas Hold'em, Sponsorship */}
       <RoadMap />

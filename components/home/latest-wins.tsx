@@ -18,8 +18,8 @@ function timeAgo(timestamp: number): string {
 }
 
 function formatAddress(address: string): string {
-  if (!address || address.length < 8) return address
-  return address.slice(-4)
+  if (!address || address.length < 10) return address
+  return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
 
 function WinNotification({ address, amount, game, timestamp, onAddressClick }: { address: string; amount: bigint; game: string; timestamp: number; onAddressClick: (address: string) => void }) {

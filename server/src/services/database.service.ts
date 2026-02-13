@@ -1409,6 +1409,35 @@ export class DatabaseService {
     }));
   }
 
+  /** Recent Blackjack wins (for public latest-wins feed). Only win/blackjack results. */
+  async getRecentGlobalWins(limit: number = 20): Promise<Array<{ gameId: string; playerAddress: string; result: string; betAmount: string; payout: string; timestamp: number }>> {
+    const query = `
+      SELECT
+        g.id AS game_id,
+        g.total_bet_amount,
+        g.total_payout,
+        g.result,
+        g.completed_at,
+        p.wallet_address AS player_address
+      FROM games g
+      JOIN game_sessions gs ON g.session_id = gs.id
+      JOIN players p ON gs.player_id = p.id
+      WHERE g.result IN ('win', 'blackjack')
+        AND g.completed_at IS NOT NULL
+      ORDER BY g.completed_at DESC
+      LIMIT $1
+    `;
+    const result = await this.pool.query(query, [limit]);
+    return result.rows.map((r: any) => ({
+      gameId: r.game_id,
+      playerAddress: r.player_address ?? '',
+      result: r.result === 'blackjack' ? 'blackjack' : 'win',
+      betAmount: String(r.total_bet_amount ?? '0'),
+      payout: String(r.total_payout ?? '0'),
+      timestamp: r.completed_at ? new Date(r.completed_at).getTime() : Date.now(),
+    }));
+  }
+
   /** Admin game config: get all key-value pairs. */
   async getAdminGameConfig(): Promise<Record<string, string>> {
     const result = await this.pool.query(`SELECT key, value FROM admin_game_config`);

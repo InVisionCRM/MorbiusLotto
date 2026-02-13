@@ -27,11 +27,6 @@ export interface WinEntry {
   txHash: string
 }
 
-// Format address for display (0x1234...5678)
-function formatAddress(address: string): string {
-  if (!address || address.length < 10) return address
-  return `${address.slice(0, 6)}...${address.slice(-4)}`
-}
 
 // Event signatures for each game
 const PLINKO_BALL_DROPPED = parseAbiItem(
@@ -42,8 +37,9 @@ const BIGWHEEL_BET_PLACED = parseAbiItem(
   'event BetPlaced(address indexed player, uint8 betType, uint256 betAmount, uint8 winningSegment, uint256 payout, bool usedPLS)'
 )
 
+// BlackjackV2: amount is int256 (profit/loss); positive = win
 const BLACKJACK_GAME_SETTLED = parseAbiItem(
-  'event GameSettled(address indexed player, uint256 betAmount, uint256 payout, string result)'
+  'event GameSettled(address indexed player, int256 amount, bytes32 indexed gameHash)'
 )
 
 const KENO_PRIZE_CLAIMED = parseAbiItem(
@@ -56,7 +52,7 @@ const LOTTERY_PRIZES_CLAIMED = parseAbiItem(
 
 const MAX_WINS = 50 // Maximum wins to keep in memory
 const POLL_INTERVAL = 10000 // Poll every 10 seconds for new events
-const LOOKBACK_BLOCKS = 1000n // How many blocks to look back on initial load
+const LOOKBACK_BLOCKS = 2000n // Look back ~5.5 hours at 10s/block (many RPCs limit eth_getLogs to 2k blocks)
 
 export function useLatestWins() {
   const publicClient = usePublicClient()
@@ -76,15 +72,14 @@ export function useLatestWins() {
     })
   }, [])
 
-  // Fetch recent wins from all games
+  // Fetch recent wins: chain events (if client) + API (Blackjack from DB)
   const fetchRecentWins = useCallback(async () => {
-    if (!publicClient) return
-
     try {
-      const currentBlock = await publicClient.getBlockNumber()
-      const fromBlock = lastBlock > 0n ? lastBlock + 1n : currentBlock - LOOKBACK_BLOCKS
+      if (publicClient) {
+        const currentBlock = await publicClient.getBlockNumber()
+        const fromBlock = lastBlock > 0n ? lastBlock + 1n : currentBlock - LOOKBACK_BLOCKS
 
-      // Fetch events from all games in parallel
+        // Fetch events from all games in parallel
       const [plinkoLogs, bigwheelLogs, blackjackLogs, kenoLogs, lotteryLogs] = await Promise.all([
         // Plinko BallDropped events
         (PLINKO_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
@@ -143,7 +138,7 @@ export function useLatestWins() {
         if (payout && payout > 0n) {
           addWin({
             id: `plinko-${log.transactionHash}-${log.logIndex}`,
-            address: formatAddress(log.args?.player as string),
+            address: (log.args?.player as string) ?? '',
             amount: payout,
             game: 'Plinko',
             timestamp: Date.now() - Number(currentBlock - (log.blockNumber || 0n)) * 2000, // Estimate timestamp
@@ -158,7 +153,7 @@ export function useLatestWins() {
         if (payout && payout > 0n) {
           addWin({
             id: `bigwheel-${log.transactionHash}-${log.logIndex}`,
-            address: formatAddress(log.args?.player as string),
+            address: (log.args?.player as string) ?? '',
             amount: payout,
             game: 'Big Wheel',
             timestamp: Date.now() - Number(currentBlock - (log.blockNumber || 0n)) * 2000,
@@ -167,15 +162,14 @@ export function useLatestWins() {
         }
       }
 
-      // Process Blackjack wins (payout > 0 and result includes 'win' or 'blackjack')
+      // Process BlackjackV2 wins (amount > 0 = profit)
       for (const log of blackjackLogs) {
-        const payout = log.args?.payout as bigint
-        const result = (log.args?.result as string)?.toLowerCase()
-        if (payout && payout > 0n && (result === 'win' || result === 'blackjack')) {
+        const amount = log.args?.amount as bigint | undefined
+        if (amount != null && amount > 0n) {
           addWin({
             id: `blackjack-${log.transactionHash}-${log.logIndex}`,
-            address: formatAddress(log.args?.player as string),
-            amount: payout,
+            address: (log.args?.player as string) ?? '',
+            amount,
             game: 'Blackjack',
             timestamp: Date.now() - Number(currentBlock - (log.blockNumber || 0n)) * 2000,
             txHash: log.transactionHash || '',
@@ -189,7 +183,7 @@ export function useLatestWins() {
         if (prize && prize > 0n) {
           addWin({
             id: `keno-${log.transactionHash}-${log.logIndex}`,
-            address: formatAddress(log.args?.player as string),
+            address: (log.args?.player as string) ?? '',
             amount: prize,
             game: 'Keno',
             timestamp: Date.now() - Number(currentBlock - (log.blockNumber || 0n)) * 2000,
@@ -204,7 +198,7 @@ export function useLatestWins() {
         if (totalAmount && totalAmount > 0n) {
           addWin({
             id: `lottery-${log.transactionHash}-${log.logIndex}`,
-            address: formatAddress(log.args?.player as string),
+            address: (log.args?.player as string) ?? '',
             amount: totalAmount,
             game: 'Lottery',
             timestamp: Date.now() - Number(currentBlock - (log.blockNumber || 0n)) * 2000,
@@ -213,7 +207,31 @@ export function useLatestWins() {
         }
       }
 
-      setLastBlock(currentBlock)
+        setLastBlock(currentBlock)
+      }
+
+      // Always fetch API recent wins (Blackjack from DB) so feed works without wallet/chain
+      try {
+        const res = await fetch(`/api/analytics/recent-wins?limit=20`)
+        if (res.ok) {
+          const { wins: apiWins } = await res.json()
+          for (const w of apiWins || []) {
+            if (w.payout && BigInt(w.payout) > 0n) {
+              addWin({
+                id: `bj-${w.gameId}`,
+                address: w.playerAddress ?? '',
+                amount: BigInt(w.payout),
+                game: 'Blackjack',
+                timestamp: typeof w.timestamp === 'number' ? w.timestamp : Date.now(),
+                txHash: '',
+              })
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching API recent wins:', e)
+      }
+
       setIsLoading(false)
     } catch (error) {
       console.error('Error fetching recent wins:', error)

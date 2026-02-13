@@ -245,6 +245,34 @@ async function initializeServices() {
       }
     });
 
+    // Public: recent Blackjack wins (for Latest Wins feed)
+    app.get('/api/analytics/recent-wins', async (req, res) => {
+      try {
+        const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+        const wins = await dbService.getRecentGlobalWins(limit);
+        sendJson(res, { wins });
+      } catch (error) {
+        logger.error('Error fetching recent wins:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Public: metrics time-series for charts (24h hourly, 7d/30d/all daily)
+    app.get('/api/analytics/series', async (req, res) => {
+      try {
+        const range = ((req.query.range as string) || '24h') as '24h' | '7d' | '30d' | 'all';
+        if (!['24h', '7d', '30d', 'all'].includes(range)) {
+          res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
+          return;
+        }
+        const series = await dbService.getMetricsSeries(range);
+        sendJson(res, { range, series });
+      } catch (error) {
+        logger.error('Error fetching metrics series:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Player game history endpoint
     app.get('/api/player/:address/games', async (req, res) => {
       try {
