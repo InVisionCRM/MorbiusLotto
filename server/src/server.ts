@@ -739,6 +739,7 @@ async function initializeServices() {
           sendJson(res, zeroPayload);
           return;
         }
+        
         sendJson(res, {
           range,
           // Blackjack metrics

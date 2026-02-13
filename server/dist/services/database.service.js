@@ -1097,12 +1097,85 @@ class DatabaseService {
                 this.pool.query(activeQuery),
                 this.pool.query(entriesQuery),
             ]);
+            console.log('[getMetricsAggregates] Query results:', {
+                volQuery: volRes.rows[0],
+                activeQuery: activeRes.rows[0],
+                entriesQuery: entriesRes.rows[0],
+                range,
+                gamesFilter,
+            });
             const volume = this.toBigInt(volRes.rows[0]?.volume ?? 0);
             const games = Number(volRes.rows[0]?.games ?? 0);
             const pnl = this.toBigInt(volRes.rows[0]?.pnl ?? 0);
             const activePlayers = Number(activeRes.rows[0]?.cnt ?? 0);
             const tournamentEntries = Number(entriesRes.rows[0]?.cnt ?? 0);
+            console.log('[getMetricsAggregates] Parsed results:', { volume: volume.toString(), games, activePlayers, pnl: pnl.toString(), tournamentEntries });
             return { volume, games, activePlayers, pnl, tournamentEntries };
+        }
+        catch (err) {
+            const missing = err?.code === '42P01' || err?.code === '42703' || (typeof err?.message === 'string' && /relation .* does not exist|column .* does not exist/i.test(err.message));
+            if (missing)
+                return zero();
+            throw err;
+        }
+    }
+    /** Tournament metrics aggregates for a time range. Returns zeros if tables are missing. */
+    async getTournamentMetrics(range) {
+        const zero = () => ({ totalTournaments: 0, activeTournaments: 0, completedTournaments: 0, totalEntries: 0, totalPrizePool: 0n, totalBuyIns: 0n });
+        const interval = range === '24h' ? "INTERVAL '24 hours'" : range === '7d' ? "INTERVAL '7 days'" : range === '30d' ? "INTERVAL '30 days'" : null;
+        const timeFilter = interval ? `WHERE t.created_at >= NOW() - ${interval}` : '';
+        const tournamentsQuery = `
+      SELECT
+        COUNT(*)::INT AS total,
+        COUNT(*) FILTER (WHERE t.status = 'active')::INT AS active,
+        COUNT(*) FILTER (WHERE t.status = 'completed')::INT AS completed,
+        (COALESCE(SUM(t.prize_pool), 0))::BIGINT AS total_prize_pool
+      FROM tournaments t
+      ${timeFilter}
+    `;
+        const buyInsQuery = interval
+            ? `
+        SELECT (COALESCE(SUM(t.buy_in_amount), 0))::BIGINT AS total_buy_ins
+        FROM tournaments t
+        JOIN tournament_entries te ON te.tournament_id = t.id
+        WHERE t.created_at >= NOW() - ${interval}
+      `
+            : `
+        SELECT (COALESCE(SUM(t.buy_in_amount), 0))::BIGINT AS total_buy_ins
+        FROM tournaments t
+        JOIN tournament_entries te ON te.tournament_id = t.id
+      `;
+        const entriesQuery = interval
+            ? `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te WHERE te.created_at >= NOW() - ${interval}`
+            : `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te`;
+        try {
+            const [tournamentsRes, buyInsRes, entriesRes] = await Promise.all([
+                this.pool.query(tournamentsQuery),
+                this.pool.query(buyInsQuery),
+                this.pool.query(entriesQuery),
+            ]);
+            console.log('[getTournamentMetrics] Query results:', {
+                tournamentsQuery: tournamentsRes.rows[0],
+                buyInsQuery: buyInsRes.rows[0],
+                entriesQuery: entriesRes.rows[0],
+                range,
+                timeFilter,
+            });
+            const totalTournaments = Number(tournamentsRes.rows[0]?.total ?? 0);
+            const activeTournaments = Number(tournamentsRes.rows[0]?.active ?? 0);
+            const completedTournaments = Number(tournamentsRes.rows[0]?.completed ?? 0);
+            const totalPrizePool = this.toBigInt(tournamentsRes.rows[0]?.total_prize_pool ?? 0);
+            const totalBuyIns = this.toBigInt(buyInsRes.rows[0]?.total_buy_ins ?? 0);
+            const totalEntries = Number(entriesRes.rows[0]?.cnt ?? 0);
+            console.log('[getTournamentMetrics] Parsed results:', {
+                totalTournaments,
+                activeTournaments,
+                completedTournaments,
+                totalEntries,
+                totalPrizePool: totalPrizePool.toString(),
+                totalBuyIns: totalBuyIns.toString(),
+            });
+            return { totalTournaments, activeTournaments, completedTournaments, totalEntries, totalPrizePool, totalBuyIns };
         }
         catch (err) {
             const missing = err?.code === '42P01' || err?.code === '42703' || (typeof err?.message === 'string' && /relation .* does not exist|column .* does not exist/i.test(err.message));

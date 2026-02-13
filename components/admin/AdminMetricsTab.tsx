@@ -141,12 +141,39 @@ export default function AdminMetricsTab() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/metrics?range=${range}`, {
-        headers: { 'x-admin-wallet': address },
+      // Fetch Blackjack stats from the same endpoint the home page uses (works correctly)
+      const [platformRes, adminRes] = await Promise.all([
+        fetch('/api/analytics/platform'),
+        fetch(`/api/admin/metrics?range=${range}`, {
+          headers: { 'x-admin-wallet': address },
+        }),
+      ]);
+      
+      if (!platformRes.ok) throw new Error(`Platform API HTTP ${platformRes.status}`);
+      if (!adminRes.ok) throw new Error(`Admin API HTTP ${adminRes.status}`);
+      
+      const platformData = await platformRes.json();
+      const adminData = await adminRes.json();
+      
+      // Merge: Use Blackjack from platform API (works), tournaments and series from admin API
+      setData({
+        range: adminData.range || range,
+        blackjack: {
+          volume: platformData.blackjack?.total_volume?.toString() || '0',
+          games: platformData.blackjack?.total_games_played || 0,
+          activePlayers: platformData.blackjack?.active_players || 0,
+          pnl: platformData.blackjack?.house_profit?.toString() || '0',
+        },
+        tournaments: adminData.tournaments || {
+          totalTournaments: 0,
+          activeTournaments: 0,
+          completedTournaments: 0,
+          totalEntries: 0,
+          totalPrizePool: '0',
+          totalBuyIns: '0',
+        },
+        series: adminData.series || [],
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setData(json);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load metrics');
       setData(null);

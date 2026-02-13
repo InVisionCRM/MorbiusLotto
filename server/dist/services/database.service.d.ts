@@ -245,6 +245,15 @@ export declare class DatabaseService {
         pnl: bigint;
         tournamentEntries: number;
     }>;
+    /** Tournament metrics aggregates for a time range. Returns zeros if tables are missing. */
+    getTournamentMetrics(range: '24h' | '7d' | '30d' | 'all'): Promise<{
+        totalTournaments: number;
+        activeTournaments: number;
+        completedTournaments: number;
+        totalEntries: number;
+        totalPrizePool: bigint;
+        totalBuyIns: bigint;
+    }>;
     /** Admin metrics time-series (hourly or daily buckets) for charts. Returns [] if games table missing. */
     getMetricsSeries(range: '24h' | '7d' | '30d' | 'all'): Promise<Array<{
         period: string;
