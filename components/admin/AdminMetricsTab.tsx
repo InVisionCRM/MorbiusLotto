@@ -16,10 +16,28 @@ type Range = '24h' | '7d' | '30d' | 'all';
 export interface AdminMetricsData {
   range: string;
   blackjack: {
-    volume: string;
-    games: number;
-    activePlayers: number;
-    pnl: string;
+    total_players: number;
+    active_players: number;
+    total_games_played: number;
+    total_volume: string;
+    total_payouts: string;
+    house_profit: string;
+    games_last_hour: number;
+    games_last_24_hours: number;
+    volume_last_24_hours: string;
+    profit_last_24_hours: string;
+    average_win_rate: number;
+    average_bet_size: number;
+    house_edge: number;
+    active_connections: number;
+    blackjack_rate: number;
+    split_rate: number;
+    double_down_rate: number;
+    surrender_rate: number;
+    pending_settlements: number;
+    failed_settlements: number;
+    largest_bet: string;
+    largest_payout: string;
   };
   tournaments: {
     totalTournaments: number;
@@ -155,14 +173,32 @@ export default function AdminMetricsTab() {
       const platformData = await platformRes.json();
       const adminData = await adminRes.json();
       
-      // Merge: Use Blackjack from platform API (works), tournaments and series from admin API
+      // Merge: Use full Blackjack data from platform API (works), tournaments and series from admin API
       setData({
         range: adminData.range || range,
-        blackjack: {
-          volume: platformData.blackjack?.total_volume?.toString() || '0',
-          games: platformData.blackjack?.total_games_played || 0,
-          activePlayers: platformData.blackjack?.active_players || 0,
-          pnl: platformData.blackjack?.house_profit?.toString() || '0',
+        blackjack: platformData.blackjack || {
+          total_players: 0,
+          active_players: 0,
+          total_games_played: 0,
+          total_volume: '0',
+          total_payouts: '0',
+          house_profit: '0',
+          games_last_hour: 0,
+          games_last_24_hours: 0,
+          volume_last_24_hours: '0',
+          profit_last_24_hours: '0',
+          average_win_rate: 0,
+          average_bet_size: 0,
+          house_edge: 0,
+          active_connections: 0,
+          blackjack_rate: 0,
+          split_rate: 0,
+          double_down_rate: 0,
+          surrender_rate: 0,
+          pending_settlements: 0,
+          failed_settlements: 0,
+          largest_bet: '0',
+          largest_payout: '0',
         },
         tournaments: adminData.tournaments || {
           totalTournaments: 0,
@@ -269,25 +305,274 @@ export default function AdminMetricsTab() {
               {/* Blackjack Metrics */}
               {data && (
                 <div>
-                  <h3 className="text-xs font-semibold text-slate-300 mb-2">Blackjack</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">Volume</p>
-                      <p className="text-slate-200 font-mono">{formatMorbius(data.blackjack?.volume || '0')} MORBIUS</p>
+                  <h3 className="text-xs font-semibold text-cyan-400 mb-3">Blackjack</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                    {/* Total Players */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Total Players</p>
+                      <p className="text-white font-mono text-sm font-bold">{formatNumber(data.blackjack?.total_players || 0)}</p>
                     </div>
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">Games</p>
-                      <p className="text-slate-200 font-mono">{formatNumber(data.blackjack?.games || 0)}</p>
+
+                    {/* Active Players */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Active Players</p>
+                      <p className="text-emerald-400 font-mono text-sm font-bold">{formatNumber(data.blackjack?.active_players || 0)}</p>
                     </div>
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">Active Players</p>
-                      <p className="text-slate-200 font-mono">{formatNumber(data.blackjack?.activePlayers || 0)}</p>
+
+                    {/* Total Games */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Total Games</p>
+                      <p className="text-white font-mono text-sm font-bold">{formatNumber(data.blackjack?.total_games_played || 0)}</p>
                     </div>
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">PnL</p>
-                      <p className={`font-mono ${Number(data.blackjack?.pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {formatMorbius(data.blackjack?.pnl || '0')} MORBIUS
+
+                    {/* Total Volume */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Total Volume</p>
+                      <p className="text-white font-mono text-sm font-bold">{formatMorbius(data.blackjack?.total_volume || '0')} MORBIUS</p>
+                    </div>
+
+                    {/* Total Payouts */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Total Payouts</p>
+                      <p className="text-white font-mono text-sm font-bold">{formatMorbius(data.blackjack?.total_payouts || '0')} MORBIUS</p>
+                    </div>
+
+                    {/* House Profit */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">House Profit</p>
+                      <p className={`font-mono text-sm font-bold ${Number(data.blackjack?.house_profit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatMorbius(data.blackjack?.house_profit || '0')} MORBIUS
                       </p>
+                    </div>
+
+                    {/* Games Last Hour */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Games (1h)</p>
+                      <p className="text-white font-mono text-sm font-bold">{formatNumber(data.blackjack?.games_last_hour || 0)}</p>
+                    </div>
+
+                    {/* Games Last 24h */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Games (24h)</p>
+                      <p className="text-white font-mono text-sm font-bold">{formatNumber(data.blackjack?.games_last_24_hours || 0)}</p>
+                    </div>
+
+                    {/* Volume Last 24h */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Volume (24h)</p>
+                      <p className="text-white font-mono text-sm font-bold">{formatMorbius(data.blackjack?.volume_last_24_hours || '0')} MORBIUS</p>
+                    </div>
+
+                    {/* Profit Last 24h */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Profit (24h)</p>
+                      <p className={`font-mono text-sm font-bold ${Number(data.blackjack?.profit_last_24_hours || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatMorbius(data.blackjack?.profit_last_24_hours || '0')} MORBIUS
+                      </p>
+                    </div>
+
+                    {/* Average Win Rate */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Avg Win Rate</p>
+                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.average_win_rate || 0).toFixed(2)}%</p>
+                    </div>
+
+                    {/* Average Bet Size */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Avg Bet Size</p>
+                      <p className="text-white font-mono text-sm font-bold">{formatMorbius(String(data.blackjack?.average_bet_size || 0))} MORBIUS</p>
+                    </div>
+
+                    {/* House Edge */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">House Edge</p>
+                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.house_edge || 0).toFixed(2)}%</p>
+                    </div>
+
+                    {/* Active Connections */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Active Connections</p>
+                      <p className="text-emerald-400 font-mono text-sm font-bold">{formatNumber(data.blackjack?.active_connections || 0)}</p>
+                    </div>
+
+                    {/* Blackjack Rate */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Blackjack Rate</p>
+                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.blackjack_rate || 0).toFixed(2)}%</p>
+                    </div>
+
+                    {/* Split Rate */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Split Rate</p>
+                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.split_rate || 0).toFixed(2)}%</p>
+                    </div>
+
+                    {/* Double Down Rate */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Double Down Rate</p>
+                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.double_down_rate || 0).toFixed(2)}%</p>
+                    </div>
+
+                    {/* Surrender Rate */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Surrender Rate</p>
+                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.surrender_rate || 0).toFixed(2)}%</p>
+                    </div>
+
+                    {/* Pending Settlements */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Pending Settlements</p>
+                      <p className="text-amber-400 font-mono text-sm font-bold">{formatNumber(data.blackjack?.pending_settlements || 0)}</p>
+                    </div>
+
+                    {/* Failed Settlements */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Failed Settlements</p>
+                      <p className="text-red-400 font-mono text-sm font-bold">{formatNumber(data.blackjack?.failed_settlements || 0)}</p>
+                    </div>
+
+                    {/* Largest Bet */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Largest Bet</p>
+                      <p className="text-yellow-400 font-mono text-sm font-bold">{formatMorbius(data.blackjack?.largest_bet || '0')} MORBIUS</p>
+                    </div>
+
+                    {/* Largest Payout */}
+                    <div 
+                      className="rounded-lg border border-cyan-500/30 p-3"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      }}
+                    >
+                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Largest Payout</p>
+                      <p className="text-yellow-400 font-mono text-sm font-bold">{formatMorbius(data.blackjack?.largest_payout || '0')} MORBIUS</p>
                     </div>
                   </div>
                 </div>

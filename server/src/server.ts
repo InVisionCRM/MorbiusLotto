@@ -302,6 +302,85 @@ async function initializeServices() {
       }
     });
 
+    // Public: global metrics aggregates (wagered, won, deposited, withdrawn) with time range filtering
+    app.get('/api/analytics/global-metrics', async (req, res) => {
+      try {
+        const range = ((req.query.range as string) || '24h') as '24h' | '7d' | '30d' | 'all';
+        if (!['24h', '7d', '30d', 'all'].includes(range)) {
+          res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
+          return;
+        }
+
+        // Get Blackjack metrics (filtered by range)
+        const aggregates = await dbService.getMetricsAggregates(range);
+        
+        // Get chain stats (all-time, but we'll use them for "all" range)
+        const chainStats = await chainAnalytics.getAllChainStats();
+        
+        // Calculate totals across all games
+        const blackjackWagered = aggregates.volume;
+        const blackjackWon = aggregates.volume + aggregates.pnl; // volume + profit = total payouts
+        
+        // For other games, use chain stats (all-time totals)
+        // Note: For time-filtered ranges, we only have Blackjack data
+        const plinkoWagered = chainStats.plinko?.totalRevenue ?? 0n;
+        const plinkoWon = chainStats.plinko?.totalPayouts ?? 0n;
+        const kenoWagered = chainStats.keno?.totalWagered ?? 0n;
+        const kenoWon = chainStats.keno?.totalWon ?? 0n;
+        const lotteryWagered = chainStats.lottery?.totalCollected ?? 0n;
+        const lotteryWon = chainStats.lottery?.totalClaimed ?? 0n;
+        const bigWheelWagered = chainStats.bigWheel?.volume ?? 0n;
+        const bigWheelWon = chainStats.bigWheel?.payouts ?? 0n;
+
+        // Total wagered and won (for filtered ranges, only Blackjack; for "all", include all games)
+        const totalWagered = range === 'all' 
+          ? blackjackWagered + plinkoWagered + kenoWagered + lotteryWagered + bigWheelWagered
+          : blackjackWagered;
+        const totalWon = range === 'all'
+          ? blackjackWon + plinkoWon + kenoWon + lotteryWon + bigWheelWon
+          : blackjackWon;
+
+        // Deposits and withdrawals: Query contract events or use placeholder
+        // For now, we'll need to query events from the Blackjack contract
+        // This is a placeholder - you may want to add event indexing for accurate data
+        const totalDeposited = 0n; // TODO: Query Deposit/DepositMORBIUS events
+        const totalWithdrawn = 0n; // TODO: Query Withdrawal events
+
+        sendJson(res, {
+          range,
+          totalWagered: totalWagered.toString(),
+          totalWon: totalWon.toString(),
+          totalDeposited: totalDeposited.toString(),
+          totalWithdrawn: totalWithdrawn.toString(),
+          breakdown: {
+            blackjack: {
+              wagered: blackjackWagered.toString(),
+              won: blackjackWon.toString(),
+            },
+            plinko: {
+              wagered: plinkoWagered.toString(),
+              won: plinkoWon.toString(),
+            },
+            keno: {
+              wagered: kenoWagered.toString(),
+              won: kenoWon.toString(),
+            },
+            lottery: {
+              wagered: lotteryWagered.toString(),
+              won: lotteryWon.toString(),
+            },
+            bigWheel: {
+              wagered: bigWheelWagered.toString(),
+              won: bigWheelWon.toString(),
+            },
+          },
+        });
+      } catch (error) {
+        logger.error('Error fetching global metrics:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Player game history endpoint
     app.get('/api/player/:address/games', async (req, res) => {
       try {

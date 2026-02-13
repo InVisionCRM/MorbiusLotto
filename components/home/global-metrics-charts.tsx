@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useState } from 'react'
-import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts'
 import { formatEther } from 'viem'
 
 export interface SeriesPoint {
@@ -30,9 +30,25 @@ const RANGES: { value: Range; label: string }[] = [
   { value: 'all', label: 'All' },
 ]
 
+interface GlobalMetrics {
+  range: string
+  totalWagered: string
+  totalWon: string
+  totalDeposited: string
+  totalWithdrawn: string
+  breakdown: {
+    blackjack: { wagered: string; won: string }
+    plinko: { wagered: string; won: string }
+    keno: { wagered: string; won: string }
+    lottery: { wagered: string; won: string }
+    bigWheel: { wagered: string; won: string }
+  }
+}
+
 export function GlobalMetricsCharts() {
   const [range, setRange] = useState<Range>('24h')
   const [series, setSeries] = useState<SeriesPoint[]>([])
+  const [globalMetrics, setGlobalMetrics] = useState<GlobalMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -40,13 +56,23 @@ export function GlobalMetricsCharts() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/analytics/series?range=${range}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setSeries(data.series ?? [])
+      const [seriesRes, metricsRes] = await Promise.all([
+        fetch(`/api/analytics/series?range=${range}`),
+        fetch(`/api/analytics/global-metrics?range=${range}`),
+      ])
+      
+      if (!seriesRes.ok) throw new Error(`Series API HTTP ${seriesRes.status}`)
+      if (!metricsRes.ok) throw new Error(`Metrics API HTTP ${metricsRes.status}`)
+      
+      const seriesData = await seriesRes.json()
+      const metricsData = await metricsRes.json()
+      
+      setSeries(seriesData.series ?? [])
+      setGlobalMetrics(metricsData)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load metrics')
       setSeries([])
+      setGlobalMetrics(null)
     } finally {
       setLoading(false)
     }
@@ -104,7 +130,8 @@ export function GlobalMetricsCharts() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Existing Area Charts */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* Volume */}
           <div
             className="rounded-2xl border border-cyan-500/30 p-4 h-52 flex flex-col"
@@ -200,6 +227,195 @@ export function GlobalMetricsCharts() {
             )}
           </div>
         </div>
+
+      {/* New Bar Charts for Global Metrics */}
+      {globalMetrics && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Total Wagered */}
+          <div
+            className="rounded-2xl border border-cyan-500/30 p-4 h-64 flex flex-col"
+            style={PANEL_STYLE}
+          >
+            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-2">
+              Total Wagered (Global)
+            </p>
+            {loading ? (
+              <p className="text-white/50 text-xs">Loading…</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    {
+                      name: 'Total',
+                      value: Number(formatEther(BigInt(globalMetrics.totalWagered || '0'))),
+                    },
+                  ]}
+                  margin={{ top: 4, right: 4, left: 0, bottom: 4 }}
+                >
+                  <XAxis dataKey="name" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                  <YAxis
+                    tick={{ fontSize: 9 }}
+                    stroke="#94a3b8"
+                    tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
+                    contentStyle={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                      border: '1px solid rgba(34, 211, 238, 0.3)',
+                      borderRadius: '6px',
+                      color: '#e2e8f0',
+                      fontSize: '11px',
+                    }}
+                  />
+                  <Bar dataKey="value" fill={CYAN_STROKE} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+            <p className="text-white text-sm font-mono mt-2 text-center">
+              {Number(formatEther(BigInt(globalMetrics.totalWagered || '0'))).toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
+            </p>
+          </div>
+
+          {/* Total Won */}
+          <div
+            className="rounded-2xl border border-emerald-500/30 p-4 h-64 flex flex-col"
+            style={PANEL_STYLE}
+          >
+            <p className="text-emerald-400/90 text-xs font-medium uppercase tracking-wider mb-2">
+              Total Won (Global)
+            </p>
+            {loading ? (
+              <p className="text-white/50 text-xs">Loading…</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    {
+                      name: 'Total',
+                      value: Number(formatEther(BigInt(globalMetrics.totalWon || '0'))),
+                    },
+                  ]}
+                  margin={{ top: 4, right: 4, left: 0, bottom: 4 }}
+                >
+                  <XAxis dataKey="name" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                  <YAxis
+                    tick={{ fontSize: 9 }}
+                    stroke="#94a3b8"
+                    tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
+                    contentStyle={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      borderRadius: '6px',
+                      color: '#e2e8f0',
+                      fontSize: '11px',
+                    }}
+                  />
+                  <Bar dataKey="value" fill="rgba(16, 185, 129, 0.9)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+            <p className="text-emerald-400 text-sm font-mono mt-2 text-center">
+              {Number(formatEther(BigInt(globalMetrics.totalWon || '0'))).toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
+            </p>
+          </div>
+
+          {/* Total Deposited */}
+          <div
+            className="rounded-2xl border border-blue-500/30 p-4 h-64 flex flex-col"
+            style={PANEL_STYLE}
+          >
+            <p className="text-blue-400/90 text-xs font-medium uppercase tracking-wider mb-2">
+              Total Deposited (Global)
+            </p>
+            {loading ? (
+              <p className="text-white/50 text-xs">Loading…</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    {
+                      name: 'Total',
+                      value: Number(formatEther(BigInt(globalMetrics.totalDeposited || '0'))),
+                    },
+                  ]}
+                  margin={{ top: 4, right: 4, left: 0, bottom: 4 }}
+                >
+                  <XAxis dataKey="name" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                  <YAxis
+                    tick={{ fontSize: 9 }}
+                    stroke="#94a3b8"
+                    tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
+                    contentStyle={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      borderRadius: '6px',
+                      color: '#e2e8f0',
+                      fontSize: '11px',
+                    }}
+                  />
+                  <Bar dataKey="value" fill="rgba(59, 130, 246, 0.9)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+            <p className="text-blue-400 text-sm font-mono mt-2 text-center">
+              {Number(formatEther(BigInt(globalMetrics.totalDeposited || '0'))).toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
+            </p>
+          </div>
+
+          {/* Total Withdrawn */}
+          <div
+            className="rounded-2xl border border-orange-500/30 p-4 h-64 flex flex-col"
+            style={PANEL_STYLE}
+          >
+            <p className="text-orange-400/90 text-xs font-medium uppercase tracking-wider mb-2">
+              Total Withdrawn (Global)
+            </p>
+            {loading ? (
+              <p className="text-white/50 text-xs">Loading…</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    {
+                      name: 'Total',
+                      value: Number(formatEther(BigInt(globalMetrics.totalWithdrawn || '0'))),
+                    },
+                  ]}
+                  margin={{ top: 4, right: 4, left: 0, bottom: 4 }}
+                >
+                  <XAxis dataKey="name" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                  <YAxis
+                    tick={{ fontSize: 9 }}
+                    stroke="#94a3b8"
+                    tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
+                    contentStyle={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                      border: '1px solid rgba(251, 146, 60, 0.3)',
+                      borderRadius: '6px',
+                      color: '#e2e8f0',
+                      fontSize: '11px',
+                    }}
+                  />
+                  <Bar dataKey="value" fill="rgba(251, 146, 60, 0.9)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+            <p className="text-orange-400 text-sm font-mono mt-2 text-center">
+              {Number(formatEther(BigInt(globalMetrics.totalWithdrawn || '0'))).toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
+            </p>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
