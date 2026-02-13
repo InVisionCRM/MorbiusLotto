@@ -1348,7 +1348,7 @@ export class DatabaseService {
 
   // --- Blackjack tables (admin-managed) ---
 
-  /** Admin metrics aggregates for a time range (Blackjack only). */
+  /** Admin metrics aggregates for a time range (Blackjack only). Returns zeros if tables are missing. */
   async getMetricsAggregates(range: '24h' | '7d' | '30d' | 'all'): Promise<{
     volume: bigint;
     games: number;
@@ -1356,14 +1356,15 @@ export class DatabaseService {
     pnl: bigint;
     tournamentEntries: number;
   }> {
+    const zero = () => ({ volume: 0n, games: 0, activePlayers: 0, pnl: 0n, tournamentEntries: 0 });
     const interval = range === '24h' ? "INTERVAL '24 hours'" : range === '7d' ? "INTERVAL '7 days'" : range === '30d' ? "INTERVAL '30 days'" : null;
     const gamesFilter = interval ? `AND COALESCE(g.completed_at, g.created_at) >= NOW() - ${interval}` : '';
 
     const volQuery = `
       SELECT
-        COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC AS volume,
+        (COALESCE(SUM(g.total_bet_amount), 0))::BIGINT AS volume,
         COUNT(*)::INT AS games,
-        (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC AS pnl
+        ((COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0)))::BIGINT AS pnl
       FROM games g
       WHERE g.result IS NOT NULL AND g.result != 'ongoing' ${gamesFilter}
     `;
@@ -1374,29 +1375,35 @@ export class DatabaseService {
       ? `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te WHERE te.created_at >= NOW() - ${interval}`
       : `SELECT COUNT(*)::INT AS cnt FROM tournament_entries te`;
 
-    const [volRes, activeRes, entriesRes] = await Promise.all([
-      this.pool.query(volQuery),
-      this.pool.query(activeQuery),
-      this.pool.query(entriesQuery),
-    ]);
+    try {
+      const [volRes, activeRes, entriesRes] = await Promise.all([
+        this.pool.query(volQuery),
+        this.pool.query(activeQuery),
+        this.pool.query(entriesQuery),
+      ]);
 
-    const volume = this.toBigInt(volRes.rows[0]?.volume ?? 0);
-    const games = Number(volRes.rows[0]?.games ?? 0);
-    const pnl = this.toBigInt(volRes.rows[0]?.pnl ?? 0);
-    const activePlayers = Number(activeRes.rows[0]?.cnt ?? 0);
-    const tournamentEntries = Number(entriesRes.rows[0]?.cnt ?? 0);
+      const volume = this.toBigInt(volRes.rows[0]?.volume ?? 0);
+      const games = Number(volRes.rows[0]?.games ?? 0);
+      const pnl = this.toBigInt(volRes.rows[0]?.pnl ?? 0);
+      const activePlayers = Number(activeRes.rows[0]?.cnt ?? 0);
+      const tournamentEntries = Number(entriesRes.rows[0]?.cnt ?? 0);
 
-    return { volume, games, activePlayers, pnl, tournamentEntries };
+      return { volume, games, activePlayers, pnl, tournamentEntries };
+    } catch (err: any) {
+      const missing = err?.code === '42P01' || err?.code === '42703' || (typeof err?.message === 'string' && /relation .* does not exist|column .* does not exist/i.test(err.message));
+      if (missing) return zero();
+      throw err;
+    }
   }
 
-  /** Admin metrics time-series (hourly or daily buckets) for charts. */
+  /** Admin metrics time-series (hourly or daily buckets) for charts. Returns [] if games table missing. */
   async getMetricsSeries(range: '24h' | '7d' | '30d' | 'all'): Promise<Array<{ period: string; volume: string; games: number }>> {
     const bucket = range === '24h' ? 'hour' : 'day';
     const interval = range === '24h' ? "INTERVAL '24 hours'" : range === '7d' ? "INTERVAL '7 days'" : range === '30d' ? "INTERVAL '30 days'" : "INTERVAL '90 days'";
     const query = `
       SELECT
         date_trunc('${bucket}', COALESCE(g.completed_at, g.created_at))::TEXT AS period,
-        COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC AS volume,
+        (COALESCE(SUM(g.total_bet_amount), 0))::BIGINT AS volume,
         COUNT(*)::INT AS games
       FROM games g
       WHERE g.result IS NOT NULL AND g.result != 'ongoing'
@@ -1404,12 +1411,18 @@ export class DatabaseService {
       GROUP BY 1
       ORDER BY 1
     `;
-    const result = await this.pool.query(query);
-    return result.rows.map((r: any) => ({
-      period: r.period,
-      volume: String(r.volume ?? 0),
-      games: Number(r.games ?? 0),
-    }));
+    try {
+      const result = await this.pool.query(query);
+      return result.rows.map((r: any) => ({
+        period: r.period,
+        volume: String(r.volume ?? 0),
+        games: Number(r.games ?? 0),
+      }));
+    } catch (err: any) {
+      const missing = err?.code === '42P01' || err?.code === '42703' || (typeof err?.message === 'string' && /relation .* does not exist|column .* does not exist/i.test(err.message));
+      if (missing) return [];
+      throw err;
+    }
   }
 
   /** Recent Blackjack wins (for public latest-wins feed). Only win/blackjack results. */

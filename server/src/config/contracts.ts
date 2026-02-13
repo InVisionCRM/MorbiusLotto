@@ -1,7 +1,12 @@
 /**
- * Contract addresses and minimal ABIs for platform analytics (Plinko, Keno, Lottery, BigWheel, Blackjack).
+ * Contract addresses and ABIs for platform analytics (Plinko, Keno, Lottery, BigWheel, Blackjack).
  * Addresses match lib/contracts.ts on PulseChain mainnet. Env overrides allowed for deployment differences.
+ * ABIs are pulled from contracts/abi/ (canonical; Hardhat artifacts or synced JSON).
  */
+import lottery6of55V2Artifact from '../../../contracts/abi/lottery6of55-v2.json';
+
+type LotteryAbi = readonly unknown[];
+const LOTTERY_ABI = (lottery6of55V2Artifact as { abi: LotteryAbi }).abi;
 export const MORBIUS_TOKEN_ADDRESS = (process.env.MORBIUS_TOKEN_ADDRESS || '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1') as `0x${string}`;
 
 export const PLINKO_ADDRESS = (process.env.PLINKO_ADDRESS || '0x37B1db8F06870BFFeFed862C06535BEFc4383ff8') as `0x${string}`;
@@ -44,12 +49,8 @@ export const KENO_GET_GLOBAL_STATS_ABI = [
   },
 ] as const;
 
-/** Minimal ABI: totalTicketsEver(), totalMORBIUSEverCollected(), totalMORBIUSEverClaimed() */
-export const LOTTERY_STATS_ABI = [
-  { inputs: [], name: 'totalTicketsEver', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'totalMORBIUSEverCollected', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'totalMORBIUSEverClaimed', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-] as const;
+/** Full Lottery 6-of-55 V2 ABI from contracts/abi/lottery6of55-v2.json. */
+export const LOTTERY_STATS_ABI = LOTTERY_ABI;
 
 /** Minimal ABI: getGlobalStats() -> (spins, volume, payouts, contractBalance, contractReserveBalance) */
 export const BIGWHEEL_GET_GLOBAL_STATS_ABI = [

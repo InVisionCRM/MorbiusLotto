@@ -41,6 +41,10 @@ const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy when behind a reverse proxy (Railway, nginx, etc.) so rate-limit sees real client IP.
+// Avoids ERR_ERL_UNEXPECTED_X_FORWARDED_FOR when X-Forwarded-For is set.
+app.set('trust proxy', process.env.TRUST_PROXY !== '0' ? 1 : 0);
+
 // CORS: allow frontend origin(s). Set FRONTEND_URL on Railway to your app URL (comma-separated for multiple).
 const allowedOrigins = (process.env.FRONTEND_URL || 'https://win.morbius.io')
   .split(',')
@@ -651,9 +655,20 @@ async function initializeServices() {
     });
 
     // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all). Source: Blackjack games DB.
+    // On any DB or serialization error we return 200 with zeros so the tab always loads; errors are logged.
     app.get('/api/admin/metrics', async (req, res) => {
+      const range = (req.query.range as string) || '24h';
+      const validRange = ['24h', '7d', '30d', 'all'].includes(range) ? range : '24h';
+      const zeroPayload = {
+        range: validRange,
+        volume: '0',
+        games: 0,
+        activePlayers: 0,
+        pnl: '0',
+        tournamentEntries: 0,
+        series: [] as Array<{ period: string; volume: string; games: number }>,
+      };
       try {
-        const range = (req.query.range as string) || '24h';
         if (!['24h', '7d', '30d', 'all'].includes(range)) {
           res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
           return;
@@ -667,7 +682,7 @@ async function initializeServices() {
           ]);
         } catch (dbError) {
           logger.error('Admin metrics DB query failed', { error: dbError });
-          res.status(503).json({ error: 'Metrics unavailable', message: 'Database query failed. Check server logs.' });
+          sendJson(res, zeroPayload);
           return;
         }
         sendJson(res, {
@@ -681,7 +696,7 @@ async function initializeServices() {
         });
       } catch (error) {
         logger.error('Error in admin metrics:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        sendJson(res, zeroPayload);
       }
     });
 
