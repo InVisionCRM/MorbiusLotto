@@ -125,7 +125,7 @@ export default function AdminHealthTab() {
           {loading && !data && <p className="text-[11px] text-slate-500">Loading…</p>}
           {data && (
             <div className="space-y-3 text-[11px]">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 left-align">
               <span className="text-slate-500">API</span>
               <span className={data.api === 'ok' ? 'text-emerald-400' : 'text-red-400'}>{data.api === 'ok' ? <CheckCircle className="w-3.5 h-3.5 inline mr-0.5" /> : <XCircle className="w-3.5 h-3.5 inline mr-0.5" />}{data.api}</span>
               <span className="text-slate-500">WebSocket</span>
@@ -183,7 +183,7 @@ export default function AdminHealthTab() {
             )}
             <div>
               <p className="text-slate-500 mb-1">Blackjack: addresses with reserve &gt; 0 (sample)</p>
-              <p className="text-slate-400 text-[10px] mb-2">
+              <p className="relative left-align text-slate-400 text-[10px] mb-2">
                 Total MORBIUS in contract: {formatMorbius(data.blackjackReserves?.totalMorbiusInContract ?? '0')} MORBIUS
               </p>
               {data.blackjackReserves?.addressesWithReserve?.length === 0 ? (
