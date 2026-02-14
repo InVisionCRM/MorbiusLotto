@@ -21,25 +21,26 @@ export const BIGWHEEL_ADDRESS = (process.env.BIGWHEEL_ADDRESS || '0x53331B63ef24
 /** Blackjack V2; use BLACKJACK_CONTRACT_ADDRESS in .env if different. */
 export const BLACKJACK_ADDRESS = (process.env.BLACKJACK_CONTRACT_ADDRESS || process.env.BLACKJACK_ADDRESS || '0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8') as `0x${string}`;
 
-/** Legacy Blackjack contracts (for admin health: reserves per contract). Set via env BLACKJACK_LEGACY_CONTRACT_ADDRESS, _2, _3. */
-export const BLACKJACK_LEGACY_ADDRESS = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS || '') as `0x${string}`;
-export const BLACKJACK_LEGACY_ADDRESS_2 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || '') as `0x${string}`;
-export const BLACKJACK_LEGACY_ADDRESS_3 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_3 || '') as `0x${string}`;
+/** Legacy Blackjack contracts (for admin health). Accept BLACKJACK_LEGACY_CONTRACT_ADDRESS* or NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS*. */
+export const BLACKJACK_LEGACY_ADDRESS = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS || '') as `0x${string}`;
+export const BLACKJACK_LEGACY_ADDRESS_2 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || '') as `0x${string}`;
+export const BLACKJACK_LEGACY_ADDRESS_3 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_3 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_3 || '') as `0x${string}`;
+
+function isLegacyAddress(v: string): v is `0x${string}` {
+  return typeof v === 'string' && v.trim().length >= 42 && v.trim().toLowerCase().startsWith('0x');
+}
 
 /** All Blackjack contracts to show in admin health: current first, then legacy 1–3 (only those set). */
 export function getAllBlackjackContracts(): Array<{ address: `0x${string}`; label: string }> {
   const list: Array<{ address: `0x${string}`; label: string }> = [
     { address: BLACKJACK_ADDRESS, label: 'Current' },
   ];
-  if (BLACKJACK_LEGACY_ADDRESS && BLACKJACK_LEGACY_ADDRESS.startsWith('0x')) {
-    list.push({ address: BLACKJACK_LEGACY_ADDRESS, label: 'Legacy 1' });
-  }
-  if (BLACKJACK_LEGACY_ADDRESS_2 && BLACKJACK_LEGACY_ADDRESS_2.startsWith('0x')) {
-    list.push({ address: BLACKJACK_LEGACY_ADDRESS_2, label: 'Legacy 2' });
-  }
-  if (BLACKJACK_LEGACY_ADDRESS_3 && BLACKJACK_LEGACY_ADDRESS_3.startsWith('0x')) {
-    list.push({ address: BLACKJACK_LEGACY_ADDRESS_3, label: 'Legacy 3' });
-  }
+  const L1 = (BLACKJACK_LEGACY_ADDRESS || '').trim();
+  const L2 = (BLACKJACK_LEGACY_ADDRESS_2 || '').trim();
+  const L3 = (BLACKJACK_LEGACY_ADDRESS_3 || '').trim();
+  if (isLegacyAddress(L1)) list.push({ address: L1 as `0x${string}`, label: 'Legacy 1' });
+  if (isLegacyAddress(L2)) list.push({ address: L2 as `0x${string}`, label: 'Legacy 2' });
+  if (isLegacyAddress(L3)) list.push({ address: L3 as `0x${string}`, label: 'Legacy 3' });
   return list;
 }
 
