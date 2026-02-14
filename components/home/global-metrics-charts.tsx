@@ -58,15 +58,22 @@ export function GlobalMetricsCharts() {
         fetch(`/api/analytics/series?range=${range}`),
         fetch(`/api/analytics/global-metrics?range=${range}`),
       ])
-      
-      if (!seriesRes.ok) throw new Error(`Series API HTTP ${seriesRes.status}`)
-      if (!metricsRes.ok) throw new Error(`Metrics API HTTP ${metricsRes.status}`)
-      
-      const seriesData = await seriesRes.json()
-      const metricsData = await metricsRes.json()
-      
-      setSeries(seriesData.series ?? [])
-      setGlobalMetrics(metricsData)
+
+      if (seriesRes.ok) {
+        const seriesData = await seriesRes.json()
+        setSeries(seriesData.series ?? [])
+      } else {
+        setSeries([])
+      }
+
+      if (metricsRes.ok) {
+        const metricsData = await metricsRes.json()
+        setGlobalMetrics(metricsData)
+        setError(null)
+      } else {
+        setGlobalMetrics(null)
+        setError(metricsRes.status === 503 ? 'Backend API not configured' : `Global metrics: HTTP ${metricsRes.status}`)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load metrics')
       setSeries([])

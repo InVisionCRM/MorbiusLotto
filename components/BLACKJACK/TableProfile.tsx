@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react'
 import { ExternalLink, ShoppingCart, BarChart3 } from 'lucide-react'
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 
-const MORBIUS_GEICKO_IFRAME = 'https://morbius.io/geicko?address=0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1&tab=chart'
 const SWAP_PAGE_URL = '/swap'
 
 interface DexScreenerPair {
@@ -32,8 +31,6 @@ export interface TableProfileProps {
   tokenSymbol?: string
   /** Optional description (placeholder for later) */
   description?: string
-  /** Geicko iframe URL for token profile (default: MORBIUS on morbius.io) */
-  geickoIframeUrl?: string
   /** Buy link (default: /swap - Internet Money Swap) */
   buyLink?: string
   /** Optional logo URL (overrides DexScreener when set) */
@@ -46,7 +43,6 @@ export function TableProfile({
   tokenAddress = MORBIUS_TOKEN_ADDRESS,
   tokenSymbol,
   description,
-  geickoIframeUrl = MORBIUS_GEICKO_IFRAME,
   buyLink = SWAP_PAGE_URL,
   logoUrl: logoUrlProp,
   ticker: tickerProp,
@@ -101,9 +97,9 @@ export function TableProfile({
         className="rounded-2xl overflow-hidden border-2 border-cyan-500/30 max-w-4xl mx-auto"
         style={panelStyle}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 min-h-[320px]">
-          {/* Left: info (logo, name, ticker, description, buy + dex links) */}
-          <div className="p-3 sm:p-4 flex flex-col justify-center gap-3 border-b md:border-b-0 md:border-r border-cyan-500/20">
+        <div className="flex flex-col">
+          {/* Token info: logo, name, ticker, description, buy + dex links */}
+          <div className="p-3 sm:p-4 flex flex-col justify-center gap-3">
             <div className="flex items-center gap-3">
               {loading && !logoUrlProp ? (
                 <div className="w-12 h-12 rounded-full bg-slate-700 animate-pulse shrink-0" />
@@ -156,16 +152,6 @@ export function TableProfile({
                 <span className="text-red-400/80 text-xs">Links unavailable</span>
               )}
             </div>
-          </div>
-
-          {/* Right: Morbius.io / Norbius.io iframe */}
-          <div className="relative w-full min-h-[280px] md:min-h-[320px] bg-black/30">
-            <iframe
-              src={geickoIframeUrl}
-              title={`${name} token profile`}
-              className="absolute inset-0 w-full h-full border-0"
-              sandbox="allow-scripts allow-same-origin allow-popups"
-            />
           </div>
         </div>
       </div>

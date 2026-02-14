@@ -796,9 +796,13 @@ async function initializeServices() {
     app.get('/api/admin/chat/messages', async (req, res) => {
       try {
         const roomId = (req.query.roomId as string)?.trim() || 'main';
-        const limit = Math.min(Math.max(parseInt(String(req.query.limit || 50), 10) || 50, 1), 100);
-        const messages = await dbService.getRecentChatMessagesForAdmin(roomId, limit);
-        sendJson(res, { roomId, messages });
+        const beforeId = (req.query.beforeId as string)?.trim() || undefined;
+        const limit = Math.min(Math.max(parseInt(String(req.query.limit || 100), 10) || 100, 1), 500);
+        const messages = beforeId
+          ? await dbService.getChatMessagesBeforeForAdmin(roomId, beforeId, limit)
+          : await dbService.getRecentChatMessagesForAdmin(roomId, limit);
+        const hasMore = messages.length === limit;
+        sendJson(res, { roomId, messages, hasMore });
       } catch (error) {
         logger.error('Error fetching admin chat messages:', error);
         res.status(500).json({ error: 'Internal server error' });

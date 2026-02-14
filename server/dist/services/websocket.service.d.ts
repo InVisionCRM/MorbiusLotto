@@ -49,6 +49,8 @@ export declare class WebSocketService {
     private broadcastToPlayer;
     private broadcastToAll;
     private broadcastToRoom;
+    /** Called by admin API when a message is soft-deleted; notifies all clients in the room. */
+    broadcastChatMessageDeleted(roomId: string, messageId: string): void;
     getConnectionCount(): number;
     getActivePlayersCount(): Promise<number>;
     private handleCheckExclusionStatus;
@@ -77,6 +79,8 @@ export declare class WebSocketService {
     private handleTournamentEntriesList;
     private handleCreatorTournaments;
     private handleCreatorEarnings;
+    private handleTournamentCancel;
+    private handleTournamentReclaim;
     private handleRecentGlobalWins;
     private getPrizePercentagesForType;
     shutdown(): void;

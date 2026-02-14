@@ -1,9 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { History, Trophy, BookOpen, Award, TrendingUp, Zap, ShieldCheck, Gamepad2 } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { History, BookOpen, Award, TrendingUp, Zap, Gamepad2 } from 'lucide-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
-import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers'
 import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
 import GlobalWinsFeed from '@/components/BLACKJACK/GlobalWinsFeed'
 import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart'
@@ -31,12 +30,10 @@ const PANEL_CLASS = 'rounded-xl'
 
 const BASE_TABS = [
   { id: 'recent', label: 'Recent Games', icon: History },
-  { id: 'top', label: 'Top Players', icon: Trophy },
   { id: 'wins', label: 'Global Wins', icon: Zap },
   { id: 'chart', label: 'P&L Chart', icon: TrendingUp },
   { id: 'howto', label: 'How to Play', icon: BookOpen },
   { id: 'tournaments', label: 'Tournaments', icon: Award },
-  { id: 'verify', label: 'Provably Fair', icon: ShieldCheck },
 ] as const
 
 const TOURNAMENT_PLAY_TAB = { id: 'tournament-play' as const, label: 'Tournament', icon: Gamepad2 }
@@ -106,8 +103,6 @@ export default function BlackjackSidebar({
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'chart')
-  const [sidebarVerifyGameId, setSidebarVerifyGameId] = useState<string | null>(null)
-  const onSidebarVerifyGameIdConsumed = useCallback(() => setSidebarVerifyGameId(null), [])
 
   const tabs = inTournament
     ? [...BASE_TABS, TOURNAMENT_PLAY_TAB]
@@ -132,13 +127,12 @@ export default function BlackjackSidebar({
   }, [activeTab])
 
   const handleQuickHistoryVerify = (gameId: string) => {
-    setSidebarVerifyGameId(gameId)
-    setActiveTab('verify')
     onVerifyGameRequest?.(gameId)
+    if (typeof window !== 'undefined') window.open('/BLACKJACK/verify', '_blank')
   }
 
   return (
-    <div className="w-full min-w-0 flex flex-col h-full min-h-[600px]">
+    <div className="w-full min-w-0 flex flex-col h-full min-h-0">
       {/* Tabs — ensure always on top and clickable */}
       <div className="flex overflow-x-auto no-scrollbar bg-slate-800/60 rounded-t-xs shrink-0 relative z-10">
         {tabs.map(({ id, label, icon: Icon }) => (
@@ -160,9 +154,9 @@ export default function BlackjackSidebar({
 
       {/* Content — padding only for howto/tournaments/chart/tournament-play; Recent/Top have their own */}
       <div
-        className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar relative ${
-          activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'verify' || activeTab === 'tournament-play' ? 'p-4' : ''
-        } ${activeTab === 'tournaments' ? 'flex flex-col' : ''}`}
+        className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar relative flex flex-col ${
+          activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'tournament-play' ? 'p-4' : ''
+        }`}
         style={Theme.panel.sidebar}
       >
         {activeTab === 'recent' && (
@@ -172,7 +166,6 @@ export default function BlackjackSidebar({
             onVerifyGame={handleQuickHistoryVerify}
           />
         )}
-        {activeTab === 'top' && <BlackjackTopPlayers />}
         {activeTab === 'wins' && (
           <GlobalWinsFeed wsClient={wsClient} wsConnected={wsConnected ?? false} className="min-h-0" />
         )}
@@ -180,7 +173,7 @@ export default function BlackjackSidebar({
             Hidden when tab is not active so data accumulates across tab switches. */}
         {chartRef != null && (
           <div
-            className={`min-w-0 ${activeTab === 'chart' ? 'h-[320px] min-h-[280px] w-full' : 'hidden'}`}
+            className={`min-w-0 min-h-0 w-full ${activeTab === 'chart' ? 'flex-1 flex flex-col' : 'hidden'}`}
             aria-hidden={activeTab !== 'chart'}
           >
             <BlackjackRealTimeBetChart
@@ -234,41 +227,6 @@ export default function BlackjackSidebar({
         {activeTab === 'tournament-play' && inTournament && tournamentTabContent != null && (
           <div className="flex flex-col gap-4 h-full min-h-0">
             {tournamentTabContent}
-          </div>
-        )}
-        {activeTab === 'verify' && (
-          <div className="text-sm text-white/90 space-y-4">
-            <p className="text-[10px] text-cyan-300/40 text-center">
-              Optional. Leave blank to auto-generate a seed on Deal Cards.
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={clientSeed}
-                onChange={(e) => onClientSeedChange?.(e.target.value)}
-                className="flex-1 px-3 py-2 text-center font-mono text-cyan-300 text-sm rounded border border-white/20 bg-white/5 focus:outline-none focus:border-cyan-500/50"
-                placeholder="Client seed (optional)"
-              />
-              <button
-                type="button"
-                onClick={onGenerateClientSeed}
-                className="w-10 h-10 flex-shrink-0 rounded-lg font-black text-base transition-all active:scale-95 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/10"
-                title="Generate random client seed"
-              >
-                ↻
-              </button>
-            </div>
-            {verifyGameHandler && (
-              <div className="pt-2">
-                <a
-                  href="/BLACKJACK/verify"
-                  className="block w-full px-4 py-2 text-center bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 rounded-lg text-white font-semibold transition-all text-sm"
-                >
-                  <i className="fas fa-shield-alt mr-2"></i>
-                  Open Verification Page
-                </a>
-              </div>
-            )}
           </div>
         )}
       </div>

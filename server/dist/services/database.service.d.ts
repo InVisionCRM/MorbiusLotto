@@ -121,6 +121,8 @@ export interface ChatMessage {
     sender_address: string | null;
     text: string;
     created_at: Date;
+    deleted_at?: Date | null;
+    deleted_by?: string | null;
 }
 export interface BlackjackTableRow {
     id: string;
@@ -209,6 +211,12 @@ export declare class DatabaseService {
     cleanupOldConnections(): Promise<number>;
     insertChatMessage(roomId: string, senderAddress: string | null, text: string): Promise<ChatMessage>;
     getRecentChatMessages(roomId: string, limit?: number): Promise<ChatMessage[]>;
+    /** Admin: recent messages including soft-deleted (for moderation UI). */
+    getRecentChatMessagesForAdmin(roomId: string, limit?: number): Promise<ChatMessage[]>;
+    /** Admin: messages older than beforeId (including deleted), for pagination. */
+    getChatMessagesBeforeForAdmin(roomId: string, beforeId: string, limit?: number): Promise<ChatMessage[]>;
+    /** Admin: soft-delete a chat message. Returns room_id if message existed and was not already deleted. */
+    deleteChatMessage(messageId: string, deletedByAddress: string): Promise<string | null>;
     /** Messages older than the message with id beforeId, in chronological order (oldest first). */
     getChatMessagesBefore(roomId: string, beforeId: string, limit?: number): Promise<ChatMessage[]>;
     getDisplayName(walletAddress: string): Promise<string | null>;
@@ -218,6 +226,10 @@ export declare class DatabaseService {
     } | null>;
     setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null): Promise<void>;
     getDisplayNames(walletAddresses: string[]): Promise<Map<string, string>>;
+    getBlockedAddresses(): Promise<string[]>;
+    isAddressBlocked(walletAddress: string): Promise<boolean>;
+    addBlockedAddress(walletAddress: string): Promise<void>;
+    removeBlockedAddress(walletAddress: string): Promise<void>;
     withTransaction<T>(callback: (client: any) => Promise<T>): Promise<T>;
     checkExclusionStatus(walletAddress: string): Promise<{
         isExcluded: boolean;

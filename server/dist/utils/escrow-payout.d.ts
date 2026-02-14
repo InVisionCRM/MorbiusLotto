@@ -17,4 +17,23 @@ export declare function sendEscrowRemainderToReclaimWallet(tournamentId: string)
     txHash?: string;
     error?: string;
 }>;
+/**
+ * Cancel a tournament in the escrow contract. Only callable by authorized server.
+ * Marks the tournament as cancelled so creator can reclaim funds.
+ */
+export declare function cancelTournamentInEscrow(tournamentId: string): Promise<{
+    success: boolean;
+    txHash?: string;
+    error?: string;
+}>;
+/**
+ * Creator reclaims funds from a cancelled tournament.
+ * Note: This function provides instructions. The creator must call creatorReclaim()
+ * directly on the escrow contract using their wallet, as it requires their signature.
+ */
+export declare function creatorReclaimFromEscrow(tournamentId: string, creatorAddress: string): Promise<{
+    success: boolean;
+    txHash?: string;
+    error?: string;
+}>;
 //# sourceMappingURL=escrow-payout.d.ts.map

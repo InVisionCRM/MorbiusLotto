@@ -1159,6 +1159,28 @@ export class DatabaseService {
     })).reverse();
   }
 
+  /** Admin: messages older than beforeId (including deleted), for pagination. */
+  async getChatMessagesBeforeForAdmin(roomId: string, beforeId: string, limit: number = 100): Promise<ChatMessage[]> {
+    const query = `
+      SELECT id, room_id, sender_address, text, created_at, deleted_at, deleted_by
+      FROM chat_messages
+      WHERE room_id = $1
+        AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2 LIMIT 1)
+      ORDER BY created_at DESC
+      LIMIT $3
+    `;
+    const result = await this.pool.query(query, [roomId, beforeId, limit]);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      room_id: row.room_id,
+      sender_address: row.sender_address,
+      text: row.text,
+      created_at: row.created_at,
+      deleted_at: row.deleted_at ?? null,
+      deleted_by: row.deleted_by ?? null
+    })).reverse();
+  }
+
   /** Admin: soft-delete a chat message. Returns room_id if message existed and was not already deleted. */
   async deleteChatMessage(messageId: string, deletedByAddress: string): Promise<string | null> {
     const normalized = this.normalizeAddress(deletedByAddress);

@@ -104,59 +104,42 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
     };
 
     return (
-      <div
-        className="w-full h-full rounded-lg pt-1 pr-1 pb-1 pl-1 flex flex-col"
-        style={{
-          background: "linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))",
-          boxShadow:
-            "inset 0 2px 4px rgba(0, 0, 0, 0.8), inset 0 -2px 4px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.5)",
-          border: "1px inset rgba(60, 60, 60, 0.5)",
-        }}
-      >
-        {/* Header with Stats (matches Plinko layout) */}
-        <div className="mb-1">
-          <div className="grid grid-cols-3 items-center justify-center text-center">
-            <div className="bg-slate-00/50 w-full px-1 py-1 rounded-tl-lg">
-              <div className="text-cyan-500/80 text-[16px] font-semibold uppercase tracking-wider">Games</div>
-              <div className="text-white text-2xl text-center">{history.length}</div>
+      <div className="w-full h-full min-h-0 rounded-lg flex flex-col bg-slate-800/40 border border-white/10">
+        {/* Compact header */}
+        <div className="shrink-0 grid grid-cols-3 items-center text-center gap-1 py-1">
+          <div>
+            <div className="text-cyan-500/80 text-[10px] font-semibold uppercase tracking-wider">Games</div>
+            <div className="text-white text-sm tabular-nums">{history.length}</div>
+          </div>
+          <div>
+            <div className="text-cyan-500/80 text-[10px] font-semibold uppercase tracking-wider">Net P&amp;L</div>
+            <div
+              className={`font-bold text-sm flex justify-center items-center gap-0.5 ${
+                netPnL >= 0 ? "text-green-400" : "text-red-400"
+              }`}
+            >
+              {netPnL >= 0 ? "+" : ""}
+              {Math.round(netPnL)}
+              <img src="/morbius/MorbiusLogo (3).png" alt="Morbius" className="w-5 h-5 object-contain" />
             </div>
-            <div className="bg-slate-00/50 w-full px-1 py-1">
-              <div className="text-cyan-500/80 text-[16px] uppercase font-semibold font-poppins tracking-wider">Net P&amp;L</div>
-              <div
-                className={`font-bold text-2xl flex text-center justify-center items-center gap-0.5 ${
-                  netPnL >= 0 ? "text-green-400" : "text-red-400"
-                }`}
-              >
-                {netPnL >= 0 ? "+" : ""}
-                {Math.round(netPnL)}
-                <img
-                  src="/morbius/MorbiusLogo (3).png"
-                  alt="Morbius"
-                  className="w-10 h-10 object-contain"
-                />
-              </div>
-            </div>
-            <div className="bg-slate-000/50 w-full px-1 py-1 rounded-tl-lg">
-              <div className="text-cyan-500/80 text-[16px] uppercase font-semibold font-poppins tracking-wider">ROI</div>
-              <div className={`text-2xl ${Number.parseFloat(roi) >= 0 ? "text-green-400" : "text-red-400"}`}>
-                {Number.parseFloat(roi) >= 0 ? "+" : ""}
-                {roi}%
-              </div>
+          </div>
+          <div>
+            <div className="text-cyan-500/80 text-[10px] font-semibold uppercase tracking-wider">ROI</div>
+            <div className={`text-sm font-bold ${Number.parseFloat(roi) >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {Number.parseFloat(roi) >= 0 ? "+" : ""}
+              {roi}%
             </div>
           </div>
         </div>
 
-        {/* Chart */}
-        <div className="h-full min-h-[300px] w-full flex-1" style={{ minWidth: 0, minHeight: '300px' }}>
+        {/* Chart — fills remaining space */}
+        <div className="flex-1 min-h-0 min-w-0 w-full">
           {history.length === 0 ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center text-white/80">
-                <p className="text-sm font-semibold font-poppins">P&amp;L chart will appear</p>
-                <p className="text-sm font-semibold font-poppins">after your first game</p>
-              </div>
+            <div className="h-full min-h-[120px] flex items-center justify-center">
+              <p className="text-xs text-white/60">P&amp;L chart after first game</p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={300}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <AreaChart data={pnlData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                 <defs>
                   {/* Cyan gradient for positive values */}
@@ -227,13 +210,12 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
           )}
         </div>
 
-        {/* Minimal footer controls (discreet) */}
         {history.length > 0 && (
-          <div className="mt-1 flex items-center justify-end">
+          <div className="shrink-0 flex justify-end py-0.5">
             <button
               type="button"
               onClick={clear}
-              className="px-2 py-1 text-[10px] bg-cyan-500/10 hover:bg-cyan-600/20 border border-cyan-500/20 rounded text-cyan-300/80 transition-colors"
+              className="px-2 py-0.5 text-[10px] bg-cyan-500/10 hover:bg-cyan-600/20 border border-cyan-500/20 rounded text-cyan-300/80"
               title="Clear chart"
             >
               Clear

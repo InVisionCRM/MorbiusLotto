@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TournamentService = exports.TOURNAMENT_CONFIG = void 0;
 const logger_1 = require("../utils/logger");
@@ -1730,6 +1763,133 @@ class TournamentService {
         }
         // distributePrizes now handles current_phase update for freerolls inside the transaction
         await this.distributePrizes(tournamentId);
+    }
+    /**
+     * Cancel a tournament that hasn't started (no games played yet).
+     * Only the creator can cancel their tournament.
+     * If tournament has custom prize token, marks it as cancelled in escrow.
+     * Refunds buy-ins to players if tournament hasn't started.
+     */
+    async cancelTournament(tournamentId, cancellerAddress) {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            // Get tournament
+            const tournamentQuery = `SELECT * FROM tournaments WHERE id = $1 FOR UPDATE`;
+            const tournamentResult = await client.query(tournamentQuery, [tournamentId]);
+            if (tournamentResult.rows.length === 0) {
+                throw new Error('Tournament not found');
+            }
+            const tournament = this.normalizeTournament(tournamentResult.rows[0]);
+            const normalizedCanceller = this.normalizeAddress(cancellerAddress);
+            // Verify canceller is the creator
+            if (!tournament.creator_address || this.normalizeAddress(tournament.creator_address) !== normalizedCanceller) {
+                throw new Error('Only the tournament creator can cancel the tournament');
+            }
+            // Check tournament status
+            if (tournament.status === 'completed') {
+                throw new Error('Cannot cancel a completed tournament');
+            }
+            if (tournament.status === 'cancelled') {
+                throw new Error('Tournament is already cancelled');
+            }
+            // Check if any games have been played
+            const gamesQuery = `SELECT COUNT(*) as count FROM tournament_games WHERE tournament_id = $1`;
+            const gamesResult = await client.query(gamesQuery, [tournamentId]);
+            const gamesCount = parseInt(gamesResult.rows[0].count, 10);
+            if (gamesCount > 0) {
+                throw new Error('Cannot cancel tournament that has already started (games have been played)');
+            }
+            // Get all entries
+            const entriesQuery = `SELECT * FROM tournament_entries WHERE tournament_id = $1`;
+            const entriesResult = await client.query(entriesQuery, [tournamentId]);
+            const entries = entriesResult.rows;
+            // Refund buy-ins to players (if tournament has buy-in)
+            if (tournament.buy_in_amount > 0n) {
+                for (const entry of entries) {
+                    const refundAmount = this.toBigInt(entry.total_buy_in || tournament.buy_in_amount);
+                    if (refundAmount > 0n) {
+                        await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [refundAmount.toString(), entry.player_address]);
+                        logger_1.logger.info('Refunded buy-in for cancelled tournament', {
+                            tournamentId,
+                            player: entry.player_address,
+                            amount: refundAmount.toString(),
+                        });
+                    }
+                }
+            }
+            // Mark tournament as cancelled
+            await client.query(`UPDATE tournaments SET status = 'cancelled', ended_at = NOW() WHERE id = $1`, [tournamentId]);
+            // If tournament has custom prize token, mark as cancelled in escrow
+            if (tournament.prize_token_address) {
+                const { cancelTournamentInEscrow } = await Promise.resolve().then(() => __importStar(require('../utils/escrow-payout')));
+                const cancelResult = await cancelTournamentInEscrow(tournamentId);
+                if (!cancelResult.success && cancelResult.error) {
+                    logger_1.logger.warn('Failed to cancel tournament in escrow (tournament marked cancelled in DB)', {
+                        tournamentId,
+                        error: cancelResult.error,
+                    });
+                }
+            }
+            await client.query('COMMIT');
+            logger_1.logger.info('Tournament cancelled', {
+                tournamentId,
+                cancelledBy: normalizedCanceller,
+                entriesRefunded: entries.length,
+            });
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    }
+    /**
+     * Creator reclaims funds from a cancelled tournament with custom prize token.
+     * Only works if tournament is cancelled and caller is the creator.
+     */
+    async creatorReclaimFunds(tournamentId, creatorAddress) {
+        const client = await this.pool.connect();
+        try {
+            // Get tournament
+            const tournament = await this.getTournament(tournamentId);
+            if (!tournament) {
+                return { success: false, error: 'Tournament not found' };
+            }
+            const normalizedCreator = this.normalizeAddress(creatorAddress);
+            // Verify caller is the creator
+            if (!tournament.creator_address || this.normalizeAddress(tournament.creator_address) !== normalizedCreator) {
+                return { success: false, error: 'Only the tournament creator can reclaim funds' };
+            }
+            // Verify tournament is cancelled
+            if (tournament.status !== 'cancelled') {
+                return { success: false, error: 'Tournament must be cancelled before creator can reclaim funds' };
+            }
+            // Verify tournament has custom prize token
+            if (!tournament.prize_token_address) {
+                return { success: false, error: 'Tournament does not use custom prize token (no escrow funds to reclaim)' };
+            }
+            // Call escrow contract to reclaim
+            const { creatorReclaimFromEscrow } = await Promise.resolve().then(() => __importStar(require('../utils/escrow-payout')));
+            const result = await creatorReclaimFromEscrow(tournamentId, creatorAddress);
+            if (result.success) {
+                logger_1.logger.info('Creator reclaimed funds from cancelled tournament', {
+                    tournamentId,
+                    creator: normalizedCreator,
+                    txHash: result.txHash,
+                });
+            }
+            return result;
+        }
+        catch (error) {
+            logger_1.logger.error('Error in creatorReclaimFunds', { tournamentId, creatorAddress, error });
+            return { success: false, error: error instanceof Error ? error.message : String(error) };
+        }
+        finally {
+            client.release();
+        }
     }
 }
 exports.TournamentService = TournamentService;

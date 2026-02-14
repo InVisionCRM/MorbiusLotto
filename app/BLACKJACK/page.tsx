@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import { BlackjackTopPlayersCarousel } from '@/components/BLACKJACK/BlackjackTopPlayersCarousel';
+import { BlackjackTopPlayersOverlay } from '@/components/BLACKJACK/BlackjackTopPlayersOverlay';
 import { TableProfile } from '@/components/BLACKJACK/TableProfile';
 import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
 import MainNav from '@/components/BLACKJACK/MainNav';
@@ -340,7 +341,6 @@ export default function BlackjackPage() {
       ? {
           description: p.description ?? undefined,
           tokenAddress: p.token_contract_address as `0x${string}` | undefined,
-          geickoIframeUrl: p.iframe_url ?? undefined,
           logoUrl: p.logo_url ?? undefined,
           ticker: p.ticker ?? undefined,
         }
@@ -2557,6 +2557,7 @@ export default function BlackjackPage() {
           {/* 1. Table + mobile controls (right of table on mobile) */}
           <div className="min-w-0 flex flex-row md:flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1 gap-2 md:gap-0">
           <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
+            <BlackjackTopPlayersOverlay />
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
               playerHands={currentGame?.playerHands}
@@ -2766,7 +2767,7 @@ export default function BlackjackPage() {
         {/* Top Players Carousel */}
         <BlackjackTopPlayersCarousel />
 
-        {/* Table token profile (token for this table: logo, morbius.io/norbius.io iframe, DexScreener links, buy) */}
+        {/* Table token profile (token for this table: logo, DexScreener links, buy) */}
         <TableProfile {...tableProfileFromTable} />
 
         {/* Tournament Leaderboard (shown when in tournament) */}

@@ -39,6 +39,8 @@ export default function AdminChatTab() {
   const [messages, setMessages] = useState<ChatMessageRow[]>([]);
   const [messagesRoom, setMessagesRoom] = useState('main');
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [blocked, setBlocked] = useState<string[]>([]);
   const [blockedLoading, setBlockedLoading] = useState(false);
   const [blockInput, setBlockInput] = useState('');
@@ -86,14 +88,16 @@ export default function AdminChatTab() {
   const fetchMessages = useCallback(async () => {
     if (!address) return;
     setMessagesLoading(true);
+    setHasMoreOlder(true);
     try {
       const res = await fetch(
-        `/api/admin/chat/messages?roomId=${encodeURIComponent(messagesRoom)}&limit=80`,
+        `/api/admin/chat/messages?roomId=${encodeURIComponent(messagesRoom)}&limit=200`,
         { headers: headers() }
       );
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages ?? []);
+        setHasMoreOlder(data.hasMore === true);
       } else {
         setMessages([]);
       }
@@ -101,6 +105,29 @@ export default function AdminChatTab() {
       setMessagesLoading(false);
     }
   }, [address, messagesRoom]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!address || messages.length === 0 || loadingOlder || !hasMoreOlder) return;
+    const oldestId = messages[0]?.id;
+    if (!oldestId) return;
+    setLoadingOlder(true);
+    try {
+      const res = await fetch(
+        `/api/admin/chat/messages?roomId=${encodeURIComponent(messagesRoom)}&beforeId=${encodeURIComponent(oldestId)}&limit=200`,
+        { headers: headers() }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const older = (data.messages ?? []) as ChatMessageRow[];
+        if (older.length > 0) {
+          setMessages((prev) => [...older, ...prev]);
+        }
+        setHasMoreOlder(data.hasMore === true);
+      }
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [address, messagesRoom, messages, loadingOlder, hasMoreOlder]);
 
   const deleteMessage = useCallback(
     async (messageId: string) => {
@@ -263,7 +290,22 @@ export default function AdminChatTab() {
           ) : messages.length === 0 ? (
             <p className="text-xs text-slate-500">No messages in this room.</p>
           ) : (
-            <ul className="space-y-2 max-h-[280px] overflow-y-auto">
+            <>
+              {hasMoreOlder && (
+                <div className="flex justify-center py-2 border-b border-slate-700/50 mb-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="text-xs border-slate-600 text-slate-400 h-7"
+                    onClick={loadOlderMessages}
+                    disabled={loadingOlder}
+                  >
+                    {loadingOlder ? 'Loading…' : 'Load older messages'}
+                  </Button>
+                </div>
+              )}
+              <ul className="space-y-2 max-h-[320px] overflow-y-auto">
               {messages.map((m) => (
                 <li
                   key={m.id}
@@ -310,7 +352,8 @@ export default function AdminChatTab() {
                   )}
                 </li>
               ))}
-            </ul>
+              </ul>
+            </>
           )}
         </CardContent>
       </Card>

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -290,6 +323,78 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
+        // Public: global metrics aggregates (wagered, won, deposited, withdrawn) with time range filtering
+        app.get('/api/analytics/global-metrics', async (req, res) => {
+            try {
+                const range = (req.query.range || '24h');
+                if (!['24h', '7d', '30d', 'all'].includes(range)) {
+                    res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
+                    return;
+                }
+                // Get Blackjack metrics (filtered by range)
+                const aggregates = await dbService.getMetricsAggregates(range);
+                // Get chain stats (all-time, but we'll use them for "all" range)
+                const chainStats = await chainAnalytics.getAllChainStats();
+                // Calculate totals across all games
+                const blackjackWagered = aggregates.volume;
+                const blackjackWon = aggregates.volume + aggregates.pnl; // volume + profit = total payouts
+                // For other games, use chain stats (all-time totals)
+                // Note: For time-filtered ranges, we only have Blackjack data
+                const plinkoWagered = chainStats.plinko?.totalRevenue ?? 0n;
+                const plinkoWon = chainStats.plinko?.totalPayouts ?? 0n;
+                const kenoWagered = chainStats.keno?.totalWagered ?? 0n;
+                const kenoWon = chainStats.keno?.totalWon ?? 0n;
+                const lotteryWagered = chainStats.lottery?.totalCollected ?? 0n;
+                const lotteryWon = chainStats.lottery?.totalClaimed ?? 0n;
+                const bigWheelWagered = chainStats.bigWheel?.volume ?? 0n;
+                const bigWheelWon = chainStats.bigWheel?.payouts ?? 0n;
+                // Total wagered and won (for filtered ranges, only Blackjack; for "all", include all games)
+                const totalWagered = range === 'all'
+                    ? blackjackWagered + plinkoWagered + kenoWagered + lotteryWagered + bigWheelWagered
+                    : blackjackWagered;
+                const totalWon = range === 'all'
+                    ? blackjackWon + plinkoWon + kenoWon + lotteryWon + bigWheelWon
+                    : blackjackWon;
+                // Deposits and withdrawals: Query contract events or use placeholder
+                // For now, we'll need to query events from the Blackjack contract
+                // This is a placeholder - you may want to add event indexing for accurate data
+                const totalDeposited = 0n; // TODO: Query Deposit/DepositMORBIUS events
+                const totalWithdrawn = 0n; // TODO: Query Withdrawal events
+                sendJson(res, {
+                    range,
+                    totalWagered: totalWagered.toString(),
+                    totalWon: totalWon.toString(),
+                    totalDeposited: totalDeposited.toString(),
+                    totalWithdrawn: totalWithdrawn.toString(),
+                    breakdown: {
+                        blackjack: {
+                            wagered: blackjackWagered.toString(),
+                            won: blackjackWon.toString(),
+                        },
+                        plinko: {
+                            wagered: plinkoWagered.toString(),
+                            won: plinkoWon.toString(),
+                        },
+                        keno: {
+                            wagered: kenoWagered.toString(),
+                            won: kenoWon.toString(),
+                        },
+                        lottery: {
+                            wagered: lotteryWagered.toString(),
+                            won: lotteryWon.toString(),
+                        },
+                        bigWheel: {
+                            wagered: bigWheelWagered.toString(),
+                            won: bigWheelWon.toString(),
+                        },
+                    },
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching global metrics:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         // Player game history endpoint
         app.get('/api/player/:address/games', async (req, res) => {
             try {
@@ -374,6 +479,49 @@ async function initializeServices() {
             catch (error) {
                 logger_1.logger.error('Error fetching player tournament history:', error);
                 res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Cancel tournament (creator only)
+        app.post('/api/tournament/:tournamentId/cancel', async (req, res) => {
+            try {
+                const { tournamentId } = req.params;
+                const { cancellerAddress } = req.body;
+                if (!cancellerAddress || typeof cancellerAddress !== 'string') {
+                    return res.status(400).json({ error: 'cancellerAddress is required' });
+                }
+                await tournamentService.cancelTournament(tournamentId, cancellerAddress);
+                sendJson(res, { success: true, message: 'Tournament cancelled successfully' });
+            }
+            catch (error) {
+                logger_1.logger.error('Error cancelling tournament:', error);
+                const status = error.message?.includes('not found') ? 404 :
+                    error.message?.includes('Only the tournament creator') ? 403 :
+                        error.message?.includes('Cannot cancel') ? 400 : 500;
+                res.status(status).json({ error: error.message || 'Internal server error' });
+            }
+        });
+        // Creator reclaim funds from cancelled tournament
+        app.post('/api/tournament/:tournamentId/reclaim', async (req, res) => {
+            try {
+                const { tournamentId } = req.params;
+                const { creatorAddress } = req.body;
+                if (!creatorAddress || typeof creatorAddress !== 'string') {
+                    return res.status(400).json({ error: 'creatorAddress is required' });
+                }
+                const result = await tournamentService.creatorReclaimFunds(tournamentId, creatorAddress);
+                if (result.success) {
+                    sendJson(res, { success: true, txHash: result.txHash, message: 'Funds reclaimed successfully' });
+                }
+                else {
+                    res.status(400).json({ error: result.error || 'Failed to reclaim funds' });
+                }
+            }
+            catch (error) {
+                logger_1.logger.error('Error reclaiming tournament funds:', error);
+                const status = error.message?.includes('not found') ? 404 :
+                    error.message?.includes('Only the tournament creator') ? 403 :
+                        error.message?.includes('must be cancelled') ? 400 : 500;
+                res.status(status).json({ error: error.message || 'Internal server error' });
             }
         });
         // Public: Blackjack table list (for picker; enabled only)
@@ -653,9 +801,169 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
+        // Admin: chat moderation (delete message, list messages, blocked addresses)
+        app.get('/api/admin/chat/messages', async (req, res) => {
+            try {
+                const roomId = req.query.roomId?.trim() || 'main';
+                const beforeId = req.query.beforeId?.trim() || undefined;
+                const limit = Math.min(Math.max(parseInt(String(req.query.limit || 100), 10) || 100, 1), 500);
+                const messages = beforeId
+                    ? await dbService.getChatMessagesBeforeForAdmin(roomId, beforeId, limit)
+                    : await dbService.getRecentChatMessagesForAdmin(roomId, limit);
+                const hasMore = messages.length === limit;
+                sendJson(res, { roomId, messages, hasMore });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching admin chat messages:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.delete('/api/admin/chat/messages/:id', async (req, res) => {
+            try {
+                const { id } = req.params;
+                const wallet = req.headers['x-admin-wallet']?.trim();
+                if (!wallet) {
+                    res.status(403).json({ error: 'Admin wallet required' });
+                    return;
+                }
+                const roomId = await dbService.deleteChatMessage(id, wallet);
+                if (roomId == null) {
+                    res.status(404).json({ error: 'Message not found or already deleted' });
+                    return;
+                }
+                wsService.broadcastChatMessageDeleted(roomId, id);
+                res.status(204).send();
+            }
+            catch (error) {
+                logger_1.logger.error('Error deleting chat message:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/admin/chat/blocked', async (req, res) => {
+            try {
+                const addresses = await dbService.getBlockedAddresses();
+                sendJson(res, { addresses });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching blocked addresses:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.post('/api/admin/chat/blocked', async (req, res) => {
+            try {
+                const address = (req.body?.address ?? req.body?.wallet_address);
+                const trimmed = address?.trim();
+                if (!trimmed || !/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+                    res.status(400).json({ error: 'Valid wallet address required (body: { address: "0x..." })' });
+                    return;
+                }
+                await dbService.addBlockedAddress(trimmed);
+                const addresses = await dbService.getBlockedAddresses();
+                sendJson(res, { addresses });
+            }
+            catch (error) {
+                logger_1.logger.error('Error adding blocked address:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.delete('/api/admin/chat/blocked/:address', async (req, res) => {
+            try {
+                const address = req.params.address?.trim();
+                if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+                    res.status(400).json({ error: 'Valid wallet address required' });
+                    return;
+                }
+                await dbService.removeBlockedAddress(address);
+                res.status(204).send();
+            }
+            catch (error) {
+                logger_1.logger.error('Error removing blocked address:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all).
         // Includes: Blackjack (DB), Plinko/Keno/Lottery/BigWheel (chain), and Tournament metrics.
         // On any DB or serialization error we return 200 with zeros so the tab always loads; errors are logged.
+        // Admin: Escrow oversight endpoints
+        app.get('/api/admin/escrow/summary', async (req, res) => {
+            try {
+                const { getEscrowSummary } = await Promise.resolve().then(() => __importStar(require('./utils/escrow-oversight')));
+                const summary = await getEscrowSummary();
+                if (!summary) {
+                    return res.status(503).json({ error: 'Escrow not configured' });
+                }
+                sendJson(res, {
+                    ...summary,
+                    totalValueLocked: summary.totalValueLocked.toString(),
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching escrow summary:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/admin/escrow/pools', async (req, res) => {
+            try {
+                const { getPoolsByDepositor, getActivePools, getPoolDetails } = await Promise.resolve().then(() => __importStar(require('./utils/escrow-oversight')));
+                const depositor = req.query.depositor;
+                const tournamentId = req.query.tournamentId;
+                if (tournamentId) {
+                    const details = await getPoolDetails(tournamentId);
+                    if (!details) {
+                        return res.status(404).json({ error: 'Tournament pool not found' });
+                    }
+                    sendJson(res, {
+                        ...details,
+                        totalDeposited: details.totalDeposited.toString(),
+                        amountPaidOut: details.amountPaidOut.toString(),
+                        remainingBalance: details.remainingBalance.toString(),
+                        depositedAt: details.depositedAt.toString(),
+                    });
+                }
+                else if (depositor) {
+                    const pools = await getPoolsByDepositor(depositor);
+                    sendJson(res, pools.map(p => ({
+                        ...p,
+                        totalDeposited: p.totalDeposited.toString(),
+                        amountPaidOut: p.amountPaidOut.toString(),
+                        remainingBalance: p.remainingBalance.toString(),
+                        depositedAt: p.depositedAt.toString(),
+                    })));
+                }
+                else {
+                    const activePools = await getActivePools();
+                    sendJson(res, activePools.map(p => ({
+                        tournamentId: p.tournamentId,
+                        balance: p.balance.toString(),
+                    })));
+                }
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching escrow pools:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/admin/escrow/tournament/:tournamentId', async (req, res) => {
+            try {
+                const { tournamentId } = req.params;
+                const { getPoolDetails } = await Promise.resolve().then(() => __importStar(require('./utils/escrow-oversight')));
+                const details = await getPoolDetails(tournamentId);
+                if (!details) {
+                    return res.status(404).json({ error: 'Tournament pool not found' });
+                }
+                sendJson(res, {
+                    ...details,
+                    totalDeposited: details.totalDeposited.toString(),
+                    amountPaidOut: details.amountPaidOut.toString(),
+                    remainingBalance: details.remainingBalance.toString(),
+                    depositedAt: details.depositedAt.toString(),
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching tournament escrow details:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         app.get('/api/admin/metrics', async (req, res) => {
             const range = req.query.range || '24h';
             const validRange = ['24h', '7d', '30d', 'all'].includes(range) ? range : '24h';
@@ -723,25 +1031,9 @@ async function initializeServices() {
                 }
                 catch (dbError) {
                     logger_1.logger.error('Admin metrics query failed', { error: dbError });
-                    console.error('[Admin Metrics] DB query error:', dbError);
                     sendJson(res, zeroPayload);
                     return;
                 }
-                // Log the actual data being returned for debugging
-                console.log('[Admin Metrics] Blackjack aggregates:', {
-                    volume: aggregates.volume.toString(),
-                    games: aggregates.games,
-                    activePlayers: aggregates.activePlayers,
-                    pnl: aggregates.pnl.toString(),
-                });
-                console.log('[Admin Metrics] Tournament metrics:', {
-                    totalTournaments: tournamentMetrics.totalTournaments,
-                    activeTournaments: tournamentMetrics.activeTournaments,
-                    completedTournaments: tournamentMetrics.completedTournaments,
-                    totalEntries: tournamentMetrics.totalEntries,
-                    totalPrizePool: tournamentMetrics.totalPrizePool.toString(),
-                    totalBuyIns: tournamentMetrics.totalBuyIns.toString(),
-                });
                 sendJson(res, {
                     range,
                     // Blackjack metrics

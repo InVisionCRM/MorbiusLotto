@@ -886,7 +886,7 @@ class DatabaseService {
         const query = `
       SELECT id, room_id, sender_address, text, created_at
       FROM chat_messages
-      WHERE room_id = $1
+      WHERE room_id = $1 AND deleted_at IS NULL
       ORDER BY created_at DESC
       LIMIT $2
     `;
@@ -899,12 +899,65 @@ class DatabaseService {
             created_at: row.created_at
         })).reverse(); // chronological order for display
     }
+    /** Admin: recent messages including soft-deleted (for moderation UI). */
+    async getRecentChatMessagesForAdmin(roomId, limit = 100) {
+        const query = `
+      SELECT id, room_id, sender_address, text, created_at, deleted_at, deleted_by
+      FROM chat_messages
+      WHERE room_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2
+    `;
+        const result = await this.pool.query(query, [roomId, limit]);
+        return result.rows.map((row) => ({
+            id: row.id,
+            room_id: row.room_id,
+            sender_address: row.sender_address,
+            text: row.text,
+            created_at: row.created_at,
+            deleted_at: row.deleted_at ?? null,
+            deleted_by: row.deleted_by ?? null
+        })).reverse();
+    }
+    /** Admin: messages older than beforeId (including deleted), for pagination. */
+    async getChatMessagesBeforeForAdmin(roomId, beforeId, limit = 100) {
+        const query = `
+      SELECT id, room_id, sender_address, text, created_at, deleted_at, deleted_by
+      FROM chat_messages
+      WHERE room_id = $1
+        AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2 LIMIT 1)
+      ORDER BY created_at DESC
+      LIMIT $3
+    `;
+        const result = await this.pool.query(query, [roomId, beforeId, limit]);
+        return result.rows.map((row) => ({
+            id: row.id,
+            room_id: row.room_id,
+            sender_address: row.sender_address,
+            text: row.text,
+            created_at: row.created_at,
+            deleted_at: row.deleted_at ?? null,
+            deleted_by: row.deleted_by ?? null
+        })).reverse();
+    }
+    /** Admin: soft-delete a chat message. Returns room_id if message existed and was not already deleted. */
+    async deleteChatMessage(messageId, deletedByAddress) {
+        const normalized = this.normalizeAddress(deletedByAddress);
+        const query = `
+      UPDATE chat_messages
+      SET deleted_at = NOW(), deleted_by = $2
+      WHERE id = $1 AND deleted_at IS NULL
+      RETURNING room_id
+    `;
+        const result = await this.pool.query(query, [messageId, normalized]);
+        return result.rows[0]?.room_id ?? null;
+    }
     /** Messages older than the message with id beforeId, in chronological order (oldest first). */
     async getChatMessagesBefore(roomId, beforeId, limit = 50) {
         const query = `
       SELECT id, room_id, sender_address, text, created_at
       FROM chat_messages
-      WHERE room_id = $1
+      WHERE room_id = $1 AND deleted_at IS NULL
         AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2 LIMIT 1)
       ORDER BY created_at DESC
       LIMIT $3
@@ -966,6 +1019,24 @@ class DatabaseService {
             map.set(row.wallet_address, row.display_name);
         }
         return map;
+    }
+    // Chat blocked addresses (admin)
+    async getBlockedAddresses() {
+        const result = await this.pool.query(`SELECT wallet_address FROM chat_blocked_addresses ORDER BY blocked_at DESC`);
+        return result.rows.map((r) => r.wallet_address);
+    }
+    async isAddressBlocked(walletAddress) {
+        const normalized = this.normalizeAddress(walletAddress);
+        const result = await this.pool.query(`SELECT 1 FROM chat_blocked_addresses WHERE wallet_address = $1 LIMIT 1`, [normalized]);
+        return result.rows.length > 0;
+    }
+    async addBlockedAddress(walletAddress) {
+        const normalized = this.normalizeAddress(walletAddress);
+        await this.pool.query(`INSERT INTO chat_blocked_addresses (wallet_address) VALUES ($1) ON CONFLICT (wallet_address) DO NOTHING`, [normalized]);
+    }
+    async removeBlockedAddress(walletAddress) {
+        const normalized = this.normalizeAddress(walletAddress);
+        await this.pool.query(`DELETE FROM chat_blocked_addresses WHERE wallet_address = $1`, [normalized]);
     }
     // Utility methods
     async withTransaction(callback) {
@@ -1097,19 +1168,11 @@ class DatabaseService {
                 this.pool.query(activeQuery),
                 this.pool.query(entriesQuery),
             ]);
-            console.log('[getMetricsAggregates] Query results:', {
-                volQuery: volRes.rows[0],
-                activeQuery: activeRes.rows[0],
-                entriesQuery: entriesRes.rows[0],
-                range,
-                gamesFilter,
-            });
             const volume = this.toBigInt(volRes.rows[0]?.volume ?? 0);
             const games = Number(volRes.rows[0]?.games ?? 0);
             const pnl = this.toBigInt(volRes.rows[0]?.pnl ?? 0);
             const activePlayers = Number(activeRes.rows[0]?.cnt ?? 0);
             const tournamentEntries = Number(entriesRes.rows[0]?.cnt ?? 0);
-            console.log('[getMetricsAggregates] Parsed results:', { volume: volume.toString(), games, activePlayers, pnl: pnl.toString(), tournamentEntries });
             return { volume, games, activePlayers, pnl, tournamentEntries };
         }
         catch (err) {
@@ -1154,27 +1217,12 @@ class DatabaseService {
                 this.pool.query(buyInsQuery),
                 this.pool.query(entriesQuery),
             ]);
-            console.log('[getTournamentMetrics] Query results:', {
-                tournamentsQuery: tournamentsRes.rows[0],
-                buyInsQuery: buyInsRes.rows[0],
-                entriesQuery: entriesRes.rows[0],
-                range,
-                timeFilter,
-            });
             const totalTournaments = Number(tournamentsRes.rows[0]?.total ?? 0);
             const activeTournaments = Number(tournamentsRes.rows[0]?.active ?? 0);
             const completedTournaments = Number(tournamentsRes.rows[0]?.completed ?? 0);
             const totalPrizePool = this.toBigInt(tournamentsRes.rows[0]?.total_prize_pool ?? 0);
             const totalBuyIns = this.toBigInt(buyInsRes.rows[0]?.total_buy_ins ?? 0);
             const totalEntries = Number(entriesRes.rows[0]?.cnt ?? 0);
-            console.log('[getTournamentMetrics] Parsed results:', {
-                totalTournaments,
-                activeTournaments,
-                completedTournaments,
-                totalEntries,
-                totalPrizePool: totalPrizePool.toString(),
-                totalBuyIns: totalBuyIns.toString(),
-            });
             return { totalTournaments, activeTournaments, completedTournaments, totalEntries, totalPrizePool, totalBuyIns };
         }
         catch (err) {

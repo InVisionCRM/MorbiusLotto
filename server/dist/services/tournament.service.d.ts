@@ -441,5 +441,21 @@ export declare class TournamentService {
     }[]>;
     /** Complete freeroll: distribute prizes (via existing logic) and set current_phase = completed. */
     private handleFreerollEnd;
+    /**
+     * Cancel a tournament that hasn't started (no games played yet).
+     * Only the creator can cancel their tournament.
+     * If tournament has custom prize token, marks it as cancelled in escrow.
+     * Refunds buy-ins to players if tournament hasn't started.
+     */
+    cancelTournament(tournamentId: string, cancellerAddress: string): Promise<void>;
+    /**
+     * Creator reclaims funds from a cancelled tournament with custom prize token.
+     * Only works if tournament is cancelled and caller is the creator.
+     */
+    creatorReclaimFunds(tournamentId: string, creatorAddress: string): Promise<{
+        success: boolean;
+        txHash?: string;
+        error?: string;
+    }>;
 }
 //# sourceMappingURL=tournament.service.d.ts.map

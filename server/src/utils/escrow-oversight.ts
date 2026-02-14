@@ -34,7 +34,6 @@ export async function getEscrowSummary(): Promise<EscrowSummary | null> {
       address: ESCROW_ADDRESS,
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getEscrowSummary',
-      args: [],
     });
     
     const [totalTournaments, activeTournaments, cancelledTournaments, totalValueLocked] = result as [
@@ -66,7 +65,6 @@ export async function getAllTournamentIds(): Promise<string[]> {
       address: ESCROW_ADDRESS,
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getAllTournamentIds',
-      args: [],
     });
     
     // Convert bytes32[] to string[] (they're stored as bytes32 but represent UUIDs)
@@ -133,7 +131,6 @@ export async function getActivePools(): Promise<Array<{ tournamentId: string; ba
       address: ESCROW_ADDRESS,
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getActivePools',
-      args: [],
     });
     
     const [activeIds, balances] = result as [`0x${string}`[], bigint[]];

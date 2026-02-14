@@ -453,6 +453,16 @@ class WebSocketService {
                         return;
                     await this.handleCreatorEarnings(ws, message);
                     break;
+                case 'tournament_cancel':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleTournamentCancel(ws, message);
+                    break;
+                case 'tournament_reclaim':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleTournamentReclaim(ws, message);
+                    break;
                 case 'recent_global_wins':
                     // No auth required for public global wins feed
                     await this.handleRecentGlobalWins(ws, message);
@@ -875,6 +885,8 @@ class WebSocketService {
             const recent = await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
             const addresses = [...new Set(recent.map(m => m.sender_address).filter(Boolean))];
             const displayNames = await this.dbService.getDisplayNames(addresses);
+            const config = await this.dbService.getAdminGameConfig();
+            const chatPaused = config['chat_paused'] === 'true';
             this.sendMessage(ws, {
                 type: 'room_joined',
                 payload: {
@@ -886,7 +898,8 @@ class WebSocketService {
                         displayName: m.sender_address ? displayNames.get(m.sender_address.toLowerCase()) ?? null : null,
                         text: m.text,
                         timestamp: m.created_at
-                    }))
+                    })),
+                    chatPaused
                 },
                 requestId: message.requestId
             });
@@ -1027,12 +1040,19 @@ class WebSocketService {
             if (ws.currentRoom !== normalizedRoom) {
                 return this.sendError(ws, 'Not in this room', message.requestId);
             }
+            const config = await this.dbService.getAdminGameConfig();
+            if (config['chat_paused'] === 'true') {
+                return this.sendError(ws, 'Chat is temporarily paused', message.requestId);
+            }
+            const senderAddress = ws.playerAddress ?? null;
+            if (senderAddress && await this.dbService.isAddressBlocked(senderAddress)) {
+                return this.sendError(ws, 'Unable to send message', message.requestId);
+            }
             const now = Date.now();
             if (ws.lastChatMessageAt != null && now - ws.lastChatMessageAt < CHAT_RATE_LIMIT_MS) {
                 return this.sendError(ws, 'Please wait before sending another message', message.requestId);
             }
             ws.lastChatMessageAt = now;
-            const senderAddress = ws.playerAddress ?? null;
             // Per-address limit (across all tabs/connections) so one wallet can't spam
             if (senderAddress) {
                 if (!this.checkPerAddressChatLimit(senderAddress, now)) {
@@ -1153,6 +1173,13 @@ class WebSocketService {
             if (client?.readyState === ws_1.WebSocket.OPEN) {
                 this.sendMessage(client, message);
             }
+        });
+    }
+    /** Called by admin API when a message is soft-deleted; notifies all clients in the room. */
+    broadcastChatMessageDeleted(roomId, messageId) {
+        this.broadcastToRoom(roomId, {
+            type: 'chat_message_deleted',
+            payload: { roomId, messageId }
         });
     }
     // Get connection count
@@ -2191,6 +2218,67 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error getting creator earnings:', error);
             this.sendError(ws, 'Failed to get creator earnings', message.requestId);
+        }
+    }
+    async handleTournamentCancel(ws, message) {
+        try {
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const address = ws.playerAddress;
+            if (!address) {
+                return this.sendError(ws, 'No address', message.requestId);
+            }
+            const { tournamentId } = message.payload || {};
+            if (!tournamentId || typeof tournamentId !== 'string') {
+                return this.sendError(ws, 'tournamentId is required', message.requestId);
+            }
+            await this.tournamentService.cancelTournament(tournamentId, address);
+            this.sendMessage(ws, {
+                type: 'tournament_cancelled',
+                payload: { tournamentId, success: true },
+                requestId: message.requestId,
+            });
+            // Broadcast to all clients in the tournament room
+            const roomId = `tournament:${tournamentId}`;
+            this.broadcastToRoom(roomId, {
+                type: 'tournament_cancelled',
+                payload: { tournamentId },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error cancelling tournament:', error);
+            this.sendError(ws, error.message || 'Failed to cancel tournament', message.requestId);
+        }
+    }
+    async handleTournamentReclaim(ws, message) {
+        try {
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const address = ws.playerAddress;
+            if (!address) {
+                return this.sendError(ws, 'No address', message.requestId);
+            }
+            const { tournamentId } = message.payload || {};
+            if (!tournamentId || typeof tournamentId !== 'string') {
+                return this.sendError(ws, 'tournamentId is required', message.requestId);
+            }
+            const result = await this.tournamentService.creatorReclaimFunds(tournamentId, address);
+            if (result.success) {
+                this.sendMessage(ws, {
+                    type: 'tournament_reclaimed',
+                    payload: { tournamentId, txHash: result.txHash, success: true },
+                    requestId: message.requestId,
+                });
+            }
+            else {
+                this.sendError(ws, result.error || 'Failed to reclaim funds', message.requestId);
+            }
+        }
+        catch (error) {
+            logger_1.logger.error('Error reclaiming tournament funds:', error);
+            this.sendError(ws, error.message || 'Failed to reclaim funds', message.requestId);
         }
     }
     async handleRecentGlobalWins(ws, message) {
