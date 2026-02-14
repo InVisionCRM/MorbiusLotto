@@ -15,12 +15,14 @@ import {
   PLINKO_ADDRESS,
   BLACKJACK_ADDRESS,
   TOURNAMENT_PRIZE_ESCROW_ADDRESS,
+  MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS,
 } from '@/lib/contracts';
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2';
 import { KENO_ABI } from '@/lib/keno-abi';
 import { PLINKO_ABI } from '@/abi/plinko';
 import { blackjackAbi } from '@/abi/blackjack';
 import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
+import { morbiusHolderDistributorAbi } from '@/abi/morbius-holder-distributor';
 import { keccak256, toHex } from 'viem';
 
 const CONFIG_KEYS = [
@@ -866,6 +868,114 @@ function EscrowAdminSection() {
   );
 }
 
+function DistributorAdminSection() {
+  const [excludedAddr, setExcludedAddr] = useState('');
+  const [removeAddr, setRemoveAddr] = useState('');
+  const [rescueTokenAddr, setRescueTokenAddr] = useState('');
+  const [rescueTo, setRescueTo] = useState('');
+  const [rescueAmount, setRescueAmount] = useState('');
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
+
+  useEffect(() => {
+    if (isSuccess) toast.success('Transaction confirmed');
+    if (isError) toast.error('Transaction failed');
+  }, [isSuccess, isError]);
+  useEffect(() => {
+    if (writeError) toast.error(writeError.message || 'Transaction rejected or failed');
+  }, [writeError]);
+
+  const run = useCallback(
+    (fn: () => void) => {
+      try {
+        fn();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Invalid input');
+      }
+    },
+    []
+  );
+
+  const addr = MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS as `0x${string}`;
+
+  return (
+    <ContractSection title="MORBIUS Holder Distributor">
+      <WriteRow
+        label="addExcludedAddress(address) — owner only"
+        onExecute={() => {
+          if (!excludedAddr.trim() || !excludedAddr.startsWith('0x')) {
+            toast.error('Enter valid 0x address (e.g. new LP or contract)');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: morbiusHolderDistributorAbi,
+              functionName: 'addExcludedAddress',
+              args: [excludedAddr as `0x${string}`],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input
+          value={excludedAddr}
+          onChange={(e) => setExcludedAddr(e.target.value)}
+          placeholder="0x… (LP or contract)"
+          className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono"
+        />
+      </WriteRow>
+      <WriteRow
+        label="removeExcludedAddress(address) — owner only"
+        onExecute={() => {
+          if (!removeAddr.trim() || !removeAddr.startsWith('0x')) {
+            toast.error('Enter valid 0x address to remove');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: morbiusHolderDistributorAbi,
+              functionName: 'removeExcludedAddress',
+              args: [removeAddr as `0x${string}`],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input
+          value={removeAddr}
+          onChange={(e) => setRemoveAddr(e.target.value)}
+          placeholder="0x…"
+          className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono"
+        />
+      </WriteRow>
+      <WriteRow
+        label="rescueToken(token, to, amount) — owner only (not MORBIUS)"
+        onExecute={() => {
+          if (!rescueTokenAddr.trim() || !rescueTo.trim() || !rescueAmount.trim() || !rescueTokenAddr.startsWith('0x') || !rescueTo.startsWith('0x')) {
+            toast.error('Enter token address, recipient 0x…, and amount');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: morbiusHolderDistributorAbi,
+              functionName: 'rescueToken',
+              args: [rescueTokenAddr as `0x${string}`, rescueTo as `0x${string}`, BigInt(rescueAmount)],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={rescueTokenAddr} onChange={(e) => setRescueTokenAddr(e.target.value)} placeholder="token 0x…" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={rescueTo} onChange={(e) => setRescueTo(e.target.value)} placeholder="to 0x…" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={rescueAmount} onChange={(e) => setRescueAmount(e.target.value)} placeholder="amount" className="h-7 text-xs w-28 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+    </ContractSection>
+  );
+}
+
 export default function AdminConfigTab() {
   const { address } = useAccount();
   const [config, setConfig] = useState<Record<string, string>>({});
@@ -979,6 +1089,7 @@ export default function AdminConfigTab() {
       <PlinkoAdminSection />
       <BlackjackAdminSection />
       <EscrowAdminSection />
+      <DistributorAdminSection />
     </div>
   );
 }

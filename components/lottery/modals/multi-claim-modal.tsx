@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
-import { formatUnits } from 'viem'
+import { formatUnits, type ReadContractParameters } from 'viem'
 import { TOKEN_DECIMALS, LOTTERY_ADDRESS } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 import { usePlayerRoundHistory, useRound, usePlayerTickets } from '@/hooks/use-lottery-6of55'
@@ -109,7 +109,8 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                 address: LOTTERY_ADDRESS as `0x${string}`,
                 abi: LOTTERY_6OF55_V2_ABI,
                 functionName: 'hasClaimed',
-                args: [BigInt(roundId), address],
+                args: [BigInt(roundId), address as `0x${string}`],
+                authorizationList: undefined,
               }).then((result: unknown) => ({
                 roundId,
                 amount,
@@ -466,8 +467,9 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
         address: LOTTERY_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'hasClaimed',
-        args: [parsedRoundId, address],
-      }) as boolean
+        args: [parsedRoundId, address as `0x${string}`],
+        authorizationList: undefined,
+      } as ReadContractParameters<typeof LOTTERY_6OF55_V2_ABI, 'hasClaimed'>) as boolean
 
       if (hasClaimed) {
         toast.error(`Round #${singleRoundId} has already been claimed`)
@@ -480,7 +482,8 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
         address: LOTTERY_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'getClaimableWinnings',
-        args: [parsedRoundId, address],
+        args: [parsedRoundId, address as `0x${string}`],
+        authorizationList: undefined,
       }) as bigint
 
       if (claimableAmount === BigInt(0)) {

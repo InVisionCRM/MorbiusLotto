@@ -93,7 +93,7 @@ export const InfiniteMovingCards = ({
       <ul
         ref={scrollerRef}
         className={cn(
-          "flex w-max min-w-full shrink-0 flex-nowrap gap-3 py-3",
+          "flex w-max min-w-full shrink-0 flex-nowrap gap-2 py-2 md:gap-3 md:py-3",
           start && "animate-scroll",
           pauseOnHover && "hover:[animation-play-state:paused]",
         )}
@@ -101,10 +101,11 @@ export const InfiniteMovingCards = ({
         {items.map((item, idx) => (
           <li
             className={cn(
-              "relative shrink-0 rounded-xl border overflow-hidden",
+              "relative shrink-0 rounded-xl border overflow-hidden flex flex-col",
+              "h-[88px] sm:h-[100px] md:h-[116px] lg:h-[132px]",
               variant === "quote"
-                ? "w-[350px] max-w-full px-8 py-6 md:w-[450px] border-zinc-200 bg-[linear-gradient(180deg,#fafafa,#f5f5f5)] dark:border-zinc-700 dark:bg-[linear-gradient(180deg,#27272a,#18181b)]"
-                : "w-[200px] md:w-[240px] border-cyan-500/20 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(15,23,42,0.85))] dark:border-cyan-500/20",
+                ? "min-w-[200px] max-w-[320px] md:min-w-[280px] md:max-w-[420px] w-auto px-3 py-2 md:px-6 md:py-4 border-zinc-200 bg-[linear-gradient(180deg,#fafafa,#f5f5f5)] dark:border-zinc-700 dark:bg-[linear-gradient(180deg,#27272a,#18181b)]"
+                : "min-w-[120px] max-w-[200px] md:min-w-[160px] md:max-w-[280px] w-auto border-cyan-500/20 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(15,23,42,0.85))] dark:border-cyan-500/20",
             )}
             key={variant === "image" ? (item as ImageCardItem).name + idx : (item as QuoteCardItem).name + idx}
           >
@@ -112,10 +113,10 @@ export const InfiniteMovingCards = ({
               (() => {
                 const imageItem = item as ImageCardItem;
                 const content = (
-                  <div className="flex flex-col h-full min-h-0">
+                  <div className="flex flex-col h-full min-h-0 min-w-0">
                     {imageItem.src ? (
                       <>
-                        <div className="relative aspect-[4/3] w-full bg-black/30 shrink-0">
+                        <div className="relative w-full h-[48px] sm:h-[56px] md:h-[68px] lg:h-[84px] bg-black/30 shrink-0 overflow-hidden">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={imageItem.src}
@@ -123,19 +124,19 @@ export const InfiniteMovingCards = ({
                             className="w-full h-full object-cover object-center"
                           />
                         </div>
-                        <div className="px-3 py-2 text-center shrink-0">
-                          <span className="text-xs font-medium text-white">
+                        <div className="px-2 py-1 md:px-3 md:py-2 text-center shrink-0 min-h-0 flex-1 flex items-center justify-center">
+                          <span className="text-[10px] md:text-xs font-medium text-white line-clamp-2">
                             {imageItem.name}
                           </span>
                         </div>
                       </>
                     ) : (
-                      <div className="flex flex-1 flex-col justify-center px-4 py-3 min-h-[72px]">
-                        <span className="text-xs font-semibold text-cyan-300/95 leading-tight">
+                      <div className="flex flex-1 flex-col justify-center px-2 py-1.5 md:px-4 md:py-3 min-h-0 overflow-hidden">
+                        <span className="text-[10px] md:text-xs font-semibold text-cyan-300/95 leading-tight truncate">
                           {imageItem.name}
                         </span>
                         {imageItem.subtitle && (
-                          <span className="text-[11px] text-white/60 mt-0.5 leading-tight tabular-nums">
+                          <span className="text-[9px] md:text-[11px] text-white/60 mt-0.5 leading-tight tabular-nums line-clamp-2">
                             {imageItem.subtitle}
                           </span>
                         )}
@@ -150,20 +151,20 @@ export const InfiniteMovingCards = ({
                 ) : content;
               })()
             ) : (
-              <blockquote>
+              <blockquote className="flex flex-col h-full min-h-0 overflow-hidden">
                 <div
                   aria-hidden="true"
                   className="user-select-none pointer-events-none absolute -top-0.5 -left-0.5 -z-1 h-[calc(100%_+_4px)] w-[calc(100%_+_4px)]"
                 ></div>
-                <span className="relative z-20 text-sm leading-[1.6] font-normal text-neutral-800 dark:text-gray-100">
+                <span className="relative z-20 text-xs md:text-sm leading-[1.5] md:leading-[1.6] font-normal text-neutral-800 dark:text-gray-100 line-clamp-3 flex-1 min-h-0">
                   {(item as QuoteCardItem).quote}
                 </span>
-                <div className="relative z-20 mt-6 flex flex-row items-center">
-                  <span className="flex flex-col gap-1">
-                    <span className="text-sm leading-[1.6] font-normal text-neutral-500 dark:text-gray-400">
+                <div className="relative z-20 mt-1 md:mt-2 flex flex-row items-center shrink-0">
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-[10px] md:text-sm leading-[1.6] font-normal text-neutral-500 dark:text-gray-400 truncate">
                       {(item as QuoteCardItem).name}
                     </span>
-                    <span className="text-sm leading-[1.6] font-normal text-neutral-500 dark:text-gray-400">
+                    <span className="text-[10px] md:text-sm leading-[1.6] font-normal text-neutral-500 dark:text-gray-400 truncate">
                       {(item as QuoteCardItem).title}
                     </span>
                   </span>

@@ -29,9 +29,9 @@ function useIsDesktop() {
 const PANEL_CLASS = 'rounded-xl'
 
 const BASE_TABS = [
-  { id: 'recent', label: 'Recent Games', icon: History },
-  { id: 'wins', label: 'Global Wins', icon: Zap },
-  { id: 'chart', label: 'P&L Chart', icon: TrendingUp },
+  { id: 'recent', label: 'Recent', icon: History },
+  { id: 'wins', label: 'Global', icon: Zap },
+  { id: 'chart', label: 'Chart', icon: TrendingUp },
   { id: 'howto', label: 'How to Play', icon: BookOpen },
   { id: 'tournaments', label: 'Tournaments', icon: Award },
 ] as const

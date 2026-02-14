@@ -367,6 +367,14 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
                     <MorbiusBurnedDisplay variant="inline" className="px-3 py-2" />
                     <MorbiusPriceDisplay className="px-3 py-2" />
                     <Link
+                      href="/claim-fees"
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <i className="fas fa-wallet w-4 text-center" aria-hidden />
+                      <span className="text-sm font-medium">Claim fees</span>
+                    </Link>
+                    <Link
                       href="/swap"
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                       onClick={() => setIsMobileMenuOpen(false)}

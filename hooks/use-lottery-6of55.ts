@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi'
+import { useAccount, useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 import { HEX_TOKEN_ADDRESS, LOTTERY_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { pulsechain } from '@/lib/chains'
@@ -320,6 +320,7 @@ export function useRoundHistoryTotals(roundId: number) {
 
 // Write: Buy tickets with MORBIUS
 export function useBuyTickets() {
+  const { address } = useAccount()
   const { writeContract, ...rest } = useWriteContract()
 
   const buyTickets = (tickets: number[][]) => {
@@ -344,7 +345,8 @@ export function useBuyTickets() {
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTickets',
       args: [tickets as any], // Type assertion needed for wagmi
-      chainId: pulsechain.id,
+      chain: pulsechain,
+      account: address!,
     })
   }
 
@@ -353,6 +355,7 @@ export function useBuyTickets() {
 
 // Write: Buy tickets for multiple rounds (MORBIUS only)
 export function useBuyTicketsForRounds() {
+  const { address } = useAccount()
   const { writeContract, ...rest } = useWriteContract()
 
   const buyTicketsForRounds = (ticketGroups: number[][][], offsets: number[]) => {
@@ -370,7 +373,8 @@ export function useBuyTicketsForRounds() {
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTicketsForRounds',
       args: [formattedGroups as any, formattedOffsets as any],
-      chainId: pulsechain.id,
+      chain: pulsechain,
+      account: address!,
     })
   }
 
@@ -379,6 +383,7 @@ export function useBuyTicketsForRounds() {
 
 // Write: Buy tickets with WPLS (supports extra buffer)
 export function useBuyTicketsWithWPLS(defaultExtraBufferBp: number = 2500) {
+  const { address } = useAccount()
   const { writeContract, ...rest } = useWriteContract()
 
   const buyTicketsWithWPLS = (tickets: number[][], extraBufferBp?: number) => {
@@ -393,7 +398,8 @@ export function useBuyTicketsWithWPLS(defaultExtraBufferBp: number = 2500) {
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTicketsWithWPLSAndBuffer',
       args: [formattedTickets as any, BigInt(bufferBp)],
-      chainId: pulsechain.id,
+      chain: pulsechain,
+      account: address!,
     })
   }
 
@@ -402,6 +408,7 @@ export function useBuyTicketsWithWPLS(defaultExtraBufferBp: number = 2500) {
 
 // Write: Buy tickets with native PLS (wraps and swaps on-chain)
 export function useBuyTicketsWithPLS() {
+  const { address } = useAccount()
   const { writeContract, ...rest } = useWriteContract()
 
   const buyTicketsWithPLS = (tickets: number[][], valueWei: bigint) => {
@@ -412,7 +419,8 @@ export function useBuyTicketsWithPLS() {
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTicketsWithPLS',
       args: [formattedTickets as any],
-      chainId: pulsechain.id,
+      chain: pulsechain,
+      account: address!,
       value: valueWei,
     })
   }
@@ -422,6 +430,7 @@ export function useBuyTicketsWithPLS() {
 
 // Write: Buy tickets for multiple rounds with native PLS (wraps and swaps on-chain)
 export function useBuyTicketsWithPLSForRounds() {
+  const { address } = useAccount()
   const { writeContract, ...rest } = useWriteContract()
 
   const buyTicketsWithPLSForRounds = (ticketGroups: number[][][], offsets: number[], valueWei: bigint) => {
@@ -436,7 +445,8 @@ export function useBuyTicketsWithPLSForRounds() {
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTicketsWithPLSForRounds',
       args: [formattedGroups as any, formattedOffsets as any],
-      chainId: pulsechain.id,
+      chain: pulsechain,
+      account: address!,
       value: valueWei,
     })
   }
@@ -446,6 +456,7 @@ export function useBuyTicketsWithPLSForRounds() {
 
 // Write: Finalize round
 export function useFinalizeRound() {
+  const { address } = useAccount()
   const { writeContract, ...rest } = useWriteContract()
 
   const finalizeRound = () => {
@@ -453,7 +464,8 @@ export function useFinalizeRound() {
       address: LOTTERY_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'finalizeRound',
-      chainId: pulsechain.id,
+      chain: pulsechain,
+      account: address!,
     })
   }
 
@@ -462,6 +474,7 @@ export function useFinalizeRound() {
 
 // Write: Claim winnings
 export function useClaimWinnings() {
+  const { address } = useAccount()
   const { writeContract, ...rest } = useWriteContract()
 
   const claimWinnings = (roundId: number) => {
@@ -470,7 +483,8 @@ export function useClaimWinnings() {
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'claimWinnings',
       args: [BigInt(roundId)],
-      chainId: pulsechain.id,
+      chain: pulsechain,
+      account: address!,
     })
   }
 

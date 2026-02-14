@@ -63,6 +63,9 @@ export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = (
     : '0x0000000000000000000000000000000000000000'
 ) as `0x${string}`
 
+// MORBIUS Holder Distributor (receives MORBIUS; holders claim proportional share)
+export const MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS = '0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab' as const
+
 // Contract deployment info
 export const LOTTERY_DEPLOY_BLOCK = 25329129
 export const KENO_DEPLOY_BLOCK = 25341670 // Deployed Dec 21, 2025

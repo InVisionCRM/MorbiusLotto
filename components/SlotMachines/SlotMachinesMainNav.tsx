@@ -160,6 +160,14 @@ export default function SlotMachinesMainNav({
                       <span>🔢</span>
                       <span>Keno</span>
                     </Link>
+                    <Link
+                      href="/claim-fees"
+                      className="flex items-center gap-3 px-4 py-2 text-purple-300 hover:bg-purple-900/30 transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <span>💰</span>
+                      <span>Claim fees</span>
+                    </Link>
                     <div className="border-t border-purple-900/30 my-2" />
                     <Link
                       href="/"

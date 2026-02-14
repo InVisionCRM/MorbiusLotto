@@ -787,7 +787,7 @@ export default function BlackjackPage() {
     splitRate: Number(globalAnalyticsData.split_rate) || 0,
     doubleDownRate: Number(globalAnalyticsData.double_down_rate) || 0,
     surrenderRate: Number(globalAnalyticsData.surrender_rate) || 0,
-    reserveBalance: playerReserve || BigInt(0), // From contract
+    reserveBalance: typeof playerReserve === 'bigint' ? playerReserve : BigInt(0), // From contract
     pendingSettlements: Number(globalAnalyticsData.pending_settlements) || 0,
     failedSettlements: Number(globalAnalyticsData.failed_settlements) || 0,
     averageSettlementTime: 0, // Not available from database yet
@@ -1005,8 +1005,8 @@ export default function BlackjackPage() {
     
     if (wsConnected && wsClient && address && playerReserve !== undefined && hasCheckedInitialSync.current !== connectionKey) {
       hasCheckedInitialSync.current = connectionKey;
-      // Store the on-chain balance at connection time
-      const onChainBalanceAtConnection = playerReserve;
+      // Store the on-chain balance at connection time (playerReserve may be unknown from contract read)
+      const onChainBalanceAtConnection: bigint = typeof playerReserve === 'bigint' ? playerReserve : BigInt(0);
       
       // First fetch the current DB balance
       fetchBalance().then(() => {
@@ -2790,7 +2790,7 @@ export default function BlackjackPage() {
           onClose={() => setShowDepositModal(false)}
           onBalanceSync={syncBalance}
           onRefreshBalance={fetchBalance}
-          contractReserve={playerReserve}
+          contractReserve={typeof playerReserve === 'bigint' ? playerReserve : BigInt(0)}
           offChainBalance={offChainBalance}
         />
           </>

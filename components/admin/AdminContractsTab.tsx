@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BLACKJACK_ADDRESS, TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
+import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BLACKJACK_ADDRESS, TOURNAMENT_PRIZE_ESCROW_ADDRESS, MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS } from '@/lib/contracts';
 import { PLINKO_ABI } from '@/abi/plinko';
 import { KENO_ABI } from '@/lib/keno-abi';
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2';
 import { blackjackAbi } from '@/abi/blackjack';
 import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
+import { morbiusHolderDistributorAbi } from '@/abi/morbius-holder-distributor';
 import { ChevronDown, ChevronRight, Copy, ExternalLink, Loader2 } from 'lucide-react';
 
 const TOKEN_DECIMALS = 18;
@@ -331,6 +332,14 @@ export default function AdminContractsTab() {
     outputs: fn.outputs || [],
   }));
 
+  const distributorReadFunctions = morbiusHolderDistributorAbi.filter(
+    (fn: any) => fn.type === 'function' && (fn.stateMutability === 'view' || fn.stateMutability === 'pure')
+  ).map((fn: any) => ({
+    name: fn.name,
+    inputs: fn.inputs || [],
+    outputs: fn.outputs || [],
+  }));
+
   return (
     <div className="space-y-4">
       <Card className="bg-slate-900/60 border-slate-700/50">
@@ -345,7 +354,7 @@ export default function AdminContractsTab() {
       </Card>
 
       <Tabs defaultValue="plinko" className="w-full">
-        <TabsList className="h-8 w-full grid grid-cols-5 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
+        <TabsList className="h-8 w-full grid grid-cols-6 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
           <TabsTrigger value="plinko" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">
             Plinko ({plinkoReadFunctions.length})
           </TabsTrigger>
@@ -360,6 +369,9 @@ export default function AdminContractsTab() {
           </TabsTrigger>
           <TabsTrigger value="escrow" className="rounded data-[state=active]:bg-rose-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">
             Escrow ({escrowReadFunctions.length})
+          </TabsTrigger>
+          <TabsTrigger value="distributor" className="rounded data-[state=active]:bg-teal-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">
+            Distributor ({distributorReadFunctions.length})
           </TabsTrigger>
         </TabsList>
 
@@ -414,6 +426,15 @@ export default function AdminContractsTab() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="distributor" className="mt-3">
+          <ContractSection
+            contractName="MORBIUS Holder Distributor"
+            address={MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS}
+            abi={morbiusHolderDistributorAbi}
+            functions={distributorReadFunctions}
+          />
         </TabsContent>
       </Tabs>
     </div>
