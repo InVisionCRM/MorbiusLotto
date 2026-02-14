@@ -74,10 +74,10 @@ Commands are from the **repo root** unless noted. Set required env in `contracts
 | Verify Blackjack functions | `cd contracts && npx hardhat run scripts/verify-blackjack-functions.js --network pulsechain` | ABI vs deployed |
 | Emergency withdraw (legacy) | `cd contracts && npx hardhat run scripts/emergency-withdraw-blackjack.js --network pulsechain` | Owner/emergencyAdmin; set BLACKJACK_LEGACY_ADDRESS. Optional: DRY_RUN=1, BACKUP_PRIVATE_KEY |
 | Unpause legacy (re-enable withdrawals) | `cd contracts && npx hardhat run scripts/unpause-legacy-blackjack.js --network pulsechain` | emergencyAdmin only; run after emergency-withdraw so players can withdraw again |
-| List legacy Blackjack reserves | `cd contracts && npx hardhat run scripts/list-legacy-blackjack-reserves.js --network pulsechain` | Uses BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_ADDRESS. Optional: FROM_BLOCK, OUT_CSV |
+| List legacy Blackjack reserves | `cd contracts && npx hardhat run scripts/list-legacy-blackjack-reserves.js --network pulsechain` | Uses BLACKJACK_LEGACY_ADDRESS, _2, _3, BLACKJACK_ADDRESS. Optional: FROM_BLOCK, OUT_CSV |
 | Clear pending (Blackjack) | `cd contracts && npx hardhat run scripts/clear-pending.js --network pulsechain` | |
-| Debug setBetFee | `cd contracts && npx hardhat run scripts/debug-setBetFee.js --network pulsechain` | |
-| Check Blackjack V2 | `cd contracts && npx hardhat run scripts/check-blackjack-v2.js --network pulsechain` | |
+| Check Blackjack V2 | `cd contracts && npx hardhat run scripts/check-blackjack-v2.js --network pulsechain` | distributionFeeBps, burnFeeBps, totalDistributionFeesCollected, totalBurned |
+| Set legacy 3 after redeploy | Set `NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_3=<old_blackjack_address>` in .env | So users can withdraw MORBIUS from the previous contract in DepositWithdrawModal |
 | Simulate house edge (V2 RNG) | `cd server && npm run simulate:blackjack [numHands]` | Uses same Fisher-Yates deck as production; default 100k hands. Hit/stand only, so ~3–4% house edge. |
 
 ---

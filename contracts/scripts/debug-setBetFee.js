@@ -1,7 +1,7 @@
 import hre from "hardhat";
 
 async function main() {
-  const CONTRACT_ADDRESS = "0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09";
+  const CONTRACT_ADDRESS = process.env.BLACKJACK_ADDRESS || "0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8";
   const ownerKey = process.env.BACKUP_PRIVATE_KEY;
   const owner = new hre.ethers.Wallet(ownerKey, hre.ethers.provider);
 

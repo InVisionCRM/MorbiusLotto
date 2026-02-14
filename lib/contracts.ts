@@ -27,8 +27,8 @@ export const PLINKO_ADDRESS = '0x37B1db8F06870BFFeFed862C06535BEFc4383ff8' as co
 // BigWheel contract (7-segment casino wheel game - proportional sizes)
 export const BIGWHEEL_ADDRESS = '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F' as const
 
-// BlackjackV2 contract (6-deck provably fair blackjack with bet fees)
-export const BLACKJACK_ADDRESS = '0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09' as const
+// BlackjackV2 contract (6-deck provably fair blackjack with withdrawal fees)
+export const BLACKJACK_ADDRESS = '0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8' as const
 
 // Previous Blackjack contracts (if upgraded: players with balance here can withdraw from them)
 export const BLACKJACK_LEGACY_ADDRESS = (
@@ -43,17 +43,25 @@ export const BLACKJACK_LEGACY_ADDRESS_2 = (
     : ''
 ) as `0x${string}`
 
+export const BLACKJACK_LEGACY_ADDRESS_3 = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_3
+    ? process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_3
+    : ''
+) as `0x${string}`
+
 /** All Blackjack contract addresses: current + legacy (for reserve/withdraw UI and scripts) */
 export const ALL_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   BLACKJACK_ADDRESS,
   ...(BLACKJACK_LEGACY_ADDRESS ? [BLACKJACK_LEGACY_ADDRESS] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_2 ? [BLACKJACK_LEGACY_ADDRESS_2] : []),
+  ...(BLACKJACK_LEGACY_ADDRESS_3 ? [BLACKJACK_LEGACY_ADDRESS_3] : []),
 ]
 
 /** Legacy-only (previous contracts from which players can withdraw reserves) */
 export const LEGACY_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   ...(BLACKJACK_LEGACY_ADDRESS ? [BLACKJACK_LEGACY_ADDRESS] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_2 ? [BLACKJACK_LEGACY_ADDRESS_2] : []),
+  ...(BLACKJACK_LEGACY_ADDRESS_3 ? [BLACKJACK_LEGACY_ADDRESS_3] : []),
 ]
 
 // Tournament Prize Escrow (custom token prize pools for tournaments)

@@ -9,7 +9,7 @@
  * Usage (from contracts folder):
  *   npx hardhat run scripts/list-legacy-blackjack-reserves.js --network pulsechain
  *
- * Set in .env: BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_ADDRESS (any subset).
+ * Set in .env: BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, BLACKJACK_ADDRESS (any subset).
  *
  * Optional: FROM_BLOCK=12345 to start scanning from a specific block (faster).
  * Optional: OUT_CSV=reserves.csv to write results to a file (includes contract_label column).
@@ -24,6 +24,7 @@ function getBlackjackContracts() {
   const entries = [
     [process.env.BLACKJACK_LEGACY_ADDRESS, "Legacy 1"],
     [process.env.BLACKJACK_LEGACY_ADDRESS_2, "Legacy 2"],
+    [process.env.BLACKJACK_LEGACY_ADDRESS_3, "Legacy 3"],
     [process.env.BLACKJACK_ADDRESS, "Current"],
   ];
   return entries.filter(([addr]) => addr && typeof addr === "string" && addr.startsWith("0x"));
@@ -77,7 +78,7 @@ async function listReservesForContract(contractAddress, label, provider, fromBlo
 async function main() {
   const contracts = getBlackjackContracts();
   if (contracts.length === 0) {
-    console.error("Set at least one of BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_ADDRESS in .env");
+    console.error("Set at least one of BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, BLACKJACK_ADDRESS in .env");
     process.exit(1);
   }
 

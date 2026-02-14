@@ -110,9 +110,13 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     // Used nonces for signature-based withdrawals (prevents replay attacks)
     mapping(uint256 => bool) public usedNonces;
 
-    // Bet fee: percentage taken from every bet, paid to feeRecipient
-    uint256 public betFeeBps;      // 0–1000 (0%–10%), default 0
-    address public feeRecipient;   // receives collected fees
+    // Withdrawal fees: percentage of requested (gross) amount; user receives net = amount - distributionFee - burnFee
+    uint256 public distributionFeeBps;           // 0–2000 (0%–20%), default 100 (1%)
+    address public distributionRecipient;        // receives distribution fee (e.g. MORBIUS holder distributor)
+    uint256 public burnFeeBps;                    // 0–2000 (0%–20%), default 100 (1%)
+    address public burnAddress;                   // receives burn fee (e.g. dead address)
+    uint256 public totalDistributionFeesCollected;
+    uint256 public totalBurned;
 
     // EIP-712 Domain Separator
     bytes32 public immutable DOMAIN_SEPARATOR;
@@ -141,9 +145,11 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     event BetPlaced(address indexed player, bytes32 indexed gameHash, uint256 betAmount, uint256 timestamp);
     event AuthorizedServerUpdated(address indexed oldServer, address indexed newServer);
     event EmergencyAdminUpdated(address indexed oldAdmin, address indexed newAdmin);
-    event BetFeeUpdated(uint256 oldFeeBps, uint256 newFeeBps);
-    event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
-    event BetFeeCollected(address indexed player, uint256 feeAmount, bytes32 indexed gameHash);
+    event DistributionFeeUpdated(uint256 oldBps, uint256 newBps);
+    event DistributionRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+    event BurnFeeUpdated(uint256 oldBps, uint256 newBps);
+    event BurnAddressUpdated(address indexed oldAddress, address indexed newAddress);
+    event WithdrawalFeesCollected(address indexed player, uint256 amount, uint256 distributionFee, uint256 burnFee, uint256 netToUser);
 
     constructor(
         address _initialOwner,
@@ -159,6 +165,11 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         authorizedServer = _authorizedServer;
         emergencyAdmin = _emergencyAdmin;
 
+        distributionFeeBps = 100; // 1%
+        distributionRecipient = 0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab;
+        burnFeeBps = 100; // 1%
+        burnAddress = 0x000000000000000000000000000000000000dEaD;
+
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
@@ -168,6 +179,14 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
                 address(this)
             )
         );
+    }
+
+    // ============ Internal Helpers ============
+
+    function _computeWithdrawalFees(uint256 amount) internal view returns (uint256 netToUser, uint256 feeDistribution, uint256 feeBurn) {
+        feeDistribution = (amount * distributionFeeBps) / BPS_DENOMINATOR;
+        feeBurn = (amount * burnFeeBps) / BPS_DENOMINATOR;
+        netToUser = amount - feeDistribution - feeBurn;
     }
 
     // ============ External Functions ============
@@ -229,7 +248,7 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Withdraw MORBIUS from reserve
+     * @notice Withdraw MORBIUS from reserve. Amount is gross (requested); fees are deducted and sent to distribution/burn; user receives net.
      */
     function withdraw(uint256 amount) external nonReentrant whenNotPaused {
         require(amount >= MIN_WITHDRAWAL, "Withdrawal too small");
@@ -240,19 +259,32 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         require(dailyWithdrawals[msg.sender][today] + amount <= MAX_DAILY_WITHDRAWAL, "Daily withdrawal limit exceeded");
         require(dailyWithdrawalTotals[today] + amount <= MAX_DAILY_WITHDRAWAL * 10, "Global daily limit exceeded");
 
+        (uint256 netToUser, uint256 feeDistribution, uint256 feeBurn) = _computeWithdrawalFees(amount);
+
         dailyWithdrawals[msg.sender][today] += amount;
         dailyWithdrawalTotals[today] += amount;
 
         playerReserves[msg.sender] -= amount;
         totalReserves -= amount;
 
-        MORBIUS_TOKEN.safeTransfer(msg.sender, amount);
+        require(MORBIUS_TOKEN.balanceOf(address(this)) >= amount, "Insufficient contract balance");
+
+        MORBIUS_TOKEN.safeTransfer(msg.sender, netToUser);
+        if (feeDistribution > 0 && distributionRecipient != address(0)) {
+            MORBIUS_TOKEN.safeTransfer(distributionRecipient, feeDistribution);
+            totalDistributionFeesCollected += feeDistribution;
+        }
+        if (feeBurn > 0 && burnAddress != address(0)) {
+            MORBIUS_TOKEN.safeTransfer(burnAddress, feeBurn);
+            totalBurned += feeBurn;
+        }
 
         emit Withdrawal(msg.sender, amount);
+        emit WithdrawalFeesCollected(msg.sender, amount, feeDistribution, feeBurn, netToUser);
     }
 
     /**
-     * @notice Withdraw MORBIUS with server signature (for off-chain balance withdrawals)
+     * @notice Withdraw MORBIUS with server signature (for off-chain balance withdrawals). Amount is gross; fees deducted same as withdraw().
      * @dev V2 fix: tracks totalOffChainPayouts when withdrawing beyond reserves
      */
     function withdrawWithSignature(
@@ -282,6 +314,8 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         require(dailyWithdrawals[msg.sender][today] + amount <= MAX_DAILY_WITHDRAWAL, "Daily withdrawal limit exceeded");
         require(dailyWithdrawalTotals[today] + amount <= MAX_DAILY_WITHDRAWAL * 10, "Global daily limit exceeded");
 
+        (uint256 netToUser, uint256 feeDistribution, uint256 feeBurn) = _computeWithdrawalFees(amount);
+
         dailyWithdrawals[msg.sender][today] += amount;
         dailyWithdrawalTotals[today] += amount;
 
@@ -297,19 +331,27 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
                 totalReserves -= fromReserve;
                 playerReserves[msg.sender] = 0;
             }
-            // Track the off-chain portion so emergencyWithdraw knows what's spoken for
             totalOffChainPayouts += fromOffChain;
         }
 
         require(MORBIUS_TOKEN.balanceOf(address(this)) >= amount, "Insufficient contract balance");
 
-        MORBIUS_TOKEN.safeTransfer(msg.sender, amount);
+        MORBIUS_TOKEN.safeTransfer(msg.sender, netToUser);
+        if (feeDistribution > 0 && distributionRecipient != address(0)) {
+            MORBIUS_TOKEN.safeTransfer(distributionRecipient, feeDistribution);
+            totalDistributionFeesCollected += feeDistribution;
+        }
+        if (feeBurn > 0 && burnAddress != address(0)) {
+            MORBIUS_TOKEN.safeTransfer(burnAddress, feeBurn);
+            totalBurned += feeBurn;
+        }
 
         emit Withdrawal(msg.sender, amount);
+        emit WithdrawalFeesCollected(msg.sender, amount, feeDistribution, feeBurn, netToUser);
     }
 
     /**
-     * @notice Place a bet and lock funds for a game
+     * @notice Place a bet and lock funds for a game. No fees on bets; fees apply only on withdrawals.
      */
     function placeBet(bytes32 gameHash, uint256 betAmount) external nonReentrant whenNotPaused {
         require(betAmount > 0, "Bet amount must be greater than 0");
@@ -317,31 +359,19 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         require(playerReserves[msg.sender] >= betAmount, "Insufficient reserve");
         require(pendingGames[gameHash].player == address(0), "Game hash already used");
 
-        // Deduct full betAmount from player reserves
         playerReserves[msg.sender] -= betAmount;
         totalReserves -= betAmount;
 
-        // Calculate and collect fee
-        uint256 netBet = betAmount;
-        if (betFeeBps > 0 && feeRecipient != address(0)) {
-            uint256 fee = (betAmount * betFeeBps) / BPS_DENOMINATOR;
-            netBet = betAmount - fee;
-            // Credit fee to feeRecipient's reserves (withdrawable via withdraw())
-            playerReserves[feeRecipient] += fee;
-            totalReserves += fee;
-            emit BetFeeCollected(msg.sender, fee, gameHash);
-        }
-
         pendingGames[gameHash] = PendingGame({
             player: msg.sender,
-            betAmount: netBet,
+            betAmount: betAmount,
             timestamp: block.timestamp,
             settled: false
         });
 
         playerPendingGames[msg.sender].push(gameHash);
 
-        emit BetPlaced(msg.sender, gameHash, netBet, block.timestamp);
+        emit BetPlaced(msg.sender, gameHash, betAmount, block.timestamp);
     }
 
     /**
@@ -445,6 +475,17 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         totalWithdrawnToday = dailyWithdrawalTotals[today];
     }
 
+    /**
+     * @notice Get net amount and fee breakdown for a given gross withdrawal amount
+     */
+    function getWithdrawalNet(uint256 amount) external view returns (
+        uint256 netToUser,
+        uint256 feeDistribution,
+        uint256 feeBurn
+    ) {
+        return _computeWithdrawalFees(amount);
+    }
+
     // ============ Admin Functions ============
 
     function setAuthorizedServer(address _server) external onlyOwner {
@@ -457,15 +498,26 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         emergencyAdmin = _admin;
     }
 
-    function setBetFee(uint256 _betFeeBps) external onlyOwner {
-        require(_betFeeBps <= 1000, "Fee cannot exceed 10%");
-        emit BetFeeUpdated(betFeeBps, _betFeeBps);
-        betFeeBps = _betFeeBps;
+    function setDistributionFee(uint256 _distributionFeeBps) external onlyOwner {
+        require(_distributionFeeBps <= 2000, "Distribution fee cannot exceed 20%");
+        emit DistributionFeeUpdated(distributionFeeBps, _distributionFeeBps);
+        distributionFeeBps = _distributionFeeBps;
     }
 
-    function setFeeRecipient(address _feeRecipient) external onlyOwner {
-        emit FeeRecipientUpdated(feeRecipient, _feeRecipient);
-        feeRecipient = _feeRecipient;
+    function setDistributionRecipient(address _distributionRecipient) external onlyOwner {
+        emit DistributionRecipientUpdated(distributionRecipient, _distributionRecipient);
+        distributionRecipient = _distributionRecipient;
+    }
+
+    function setBurnFee(uint256 _burnFeeBps) external onlyOwner {
+        require(_burnFeeBps <= 2000, "Burn fee cannot exceed 20%");
+        emit BurnFeeUpdated(burnFeeBps, _burnFeeBps);
+        burnFeeBps = _burnFeeBps;
+    }
+
+    function setBurnAddress(address _burnAddress) external onlyOwner {
+        emit BurnAddressUpdated(burnAddress, _burnAddress);
+        burnAddress = _burnAddress;
     }
 
     function setEmergencyPause(bool _paused) external onlyEmergencyAdmin {

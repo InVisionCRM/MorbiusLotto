@@ -1,10 +1,14 @@
 import { useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi'
 import { blackjackAbi } from '../abi/blackjack'
-import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS } from '../lib/contracts'
+import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, LEGACY_BLACKJACK_ADDRESSES } from '../lib/contracts'
 import { useAccount } from 'wagmi'
 
 const LEGACY_ZERO = '0x0000000000000000000000000000000000000000'
 const isLegacyConfigured = typeof BLACKJACK_LEGACY_ADDRESS === 'string' && BLACKJACK_LEGACY_ADDRESS !== '' && BLACKJACK_LEGACY_ADDRESS !== LEGACY_ZERO
+
+function isLegacyAddress(addr: string | undefined): addr is `0x${string}` {
+  return typeof addr === 'string' && addr.length > 0 && addr !== LEGACY_ZERO && addr.startsWith('0x')
+}
 
 // ============ Read Hooks ============
 
@@ -81,37 +85,48 @@ export function useDailyWithdrawalInfo() {
 }
 
 /**
- * Get player's reserve on the previous (legacy) Blackjack contract.
- * When the contract was upgraded, balances stayed in the old contract; players can withdraw from it here.
+ * Get player's reserve on a specific legacy Blackjack contract.
+ * Pass BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, or BLACKJACK_LEGACY_ADDRESS_3.
  */
-export function useLegacyPlayerReserve() {
+export function useLegacyPlayerReserveAt(legacyAddress: string | undefined) {
   const { address } = useAccount()
+  const enabled = isLegacyAddress(legacyAddress) && !!address
   return useReadContract({
-    address: isLegacyConfigured ? (BLACKJACK_LEGACY_ADDRESS as `0x${string}`) : undefined,
+    address: enabled ? (legacyAddress as `0x${string}`) : undefined,
     abi: blackjackAbi,
     functionName: 'getPlayerReserve',
     args: address ? [address] : undefined,
     query: {
-      enabled: isLegacyConfigured && !!address,
+      enabled,
       refetchInterval: 15000,
     },
   })
 }
 
 /**
- * Whether the legacy Blackjack contract is emergency-paused.
- * If true, withdraw() reverts with "Emergency pause active"; owner/emergencyAdmin must unpause.
+ * Whether a specific legacy Blackjack contract is emergency-paused.
  */
-export function useLegacyEmergencyPaused() {
+export function useLegacyEmergencyPausedAt(legacyAddress: string | undefined) {
+  const enabled = isLegacyAddress(legacyAddress)
   return useReadContract({
-    address: isLegacyConfigured ? (BLACKJACK_LEGACY_ADDRESS as `0x${string}`) : undefined,
+    address: enabled ? (legacyAddress as `0x${string}`) : undefined,
     abi: blackjackAbi,
     functionName: 'emergencyPaused',
     query: {
-      enabled: isLegacyConfigured,
+      enabled,
       refetchInterval: 15000,
     },
   })
+}
+
+/** @deprecated Use useLegacyPlayerReserveAt(BLACKJACK_LEGACY_ADDRESS) for first legacy */
+export function useLegacyPlayerReserve() {
+  return useLegacyPlayerReserveAt(BLACKJACK_LEGACY_ADDRESS)
+}
+
+/** @deprecated Use useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS) for first legacy */
+export function useLegacyEmergencyPaused() {
+  return useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS)
 }
 
 // ============ Write Hooks ============
@@ -311,13 +326,13 @@ export function useBlackjackContract() {
     })
   }
 
-  /** Withdraw from the previous (legacy) Blackjack contract. Use when balance is stuck there after upgrade. */
-  const withdrawLegacy = async (amount: bigint) => {
+  /** Withdraw from a specific legacy Blackjack contract. Use when balance is stuck there after upgrade. */
+  const withdrawLegacy = async (legacyAddress: `0x${string}`, amount: bigint) => {
     if (!address) throw new Error('Wallet not connected')
-    if (!isLegacyConfigured) throw new Error('Legacy contract not configured')
+    if (!isLegacyAddress(legacyAddress)) throw new Error('Invalid legacy contract address')
 
     return withdrawContract.writeContractAsync({
-      address: BLACKJACK_LEGACY_ADDRESS as `0x${string}`,
+      address: legacyAddress,
       abi: blackjackAbi,
       functionName: 'withdraw',
       args: [amount],

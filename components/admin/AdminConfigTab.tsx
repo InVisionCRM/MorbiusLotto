@@ -551,8 +551,10 @@ function PlinkoAdminSection() {
 function BlackjackAdminSection() {
   const [authorizedServer, setAuthorizedServer] = useState('');
   const [emergencyAdmin, setEmergencyAdmin] = useState('');
-  const [betFeeBps, setBetFeeBps] = useState('');
-  const [feeRecipient, setFeeRecipient] = useState('');
+  const [distributionFeeBps, setDistributionFeeBps] = useState('');
+  const [distributionRecipient, setDistributionRecipient] = useState('');
+  const [burnFeeBps, setBurnFeeBps] = useState('');
+  const [burnAddress, setBurnAddress] = useState('');
   const [emergencyPause, setEmergencyPause] = useState('true');
   const [emergencyAmount, setEmergencyAmount] = useState('');
   const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
@@ -622,29 +624,29 @@ function BlackjackAdminSection() {
         <Input value={emergencyAdmin} onChange={(e) => setEmergencyAdmin(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="setBetFee(uint256 bps)"
+        label="setDistributionFee(uint256 bps) — max 2000 (20%)"
         onExecute={() => {
-          if (!betFeeBps.trim()) {
-            toast.error('Enter basis points');
+          if (!distributionFeeBps.trim()) {
+            toast.error('Enter basis points (0–2000)');
             return;
           }
           run(() =>
             writeContract({
               address: addr,
               abi: blackjackAbi,
-              functionName: 'setBetFee',
-              args: [BigInt(betFeeBps)],
+              functionName: 'setDistributionFee',
+              args: [BigInt(distributionFeeBps)],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={betFeeBps} onChange={(e) => setBetFeeBps(e.target.value)} placeholder="basis points" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={distributionFeeBps} onChange={(e) => setDistributionFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="setFeeRecipient(address)"
+        label="setDistributionRecipient(address)"
         onExecute={() => {
-          if (!feeRecipient.trim() || !feeRecipient.startsWith('0x')) {
+          if (!distributionRecipient.trim() || !distributionRecipient.startsWith('0x')) {
             toast.error('Enter valid 0x address');
             return;
           }
@@ -652,14 +654,54 @@ function BlackjackAdminSection() {
             writeContract({
               address: addr,
               abi: blackjackAbi,
-              functionName: 'setFeeRecipient',
-              args: [feeRecipient as `0x${string}`],
+              functionName: 'setDistributionRecipient',
+              args: [distributionRecipient as `0x${string}`],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={feeRecipient} onChange={(e) => setFeeRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={distributionRecipient} onChange={(e) => setDistributionRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="setBurnFee(uint256 bps) — max 2000 (20%)"
+        onExecute={() => {
+          if (!burnFeeBps.trim()) {
+            toast.error('Enter basis points (0–2000)');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: blackjackAbi,
+              functionName: 'setBurnFee',
+              args: [BigInt(burnFeeBps)],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={burnFeeBps} onChange={(e) => setBurnFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="setBurnAddress(address)"
+        onExecute={() => {
+          if (!burnAddress.trim() || !burnAddress.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: blackjackAbi,
+              functionName: 'setBurnAddress',
+              args: [burnAddress as `0x${string}`],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={burnAddress} onChange={(e) => setBurnAddress(e.target.value)} placeholder="0x… dead" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setEmergencyPause(bool) — emergency admin only"

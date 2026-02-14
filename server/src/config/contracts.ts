@@ -19,7 +19,7 @@ export const KENO_ADDRESS = (process.env.KENO_ADDRESS || '0x734A1460b4131F8cFE49
 export const LOTTERY_ADDRESS = (process.env.LOTTERY_ADDRESS || '0xD66b4489fbfF99A8d62f969203899840F2ec69c5') as `0x${string}`;
 export const BIGWHEEL_ADDRESS = (process.env.BIGWHEEL_ADDRESS || '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F') as `0x${string}`;
 /** Blackjack V2; use BLACKJACK_CONTRACT_ADDRESS in .env if different. */
-export const BLACKJACK_ADDRESS = (process.env.BLACKJACK_CONTRACT_ADDRESS || process.env.BLACKJACK_ADDRESS || '0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09') as `0x${string}`;
+export const BLACKJACK_ADDRESS = (process.env.BLACKJACK_CONTRACT_ADDRESS || process.env.BLACKJACK_ADDRESS || '0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8') as `0x${string}`;
 
 /** Full Plinko ABI from contracts/abi/plinko.json. */
 export const PLINKO_GET_GLOBAL_STATS_ABI = PLINKO_ABI;
