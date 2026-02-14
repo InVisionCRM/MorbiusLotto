@@ -20,7 +20,7 @@ exports.KENO_ADDRESS = (process.env.KENO_ADDRESS || '0x734A1460b4131F8cFE4950894
 exports.LOTTERY_ADDRESS = (process.env.LOTTERY_ADDRESS || '0xD66b4489fbfF99A8d62f969203899840F2ec69c5');
 exports.BIGWHEEL_ADDRESS = (process.env.BIGWHEEL_ADDRESS || '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F');
 /** Blackjack V2; use BLACKJACK_CONTRACT_ADDRESS in .env if different. */
-exports.BLACKJACK_ADDRESS = (process.env.BLACKJACK_CONTRACT_ADDRESS || process.env.BLACKJACK_ADDRESS || '0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09');
+exports.BLACKJACK_ADDRESS = (process.env.BLACKJACK_CONTRACT_ADDRESS || process.env.BLACKJACK_ADDRESS || '0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8');
 /** Full Plinko ABI from contracts/abi/plinko.json. */
 exports.PLINKO_GET_GLOBAL_STATS_ABI = PLINKO_ABI;
 /** Full CryptoKeno ABI from contracts/abi/CryptoKeno.json. */

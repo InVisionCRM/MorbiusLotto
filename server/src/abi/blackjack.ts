@@ -2,4 +2,5 @@
 import blackjackArtifact from './blackjack-v2.json';
 
 type Abi = readonly unknown[];
-export const blackjackAbi = (blackjackArtifact as { abi: Abi }).abi;
+const raw = blackjackArtifact as unknown;
+export const blackjackAbi: Abi = Array.isArray(raw) ? raw : (raw as { abi: Abi }).abi;

@@ -229,7 +229,7 @@ async function initializeServices() {
         // Top players leaderboard (by total volume)
         app.get('/api/analytics/top-players', async (req, res) => {
             try {
-                const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+                const limit = Math.min(parseInt(req.query.limit) || 25, 50);
                 const topPlayers = await dbService.getTopPlayers(limit);
                 sendJson(res, topPlayers);
             }
