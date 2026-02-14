@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/table'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 
-const TOP_N = 10
+const TOP_N = 25
 
 const tableCls = 'text-white font-poppins bg-transparent'
 const rowCls = 'border-white/10 hover:bg-transparent'

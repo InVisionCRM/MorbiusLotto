@@ -470,7 +470,7 @@ export class DatabaseService {
     return this.normalizeGlobalAnalytics(result.rows[0] || {});
   }
 
-  async getTopPlayers(limit: number = 10): Promise<TopPlayerEntry[]> {
+  async getTopPlayers(limit: number = 25): Promise<TopPlayerEntry[]> {
     const query = `
       WITH agg AS (
         SELECT
@@ -486,10 +486,11 @@ export class DatabaseService {
         JOIN game_sessions gs ON gs.player_id = p.id
         JOIN games g ON g.session_id = gs.id AND g.result IS NOT NULL AND g.result != 'ongoing'
         GROUP BY p.id, p.wallet_address
+        HAVING COUNT(g.*) >= 10
       )
-      SELECT ROW_NUMBER() OVER (ORDER BY total_bet DESC)::INTEGER AS rank, *
+      SELECT ROW_NUMBER() OVER (ORDER BY profit_loss DESC, win_rate DESC)::INTEGER AS rank, *
       FROM agg
-      ORDER BY total_bet DESC
+      ORDER BY profit_loss DESC, win_rate DESC
       LIMIT $1
     `;
     const result = await this.pool.query(query, [limit]);

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { formatEther } from 'viem'
 import { useBlackjackTopPlayers, type TopPlayerEntry } from '@/hooks/use-blackjack-stats'
 
-const TOP_N = 10
+const TOP_N = 25
 
 function formatVal(wei: bigint): string {
   return Math.floor(Number(formatEther(wei))).toLocaleString()
@@ -13,7 +13,7 @@ function formatVal(wei: bigint): string {
 
 function shortAddress(addr: string): string {
   if (!addr || addr.length < 8) return addr
-  return `${addr.slice(0, 4)}…${addr.slice(-4)}`
+  return addr.slice(-4)
 }
 
 function rankStyle(rank: number): string {
@@ -48,12 +48,13 @@ export function BlackjackTopPlayersOverlay() {
     >
       <ul
         ref={scrollerRef}
-        className={`flex w-max min-w-full shrink-0 flex-nowrap gap-2 py-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}
+        className={`grid w-max min-w-full shrink-0 grid-flow-col grid-rows-2 gap-1 py-1.5 md:py-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}
+        style={{ gridAutoColumns: 'minmax(140px, 1fr)' }}
       >
         {players.map((entry: TopPlayerEntry) => {
           const profit = entry.profit_loss >= BigInt(0)
           return (
-            <li key={entry.wallet_address} className="shrink-0 w-[100px] md:w-[120px]">
+            <li key={entry.wallet_address} className="min-w-[140px] w-[140px] md:min-w-[160px] md:w-[160px]">
               <Link
                 href={`/player/${entry.wallet_address}`}
                 className={`block rounded-lg border-2 bg-gradient-to-b from-slate-800/95 to-slate-900/95 px-2 py-1.5 text-white shadow-[0_4px_14px_rgba(0,0,0,0.45),0_2px_6px_rgba(0,0,0,0.3)] transition-opacity hover:opacity-95 ${rankStyle(entry.rank)}`}
