@@ -185,7 +185,7 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
                   {/* Home */}
                   <div className="p-2 border-b border-gray-700/50">
                     <Link
-                      href="/home"
+                      href="/"
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >

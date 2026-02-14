@@ -138,7 +138,7 @@ export function HomeHeader({ showBackArrow = false, backArrowHref = '/', backArr
                   <div className="p-2 border-b border-gray-700/50">
                     <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Quick Links</div>
                     <Link
-                      href="/home"
+                      href="/"
                       className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                       onClick={() => setMenuOpen(false)}
                     >

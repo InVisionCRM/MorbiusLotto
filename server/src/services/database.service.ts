@@ -131,6 +131,8 @@ export interface ChatMessage {
   sender_address: string | null;
   text: string;
   created_at: Date;
+  deleted_at?: Date | null;
+  deleted_by?: string | null;
 }
 
 export interface BlackjackTableRow {
@@ -1122,7 +1124,7 @@ export class DatabaseService {
     const query = `
       SELECT id, room_id, sender_address, text, created_at
       FROM chat_messages
-      WHERE room_id = $1
+      WHERE room_id = $1 AND deleted_at IS NULL
       ORDER BY created_at DESC
       LIMIT $2
     `;
@@ -1136,12 +1138,46 @@ export class DatabaseService {
     })).reverse(); // chronological order for display
   }
 
+  /** Admin: recent messages including soft-deleted (for moderation UI). */
+  async getRecentChatMessagesForAdmin(roomId: string, limit: number = 100): Promise<ChatMessage[]> {
+    const query = `
+      SELECT id, room_id, sender_address, text, created_at, deleted_at, deleted_by
+      FROM chat_messages
+      WHERE room_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2
+    `;
+    const result = await this.pool.query(query, [roomId, limit]);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      room_id: row.room_id,
+      sender_address: row.sender_address,
+      text: row.text,
+      created_at: row.created_at,
+      deleted_at: row.deleted_at ?? null,
+      deleted_by: row.deleted_by ?? null
+    })).reverse();
+  }
+
+  /** Admin: soft-delete a chat message. Returns room_id if message existed and was not already deleted. */
+  async deleteChatMessage(messageId: string, deletedByAddress: string): Promise<string | null> {
+    const normalized = this.normalizeAddress(deletedByAddress);
+    const query = `
+      UPDATE chat_messages
+      SET deleted_at = NOW(), deleted_by = $2
+      WHERE id = $1 AND deleted_at IS NULL
+      RETURNING room_id
+    `;
+    const result = await this.pool.query(query, [messageId, normalized]);
+    return result.rows[0]?.room_id ?? null;
+  }
+
   /** Messages older than the message with id beforeId, in chronological order (oldest first). */
   async getChatMessagesBefore(roomId: string, beforeId: string, limit: number = 50): Promise<ChatMessage[]> {
     const query = `
       SELECT id, room_id, sender_address, text, created_at
       FROM chat_messages
-      WHERE room_id = $1
+      WHERE room_id = $1 AND deleted_at IS NULL
         AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2 LIMIT 1)
       ORDER BY created_at DESC
       LIMIT $3
@@ -1204,6 +1240,36 @@ export class DatabaseService {
       map.set(row.wallet_address, row.display_name);
     }
     return map;
+  }
+
+  // Chat blocked addresses (admin)
+  async getBlockedAddresses(): Promise<string[]> {
+    const result = await this.pool.query(
+      `SELECT wallet_address FROM chat_blocked_addresses ORDER BY blocked_at DESC`
+    );
+    return result.rows.map((r: any) => r.wallet_address);
+  }
+
+  async isAddressBlocked(walletAddress: string): Promise<boolean> {
+    const normalized = this.normalizeAddress(walletAddress);
+    const result = await this.pool.query(
+      `SELECT 1 FROM chat_blocked_addresses WHERE wallet_address = $1 LIMIT 1`,
+      [normalized]
+    );
+    return result.rows.length > 0;
+  }
+
+  async addBlockedAddress(walletAddress: string): Promise<void> {
+    const normalized = this.normalizeAddress(walletAddress);
+    await this.pool.query(
+      `INSERT INTO chat_blocked_addresses (wallet_address) VALUES ($1) ON CONFLICT (wallet_address) DO NOTHING`,
+      [normalized]
+    );
+  }
+
+  async removeBlockedAddress(walletAddress: string): Promise<void> {
+    const normalized = this.normalizeAddress(walletAddress);
+    await this.pool.query(`DELETE FROM chat_blocked_addresses WHERE wallet_address = $1`, [normalized]);
   }
 
   // Utility methods

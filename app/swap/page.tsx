@@ -15,7 +15,7 @@ export default function SwapPage() {
       <div className="border-b border-white/10 py-4">
         <div className="container mx-auto px-4">
           <Link
-            href="/home"
+            href="/"
             className="inline-flex items-center gap-2 text-white/60 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

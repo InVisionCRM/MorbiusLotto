@@ -23,7 +23,10 @@ export default function Footer() {
 
   return (
     <>
-      <footer className="w-full bg-black/75 backdrop-blur-sm border-t border-black/10 py-4 px-4 mt-auto">
+      <footer
+        className="w-full bg-black/50 backdrop-blur-sm border-t border-black/10 py-4 px-4 mt-auto bg-cover bg-center"
+        style={{ backgroundImage: "url('/Pulse Branding/Banner/Dark/minimal.png')" }}
+      >
         <div className="container mx-auto max-w-4xl">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {/* Column 1 - More From Morbius.io */}
@@ -58,7 +61,7 @@ export default function Footer() {
               <h3 className="text-purple-500 font-bold text-xs mb-2 md:mb-1">Quick Links</h3>
               <ul className="space-y-1 md:space-y-0.5 text-center md:text-left">
                 <li>
-                  <a href="/home" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="/" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
                     Home
                   </a>
                 </li>

@@ -23,11 +23,12 @@ export const Theme = {
    * Source: Plinko board panel styling
    */
   inset: {
-    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+    // Shadow on bottom, highlight on top (recessed panel look)
+    boxShadow: 'inset 0 -3px 6px rgba(0, 0, 0, 0.8), inset 0 3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
     border: '1px inset rgba(60, 60, 60, 0.5)',
     // Alternative lighter variant
     light: {
-      boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.8), inset 0 -2px 4px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.5)',
+      boxShadow: 'inset 0 -2px 4px rgba(0, 0, 0, 0.8), inset 0 2px 4px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.5)',
       border: '1px inset rgba(60, 60, 60, 0.5)',
     },
   },
@@ -81,13 +82,13 @@ export const Theme = {
   panel: {
     base: {
       background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+      boxShadow: 'inset 0 -3px 6px rgba(0, 0, 0, 0.8), inset 0 3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
       border: '1px inset rgba(60, 60, 60, 0.5)',
     },
     // Sidebar variant
     sidebar: {
       background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+      boxShadow: 'inset 0 -3px 6px rgba(0, 0, 0, 0.8), inset 0 3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
       border: '1px inset rgba(60, 60, 60, 0.5)',
     },
   },

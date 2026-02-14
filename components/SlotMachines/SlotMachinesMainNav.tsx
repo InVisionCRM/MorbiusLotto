@@ -103,7 +103,7 @@ export default function SlotMachinesMainNav({
                 {menuOpen && (
                   <div className="absolute right-0 mt-2 w-48 rounded-xl bg-black/95 border border-purple-900/50 shadow-xl shadow-purple-900/20 py-2 z-50">
                     <Link
-                      href="/home"
+                      href="/"
                       className="flex items-center gap-3 px-4 py-2 text-purple-300 hover:bg-purple-900/30 transition-colors"
                       onClick={() => setMenuOpen(false)}
                     >

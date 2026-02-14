@@ -19,7 +19,6 @@ const breathingKeyframes = `
 
 const PATH_TO_ROOM: Record<string, { roomId: string; title: string }> = {
   '/': { roomId: 'main', title: 'Lobby Chat' },
-  '/home': { roomId: 'main', title: 'Lobby Chat' },
   '/BLACKJACK': { roomId: 'blackjack', title: 'Blackjack Chat' },
   '/PLINKO': { roomId: 'plinko', title: 'Plinko Chat' },
   '/plinko-dashboard': { roomId: 'plinko', title: 'Plinko Chat' },

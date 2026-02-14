@@ -792,6 +792,82 @@ async function initializeServices() {
       }
     });
 
+    // Admin: chat moderation (delete message, list messages, blocked addresses)
+    app.get('/api/admin/chat/messages', async (req, res) => {
+      try {
+        const roomId = (req.query.roomId as string)?.trim() || 'main';
+        const limit = Math.min(Math.max(parseInt(String(req.query.limit || 50), 10) || 50, 1), 100);
+        const messages = await dbService.getRecentChatMessagesForAdmin(roomId, limit);
+        sendJson(res, { roomId, messages });
+      } catch (error) {
+        logger.error('Error fetching admin chat messages:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.delete('/api/admin/chat/messages/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const wallet = (req.headers['x-admin-wallet'] as string)?.trim();
+        if (!wallet) {
+          res.status(403).json({ error: 'Admin wallet required' });
+          return;
+        }
+        const roomId = await dbService.deleteChatMessage(id, wallet);
+        if (roomId == null) {
+          res.status(404).json({ error: 'Message not found or already deleted' });
+          return;
+        }
+        wsService.broadcastChatMessageDeleted(roomId, id);
+        res.status(204).send();
+      } catch (error) {
+        logger.error('Error deleting chat message:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.get('/api/admin/chat/blocked', async (req, res) => {
+      try {
+        const addresses = await dbService.getBlockedAddresses();
+        sendJson(res, { addresses });
+      } catch (error) {
+        logger.error('Error fetching blocked addresses:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.post('/api/admin/chat/blocked', async (req, res) => {
+      try {
+        const address = (req.body?.address ?? req.body?.wallet_address) as string | undefined;
+        const trimmed = address?.trim();
+        if (!trimmed || !/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+          res.status(400).json({ error: 'Valid wallet address required (body: { address: "0x..." })' });
+          return;
+        }
+        await dbService.addBlockedAddress(trimmed);
+        const addresses = await dbService.getBlockedAddresses();
+        sendJson(res, { addresses });
+      } catch (error) {
+        logger.error('Error adding blocked address:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.delete('/api/admin/chat/blocked/:address', async (req, res) => {
+      try {
+        const address = req.params.address?.trim();
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          res.status(400).json({ error: 'Valid wallet address required' });
+          return;
+        }
+        await dbService.removeBlockedAddress(address);
+        res.status(204).send();
+      } catch (error) {
+        logger.error('Error removing blocked address:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Admin: metrics aggregates + series for charts (range: 24h | 7d | 30d | all).
     // Includes: Blackjack (DB), Plinko/Keno/Lottery/BigWheel (chain), and Tournament metrics.
     // On any DB or serialization error we return 200 with zeros so the tab always loads; errors are logged.

@@ -46,6 +46,14 @@ export interface RoomJoinedPayload {
     text: string;
     timestamp: string;
   }>;
+  /** When true, sending is disabled and UI should show "Chat is paused". */
+  chatPaused?: boolean;
+}
+
+/** Server → client when an admin deletes a message. Use on('chat_message_deleted', handler). */
+export interface ChatMessageDeletedPayload {
+  roomId: string;
+  messageId: string;
 }
 
 /** Freeroll list item (server → client). Request: freeroll_list { includePast?: boolean }. Response: freeroll_list { tournaments: FreerollListItemPayload[] }. */
@@ -452,6 +460,9 @@ export class BlackjackWebSocketClient {
           'connection_established',
           'pong',
           'global_game_completed',
+          'chat_message',
+          'chat_message_deleted',
+          'room_joined',
         ]);
         if (!knownEventTypes.has(message.type)) {
           logger.warn('Unhandled message type:', message.type);

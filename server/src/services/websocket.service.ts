@@ -979,6 +979,8 @@ export class WebSocketService {
       const recent = await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
       const addresses = [...new Set(recent.map(m => m.sender_address).filter(Boolean) as string[])];
       const displayNames = await this.dbService.getDisplayNames(addresses);
+      const config = await this.dbService.getAdminGameConfig();
+      const chatPaused = config['chat_paused'] === 'true';
 
       this.sendMessage(ws, {
         type: 'room_joined',
@@ -991,7 +993,8 @@ export class WebSocketService {
             displayName: m.sender_address ? displayNames.get(m.sender_address.toLowerCase()) ?? null : null,
             text: m.text,
             timestamp: m.created_at
-          }))
+          })),
+          chatPaused
         },
         requestId: message.requestId
       });
@@ -1139,13 +1142,22 @@ export class WebSocketService {
         return this.sendError(ws, 'Not in this room', message.requestId);
       }
 
+      const config = await this.dbService.getAdminGameConfig();
+      if (config['chat_paused'] === 'true') {
+        return this.sendError(ws, 'Chat is temporarily paused', message.requestId);
+      }
+
+      const senderAddress = ws.playerAddress ?? null;
+      if (senderAddress && await this.dbService.isAddressBlocked(senderAddress)) {
+        return this.sendError(ws, 'Unable to send message', message.requestId);
+      }
+
       const now = Date.now();
       if (ws.lastChatMessageAt != null && now - ws.lastChatMessageAt < CHAT_RATE_LIMIT_MS) {
         return this.sendError(ws, 'Please wait before sending another message', message.requestId);
       }
       ws.lastChatMessageAt = now;
 
-      const senderAddress = ws.playerAddress ?? null;
       // Per-address limit (across all tabs/connections) so one wallet can't spam
       if (senderAddress) {
         if (!this.checkPerAddressChatLimit(senderAddress, now)) {
@@ -1271,6 +1283,14 @@ export class WebSocketService {
       if (client?.readyState === WebSocket.OPEN) {
         this.sendMessage(client, message);
       }
+    });
+  }
+
+  /** Called by admin API when a message is soft-deleted; notifies all clients in the room. */
+  public broadcastChatMessageDeleted(roomId: string, messageId: string) {
+    this.broadcastToRoom(roomId, {
+      type: 'chat_message_deleted',
+      payload: { roomId, messageId }
     });
   }
 

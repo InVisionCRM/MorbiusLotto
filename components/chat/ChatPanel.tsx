@@ -87,7 +87,7 @@ export function ChatPanel({
   sheetOpen,
   onUnreadChange,
 }: ChatPanelProps) {
-  const { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore } = useChat(roomId, { wsClient, wsConnected });
+  const { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore, chatPaused } = useChat(roomId, { wsClient, wsConnected });
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
   const [showNameInput, setShowNameInput] = useState(false);
@@ -160,7 +160,7 @@ export function ChatPanel({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = input.trim();
-    if (!trimmed || !connected) return;
+    if (!trimmed || !connected || chatPaused) return;
     sendMessage(trimmed);
     setInput('');
   };
@@ -222,6 +222,11 @@ export function ChatPanel({
               >
                 {loadingMore ? 'Loading…' : 'Load older messages'}
               </button>
+            </div>
+          )}
+          {chatPaused && (
+            <div className="text-amber-400/90 text-xs p-2 rounded bg-amber-500/10 text-center">
+              Chat is temporarily paused
             </div>
           )}
           {error && (
@@ -310,8 +315,8 @@ export function ChatPanel({
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value.slice(0, CHAT_MESSAGE_MAX_LENGTH))}
-              placeholder={connected ? 'Type a message…' : 'Connect to chat'}
-              disabled={!connected}
+              placeholder={chatPaused ? 'Chat is paused' : connected ? 'Type a message…' : 'Connect to chat'}
+              disabled={!connected || chatPaused}
               maxLength={CHAT_MESSAGE_MAX_LENGTH}
               className="w-full rounded-lg px-3 py-2 pr-12 text-sm bg-black/30 text-white placeholder-white/40 border border-cyan-500/30 focus:border-cyan-400/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/30"
             />
@@ -321,7 +326,7 @@ export function ChatPanel({
           </div>
           <button
             type="submit"
-            disabled={!connected || !input.trim()}
+            disabled={!connected || chatPaused || !input.trim()}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:pointer-events-none text-white transition shrink-0"
           >
             Send

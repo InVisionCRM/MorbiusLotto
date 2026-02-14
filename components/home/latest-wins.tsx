@@ -89,10 +89,6 @@ export function LatestWins() {
 
         {/* Animated Win List — fills remaining space so no gap at bottom of grid */}
         <div className="relative flex-1 h-200 overflow-hidden">
-          {/* Gradient overlay at top */}
-          <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black to-transparent z-10 pointer-events-none" />
-
-          {/* Content */}
           {isLoading ? (
             <LoadingSkeleton />
           ) : wins.length === 0 ? (
@@ -111,9 +107,6 @@ export function LatestWins() {
               ))}
             </AnimatedList>
           )}
-
-          {/* Gradient overlay at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black to-transparent z-10 pointer-events-none" />
         </div>
       </div>
 

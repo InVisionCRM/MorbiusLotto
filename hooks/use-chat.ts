@@ -6,6 +6,7 @@ import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import {
   BlackjackWebSocketClient,
   type ChatMessagePayload,
+  type ChatMessageDeletedPayload,
   type RoomJoinedPayload,
 } from '@/lib/websocket-client';
 
@@ -23,6 +24,7 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [chatPaused, setChatPaused] = useState(false);
   const internalClientRef = useRef<BlackjackWebSocketClient | null>(null);
   const roomIdRef = useRef(roomId);
   roomIdRef.current = roomId;
@@ -95,6 +97,7 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
               timestamp: m.timestamp,
             }))
           );
+          setChatPaused(payload.chatPaused === true);
         }
       })
       .catch((err) => {
@@ -110,10 +113,17 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
       });
     };
 
+    const onDeleted = (payload: ChatMessageDeletedPayload) => {
+      if (payload.roomId !== roomIdRef.current) return;
+      setMessages((prev) => prev.filter((m) => m.id !== payload.messageId));
+    };
+
     internal.on('chat_message', onChat);
+    internal.on('chat_message_deleted', onDeleted);
 
     return () => {
       internal.off('chat_message', onChat);
+      internal.off('chat_message_deleted', onDeleted);
       internal.disconnect();
       internalClientRef.current = null;
       setConnected(false);
@@ -142,6 +152,7 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
               timestamp: m.timestamp,
             }))
           );
+          setChatPaused(payload.chatPaused === true);
         }
       })
       .catch((err) => {
@@ -156,9 +167,16 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
       });
     };
 
+    const onDeleted = (payload: ChatMessageDeletedPayload) => {
+      if (payload.roomId !== roomIdRef.current) return;
+      setMessages((prev) => prev.filter((m) => m.id !== payload.messageId));
+    };
+
     externalClient.on('chat_message', onChat);
+    externalClient.on('chat_message_deleted', onDeleted);
     return () => {
       externalClient.off('chat_message', onChat);
+      externalClient.off('chat_message_deleted', onDeleted);
     };
   }, [roomId, externalClient, externalConnected]);
 
@@ -168,5 +186,5 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
     setConnected(externalClient.isConnected());
   }, [externalClient, connected]);
 
-  return { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore };
+  return { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore, chatPaused };
 }

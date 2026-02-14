@@ -35,12 +35,15 @@ export function Footer() {
 
   return (
     <>
-      <footer className="w-full border-t border-white/10 py-6 mt-16">
+      <footer
+        className="w-full border-t border-white/10 py-6 mt-16 bg-cover bg-center"
+        style={{ backgroundImage: "url('/Pulse Branding/Banner/Dark/minimal.png')" }}
+      >
         <div className="container mx-auto px-4 max-w-7xl">
           <div className="flex flex-col items-center gap-6">
             {/* Navigation Links */}
             <div className="flex flex-wrap justify-center gap-6 text-sm">
-              <Link href="/home" className="text-white/60 hover:text-white/90 transition-colors">
+              <Link href="/" className="text-white/60 hover:text-white/90 transition-colors">
                 Home
               </Link>
               <Link href="/" className="text-white/60 hover:text-white/90 transition-colors">
