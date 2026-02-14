@@ -634,7 +634,6 @@ export default function BlackjackPage() {
     const connected = wsConnected;
     console.log('[Balance] fetchBalance called | wsClient:', !!client, '| wsConnected:', connected);
     // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:548',message:'fetchBalance called',data:{hasClient:!!client,connected,address},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     if (!client || !connected) return;
     try {
@@ -642,7 +641,6 @@ export default function BlackjackPage() {
       const balanceBigInt = BigInt(balance);
       // #region agent log
       const contractReserveValue = typeof playerReserve !== 'undefined' && playerReserve !== null ? playerReserve.toString() : 'undefined';
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:552',message:'fetchBalance received',data:{balanceString:balance,balanceBigInt:balanceBigInt.toString(),contractReserve:contractReserveValue,offChainBalanceBefore:offChainBalance?.toString()},timestamp:Date.now(),runId:'run1',hypothesisId:'C'})}).catch(()=>{});
       // #endregion
       console.log('[Balance] Server returned balance:', balance, '| as BigInt:', balanceBigInt.toString());
       setOffChainBalance(balanceBigInt);
@@ -650,7 +648,6 @@ export default function BlackjackPage() {
     } catch (error) {
       console.error('[Balance] Failed to fetch balance:', error);
       // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:556',message:'fetchBalance error',data:{error:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
     }
   }, [wsClient, wsConnected, address, offChainBalance, playerReserve]);
@@ -660,14 +657,12 @@ export default function BlackjackPage() {
     const client = wsClient;
     const connected = wsConnected;
     // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:572',message:'syncBalance called',data:{hasClient:!!client,connected,address,currentOffChainBalance:offChainBalance?.toString(),currentContractReserve:playerReserve?.toString()},timestamp:Date.now(),runId:'run1',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
     if (!client || !connected) return;
     try {
       const { balance } = await client.syncBalance();
       const balanceBigInt = BigInt(balance);
       // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:577',message:'syncBalance received',data:{balanceString:balance,balanceBigInt:balanceBigInt.toString(),previousOffChainBalance:offChainBalance?.toString()},timestamp:Date.now(),runId:'run1',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
       setOffChainBalance(balanceBigInt);
       setGameState(prev => ({ ...prev, balance: balanceBigInt }));
@@ -679,7 +674,6 @@ export default function BlackjackPage() {
     } catch (error) {
       console.error('Failed to sync balance:', error);
       // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:585',message:'syncBalance error',data:{error:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),runId:'run1',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
     }
   }, [wsClient, wsConnected, refetchPlayerReserve, offChainBalance, playerReserve, address]);
@@ -2589,10 +2583,11 @@ export default function BlackjackPage() {
               onRebetAndDeal={tournament.tournamentState.inTournament ? undefined : handleRebetAndDeal}
               onHalfBet={tournament.tournamentState.inTournament ? () => {} : handleHalfBet}
               onDoubleBet={tournament.tournamentState.inTournament ? () => {} : handleDoubleBet}
-              musicTrackName={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? 'Music'}
               isMusicPlaying={isMusicPlaying}
               onToggleMusic={toggleMusic}
               onNextTrack={nextTrack}
+              musicVolume={musicVolume}
+              onMusicVolumeChange={setMusicVolume}
               canDeal={tournament.tournamentState.inTournament
                 ? !gameState.isPlaying && (tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining > 0
                 : !gameState.isPlaying && totalBetAmount > 0}

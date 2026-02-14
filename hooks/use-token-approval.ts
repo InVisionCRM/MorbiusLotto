@@ -61,14 +61,6 @@ export function useTokenApproval({
     error: approveError,
   } = useWriteContract()
 
-  // #region agent log
-  useEffect(() => {
-    if (approveHash) {
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:62',message:'approveHash set',data:{approveHash,isPending:isApprovePending,hasError:!!approveError,errorMessage:approveError?.message},timestamp:Date.now(),runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    }
-  }, [approveHash, isApprovePending, approveError]);
-  // #endregion
-
   // Wait for approval transaction
   const {
     isLoading: isApproveLoading,
@@ -76,22 +68,6 @@ export function useTokenApproval({
   } = useWaitForTransactionReceipt({
     hash: approveHash,
   })
-
-  // #region agent log
-  useEffect(() => {
-    if (approveError) {
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:72',message:'approveError detected',data:{errorMessage:approveError?.message,errorName:approveError?.name,errorStack:approveError?.stack},timestamp:Date.now(),runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    }
-  }, [approveError]);
-  // #endregion
-
-  // #region agent log
-  useEffect(() => {
-    if (isApprovalSuccess) {
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:79',message:'approval success',data:{approveHash},timestamp:Date.now(),runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    }
-  }, [isApprovalSuccess, approveHash]);
-  // #endregion
 
   // Clear optimistic allowance and refetch on success
   useEffect(() => {
@@ -111,36 +87,17 @@ export function useTokenApproval({
     allowance < requiredAmount &&
     requiredAmount > BigInt(0)
 
-  // #region agent log
-  useEffect(() => {
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:89',message:'needsApproval check',data:{contractAllowance:contractAllowance?.toString(),allowance:allowance.toString(),requiredAmount:requiredAmount.toString(),isLoadingAllowance,needsApproval,enabled,hasUserAddress:!!userAddress},timestamp:Date.now(),runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  }, [contractAllowance, allowance, requiredAmount, isLoadingAllowance, needsApproval, enabled, userAddress]);
-  // #endregion
-
   const approve = (customAmount?: bigint) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:91',message:'approve function called',data:{hasUserAddress:!!userAddress,userAddress,customAmount:customAmount?.toString(),defaultToUnlimited,requiredAmount:requiredAmount.toString(),tokenAddress,spenderAddress},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     if (!userAddress) {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:94',message:'approve early return - no userAddress',data:{},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       return
     }
 
     const amountToApprove = customAmount ?? (defaultToUnlimited ? MAX_UINT256 : requiredAmount)
 
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:98',message:'approve parameters calculated',data:{amountToApprove:amountToApprove.toString(),isUnlimited:amountToApprove === MAX_UINT256},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-
     // Set optimistic allowance immediately for better UX
     setOptimisticAllowance(amountToApprove)
 
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:105',message:'calling writeContract',data:{tokenAddress,spenderAddress,amountToApprove:amountToApprove.toString(),chainId:pulsechain.id},timestamp:Date.now(),runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       writeContract({
         address: tokenAddress,
         abi: ERC20_ABI,
@@ -148,13 +105,7 @@ export function useTokenApproval({
         args: [spenderAddress, amountToApprove],
         chainId: pulsechain.id,
       })
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:113',message:'writeContract called successfully',data:{},timestamp:Date.now(),runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-token-approval.ts:116',message:'writeContract error caught',data:{error:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       console.error('Approval error:', error)
     }
   }

@@ -346,21 +346,12 @@ export class DatabaseService {
   // Off-chain balance operations
   async getPlayerBalance(walletAddress: string): Promise<bigint> {
     const normalizedAddress = this.normalizeAddress(walletAddress);
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'database.service.ts:331',message:'getPlayerBalance query',data:{walletAddress,normalizedAddress},timestamp:Date.now(),runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     const query = `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`;
     const result = await this.pool.query(query, [normalizedAddress]);
     if (result.rows.length === 0) {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'database.service.ts:334',message:'Player not found in DB',data:{walletAddress,normalizedAddress},timestamp:Date.now(),runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       return 0n;
     }
     const balance = BigInt(result.rows[0].balance || '0');
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'database.service.ts:337',message:'getPlayerBalance result',data:{walletAddress,normalizedAddress,balance:balance.toString(),rawBalance:result.rows[0].balance},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     return balance;
   }
 

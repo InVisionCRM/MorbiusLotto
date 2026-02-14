@@ -78,6 +78,8 @@ interface BlackjackTableProps {
   isMusicPlaying?: boolean;
   onToggleMusic?: () => void;
   onNextTrack?: () => void;
+  musicVolume?: number;
+  onMusicVolumeChange?: (value: number) => void;
   /** When set, show a centered tournament hand summary (rank, winnings, stats) after a hand completes */
   tournamentHandSummary?: {
     chipDelta: number;
@@ -117,6 +119,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   isMusicPlaying,
   onToggleMusic,
   onNextTrack,
+  musicVolume = 50,
+  onMusicVolumeChange,
   onDoubleDownChips,
   onSplitChips,
   onRebet,
@@ -172,7 +176,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
   // Music player state is now managed by parent (page.tsx) to avoid duplicate audio instances
   // Use props if provided
-  const hasMusicProps = musicTrackName !== undefined && onToggleMusic !== undefined;
+  const hasMusicProps = onToggleMusic !== undefined;
 
   // Chip animation state
   const [chipAnimationState, setChipAnimationState] = useState<'none' | 'win' | 'loss'>('none');
@@ -850,50 +854,49 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         }}
       />
 
-      {/* Background music player at top-left - Desktop only (mobile shows in MainNav dropdown) */}
-      {hasMusicProps && musicTrackName && onToggleMusic && (
+      {/* Background music player at bottom-left - Desktop only (mobile shows in MainNav dropdown) */}
+      {hasMusicProps && onToggleMusic && (
         <div
-          className="hidden sm:flex absolute top-2 left-2 sm:top-4 sm:left-4 z-20 flex-col gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl border border-cyan-500/30 px-2 py-1.5 sm:px-3 sm:py-2 shadow-lg pointer-events-auto"
+          className="hidden sm:flex absolute bottom-4 left-4 z-20 flex-col gap-1.5 rounded-xl border border-cyan-500/30 px-3 py-2 shadow-lg pointer-events-auto"
           style={{
             background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.8))',
             boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.5)',
           }}
         >
           <div className="flex items-center gap-2">
-            <span className="text-cyan-400/90 text-xs font-medium max-w-[90px] sm:max-w-[100px] truncate" title={musicTrackName}>
-              {musicTrackName}
-            </span>
             <button
               type="button"
               onClick={onToggleMusic}
-              className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
               aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
             >
-              {isMusicPlaying ? <i className="fas fa-pause text-xs sm:text-sm" /> : <i className="fas fa-play text-xs sm:text-sm" />}
+              {isMusicPlaying ? <i className="fas fa-pause text-sm" /> : <i className="fas fa-play text-sm" />}
             </button>
             {onNextTrack && (
               <button
                 type="button"
                 onClick={onNextTrack}
-                className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
                 aria-label="Next track"
               >
-                <i className="fas fa-forward text-xs sm:text-sm" />
+                <i className="fas fa-forward text-sm" />
               </button>
             )}
+            {onMusicVolumeChange !== undefined && (
+              <div className="flex items-center gap-1.5">
+                <i className="fas fa-volume-up text-cyan-400/80 text-xs w-4 text-center" aria-hidden />
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={musicVolume}
+                  onChange={(e) => onMusicVolumeChange(Number(e.target.value))}
+                  className="w-16 h-1.5 rounded-full appearance-none bg-slate-600 accent-cyan-500 cursor-pointer"
+                  aria-label="Music volume"
+                />
+              </div>
+            )}
           </div>
-          {onOpenTableThemeSelector && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenTableThemeSelector();
-              }}
-              className="text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-1 transition-colors cursor-pointer py-0.5 px-0 -mx-0 text-left w-full"
-            >
-              Change Table
-            </button>
-          )}
         </div>
       )}
 

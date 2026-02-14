@@ -217,7 +217,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   // Handle approval from modal
   const handleApprove = (amount: bigint) => {
     // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DepositWithdrawModal.tsx:209',message:'handleApprove called from modal',data:{amount:amount.toString(),needsApproval,isApproving,hasAddress:!!address},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     approve(amount)
   }
@@ -262,6 +261,17 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
           requestedAmount: amountWei.toString(),
         }),
       })
+
+      if (response.status === 409) {
+        setIsPreparingWithdraw(false)
+        const data = await response.json().catch(() => ({}))
+        const msg = data?.error || 'A withdrawal is already in progress.'
+        toast.error('Withdrawal already in progress', {
+          id: toastId,
+          description: msg.includes('expire') ? msg : `${msg} Complete it in your wallet or wait up to 10 minutes for it to expire.`,
+        })
+        return
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))

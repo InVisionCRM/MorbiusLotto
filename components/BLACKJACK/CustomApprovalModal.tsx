@@ -39,24 +39,14 @@ export function CustomApprovalModal({
   const [customAmount, setCustomAmount] = useState<string>('10000')
 
   const handleApprove = () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CustomApprovalModal.tsx:42',message:'CustomApprovalModal handleApprove',data:{approvalType,customAmount,isApproving},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     try {
       const amount = approvalType === 'unlimited'
         ? MAX_UINT256
         : parseEther(customAmount)
-
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CustomApprovalModal.tsx:48',message:'calling onApprove',data:{amount:amount.toString(),isUnlimited:amount === MAX_UINT256},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       onApprove(amount)
       onOpenChange(false)
     } catch (error) {
       console.error('Invalid amount:', error)
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CustomApprovalModal.tsx:52',message:'parseEther error',data:{error:error instanceof Error ? error.message : String(error),customAmount},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
     }
   }
 

@@ -829,10 +829,6 @@ export class WebSocketService {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
 
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.service.ts:773',message:'handleSyncBalance entry',data:{playerAddress:ws.playerAddress,requestId:message.requestId},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-
       // Get contract reserve balance
       const contractBalance = await this.publicClient.readContract({
         address: this.contractAddress,
@@ -841,24 +837,12 @@ export class WebSocketService {
         args: [ws.playerAddress as `0x${string}`]
       }) as bigint;
 
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.service.ts:780',message:'Contract balance read',data:{contractBalance:contractBalance.toString(),contractAddress:this.contractAddress,playerAddress:ws.playerAddress},timestamp:Date.now(),runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
-
       // Safety: only increase DB balance, never decrease.
       // This prevents wiping off-chain winnings that exceed the on-chain reserve.
       const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
 
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.service.ts:785',message:'DB balance read before sync',data:{currentDbBalance:currentDbBalance.toString(),contractBalance:contractBalance.toString(),comparison:contractBalance > currentDbBalance ? 'contract > DB' : 'DB >= contract'},timestamp:Date.now(),runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
-
       const newBalance = contractBalance > currentDbBalance ? contractBalance : currentDbBalance;
       await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
-
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.service.ts:789',message:'Balance synced result',data:{newBalance:newBalance.toString(),wasUpdated:newBalance !== currentDbBalance},timestamp:Date.now(),runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
 
       logger.debug('Balance synced (max-safe)', {
         playerAddress: ws.playerAddress,
@@ -887,16 +871,8 @@ export class WebSocketService {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
 
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.service.ts:815',message:'handleGetBalance entry',data:{playerAddress:ws.playerAddress,requestId:message.requestId},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-
       // Get off-chain balance
       const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
-
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.service.ts:820',message:'getBalance returning DB balance',data:{balance:balance.toString(),playerAddress:ws.playerAddress},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
 
       this.sendMessage(ws, {
         type: 'balance',
