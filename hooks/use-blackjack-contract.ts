@@ -4,7 +4,10 @@ import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2
 import { useAccount } from 'wagmi'
 
 const LEGACY_ZERO = '0x0000000000000000000000000000000000000000'
-const isLegacyConfigured = typeof BLACKJACK_LEGACY_ADDRESS === 'string' && BLACKJACK_LEGACY_ADDRESS !== '' && BLACKJACK_LEGACY_ADDRESS !== LEGACY_ZERO
+const isLegacyConfigured =
+  typeof BLACKJACK_LEGACY_ADDRESS === 'string' &&
+  (BLACKJACK_LEGACY_ADDRESS as string) !== '' &&
+  (BLACKJACK_LEGACY_ADDRESS as string) !== LEGACY_ZERO
 
 function isLegacyAddress(addr: string | undefined): addr is `0x${string}` {
   return typeof addr === 'string' && addr.length > 0 && addr !== LEGACY_ZERO && addr.startsWith('0x')
@@ -178,7 +181,7 @@ export function useWatchDeposits(onDeposit?: (player: string, morbiusAmount: big
     eventName: 'Deposit',
     onLogs(logs) {
       for (const log of logs) {
-        const { args } = log
+        const args = (log as { args?: { player: string; morbiusAmount: bigint; plsAmount: bigint } }).args
         if (args && onDeposit) {
           onDeposit(args.player, args.morbiusAmount, args.plsAmount)
         }
@@ -197,7 +200,7 @@ export function useWatchDepositsMORBIUS(onDeposit?: (player: string, amount: big
     eventName: 'DepositMORBIUS',
     onLogs(logs) {
       for (const log of logs) {
-        const { args } = log
+        const args = (log as { args?: { player: string; amount: bigint } }).args
         if (args && onDeposit) {
           onDeposit(args.player, args.amount)
         }
@@ -216,7 +219,7 @@ export function useWatchWithdrawals(onWithdrawal?: (player: string, amount: bigi
     eventName: 'Withdrawal',
     onLogs(logs) {
       for (const log of logs) {
-        const { args } = log
+        const args = (log as { args?: { player: string; amount: bigint } }).args
         if (args && onWithdrawal) {
           onWithdrawal(args.player, args.amount)
         }
@@ -235,7 +238,7 @@ export function useWatchBetPlaced(onBetPlaced?: (player: string, gameHash: strin
     eventName: 'BetPlaced',
     onLogs(logs) {
       for (const log of logs) {
-        const { args } = log
+        const args = (log as { args?: { player: string; gameHash: string; betAmount: bigint } }).args
         if (args && onBetPlaced) {
           onBetPlaced(args.player, args.gameHash, args.betAmount)
         }
@@ -254,7 +257,7 @@ export function useWatchGameSettlements(onSettlement?: (player: string, amount: 
     eventName: 'GameSettled',
     onLogs(logs) {
       for (const log of logs) {
-        const { args } = log
+        const args = (log as { args?: { player: string; amount: bigint; gameHash: string } }).args
         if (args && onSettlement) {
           onSettlement(args.player, args.amount, args.gameHash)
         }
@@ -301,7 +304,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'deposit',
       value: plsAmount, // Send PLS to deposit function
-    })
+    } as unknown as Parameters<typeof depositContract.writeContractAsync>[0])
   }
 
   const depositMORBIUS = async (amount: bigint) => {
@@ -312,7 +315,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'depositMORBIUS',
       args: [amount],
-    })
+    } as unknown as Parameters<typeof depositMORBIUSContract.writeContractAsync>[0])
   }
 
   const withdraw = async (amount: bigint) => {
@@ -323,7 +326,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'withdraw',
       args: [amount],
-    })
+    } as unknown as Parameters<typeof withdrawContract.writeContractAsync>[0])
   }
 
   /** Withdraw from a specific legacy Blackjack contract. Use when balance is stuck there after upgrade. */
@@ -336,7 +339,8 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'withdraw',
       args: [amount],
-    })
+      gas: 350000n, // legacy contracts may need more gas; avoids "Internal Transaction Awaiting" / stuck estimates
+    } as unknown as Parameters<typeof withdrawContract.writeContractAsync>[0])
   }
 
   const withdrawWithSignature = async (
@@ -353,7 +357,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'withdrawWithSignature',
       args: [amount, nonce, v, r, s],
-    })
+    } as any)
   }
 
   const revealServerSeed = async (serverSeed: string) => {
@@ -364,7 +368,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'revealServerSeed',
       args: [serverSeed as `0x${string}`],
-    })
+    } as unknown as Parameters<typeof revealSeedContract.writeContractAsync>[0])
   }
 
   const placeBet = async (gameHash: `0x${string}`, betAmount: bigint) => {
@@ -375,7 +379,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'placeBet',
       args: [gameHash, betAmount],
-    })
+    } as any)
   }
 
   return {

@@ -426,7 +426,18 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         (e?.cause?.message ?? null) ??
         'Withdrawal failed'
       const reason = String(msg).slice(0, 120)
-      toast.error(reason, { id: toastId, duration: 6000 })
+      const isStuckOrAwaiting =
+        /internal transaction awaiting|awaiting|stuck|pending.*nonce|nonce.*low|replacement fee/i.test(reason)
+      toast.error(
+        isStuckOrAwaiting ? 'Transaction stuck or pending' : reason,
+        {
+          id: toastId,
+          description: isStuckOrAwaiting
+            ? 'Clear the pending transaction in your wallet (cancel/speed up), or wait for it to confirm, then try again.'
+            : reason,
+          duration: 8000,
+        }
+      )
     }
   }
 
