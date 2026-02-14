@@ -43,6 +43,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const [depositMethod, setDepositMethod] = useState<'pls' | 'morbius'>('pls')
   const [showApprovalModal, setShowApprovalModal] = useState(false)
   const [isPreparingWithdraw, setIsPreparingWithdraw] = useState(false)
+  /** Amount to withdraw per legacy contract (address -> amount string). Lets users withdraw in chunks under the 1M contract limit. */
+  const [legacyWithdrawAmounts, setLegacyWithdrawAmounts] = useState<Record<string, string>>({})
+
+  // Legacy contracts cap withdrawal at 1,000,000 MORBIUS per tx (MAX_DAILY_WITHDRAWAL)
+  const LEGACY_MAX_WITHDRAW_WEI = BigInt(1_000_000) * BigInt(1e18)
 
   // Contract hooks
   const {
@@ -476,6 +481,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                 </CardHeader>
 
                 <CardContent className="space-y-6">
+                  {/* Do not deposit banner */}
+                  <div className="text-center py-3 px-4 rounded-lg bg-red-950/80 border-2 border-red-500/60 text-red-200 font-bold text-lg tracking-wide">
+                    DO NOT DEPOSIT
+                  </div>
+
                   {/* Transaction Status Indicator */}
                   {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
                     <div className="flex items-center justify-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
@@ -489,40 +499,67 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                   {/* Previous contract balances (after upgrades) */}
                   {legacyItems
                     .filter((item) => item.reserve > BigInt(0))
-                    .map((item) => (
-                      <div key={item.address} className="p-4 rounded-lg border border-amber-500/40 bg-amber-950/30 space-y-2">
-                        <div className="text-sm font-medium text-amber-200">
-                          Balance in {item.label}
+                    .map((item) => {
+                      const maxAllowedWei = item.reserve > LEGACY_MAX_WITHDRAW_WEI ? LEGACY_MAX_WITHDRAW_WEI : item.reserve
+                      const rawInput = legacyWithdrawAmounts[item.address] ?? ''
+                      let amountWei: bigint
+                      try {
+                        amountWei = rawInput.trim() === '' ? maxAllowedWei : parseEther(rawInput)
+                      } catch {
+                        amountWei = 0n
+                      }
+                      const validAmount = amountWei > 0n && amountWei <= item.reserve && amountWei <= LEGACY_MAX_WITHDRAW_WEI
+                      const setMax = () => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: formatEther(maxAllowedWei) }))
+                      return (
+                        <div key={item.address} className="p-4 rounded-lg border border-amber-500/40 bg-amber-950/30 space-y-2">
+                          <div className="text-sm font-medium text-amber-200">
+                            Balance in {item.label}
+                          </div>
+                          {item.paused ? (
+                            <p className="text-sm text-amber-300">
+                              Withdrawals from this contract are temporarily paused. Contact support to re-enable.
+                            </p>
+                          ) : (
+                            <p className="text-xs text-amber-200/80">
+                              You have MORBIUS in a previous Blackjack contract. Withdraw it to your wallet (no server needed). Max 1,000,000 MORBIUS per withdrawal (contract limit).
+                            </p>
+                          )}
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder={formatEther(maxAllowedWei)}
+                                value={rawInput}
+                                onChange={(e) => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: e.target.value }))}
+                                className="bg-slate-800/80 border-amber-500/40 text-white max-w-[180px]"
+                              />
+                              <Button type="button" variant="outline" size="sm" onClick={setMax} className="border-amber-500/40 text-amber-200 shrink-0">
+                                Max
+                              </Button>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                              <span className="text-lg font-bold text-white">
+                                Balance: {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} MORBIUS
+                              </span>
+                              <Button
+                                onClick={() => validAmount && handleWithdrawLegacy(item.address, amountWei, item.refetch)}
+                                disabled={item.paused || isLegacyWithdrawLoading || !validAmount}
+                                className="bg-amber-600 hover:bg-amber-500 text-white shrink-0 disabled:opacity-60"
+                              >
+                                {isLegacyWithdrawLoading ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : item.paused ? (
+                                  'Paused'
+                                ) : (
+                                  'Withdraw to wallet'
+                                )}
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        {item.paused ? (
-                          <p className="text-sm text-amber-300">
-                            Withdrawals from this contract are temporarily paused. Contact support to re-enable.
-                          </p>
-                        ) : (
-                          <p className="text-xs text-amber-200/80">
-                            You have MORBIUS in a previous Blackjack contract. Withdraw it to your wallet (no server needed).
-                          </p>
-                        )}
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-lg font-bold text-white">
-                            {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} MORBIUS
-                          </span>
-                          <Button
-                            onClick={() => handleWithdrawLegacy(item.address, item.reserve, item.refetch)}
-                            disabled={item.paused || isLegacyWithdrawLoading}
-                            className="bg-amber-600 hover:bg-amber-500 text-white shrink-0 disabled:opacity-60"
-                          >
-                            {isLegacyWithdrawLoading ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : item.paused ? (
-                              'Paused'
-                            ) : (
-                              'Withdraw to wallet'
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
 
                   {/* Current Reserve Balance */}
                   <div className="text-center p-4 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg border border-blue-500/20">
