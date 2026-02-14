@@ -17,7 +17,7 @@ import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
-import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from './config/contracts';
+import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
 
 const ERC20_BALANCE_OF_ABI = [
   { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
@@ -670,49 +670,63 @@ async function initializeServices() {
       }
     });
 
-    // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves)
+    // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves for current + all legacy)
     // MORBIUS in contract = MORBIUS_TOKEN.balanceOf(gameContract) for each game (canonical addresses in config/contracts.ts).
     app.get('/api/admin/health', async (req, res) => {
       try {
         const client = getPublicClient();
-        const blackjackAddress = BLACKJACK_ADDRESS;
 
         const api = 'ok';
         const ws = 'up'; // same process
 
         const games: Record<string, { rpc: 'ok' | 'fail'; error?: string }> = {};
         const morbius: Record<string, string> = {};
-        let blackjackReserves: { totalMorbiusInContract: string; addressesWithReserve: Array<{ address: string; reserve: string }> } = { totalMorbiusInContract: '0', addressesWithReserve: [] };
+        type ContractReserves = { contractAddress: string; label: string; totalMorbiusInContract: string; addressesWithReserve: Array<{ address: string; reserve: string }> };
+        const blackjackReservesByContract: ContractReserves[] = [];
 
         const readMorbiusBalance = async (contractAddress: `0x${string}`): Promise<bigint> => {
           return client.readContract({ address: MORBIUS_TOKEN_ADDRESS, abi: ERC20_BALANCE_OF_ABI, functionName: 'balanceOf', args: [contractAddress] }) as Promise<bigint>;
         };
 
-        // Blackjack: MORBIUS balance of contract + sample of addresses with reserve > 0
-        try {
-          const balance = await readMorbiusBalance(blackjackAddress);
-          morbius.blackjack = balance.toString();
-          games.blackjack = { rpc: 'ok' };
+        const blackjackContracts = getAllBlackjackContracts();
+        const addresses = await dbService.getPlayerAddressesForReserveCheck(100);
 
-          const addresses = await dbService.getPlayerAddressesForReserveCheck(50);
-          const reserves = await Promise.all(
-            addresses.map(async (addr) => {
-              const a = addr.startsWith('0x') ? addr as `0x${string}` : `0x${addr}` as `0x${string}`;
-              try {
-                const r = await client.readContract({ address: blackjackAddress, abi: blackjackAbi, functionName: 'getPlayerReserve', args: [a] }) as bigint;
-                return { address: addr, reserve: r };
-              } catch {
-                return { address: addr, reserve: 0n };
-              }
-            })
-          );
-          blackjackReserves = {
-            totalMorbiusInContract: balance.toString(),
-            addressesWithReserve: reserves.filter((r) => r.reserve > 0n).map((r) => ({ address: r.address, reserve: r.reserve.toString() })),
-          };
-        } catch (err: any) {
-          games.blackjack = { rpc: 'fail', error: err?.message || 'RPC/contract read failed' };
-          morbius.blackjack = '0';
+        for (const { address: blackjackAddress, label } of blackjackContracts) {
+          try {
+            const balance = await readMorbiusBalance(blackjackAddress);
+            if (label === 'Current') {
+              morbius.blackjack = balance.toString();
+              games.blackjack = { rpc: 'ok' };
+            }
+            const reserves = await Promise.all(
+              addresses.map(async (addr) => {
+                const a = addr.startsWith('0x') ? addr as `0x${string}` : `0x${addr}` as `0x${string}`;
+                try {
+                  const r = await client.readContract({ address: blackjackAddress, abi: blackjackAbi, functionName: 'getPlayerReserve', args: [a] }) as bigint;
+                  return { address: addr, reserve: r };
+                } catch {
+                  return { address: addr, reserve: 0n };
+                }
+              })
+            );
+            blackjackReservesByContract.push({
+              contractAddress: blackjackAddress,
+              label,
+              totalMorbiusInContract: balance.toString(),
+              addressesWithReserve: reserves.filter((r) => r.reserve > 0n).map((r) => ({ address: r.address, reserve: r.reserve.toString() })),
+            });
+          } catch (err: any) {
+            if (label === 'Current') {
+              games.blackjack = { rpc: 'fail', error: err?.message || 'RPC/contract read failed' };
+              morbius.blackjack = '0';
+            }
+            blackjackReservesByContract.push({
+              contractAddress: blackjackAddress,
+              label,
+              totalMorbiusInContract: '0',
+              addressesWithReserve: [],
+            });
+          }
         }
 
         // Plinko: MORBIUS balance held by Plinko contract
@@ -749,12 +763,12 @@ async function initializeServices() {
         }
 
         const contractAddresses: Record<string, string> = {
-          blackjack: blackjackAddress,
+          blackjack: BLACKJACK_ADDRESS,
           plinko: PLINKO_ADDRESS,
           keno: KENO_ADDRESS,
           lottery: LOTTERY_ADDRESS,
         };
-        sendJson(res, { api, ws, games, morbius, blackjackReserves, contractAddresses });
+        sendJson(res, { api, ws, games, morbius, blackjackReservesByContract, contractAddresses });
       } catch (error) {
         logger.error('Error in admin health:', error);
         res.status(500).json({ error: 'Internal server error' });

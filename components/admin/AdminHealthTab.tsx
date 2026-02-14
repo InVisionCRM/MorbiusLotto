@@ -7,12 +7,22 @@ import { formatEther } from 'viem';
 import { Activity, RefreshCw, CheckCircle, XCircle, Copy } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
+export interface BlackjackContractReserves {
+  contractAddress: string;
+  label: string;
+  totalMorbiusInContract: string;
+  addressesWithReserve: Array<{ address: string; reserve: string }>;
+}
+
 export interface AdminHealthData {
   api: string;
   ws: string;
   games: Record<string, { rpc: 'ok' | 'fail'; error?: string }>;
   morbius: Record<string, string>;
-  blackjackReserves: {
+  /** Per-contract reserves: current + legacy 1–3 (when configured) */
+  blackjackReservesByContract?: BlackjackContractReserves[];
+  /** @deprecated Use blackjackReservesByContract */
+  blackjackReserves?: {
     totalMorbiusInContract: string;
     addressesWithReserve: Array<{ address: string; reserve: string }>;
   };
@@ -81,16 +91,33 @@ export default function AdminHealthTab() {
     fetchHealth();
   }, [fetchHealth]);
 
-  // Prepare pie chart data
+  // All Blackjack contracts with reserves (current + legacy)
+  const blackjackContracts = useMemo(() => {
+    if (data?.blackjackReservesByContract && data.blackjackReservesByContract.length > 0) {
+      return data.blackjackReservesByContract;
+    }
+    if (data?.blackjackReserves) {
+      return [{
+        contractAddress: data.contractAddresses?.blackjack ?? '',
+        label: 'Current',
+        totalMorbiusInContract: data.blackjackReserves.totalMorbiusInContract,
+        addressesWithReserve: data.blackjackReserves.addressesWithReserve,
+      }];
+    }
+    return [];
+  }, [data?.blackjackReservesByContract, data?.blackjackReserves, data?.contractAddresses?.blackjack]);
+
+  // Pie chart for first contract with reserves (or current)
   const pieChartData = useMemo(() => {
-    if (!data?.blackjackReserves?.addressesWithReserve) return [];
-    return data.blackjackReserves.addressesWithReserve.map(({ address, reserve }) => ({
+    const first = blackjackContracts[0]?.addressesWithReserve;
+    if (!first?.length) return [];
+    return first.map(({ address, reserve }) => ({
       name: truncateAddress(address),
       value: Number(formatEther(BigInt(reserve))),
       address,
       reserve: formatMorbius(reserve),
     }));
-  }, [data?.blackjackReserves?.addressesWithReserve]);
+  }, [blackjackContracts]);
 
   if (!address) {
     return (
@@ -182,63 +209,85 @@ export default function AdminHealthTab() {
               </div>
             )}
             <div>
-              <p className="text-slate-500 mb-1">Blackjack: addresses with reserve &gt; 0 (sample)</p>
-              <p className="relative left-align text-slate-400 text-[10px] mb-2">
-                Total MORBIUS in contract: {formatMorbius(data.blackjackReserves?.totalMorbiusInContract ?? '0')} MORBIUS
-              </p>
-              {data.blackjackReserves?.addressesWithReserve?.length === 0 ? (
-                <p className="text-slate-500 text-[10px]">None in sample.</p>
+              <p className="text-slate-500 mb-1">Blackjack: all contracts — addresses with reserve &gt; 0</p>
+              {blackjackContracts.length === 0 ? (
+                <p className="text-slate-500 text-[10px]">No contract data.</p>
               ) : (
-                <div className="space-y-3">
-                  {/* Pie Chart */}
-                  <div className="rounded border border-slate-700/50 p-3 bg-slate-800/30">
-                    <ResponsiveContainer width="100%" height={250}>
-                      <PieChart>
-                        <Pie
-                          data={pieChartData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
+                <div className="space-y-4">
+                  {blackjackContracts.map((contract) => (
+                    <div key={contract.contractAddress} className="rounded border border-slate-700/50 p-3 bg-slate-800/30 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-cyan-400 text-[11px]">{contract.label}</span>
+                        <span className="text-slate-400 text-[10px]">
+                          Total: {formatMorbius(contract.totalMorbiusInContract)} MORBIUS
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(contract.contractAddress)}
+                          className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1"
+                          title="Copy contract address"
                         >
-                          {pieChartData.map((_, index) => (
-                            <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value: number, name: string, props: any) => [
-                            `${props.payload.reserve} MORBIUS`,
-                            props.payload.name,
-                          ]}
-                          contentStyle={{
-                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                            border: '1px solid rgba(100, 116, 139, 0.5)',
-                            borderRadius: '6px',
-                            color: '#e2e8f0',
-                            fontSize: '11px',
-                          }}
-                        />
-                        <Legend
-                          formatter={(value, entry: any) => {
-                            const data = entry.payload;
-                            return `${data.name}: ${data.reserve}`;
-                          }}
-                          wrapperStyle={{ fontSize: '10px', color: '#94a3b8' }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {/* Address List */}
-                  <ul className="max-h-32 overflow-y-auto space-y-0.5 text-[10px] font-mono text-slate-400">
-                    {(data.blackjackReserves?.addressesWithReserve ?? []).map(({ address: addr, reserve }) => (
-                      <li key={addr}>
-                        {addr.slice(0, 10)}…{addr.slice(-8)} — {formatMorbius(reserve)} MORBIUS
-                      </li>
-                    ))}
-                  </ul>
+                          <Copy className="w-3 h-3" />
+                          {truncateAddress(contract.contractAddress, 8, 6)}
+                        </button>
+                      </div>
+                      {contract.addressesWithReserve.length === 0 ? (
+                        <p className="text-slate-500 text-[10px]">No addresses with reserve in sample.</p>
+                      ) : (
+                        <>
+                          {contract.label === 'Current' && pieChartData.length > 0 && (
+                            <div className="mb-2">
+                              <ResponsiveContainer width="100%" height={220}>
+                                <PieChart>
+                                  <Pie
+                                    data={pieChartData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                                    outerRadius={70}
+                                    fill="#8884d8"
+                                    dataKey="value"
+                                  >
+                                    {pieChartData.map((_, index) => (
+                                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip
+                                    formatter={(value: number, name: string, props: any) => [
+                                      `${props.payload.reserve} MORBIUS`,
+                                      props.payload.name,
+                                    ]}
+                                    contentStyle={{
+                                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                                      border: '1px solid rgba(100, 116, 139, 0.5)',
+                                      borderRadius: '6px',
+                                      color: '#e2e8f0',
+                                      fontSize: '11px',
+                                    }}
+                                  />
+                                  <Legend
+                                    formatter={(value, entry: any) => {
+                                      const p = entry.payload;
+                                      return `${p.name}: ${p.reserve}`;
+                                    }}
+                                    wrapperStyle={{ fontSize: '10px', color: '#94a3b8' }}
+                                  />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                          <ul className="max-h-28 overflow-y-auto space-y-0.5 text-[10px] font-mono text-slate-400">
+                            {contract.addressesWithReserve.map(({ address: addr, reserve }) => (
+                              <li key={`${contract.contractAddress}-${addr}`}>
+                                {addr.slice(0, 10)}…{addr.slice(-8)} — {formatMorbius(reserve)} MORBIUS
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

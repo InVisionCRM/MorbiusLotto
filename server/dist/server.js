@@ -684,44 +684,57 @@ async function initializeServices() {
                 res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
             }
         });
-        // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves)
+        // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves for current + all legacy)
         // MORBIUS in contract = MORBIUS_TOKEN.balanceOf(gameContract) for each game (canonical addresses in config/contracts.ts).
         app.get('/api/admin/health', async (req, res) => {
             try {
                 const client = (0, chain_client_1.getPublicClient)();
-                const blackjackAddress = contracts_1.BLACKJACK_ADDRESS;
                 const api = 'ok';
                 const ws = 'up'; // same process
                 const games = {};
                 const morbius = {};
-                let blackjackReserves = { totalMorbiusInContract: '0', addressesWithReserve: [] };
+                const blackjackReservesByContract = [];
                 const readMorbiusBalance = async (contractAddress) => {
                     return client.readContract({ address: contracts_1.MORBIUS_TOKEN_ADDRESS, abi: ERC20_BALANCE_OF_ABI, functionName: 'balanceOf', args: [contractAddress] });
                 };
-                // Blackjack: MORBIUS balance of contract + sample of addresses with reserve > 0
-                try {
-                    const balance = await readMorbiusBalance(blackjackAddress);
-                    morbius.blackjack = balance.toString();
-                    games.blackjack = { rpc: 'ok' };
-                    const addresses = await dbService.getPlayerAddressesForReserveCheck(50);
-                    const reserves = await Promise.all(addresses.map(async (addr) => {
-                        const a = addr.startsWith('0x') ? addr : `0x${addr}`;
-                        try {
-                            const r = await client.readContract({ address: blackjackAddress, abi: blackjack_1.blackjackAbi, functionName: 'getPlayerReserve', args: [a] });
-                            return { address: addr, reserve: r };
+                const blackjackContracts = (0, contracts_1.getAllBlackjackContracts)();
+                const addresses = await dbService.getPlayerAddressesForReserveCheck(100);
+                for (const { address: blackjackAddress, label } of blackjackContracts) {
+                    try {
+                        const balance = await readMorbiusBalance(blackjackAddress);
+                        if (label === 'Current') {
+                            morbius.blackjack = balance.toString();
+                            games.blackjack = { rpc: 'ok' };
                         }
-                        catch {
-                            return { address: addr, reserve: 0n };
+                        const reserves = await Promise.all(addresses.map(async (addr) => {
+                            const a = addr.startsWith('0x') ? addr : `0x${addr}`;
+                            try {
+                                const r = await client.readContract({ address: blackjackAddress, abi: blackjack_1.blackjackAbi, functionName: 'getPlayerReserve', args: [a] });
+                                return { address: addr, reserve: r };
+                            }
+                            catch {
+                                return { address: addr, reserve: 0n };
+                            }
+                        }));
+                        blackjackReservesByContract.push({
+                            contractAddress: blackjackAddress,
+                            label,
+                            totalMorbiusInContract: balance.toString(),
+                            addressesWithReserve: reserves.filter((r) => r.reserve > 0n).map((r) => ({ address: r.address, reserve: r.reserve.toString() })),
+                        });
+                    }
+                    catch (err) {
+                        if (label === 'Current') {
+                            games.blackjack = { rpc: 'fail', error: err?.message || 'RPC/contract read failed' };
+                            morbius.blackjack = '0';
                         }
-                    }));
-                    blackjackReserves = {
-                        totalMorbiusInContract: balance.toString(),
-                        addressesWithReserve: reserves.filter((r) => r.reserve > 0n).map((r) => ({ address: r.address, reserve: r.reserve.toString() })),
-                    };
-                }
-                catch (err) {
-                    games.blackjack = { rpc: 'fail', error: err?.message || 'RPC/contract read failed' };
-                    morbius.blackjack = '0';
+                        blackjackReservesByContract.push({
+                            contractAddress: blackjackAddress,
+                            label,
+                            totalMorbiusInContract: '0',
+                            addressesWithReserve: [],
+                        });
+                    }
                 }
                 // Plinko: MORBIUS balance held by Plinko contract
                 try {
@@ -757,12 +770,12 @@ async function initializeServices() {
                     morbius.lottery = '0';
                 }
                 const contractAddresses = {
-                    blackjack: blackjackAddress,
+                    blackjack: contracts_1.BLACKJACK_ADDRESS,
                     plinko: contracts_1.PLINKO_ADDRESS,
                     keno: contracts_1.KENO_ADDRESS,
                     lottery: contracts_1.LOTTERY_ADDRESS,
                 };
-                sendJson(res, { api, ws, games, morbius, blackjackReserves, contractAddresses });
+                sendJson(res, { api, ws, games, morbius, blackjackReservesByContract, contractAddresses });
             }
             catch (error) {
                 logger_1.logger.error('Error in admin health:', error);

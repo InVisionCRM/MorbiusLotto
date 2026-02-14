@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BIGWHEEL_GET_GLOBAL_STATS_ABI = exports.LOTTERY_STATS_ABI = exports.KENO_GET_GLOBAL_STATS_ABI = exports.PLINKO_GET_GLOBAL_STATS_ABI = exports.BLACKJACK_ADDRESS = exports.BIGWHEEL_ADDRESS = exports.LOTTERY_ADDRESS = exports.KENO_ADDRESS = exports.PLINKO_ADDRESS = exports.MORBIUS_TOKEN_ADDRESS = void 0;
+exports.BIGWHEEL_GET_GLOBAL_STATS_ABI = exports.LOTTERY_STATS_ABI = exports.KENO_GET_GLOBAL_STATS_ABI = exports.PLINKO_GET_GLOBAL_STATS_ABI = exports.BLACKJACK_LEGACY_ADDRESS_3 = exports.BLACKJACK_LEGACY_ADDRESS_2 = exports.BLACKJACK_LEGACY_ADDRESS = exports.BLACKJACK_ADDRESS = exports.BIGWHEEL_ADDRESS = exports.LOTTERY_ADDRESS = exports.KENO_ADDRESS = exports.PLINKO_ADDRESS = exports.MORBIUS_TOKEN_ADDRESS = void 0;
+exports.getAllBlackjackContracts = getAllBlackjackContracts;
 /**
  * Contract addresses and ABIs for platform analytics (Plinko, Keno, Lottery, BigWheel, Blackjack).
  * Addresses match lib/contracts.ts on PulseChain mainnet. Env overrides allowed for deployment differences.
@@ -21,6 +22,26 @@ exports.LOTTERY_ADDRESS = (process.env.LOTTERY_ADDRESS || '0xD66b4489fbfF99A8d62
 exports.BIGWHEEL_ADDRESS = (process.env.BIGWHEEL_ADDRESS || '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F');
 /** Blackjack V2; use BLACKJACK_CONTRACT_ADDRESS in .env if different. */
 exports.BLACKJACK_ADDRESS = (process.env.BLACKJACK_CONTRACT_ADDRESS || process.env.BLACKJACK_ADDRESS || '0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8');
+/** Legacy Blackjack contracts (for admin health: reserves per contract). Set via env BLACKJACK_LEGACY_CONTRACT_ADDRESS, _2, _3. */
+exports.BLACKJACK_LEGACY_ADDRESS = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS || '');
+exports.BLACKJACK_LEGACY_ADDRESS_2 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || '');
+exports.BLACKJACK_LEGACY_ADDRESS_3 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_3 || '');
+/** All Blackjack contracts to show in admin health: current first, then legacy 1–3 (only those set). */
+function getAllBlackjackContracts() {
+    const list = [
+        { address: exports.BLACKJACK_ADDRESS, label: 'Current' },
+    ];
+    if (exports.BLACKJACK_LEGACY_ADDRESS && exports.BLACKJACK_LEGACY_ADDRESS.startsWith('0x')) {
+        list.push({ address: exports.BLACKJACK_LEGACY_ADDRESS, label: 'Legacy 1' });
+    }
+    if (exports.BLACKJACK_LEGACY_ADDRESS_2 && exports.BLACKJACK_LEGACY_ADDRESS_2.startsWith('0x')) {
+        list.push({ address: exports.BLACKJACK_LEGACY_ADDRESS_2, label: 'Legacy 2' });
+    }
+    if (exports.BLACKJACK_LEGACY_ADDRESS_3 && exports.BLACKJACK_LEGACY_ADDRESS_3.startsWith('0x')) {
+        list.push({ address: exports.BLACKJACK_LEGACY_ADDRESS_3, label: 'Legacy 3' });
+    }
+    return list;
+}
 /** Full Plinko ABI from contracts/abi/plinko.json. */
 exports.PLINKO_GET_GLOBAL_STATS_ABI = PLINKO_ABI;
 /** Full CryptoKeno ABI from contracts/abi/CryptoKeno.json. */
