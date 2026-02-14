@@ -115,7 +115,7 @@ export function BlackjackTopPlayersCarousel() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center py-4">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/40 border-t-white" />
       </div>
     )
@@ -138,14 +138,14 @@ export function BlackjackTopPlayersCarousel() {
   })
 
   return (
-    <div className="w-full py-3 bg-gradient-to-b from-slate-950/95 to-slate-900/95">
+    <div className="w-full py-1.5 md:py-2 bg-gradient-to-b from-slate-950/95 to-slate-900/95">
       <InfiniteMovingCards
         items={cardItems}
         variant="image"
         direction="left"
         speed="normal"
         pauseOnHover={true}
-        className="max-w-5xl mx-auto [&_span]:text-inherit [&_a]:cursor-pointer"
+        className="max-w-5xl mx-auto [&_span]:text-inherit [&_a]:cursor-pointer [&_ul]:py-1 [&_ul]:md:py-1.5 [&_li]:h-[72px] [&_li]:sm:h-[78px] [&_li]:md:h-[88px] [&_li]:lg:h-[96px]"
       />
     </div>
   )
