@@ -140,7 +140,7 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <AreaChart data={pnlData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+              <AreaChart data={pnlData} margin={{ top: 10, right: 8, left: 0, bottom: 5 }}>
                 <defs>
                   {/* Cyan gradient for positive values */}
                   <linearGradient id="positiveGradient-bj" x1="0" y1="0" x2="0" y2="1">
@@ -166,6 +166,7 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
                 />
 
                 <YAxis
+                  width={36}
                   stroke="rgba(255,255,255,0.4)"
                   fontSize={10}
                   tick={{ fill: "rgba(255,255,255,0.5)", fontFamily: "Poppins", fontWeight: 600 }}
