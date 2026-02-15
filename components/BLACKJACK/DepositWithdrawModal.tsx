@@ -465,11 +465,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-[50px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-4"
+              className="fixed top-[50px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-3"
             >
-              <Card className="w-full max-w-md bg-gradient-to-br from-gray-900 to-black border-gray-700 shadow-2xl pointer-events-auto">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                  <CardTitle className="text-white text-lg font-bold">Reserve Management</CardTitle>
+              <Card className="w-full max-w-sm bg-gradient-to-br from-gray-900 to-black border-gray-700 shadow-2xl pointer-events-auto">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3 px-4 pb-2">
+                  <CardTitle className="text-white text-base font-bold">Reserve Management</CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -480,19 +480,17 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                   </Button>
                 </CardHeader>
 
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-3 px-4 pb-4">
                   {/* Do not deposit banner */}
-                  <div className="text-center py-3 px-4 rounded-lg bg-red-950/80 border-2 border-red-500/60 text-red-200 font-bold text-lg tracking-wide">
+                  <div className="text-center py-1.5 px-3 rounded bg-red-950/80 border border-red-500/60 text-red-200 font-bold text-sm tracking-wide">
                     DO NOT DEPOSIT
                   </div>
 
                   {/* Transaction Status Indicator */}
                   {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
-                    <div className="flex items-center justify-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                      <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
-                      <span className="text-sm text-yellow-400 font-medium">
-                        Waiting for blockchain confirmation...
-                      </span>
+                    <div className="flex items-center justify-center gap-1.5 py-2 px-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-sm text-yellow-400">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                      <span>Waiting for confirmation...</span>
                     </div>
                   )}
 
@@ -511,48 +509,45 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                       const validAmount = amountWei > 0n && amountWei <= item.reserve && amountWei <= LEGACY_MAX_WITHDRAW_WEI
                       const setMax = () => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: formatEther(maxAllowedWei) }))
                       return (
-                        <div key={item.address} className="p-4 rounded-lg border border-amber-500/40 bg-amber-950/30 space-y-2">
-                          <div className="text-sm font-medium text-amber-200">
-                            Balance in {item.label}
+                        <div key={item.address} className="p-2.5 rounded border border-amber-500/40 bg-amber-950/30 space-y-1.5">
+                          <div className="text-xs font-medium text-amber-200">
+                            {item.label}
                           </div>
                           {item.paused ? (
-                            <p className="text-sm text-amber-300">
-                              Withdrawals from this contract are temporarily paused. Contact support to re-enable.
-                            </p>
+                            <p className="text-xs text-amber-300">Withdrawals paused. Contact support.</p>
                           ) : (
-                            <p className="text-xs text-amber-200/80">
-                              You have MORBIUS in a previous Blackjack contract. Withdraw it to your wallet (no server needed). Max 1,000,000 MORBIUS per withdrawal (contract limit).
-                            </p>
+                            <p className="text-[11px] text-amber-200/80">Max 1M MORBIUS per withdrawal.</p>
                           )}
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-1.5">
                               <Input
                                 type="text"
                                 inputMode="decimal"
                                 placeholder={formatEther(maxAllowedWei)}
                                 value={rawInput}
                                 onChange={(e) => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: e.target.value }))}
-                                className="bg-slate-800/80 border-amber-500/40 text-white max-w-[180px]"
+                                className="h-8 text-sm bg-slate-800/80 border-amber-500/40 text-white max-w-[140px]"
                               />
-                              <Button type="button" variant="outline" size="sm" onClick={setMax} className="border-amber-500/40 text-amber-200 shrink-0">
+                              <Button type="button" variant="outline" size="sm" onClick={setMax} className="h-8 px-2 border-amber-500/40 text-amber-200 text-xs shrink-0">
                                 Max
                               </Button>
                             </div>
-                            <div className="flex items-center justify-between gap-3 flex-wrap">
-                              <span className="text-lg font-bold text-white">
-                                Balance: {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} MORBIUS
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-white">
+                                {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} MORBIUS
                               </span>
                               <Button
+                                size="sm"
                                 onClick={() => validAmount && handleWithdrawLegacy(item.address, amountWei, item.refetch)}
                                 disabled={item.paused || isLegacyWithdrawLoading || !validAmount}
-                                className="bg-amber-600 hover:bg-amber-500 text-white shrink-0 disabled:opacity-60"
+                                className="h-8 text-xs bg-amber-600 hover:bg-amber-500 text-white shrink-0 disabled:opacity-60"
                               >
                                 {isLegacyWithdrawLoading ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                 ) : item.paused ? (
                                   'Paused'
                                 ) : (
-                                  'Withdraw to wallet'
+                                  'Withdraw'
                                 )}
                               </Button>
                             </div>
@@ -562,38 +557,35 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                     })}
 
                   {/* Current Reserve Balance */}
-                  <div className="text-center p-4 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg border border-blue-500/20">
-                    <div className="text-sm text-gray-400 mb-1">Current Balance</div>
-                    <div className="text-2xl font-bold text-white">
+                  <div className="text-center py-2 px-3 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded border border-blue-500/20">
+                    <div className="text-xs text-gray-400">Current Balance</div>
+                    <div className="text-xl font-bold text-white">
                       {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0} MORBIUS
                     </div>
-                    {/* Show contract reserve if different from display (e.g. during play, display = off-chain) */}
                     {contractReserve && contractReserve !== displayBalance && (
-                      <div className="flex items-center justify-center gap-2 mt-2">
-                        <div className="text-xs text-yellow-400">
-                          On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()} MORBIUS
-                        </div>
-                        {/* If on-chain > display, show Sync button to sync on-chain → DB */}
+                      <div className="flex items-center justify-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className="text-[11px] text-yellow-400">
+                          On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()}
+                        </span>
                         {onBalanceSync && contractReserve > displayBalance && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={async () => {
-                              toast.info('Syncing balance...')
+                              toast.info('Syncing...')
                               try {
                                 await onBalanceSync()
-                                toast.success('Balance synced!', { duration: 3000 })
+                                toast.success('Synced!', { duration: 3000 })
                               } catch (error) {
                                 console.error('Sync failed:', error)
-                                toast.error('Sync failed. Please try again.')
+                                toast.error('Sync failed.')
                               }
                             }}
-                            className="h-6 px-2 text-xs bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
+                            className="h-6 px-1.5 text-[11px] bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
                           >
                             Sync
                           </Button>
                         )}
-                        {/* Otherwise show Refresh button to just refresh display */}
                         {onRefreshBalance && contractReserve <= displayBalance && (
                           <Button
                             variant="outline"
@@ -602,13 +594,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                               toast.info('Refreshing...')
                               try {
                                 await onRefreshBalance()
-                                toast.success('Balance refreshed', { duration: 3000 })
+                                toast.success('Refreshed', { duration: 3000 })
                               } catch (error) {
                                 console.error('Refresh failed:', error)
-                                toast.error('Refresh failed. Please try again.')
+                                toast.error('Refresh failed.')
                               }
                             }}
-                            className="h-6 px-2 text-xs bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
+                            className="h-6 px-1.5 text-[11px] bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
                           >
                             Refresh
                           </Button>
@@ -618,48 +610,45 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                   </div>
 
                   <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'deposit' | 'withdraw')}>
-                    <TabsList className="grid w-full grid-cols-2 bg-gray-800">
+                    <TabsList className="grid w-full grid-cols-2 h-9 bg-gray-800">
                       <TabsTrigger
                         value="deposit"
-                        className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                        className="text-xs data-[state=active]:bg-green-600 data-[state=active]:text-white"
                       >
-                        <Plus className="w-4 h-4 mr-2" />
+                        <Plus className="w-3.5 h-3.5 mr-1.5" />
                         Deposit
                       </TabsTrigger>
                       <TabsTrigger
                         value="withdraw"
-                        className="data-[state=active]:bg-red-600 data-[state=active]:text-white"
+                        className="text-xs data-[state=active]:bg-red-600 data-[state=active]:text-white"
                       >
-                        <Minus className="w-4 h-4 mr-2" />
+                        <Minus className="w-3.5 h-3.5 mr-1.5" />
                         Withdraw
                       </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="deposit" className="space-y-4">
-                      {/* Deposit Method Selection */}
-                      <div className="flex space-x-2">
+                    <TabsContent value="deposit" className="space-y-2.5 mt-2.5">
+                      <div className="flex gap-1.5">
                         <Button
                           variant={depositMethod === 'pls' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setDepositMethod('pls')}
-                          className="flex-1"
+                          className="flex-1 h-8 text-xs"
                         >
-                          Deposit PLS
+                          PLS
                         </Button>
                         <Button
                           variant={depositMethod === 'morbius' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setDepositMethod('morbius')}
-                          className="flex-1"
+                          className="flex-1 h-8 text-xs"
                         >
-                          Deposit MORBIUS
+                          MORBIUS
                         </Button>
                       </div>
-
-                      {/* Deposit Amount Input */}
-                      <div className="space-y-2">
-                        <Label htmlFor="deposit-amount" className="text-white">
-                          Amount ({depositMethod === 'pls' ? 'MORBIUS equivalent' : 'MORBIUS'})
+                      <div className="space-y-1">
+                        <Label htmlFor="deposit-amount" className="text-xs text-gray-300">
+                          Amount ({depositMethod === 'pls' ? 'MORBIUS equiv.' : 'MORBIUS'})
                         </Label>
                         <Input
                           id="deposit-amount"
@@ -670,62 +659,42 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           min="0"
                           step="1"
                           max={depositMethod === 'pls' ? maxDepositPLS : maxDepositMORBIUS}
-                          className="bg-gray-800 border-gray-600 text-white"
+                          className="h-8 text-sm bg-gray-800 border-gray-600 text-white"
                         />
                       </div>
-
-                      {/* Balance Display */}
-                      <div className="text-sm text-gray-400">
+                      <div className="text-[11px] text-gray-400">
                         {depositMethod === 'pls' ? (
-                          <>
-                            Available: {maxDepositPLS} PLS
-                            {plsEquivalent && depositAmount && (
-                              <div className="text-green-400">
-                                ≈ {Math.floor(Number(formatEther(plsEquivalent)))} PLS required
-                              </div>
-                            )}
-                          </>
+                          <>Avail: {maxDepositPLS} PLS{plsEquivalent && depositAmount && <> · ≈{Math.floor(Number(formatEther(plsEquivalent)))} PLS</>}</>
                         ) : (
-                          <>Available: {maxDepositMORBIUS} MORBIUS</>
+                          <>Avail: {maxDepositMORBIUS} MORBIUS</>
                         )}
                       </div>
-
-                      {/* Deposit Button */}
                       <Button
                         onClick={depositMethod === 'pls' ? handleDepositPLS : handleDepositMORBIUS}
                         disabled={
-                          !depositAmount || 
-                          isDepositLoading || 
-                          plsQuoteLoading || 
+                          !depositAmount ||
+                          isDepositLoading ||
+                          plsQuoteLoading ||
                           (depositMethod === 'morbius' && isLoadingAllowance) ||
                           (depositMethod === 'morbius' && isApproving)
                         }
-                        className="w-full bg-green-600 hover:bg-green-700"
+                        className="w-full h-8 text-sm bg-green-600 hover:bg-green-700"
                       >
                         {isDepositLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Processing Transaction...
-                          </>
+                          <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Processing...</>
                         ) : depositMethod === 'morbius' && isApproving ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Waiting for Approval...
-                          </>
+                          <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Approving...</>
                         ) : depositMethod === 'morbius' && needsApproval ? (
-                          'Approve Required'
+                          'Approve'
                         ) : (
                           `Deposit ${depositMethod === 'pls' ? 'PLS' : 'MORBIUS'}`
                         )}
                       </Button>
                     </TabsContent>
 
-                    <TabsContent value="withdraw" className="space-y-4">
-                      {/* Withdraw Amount Input */}
-                      <div className="space-y-2">
-                        <Label htmlFor="withdraw-amount" className="text-white">
-                          Amount (MORBIUS)
-                        </Label>
+                    <TabsContent value="withdraw" className="space-y-2.5 mt-2.5">
+                      <div className="space-y-1">
+                        <Label htmlFor="withdraw-amount" className="text-xs text-gray-300">Amount (MORBIUS)</Label>
                         <Input
                           id="withdraw-amount"
                           type="number"
@@ -735,26 +704,17 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           min="0"
                           step="1"
                           max={maxWithdraw}
-                          className="bg-gray-800 border-gray-600 text-white"
+                          className="h-8 text-sm bg-gray-800 border-gray-600 text-white"
                         />
                       </div>
-
-                      {/* Available Balance */}
-                      <div className="text-sm text-gray-400">
-                        Available: {maxWithdraw} MORBIUS
-                      </div>
-
-                      {/* Withdraw Button */}
+                      <div className="text-[11px] text-gray-400">Avail: {maxWithdraw} MORBIUS</div>
                       <Button
                         onClick={handleWithdraw}
                         disabled={!withdrawAmount || isWithdrawLoading}
-                        className="w-full bg-red-600 hover:bg-red-700"
+                        className="w-full h-8 text-sm bg-red-600 hover:bg-red-700"
                       >
                         {isWithdrawLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Processing Transaction...
-                          </>
+                          <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Processing...</>
                         ) : (
                           'Withdraw MORBIUS'
                         )}
