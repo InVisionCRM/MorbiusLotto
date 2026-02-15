@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts'
+import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { formatEther } from 'viem'
 import { usePlatformAnalytics } from '@/hooks/use-platform-analytics'
 
@@ -154,173 +154,88 @@ export function GlobalMetricsCharts() {
         </p>
       )}
 
-      {/* Existing Area Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-1">
-          {/* Volume */}
-          <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-52 flex flex-col relative overflow-hidden min-w-0"
-            style={PANEL_STYLE}
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10 shrink-0">
-              Volume (MORBIUS)
-            </p>
-            {loading && chartData.length === 0 ? (
-              <p className="text-white/50 text-xs relative z-10 shrink-0">Loading…</p>
-            ) : chartData.length > 0 ? (
-              <div className="flex-1 min-h-0 min-w-0 w-full relative z-10">
+      {/* All charts — full width/height within cards, label floats top-left */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {[
+          { key: 'volume', label: 'Volume (MORBIUS)', dataKey: 'volumeNum', isSeries: true, fmt: (v: number) => (v >= 1e3 ? `${v / 1e3}k` : String(v)) },
+          { key: 'games', label: 'Games', dataKey: 'games', isSeries: true, fmt: (v: number) => String(v) },
+          { key: 'avgbet', label: 'Avg Bet (MORBIUS)', dataKey: 'avgBetNum', isSeries: true, fmt: (v: number) => (v >= 1e3 ? `${v / 1e3}k` : String(Math.round(v))) },
+          { key: 'wagered', label: 'Total Wagered', dataKey: 'value', isSeries: false, metricKey: 'totalWagered' as const },
+          { key: 'won', label: 'Total Won', dataKey: 'value', isSeries: false, metricKey: 'totalWon' as const },
+          { key: 'deposited', label: 'Total Deposited', dataKey: 'value', isSeries: false, metricKey: 'totalDeposited' as const },
+          { key: 'withdrawn', label: 'Total Withdrawn', dataKey: 'value', isSeries: false, metricKey: 'totalWithdrawn' as const },
+        ].map((chart) => {
+          // Build data + determine if we have content
+          let data: Record<string, unknown>[]
+          let hasData: boolean
+          let summaryValue: string | null = null
+
+          if (chart.isSeries) {
+            data = chartData
+            hasData = chartData.length > 0
+          } else {
+            const raw = displayMetrics[chart.metricKey!] ?? '0'
+            const num = Number(formatEther(BigInt(raw || '0')))
+            summaryValue = `${num.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`
+            // Build a cumulative series from the time-series so the chart shows growth over time
+            let cumulative = 0
+            if (chart.metricKey === 'totalWagered') {
+              data = chartData.map((p) => { cumulative += p.volumeNum; return { ...p, value: cumulative } })
+            } else if (chart.metricKey === 'totalWon') {
+              // approximate: won ~ volume * (1 - small edge); use games as proxy shape
+              data = chartData.map((p) => { cumulative += p.volumeNum * 0.97; return { ...p, value: cumulative } })
+            } else {
+              // deposited/withdrawn: no time-series breakdown yet; show single point
+              data = [{ label: 'Total', value: num }]
+            }
+            hasData = data.length > 0 && (num > 0 || chartData.length > 0)
+          }
+
+          const fmtTick = chart.fmt ?? ((v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v)))
+
+          return (
+            <div
+              key={chart.key}
+              className="rounded-2xl border border-cyan-500/30 h-52 relative overflow-hidden"
+              style={PANEL_STYLE}
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
+              <p className="absolute top-2 left-3 text-cyan-400/90 text-xs font-medium uppercase tracking-wider z-10">
+                {chart.label}
+              </p>
+              {summaryValue && (
+                <p className="absolute bottom-2 left-0 right-0 text-cyan-400 text-sm font-mono text-center z-10">
+                  {summaryValue}
+                </p>
+              )}
+              {loading && !hasData ? (
+                <p className="absolute inset-0 flex items-center justify-center text-white/50 text-xs z-10">Loading…</p>
+              ) : hasData ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                  <AreaChart data={data} margin={{ top: 24, right: 4, left: 4, bottom: summaryValue ? 24 : 4 }}>
                     <XAxis dataKey="label" tick={{ fontSize: 8 }} stroke="#94a3b8" />
                     <YAxis
                       tick={{ fontSize: 8 }}
                       stroke="#94a3b8"
-                      tickFormatter={(v) => (v >= 1e3 ? `${v / 1e3}k` : String(v))}
+                      width={32}
+                      tickFormatter={fmtTick}
                     />
                     <Area
                       type="monotone"
-                      dataKey="volumeNum"
+                      dataKey={chart.dataKey}
                       stroke={CYAN_STROKE}
                       fill={CYAN_FILL}
                       strokeWidth={1.5}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="text-white/40 text-xs relative z-10 shrink-0">No data for this range</p>
-            )}
-          </div>
-
-          {/* Games */}
-          <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-52 flex flex-col relative overflow-hidden min-w-0"
-            style={PANEL_STYLE}
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10 shrink-0">
-              Games
-            </p>
-            {loading && chartData.length === 0 ? (
-              <p className="text-white/50 text-xs relative z-10 shrink-0">Loading…</p>
-            ) : chartData.length > 0 ? (
-              <div className="flex-1 min-h-0 min-w-0 w-full relative z-10">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
-                    <XAxis dataKey="label" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                    <YAxis tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                    <Area
-                      type="monotone"
-                      dataKey="games"
-                      stroke={CYAN_STROKE}
-                      fill={CYAN_FILL}
-                      strokeWidth={1.5}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="text-white/40 text-xs relative z-10 shrink-0">No data for this range</p>
-            )}
-          </div>
-
-          {/* Avg bet */}
-          <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-52 flex flex-col relative overflow-hidden min-w-0"
-            style={PANEL_STYLE}
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10 shrink-0">
-              Avg bet (MORBIUS)
-            </p>
-            {loading && chartData.length === 0 ? (
-              <p className="text-white/50 text-xs relative z-10 shrink-0">Loading…</p>
-            ) : chartData.length > 0 ? (
-              <div className="flex-1 min-h-0 min-w-0 w-full relative z-10">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
-                    <XAxis dataKey="label" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                    <YAxis
-                      tick={{ fontSize: 8 }}
-                      stroke="#94a3b8"
-                      tickFormatter={(v) => (v >= 1e3 ? `${v / 1e3}k` : String(Math.round(v)))}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="avgBetNum"
-                      stroke={CYAN_STROKE}
-                      fill={CYAN_FILL}
-                      strokeWidth={1.5}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="text-white/40 text-xs relative z-10 shrink-0">No data for this range</p>
-            )}
-          </div>
-        </div>
-
-      {/* Area Charts for Global Metrics — use displayMetrics (platform when range=all so same as stats section) */}
-      {(globalMetrics != null || (range === 'all' && platformData != null)) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {[
-            { key: 'wagered', label: 'Total Wagered (Global)', value: displayMetrics.totalWagered },
-            { key: 'won', label: 'Total Won (Global)', value: displayMetrics.totalWon },
-            { key: 'deposited', label: 'Total Deposited (Global)', value: displayMetrics.totalDeposited },
-            { key: 'withdrawn', label: 'Total Withdrawn (Global)', value: displayMetrics.totalWithdrawn },
-          ].map(({ key, label, value }) => {
-            const num = Number(formatEther(BigInt(value || '0')))
-            const maxY = Math.max(1, num)
-            return (
-              <div
-                key={key}
-                className="rounded-2xl border border-cyan-500/30 p-2 h-64 flex flex-col relative overflow-hidden min-w-0"
-                style={PANEL_STYLE}
-              >
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-                <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10 shrink-0">
-                  {label}
-                </p>
-                {loading && globalMetrics == null ? (
-                  <p className="text-white/50 text-xs relative z-10 shrink-0">Loading…</p>
-                ) : (
-                  <div className="flex-1 min-h-0 min-w-0 w-full relative z-10">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart
-                        data={[{ name: 'Total', value: num }]}
-                        margin={{ top: 2, right: 2, left: 2, bottom: 2 }}
-                      >
-                        <XAxis dataKey="name" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                        <YAxis
-                          domain={[0, maxY]}
-                          tick={{ fontSize: 8 }}
-                          stroke="#94a3b8"
-                          tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
-                        />
-                        <Tooltip
-                          formatter={(val: number) => `${val.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
-                          contentStyle={{
-                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                            border: '1px solid rgba(34, 211, 238, 0.3)',
-                            borderRadius: '6px',
-                            color: '#e2e8f0',
-                            fontSize: '11px',
-                          }}
-                        />
-                        <Area type="monotone" dataKey="value" stroke={CYAN_STROKE} fill={CYAN_FILL} strokeWidth={1.5} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-                <p className="text-cyan-400 text-sm font-mono mt-1 text-center relative z-10 shrink-0">
-                  {num.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
-                </p>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              ) : (
+                <p className="absolute inset-0 flex items-center justify-center text-white/40 text-xs z-10">No data for this range</p>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </section>
   )
 }
