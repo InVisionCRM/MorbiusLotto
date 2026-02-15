@@ -300,11 +300,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       if (response.status === 409) {
         setIsPreparingWithdraw(false)
         const data = await response.json().catch(() => ({}))
-        const msg = data?.error || 'A withdrawal is already in progress.'
-        toast.error('Withdrawal already in progress', {
-          id: toastId,
-          description: msg.includes('expire') ? msg : `${msg} Complete it in your wallet or wait up to 10 minutes for it to expire.`,
-        })
+        const msg = data?.error || 'Withdrawal conflict.'
+        toast.error('Withdrawal failed', { id: toastId, description: msg })
         return
       }
 

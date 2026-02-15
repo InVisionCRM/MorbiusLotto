@@ -1127,16 +1127,8 @@ async function initializeServices() {
           return res.status(400).json({ error: 'Invalid address' });
         }
 
-        // Reject if player already has a pending (un-expired) withdrawal
-        const existingPending = await dbService.getActivePendingWithdrawal(normalizedAddress);
-        if (existingPending) {
-          return res.status(409).json({
-            error: 'A withdrawal is already pending. Submit or wait for it to expire (10 min).',
-          });
-        }
-
-        // Expire any old pending withdrawals first (refunds balances)
-        await dbService.expirePendingWithdrawals();
+        // Expire any pending withdrawal for this wallet (refund) so they can request a new one
+        await dbService.expirePendingWithdrawalsForWallet(normalizedAddress);
 
         // Get database balance for this specific wallet
         const dbBalance = await dbService.getPlayerBalance(normalizedAddress);
