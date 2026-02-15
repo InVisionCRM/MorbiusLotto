@@ -2449,9 +2449,8 @@ export default function BlackjackPage() {
         isMusicPlaying={isMusicPlaying}
         onToggleMusic={toggleMusic}
         onNextTrack={nextTrack}
-      />
-
-      <ProfileSettingsModal
+      >
+        <ProfileSettingsModal
         open={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
         displayName={profileDisplayName ?? ''}
@@ -2529,7 +2528,7 @@ export default function BlackjackPage() {
         </div>
       )}
 
-      <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-12 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
+      <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
         {/* View-specific content */}
         {currentView === 'game' && (
           <>
@@ -3006,6 +3005,7 @@ export default function BlackjackPage() {
       </div>
 
       <Footer />
+      </MainNav>
 
       <style jsx global>{`
         .history-item-enter {

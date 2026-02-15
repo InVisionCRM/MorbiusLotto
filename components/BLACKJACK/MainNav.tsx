@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
@@ -8,13 +9,21 @@ import { WalletMenu } from '@/components/shared/WalletMenu';
 import { NumberTicker } from '@/components/ui/number-ticker';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
-import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
+import {
+  Sidebar,
+  SidebarBody,
+  SidebarLink,
+  SidebarButton,
+  useSidebar,
+} from '@/components/ui/sidebar';
+import { BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
 import { isAdminWallet } from '@/lib/admin';
 import type { BlackjackThemeKind } from '@/app/BLACKJACK/constants';
 import type { TableOption } from '@/hooks/use-blackjack-tables';
 import ThemeSelectionModal from '@/components/BLACKJACK/ThemeSelectionModal';
 
 interface MainNavProps {
+  children?: React.ReactNode;
   onOpenDepositModal?: () => void;
   reserveBalance?: bigint;
   currentView?: 'game' | 'history' | 'stats' | 'analytics';
@@ -25,7 +34,6 @@ interface MainNavProps {
   onImageSourceChange?: (id: string) => void;
   videoSource?: string;
   onVideoSourceChange?: (id: string) => void;
-  /** Table options from API (when provided, theme modal uses these instead of static list). */
   imageOptions?: TableOption[];
   videoOptions?: TableOption[];
   videoSyncToClock?: boolean;
@@ -34,17 +42,12 @@ interface MainNavProps {
   onVideoPositionChange?: (position: number) => void;
   soundEnabled?: boolean;
   onSoundChange?: (enabled: boolean) => void;
-  /** When provided, theme modal is controlled by parent (e.g. for opening from table "Change Table" link) */
   themeModalOpen?: boolean;
   onThemeModalOpenChange?: (open: boolean) => void;
-  /** Opens the Tournament Lobby browser from nav */
   onTournamentLobby?: () => void;
-  /** Profile for connected wallet (display name + avatar). When set, show in nav with edit icon. */
   profileDisplayName?: string | null;
   profileImageUrl?: string | null;
-  /** Opens the profile settings modal when edit icon is clicked */
   onOpenProfileSettings?: () => void;
-  /** Music player controls for mobile dropdown */
   musicTrackName?: string;
   isMusicPlaying?: boolean;
   onToggleMusic?: () => void;
@@ -55,45 +58,373 @@ const viewLabels: Record<string, string> = {
   game: 'Play',
   history: 'History',
   stats: 'My Stats',
-  analytics: 'Analytics'
+  analytics: 'Analytics',
 };
 
 const viewIcons: Record<string, string> = {
   game: 'fa-play',
   history: 'fa-history',
   stats: 'fa-chart-bar',
-  analytics: 'fa-chart-line'
+  analytics: 'fa-chart-line',
 };
 
-export default function MainNav({ onOpenDepositModal, reserveBalance, currentView = 'game', onViewChange, theme = 'video', onThemeChange, imageSource = DEFAULT_BLACKJACK_IMAGE_ID, onImageSourceChange, videoSource = 'glowingTable', onVideoSourceChange, imageOptions, videoOptions, videoSyncToClock = true, onVideoSyncToClockChange, videoPosition = 50, onVideoPositionChange, soundEnabled = true, onSoundChange, themeModalOpen: themeModalOpenProp, onThemeModalOpenChange, onTournamentLobby, profileDisplayName, profileImageUrl, onOpenProfileSettings, musicTrackName, isMusicPlaying, onToggleMusic, onNextTrack }: MainNavProps) {
+const SIDEBAR_PANEL_STYLE = {
+  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+  border: '1px inset rgba(60, 60, 60, 0.5)',
+} as const;
+
+function NavContent({
+  onOpenDepositModal,
+  reserveBalance,
+  currentView = 'game',
+  onViewChange,
+  setThemeModalOpen,
+  onTournamentLobby,
+  onThemeChange,
+  soundEnabled,
+  onSoundChange,
+  profileDisplayName,
+  profileImageUrl,
+  onOpenProfileSettings,
+  musicTrackName,
+  isMusicPlaying,
+  onToggleMusic,
+  onNextTrack,
+  views,
+  isDeployer,
+  isAdmin,
+  isConnected,
+}: {
+  onOpenDepositModal?: () => void;
+  reserveBalance?: bigint;
+  currentView?: string;
+  onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics') => void;
+  setThemeModalOpen: (open: boolean) => void;
+  onTournamentLobby?: () => void;
+  onThemeChange?: (theme: BlackjackThemeKind) => void;
+  soundEnabled?: boolean;
+  onSoundChange?: (enabled: boolean) => void;
+  profileDisplayName?: string | null;
+  profileImageUrl?: string | null;
+  onOpenProfileSettings?: () => void;
+  musicTrackName?: string;
+  isMusicPlaying?: boolean;
+  onToggleMusic?: () => void;
+  onNextTrack?: () => void;
+  views: Array<'game' | 'history' | 'stats' | 'analytics'>;
+  isDeployer: boolean;
+  isAdmin: boolean;
+  isConnected: boolean;
+}) {
+  const { open } = useSidebar();
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Logo / Brand */}
+      <div className="shrink-0 py-4">
+        <Link
+          href="/"
+          className="flex items-center gap-2 group/sidebar"
+          aria-label="MORBIUS.IO Home"
+        >
+          <span
+            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden bg-white/10"
+            style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.3)' }}
+          >
+            <Image
+              src="/morbius/MorbiusLogo (3).png"
+              alt=""
+              width={24}
+              height={24}
+              className="object-contain"
+            />
+          </span>
+          <motion.span
+            animate={{
+              display: open ? 'inline-block' : 'none',
+              opacity: open ? 1 : 0,
+            }}
+            className="text-base font-semibold text-white whitespace-nowrap overflow-hidden"
+          >
+            MORBIUS.IO
+          </motion.span>
+        </Link>
+      </div>
+
+      {/* Reserve balance - when connected */}
+      {isConnected && reserveBalance !== undefined && onOpenDepositModal && (
+        <button
+          onClick={onOpenDepositModal}
+          className="flex items-center gap-2 py-2 rounded-lg px-2 hover:bg-white/5 transition-colors text-left w-full mb-2"
+          aria-label="MORBIUS reserve balance — click to deposit or withdraw"
+          title={`Deposit/Withdraw — ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
+        >
+          <Image
+            src="/morbius/MorbiusLogo (3).png"
+            alt=""
+            width={20}
+            height={20}
+            className="object-contain shrink-0"
+          />
+          <motion.span
+            animate={{
+              display: open ? 'inline-block' : 'none',
+              opacity: open ? 1 : 0,
+            }}
+            className="text-white/90 font-bold text-sm truncate min-w-0"
+          >
+            <NumberTicker
+              value={Math.floor(Number(reserveBalance) / 1e18)}
+              className="text-white/90 font-bold"
+              animateOnChange={true}
+            />
+          </motion.span>
+        </button>
+      )}
+
+      {/* Nav links - scrollable */}
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5">
+        {/* Home */}
+        <SidebarLink
+          link={{
+            label: 'Home',
+            href: '/',
+            icon: <i className="fas fa-home w-5 text-center text-white/80 shrink-0" aria-hidden />,
+          }}
+          className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+        />
+
+        {/* Blackjack views */}
+        {views.map((view) => (
+          <SidebarButton
+            key={view}
+            label={viewLabels[view]}
+            icon={
+              <i
+                className={`fas ${viewIcons[view]} w-5 text-center shrink-0 ${
+                  currentView === view ? 'text-cyan-400' : 'text-white/80'
+                }`}
+                aria-hidden
+              />
+            }
+            onClick={() => onViewChange?.(view)}
+            active={currentView === view}
+            className={`rounded-lg px-2 py-2 transition-colors ${
+              currentView === view ? 'bg-cyan-500/20 text-cyan-300' : 'text-white/90 hover:text-white hover:bg-white/5'
+            }`}
+          />
+        ))}
+
+        {/* Tournament Lobby */}
+        {onTournamentLobby && (
+          <SidebarButton
+            label="Tournament Lobby"
+            icon={<i className="fas fa-trophy w-5 text-center text-white/80 shrink-0" aria-hidden />}
+            onClick={onTournamentLobby}
+            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+        )}
+
+        {/* Table theme */}
+        {onThemeChange && (
+          <SidebarButton
+            label="Table theme"
+            icon={<i className="fas fa-palette w-5 text-center text-white/80 shrink-0" aria-hidden />}
+            onClick={() => setThemeModalOpen(true)}
+            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+        )}
+
+        {/* Sound */}
+        {onSoundChange !== undefined && (
+          <SidebarButton
+            label={soundEnabled ? 'Sound On' : 'Sound Off'}
+            icon={
+              <i
+                className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${
+                  soundEnabled ? 'text-cyan-400' : 'text-white/80'
+                }`}
+                aria-hidden
+              />
+            }
+            onClick={() => onSoundChange(!soundEnabled)}
+            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+        )}
+
+        {/* Divider / Other Games */}
+        <div className="pt-2 mt-2 border-t border-white/10">
+          <div className="px-2 py-1 overflow-hidden">
+            <motion.span
+              animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }}
+              className="text-xs text-cyan-300/60 uppercase tracking-wider"
+            >
+              Other Games
+            </motion.span>
+          </div>
+          <SidebarLink
+            link={{
+              label: 'Plinko',
+              href: '/PLINKO',
+              icon: <i className="fas fa-circle w-5 text-center text-white/80 shrink-0" aria-hidden />,
+            }}
+            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+          <SidebarLink
+            link={{
+              label: 'Lottery',
+              href: '/lottery',
+              icon: <i className="fas fa-ticket-alt w-5 text-center text-white/80 shrink-0" aria-hidden />,
+            }}
+            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+          <SidebarLink
+            link={{
+              label: 'Keno',
+              href: '/keno',
+              icon: <i className="fas fa-th w-5 text-center text-white/80 shrink-0" aria-hidden />,
+            }}
+            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+          <SidebarLink
+            link={{
+              label: 'Creator Dashboard',
+              href: '/creators',
+              icon: <i className="fas fa-crown w-5 text-center text-white/80 shrink-0" aria-hidden />,
+            }}
+            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+          {isAdmin && (
+            <SidebarLink
+              link={{
+                label: 'Admin',
+                href: '/admin',
+                icon: <i className="fas fa-cog w-5 text-center text-white/80 shrink-0" aria-hidden />,
+              }}
+              className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            />
+          )}
+        </div>
+
+        {/* Morbius Stats */}
+        <div className="pt-2 mt-2 border-t border-white/10 overflow-hidden">
+          <div className="px-2 py-1">
+            <motion.span
+              animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }}
+              className="text-xs text-cyan-300/60 uppercase tracking-wider"
+            >
+              Morbius
+            </motion.span>
+          </div>
+          <motion.div
+            animate={{ display: open ? 'block' : 'none', opacity: open ? 1 : 0 }}
+            className="px-2 py-1"
+          >
+            <MorbiusBurnedDisplay variant="inline" className="text-white/80 text-xs" />
+          </motion.div>
+          <motion.div
+            animate={{ display: open ? 'block' : 'none', opacity: open ? 1 : 0 }}
+            className="px-2 py-1"
+          >
+            <MorbiusPriceDisplay className="text-white/80 text-xs" />
+          </motion.div>
+          <SidebarLink
+            link={{
+              label: 'Claim fees',
+              href: '/claim-fees',
+              icon: <i className="fas fa-wallet w-5 text-center text-white/80 shrink-0" aria-hidden />,
+            }}
+            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+          <SidebarLink
+            link={{
+              label: 'Swap',
+              href: '/swap',
+              icon: <i className="fas fa-exchange-alt w-5 text-center text-white/80 shrink-0" aria-hidden />,
+            }}
+            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+        </div>
+      </nav>
+
+      {/* Bottom: Music (when expanded) + Wallet/Profile */}
+      <div className="shrink-0 pt-2 border-t border-white/10 space-y-2">
+        {musicTrackName && onToggleMusic && open && (
+          <div className="px-2 py-2 rounded-lg bg-white/5 border border-cyan-500/20 flex items-center gap-2">
+            <span className="text-cyan-400/90 text-xs font-medium truncate flex-1 min-w-0" title={musicTrackName}>
+              {musicTrackName}
+            </span>
+            <button
+              type="button"
+              onClick={onToggleMusic}
+              className="w-7 h-7 rounded flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors shrink-0"
+              aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
+            >
+              {isMusicPlaying ? <i className="fas fa-pause text-xs" /> : <i className="fas fa-play text-xs" />}
+            </button>
+            {onNextTrack && (
+              <button
+                type="button"
+                onClick={onNextTrack}
+                className="w-7 h-7 rounded flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors shrink-0"
+                aria-label="Next track"
+              >
+                <i className="fas fa-forward text-xs" />
+              </button>
+            )}
+          </div>
+        )}
+        <div className="px-2">
+          <WalletMenu
+            onOpenDepositModal={onOpenDepositModal}
+            reserveBalance={reserveBalance}
+            profileDisplayName={profileDisplayName}
+            profileImageUrl={profileImageUrl}
+            onOpenProfileSettings={onOpenProfileSettings}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function MainNav({
+  children,
+  onOpenDepositModal,
+  reserveBalance,
+  currentView = 'game',
+  onViewChange,
+  theme = 'video',
+  onThemeChange,
+  imageSource = DEFAULT_BLACKJACK_IMAGE_ID,
+  onImageSourceChange,
+  videoSource = 'glowingTable',
+  onVideoSourceChange,
+  imageOptions,
+  videoOptions,
+  videoSyncToClock = true,
+  onVideoSyncToClockChange,
+  videoPosition = 50,
+  onVideoPositionChange,
+  soundEnabled = true,
+  onSoundChange,
+  themeModalOpen: themeModalOpenProp,
+  onThemeModalOpenChange,
+  onTournamentLobby,
+  profileDisplayName,
+  profileImageUrl,
+  onOpenProfileSettings,
+  musicTrackName,
+  isMusicPlaying,
+  onToggleMusic,
+  onNextTrack,
+}: MainNavProps) {
   const { address, isConnected } = useAccount();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [internalThemeModalOpen, setInternalThemeModalOpen] = useState(false);
   const isThemeModalControlled = onThemeModalOpenChange !== undefined;
   const themeModalOpen = isThemeModalControlled ? (themeModalOpenProp ?? false) : internalThemeModalOpen;
   const setThemeModalOpen = isThemeModalControlled ? onThemeModalOpenChange : setInternalThemeModalOpen;
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const mobileMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
-        setIsMobileMenuOpen(false);
-      }
-    };
-
-    if (isDropdownOpen || isMobileMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isDropdownOpen, isMobileMenuOpen]);
 
   const isDeployer = Boolean(
     address && BLACKJACK_DEPLOYER_WALLET && address.toLowerCase() === BLACKJACK_DEPLOYER_WALLET
@@ -104,289 +435,37 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
     : ['game', 'history', 'stats'];
 
   return (
-    <nav
-      className="fixed top-0 left-0 right-0 z-[100] h-12 min-h-12"
-      style={{
-        background: 'linear-gradient(to right, #0f172a, #0f172a, rgba(6, 182, 212, 0.5))',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
-        backdropFilter: 'blur(8px)',
-      }}
-    >
-      <div className="container mx-auto px-2 py-1">
-        <div className="flex items-center justify-between gap-2 overflow-x-hidden">
-          {/* Logo */}
-          <Link href="/" className="flex items-center">
-            <span className="text-lg font-medium text-white">
-              MORBIUS.IO
-            </span>
-          </Link>
-
-
-          {/* Right Side Actions */}
-          <div className="flex items-center gap-1 flex-shrink-0 min-w-0">
-            {/* Morbius Reserve Balance Display */}
-            {isConnected && reserveBalance !== undefined && (
-              <button
-                onClick={onOpenDepositModal}
-                className="hidden sm:flex relative items-center justify-start bg-slate-900/30 rounded-lg py-1.5 px-3 pr-8 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.1)] gap-1 text-xs flex-shrink min-w-0 hover:bg-slate-900/50 transition-colors cursor-pointer"
-                aria-label="MORBIUS reserve balance — click to deposit or withdraw"
-                title="Deposit/Withdraw"
-              >
-                <div className="flex items-center gap-1">
-                  <NumberTicker
-                    value={Math.floor(Number(reserveBalance) / 1e18)}
-                    className="text-white/80 font-bold whitespace-nowrap"
-                    animateOnChange={true}
-                  />
-                  <Image
-                    src="/morbius/MorbiusLogo (3).png"
-                    alt="Morbius Logo"
-                    width={16}
-                    height={16}
-                    className="object-contain"
-                  />
-                </div>
-                <i className="fas fa-chevron-down text-white/60 text-xs absolute right-2 top-1/2 transform -translate-y-1/2"></i>
-              </button>
-            )}
-
-            {/* Wallet / Profile — shared WalletMenu (same UX globally) */}
-            <WalletMenu
-              onOpenDepositModal={onOpenDepositModal}
-              reserveBalance={reserveBalance}
-              profileDisplayName={profileDisplayName}
-              profileImageUrl={profileImageUrl}
-              onOpenProfileSettings={onOpenProfileSettings}
-            />
-
-            {/* Hamburger Menu - Always visible */}
-            <div className="relative z-50" ref={mobileMenuRef}>
-              <button
-                type="button"
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
-                className="w-10 h-10 flex flex-col items-center justify-center gap-[7px] transition-all active:scale-95 rounded-md hover:bg-white/10"
-              >
-                <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
-                <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
-                <span className="w-10 h-[5px] bg-slate-900 rounded-full pointer-events-none" />
-              </button>
-
-              {/* Dropdown Menu */}
-              {isMobileMenuOpen && (
-                <div
-                  className="fixed right-2 top-14 w-64 rounded-lg overflow-hidden shadow-xl z-[200] max-h-[80vh] overflow-y-auto"
-                  style={{
-                    background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-                    border: '1px solid rgba(6, 182, 212, 0.3)',
-                    boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  {/* Home */}
-                  <div className="p-2 border-b border-gray-700/50">
-                    <Link
-                      href="/"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-home w-4 text-center" aria-hidden />
-                      <span className="text-sm font-medium">Home</span>
-                    </Link>
-                  </div>
-                  {/* Music Player - Mobile Only */}
-                  {musicTrackName && onToggleMusic && (
-                    <div className="p-2 border-b border-gray-700/50">
-                      <div className="flex items-center gap-2 text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1 mb-2">
-                        <i className="fas fa-music w-4 text-center" aria-hidden />
-                        Music Player
-                      </div>
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-gray-800/50 border border-cyan-500/30">
-                        <span className="text-cyan-400/90 text-xs font-medium flex-1 truncate" title={musicTrackName}>
-                          {musicTrackName}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={onToggleMusic}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-                          aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
-                        >
-                          {isMusicPlaying ? <i className="fas fa-pause text-sm" /> : <i className="fas fa-play text-sm" />}
-                        </button>
-                        {onNextTrack && (
-                          <button
-                            type="button"
-                            onClick={onNextTrack}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-                            aria-label="Next track"
-                          >
-                            <i className="fas fa-forward text-sm" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Blackjack Views Section */}
-                  <div className="p-2 border-b border-gray-700/50">
-                    <div className="flex items-center gap-2 text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">
-                      <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
-                        <Image src="/BlackJack/Cards/PNG/AS.png" alt="" width={20} height={20} className="object-contain" />
-                      </span>
-                      Blackjack
-                    </div>
-                    {views.map((view) => (
-                      <button
-                        key={view}
-                        onClick={() => {
-                          onViewChange?.(view);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
-                          currentView === view
-                            ? 'bg-cyan-500/20 text-cyan-300'
-                            : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                        }`}
-                      >
-                        <i className={`fas ${viewIcons[view]} w-4 text-center`}></i>
-                        <span className="text-sm font-medium">{viewLabels[view]}</span>
-                        {currentView === view && (
-                          <i className="fas fa-check ml-auto text-cyan-400 text-xs"></i>
-                        )}
-                      </button>
-                    ))}
-                    {/* Tournament Lobby */}
-                    {onTournamentLobby && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onTournamentLobby();
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-t border-gray-700/50 mt-2 pt-2"
-                        aria-label="Open Tournament Lobby"
-                      >
-                        <i className="fas fa-trophy w-4 text-center" aria-hidden />
-                        <span className="text-sm font-medium">Tournament Lobby</span>
-                        <i className="fas fa-chevron-right ml-auto text-white/50 text-xs" aria-hidden />
-                      </button>
-                    )}
-                    {/* Table theme – opens modal */}
-                    {onThemeChange && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setThemeModalOpen(true);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-t border-gray-700/50 mt-2 pt-2"
-                        aria-label="Open table theme picker"
-                      >
-                        <i className="fas fa-palette w-4 text-center" aria-hidden />
-                        <span className="text-sm font-medium">Table theme</span>
-                        <i className="fas fa-chevron-right ml-auto text-white/50 text-xs" aria-hidden />
-                      </button>
-                    )}
-                    {/* Sound Toggle */}
-                    {onSoundChange !== undefined && (
-                      <button
-                        type="button"
-                        onClick={() => onSoundChange(!soundEnabled)}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                        aria-label={soundEnabled ? 'Mute game sound' : 'Unmute game sound'}
-                      >
-                        <i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-4 text-center`} aria-hidden />
-                        <span className="text-sm font-medium">
-                          {soundEnabled ? 'Sound On' : 'Sound Off'}
-                        </span>
-                        {soundEnabled && (
-                          <i className="fas fa-check ml-auto text-cyan-400 text-xs" aria-hidden />
-                        )}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Other Games Section */}
-                  <div className="p-2 border-b border-gray-700/50">
-                    <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Other Games</div>
-                    <Link
-                      href="/PLINKO"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-circle w-4 text-center"></i>
-                      <span className="text-sm font-medium">Plinko</span>
-                    </Link>
-                    {/* Big Wheel - commented out
-                    <Link
-                      href="/BIG-WHEEL"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-dharmachakra w-4 text-center"></i>
-                      <span className="text-sm font-medium">Big Wheel</span>
-                    </Link>
-                    */}
-                    <Link
-                      href="/lottery"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-ticket-alt w-4 text-center"></i>
-                      <span className="text-sm font-medium">Lottery</span>
-                    </Link>
-                    <Link
-                      href="/keno"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-th w-4 text-center"></i>
-                      <span className="text-sm font-medium">Keno</span>
-                    </Link>
-                    <Link
-                      href="/creators"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-crown w-4 text-center"></i>
-                      <span className="text-sm font-medium">Creator Dashboard</span>
-                    </Link>
-                    {isAdmin && (
-                      <Link
-                        href="/admin"
-                        className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        <i className="fas fa-cog w-4 text-center" aria-hidden />
-                        <span className="text-sm font-medium">Admin</span>
-                      </Link>
-                    )}
-                  </div>
-
-                  {/* Morbius Stats Section */}
-                  <div className="p-2">
-                    <div className="text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">Morbius Stats</div>
-                    <MorbiusBurnedDisplay variant="inline" className="px-3 py-2" />
-                    <MorbiusPriceDisplay className="px-3 py-2" />
-                    <Link
-                      href="/claim-fees"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-wallet w-4 text-center" aria-hidden />
-                      <span className="text-sm font-medium">Claim fees</span>
-                    </Link>
-                    <Link
-                      href="/swap"
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <i className="fas fa-exchange-alt w-4 text-center" aria-hidden />
-                      <span className="text-sm font-medium">Swap</span>
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+    <Sidebar>
+      <div className="flex flex-col md:flex-row min-h-screen w-full">
+        <SidebarBody
+          className="shrink-0"
+          style={SIDEBAR_PANEL_STYLE}
+        >
+          <NavContent
+            onOpenDepositModal={onOpenDepositModal}
+            reserveBalance={reserveBalance}
+            currentView={currentView}
+            onViewChange={onViewChange}
+            setThemeModalOpen={setThemeModalOpen}
+            onTournamentLobby={onTournamentLobby}
+            onThemeChange={onThemeChange}
+            soundEnabled={soundEnabled}
+            onSoundChange={onSoundChange}
+            profileDisplayName={profileDisplayName}
+            profileImageUrl={profileImageUrl}
+            onOpenProfileSettings={onOpenProfileSettings}
+            musicTrackName={musicTrackName}
+            isMusicPlaying={isMusicPlaying}
+            onToggleMusic={onToggleMusic}
+            onNextTrack={onNextTrack}
+            views={views}
+            isDeployer={isDeployer}
+            isAdmin={isAdmin}
+            isConnected={isConnected}
+          />
+        </SidebarBody>
+        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden">
+          {children}
         </div>
       </div>
 
@@ -406,6 +485,6 @@ export default function MainNav({ onOpenDepositModal, reserveBalance, currentVie
         videoPosition={videoPosition}
         onVideoPositionChange={onVideoPositionChange}
       />
-    </nav>
+    </Sidebar>
   );
 }

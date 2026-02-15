@@ -131,25 +131,28 @@ export default function BlackjackSidebar({
     if (typeof window !== 'undefined') window.open('/BLACKJACK/verify', '_blank')
   }
 
+  const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? 'Chart'
+
   return (
     <div className="w-full min-w-0 flex flex-col h-full min-h-0">
-      {/* Tabs — ensure always on top and clickable */}
-      <div className="flex overflow-x-auto no-scrollbar bg-slate-800/60 rounded-t-xs shrink-0 relative z-10">
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={`flex-shrink-0 px-3 py-2.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${
-              activeTab === id
-                ? 'text-cyan-400 border-cyan-500 bg-cyan-500/10'
-                : 'text-white/70 border-transparent hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">{label}</span>
-          </button>
-        ))}
+      {/* Compact icon bar — icons only with active label */}
+      <div className="flex items-center gap-1 px-2 py-2 shrink-0 relative z-10 bg-black/20 border-b border-white/10 rounded-t-xl">
+        <div className="flex gap-0.5 flex-wrap">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`p-2 rounded-lg transition-colors ${
+                activeTab === id ? 'bg-cyan-500/30 text-cyan-400' : 'text-white/60 hover:text-white hover:bg-white/5'
+              }`}
+              title={label}
+            >
+              <Icon className="w-4 h-4" />
+            </button>
+          ))}
+        </div>
+        <span className="ml-2 text-sm font-medium text-cyan-300 truncate min-w-0">{activeLabel}</span>
       </div>
 
       {/* Content — padding only for howto/tournaments/chart/tournament-play; Recent/Top have their own */}
