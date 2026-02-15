@@ -4,8 +4,6 @@ import { HomeHeader } from '@/components/home/header'
 import { HeroSection } from '@/components/home/hero-section'
 import { LatestWins } from '@/components/home/latest-wins'
 import { ChatPanel } from '@/components/chat/ChatPanel'
-import { GlobalStatsSection } from '@/components/home/global-stats-section'
-import { GlobalMetricsCharts } from '@/components/home/global-metrics-charts'
 import { GamesSection } from '@/components/home/games-section'
 import { RoadMap } from '@/components/home/RoadMap'
 import { SocialsSection } from '@/components/home/socials-section'
@@ -63,12 +61,6 @@ export default function HomePage() {
 
         {/* Games: Lottery, Keno, Plinko, Blackjack, etc. */}
         <GamesSection />
-
-        {/* Platform stats: Blackjack + Plinko, Keno, Lottery, Big Wheel */}
-        <GlobalStatsSection />
-
-        {/* Volume over time charts (24h / 7d / 30d / all) */}
-        <GlobalMetricsCharts />
 
         {/* Roadmap: Tournaments, Slot Machines, Texas Hold'em, Sponsorship */}
         <RoadMap />
