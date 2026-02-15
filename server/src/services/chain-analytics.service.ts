@@ -1,9 +1,11 @@
+import { parseAbiItem } from 'viem';
 import { getPublicClient } from '../utils/chain-client';
 import {
   PLINKO_ADDRESS,
   KENO_ADDRESS,
   LOTTERY_ADDRESS,
   BIGWHEEL_ADDRESS,
+  BLACKJACK_ADDRESS,
   PLINKO_GET_GLOBAL_STATS_ABI,
   KENO_GET_GLOBAL_STATS_ABI,
   LOTTERY_STATS_ABI,
@@ -170,6 +172,47 @@ export class ChainAnalyticsService {
       console.error('ChainAnalyticsService getBigWheelStats:', err);
       return null;
     }
+  }
+
+  /**
+   * All-time total MORBIUS deposited and withdrawn for Blackjack V2 (from contract events).
+   * Deposit = PLS swaps (morbiusAmount) + direct DepositMORBIUS(amount). Withdrawal = Withdrawal(amount).
+   */
+  async getBlackjackDepositWithdrawTotals(): Promise<{ totalDeposited: bigint; totalWithdrawn: bigint }> {
+    const client = getPublicClient();
+    let totalDeposited = 0n;
+    let totalWithdrawn = 0n;
+    try {
+      const toBlock = await client.getBlockNumber();
+      const chunkSize = 50000;
+      let fromBlock = 0n;
+      const depositEvent = parseAbiItem('event Deposit(address indexed player, uint256 morbiusAmount, uint256 plsAmount)');
+      const depositMorbiusEvent = parseAbiItem('event DepositMORBIUS(address indexed player, uint256 amount)');
+      const withdrawalEvent = parseAbiItem('event Withdrawal(address indexed player, uint256 amount)');
+
+      while (fromBlock <= toBlock) {
+        const end = fromBlock + BigInt(chunkSize) > toBlock ? toBlock : fromBlock + BigInt(chunkSize);
+        const [depositLogs, depositMorbiusLogs, withdrawalLogs] = await Promise.all([
+          client.getLogs({ address: BLACKJACK_ADDRESS, event: depositEvent, fromBlock, toBlock: end }),
+          client.getLogs({ address: BLACKJACK_ADDRESS, event: depositMorbiusEvent, fromBlock, toBlock: end }),
+          client.getLogs({ address: BLACKJACK_ADDRESS, event: withdrawalEvent, fromBlock, toBlock: end }),
+        ]);
+        for (const log of depositLogs) {
+          if (log.args && 'morbiusAmount' in log.args) totalDeposited += (log.args as { morbiusAmount: bigint }).morbiusAmount;
+        }
+        for (const log of depositMorbiusLogs) {
+          if (log.args && 'amount' in log.args) totalDeposited += (log.args as { amount: bigint }).amount;
+        }
+        for (const log of withdrawalLogs) {
+          if (log.args && 'amount' in log.args) totalWithdrawn += (log.args as { amount: bigint }).amount;
+        }
+        fromBlock = end + 1n;
+        if (fromBlock > toBlock) break;
+      }
+    } catch (err) {
+      console.error('ChainAnalyticsService getBlackjackDepositWithdrawTotals:', err);
+    }
+    return { totalDeposited, totalWithdrawn };
   }
 
   /** Fetch all on-chain game stats in parallel. */

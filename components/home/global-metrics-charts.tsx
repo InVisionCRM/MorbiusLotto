@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts'
 import { formatEther } from 'viem'
+import { usePlatformAnalytics } from '@/hooks/use-platform-analytics'
 
 export interface SeriesPoint {
   period: string
@@ -49,6 +50,7 @@ export function GlobalMetricsCharts() {
   const [globalMetrics, setGlobalMetrics] = useState<GlobalMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { data: platformData } = usePlatformAnalytics()
 
   const fetchSeries = useCallback(async () => {
     setLoading(true)
@@ -86,6 +88,23 @@ export function GlobalMetricsCharts() {
   useEffect(() => {
     fetchSeries()
   }, [fetchSeries])
+
+  // When range is 'all', use platform totals so charts match global-stats-section; otherwise use global-metrics
+  const displayMetrics = useMemo(() => {
+    const wagered = globalMetrics?.totalWagered ?? '0'
+    const won = globalMetrics?.totalWon ?? '0'
+    const deposited = globalMetrics?.totalDeposited ?? '0'
+    const withdrawn = globalMetrics?.totalWithdrawn ?? '0'
+    if (range === 'all' && platformData?.combined) {
+      return {
+        totalWagered: platformData.combined.totalVolume,
+        totalWon: platformData.combined.totalPayouts,
+        totalDeposited: deposited,
+        totalWithdrawn: withdrawn,
+      }
+    }
+    return { totalWagered: wagered, totalWon: won, totalDeposited: deposited, totalWithdrawn: withdrawn }
+  }, [range, globalMetrics, platformData])
 
   const isHourly = range === '24h'
   const chartData = series.map((p) => ({
@@ -139,300 +158,167 @@ export function GlobalMetricsCharts() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-1">
           {/* Volume */}
           <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-52 flex flex-col relative overflow-hidden"
+            className="rounded-2xl border border-cyan-500/30 p-2 h-52 flex flex-col relative overflow-hidden min-w-0"
             style={PANEL_STYLE}
           >
-            {/* Top inset glow */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10">
+            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10 shrink-0">
               Volume (MORBIUS)
             </p>
             {loading && chartData.length === 0 ? (
-              <p className="text-white/50 text-xs relative z-10">Loading…</p>
+              <p className="text-white/50 text-xs relative z-10 shrink-0">Loading…</p>
             ) : chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                  <YAxis
-                    tick={{ fontSize: 8 }}
-                    stroke="#94a3b8"
-                    tickFormatter={(v) => (v >= 1e3 ? `${v / 1e3}k` : String(v))}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="volumeNum"
-                    stroke={CYAN_STROKE}
-                    fill={CYAN_FILL}
-                    strokeWidth={1.5}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="flex-1 min-h-0 min-w-0 w-full relative z-10">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 8 }} stroke="#94a3b8" />
+                    <YAxis
+                      tick={{ fontSize: 8 }}
+                      stroke="#94a3b8"
+                      tickFormatter={(v) => (v >= 1e3 ? `${v / 1e3}k` : String(v))}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="volumeNum"
+                      stroke={CYAN_STROKE}
+                      fill={CYAN_FILL}
+                      strokeWidth={1.5}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <p className="text-white/40 text-xs relative z-10">No data for this range</p>
+              <p className="text-white/40 text-xs relative z-10 shrink-0">No data for this range</p>
             )}
           </div>
 
           {/* Games */}
           <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-52 flex flex-col relative overflow-hidden"
+            className="rounded-2xl border border-cyan-500/30 p-2 h-52 flex flex-col relative overflow-hidden min-w-0"
             style={PANEL_STYLE}
           >
-            {/* Top inset glow */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10">
+            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10 shrink-0">
               Games
             </p>
             {loading && chartData.length === 0 ? (
-              <p className="text-white/50 text-xs relative z-10">Loading…</p>
+              <p className="text-white/50 text-xs relative z-10 shrink-0">Loading…</p>
             ) : chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                  <YAxis tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                  <Area
-                    type="monotone"
-                    dataKey="games"
-                    stroke={CYAN_STROKE}
-                    fill={CYAN_FILL}
-                    strokeWidth={1.5}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="flex-1 min-h-0 min-w-0 w-full relative z-10">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 8 }} stroke="#94a3b8" />
+                    <YAxis tick={{ fontSize: 8 }} stroke="#94a3b8" />
+                    <Area
+                      type="monotone"
+                      dataKey="games"
+                      stroke={CYAN_STROKE}
+                      fill={CYAN_FILL}
+                      strokeWidth={1.5}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <p className="text-white/40 text-xs relative z-10">No data for this range</p>
+              <p className="text-white/40 text-xs relative z-10 shrink-0">No data for this range</p>
             )}
           </div>
 
           {/* Avg bet */}
           <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-52 flex flex-col relative overflow-hidden"
+            className="rounded-2xl border border-cyan-500/30 p-2 h-52 flex flex-col relative overflow-hidden min-w-0"
             style={PANEL_STYLE}
           >
-            {/* Top inset glow */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10">
+            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10 shrink-0">
               Avg bet (MORBIUS)
             </p>
             {loading && chartData.length === 0 ? (
-              <p className="text-white/50 text-xs relative z-10">Loading…</p>
+              <p className="text-white/50 text-xs relative z-10 shrink-0">Loading…</p>
             ) : chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                  <YAxis
-                    tick={{ fontSize: 8 }}
-                    stroke="#94a3b8"
-                    tickFormatter={(v) => (v >= 1e3 ? `${v / 1e3}k` : String(Math.round(v)))}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="avgBetNum"
-                    stroke={CYAN_STROKE}
-                    fill={CYAN_FILL}
-                    strokeWidth={1.5}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="flex-1 min-h-0 min-w-0 w-full relative z-10">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 8 }} stroke="#94a3b8" />
+                    <YAxis
+                      tick={{ fontSize: 8 }}
+                      stroke="#94a3b8"
+                      tickFormatter={(v) => (v >= 1e3 ? `${v / 1e3}k` : String(Math.round(v)))}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="avgBetNum"
+                      stroke={CYAN_STROKE}
+                      fill={CYAN_FILL}
+                      strokeWidth={1.5}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <p className="text-white/40 text-xs relative z-10">No data for this range</p>
+              <p className="text-white/40 text-xs relative z-10 shrink-0">No data for this range</p>
             )}
           </div>
         </div>
 
-      {/* New Bar Charts for Global Metrics */}
-      {globalMetrics && (
+      {/* Bar Charts for Global Metrics — use displayMetrics (platform when range=all so same as stats section) */}
+      {(globalMetrics != null || (range === 'all' && platformData != null)) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {/* Total Wagered */}
-          <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-64 flex flex-col relative overflow-hidden"
-            style={PANEL_STYLE}
-          >
-            {/* Top inset glow */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10">
-              Total Wagered (Global)
-            </p>
-            {loading ? (
-              <p className="text-white/50 text-xs relative z-10">Loading…</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[
-                    {
-                      name: 'Total',
-                      value: Number(formatEther(BigInt(globalMetrics.totalWagered || '0'))),
-                    },
-                  ]}
-                  margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-                >
-                  <XAxis dataKey="name" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                  <YAxis
-                    tick={{ fontSize: 8 }}
-                    stroke="#94a3b8"
-                    tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
-                  />
-                  <Tooltip
-                    formatter={(value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
-                    contentStyle={{
-                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                      border: '1px solid rgba(34, 211, 238, 0.3)',
-                      borderRadius: '6px',
-                      color: '#e2e8f0',
-                      fontSize: '11px',
-                    }}
-                  />
-                  <Bar dataKey="value" fill={CYAN_STROKE} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-            <p className="text-cyan-400 text-sm font-mono mt-1 text-center relative z-10">
-              {Number(formatEther(BigInt(globalMetrics.totalWagered || '0'))).toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
-            </p>
-          </div>
-
-          {/* Total Won */}
-          <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-64 flex flex-col relative overflow-hidden"
-            style={PANEL_STYLE}
-          >
-            {/* Top inset glow */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10">
-              Total Won (Global)
-            </p>
-            {loading ? (
-              <p className="text-white/50 text-xs relative z-10">Loading…</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[
-                    {
-                      name: 'Total',
-                      value: Number(formatEther(BigInt(globalMetrics.totalWon || '0'))),
-                    },
-                  ]}
-                  margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-                >
-                  <XAxis dataKey="name" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                  <YAxis
-                    tick={{ fontSize: 8 }}
-                    stroke="#94a3b8"
-                    tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
-                  />
-                  <Tooltip
-                    formatter={(value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
-                    contentStyle={{
-                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                      border: '1px solid rgba(34, 211, 238, 0.3)',
-                      borderRadius: '6px',
-                      color: '#e2e8f0',
-                      fontSize: '11px',
-                    }}
-                  />
-                  <Bar dataKey="value" fill={CYAN_STROKE} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-            <p className="text-cyan-400 text-sm font-mono mt-1 text-center relative z-10">
-              {Number(formatEther(BigInt(globalMetrics.totalWon || '0'))).toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
-            </p>
-          </div>
-
-          {/* Total Deposited */}
-          <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-64 flex flex-col relative overflow-hidden"
-            style={PANEL_STYLE}
-          >
-            {/* Top inset glow */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10">
-              Total Deposited (Global)
-            </p>
-            {loading ? (
-              <p className="text-white/50 text-xs relative z-10">Loading…</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[
-                    {
-                      name: 'Total',
-                      value: Number(formatEther(BigInt(globalMetrics.totalDeposited || '0'))),
-                    },
-                  ]}
-                  margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-                >
-                  <XAxis dataKey="name" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                  <YAxis
-                    tick={{ fontSize: 8 }}
-                    stroke="#94a3b8"
-                    tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
-                  />
-                  <Tooltip
-                    formatter={(value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
-                    contentStyle={{
-                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                      border: '1px solid rgba(34, 211, 238, 0.3)',
-                      borderRadius: '6px',
-                      color: '#e2e8f0',
-                      fontSize: '11px',
-                    }}
-                  />
-                  <Bar dataKey="value" fill={CYAN_STROKE} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-            <p className="text-cyan-400 text-sm font-mono mt-1 text-center relative z-10">
-              {Number(formatEther(BigInt(globalMetrics.totalDeposited || '0'))).toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
-            </p>
-          </div>
-
-          {/* Total Withdrawn */}
-          <div
-            className="rounded-2xl border border-cyan-500/30 p-2 h-64 flex flex-col relative overflow-hidden"
-            style={PANEL_STYLE}
-          >
-            {/* Top inset glow */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
-            <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10">
-              Total Withdrawn (Global)
-            </p>
-            {loading ? (
-              <p className="text-white/50 text-xs relative z-10">Loading…</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[
-                    {
-                      name: 'Total',
-                      value: Number(formatEther(BigInt(globalMetrics.totalWithdrawn || '0'))),
-                    },
-                  ]}
-                  margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-                >
-                  <XAxis dataKey="name" tick={{ fontSize: 8 }} stroke="#94a3b8" />
-                  <YAxis
-                    tick={{ fontSize: 8 }}
-                    stroke="#94a3b8"
-                    tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
-                  />
-                  <Tooltip
-                    formatter={(value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
-                    contentStyle={{
-                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                      border: '1px solid rgba(34, 211, 238, 0.3)',
-                      borderRadius: '6px',
-                      color: '#e2e8f0',
-                      fontSize: '11px',
-                    }}
-                  />
-                  <Bar dataKey="value" fill={CYAN_STROKE} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-            <p className="text-cyan-400 text-sm font-mono mt-1 text-center relative z-10">
-              {Number(formatEther(BigInt(globalMetrics.totalWithdrawn || '0'))).toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
-            </p>
-          </div>
+          {[
+            { key: 'wagered', label: 'Total Wagered (Global)', value: displayMetrics.totalWagered },
+            { key: 'won', label: 'Total Won (Global)', value: displayMetrics.totalWon },
+            { key: 'deposited', label: 'Total Deposited (Global)', value: displayMetrics.totalDeposited },
+            { key: 'withdrawn', label: 'Total Withdrawn (Global)', value: displayMetrics.totalWithdrawn },
+          ].map(({ key, label, value }) => {
+            const num = Number(formatEther(BigInt(value || '0')))
+            const maxY = Math.max(1, num)
+            return (
+              <div
+                key={key}
+                className="rounded-2xl border border-cyan-500/30 p-2 h-64 flex flex-col relative overflow-hidden min-w-0"
+                style={PANEL_STYLE}
+              >
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_50%)] pointer-events-none" />
+                <p className="text-cyan-400/90 text-xs font-medium uppercase tracking-wider mb-1 relative z-10 shrink-0">
+                  {label}
+                </p>
+                {loading && globalMetrics == null ? (
+                  <p className="text-white/50 text-xs relative z-10 shrink-0">Loading…</p>
+                ) : (
+                  <div className="flex-1 min-h-0 min-w-0 w-full relative z-10">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[{ name: 'Total', value: num }]}
+                        margin={{ top: 2, right: 2, left: 2, bottom: 2 }}
+                      >
+                        <XAxis dataKey="name" tick={{ fontSize: 8 }} stroke="#94a3b8" />
+                        <YAxis
+                          domain={[0, maxY]}
+                          tick={{ fontSize: 8 }}
+                          stroke="#94a3b8"
+                          tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v))}
+                        />
+                        <Tooltip
+                          formatter={(val: number) => `${val.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS`}
+                          contentStyle={{
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            border: '1px solid rgba(34, 211, 238, 0.3)',
+                            borderRadius: '6px',
+                            color: '#e2e8f0',
+                            fontSize: '11px',
+                          }}
+                        />
+                        <Bar dataKey="value" fill={CYAN_STROKE} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+                <p className="text-cyan-400 text-sm font-mono mt-1 text-center relative z-10 shrink-0">
+                  {num.toLocaleString(undefined, { maximumFractionDigits: 2 })} MORBIUS
+                </p>
+              </div>
+            )
+          })}
         </div>
       )}
     </section>

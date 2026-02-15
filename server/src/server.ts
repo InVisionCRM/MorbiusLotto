@@ -340,11 +340,8 @@ async function initializeServices() {
           ? blackjackWon + plinkoWon + kenoWon + lotteryWon + bigWheelWon
           : blackjackWon;
 
-        // Deposits and withdrawals: Query contract events or use placeholder
-        // For now, we'll need to query events from the Blackjack contract
-        // This is a placeholder - you may want to add event indexing for accurate data
-        const totalDeposited = 0n; // TODO: Query Deposit/DepositMORBIUS events
-        const totalWithdrawn = 0n; // TODO: Query Withdrawal events
+        // Deposits and withdrawals: from Blackjack V2 contract events (all-time)
+        const { totalDeposited, totalWithdrawn } = await chainAnalytics.getBlackjackDepositWithdrawTotals();
 
         sendJson(res, {
           range,
