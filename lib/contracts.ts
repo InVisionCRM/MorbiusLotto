@@ -72,7 +72,9 @@ export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = (
 ) as `0x${string}`
 
 // MORBIUS Holder Distributor (receives MORBIUS; holders claim proportional share)
-export const MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS = '0xc87B4F61460b24A0040AdaaB5452d07f38c876C6' as const
+// OLD: 0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab (has ~1100 MORBIUS; use this for claims)
+// NEW: 0xc87B4F61460b24A0040AdaaB5452d07f38c876C6 (redeployed with fixed EX_BLACKJACK; currently empty)
+export const MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS = '0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab' as const
 
 // Contract deployment info
 export const LOTTERY_DEPLOY_BLOCK = 25329129

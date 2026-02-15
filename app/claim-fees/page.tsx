@@ -69,8 +69,7 @@ export default function ClaimFeesPage() {
         address: DISTRIBUTOR_ADDRESS,
         abi: morbiusHolderDistributorAbi,
         functionName: 'updatePool',
-        chainId: pulsechain.id,
-      });
+      } as unknown as Parameters<typeof writeContract>[0]);
     }).catch((e) => toast.error(e instanceof Error ? e.message : 'Failed to switch chain'));
   };
 
@@ -84,8 +83,7 @@ export default function ClaimFeesPage() {
         address: DISTRIBUTOR_ADDRESS,
         abi: morbiusHolderDistributorAbi,
         functionName: 'claim',
-        chainId: pulsechain.id,
-      });
+      } as unknown as Parameters<typeof writeContract>[0]);
     }).catch((e) => toast.error(e instanceof Error ? e.message : 'Failed to switch chain'));
   };
 
@@ -142,8 +140,8 @@ export default function ClaimFeesPage() {
                       <span className="font-mono">{formatEther(circulating)}</span>
                     </div>
                   )}
-                  <p className="text-xs text-slate-500">
-                    If claimable shows 0 but you hold MORBIUS, click &quot;Refresh rewards&quot; first to update the pool.
+                  <p className="text-xs text-amber-400/90 bg-amber-950/30 rounded-lg p-2 border border-amber-600/30">
+                    <strong>Hold MORBIUS to earn.</strong> If you hold MORBIUS but see 0 claimable, click &quot;Refresh rewards&quot; first—the pool must be updated before amounts appear.
                   </p>
                   <div className="flex gap-2">
                     <button
