@@ -4,8 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { ContractAddress } from '@/components/ui/contract-address'
-import { Footer } from '@/components/shared/footer'
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import Footer from '@/components/PLINKO/Footer'
 
 export default function SwapPage() {
   const [isLoading, setIsLoading] = useState(true)

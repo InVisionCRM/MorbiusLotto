@@ -1,14 +1,12 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { useState } from 'react'
 import { DottedGlowBackground } from '@/components/ui/dotted-glow-background'
-import { BuyMorbiusModal } from './buy-morbius-modal'
 import { Theme } from '@/lib/theme'
 
 export function HeroSection() {
-  const [buyMorbiusModalOpen, setBuyMorbiusModalOpen] = useState(false)
 
   return (
     <section className="relative w-full min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-6 pt-16 pb-24" style={{ background: Theme.greyGradient.background }}>
@@ -85,12 +83,12 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 1.4, ease: "easeOut" }}
         >
-          <button
-            onClick={() => setBuyMorbiusModalOpen(true)}
+          <Link
+            href="/swap"
             className="px-6 py-3 bg-gradient-to-b from-cyan-600 to-cyan-800 text-white font-semibold text-sm sm:text-base rounded-full hover:from-purple-500 hover:to-purple-700 transition-all duration-300 hover:scale-105 shadow-lg shadow-cyan-500/20"
           >
             Get Morbius
-          </button>
+          </Link>
 
           <button
             onClick={() => {
@@ -118,11 +116,6 @@ export function HeroSection() {
         </div>
       </motion.div>
 
-      {/* Buy Morbius Modal */}
-      <BuyMorbiusModal
-        open={buyMorbiusModalOpen}
-        onOpenChange={setBuyMorbiusModalOpen}
-      />
     </section>
   )
 }
