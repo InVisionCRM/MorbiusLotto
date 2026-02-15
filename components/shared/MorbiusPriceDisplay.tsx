@@ -7,9 +7,11 @@ import { formatEther } from 'viem';
 
 interface MorbiusPriceDisplayProps {
   className?: string;
+  /** Override label color (e.g. "text-white" for dark sidebar) */
+  labelClassName?: string;
 }
 
-export function MorbiusPriceDisplay({ className = '' }: MorbiusPriceDisplayProps) {
+export function MorbiusPriceDisplay({ className = '', labelClassName }: MorbiusPriceDisplayProps) {
   const { wplsPerMORBIUS, isLoading } = useWplsPrice();
 
   // Format price: WPLS per MORBIUS
@@ -26,7 +28,7 @@ export function MorbiusPriceDisplay({ className = '' }: MorbiusPriceDisplayProps
         height={16}
         className="object-contain"
       />
-      <span className="text-white/60 text-xs">=</span>
+      <span className={labelClassName ?? 'text-white/60 text-xs'}>=</span>
       {isLoading ? (
         <span className="text-cyan-400 text-sm animate-pulse">...</span>
       ) : (

@@ -152,36 +152,49 @@ function NavContent({
         </Link>
       </div>
 
-      {/* Reserve balance - when connected */}
-      {isConnected && reserveBalance !== undefined && onOpenDepositModal && (
-        <button
-          onClick={onOpenDepositModal}
-          className="flex items-center gap-2 py-2 rounded-lg px-2 hover:bg-white/5 transition-colors text-left w-full mb-2"
-          aria-label="MORBIUS reserve balance — click to deposit or withdraw"
-          title={`Deposit/Withdraw — ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
-        >
-          <Image
-            src="/morbius/MorbiusLogo (3).png"
-            alt=""
-            width={20}
-            height={20}
-            className="object-contain shrink-0"
+      {/* Wallet + Reserve balance - top section, right under logo */}
+      <div className="shrink-0 py-2 space-y-2">
+        <div className="px-2">
+          <WalletMenu
+            onOpenDepositModal={onOpenDepositModal}
+            reserveBalance={reserveBalance}
+            profileDisplayName={profileDisplayName}
+            profileImageUrl={profileImageUrl}
+            onOpenProfileSettings={onOpenProfileSettings}
+            dropdownPlacement="below"
+            variant="sidebar"
           />
-          <motion.span
-            animate={{
-              display: open ? 'inline-block' : 'none',
-              opacity: open ? 1 : 0,
-            }}
-            className="text-white/90 font-bold text-sm truncate min-w-0"
+        </div>
+        {isConnected && reserveBalance !== undefined && onOpenDepositModal && (
+          <button
+            onClick={onOpenDepositModal}
+            className="flex items-center gap-2 py-2 rounded-lg px-2 hover:bg-white/5 transition-colors text-left w-full"
+            aria-label="MORBIUS reserve balance — click to deposit or withdraw"
+            title={`Deposit/Withdraw — ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
           >
-            <NumberTicker
-              value={Math.floor(Number(reserveBalance) / 1e18)}
-              className="text-white/90 font-bold"
-              animateOnChange={true}
+            <Image
+              src="/morbius/MorbiusLogo (3).png"
+              alt=""
+              width={20}
+              height={20}
+              className="object-contain shrink-0"
             />
-          </motion.span>
-        </button>
-      )}
+            <motion.span
+              animate={{
+                display: open ? 'inline-block' : 'none',
+                opacity: open ? 1 : 0,
+              }}
+              className="text-white font-bold text-sm truncate min-w-0"
+            >
+              <NumberTicker
+                value={Math.floor(Number(reserveBalance) / 1e18)}
+                className="text-white font-bold"
+                animateOnChange={true}
+              />
+            </motion.span>
+          </button>
+        )}
+      </div>
 
       {/* Nav links - scrollable */}
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5">
@@ -190,39 +203,54 @@ function NavContent({
           link={{
             label: 'Home',
             href: '/',
-            icon: <i className="fas fa-home w-5 text-center text-white/80 shrink-0" aria-hidden />,
+            icon: <i className="fas fa-home w-5 text-center text-white shrink-0" aria-hidden />,
           }}
-          className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
         />
 
-        {/* Blackjack views */}
-        {views.map((view) => (
+        {/* Blackjack views - Play and Analytics only */}
+        <SidebarButton
+          label="Play"
+          icon={
+            <i
+              className={`fas fa-play w-5 text-center shrink-0 ${
+                currentView === 'game' ? 'text-cyan-400' : 'text-white'
+              }`}
+              aria-hidden
+            />
+          }
+          onClick={() => onViewChange?.('game')}
+          active={currentView === 'game'}
+          className={`rounded-lg px-2 py-2 transition-colors ${
+            currentView === 'game' ? 'bg-cyan-500/20 text-cyan-300' : 'text-white hover:bg-white/5'
+          }`}
+        />
+        {isDeployer && (
           <SidebarButton
-            key={view}
-            label={viewLabels[view]}
+            label="Analytics"
             icon={
               <i
-                className={`fas ${viewIcons[view]} w-5 text-center shrink-0 ${
-                  currentView === view ? 'text-cyan-400' : 'text-white/80'
+                className={`fas fa-chart-line w-5 text-center shrink-0 ${
+                  currentView === 'analytics' ? 'text-cyan-400' : 'text-white'
                 }`}
                 aria-hidden
               />
             }
-            onClick={() => onViewChange?.(view)}
-            active={currentView === view}
+            onClick={() => onViewChange?.('analytics')}
+            active={currentView === 'analytics'}
             className={`rounded-lg px-2 py-2 transition-colors ${
-              currentView === view ? 'bg-cyan-500/20 text-cyan-300' : 'text-white/90 hover:text-white hover:bg-white/5'
+              currentView === 'analytics' ? 'bg-cyan-500/20 text-cyan-300' : 'text-white hover:bg-white/5'
             }`}
           />
-        ))}
+        )}
 
         {/* Tournament Lobby */}
         {onTournamentLobby && (
           <SidebarButton
             label="Tournament Lobby"
-            icon={<i className="fas fa-trophy w-5 text-center text-white/80 shrink-0" aria-hidden />}
+            icon={<i className="fas fa-trophy w-5 text-center text-white shrink-0" aria-hidden />}
             onClick={onTournamentLobby}
-            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
           />
         )}
 
@@ -230,9 +258,9 @@ function NavContent({
         {onThemeChange && (
           <SidebarButton
             label="Table theme"
-            icon={<i className="fas fa-palette w-5 text-center text-white/80 shrink-0" aria-hidden />}
+            icon={<i className="fas fa-palette w-5 text-center text-white shrink-0" aria-hidden />}
             onClick={() => setThemeModalOpen(true)}
-            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
           />
         )}
 
@@ -243,22 +271,74 @@ function NavContent({
             icon={
               <i
                 className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${
-                  soundEnabled ? 'text-cyan-400' : 'text-white/80'
+                  soundEnabled ? 'text-cyan-400' : 'text-white'
                 }`}
                 aria-hidden
               />
             }
             onClick={() => onSoundChange(!soundEnabled)}
-            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
           />
         )}
 
-        {/* Divider / Other Games */}
+        {/* My Stuff */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <div className="px-2 py-1 overflow-hidden">
             <motion.span
               animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }}
-              className="text-xs text-cyan-300/60 uppercase tracking-wider"
+              className="text-xs text-white uppercase tracking-wider"
+            >
+              My Stuff
+            </motion.span>
+          </div>
+          <SidebarLink
+            link={{
+              label: 'Creator Dashboard',
+              href: '/creators',
+              icon: <i className="fas fa-crown w-5 text-center text-white shrink-0" aria-hidden />,
+            }}
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+          <SidebarButton
+            label="History"
+            icon={
+              <i
+                className={`fas fa-history w-5 text-center shrink-0 ${
+                  currentView === 'history' ? 'text-cyan-400' : 'text-white'
+                }`}
+                aria-hidden
+              />
+            }
+            onClick={() => onViewChange?.('history')}
+            active={currentView === 'history'}
+            className={`rounded-lg px-2 py-2 transition-colors ${
+              currentView === 'history' ? 'bg-cyan-500/20 text-cyan-300' : 'text-white hover:bg-white/5'
+            }`}
+          />
+          <SidebarButton
+            label="My Stats"
+            icon={
+              <i
+                className={`fas fa-chart-bar w-5 text-center shrink-0 ${
+                  currentView === 'stats' ? 'text-cyan-400' : 'text-white'
+                }`}
+                aria-hidden
+              />
+            }
+            onClick={() => onViewChange?.('stats')}
+            active={currentView === 'stats'}
+            className={`rounded-lg px-2 py-2 transition-colors ${
+              currentView === 'stats' ? 'bg-cyan-500/20 text-cyan-300' : 'text-white hover:bg-white/5'
+            }`}
+          />
+        </div>
+
+        {/* Other Games */}
+        <div className="pt-2 mt-2 border-t border-white/10">
+          <div className="px-2 py-1 overflow-hidden">
+            <motion.span
+              animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }}
+              className="text-xs text-white uppercase tracking-wider"
             >
               Other Games
             </motion.span>
@@ -267,42 +347,62 @@ function NavContent({
             link={{
               label: 'Plinko',
               href: '/PLINKO',
-              icon: <i className="fas fa-circle w-5 text-center text-white/80 shrink-0" aria-hidden />,
+              icon: <i className="fas fa-circle w-5 text-center text-white shrink-0" aria-hidden />,
             }}
-            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
           />
           <SidebarLink
             link={{
               label: 'Lottery',
               href: '/lottery',
-              icon: <i className="fas fa-ticket-alt w-5 text-center text-white/80 shrink-0" aria-hidden />,
+              icon: <i className="fas fa-ticket-alt w-5 text-center text-white shrink-0" aria-hidden />,
             }}
-            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
           />
           <SidebarLink
             link={{
               label: 'Keno',
               href: '/keno',
-              icon: <i className="fas fa-th w-5 text-center text-white/80 shrink-0" aria-hidden />,
+              icon: <i className="fas fa-th w-5 text-center text-white shrink-0" aria-hidden />,
             }}
-            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+          />
+        </div>
+
+        {/* Other */}
+        <div className="pt-2 mt-2 border-t border-white/10">
+          <div className="px-2 py-1 overflow-hidden">
+            <motion.span
+              animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }}
+              className="text-xs text-white uppercase tracking-wider"
+            >
+              Other
+            </motion.span>
+          </div>
+          <SidebarLink
+            link={{
+              label: 'Morb-It',
+              href: '/Morb-It',
+              icon: <i className="fas fa-gamepad w-5 text-center text-white shrink-0" aria-hidden />,
+            }}
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
           />
           <SidebarLink
             link={{
-              label: 'Creator Dashboard',
-              href: '/creators',
-              icon: <i className="fas fa-crown w-5 text-center text-white/80 shrink-0" aria-hidden />,
+              label: 'Donate',
+              href: '/donate',
+              icon: <i className="fas fa-heart w-5 text-center text-white shrink-0" aria-hidden />,
             }}
-            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
           />
           {isAdmin && (
             <SidebarLink
               link={{
                 label: 'Admin',
                 href: '/admin',
-                icon: <i className="fas fa-cog w-5 text-center text-white/80 shrink-0" aria-hidden />,
+                icon: <i className="fas fa-cog w-5 text-center text-white shrink-0" aria-hidden />,
               }}
-              className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+              className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
             />
           )}
         </div>
@@ -312,7 +412,7 @@ function NavContent({
           <div className="px-2 py-1">
             <motion.span
               animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }}
-              className="text-xs text-cyan-300/60 uppercase tracking-wider"
+              className="text-xs text-white uppercase tracking-wider"
             >
               Morbius
             </motion.span>
@@ -321,38 +421,38 @@ function NavContent({
             animate={{ display: open ? 'block' : 'none', opacity: open ? 1 : 0 }}
             className="px-2 py-1"
           >
-            <MorbiusBurnedDisplay variant="inline" className="text-white/80 text-xs" />
+            <MorbiusBurnedDisplay variant="inline" className="text-white text-xs" labelClassName="text-white text-xs" />
           </motion.div>
           <motion.div
             animate={{ display: open ? 'block' : 'none', opacity: open ? 1 : 0 }}
             className="px-2 py-1"
           >
-            <MorbiusPriceDisplay className="text-white/80 text-xs" />
+            <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
           </motion.div>
           <SidebarLink
             link={{
               label: 'Claim fees',
               href: '/claim-fees',
-              icon: <i className="fas fa-wallet w-5 text-center text-white/80 shrink-0" aria-hidden />,
+              icon: <i className="fas fa-wallet w-5 text-center text-white shrink-0" aria-hidden />,
             }}
-            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
           />
           <SidebarLink
             link={{
               label: 'Swap',
               href: '/swap',
-              icon: <i className="fas fa-exchange-alt w-5 text-center text-white/80 shrink-0" aria-hidden />,
+              icon: <i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />,
             }}
-            className="text-white/90 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+            className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
           />
         </div>
       </nav>
 
-      {/* Bottom: Music (when expanded) + Wallet/Profile */}
+      {/* Bottom: Music (when expanded) */}
       <div className="shrink-0 pt-2 border-t border-white/10 space-y-2">
         {musicTrackName && onToggleMusic && open && (
           <div className="px-2 py-2 rounded-lg bg-white/5 border border-cyan-500/20 flex items-center gap-2">
-            <span className="text-cyan-400/90 text-xs font-medium truncate flex-1 min-w-0" title={musicTrackName}>
+            <span className="text-white text-xs font-medium truncate flex-1 min-w-0" title={musicTrackName}>
               {musicTrackName}
             </span>
             <button
@@ -375,15 +475,6 @@ function NavContent({
             )}
           </div>
         )}
-        <div className="px-2">
-          <WalletMenu
-            onOpenDepositModal={onOpenDepositModal}
-            reserveBalance={reserveBalance}
-            profileDisplayName={profileDisplayName}
-            profileImageUrl={profileImageUrl}
-            onOpenProfileSettings={onOpenProfileSettings}
-          />
-        </div>
       </div>
     </div>
   );

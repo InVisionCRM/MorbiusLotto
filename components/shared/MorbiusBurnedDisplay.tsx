@@ -9,9 +9,11 @@ import { formatEther } from 'viem';
 interface MorbiusBurnedDisplayProps {
   variant?: 'inline' | 'card';
   className?: string;
+  /** Override label color (e.g. "text-white" for dark sidebar) */
+  labelClassName?: string;
 }
 
-export function MorbiusBurnedDisplay({ variant = 'inline', className = '' }: MorbiusBurnedDisplayProps) {
+export function MorbiusBurnedDisplay({ variant = 'inline', className = '', labelClassName }: MorbiusBurnedDisplayProps) {
   const { burnedAmount, isLoading } = useMorbiusBurned();
 
   // Convert from wei to whole tokens (no decimals for display)
@@ -51,7 +53,7 @@ export function MorbiusBurnedDisplay({ variant = 'inline', className = '' }: Mor
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <span className="text-orange-500">🔥</span>
-      <span className="text-white/60 text-xs">Burned:</span>
+      <span className={labelClassName ?? 'text-white/60 text-xs'}>Burned:</span>
       {isLoading ? (
         <span className="text-orange-400 text-sm animate-pulse">...</span>
       ) : (

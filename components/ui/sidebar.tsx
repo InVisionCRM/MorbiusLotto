@@ -127,28 +127,40 @@ export const MobileSidebar = ({
         </div>
         <AnimatePresence>
           {open && (
-            <motion.div
-              initial={{ x: "-100%", opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: "-100%", opacity: 0 }}
-              transition={{
-                duration: 0.3,
-                ease: "easeInOut",
-              }}
-              className={cn(
-                "fixed h-full w-full inset-0 p-10 z-[100] flex flex-col justify-between overflow-y-auto",
-                className
-              )}
-              style={style}
-            >
-              <div
-                className="absolute right-10 top-10 z-50 text-white/80 hover:text-white cursor-pointer"
-                onClick={() => setOpen(!open)}
+            <>
+              {/* Backdrop - tap to close */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 bg-black/50 z-[99] md:hidden"
+                onClick={() => setOpen(false)}
+                aria-hidden
+              />
+              <motion.div
+                initial={{ x: "-100%", opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: "-100%", opacity: 0 }}
+                transition={{
+                  duration: 0.3,
+                  ease: "easeInOut",
+                }}
+                className={cn(
+                  "fixed left-0 top-0 bottom-0 w-[33.333vw] min-w-[120px] max-w-[180px] pl-3 pr-2 py-4 z-[100] flex flex-col justify-between overflow-y-auto",
+                  className
+                )}
+                style={style}
               >
-                <IconX />
-              </div>
-              {children}
-            </motion.div>
+                <div
+                  className="absolute right-2 top-3 z-50 text-white/80 hover:text-white cursor-pointer p-1"
+                  onClick={() => setOpen(!open)}
+                >
+                  <IconX className="w-5 h-5" />
+                </div>
+                {children}
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
       </div>
@@ -181,7 +193,7 @@ export const SidebarLink = ({
           display: animate ? (open ? "inline-block" : "none") : "inline-block",
           opacity: animate ? (open ? 1 : 0) : 1,
         }}
-        className="text-neutral-700 dark:text-neutral-200 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
+        className="text-inherit text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
       >
         {link.label}
       </motion.span>
@@ -220,7 +232,7 @@ export const SidebarButton = ({
           display: animate ? (open ? "inline-block" : "none") : "inline-block",
           opacity: animate ? (open ? 1 : 0) : 1,
         }}
-        className="text-neutral-700 dark:text-neutral-200 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
+        className="text-inherit text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
       >
         {label}
       </motion.span>

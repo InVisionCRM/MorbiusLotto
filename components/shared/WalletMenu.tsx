@@ -17,6 +17,10 @@ export interface WalletMenuProps {
   onOpenProfileSettings?: () => void
   /** Optional class for the wrapper div */
   className?: string
+  /** When 'below', dropdown opens below the button (absolute) for use inside sidebar. Default: 'viewport-right' */
+  dropdownPlacement?: 'viewport-right' | 'below'
+  /** When true, use white text in dropdown (for dark sidebar) */
+  variant?: 'default' | 'sidebar'
 }
 
 /**
@@ -31,6 +35,8 @@ export function WalletMenu({
   profileImageUrl,
   onOpenProfileSettings,
   className = '',
+  dropdownPlacement = 'viewport-right',
+  variant = 'default',
 }: WalletMenuProps) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
@@ -66,7 +72,7 @@ export function WalletMenu({
               {profileImageUrl ? (
                 <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-gray-400 text-xs">?</span>
+                <span className={`text-xs ${variant === 'sidebar' ? 'text-white/70' : 'text-gray-400'}`}>?</span>
               )}
             </div>
             <span className="text-white max-w-[80px] truncate">
@@ -80,7 +86,11 @@ export function WalletMenu({
 
           {isWalletDropdownOpen && (
             <div
-              className="fixed right-2 top-14 w-64 rounded-lg overflow-hidden shadow-xl"
+              className={
+                dropdownPlacement === 'below'
+                  ? 'absolute left-0 top-full mt-1 w-full min-w-[200px] rounded-lg overflow-hidden shadow-xl z-[9999]'
+                  : 'fixed right-2 top-14 w-64 rounded-lg overflow-hidden shadow-xl'
+              }
               style={{
                 zIndex: 9999,
                 background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
@@ -89,7 +99,7 @@ export function WalletMenu({
               }}
             >
               <div className="p-2">
-                <div className="flex items-center gap-2 text-xs text-cyan-300/60 uppercase tracking-wider px-3 py-1">
+                <div className={`flex items-center gap-2 text-xs uppercase tracking-wider px-3 py-1 ${variant === 'sidebar' ? 'text-white/80' : 'text-cyan-300/60'}`}>
                   <i className="fas fa-wallet w-4 text-center" aria-hidden />
                   Wallet
                 </div>
@@ -99,14 +109,14 @@ export function WalletMenu({
                       onOpenDepositModal()
                       setIsWalletDropdownOpen(false)
                     }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${variant === 'sidebar' ? 'text-white hover:bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
                   >
                     <i className="fas fa-wallet w-4 text-center" />
                     <span className="text-sm font-medium">Deposit/Withdraw</span>
                   </button>
                 )}
                 {reserveBalance !== undefined && (
-                  <div className="flex items-center gap-3 px-3 py-2 text-gray-400">
+                  <div className={`flex items-center gap-3 px-3 py-2 ${variant === 'sidebar' ? 'text-white/90' : 'text-gray-400'}`}>
                     <i className="fas fa-coins w-4 text-center" />
                     <span className="text-sm">
                       Balance: {Math.floor(Number(reserveBalance) / 1e18)} MORBIUS
@@ -120,7 +130,7 @@ export function WalletMenu({
                       onOpenProfileSettings()
                       setIsWalletDropdownOpen(false)
                     }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${variant === 'sidebar' ? 'text-white hover:bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
                   >
                     <i className="fas fa-pen w-4 text-center" aria-hidden />
                     <span className="text-sm font-medium">Edit profile</span>
