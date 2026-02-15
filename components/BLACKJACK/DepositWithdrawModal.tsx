@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Theme, getPanelStyles } from '@/lib/theme'
 import { toast } from 'sonner'
 
 interface DepositWithdrawModalProps {
@@ -456,7 +457,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+              className={`fixed inset-0 z-50 ${Theme.modal.overlay}`}
               onClick={onClose}
             />
 
@@ -467,37 +468,38 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               exit={{ opacity: 0, scale: 0.95 }}
               className="fixed top-[50px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-3"
             >
-              <Card className="w-full max-w-2xl bg-gradient-to-br from-gray-900 to-black border-gray-700 shadow-2xl pointer-events-auto max-h-[90vh] flex flex-col">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 py-2.5 px-4 pb-2 shrink-0">
-                  <CardTitle className="text-white text-base font-bold">Reserve Management</CardTitle>
+              <Card
+                className={`w-[min(92vw,42rem)] max-h-[75vh] flex flex-col overflow-hidden pointer-events-auto rounded-2xl ${Theme.modal.container}`}
+                style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
+              >
+                <CardHeader className={`flex flex-row items-center justify-between space-y-0 py-2 px-4 shrink-0 rounded-t-2xl ${Theme.modal.header}`}>
+                  <CardTitle className="text-white text-sm font-bold">Reserve Management</CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={onClose}
-                    className="text-gray-400 hover:text-white"
+                    className="text-white/80 hover:text-white hover:bg-white/10"
                   >
                     <X className="w-4 h-4" />
                   </Button>
                 </CardHeader>
 
-                <CardContent className="px-4 pb-4 pt-0 flex flex-col min-h-0 overflow-hidden">
-                  {/* Banner + status: single row */}
-                  <div className="space-y-1.5 shrink-0">
-                    <div className="text-center py-1 px-3 rounded bg-red-950/80 border border-red-500/60 text-red-200 font-bold text-sm tracking-wide">
+                <CardContent className="px-4 pb-4 pt-2 flex flex-col min-h-0 overflow-hidden">
+                  <div className="flex items-center gap-3 shrink-0 mb-2">
+                    <div className="text-center py-1 px-3 rounded bg-red-950/80 border border-red-500/60 text-red-200 font-bold text-xs tracking-wide flex-1">
                       DO NOT DEPOSIT
                     </div>
                     {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
-                      <div className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-sm text-yellow-400">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                        <span>Waiting for confirmation...</span>
+                      <div className="flex items-center gap-1.5 py-1 px-2 rounded text-xs text-yellow-400 border border-cyan-500/30 bg-cyan-950/20">
+                        <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                        <span>Confirming...</span>
                       </div>
                     )}
                   </div>
 
-                  {/* 2-col grid: left = balances, right = deposit/withdraw */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 min-h-0 overflow-y-auto">
-                    {/* Left: legacy + current balance */}
-                    <div className="space-y-2 min-h-0 overflow-y-auto">
+                  {/* Always 2 cols: left = balances, right = deposit/withdraw — width only, no extra height */}
+                  <div className="grid grid-cols-2 gap-4 min-h-0 flex-1 overflow-hidden">
+                    <div className="space-y-2 min-h-0 overflow-y-auto pr-1" style={{ ...getPanelStyles('base'), borderRadius: 8, padding: 10 }}>
                       {legacyItems
                         .filter((item) => item.reserve > BigInt(0))
                         .map((item) => {
@@ -512,39 +514,39 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           const validAmount = amountWei > 0n && amountWei <= item.reserve && amountWei <= LEGACY_MAX_WITHDRAW_WEI
                           const setMax = () => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: formatEther(maxAllowedWei) }))
                           return (
-                            <div key={item.address} className="p-2.5 rounded border border-amber-500/40 bg-amber-950/30 space-y-1.5">
-                              <div className="text-xs font-medium text-amber-200">{item.label}</div>
+                            <div key={item.address} className="rounded border border-cyan-500/30 bg-slate-900/60 p-2 space-y-1" style={{ ...Theme.inset }}>
+                              <div className="text-xs font-medium text-cyan-200">{item.label}</div>
                               {item.paused ? (
-                                <p className="text-xs text-amber-300">Withdrawals paused.</p>
+                                <p className="text-[11px] text-cyan-300/80">Withdrawals paused.</p>
                               ) : (
-                                <p className="text-[11px] text-amber-200/80">Max 1M per withdrawal.</p>
+                                <p className="text-[11px] text-cyan-300/60">Max 1M per withdrawal.</p>
                               )}
-                              <div className="flex flex-col gap-1.5">
-                                <div className="flex items-center gap-1.5">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1">
                                   <Input
                                     type="text"
                                     inputMode="decimal"
                                     placeholder={formatEther(maxAllowedWei)}
                                     value={rawInput}
                                     onChange={(e) => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: e.target.value }))}
-                                    className="h-8 text-sm bg-slate-800/80 border-amber-500/40 text-white max-w-[120px]"
+                                    className="h-7 text-xs bg-slate-800 border-cyan-500/30 text-white max-w-[100px]"
                                   />
-                                  <Button type="button" variant="outline" size="sm" onClick={setMax} className="h-8 px-2 border-amber-500/40 text-amber-200 text-xs shrink-0">
+                                  <Button type="button" variant="outline" size="sm" onClick={setMax} className="h-7 px-1.5 border-cyan-500/30 text-cyan-300 text-[11px] shrink-0">
                                     Max
                                   </Button>
                                 </div>
-                                <div className="flex items-center justify-between gap-2 flex-wrap">
-                                  <span className="text-sm font-semibold text-white">
+                                <div className="flex items-center justify-between gap-1 flex-wrap">
+                                  <span className="text-xs font-semibold text-white">
                                     {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} MORBIUS
                                   </span>
                                   <Button
                                     size="sm"
                                     onClick={() => validAmount && handleWithdrawLegacy(item.address, amountWei, item.refetch)}
                                     disabled={item.paused || isLegacyWithdrawLoading || !validAmount}
-                                    className="h-8 text-xs bg-amber-600 hover:bg-amber-500 text-white shrink-0 disabled:opacity-60"
+                                    className={`h-7 text-[11px] shrink-0 disabled:opacity-60 ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
                                   >
                                     {isLegacyWithdrawLoading ? (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      <Loader2 className="w-3 h-3 animate-spin" />
                                     ) : item.paused ? (
                                       'Paused'
                                     ) : (
@@ -556,14 +558,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                             </div>
                           )
                         })}
-                      <div className="text-center py-2 px-3 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded border border-blue-500/20">
-                        <div className="text-xs text-gray-400">Current Balance</div>
-                        <div className="text-lg font-bold text-white">
+                      <div className="text-center py-2 px-2 rounded border border-cyan-500/30 bg-slate-900/60" style={{ ...Theme.inset }}>
+                        <div className="text-[11px] text-cyan-300/70">Current Balance</div>
+                        <div className="text-base font-bold text-white">
                           {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0} MORBIUS
                         </div>
                         {contractReserve && contractReserve !== displayBalance && (
-                          <div className="flex items-center justify-center gap-1.5 mt-1 flex-wrap">
-                            <span className="text-[11px] text-yellow-400">
+                          <div className="flex items-center justify-center gap-1 mt-1 flex-wrap">
+                            <span className="text-[10px] text-cyan-300/60">
                               On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()}
                             </span>
                             {onBalanceSync && contractReserve > displayBalance && (
@@ -580,7 +582,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                                     toast.error('Sync failed.')
                                   }
                                 }}
-                                className="h-6 px-1.5 text-[11px] bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
+                                className="h-5 px-1 text-[10px] border-cyan-500/30 text-cyan-300"
                               >
                                 Sync
                               </Button>
@@ -599,7 +601,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                                     toast.error('Refresh failed.')
                                   }
                                 }}
-                                className="h-6 px-1.5 text-[11px] bg-yellow-600/20 border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30"
+                                className="h-5 px-1 text-[10px] border-cyan-500/30 text-cyan-300"
                               >
                                 Refresh
                               </Button>
@@ -609,33 +611,32 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                       </div>
                     </div>
 
-                    {/* Right: Deposit / Withdraw tabs */}
-                    <div className="min-h-0 flex flex-col">
+                    <div className="min-h-0 flex flex-col overflow-hidden">
                   <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'deposit' | 'withdraw')} className="flex flex-col min-h-0">
-                    <TabsList className="grid w-full grid-cols-2 h-9 bg-gray-800">
+                    <TabsList className="grid w-full grid-cols-2 h-8 bg-slate-800/80 border border-cyan-500/30 rounded-lg p-0.5 shrink-0">
                       <TabsTrigger
                         value="deposit"
-                        className="text-xs data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-md"
                       >
-                        <Plus className="w-3.5 h-3.5 mr-1.5" />
+                        <Plus className="w-3 h-3 mr-1" />
                         Deposit
                       </TabsTrigger>
                       <TabsTrigger
                         value="withdraw"
-                        className="text-xs data-[state=active]:bg-red-600 data-[state=active]:text-white"
+                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-md"
                       >
-                        <Minus className="w-3.5 h-3.5 mr-1.5" />
+                        <Minus className="w-3 h-3 mr-1" />
                         Withdraw
                       </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="deposit" className="space-y-2.5 mt-2.5">
-                      <div className="flex gap-1.5">
+                    <TabsContent value="deposit" className="space-y-2 mt-2 min-h-0 overflow-y-auto">
+                      <div className="flex gap-1">
                         <Button
                           variant={depositMethod === 'pls' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setDepositMethod('pls')}
-                          className="flex-1 h-8 text-xs"
+                          className={`flex-1 h-7 text-xs ${depositMethod === 'pls' ? Theme.cyan.gradient.button : 'border-cyan-500/30 text-cyan-300'}`}
                         >
                           PLS
                         </Button>
@@ -643,13 +644,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           variant={depositMethod === 'morbius' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setDepositMethod('morbius')}
-                          className="flex-1 h-8 text-xs"
+                          className={`flex-1 h-7 text-xs ${depositMethod === 'morbius' ? Theme.cyan.gradient.button : 'border-cyan-500/30 text-cyan-300'}`}
                         >
                           MORBIUS
                         </Button>
                       </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="deposit-amount" className="text-xs text-gray-300">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="deposit-amount" className="text-[11px] text-cyan-300/80">
                           Amount ({depositMethod === 'pls' ? 'MORBIUS equiv.' : 'MORBIUS'})
                         </Label>
                         <Input
@@ -661,10 +662,10 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           min="0"
                           step="1"
                           max={depositMethod === 'pls' ? maxDepositPLS : maxDepositMORBIUS}
-                          className="h-8 text-sm bg-gray-800 border-gray-600 text-white"
+                          className="h-7 text-sm bg-slate-800 border-cyan-500/30 text-white"
                         />
                       </div>
-                      <div className="text-[11px] text-gray-400">
+                      <div className="text-[10px] text-cyan-300/60">
                         {depositMethod === 'pls' ? (
                           <>Avail: {maxDepositPLS} PLS{plsEquivalent && depositAmount && <> · ≈{Math.floor(Number(formatEther(plsEquivalent)))} PLS</>}</>
                         ) : (
@@ -680,12 +681,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           (depositMethod === 'morbius' && isLoadingAllowance) ||
                           (depositMethod === 'morbius' && isApproving)
                         }
-                        className="w-full h-8 text-sm bg-green-600 hover:bg-green-700"
+                        className={`w-full h-7 text-xs ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
                       >
                         {isDepositLoading ? (
-                          <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Processing...</>
+                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Processing...</>
                         ) : depositMethod === 'morbius' && isApproving ? (
-                          <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Approving...</>
+                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Approving...</>
                         ) : depositMethod === 'morbius' && needsApproval ? (
                           'Approve'
                         ) : (
@@ -694,9 +695,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                       </Button>
                     </TabsContent>
 
-                    <TabsContent value="withdraw" className="space-y-2.5 mt-2.5">
-                      <div className="space-y-1">
-                        <Label htmlFor="withdraw-amount" className="text-xs text-gray-300">Amount (MORBIUS)</Label>
+                    <TabsContent value="withdraw" className="space-y-2 mt-2 min-h-0 overflow-y-auto">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="withdraw-amount" className="text-[11px] text-cyan-300/80">Amount (MORBIUS)</Label>
                         <Input
                           id="withdraw-amount"
                           type="number"
@@ -706,17 +707,17 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           min="0"
                           step="1"
                           max={maxWithdraw}
-                          className="h-8 text-sm bg-gray-800 border-gray-600 text-white"
+                          className="h-7 text-sm bg-slate-800 border-cyan-500/30 text-white"
                         />
                       </div>
-                      <div className="text-[11px] text-gray-400">Avail: {maxWithdraw} MORBIUS</div>
+                      <div className="text-[10px] text-cyan-300/60">Avail: {maxWithdraw} MORBIUS</div>
                       <Button
                         onClick={handleWithdraw}
                         disabled={!withdrawAmount || isWithdrawLoading}
-                        className="w-full h-8 text-sm bg-red-600 hover:bg-red-700"
+                        className={`w-full h-7 text-xs ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
                       >
                         {isWithdrawLoading ? (
-                          <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Processing...</>
+                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Processing...</>
                         ) : (
                           'Withdraw MORBIUS'
                         )}
