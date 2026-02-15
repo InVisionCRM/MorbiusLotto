@@ -4,7 +4,7 @@ async function main() {
   console.log("Configuring Blackjack contract as owner...");
 
   // Contract address
-  const CONTRACT_ADDRESS = process.env.BLACKJACK_ADDRESS || "0xDe2c7a18de8a9d889E18874EA90A42f84FbaA080";
+  const CONTRACT_ADDRESS = process.env.BLACKJACK_ADDRESS || "0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8";
 
   // Get contract instance
   const blackjack = await hre.ethers.getContractAt("Blackjack", CONTRACT_ADDRESS);

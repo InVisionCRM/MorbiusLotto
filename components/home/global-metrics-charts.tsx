@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts'
+import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts'
 import { formatEther } from 'viem'
 import { usePlatformAnalytics } from '@/hooks/use-platform-analytics'
 
@@ -261,7 +261,7 @@ export function GlobalMetricsCharts() {
           </div>
         </div>
 
-      {/* Bar Charts for Global Metrics — use displayMetrics (platform when range=all so same as stats section) */}
+      {/* Area Charts for Global Metrics — use displayMetrics (platform when range=all so same as stats section) */}
       {(globalMetrics != null || (range === 'all' && platformData != null)) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {[
@@ -287,7 +287,7 @@ export function GlobalMetricsCharts() {
                 ) : (
                   <div className="flex-1 min-h-0 min-w-0 w-full relative z-10">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
+                      <AreaChart
                         data={[{ name: 'Total', value: num }]}
                         margin={{ top: 2, right: 2, left: 2, bottom: 2 }}
                       >
@@ -308,8 +308,8 @@ export function GlobalMetricsCharts() {
                             fontSize: '11px',
                           }}
                         />
-                        <Bar dataKey="value" fill={CYAN_STROKE} radius={[4, 4, 0, 0]} />
-                      </BarChart>
+                        <Area type="monotone" dataKey="value" stroke={CYAN_STROKE} fill={CYAN_FILL} strokeWidth={1.5} />
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
                 )}
