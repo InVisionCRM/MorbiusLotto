@@ -173,7 +173,7 @@ export default function BlackjackSidebar({
             Hidden when tab is not active so data accumulates across tab switches. */}
         {chartRef != null && (
           <div
-            className={`min-w-0 min-h-0 w-full ${activeTab === 'chart' ? 'flex-1 flex flex-col' : 'hidden'}`}
+            className={`min-w-0 w-full ${activeTab === 'chart' ? 'flex-1 flex flex-col min-h-[260px]' : 'hidden'}`}
             aria-hidden={activeTab !== 'chart'}
           >
             <BlackjackRealTimeBetChart

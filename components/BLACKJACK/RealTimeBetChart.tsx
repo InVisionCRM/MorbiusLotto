@@ -104,14 +104,14 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
     };
 
     return (
-      <div className="w-full h-full min-h-0 rounded-lg flex flex-col bg-slate-800/40 border border-white/10">
-        {/* Compact header */}
-        <div className="shrink-0 grid grid-cols-3 items-center text-center gap-1 py-1">
-          <div>
+      <div className="w-full h-full min-h-[280px] min-w-0 rounded-lg flex flex-col overflow-hidden bg-slate-800/40 border border-white/10">
+        {/* Compact header — full width */}
+        <div className="w-full shrink-0 grid grid-cols-3 items-center text-center gap-1 py-1 px-0">
+          <div className="min-w-0">
             <div className="text-cyan-500/80 text-[10px] font-semibold uppercase tracking-wider">Games</div>
             <div className="text-white text-sm tabular-nums">{history.length}</div>
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="text-cyan-500/80 text-[10px] font-semibold uppercase tracking-wider">Net P&amp;L</div>
             <div
               className={`font-bold text-sm flex justify-center items-center gap-0.5 ${
@@ -120,10 +120,10 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
             >
               {netPnL >= 0 ? "+" : ""}
               {Math.round(netPnL)}
-              <img src="/morbius/MorbiusLogo (3).png" alt="Morbius" className="w-5 h-5 object-contain" />
+              <img src="/morbius/MorbiusLogo (3).png" alt="Morbius" className="w-5 h-5 object-contain shrink-0" />
             </div>
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="text-cyan-500/80 text-[10px] font-semibold uppercase tracking-wider">ROI</div>
             <div className={`text-sm font-bold ${Number.parseFloat(roi) >= 0 ? "text-green-400" : "text-red-400"}`}>
               {Number.parseFloat(roi) >= 0 ? "+" : ""}
@@ -132,15 +132,16 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
           </div>
         </div>
 
-        {/* Chart — fills remaining space */}
-        <div className="flex-1 min-h-0 min-w-0 w-full">
+        {/* Chart — fills remaining space; same width/height as container */}
+        <div className="flex-1 min-h-[200px] min-w-0 w-full overflow-hidden">
           {history.length === 0 ? (
-            <div className="h-full min-h-[120px] flex items-center justify-center">
+            <div className="w-full h-full min-h-[160px] flex items-center justify-center">
               <p className="text-xs text-white/60">P&amp;L chart after first game</p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <AreaChart data={pnlData} margin={{ top: 10, right: 8, left: 0, bottom: 5 }}>
+            <div className="w-full h-full min-h-[200px]">
+              <ResponsiveContainer width="100%" height="100%" minHeight={200} minWidth={0}>
+                <AreaChart data={pnlData} margin={{ top: 10, right: 8, left: 0, bottom: 5 }}>
                 <defs>
                   {/* Cyan gradient for positive values */}
                   <linearGradient id="positiveGradient-bj" x1="0" y1="0" x2="0" y2="1">
@@ -206,13 +207,14 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
                   dot={false}
                   activeDot={false}
                 />
-              </AreaChart>
-            </ResponsiveContainer>
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </div>
 
         {history.length > 0 && (
-          <div className="shrink-0 flex justify-end py-0.5">
+          <div className="w-full shrink-0 flex justify-end py-0.5 px-0">
             <button
               type="button"
               onClick={clear}

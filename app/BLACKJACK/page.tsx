@@ -7,7 +7,6 @@ import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import { BlackjackTopPlayersCarousel } from '@/components/BLACKJACK/BlackjackTopPlayersCarousel';
 import { BlackjackTopPlayersOverlay } from '@/components/BLACKJACK/BlackjackTopPlayersOverlay';
-import { TableProfile } from '@/components/BLACKJACK/TableProfile';
 import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
 import MainNav from '@/components/BLACKJACK/MainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
@@ -232,7 +231,7 @@ export default function BlackjackPage() {
   const [perfectPairsBet, setPerfectPairsBet] = useState(0);
 
   // Background preference state (persisted per wallet). imageSource/videoSource can be static id or API table UUID.
-  const { imageOptions, videoOptions, getThemeInfo, getTableProfile } = useBlackjackTables();
+  const { imageOptions, videoOptions, getThemeInfo } = useBlackjackTables();
   const [theme, setTheme] = useState<BlackjackThemeKind>('video');
   const [imageSource, setImageSource] = useState<string>(DEFAULT_BLACKJACK_IMAGE_ID);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -334,18 +333,6 @@ export default function BlackjackPage() {
     setVideoSource(id);
     toast.info('Video background updated.');
   }, []);
-
-  const tableProfileFromTable = useMemo(() => {
-    const p = getTableProfile(theme, theme === 'video' ? videoSource : imageSource);
-    return p
-      ? {
-          description: p.description ?? undefined,
-          tokenAddress: p.token_contract_address as `0x${string}` | undefined,
-          logoUrl: p.logo_url ?? undefined,
-          ticker: p.ticker ?? undefined,
-        }
-      : {};
-  }, [getTableProfile, theme, videoSource, imageSource]);
 
   // Splash screen dismissal state
   const [splashDismissed, setSplashDismissed] = useState(false);
@@ -2761,9 +2748,6 @@ export default function BlackjackPage() {
 
         {/* Top Players Carousel */}
         <BlackjackTopPlayersCarousel />
-
-        {/* Table token profile (token for this table: logo, DexScreener links, buy) */}
-        <TableProfile {...tableProfileFromTable} />
 
         {/* Tournament Leaderboard (shown when in tournament) */}
         {tournament.tournamentState.inTournament && (
