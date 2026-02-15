@@ -12,6 +12,12 @@ import { toast } from 'sonner';
 
 const DISTRIBUTOR_ADDRESS = MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS as `0x${string}`;
 
+function formatTwoDecimals(val: bigint): string {
+  const s = formatEther(val);
+  const [int, dec] = s.split('.');
+  return `${int}.${(dec ?? '00').slice(0, 2).padEnd(2, '0')}`;
+}
+
 export default function ClaimFeesPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -131,13 +137,13 @@ export default function ClaimFeesPage() {
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-400">Claimable</span>
                     <span className="font-mono text-cyan-300">
-                      {formatEther(earnedBigInt)} MORBIUS
+                      {formatTwoDecimals(earnedBigInt)} MORBIUS
                     </span>
                   </div>
                   {circulating !== undefined && (
                     <div className="flex justify-between items-center text-xs text-slate-500">
                       <span>Circulating supply (reference)</span>
-                      <span className="font-mono">{formatEther(circulating)}</span>
+                      <span className="font-mono">{formatTwoDecimals(circulating)}</span>
                     </div>
                   )}
                   <p className="text-xs text-amber-400/90 bg-amber-950/30 rounded-lg p-2 border border-amber-600/30">
