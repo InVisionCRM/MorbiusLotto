@@ -33,7 +33,7 @@ contract MorbiusHolderDistributor is Ownable, ReentrancyGuard {
     address private constant EX_KENO = 0x734A1460b4131F8cFE4950894Be89d1a852c957A;
     address private constant EX_PLINKO = 0x37B1db8F06870BFFeFed862C06535BEFc4383ff8;
     address private constant EX_BIGWHEEL = 0x53331B63ef24904Ea470Cf07b924c7C13A699d8F;
-    address private constant EX_BLACKJACK = 0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09;
+    address private constant EX_BLACKJACK = 0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8; // BlackjackV2
     address private constant EX_TOURNAMENT_ESCROW = 0x59dec9419B32aA9CCC2C46A6fd8AeB68dE069C26;
 
     /// @notice Owner-added addresses (new LPs/contracts) excluded from circulating; 1-based index, 0 = not in list
