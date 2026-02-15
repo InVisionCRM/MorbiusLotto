@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { Card } from '@/components/ui/card'
+import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -176,13 +177,14 @@ export default function DonatePage() {
   const quickAmounts = [10, 25, 50, 100, 250, 500]
 
   return (
-    <div className="min-h-screen text-slate-100" style={{
-      backgroundImage: "linear-gradient(rgba(2, 6, 23, 0.9), rgba(2, 6, 23, 0.88)), url('/MORBIUS/MORBIUSbg.png')",
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed',
-    }}>
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <GlobalMainNav>
+      <div className="min-h-screen text-slate-100 pt-4 md:pt-2" style={{
+        backgroundImage: "linear-gradient(rgba(2, 6, 23, 0.9), rgba(2, 6, 23, 0.88)), url('/MORBIUS/MORBIUSbg.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+      }}>
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent funnel-display-bold">
@@ -420,10 +422,11 @@ export default function DonatePage() {
           </div>
         </Card>
 
-      </div>
+        </div>
 
-      {/* Footer */}
-      <Footer />
-    </div>
+        {/* Footer */}
+        <Footer />
+      </div>
+    </GlobalMainNav>
   )
 }

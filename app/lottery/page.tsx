@@ -11,7 +11,7 @@ import {
   useWatchRoundFinalized,
   useWatchMegaMillions,
 } from '@/hooks/use-lottery-6of55';
-import LotteryMainNav from '@/components/lottery/LotteryMainNav';
+import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { FreeTicketBadge } from '@/components/lottery/free-ticket-badge';
 import { RoundTimer } from '@/components/lottery/round-timer';
 import { LotteryBentoGrid } from '@/components/lottery/bento-grid-lottery';
@@ -351,8 +351,8 @@ export default function LotteryPage() {
   if (!isContractDeployed) {
     return (
       <div className="flex flex-col min-h-screen w-full transition-all duration-1000 overflow-y-auto sm:overflow-hidden relative">
-        <LotteryMainNav />
-        <main className="container mx-auto px-4 py-6 pt-16">
+        <GlobalMainNav>
+        <main className="container mx-auto px-4 py-6 pt-4 md:pt-2">
           <Card className="p-8 text-center">
             <h2 className="text-2xl font-bold mb-4">Contract Not Deployed</h2>
             <p className="text-muted-foreground mb-4">
@@ -363,6 +363,7 @@ export default function LotteryPage() {
             </p>
           </Card>
         </main>
+        </GlobalMainNav>
       </div>
     );
   }
@@ -371,10 +372,11 @@ export default function LotteryPage() {
     return (
       <>
         <div className="flex flex-col min-h-screen w-full transition-all duration-1000 overflow-y-auto sm:overflow-hidden relative">
-          <LotteryMainNav />
-          <main className="w-full max-w-full px-2 sm:px-4 md:px-6 py-6 pt-16 overflow-x-hidden">
+          <GlobalMainNav>
+          <main className="w-full max-w-full px-2 sm:px-4 md:px-6 py-6 pt-4 md:pt-2 overflow-x-hidden">
             <Skeleton className="h-[400px] sm:h-[600px] md:h-[800px] w-full" />
           </main>
+          </GlobalMainNav>
         </div>
 
         {/* Footer */}
@@ -394,13 +396,12 @@ export default function LotteryPage() {
 
   return (
     <div className="flex flex-col min-h-screen w-full transition-all duration-1000 overflow-y-auto sm:overflow-hidden relative">
-      <LotteryMainNav
-        onShowHistory={() => setShowRoundHistoryModal(true)}
-        onShowDashboard={() => setShowBentoGridModal(true)}
-      />
-
+      <GlobalMainNav
+        onShowLotteryHistory={() => setShowRoundHistoryModal(true)}
+        onShowLotteryDashboard={() => setShowBentoGridModal(true)}
+      >
       {/* Main Content */}
-      <main className="flex flex-col relative pt-16 px-2 gap-2 lg:px-3 lg:gap-3 min-h-[calc(100vh-4rem)]">
+      <main className="flex flex-col relative pt-4 md:pt-2 px-2 gap-2 lg:px-3 lg:gap-3 min-h-[calc(100vh-4rem)]">
 
         {/* Round Stats Header */}
         <div className="flex justify-center mb-4 w-full">
@@ -675,6 +676,7 @@ export default function LotteryPage() {
 
       {/* Footer */}
       <Footer />
+      </GlobalMainNav>
     </div>
   );
 }

@@ -1,6 +1,10 @@
 'use client'
 
-import { HomeHeader } from '@/components/home/header'
+import { useState } from 'react'
+import GlobalMainNav from '@/components/shared/GlobalMainNav'
+import { useAuth } from '@/hooks/use-auth'
+import { LoginModal } from '@/components/auth/LoginModal'
+import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal'
 import { HeroSection } from '@/components/home/hero-section'
 import { LatestWins } from '@/components/home/latest-wins'
 import { ChatPanel } from '@/components/chat/ChatPanel'
@@ -16,31 +20,39 @@ import Footer from '@/components/PLINKO/Footer'
 import { Theme } from '@/lib/theme'
 
 export default function HomePage() {
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [responsibleGamingOpen, setResponsibleGamingOpen] = useState(false)
+  const { address, isAuthenticated, signIn, signOut, isSigning } = useAuth()
 
   return (
-    <div className="min-h-screen text-white flex flex-col items-center relative" style={{ background: Theme.greyGradient.background }}>
-      <style jsx global>{`
-        ::-webkit-scrollbar {
-          width: 4px;
-        }
+    <GlobalMainNav
+      page="home"
+      onOpenAuthModal={() => setLoginOpen(true)}
+      onOpenResponsibleGaming={() => setResponsibleGamingOpen(true)}
+      isAuthenticated={isAuthenticated}
+      onSignOut={signOut}
+    >
+      <div className="min-h-screen text-white flex flex-col items-center relative pt-4 md:pt-2" style={{ background: Theme.greyGradient.background }}>
+        <style jsx global>{`
+          ::-webkit-scrollbar {
+            width: 4px;
+          }
 
-        ::-webkit-scrollbar-track {
-          background: transparent;
-        }
+          ::-webkit-scrollbar-track {
+            background: transparent;
+          }
 
-        ::-webkit-scrollbar-thumb {
-          background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.5) 50%, rgb(6, 182, 212) 100%);
-          border-radius: 2px;
-        }
+          ::-webkit-scrollbar-thumb {
+            background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.5) 50%, rgb(6, 182, 212) 100%);
+            border-radius: 2px;
+          }
 
-        ::-webkit-scrollbar-thumb:hover {
-          background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.7) 50%, rgb(6, 182, 212) 100%);
-        }
-      `}</style>
-      {/* Header */}
-      <HomeHeader />
+          ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.7) 50%, rgb(6, 182, 212) 100%);
+          }
+        `}</style>
 
-      {/* Hero Section */}
+        {/* Hero Section */}
       <HeroSection />
 
       <div className="w-full flex flex-col items-center gap-y-16 py-8 px-4">
@@ -87,5 +99,18 @@ export default function HomePage() {
         <Footer />
       </div>
     </div>
+
+      <LoginModal
+        open={loginOpen}
+        onOpenChange={setLoginOpen}
+        onSignIn={signIn}
+        isSigning={isSigning}
+        address={address}
+      />
+      <SelfExclusionModal
+        isOpen={responsibleGamingOpen}
+        onClose={() => setResponsibleGamingOpen(false)}
+      />
+    </GlobalMainNav>
   )
 }

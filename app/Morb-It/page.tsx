@@ -5,8 +5,8 @@ import { MEME_TEMPLATES } from './constants';
 import { MemeTemplate, TextLayer } from './types';
 import { MemeSelector } from '@/components/Morb-It/MemeSelector';
 import { LayerEditor } from '@/components/Morb-It/LayerEditor';
-import Link from 'next/link';
 import { useAccount } from 'wagmi';
+import GlobalMainNav from '@/components/shared/GlobalMainNav';
 
 interface SavedMeme {
   id: number;
@@ -877,26 +877,14 @@ export default function MorbItPage() {
   };
 
   return (
-    <div
-      className="min-h-screen text-white p-4 md:p-8 font-sans"
-      style={{
-        background: 'linear-gradient(145deg, rgb(10, 15, 20), rgb(16, 26, 35))',
-      }}
-    >
-      <header className="max-w-7xl mx-auto mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-            <Link href="/" className="text-cyan-300/60 hover:text-cyan-300 transition-colors">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </Link>
-            <h1 className="text-3xl font-bold text-cyan-300">
-            MORB IT
-            </h1>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto space-y-6">
+    <GlobalMainNav>
+      <div
+        className="min-h-screen text-white p-4 md:p-8 font-sans pt-4 md:pt-2"
+        style={{
+          background: 'linear-gradient(145deg, rgb(10, 15, 20), rgb(16, 26, 35))',
+        }}
+      >
+        <main className="max-w-7xl mx-auto space-y-6 pt-4">
 
         {/* 2-Column Grid: Meme Selector + Canvas (single column on mobile) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1217,6 +1205,7 @@ export default function MorbItPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </GlobalMainNav>
   );
 }

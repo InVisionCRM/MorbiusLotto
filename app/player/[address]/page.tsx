@@ -2,11 +2,10 @@
 
 import React, { useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
-import { usePlayerProfileStats, usePlayerProfileGames } from '@/hooks/use-player-profile'
-import { formatEther } from 'viem'
+import { usePlayerProfileStats } from '@/hooks/use-player-profile'
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard'
 import Footer from '@/components/PLINKO/Footer'
-import { HomeHeader } from '@/components/home/header'
+import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { Card } from '@/components/ui/card'
 
 function formatAddress(address: string): string {
@@ -44,22 +43,23 @@ export default function PlayerProfilePage() {
 
   if (!address) {
     return (
-      <div className="min-h-screen text-white bg-black">
-        <HomeHeader showBackArrow={true} backArrowHref="/BLACKJACK" backArrowLabel="Back to Blackjack" />
-        <main className="container mx-auto px-4 py-8 max-w-6xl">
-          <div className="text-center py-20">
-            <p className="text-white/60">Invalid address</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
+      <GlobalMainNav page="home" showBackArrow backArrowHref="/BLACKJACK" backArrowLabel="Back to Blackjack">
+        <div className="min-h-screen text-white bg-black pt-4 md:pt-2">
+          <main className="container mx-auto px-4 py-8 max-w-6xl">
+            <div className="text-center py-20">
+              <p className="text-white/60">Invalid address</p>
+            </div>
+          </main>
+          <Footer />
+        </div>
+      </GlobalMainNav>
     )
   }
 
   return (
-    <div className="min-h-screen text-white bg-black">
-      <HomeHeader showBackArrow={true} backArrowHref="/BLACKJACK" backArrowLabel="Back to Blackjack" />
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+    <GlobalMainNav page="home" showBackArrow backArrowHref="/BLACKJACK" backArrowLabel="Back to Blackjack">
+      <div className="min-h-screen text-white bg-black pt-4 md:pt-2">
+        <main className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent mb-2">
@@ -87,5 +87,6 @@ export default function PlayerProfilePage() {
       </main>
       <Footer />
     </div>
+    </GlobalMainNav>
   )
 }

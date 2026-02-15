@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import Footer from '@/components/PLINKO/Footer'
-import { HomeHeader } from '@/components/home/header'
+import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { formatEther, parseAbiItem } from 'viem'
 import { PLINKO_ADDRESS, PLINKO_DEPLOY_BLOCK } from '@/lib/contracts'
 import { PLINKO_ABI } from '@/abi/plinko'
@@ -137,14 +137,9 @@ export default function PlinkoVerifierPage() {
   }
 
   return (
-    <div className="min-h-screen text-white bg-black">
-      <HomeHeader
-        showBackArrow={true}
-        backArrowHref="/PLINKO"
-        backArrowLabel="Back to Plinko"
-      />
-
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
+    <GlobalMainNav page="plinko" showBackArrow backArrowHref="/PLINKO" backArrowLabel="Back to Plinko">
+      <div className="min-h-screen text-white bg-black pt-4 md:pt-2">
+        <main className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
@@ -339,9 +334,10 @@ export default function PlinkoVerifierPage() {
             </div>
           </div>
         </Card>
-      </main>
+        </main>
 
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </GlobalMainNav>
   )
 }

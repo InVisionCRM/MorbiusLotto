@@ -3,8 +3,7 @@
 import { useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId, useSwitchChain } from 'wagmi';
 import { formatEther } from 'viem';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS } from '@/lib/contracts';
 import { morbiusHolderDistributorAbi } from '@/abi/morbius-holder-distributor';
 import { pulsechain } from '@/lib/chains';
@@ -94,20 +93,9 @@ export default function ClaimFeesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="border-b border-white/10 py-4">
-        <div className="container mx-auto px-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-white/60 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Home
-          </Link>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-8">
+    <GlobalMainNav>
+      <div className="min-h-screen bg-black text-white pt-4 md:pt-2">
+        <div className="container mx-auto px-4 py-8">
         <div className="max-w-md mx-auto">
           <h1 className="text-2xl font-bold text-center mb-2 bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
             Claim MORBIUS Rewards
@@ -176,7 +164,8 @@ export default function ClaimFeesPage() {
             Rewards accrue from a share of lottery and game activity. You pay gas to claim.
           </p>
         </div>
+        </div>
       </div>
-    </div>
+    </GlobalMainNav>
   );
 }

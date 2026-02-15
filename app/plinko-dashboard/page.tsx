@@ -22,7 +22,7 @@ import { useMorbiusBurned } from "@/hooks/use-morbius-burned";
 import { PixelImage } from "../../components/ui/pixel-image";
 import { DottedGlowBackground } from "../../components/ui/dotted-glow-background";
 import Footer from '@/components/PLINKO/Footer';
-import { HomeHeader } from "@/components/home/header";
+import GlobalMainNav from '@/components/shared/GlobalMainNav';
 
 interface PlinkoBentoGridProps {
   onPlayNow?: () => void;
@@ -52,50 +52,46 @@ export default function PlinkoDashboardPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950/70 text-white relative">
-      <HomeHeader
-        showBackArrow={true}
-        backArrowHref="/PLINKO"
-        backArrowLabel="Back to Plinko"
-      />
+    <GlobalMainNav page="plinko" showBackArrow backArrowHref="/PLINKO" backArrowLabel="Back to Plinko">
+      <div className="min-h-screen bg-slate-950/70 text-white relative pt-4 md:pt-2">
+        {/* Background Image with Overlay */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: "url('/morbius/Morbiusbg.png')",
+          }}
+        />
+        <div className="absolute inset-0 bg-slate-950/70" />
 
-      {/* Background Image with Overlay */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: "url('/morbius/Morbiusbg.png')",
-        }}
-      />
-      <div className="absolute inset-0 bg-slate-950/70" />
+        {/* Content */}
+        <div className="relative z-10">
+          <div className="container mx-auto px-4 py-8">
+            <div className="text-center mb-8">
+              <h1 className="text-4xl md:text-5xl font-black text-white mb-2 tracking-wider">PLINKO DASHBOARD</h1>
+              <p className="text-white/80">Drop balls, hit pegs, win crypto rewards</p>
+            </div>
 
-      {/* Content */}
-      <div className="relative z-10">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl md:text-5xl font-black text-white mb-2 tracking-wider">PLINKO DASHBOARD</h1>
-            <p className="text-white/80">Drop balls, hit pegs, win crypto rewards</p>
+            <PlinkoBentoGrid
+              onPlayNow={() => window.location.href = '/PLINKO'}
+              onShowHistory={() => window.location.href = '/plinko-stats'}
+              onShowSimulator={() => window.location.href = '/plinko-simulator'}
+              onShowPaytable={() => window.location.href = '/PLINKO'}
+              onShowVerifier={() => window.location.href = '/plinko-verifier'}
+              burnedAmount={burnedAmount}
+              isLoadingBurned={isLoadingBurned}
+            />
+
+            <HowToPlayModal
+              isOpen={showHowToPlayModal}
+              onOpenChange={setShowHowToPlayModal}
+            />
           </div>
-
-        <PlinkoBentoGrid
-          onPlayNow={() => window.location.href = '/PLINKO'}
-          onShowHistory={() => window.location.href = '/plinko-stats'}
-          onShowSimulator={() => window.location.href = '/plinko-simulator'}
-          onShowPaytable={() => window.location.href = '/PLINKO'}
-          onShowVerifier={() => window.location.href = '/plinko-verifier'}
-          burnedAmount={burnedAmount}
-          isLoadingBurned={isLoadingBurned}
-        />
-
-        <HowToPlayModal
-          isOpen={showHowToPlayModal}
-          onOpenChange={setShowHowToPlayModal}
-        />
         </div>
-      </div>
 
-      {/* Footer */}
-      <Footer />
-    </div>
+        {/* Footer */}
+        <Footer />
+      </div>
+    </GlobalMainNav>
   );
 }
 

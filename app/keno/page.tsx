@@ -34,7 +34,7 @@ import { KenoPrizePoolModal } from '@/components/CryptoKeno/keno-prize-pool-moda
 import { ContractAddress } from '@/components/ui/contract-address'
 import Footer from '@/components/PLINKO/Footer'
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text'
-import KenoMainNav from '@/components/CryptoKeno/KenoMainNav'
+import GlobalMainNav from '@/components/shared/GlobalMainNav'
 
 const ALL_NUMBERS = Array.from({ length: 80 }, (_, i) => i + 1)
 
@@ -671,12 +671,10 @@ export default function KenoPage() {
         background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95))',
       }}
     >
-      <KenoMainNav 
-        onShowPrizePool={() => setShowPrizePool(true)}
-      />
-
-
-      <main className="px-2 sm:px-4 md:px-6 pb-16 pt-16 w-full max-w-full overflow-x-hidden">
+      <GlobalMainNav 
+        onShowKenoPrizePool={() => setShowPrizePool(true)}
+      >
+      <main className="px-2 sm:px-4 md:px-6 pb-16 pt-4 md:pt-2 w-full max-w-full overflow-x-hidden">
         <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6">
           {/* LEFT COLUMN */}
           <div className="flex flex-col gap-6">
@@ -1598,6 +1596,7 @@ export default function KenoPage() {
 
       {/* Footer */}
       <Footer />
+      </GlobalMainNav>
     </div>
   )
 }

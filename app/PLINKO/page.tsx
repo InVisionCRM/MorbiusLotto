@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import PlinkoGame from '@/components/PLINKO/PlinkoGame';
-import MainNav from '@/components/PLINKO/MainNav';
+import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import AutoPlayModal from '@/components/PLINKO/AutoPlayModal';
 import PresetAmountsModal from '@/components/PLINKO/PresetAmountsModal';
 import ExtendedHistoryModal from '@/components/PLINKO/ExtendedHistoryModal';
@@ -1107,18 +1107,11 @@ const Home: React.FC = () => {
       className="flex flex-col min-h-screen w-full transition-all duration-1000 overflow-y-auto sm:overflow-hidden relative"
     >
 
-      {/* Main Content */}
-      <MainNav
-        balance={freePlayEnabled ? gameState.balance : contractBallBalance}
-        soundEnabled={soundEnabled}
-        onSoundToggle={() => setSoundEnabled(!soundEnabled)}
-        freePlayEnabled={freePlayEnabled}
-        onFreePlayToggle={() => setFreePlayEnabled(!freePlayEnabled)}
-        onShowHistory={() => setShowPlinkoHistory(true)}
-        onBuyBalls={!freePlayEnabled && contractBallBalance === 0 ? () => setShowBuyBallsModal(true) : undefined}
-        ballCount={!freePlayEnabled ? contractBallBalance : undefined}
-      />
-
+      <GlobalMainNav
+        onShowPlinkoHistory={() => setShowPlinkoHistory(true)}
+        onPlinkoSoundToggle={() => setSoundEnabled(!soundEnabled)}
+        plinkoSoundEnabled={soundEnabled}
+      >
       {/* Free Play Badge */}
       {freePlayEnabled && (
         <div className="fixed top-14 left-2 z-30">
@@ -1145,7 +1138,7 @@ const Home: React.FC = () => {
       </div>
 
       {/* RESPONSIVE LAYOUT - Mobile-first approach */}
-      <div className="flex relative pt-16 px-2 gap-2 flex-col lg:flex-row lg:px-3 lg:gap-3 min-h-[calc(100vh-4rem)]">
+      <div className="flex relative pt-4 md:pt-2 px-2 gap-2 flex-col lg:flex-row lg:px-3 lg:gap-3 min-h-[calc(100vh-4rem)]">
         {/* LEFT COLUMN - BUY SECTION + CHART - Mobile-first responsive */}
         <div className="order-2 lg:order-1 lg:flex lg:w-[320px] xl:w-[360px] 2xl:w-[400px] lg:flex-col lg:p-1 lg:overflow-y-auto lg:relative lg:z-20 lg:self-stretch">
           {!freePlayEnabled && (
@@ -2163,6 +2156,7 @@ const Home: React.FC = () => {
 
       {/* Footer */}
       <Footer />
+      </GlobalMainNav>
     </div>
   );
 };

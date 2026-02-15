@@ -1,32 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
 import { ContractAddress } from '@/components/ui/contract-address'
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import Footer from '@/components/PLINKO/Footer'
+import GlobalMainNav from '@/components/shared/GlobalMainNav'
 
 export default function SwapPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <div className="border-b border-white/10 py-4">
-        <div className="container mx-auto px-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-white/60 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Home
-          </Link>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
+    <GlobalMainNav>
+      <div className="min-h-screen bg-black text-white pt-4 md:pt-2">
+        {/* Main Content */}
+        <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold text-center mb-4 bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
             Buy Morbius
@@ -68,5 +55,6 @@ export default function SwapPage() {
 
       <Footer />
     </div>
+    </GlobalMainNav>
   )
 }

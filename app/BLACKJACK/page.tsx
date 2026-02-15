@@ -8,7 +8,7 @@ import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import { BlackjackTopPlayersCarousel } from '@/components/BLACKJACK/BlackjackTopPlayersCarousel';
 import { BlackjackTopPlayersOverlay } from '@/components/BLACKJACK/BlackjackTopPlayersOverlay';
 import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
-import MainNav from '@/components/BLACKJACK/MainNav';
+import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
 import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
@@ -2417,7 +2417,7 @@ export default function BlackjackPage() {
         style={{ display: 'none' }}
       />
 
-      <MainNav
+      <GlobalMainNav
         onOpenDepositModal={handleOpenDepositModal}
         reserveBalance={offChainBalance}
         currentView={currentView}
@@ -3005,7 +3005,7 @@ export default function BlackjackPage() {
       </div>
 
       <Footer />
-      </MainNav>
+      </GlobalMainNav>
 
       <style jsx global>{`
         .history-item-enter {

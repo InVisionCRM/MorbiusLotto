@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useAccount } from 'wagmi';
 import Link from 'next/link';
 import { isAdminWallet } from '@/lib/admin';
+import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,36 +24,25 @@ export default function AdminPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
-        <ShieldX className="w-12 h-12 text-red-400/80 mb-3" />
-        <h1 className="text-lg font-semibold text-slate-200">Access denied</h1>
-        <p className="text-xs text-slate-500 mt-1">Admin wallet required.</p>
-        <Link href="/" className="mt-4">
-          <Button variant="outline" size="sm" className="text-xs border-slate-600 text-slate-300">
-            <ArrowLeft className="w-3 h-3 mr-1" /> Back
-          </Button>
-        </Link>
-      </div>
+      <GlobalMainNav page="home" showBackArrow backArrowHref="/" backArrowLabel="Back to Home">
+        <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 pt-4 md:pt-2">
+          <ShieldX className="w-12 h-12 text-red-400/80 mb-3" />
+          <h1 className="text-lg font-semibold text-slate-200">Access denied</h1>
+          <p className="text-xs text-slate-500 mt-1">Admin wallet required.</p>
+          <Link href="/" className="mt-4">
+            <Button variant="outline" size="sm" className="text-xs border-slate-600 text-slate-300">
+              <ArrowLeft className="w-3 h-3 mr-1" /> Back
+            </Button>
+          </Link>
+        </div>
+      </GlobalMainNav>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-900/95 backdrop-blur">
-        <div className="container mx-auto px-3 py-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Link href="/" className="text-slate-400 hover:text-white transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-            </Link>
-            <h1 className="text-sm font-semibold text-slate-100">Admin</h1>
-          </div>
-          <span className="text-[10px] text-slate-500 truncate max-w-[120px] sm:max-w-[200px]" title={address}>
-            {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : '—'}
-          </span>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-3 py-3 max-w-6xl">
+    <GlobalMainNav page="home" showBackArrow backArrowHref="/" backArrowLabel="Back to Home">
+      <div className="min-h-screen bg-slate-950 text-white pt-4 md:pt-2">
+        <main className="container mx-auto px-3 py-3 max-w-6xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="h-8 w-full grid grid-cols-6 sm:grid-cols-7 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
             <TabsTrigger value="tables" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
@@ -106,7 +96,8 @@ export default function AdminPage() {
             <AdminChatTab />
           </TabsContent>
         </Tabs>
-      </main>
-    </div>
+        </main>
+      </div>
+    </GlobalMainNav>
   );
 }

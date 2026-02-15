@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import Footer from '@/components/PLINKO/Footer'
-import { HomeHeader } from '@/components/home/header'
+import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { formatUnits } from 'viem'
 import { CheckCircle, AlertTriangle, Info, Shield, Hash, Eye, Copy, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
@@ -305,14 +305,9 @@ function BlackjackVerifyContent() {
   }
 
   return (
-    <div className="min-h-screen text-white bg-black">
-      <HomeHeader
-        showBackArrow={true}
-        backArrowHref="/BLACKJACK"
-        backArrowLabel="Back to Blackjack"
-      />
-
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+    <GlobalMainNav page="blackjack" showBackArrow backArrowHref="/BLACKJACK" backArrowLabel="Back to Blackjack">
+      <div className="min-h-screen text-white bg-black pt-4 md:pt-2">
+        <main className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
@@ -643,10 +638,11 @@ function BlackjackVerifyContent() {
             </div>
           </div>
         </Card>
-      </main>
+        </main>
 
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </GlobalMainNav>
   )
 }
 
