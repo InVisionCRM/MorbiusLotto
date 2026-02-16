@@ -21,11 +21,13 @@ const getCardImagePath = (value: number, index: number, salt: number = 0): strin
 }
 
 const CardImage = ({ value, index, salt = 0 }: { value: number; index: number; salt?: number }) => {
-  if (!value || value < 1 || value > 13) return null
+  // Normalize: 0 can be Ace from deck index; 1-13 are ranks
+  const rank = (value >= 0 && value <= 51) ? (value % 13) + 1 : (value === 0 ? 1 : value);
+  if (rank < 1 || rank > 13) return null
   return (
     <div className="relative flex-shrink-0 rounded-md overflow-hidden shadow-lg"
       style={{ width: 36, height: 50, marginLeft: index > 0 ? -10 : 0 }}>
-      <Image src={getCardImagePath(value, index, salt)} alt="" width={36} height={50} className="object-contain" unoptimized />
+      <Image src={getCardImagePath(rank, index, salt)} alt="" width={36} height={50} className="object-contain" unoptimized />
     </div>
   )
 }

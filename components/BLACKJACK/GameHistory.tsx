@@ -57,11 +57,11 @@ const getCardImagePath = (value: number, index: number, salt: number = 0): strin
 
 // Card component that displays the actual card image
 const CardImage = ({ value, index, salt = 0 }: { value: number; index: number; salt?: number }) => {
-  const imagePath = getCardImagePath(value, index, salt)
+  // Normalize: 0 can be Ace from deck index; 1-13 are ranks
+  const rank = (value >= 0 && value <= 51) ? (value % 13) + 1 : (value === 0 ? 1 : value);
+  if (rank < 1 || rank > 13) return null;
 
-  if (!value || value < 1 || value > 13) {
-    return null
-  }
+  const imagePath = getCardImagePath(rank, index, salt);
 
   return (
     <div
@@ -75,7 +75,7 @@ const CardImage = ({ value, index, salt = 0 }: { value: number; index: number; s
     >
       <Image
         src={imagePath}
-        alt={`Card ${VALUE_TO_RANK[value] || value}`}
+        alt={`Card ${VALUE_TO_RANK[rank] || rank}`}
         width={45}
         height={63}
         className="object-contain"

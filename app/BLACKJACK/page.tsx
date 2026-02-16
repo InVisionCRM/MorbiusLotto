@@ -2313,57 +2313,6 @@ export default function BlackjackPage() {
     // Verify view removed - navigation handled elsewhere
   }, []);
 
-  // Fetch game result for verification (Verify tab) - deprecated, use /BLACKJACK/verify page instead
-  const handleVerifyGame = useCallback(async (id: string): Promise<any | null> => {
-    const apiUrl = getApiUrlOptional();
-    if (!apiUrl) {
-      throw new Error('Verification requires the game server. Set NEXT_PUBLIC_API_URL in your environment.');
-    }
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout so UI doesn't hang
-      const res = await fetch(`${apiUrl}/api/game/${id}/verify`, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (!res.ok) return null;
-      const raw = await res.json();
-      if (!raw || !raw.gameId) return null;
-      const hands = raw.playerHands || [];
-      const playerCards = hands.flatMap((h: { cards?: number[] }) => h.cards || []);
-      const firstResult = hands[0]?.result ?? raw.result ?? 'push';
-      return {
-        gameId: raw.gameId,
-        serverSeedHash: raw.serverSeedHash ?? '',
-        serverSeed: raw.serverSeed,
-        clientSeed: raw.clientSeed ?? 'default',
-        nonce: typeof raw.nonce === 'number' ? raw.nonce : Number(raw.baseNonce ?? 0),
-        betAmount: BigInt(raw.betAmount ?? raw.total_bet_amount ?? 0),
-        playerCards,
-        dealerCards: Array.isArray(raw.dealerCards) ? raw.dealerCards : [],
-        result: raw.result ?? firstResult,
-        payout: BigInt(raw.totalPayout ?? raw.total_payout ?? 0),
-        timestamp: raw.timestamp ?? 0,
-        actions: raw.actions ?? [],
-        playerHands: hands.map((h: any) => ({
-          cards: h.cards || [],
-          total: h.total || 0,
-          result: h.result || '',
-          payout: BigInt(h.payout ?? 0),
-          actions: h.actions || [],
-        })),
-        dealerActions: raw.dealerActions ?? [],
-        baseNonce: Number(raw.baseNonce ?? raw.nonce ?? 0),
-        rngVersion: raw.rngVersion,
-        gameNumber: raw.gameNumber,
-      };
-    } catch (err) {
-      console.error('[Verify] fetch failed:', err);
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error('Verification timed out. Is the game server running?');
-      }
-      throw err;
-    }
-  }, []);
-
   // Stable callback for verification "initial game id consumed" (avoids verify effect re-running every render)
   const handleInitialVerifyGameIdConsumed = useCallback(() => setInitialVerifyGameId(null), []);
 
@@ -2413,9 +2362,16 @@ export default function BlackjackPage() {
         ? result.playerHands
         : [result.playerHand];
 
+      // Convert card to display rank (1-13). Handles Card objects, raw ranks 1-13, and deck indices 0-51.
+      const toDisplayRank = (c: unknown): number => {
+        const n = typeof c === 'object' && c !== null && 'value' in c ? (c as { value: number }).value : Number(c);
+        if (n >= 0 && n <= 51) return (n % 13) + 1; // deck index → rank
+        return Math.max(1, Math.min(13, n)); // clamp rank
+      };
+
       const playerHands = handsToMap.map((hand) => {
         const cards = Array.isArray(hand.cards)
-          ? hand.cards.map(c => typeof c === 'object' && 'value' in c ? c.value : Number(c))
+          ? hand.cards.map(c => toDisplayRank(c))
           : [];
         const handResult: 'win' | 'loss' | 'push' | 'blackjack' =
           hand.result === 'blackjack' ? 'blackjack' :
@@ -2430,7 +2386,7 @@ export default function BlackjackPage() {
       });
 
       const dealerCards = Array.isArray(result.dealerHand.cards)
-        ? result.dealerHand.cards.map(c => typeof c === 'object' && 'value' in c ? c.value : Number(c))
+        ? result.dealerHand.cards.map(c => toDisplayRank(c))
         : [];
 
       const totalBet = result.playerHands && result.playerHands.length > 0
@@ -2774,7 +2730,6 @@ export default function BlackjackPage() {
           <BlackjackSidebar
             history={gameState.history}
             reserveBalance={offChainBalance}
-            onQuickJoinTournament={() => setShowTournamentEntry(true)}
             onTournamentLobby={() => {
           setTournamentBrowserInitialTab('join');
           setShowTournamentBrowser(true);
@@ -2783,11 +2738,7 @@ export default function BlackjackPage() {
             chartSessionStartTime={chartSessionStartTime.current}
             wsClient={wsClient}
             wsConnected={wsConnected}
-            clientSeed={clientSeed}
-            onClientSeedChange={setClientSeed}
-            onGenerateClientSeed={generateClientSeed}
             onVerifyGameRequest={openVerifyView}
-            verifyGameHandler={handleVerifyGame}
             inTournament={tournament.tournamentState.inTournament}
             tournaments={tournament.tournamentList}
             onRefreshTournaments={() => tournament.fetchTournamentList()}

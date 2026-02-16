@@ -45,7 +45,27 @@ export function WalletMenu({
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
   const walletDropdownRef = useRef<HTMLDivElement>(null)
+
+  const handleCopyAddress = async () => {
+    if (!address) return
+    try {
+      await navigator.clipboard.writeText(address)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // fallback for older browsers
+      const ta = document.createElement('textarea')
+      ta.value = address
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -176,6 +196,24 @@ export function WalletMenu({
                   <i className="fas fa-sign-out-alt w-4 text-center" />
                   <span className="text-sm font-medium">Disconnect</span>
                 </button>
+                <div className={`mt-2 pt-2 border-t border-white/10 flex items-start gap-2 px-3 py-2 ${variant === 'sidebar' ? 'text-white/60' : 'text-gray-500'}`}>
+                  <code className="text-[10px] font-mono break-all flex-1 min-w-0 leading-tight" title={address}>
+                    {address}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={handleCopyAddress}
+                    className="shrink-0 p-1 rounded hover:bg-white/10 transition-colors"
+                    aria-label="Copy address"
+                    title="Copy address"
+                  >
+                    {copied ? (
+                      <i className="fas fa-check text-cyan-400 text-xs" />
+                    ) : (
+                      <i className="fas fa-copy text-xs" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )}

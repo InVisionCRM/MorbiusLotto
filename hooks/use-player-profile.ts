@@ -62,6 +62,33 @@ export function useProfile() {
 }
 
 /**
+ * Hook to fetch display profile (name + avatar) for any address.
+ * Use for LatestWins, leaderboards, etc. to show profile name when set.
+ */
+export function useProfileForAddress(address: string | null) {
+  const query = useQuery<DisplayProfile>({
+    queryKey: ['playerProfile', address],
+    queryFn: async () => {
+      if (!address) return { displayName: null, profileImageUrl: null }
+      const res = await fetch(`/api/player/${address}/profile`)
+      if (!res.ok) return { displayName: null, profileImageUrl: null }
+      const data = await res.json()
+      return {
+        displayName: data.displayName ?? null,
+        profileImageUrl: data.profileImageUrl ?? null,
+      }
+    },
+    enabled: !!address,
+    staleTime: 60_000,
+  })
+  return {
+    displayName: query.data?.displayName ?? null,
+    profileImageUrl: query.data?.profileImageUrl ?? null,
+    isLoading: query.isLoading,
+  }
+}
+
+/**
  * Hook to fetch player stats for any address
  */
 export function usePlayerProfileStats(address: string | null) {

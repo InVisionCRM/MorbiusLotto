@@ -10,9 +10,6 @@ import { GameResult } from '@/app/BLACKJACK/types'
 import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar'
 import type { TournamentListItem } from '@/lib/tournament-types'
 import { Theme } from '@/lib/theme'
-// GameVerificationTools removed - use /BLACKJACK/verify page instead
-type GameVerificationData = any // Type kept for compatibility
-
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false)
   useEffect(() => {
@@ -26,7 +23,7 @@ function useIsDesktop() {
   return isDesktop
 }
 
-const PANEL_CLASS = 'rounded-xl'
+const PANEL_CLASS = ''
 
 const BASE_TABS = [
   { id: 'recent', label: 'Recent', icon: History },
@@ -43,17 +40,12 @@ export type BlackjackSidebarTabId = (typeof BASE_TABS)[number]['id'] | 'tourname
 interface BlackjackSidebarProps {
   history: GameResult[]
   reserveBalance?: bigint
-  onQuickJoinTournament?: () => void
   onTournamentLobby?: () => void
   chartRef?: React.RefObject<BlackjackRealTimeBetChartRef | null>
   chartSessionStartTime?: number
   wsClient?: unknown
   wsConnected?: boolean
-  clientSeed?: string
-  onClientSeedChange?: (value: string) => void
-  onGenerateClientSeed?: () => void
   onVerifyGameRequest?: (gameId: string) => void
-  verifyGameHandler?: (gameId: string) => Promise<GameVerificationData | null>
   /** When true, a "Tournament" tab is shown with HUD + betting controls; only visible during a tournament */
   inTournament?: boolean
   /** Content for the tournament tab (TournamentHUD + TournamentBetPanel) */
@@ -79,17 +71,12 @@ interface BlackjackSidebarProps {
 export default function BlackjackSidebar({
   history,
   reserveBalance,
-  onQuickJoinTournament,
   onTournamentLobby,
   chartRef,
   chartSessionStartTime,
   wsClient,
   wsConnected,
-  clientSeed = '',
-  onClientSeedChange,
-  onGenerateClientSeed,
   onVerifyGameRequest,
-  verifyGameHandler,
   inTournament = false,
   tournamentTabContent,
   tournaments = [],

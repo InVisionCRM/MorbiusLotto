@@ -348,13 +348,14 @@ export class BlackjackGameService {
         await this.dbService.setSessionServerSeed(session.id, newServerSeed, newServerSeedHash);
       }
 
+      const dealerFullHand = this.pfService.calculateHandTotalV2(dealerCards);
       const gameState: GameState = {
         gameId: game.id,
         sessionId: session.id,
         playerHands: [initialHand],
         dealerCards: status === 'completed' ? dealerCards : dealerCards.slice(0, 1),
-        dealerTotal: dealerVisibleHand.total,
-        dealerHasAce: dealerVisibleHand.hasAce,
+        dealerTotal: status === 'completed' ? dealerFullHand.total : dealerVisibleHand.total,
+        dealerHasAce: status === 'completed' ? dealerFullHand.hasAce : dealerVisibleHand.hasAce,
         status,
         totalBetAmount: request.betAmount,
         totalPayout: immediatePayout,

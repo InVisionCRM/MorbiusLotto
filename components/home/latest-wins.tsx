@@ -3,7 +3,8 @@
 import React, { useState } from 'react'
 import { AnimatedList } from '@/components/ui/animated-list'
 import { formatEther } from 'viem'
-import { useLatestWins, WinEntry } from '@/hooks/use-latest-wins'
+import { useLatestWins } from '@/hooks/use-latest-wins'
+import { useProfileForAddress } from '@/hooks/use-player-profile'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { Theme } from '@/lib/theme'
 
@@ -18,13 +19,17 @@ function timeAgo(timestamp: number): string {
   return `${days}d ago`
 }
 
-function formatAddress(address: string): string {
+/** Display label: profile name if set, else …last4 (matches WalletMenu) */
+function getAddressLabel(address: string, displayName: string | null): string {
   if (!address || address.length < 10) return address
-  return `${address.slice(0, 6)}...${address.slice(-4)}`
+  if (displayName && displayName.trim()) return displayName.trim()
+  return `…${address.slice(-4)}`
 }
 
 function WinNotification({ address, amount, game, timestamp, onAddressClick }: { address: string; amount: bigint; game: string; timestamp: number; onAddressClick: (address: string) => void }) {
+  const { displayName } = useProfileForAddress(address)
   const formattedAmount = Math.floor(Number(formatEther(amount))).toLocaleString()
+  const label = getAddressLabel(address, displayName)
 
   return (
     <div
@@ -36,7 +41,7 @@ function WinNotification({ address, amount, game, timestamp, onAddressClick }: {
           onClick={() => onAddressClick(address)}
           className="text-cyan-400 hover:text-cyan-300 underline font-mono transition-colors"
         >
-          {formatAddress(address)}
+          {label}
         </button>
         {' won '}
         <span className="text-green-500 font-bold">{formattedAmount} MORBIUS</span>

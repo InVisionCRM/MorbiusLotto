@@ -20,9 +20,9 @@ const PULSECHAIN_CARDS: ImageCardItem[] = [
 
 export function PulseChainSection() {
   return (
-    <section className="relative py-24 px-4 sm:px-6 overflow-hidden">
-      <div className="container mx-auto max-w-7xl relative z-10">
-        <div className="text-center mb-8 px-2 sm:px-0">
+    <section className="relative py-24 px-4 sm:px-6 overflow-hidden w-full min-w-0">
+      <div className="container mx-auto max-w-7xl relative z-10 w-full min-w-0">
+        <div className="text-center mb-8 px-2 sm:px-0 min-w-0">
           <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2 break-words">
             We Support PulseChain!
           </h2>
@@ -40,14 +40,20 @@ export function PulseChainSection() {
           </p>
         </div>
 
-        <div className="w-full overflow-hidden px-2 sm:px-0">
+        <div
+          className="w-full overflow-hidden px-2 sm:px-0"
+          style={{
+            maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
+            WebkitMaskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
+          }}
+        >
           <InfiniteMovingCards
             items={PULSECHAIN_CARDS}
             variant="image"
             direction="left"
             speed="normal"
             pauseOnHover
-            className="[mask-image:linear-gradient(to_right,transparent,white_10%,white_90%,transparent)]"
+            className="[mask-image:none] [-webkit-mask-image:none]"
           />
         </div>
       </div>

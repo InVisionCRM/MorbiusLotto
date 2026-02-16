@@ -5,7 +5,6 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { useAuth } from '@/hooks/use-auth'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { HeroSection } from '@/components/home/hero-section'
-import { LatestWins } from '@/components/home/latest-wins'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import { GamesSection } from '@/components/home/games-section'
 import { RoadMap } from '@/components/home/RoadMap'
@@ -53,19 +52,14 @@ export default function HomePage() {
       <HeroSection />
 
       <div className="w-full flex flex-col items-center gap-y-16 py-8 px-4">
-        {/* Chat (left) + Latest Wins (right): 2-col on desktop, stacked on mobile; equal row height so no odd gap */}
-        <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch min-h-0">
-          <div className="min-h-[320px] md:min-h-[420px] order-1 flex flex-col min-w-0">
-            <ChatPanel
-              roomId="main"
-              title="Lobby Chat"
-              collapsible={false}
-              className="h-full min-h-0 flex-1"
-            />
-          </div>
-          <div className="order-2 flex flex-col min-h-[320px] md:min-h-[420px] min-w-0">
-            <LatestWins />
-          </div>
+        {/* Lobby Chat */}
+        <div className="w-full max-w-5xl min-h-[320px] md:min-h-[420px] flex flex-col min-w-0">
+          <ChatPanel
+            roomId="main"
+            title="Lobby Chat"
+            collapsible={false}
+            className="h-full min-h-0 flex-1"
+          />
         </div>
 
         {/* Games: Lottery, Keno, Plinko, Blackjack, etc. */}
