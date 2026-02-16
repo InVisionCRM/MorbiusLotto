@@ -274,12 +274,22 @@ export function GameHistoryLayoutD({ history, sortBy, onSortChange }: LayoutProp
           return (
             <div key={entry.id} className="rounded-lg border border-gray-700/60 overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-800/50">
-                <Badge className={`${getResultColor(entry.result)} border-0`}>{entry.result.toUpperCase()}</Badge>
-                <span className="text-xs text-gray-400">{formatTimestamp(entry.timestamp)}</span>
-                <span className="text-sm">{formatAmount(entry.betAmount)} MORBIUS</span>
-                <span className={`text-sm font-bold ${getProfit(entry) > 0 ? 'text-green-400' : getProfit(entry) < 0 ? 'text-red-400' : 'text-yellow-400'}`}>
-                  {getProfit(entry) > 0 ? '+' : ''}{getProfit(entry).toLocaleString()} MORBIUS
-                </span>
+                <div className="flex items-center gap-2">
+                  <Badge className={`${getResultColor(entry.result)} border-0`}>{entry.result.toUpperCase()}</Badge>
+                  <span className="text-xs text-gray-400">{formatTimestamp(entry.timestamp)}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">WAGER</span>
+                    <span className="text-sm">{formatAmount(entry.betAmount)} MORBIUS</span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">OUTCOME</span>
+                    <span className={`text-sm font-bold ${getProfit(entry) > 0 ? 'text-green-400' : getProfit(entry) < 0 ? 'text-red-400' : 'text-yellow-400'}`}>
+                      {getProfit(entry) > 0 ? '+' : ''}{getProfit(entry).toLocaleString()} MORBIUS
+                    </span>
+                  </div>
+                </div>
               </div>
               <div className="flex items-stretch">
                 <div className="flex-1 min-w-0 p-4 flex flex-col items-center justify-center border-r border-gray-700">
@@ -288,7 +298,10 @@ export function GameHistoryLayoutD({ history, sortBy, onSortChange }: LayoutProp
                     {entry.playerHands?.[0]?.cards?.map((v, j) => <CardImage key={j} value={v} index={j} salt={i} />)}
                     {(!entry.playerHands?.[0]?.cards?.length) && <span className="text-xs text-gray-500">No cards</span>}
                   </div>
-                  <div className="text-2xl font-bold text-cyan-400">{playerTotal}</div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">TOTAL</span>
+                    <span className="text-2xl font-bold text-cyan-400">{playerTotal}</span>
+                  </div>
                 </div>
                 <div className="flex items-center px-4 bg-gray-900/50">
                   <span className="text-sm font-bold text-gray-500">VS</span>
@@ -299,7 +312,10 @@ export function GameHistoryLayoutD({ history, sortBy, onSortChange }: LayoutProp
                     {entry.dealerCards?.map((v, j) => <CardImage key={j} value={v} index={j} salt={i + 100} />)}
                     {(!entry.dealerCards?.length) && <span className="text-xs text-gray-500">No cards</span>}
                   </div>
-                  <div className="text-2xl font-bold text-red-400">{entry.dealerTotal ?? 0}</div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">TOTAL</span>
+                    <span className="text-2xl font-bold text-red-400">{entry.dealerTotal ?? 0}</span>
+                  </div>
                 </div>
               </div>
             </div>

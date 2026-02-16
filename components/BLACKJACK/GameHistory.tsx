@@ -206,89 +206,102 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-0">
+      <CardContent className="space-y-3 p-4">
         <AnimatePresence>
-          {sortedHistory.map((entry, entryIndex) => (
+          {sortedHistory.map((entry, entryIndex) => {
+            const playerTotal = entry.playerHands?.[0]?.total ?? 0
+            return (
             <motion.div
               key={entry.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="border-b border-gray-700/60 last:border-b-0"
+              className="rounded-lg border border-gray-700/60 overflow-hidden"
             >
-              {/* Game Summary - grid: even columns, text left */}
+              {/* Top bar: Result, time, WAGER, OUTCOME */}
               <div
-                className="p-4 cursor-pointer hover:bg-gray-800/50 transition-colors"
+                className="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-800/50 cursor-pointer hover:bg-gray-800/70 transition-colors"
                 onClick={() => setExpandedGame(expandedGame === entry.id ? null : entry.id)}
               >
-                {/* Row 1: Result, time, bet, P/L - flex-wrap for mobile */}
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <Badge className={`${getResultColor(entry.result)} border-0 shrink-0`}>
-                      {entry.result === 'blackjack' && <Trophy className="w-3 h-3 mr-1" />}
-                      {entry.result.toUpperCase()}
-                    </Badge>
-                    {entry.wasSplit && (
-                      <Badge className="bg-cyan-900/30 text-cyan-300 border border-cyan-500/30 text-xs shrink-0">SPLIT</Badge>
-                    )}
-                    {entry.wasDoubleDown && (
-                      <Badge className="bg-amber-900/30 text-amber-300 border border-amber-500/30 text-xs shrink-0">2x</Badge>
-                    )}
-                    <span className="text-sm text-gray-400 flex items-center gap-1 shrink-0">
-                      <Clock className="w-3.5 h-3.5" />
-                      {formatTimestamp(entry.timestamp)}
-                    </span>
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <Badge className={`${getResultColor(entry.result)} border-0 shrink-0`}>
+                    {entry.result === 'blackjack' && <Trophy className="w-3 h-3 mr-1" />}
+                    {entry.result.toUpperCase()}
+                  </Badge>
+                  {entry.wasSplit && (
+                    <Badge className="bg-cyan-900/30 text-cyan-300 border border-cyan-500/30 text-xs shrink-0">SPLIT</Badge>
+                  )}
+                  {entry.wasDoubleDown && (
+                    <Badge className="bg-amber-900/30 text-amber-300 border border-amber-500/30 text-xs shrink-0">2x</Badge>
+                  )}
+                  <span className="text-xs text-gray-400 flex items-center gap-1 shrink-0">
+                    <Clock className="w-3.5 h-3.5" />
+                    {formatTimestamp(entry.timestamp)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">WAGER</span>
+                    <span className="text-sm text-gray-300">{formatAmount(entry.betAmount)} MORBIUS</span>
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-sm text-gray-300 shrink-0">{formatAmount(entry.betAmount)} MORBIUS</span>
-                    <span className={`text-sm font-semibold shrink-0 ${
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">OUTCOME</span>
+                    <span className={`text-sm font-bold ${
                       getProfit(entry) > 0 ? 'text-green-400' :
                       getProfit(entry) < 0 ? 'text-red-400' : 'text-yellow-400'
                     }`}>
                       {getProfit(entry) > 0 ? '+' : ''}{getProfit(entry).toLocaleString()} MORBIUS
                     </span>
-                    {expandedGame === entry.id ? (
-                      <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" />
+                  </div>
+                  {expandedGame === entry.id ? (
+                    <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
+                  )}
+                </div>
+              </div>
+
+              {/* Battle layout: You vs Dealer with TOTAL labels */}
+              <div className="flex items-stretch">
+                <div className="flex-1 min-w-0 p-4 flex flex-col items-center justify-center border-r border-gray-700">
+                  <div className="text-xs text-cyan-400 uppercase font-medium mb-2">You</div>
+                  <div className="flex items-center justify-center gap-1 mb-2">
+                    {entry.playerHands?.[0]?.cards?.length ? (
+                      entry.playerHands[0].cards.slice(0, 4).map((cardValue, idx) => (
+                        <CardImage key={`p-${idx}`} value={cardValue} index={idx} salt={entryIndex} />
+                      ))
                     ) : (
-                      <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
+                      <span className="text-xs text-gray-500">No cards</span>
+                    )}
+                    {entry.playerHands?.[0]?.cards?.length > 4 && (
+                      <span className="text-xs text-gray-500">+{entry.playerHands[0].cards.length - 4}</span>
                     )}
                   </div>
-                </div>
-
-                {/* Row 2: You vs Dealer - both totals clearly shown */}
-                <div className="flex flex-wrap items-center gap-3 sm:gap-6">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider shrink-0">You</span>
-                    <div className="flex items-center gap-1">
-                      {entry.playerHands?.[0]?.cards?.length ? (
-                        entry.playerHands[0].cards.slice(0, 3).map((cardValue, idx) => (
-                          <CardImage key={`p-${idx}`} value={cardValue} index={idx} salt={entryIndex} />
-                        ))
-                      ) : (
-                        <span className="text-xs text-gray-500">No cards</span>
-                      )}
-                      {entry.playerHands?.[0]?.cards?.length > 3 && (
-                        <span className="text-xs text-gray-500">+{entry.playerHands[0].cards.length - 3}</span>
-                      )}
-                    </div>
-                    <span className="text-sm font-bold text-cyan-400 ml-1">{entry.playerHands?.[0]?.total ?? 0}</span>
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">TOTAL</span>
+                    <span className="text-2xl font-bold text-cyan-400">{playerTotal}</span>
                   </div>
-                  <span className="text-gray-500 text-sm shrink-0">vs</span>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider shrink-0">Dealer</span>
-                    <div className="flex items-center gap-1">
-                      {entry.dealerCards?.length ? (
-                        entry.dealerCards.slice(0, 3).map((cardValue, idx) => (
-                          <CardImage key={`d-${idx}`} value={cardValue} index={idx} salt={entryIndex + 100} />
-                        ))
-                      ) : (
-                        <span className="text-xs text-gray-500">No cards</span>
-                      )}
-                      {entry.dealerCards?.length > 3 && (
-                        <span className="text-xs text-gray-500">+{entry.dealerCards.length - 3}</span>
-                      )}
-                    </div>
-                    <span className="text-sm font-bold text-red-400 ml-1">{entry.dealerTotal ?? 0}</span>
+                </div>
+                <div className="flex items-center px-4 bg-gray-900/50">
+                  <span className="text-sm font-bold text-gray-500">VS</span>
+                </div>
+                <div className="flex-1 min-w-0 p-4 flex flex-col items-center justify-center">
+                  <div className="text-xs text-red-400 uppercase font-medium mb-2">Dealer</div>
+                  <div className="flex items-center justify-center gap-1 mb-2">
+                    {entry.dealerCards?.length ? (
+                      entry.dealerCards.slice(0, 4).map((cardValue, idx) => (
+                        <CardImage key={`d-${idx}`} value={cardValue} index={idx} salt={entryIndex + 100} />
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-500">No cards</span>
+                    )}
+                    {entry.dealerCards?.length > 4 && (
+                      <span className="text-xs text-gray-500">+{entry.dealerCards.length - 4}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">TOTAL</span>
+                    <span className="text-2xl font-bold text-red-400">{entry.dealerTotal ?? 0}</span>
                   </div>
                 </div>
               </div>
@@ -426,7 +439,7 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                 )}
               </AnimatePresence>
             </motion.div>
-          ))}
+          )})}
         </AnimatePresence>
       </CardContent>
     </Card>
