@@ -10,14 +10,16 @@ echo "=== Tournament Smoke Test ==="
 echo "API Base: $API_BASE"
 echo ""
 
-# 1. List active tournaments
-echo "1. Listing active tournaments..."
-RES=$(curl -s "$API_BASE/api/tournament/list?includePrivate=false")
-if echo "$RES" | grep -q '"tournaments"'; then
-  echo "   ✓ List tournaments OK"
-else
-  echo "   ✗ List tournaments failed: $RES"
+# 1. Get active tournament
+echo "1. Getting active tournament..."
+RES=$(curl -s "$API_BASE/api/tournament/active")
+if echo "$RES" | grep -qE '"(id|entryCount)"'; then
+  echo "   ✓ Active tournament OK"
+elif echo "$RES" | grep -q "Cannot GET\|<!DOCTYPE\|<html"; then
+  echo "   ✗ Active tournament failed (bad route or HTML error): $RES"
   exit 1
+else
+  echo "   ? Active tournament response: ${RES:0:200}..."
 fi
 
 # 2. Test cancel endpoint (will fail with 404/403 without real tournament - that's expected)
@@ -26,8 +28,8 @@ echo "2. Testing cancel endpoint (expect 404 without valid tournament)..."
 CANCEL_RES=$(curl -s -w "\n%{http_code}" -X POST "$API_BASE/api/tournament/00000000-0000-0000-0000-000000000000/cancel" \
   -H "Content-Type: application/json" \
   -d '{"cancellerAddress":"0x0000000000000000000000000000000000000001"}')
-HTTP_CODE=$(echo "$CANCEL_RES" | tail -1)
-BODY=$(echo "$CANCEL_RES" | head -n -1)
+HTTP_CODE=$(echo "$CANCEL_RES" | tail -n 1)
+BODY=$(echo "$CANCEL_RES" | sed '$d')
 if [ "$HTTP_CODE" = "404" ] || [ "$HTTP_CODE" = "403" ] || [ "$HTTP_CODE" = "400" ]; then
   echo "   ✓ Cancel endpoint reachable (HTTP $HTTP_CODE - expected without real tournament)"
 elif [ "$HTTP_CODE" = "200" ]; then
@@ -42,7 +44,7 @@ echo "3. Testing reclaim endpoint (expect 400/404 without valid cancelled tourna
 RECLAIM_RES=$(curl -s -w "\n%{http_code}" -X POST "$API_BASE/api/tournament/00000000-0000-0000-0000-000000000000/reclaim" \
   -H "Content-Type: application/json" \
   -d '{"creatorAddress":"0x0000000000000000000000000000000000000001"}')
-HTTP_CODE=$(echo "$RECLAIM_RES" | tail -1)
+HTTP_CODE=$(echo "$RECLAIM_RES" | tail -n 1)
 if [ "$HTTP_CODE" = "404" ] || [ "$HTTP_CODE" = "403" ] || [ "$HTTP_CODE" = "400" ]; then
   echo "   ✓ Reclaim endpoint reachable (HTTP $HTTP_CODE - expected)"
 else

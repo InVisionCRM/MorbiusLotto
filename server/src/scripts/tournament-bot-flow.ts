@@ -26,9 +26,12 @@
 import path from 'path';
 import dotenv from 'dotenv';
 
-// Load root .env for NEXT_PUBLIC_WEBSOCKET_URL
-dotenv.config({ path: path.join(__dirname, '../../../.env') });
-dotenv.config(); // Also load server/.env
+// Load env from both root and server (cwd can vary when run via npm)
+const rootEnv = path.join(__dirname, '../../../.env');
+const serverEnv = path.join(__dirname, '../../.env');
+dotenv.config({ path: rootEnv });
+dotenv.config({ path: serverEnv });
+dotenv.config(); // cwd .env as fallback
 
 import WebSocket from 'ws';
 
@@ -40,7 +43,8 @@ const DEFAULT_BOTS = [
 function getBotAddresses(): string[] {
   const env = process.env.TOURNAMENT_BOT_ADDRESSES?.trim();
   if (env) {
-    return env.split(',').map((a) => a.trim()).filter(Boolean);
+    const addrs = env.split(/[,\s]+/).map((a) => a.trim()).filter((a) => a.startsWith('0x'));
+    if (addrs.length > 0) return addrs;
   }
   return DEFAULT_BOTS;
 }
@@ -182,12 +186,12 @@ async function playHand(ws: WebSocket, betAmount: number): Promise<GameState | n
   return state;
 }
 
-async function runBot(
+async function joinBot(
   ws: WebSocket,
   label: string,
   tournamentId: string
-): Promise<void> {
-  console.log(`\n[${label}] Joining tournament ${tournamentId}...`);
+): Promise<{ chips: number; handsRemaining: number; maxHands: number }> {
+  console.log(`[${label}] Joining tournament...`);
   const joinRes = (await sendRequest(ws, 'tournament_join', { tournamentId })) as {
     chips: number;
     handsRemaining: number;
@@ -195,7 +199,15 @@ async function runBot(
     handsPlayed?: number;
   };
   console.log(`[${label}] Joined. Chips: ${joinRes.chips}, Hands: ${joinRes.handsRemaining}`);
+  return joinRes;
+}
 
+async function playBot(
+  ws: WebSocket,
+  label: string,
+  tournamentId: string,
+  joinRes: { chips: number; handsRemaining: number; maxHands: number }
+): Promise<void> {
   let handNum = 0;
   const maxHands = joinRes.maxHands ?? 50;
   while (joinRes.handsRemaining > 0 && handNum < maxHands) {
@@ -224,6 +236,16 @@ async function runBot(
       break;
     }
   }
+}
+
+/** Join + play (convenience for single flow). */
+async function runBot(
+  ws: WebSocket,
+  label: string,
+  tournamentId: string
+): Promise<void> {
+  const joinRes = await joinBot(ws, label, tournamentId);
+  await playBot(ws, label, tournamentId, joinRes);
 }
 
 /** Run bot in freeroll (handles elimination - stops when eliminated or busted). */
@@ -305,15 +327,21 @@ async function runStandardMode(bots: string[]): Promise<void> {
   const tournamentId = createRes.tournamentId;
   console.log(`\nTournament created: ${createRes.name} (${tournamentId})`);
 
-  const connections: WebSocket[] = [ws1];
-  await runBot(ws1, 'Bot_1', tournamentId);
-
-  for (let i = 1; i < bots.length; i++) {
-    const ws = await createWsClient(bots[i]);
-    await waitForConnection(ws);
+  // All bots must JOIN before any play, or tournament ends when first player completes
+  const connections: WebSocket[] = [];
+  const joinStates: { chips: number; handsRemaining: number; maxHands: number }[] = [];
+  for (let i = 0; i < bots.length; i++) {
+    const ws = i === 0 ? ws1 : await createWsClient(bots[i]);
+    if (i > 0) await waitForConnection(ws);
     connections.push(ws);
-    console.log(`\nBot_${i + 1} connected.`);
-    await runBot(ws, `Bot_${i + 1}`, tournamentId);
+    const joinRes = await joinBot(ws, `Bot_${i + 1}`, tournamentId);
+    joinStates.push(joinRes);
+  }
+
+  console.log('\n--- All joined. Starting play ---');
+  for (let i = 0; i < bots.length; i++) {
+    console.log(`\n--- Bot_${i + 1} playing ---`);
+    await playBot(connections[i], `Bot_${i + 1}`, tournamentId, joinStates[i]);
   }
 
   connections.forEach((ws) => ws.close());
@@ -419,7 +447,7 @@ async function main() {
   console.log('Tournament Bot Flow');
   console.log('Mode:', mode);
   console.log('WebSocket URL:', WS_URL);
-  console.log('Bots:', bots.length);
+  console.log('Bots:', bots.length, process.env.TOURNAMENT_BOT_ADDRESSES ? '(from env)' : '(defaults)');
   bots.forEach((a, i) => console.log(`  Bot_${i + 1}: ${a}`));
 
   if (mode === 'elimination') {
