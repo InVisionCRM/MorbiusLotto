@@ -6,12 +6,57 @@ import { toast } from 'sonner'
 
 const DISPLAY_NAME_MIN = 3
 const DISPLAY_NAME_MAX = 32
-const PFP_DATA_URL_MAX_BYTES = 200 * 1024 // 200KB for data URL images
+const AVATAR_MAX_PX = 256
+const AVATAR_JPEG_QUALITY = 0.85
 
 const PANEL_STYLE = {
   background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.9))',
   boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
   border: '1px solid rgba(34, 211, 238, 0.3)',
+}
+
+/** Resize and compress image to a small data URL (any input size accepted). */
+async function resizeImageToDataUrl(
+  file: File,
+  maxPx: number = AVATAR_MAX_PX,
+  quality: number = AVATAR_JPEG_QUALITY
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const canvas = document.createElement('canvas')
+      let { width, height } = img
+      if (width > maxPx || height > maxPx) {
+        if (width > height) {
+          height = Math.round((height * maxPx) / width)
+          width = maxPx
+        } else {
+          width = Math.round((width * maxPx) / height)
+          height = maxPx
+        }
+      }
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Canvas not supported'))
+        return
+      }
+      ctx.drawImage(img, 0, 0, width, height)
+      try {
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      } catch (e) {
+        reject(e)
+      }
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Failed to load image'))
+    }
+    img.src = url
+  })
 }
 
 export interface ProfileSettingsModalProps {
@@ -57,25 +102,20 @@ export default function ProfileSettingsModal({
     setProfileImageUrl(v === '' ? null : v)
   }
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    e.target.value = ''
     if (!file.type.startsWith('image/')) {
       toast.error('Please choose an image file (PNG, JPEG, GIF, WebP).')
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      const approxBytes = Math.floor((dataUrl.length * 3) / 4)
-      if (approxBytes > PFP_DATA_URL_MAX_BYTES) {
-        toast.error('Image too large. Use a smaller image or paste a URL instead (max ~200KB).')
-        return
-      }
+    try {
+      const dataUrl = await resizeImageToDataUrl(file)
       setProfileImageUrl(dataUrl)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to process image.')
     }
-    reader.readAsDataURL(file)
-    e.target.value = ''
   }
 
   const handleSave = async () => {
@@ -159,7 +199,7 @@ export default function ProfileSettingsModal({
                   onClick={() => fileInputRef.current?.click()}
                   className="text-sm text-cyan-400 hover:text-cyan-300"
                 >
-                  Upload image (max ~200KB)
+                  Upload image
                 </button>
               </div>
             </div>

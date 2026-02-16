@@ -526,27 +526,7 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
 
       {/* History Tab */}
       {activeTab === 'history' && (
-        <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Activity className="w-5 h-5 text-cyan-400" />
-              Game History
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {gamesLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
-              </div>
-            ) : historyEntries.length > 0 ? (
-              <GameHistory history={historyEntries} isLoading={false} />
-            ) : (
-              <div className="text-center py-12 text-white/60">
-                <p>No game history available</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <GameHistory history={historyEntries} isLoading={gamesLoading} />
       )}
 
       {/* Creator Tab */}

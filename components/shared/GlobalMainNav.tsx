@@ -252,6 +252,7 @@ function NavContent(props: {
             onOpenProfileSettings={onOpenProfileSettings}
             dropdownPlacement="below"
             variant="sidebar"
+            sidebarOpen={open}
           />
         </div>
         {isConnected && reserveBalance !== undefined && onOpenDepositModal && (

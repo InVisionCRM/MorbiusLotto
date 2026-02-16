@@ -206,7 +206,7 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-0">
         <AnimatePresence>
           {sortedHistory.map((entry, entryIndex) => (
             <motion.div
@@ -214,7 +214,7 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="border border-gray-700 rounded-lg overflow-hidden"
+              className="border-b border-gray-700/60 last:border-b-0"
             >
               {/* Game Summary - grid: even columns, text left */}
               <div

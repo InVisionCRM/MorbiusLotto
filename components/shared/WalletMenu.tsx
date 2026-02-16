@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
+import { motion } from 'motion/react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useDisconnect } from 'wagmi'
 
@@ -21,6 +22,8 @@ export interface WalletMenuProps {
   dropdownPlacement?: 'viewport-right' | 'below'
   /** When true, use white text in dropdown (for dark sidebar) */
   variant?: 'default' | 'sidebar'
+  /** When variant=sidebar, pass sidebar open state so label animates with collapse */
+  sidebarOpen?: boolean
 }
 
 /**
@@ -37,6 +40,7 @@ export function WalletMenu({
   className = '',
   dropdownPlacement = 'viewport-right',
   variant = 'default',
+  sidebarOpen = true,
 }: WalletMenuProps) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
@@ -62,26 +66,52 @@ export function WalletMenu({
           <button
             type="button"
             onClick={() => setIsWalletDropdownOpen(!isWalletDropdownOpen)}
-            className="flex items-center gap-2 px-2 py-1 rounded-sm text-white text-sm font-bold transition-all hover:bg-white/5"
-            style={{
-              background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))',
-            }}
+            className={
+              variant === 'sidebar'
+                ? 'flex items-center justify-start gap-2 w-full text-left rounded-lg px-2 py-2 text-white text-sm font-medium transition-colors hover:bg-white/5'
+                : 'flex items-center gap-2 px-2 py-1 rounded-sm text-white text-sm font-bold transition-all hover:bg-white/5'
+            }
+            style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))' } : undefined}
             aria-label={isWalletDropdownOpen ? 'Close wallet menu' : 'Open wallet menu'}
           >
-            <div className="w-7 h-7 rounded-full bg-slate-700 border border-cyan-500/30 overflow-hidden flex-shrink-0 flex items-center justify-center">
+            <div
+              className={`rounded-full bg-slate-700 border border-cyan-500/30 overflow-hidden flex-shrink-0 flex items-center justify-center ${variant === 'sidebar' ? 'w-5 h-5' : 'w-7 h-7'}`}
+            >
               {profileImageUrl ? (
                 <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <span className={`text-xs ${variant === 'sidebar' ? 'text-white/70' : 'text-gray-400'}`}>?</span>
               )}
             </div>
-            <span className="text-white max-w-[80px] truncate">
-              {profileDisplayName ?? `…${address.slice(-4)}`}
-            </span>
-            <i
-              className={`fas fa-chevron-down text-white text-sm transition-transform ${isWalletDropdownOpen ? 'rotate-180' : ''}`}
-              aria-hidden
-            />
+            {variant === 'sidebar' ? (
+              <>
+                <motion.span
+                  animate={{ display: sidebarOpen ? 'inline-block' : 'none', opacity: sidebarOpen ? 1 : 0 }}
+                  className="text-white truncate min-w-0 text-sm"
+                >
+                  {profileDisplayName ?? `…${address.slice(-4)}`}
+                </motion.span>
+                <motion.span
+                  animate={{ display: sidebarOpen ? 'inline-block' : 'none', opacity: sidebarOpen ? 1 : 0 }}
+                  className="flex-shrink-0"
+                >
+                  <i
+                    className={`fas fa-chevron-down text-white text-sm transition-transform ${isWalletDropdownOpen ? 'rotate-180' : ''}`}
+                    aria-hidden
+                  />
+                </motion.span>
+              </>
+            ) : (
+              <>
+                <span className="text-white truncate min-w-0">
+                  {profileDisplayName ?? `…${address.slice(-4)}`}
+                </span>
+                <i
+                  className={`fas fa-chevron-down text-white text-sm transition-transform flex-shrink-0 ${isWalletDropdownOpen ? 'rotate-180' : ''}`}
+                  aria-hidden
+                />
+              </>
+            )}
           </button>
 
           {isWalletDropdownOpen && (
@@ -155,13 +185,29 @@ export function WalletMenu({
           {({ openConnectModal }) => (
             <button
               onClick={openConnectModal}
-              className="flex items-center gap-2 px-3 py-1 rounded-sm text-white/50 text-sm font-bold transition-all hover:scale-105 active:scale-95"
-              style={{
-                background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))',
-              }}
+              className={
+                variant === 'sidebar'
+                  ? 'flex items-center justify-start gap-2 w-full text-left rounded-lg px-2 py-2 text-white/70 text-sm font-medium transition-colors hover:bg-white/5 hover:text-white'
+                  : 'flex items-center gap-2 px-3 py-1 rounded-sm text-white/50 text-sm font-bold transition-all hover:scale-105 active:scale-95'
+              }
+              style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))' } : undefined}
             >
-              <span className="text-cyan-400">Connect</span>
-              <i className="fas fa-chevron-down text-cyan-400 text-xs" />
+              <i className="fas fa-wallet w-5 text-center text-cyan-400 shrink-0" aria-hidden />
+              {variant === 'sidebar' ? (
+                <>
+                  <motion.span
+                    animate={{ display: sidebarOpen ? 'inline-block' : 'none', opacity: sidebarOpen ? 1 : 0 }}
+                    className="text-cyan-400"
+                  >
+                    Connect
+                  </motion.span>
+                </>
+              ) : (
+                <>
+                  <span className="text-cyan-400">Connect</span>
+                  <i className="fas fa-chevron-down text-cyan-400 text-xs" />
+                </>
+              )}
             </button>
           )}
         </ConnectButton.Custom>
