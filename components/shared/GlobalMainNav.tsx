@@ -25,6 +25,7 @@ import type { TableOption } from '@/hooks/use-blackjack-tables';
 import ThemeSelectionModal from '@/components/BLACKJACK/ThemeSelectionModal';
 import HowToPlayModal from '@/components/PLINKO/HowToPlayModal';
 import SwapModal from '@/components/PLINKO/SwapModal';
+import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal';
 
 export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'home';
 
@@ -337,12 +338,7 @@ function NavContent(props: {
           )}
 
           {(page === 'home' || (page !== 'blackjack' && page !== 'plinko' && page !== 'lottery' && page !== 'keno')) && (
-            <>
-              <SidebarLink link={{ label: 'Creator Dashboard', href: '/creators', icon: <i className="fas fa-crown w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-              {onOpenResponsibleGaming && (
-                <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-              )}
-            </>
+            <SidebarLink link={{ label: 'Creator Dashboard', href: '/creators', icon: <i className="fas fa-crown w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           )}
         </div>
 
@@ -375,6 +371,7 @@ function NavContent(props: {
           <div className="px-2 py-1 overflow-hidden">
             <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-xs text-white uppercase tracking-wider">Other</motion.span>
           </div>
+          <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <i className="fas fa-gamepad w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Donate', href: '/donate', icon: <i className="fas fa-heart w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           {isAdmin && (
@@ -475,6 +472,8 @@ export default function GlobalMainNav({
   const page = useNavPage(pageProp);
   const { address, isConnected } = useAccount();
   const { displayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook } = useProfile();
+  const [responsibleGamingOpen, setResponsibleGamingOpen] = useState(false);
+  const effectiveOnOpenResponsibleGaming = onOpenResponsibleGaming ?? (() => setResponsibleGamingOpen(true));
   const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook;
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook;
   const [internalThemeModalOpen, setInternalThemeModalOpen] = useState(false);
@@ -528,7 +527,7 @@ export default function GlobalMainNav({
             showBackArrow={showBackArrow}
             backArrowHref={backArrowHref}
             backArrowLabel={backArrowLabel}
-            onOpenResponsibleGaming={onOpenResponsibleGaming}
+            onOpenResponsibleGaming={effectiveOnOpenResponsibleGaming}
             onOpenAuthModal={onOpenAuthModal}
             isAuthenticated={isAuthenticated}
             onSignOut={onSignOut}
@@ -558,6 +557,10 @@ export default function GlobalMainNav({
 
       {page === 'plinko' && <HowToPlayModal open={howToPlayOpen} onOpenChange={setHowToPlayOpen} />}
       {(page === 'plinko' || page === 'lottery') && <SwapModal open={swapOpen} onOpenChange={setSwapOpen} />}
+      <SelfExclusionModal
+        isOpen={responsibleGamingOpen}
+        onClose={() => setResponsibleGamingOpen(false)}
+      />
     </Sidebar>
   );
 }

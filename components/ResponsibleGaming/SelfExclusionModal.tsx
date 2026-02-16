@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { getWebSocketUrl } from '@/lib/api-urls';
+import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 
 type DurationType = '24h' | '7d' | '30d' | '6m' | '1y' | 'permanent';
@@ -47,10 +47,18 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
   useEffect(() => {
     if (!isOpen || !address || externalClient) return;
 
-    const ws = new BlackjackWebSocketClient(getWebSocketUrl(), address);
+    const wsUrl = getWebSocketUrlOptional();
+    if (!wsUrl) {
+      setError('WebSocket server not configured. Responsible gaming is unavailable.');
+      setInternalClient(null);
+      return;
+    }
+
+    setError(null);
+    const ws = new BlackjackWebSocketClient(wsUrl, address);
     ws.connect()
       .then(() => setInternalClient(ws))
-      .catch((err) => setError(err.message));
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to connect'));
 
     return () => {
       ws.disconnect();

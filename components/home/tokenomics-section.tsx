@@ -4,7 +4,6 @@ import { useRef } from 'react'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Theme } from '@/lib/theme'
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay'
 import { AnimatedBeam } from '@/components/ui/animated-beam'
 
@@ -24,18 +23,14 @@ function TokenConversionCard() {
 
   return (
     <motion.div
-      className="mb-16"
+      className="mb-8"
       initial="hidden"
       whileInView="visible"
       viewport={{ once: true }}
       variants={fadeIn}
     >
-      <div
-        ref={containerRef}
-        className="relative p-6 md:p-8 rounded-2xl"
-        style={Theme.panel.base}
-      >
-          <h3 className="text-xl md:text-2xl font-russo-one font-normal text-white mb-6 text-center">
+      <div ref={containerRef} className="relative p-4 md:p-5">
+          <h3 className="text-xl md:text-2xl font-russo-one font-normal text-white mb-4 text-center">
             Don't have any MORBIUS yet? No problem! You can just use PLS to bet! All bets made with PLS are converted to Morbius so it's a win-win for everyone.
           </h3>
           <div className="flex flex-row items-center justify-between">
@@ -81,7 +76,7 @@ function TokenConversionCard() {
             curvature={100}
           />
 
-          <p className="text-center text-white text-lg font-bold font-prosto-one mt-6 pt-6 border-t border-white/10">
+          <p className="text-center text-white text-lg font-bold font-prosto-one mt-4 pt-4 border-t border-white/10">
             Instant swap via PulseX DEX
           </p>
       </div>
@@ -91,14 +86,10 @@ function TokenConversionCard() {
 
 export function TokenomicsSection() {
   return (
-    <section className="relative py-24 px-4 overflow-hidden">
-      {/* Subtle gradient background */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.08)_0%,transparent_50%)] pointer-events-none" />
-
-      <div className="container mx-auto max-w-5xl relative z-10">
-        {/* Header — matches other home sections */}
+    <section className="relative py-12 px-4 overflow-hidden">
+      <div className="container mx-auto max-w-5xl">
         <motion.div
-          className="text-center mb-8"
+          className="text-center mb-6"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
@@ -107,19 +98,19 @@ export function TokenomicsSection() {
           <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
             Tokenomics*
           </h2>
-          <p className="text-white/50 text-sm mb-6">* Tokenomics are subject to change.</p>
-          <MorbiusBurnedDisplay variant="card" className="mt-6" />
+          <p className="text-white/50 text-sm mb-4">* Tokenomics are subject to change.</p>
+          <MorbiusBurnedDisplay variant="card" className="mt-4" />
         </motion.div>
 
         {/* Every Game Burns Morbius */}
         <motion.div
-          className="mb-16"
+          className="mb-8"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
           variants={fadeIn}
         >
-          <div className="text-center mb-8">
+          <div className="text-center mb-4">
             <h3 className="text-3xl md:text-4xl font-russo-one font-normal text-white mb-2">
               Every Game Burns Morbius!
             </h3>
@@ -128,7 +119,7 @@ export function TokenomicsSection() {
 
         {/* Burn Rate Cards */}
         <motion.div
-          className="grid grid-cols-3 md:grid-cols-3 gap-1 mb-16"
+          className="grid grid-cols-3 md:grid-cols-3 gap-2 mb-8"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
@@ -141,8 +132,8 @@ export function TokenomicsSection() {
           ].map((game) => (
             <motion.div key={game.name} variants={fadeIn}>
               <Link href={game.href}>
-                <div className="h-full p-2 text-center rounded-2xl transition-colors" style={Theme.panel.base}>
-                  <div className="text-4xl font-black border-3 border-white rounded-2xl bg-gradient-to-l from-purple-700 to-purple-1-0 via-purple-500/10 mb-2">
+                <div className="h-full p-3 text-center transition-colors">
+                  <div className="text-4xl font-black text-white mb-2">
                     10%
                   </div>
                   <div className="text-lg font-medium text-white mb-1">{game.name}</div>
@@ -158,7 +149,7 @@ export function TokenomicsSection() {
 
         {/* Bottom Statement */}
         <motion.p
-          className="text-center text-white mt-16 text-lg max-w-2xl mx-auto"
+          className="text-center text-white mt-8 text-lg max-w-2xl mx-auto"
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}

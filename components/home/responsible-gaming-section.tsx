@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion'
 import { PauseCircle, Clock, Wallet, ShieldCheck, Gamepad2, MessageCircle } from 'lucide-react'
-import { Theme } from '@/lib/theme'
 
 const X_LINK = 'https://x.com/morbiusfinance'
 const TELEGRAM_LINK = 'https://t.me/morbiusfinance'
@@ -80,13 +79,10 @@ const containerVariants = {
 
 export function ResponsibleGamingSection() {
   return (
-    <section className="relative py-16 px-4 overflow-hidden">
-      {/* Subtle background glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.06)_0%,transparent_60%)] pointer-events-none" />
-
-      <div className="container mx-auto max-w-5xl relative z-10">
+    <section className="relative py-10 px-4 overflow-hidden">
+      <div className="container mx-auto max-w-5xl">
         <motion.div
-          className="text-center mb-8"
+          className="text-center mb-6"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-50px' }}
@@ -101,7 +97,7 @@ export function ResponsibleGamingSection() {
         </motion.div>
 
         <motion.div
-          className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6"
+          className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4"
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
@@ -112,29 +108,21 @@ export function ResponsibleGamingSection() {
             return (
             <motion.div
               key={card.title}
-              className="group relative rounded-2xl border border-cyan-500/30 p-5 md:p-6 overflow-hidden transition-all duration-300 hover:border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/10 hover:-translate-y-0.5"
-              style={Theme.panel.base}
+              className="group relative rounded-xl border border-cyan-500/20 p-3 md:p-4 transition-all duration-300 hover:border-cyan-400/40"
               variants={cardVariants}
             >
-              {/* Card accent glow on hover */}
-              <div
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                style={{
-                  background: 'radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.08) 0%, transparent 70%)',
-                }}
-              />
-              <div className="relative">
-                <div className="flex justify-center mb-3">
+              <div>
+                <div className="flex justify-center mb-2">
                   <Icon
                     className="w-10 h-10 md:w-12 md:h-12 text-purple-400"
                     strokeWidth={1.5}
                     aria-hidden
                   />
                 </div>
-                <h3 className="text-lg font-semibold text-cyan-300/95 mb-2 font-russo-one">
+                <h3 className="text-lg font-semibold text-cyan-300/95 mb-1 font-russo-one">
                   {card.title}
                 </h3>
-                <p className="text-white/85 text-sm md:text-base leading-relaxed">
+                <p className="text-white/85 text-sm leading-relaxed">
                   {'content' in card && card.content ? card.content : card.text}
                 </p>
               </div>

@@ -4,7 +4,6 @@ import { useState } from 'react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { useAuth } from '@/hooks/use-auth'
 import { LoginModal } from '@/components/auth/LoginModal'
-import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal'
 import { HeroSection } from '@/components/home/hero-section'
 import { LatestWins } from '@/components/home/latest-wins'
 import { ChatPanel } from '@/components/chat/ChatPanel'
@@ -21,14 +20,12 @@ import { Theme } from '@/lib/theme'
 
 export default function HomePage() {
   const [loginOpen, setLoginOpen] = useState(false)
-  const [responsibleGamingOpen, setResponsibleGamingOpen] = useState(false)
   const { address, isAuthenticated, signIn, signOut, isSigning } = useAuth()
 
   return (
     <GlobalMainNav
       page="home"
       onOpenAuthModal={() => setLoginOpen(true)}
-      onOpenResponsibleGaming={() => setResponsibleGamingOpen(true)}
       isAuthenticated={isAuthenticated}
       onSignOut={signOut}
     >
@@ -106,10 +103,6 @@ export default function HomePage() {
         onSignIn={signIn}
         isSigning={isSigning}
         address={address}
-      />
-      <SelfExclusionModal
-        isOpen={responsibleGamingOpen}
-        onClose={() => setResponsibleGamingOpen(false)}
       />
     </GlobalMainNav>
   )
