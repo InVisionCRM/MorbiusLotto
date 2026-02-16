@@ -108,15 +108,20 @@ export function usePlayerProfileGames(address: string | null, limit: number = 50
         throw new Error('Failed to fetch player games')
       }
       const data = await response.json()
-      return data.map((game: any) => ({
-        id: game.id || game.game_id,
-        game_id: game.game_id || game.id,
-        result: game.result,
-        total_bet_amount: BigInt(game.total_bet_amount || 0),
-        total_payout: BigInt(game.total_payout || 0),
-        created_at: game.created_at || game.createdAt,
-        completed_at: game.completed_at || game.completedAt,
-      }))
+      const games = Array.isArray(data) ? data : (data?.games ?? data?.data ?? [])
+      return games.map((game: any) => {
+        const betRaw = game.total_bet_amount ?? game.totalBetAmount ?? game.bet_amount ?? game.betAmount ?? 0
+        const payoutRaw = game.total_payout ?? game.totalPayout ?? game.payout ?? 0
+        return {
+          id: game.id || game.game_id,
+          game_id: game.game_id || game.id,
+          result: game.result,
+          total_bet_amount: BigInt(typeof betRaw === 'string' ? betRaw : String(betRaw ?? 0)),
+          total_payout: BigInt(typeof payoutRaw === 'string' ? payoutRaw : String(payoutRaw ?? 0)),
+          created_at: game.created_at || game.createdAt,
+          completed_at: game.completed_at || game.completedAt,
+        }
+      })
     },
     enabled: !!address,
   })

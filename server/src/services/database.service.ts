@@ -694,11 +694,29 @@ export class DatabaseService {
 
   async getPlayerGames(walletAddress: string, limit: number = 50, offset: number = 0): Promise<Game[]> {
     const normalizedAddress = this.normalizeAddress(walletAddress);
+    // Fallback: when total_bet_amount/total_payout are 0 (e.g. tournament games), sum from game_hands.
+    // Tournament chip amounts are 1:1; scale by 1e18 so formatEther displays correctly.
     const query = `
-      SELECT g.*, gs.player_id
+      WITH gh_agg AS (
+        SELECT game_id,
+          SUM(bet_amount) AS bet_sum,
+          SUM(payout) AS payout_sum
+        FROM game_hands
+        GROUP BY game_id
+      )
+      SELECT
+        g.id, g.session_id, g.game_number,
+        CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
+        g.dealer_cards, g.dealer_total, g.result,
+        CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
+        g.dealer_actions, g.actions, g.created_at, g.completed_at, g.server_seed_revealed,
+        g.client_seed_commitment, g.dealer_seed, g.hand_count, g.current_hand_index,
+        g.rng_counter, g.rng_version, g.perfect_pairs_bet_amount, g.perfect_pairs_payout,
+        gs.player_id
       FROM games g
       JOIN game_sessions gs ON g.session_id = gs.id
       JOIN players p ON gs.player_id = p.id
+      LEFT JOIN gh_agg gh ON gh.game_id = g.id
       WHERE LOWER(p.wallet_address) = LOWER($1)
       ORDER BY g.created_at DESC
       LIMIT $2 OFFSET $3

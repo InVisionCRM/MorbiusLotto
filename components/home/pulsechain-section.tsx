@@ -21,13 +21,13 @@ const PULSECHAIN_CARDS: ImageCardItem[] = [
 
 export function PulseChainSection() {
   return (
-    <section className="relative py-16 px-4 sm:px-6 overflow-hidden" style={{ background: Theme.greyGradient.background }}>
-      <div className="container mx-auto max-w-6xl relative z-10">
-        <div className="text-center mb-8 px-2 sm:px-0">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2 break-words">
+    <section className="relative py-20 sm:py-24 px-4 sm:px-6 overflow-hidden" style={{ background: Theme.greyGradient.background }}>
+      <div className="container mx-auto max-w-7xl relative z-10">
+        <div className="text-center mb-10 sm:mb-12 px-2 sm:px-0">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-russo-one font-normal text-cyan-500 mb-2 break-words">
             We Support PulseChain!
           </h2>
-          <p className="text-white/50 text-sm max-w-3xl mx-auto break-words hyphens-auto">
+          <p className="text-white/50 text-base sm:text-lg max-w-3xl mx-auto break-words hyphens-auto">
             We want to build relationships with the top projects on PulseChain. Here are some of the projects we align with and decided to make custom UI for! If you would like a custom table or slot machine (future release), please reach out to{' '}
             <a
               href="https://x.com/kccrypto369"
