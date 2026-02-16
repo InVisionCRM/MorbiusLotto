@@ -325,11 +325,6 @@ export function TournamentListSidebar({
                           active.prizeDistributionType}
                       </span>
                     </div>
-                    {active.rebuyConfig?.enabled && (
-                      <p className="text-white/60">
-                        Rebuys: {active.rebuyConfig.maxRebuys === 0 ? 'Unlimited' : active.rebuyConfig.maxRebuys}
-                      </p>
-                    )}
                   </div>
                   <div className="p-3 border-t border-white/10 space-y-2 bg-slate-900/60">
                     {onJoin && (() => {

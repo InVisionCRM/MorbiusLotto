@@ -9,7 +9,7 @@ import { tournamentIdToBytes32 } from './tournament-id-bytes32';
 import { logger } from './logger';
 
 const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS as `0x${string}` | undefined;
-const ESCROW_V3_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS as `0x${string}` | undefined;
+const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25' as const;
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY) as `0x${string}` | undefined;
 
 let walletClient: ReturnType<typeof createWalletClient> | null = null;
@@ -125,9 +125,7 @@ export async function sendEscrowV3Payout(
   winnerAddress: string,
   amount: bigint
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
-  if (!ESCROW_V3_ADDRESS || !ESCROW_V3_ADDRESS.startsWith('0x')) {
-    return { success: false, error: 'Escrow V3 not configured' };
-  }
+  // Address is hardcoded, always available
   if (amount <= 0n) return { success: true };
 
   const id = BigInt(onChainTournamentId);
@@ -162,7 +160,7 @@ export async function sendEscrowV3RemainderTo(
   onChainTournamentId: number | bigint,
   to: `0x${string}`
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
-  if (!ESCROW_V3_ADDRESS || !ESCROW_V3_ADDRESS.startsWith('0x')) return { success: false, error: 'Escrow V3 not configured' };
+  // Address is hardcoded, always available
   const status = await getEscrowV3PoolStatus(onChainTournamentId);
   if (!status) return { success: false, error: 'Could not read pool status' };
   const remaining = status.totalDeposited - status.amountPaidOut;
@@ -193,7 +191,7 @@ export async function sendEscrowV3RemainderTo(
 }
 
 /**
- * Cancel a tournament in the escrow contract. Only callable by authorized server.
+ * Cancel a tournament in the escrow contract (V1/V2). Only callable by authorized server.
  * Marks the tournament as cancelled so creator can reclaim funds.
  */
 export async function cancelTournamentInEscrow(tournamentId: string): Promise<{ success: boolean; txHash?: string; error?: string }> {
@@ -218,6 +216,39 @@ export async function cancelTournamentInEscrow(tournamentId: string): Promise<{ 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error('Escrow cancel tournament attempt failed', { attempt, tournamentId, error: msg });
+      if (attempt === maxRetries) {
+        return { success: false, error: msg };
+      }
+    }
+  }
+  return { success: false, error: 'Max retries exceeded' };
+}
+
+/**
+ * Cancel a tournament in Escrow V3 (uint256 tournament IDs).
+ */
+export async function cancelEscrowV3Tournament(
+  onChainTournamentId: number | bigint
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  // Address is hardcoded, always available
+  const id = BigInt(onChainTournamentId);
+  const maxRetries = 5;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const client = getWalletClient();
+      const hash = await client.writeContract({
+        account: client.account!,
+        chain: pulsechain,
+        address: ESCROW_V3_ADDRESS,
+        abi: tournamentPrizeEscrowV3Abi as any, // ABI type doesn't include cancelTournament but it exists in contract
+        functionName: 'cancelTournament',
+        args: [id],
+      });
+      logger.info('Escrow V3 tournament cancelled', { onChainTournamentId: id.toString(), txHash: hash });
+      return { success: true, txHash: hash };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('Escrow V3 cancel tournament attempt failed', { attempt, onChainTournamentId: id.toString(), error: msg });
       if (attempt === maxRetries) {
         return { success: false, error: msg };
       }

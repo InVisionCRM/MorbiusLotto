@@ -8,7 +8,7 @@ const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2"
 const tournament_prize_escrow_v3_1 = require("../abi/tournament-prize-escrow-v3");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-const ESCROW_V3_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS;
+const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25';
 /**
  * Read tournament prize pool status from the escrow contract.
  * Supports both V1 and V2 contracts. V2 returns additional fields.
@@ -58,8 +58,7 @@ async function getEscrowPoolStatus(tournamentId) {
  * Read tournament prize pool status from Escrow V3 (uint256 tournament IDs).
  */
 async function getEscrowV3PoolStatus(onChainTournamentId) {
-    if (!ESCROW_V3_ADDRESS || !ESCROW_V3_ADDRESS.startsWith('0x'))
-        return null;
+    // Address is hardcoded, always available
     try {
         const client = (0, chain_client_1.getPublicClient)();
         const result = await client.readContract({

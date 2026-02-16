@@ -17,7 +17,6 @@ interface TournamentCompleteProps {
   isOpen: boolean;
   onClose: () => void;
   onPlayAgain?: () => void;
-  onRebuy?: () => void;
   state: TournamentState;
   tournamentName?: string;
   prizeWon?: bigint;
@@ -27,7 +26,6 @@ export function TournamentComplete({
   isOpen,
   onClose,
   onPlayAgain,
-  onRebuy,
   state,
   tournamentName,
   prizeWon = BigInt(0),
@@ -142,19 +140,6 @@ export function TournamentComplete({
             </div>
           )}
 
-          {/* Rebuy hint for busted players */}
-          {isBusted && state.canRebuy && (
-            <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-3 py-2 text-center">
-              <p className="text-cyan-300 text-xs">
-                You can rebuy and continue playing!
-              </p>
-              {state.maxRebuys > 0 && (
-                <p className="text-cyan-400/60 text-[10px] mt-0.5">
-                  {state.rebuyCount} of {state.maxRebuys} rebuys used
-                </p>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Actions */}
@@ -165,14 +150,7 @@ export function TournamentComplete({
           >
             Exit Tournament
           </button>
-          {isBusted && state.canRebuy && onRebuy ? (
-            <button
-              onClick={onRebuy}
-              className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-sm font-bold transition-all shadow-lg shadow-cyan-500/20 border border-cyan-400/30"
-            >
-              Rebuy &amp; Continue
-            </button>
-          ) : onPlayAgain && !isBusted ? (
+          {onPlayAgain && !isBusted ? (
             <button
               onClick={onPlayAgain}
               className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white text-sm font-bold transition-all shadow-lg shadow-cyan-500/20 border border-cyan-400/30"

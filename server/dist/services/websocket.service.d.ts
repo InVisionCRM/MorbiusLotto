@@ -70,7 +70,6 @@ export declare class WebSocketService {
     private handleCreateFreeroll;
     private handleTournamentList;
     private handleTournamentJoin;
-    private handleTournamentRebuy;
     private handleTournamentGetInfo;
     private handleFreerollList;
     private handleFreerollRegister;

@@ -1,10 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useWriteContract } from 'wagmi';
 import { Theme } from '@/lib/theme';
 import { formatEther } from 'viem';
+import { pulsechain } from 'viem/chains';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS } from '@/lib/contracts';
+import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV3Abi } from '@/abi/tournament-prize-escrow-v3';
+import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
+
+const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 
 interface TournamentCancelReclaimProps {
   tournamentId: string;
@@ -15,6 +22,7 @@ interface TournamentCancelReclaimProps {
   prizeTokenAddress?: string | null;
   prizePool?: string;
   entryCount?: number;
+  onChainTournamentId?: number | null;
   wsClient?: BlackjackWebSocketClient | null;
   onCancel?: () => void;
   onReclaim?: () => void;
@@ -29,11 +37,13 @@ export function TournamentCancelReclaim({
   prizeTokenAddress,
   prizePool = '0',
   entryCount = 0,
+  onChainTournamentId,
   wsClient,
   onCancel,
   onReclaim,
 }: TournamentCancelReclaimProps) {
   const { address } = useAccount();
+  const { writeContractAsync } = useWriteContract();
   const [isCancelling, setIsCancelling] = useState(false);
   const [isReclaiming, setIsReclaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,23 +94,35 @@ export function TournamentCancelReclaim({
     setSuccess(null);
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || window.location.origin.replace(/^ws/, 'http');
-      const res = await fetch(`${base}/api/tournament/${tournamentId}/reclaim`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creatorAddress: address }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to reclaim funds');
-      }
-
-      if (data.error && data.error.includes('must call creatorReclaim() directly')) {
-        // Show instructions for direct contract call
-        setError('Please call creatorReclaim() directly on the escrow contract using your wallet. The contract address is shown in the tournament details.');
+      const isV3 = onChainTournamentId != null;
+      if (isV3) {
+        // Escrow V3: uint256 tournament ID
+        const hash = await writeContractAsync({
+          address: TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS,
+          abi: tournamentPrizeEscrowV3Abi,
+          functionName: 'creatorReclaim',
+          args: [BigInt(onChainTournamentId)],
+          account: address,
+          chain: pulsechain,
+        });
+        setSuccess(`Funds reclaimed successfully! Transaction: ${hash.slice(0, 10)}...`);
+        onReclaim?.();
       } else {
-        setSuccess(`Funds reclaimed successfully! Transaction: ${data.txHash?.slice(0, 10)}...`);
+        // Escrow V1/V2: bytes32 tournament ID
+        if (!TOURNAMENT_PRIZE_ESCROW_ADDRESS || TOURNAMENT_PRIZE_ESCROW_ADDRESS === ESCROW_ZERO) {
+          setError('Escrow contract not configured for this tournament type');
+          return;
+        }
+        const idBytes32 = tournamentIdToBytes32(tournamentId);
+        const hash = await writeContractAsync({
+          address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
+          abi: tournamentPrizeEscrowV2Abi,
+          functionName: 'creatorReclaim',
+          args: [idBytes32],
+          account: address,
+          chain: pulsechain,
+        });
+        setSuccess(`Funds reclaimed successfully! Transaction: ${hash.slice(0, 10)}...`);
         onReclaim?.();
       }
     } catch (err: any) {

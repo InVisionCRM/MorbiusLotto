@@ -373,6 +373,12 @@ export function getExamplePrizeDistribution(
   const result: { rank: number; percentage: number; amount: bigint }[] = [];
   const distributablePool = (prizePool * BigInt(100 - totalFeePercent)) / 100n;
 
+  // Defensive check: ensure prizePercentages is a valid array
+  if (!Array.isArray(prizePercentages) || prizePercentages.length === 0) {
+    // Default to top_10 distribution if invalid
+    prizePercentages = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+  }
+
   for (let i = 0; i < prizePercentages.length; i++) {
     const percentage = prizePercentages[i];
     if (percentage > 0) {

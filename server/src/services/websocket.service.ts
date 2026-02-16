@@ -452,11 +452,6 @@ export class WebSocketService {
           await this.handleTournamentJoin(ws, message);
           break;
 
-        case 'tournament_rebuy':
-          if (!this.requireAuth(ws, message)) return;
-          await this.handleTournamentRebuy(ws, message);
-          break;
-
         case 'tournament_get_info':
           if (!this.requireAuth(ws, message)) return;
           await this.handleTournamentGetInfo(ws, message);
@@ -2208,59 +2203,6 @@ export class WebSocketService {
     }
   }
 
-  private async handleTournamentRebuy(ws: WebSocketClient, message: WebSocketMessage) {
-    try {
-      if (!ws.playerAddress) {
-        return this.sendError(ws, 'Wallet required', message.requestId);
-      }
-
-      if (!this.tournamentService) {
-        return this.sendError(ws, 'Tournament mode not available', message.requestId);
-      }
-
-      const payload = message.payload as { tournamentId: string };
-
-      if (!payload.tournamentId) {
-        return this.sendError(ws, 'Tournament ID required', message.requestId);
-      }
-
-      const result = await this.tournamentService.processRebuy(
-        ws.playerAddress,
-        payload.tournamentId
-      );
-
-      // Get tournament for extended info
-      const tournamentInfo = await this.tournamentService.getTournamentInfoExtended(payload.tournamentId);
-
-      this.sendMessage(ws, {
-        type: 'tournament_rebuy_result',
-        payload: {
-          success: true,
-          entryId: result.entry.id,
-          newChips: result.entry.chips_remaining,
-          rebuyCount: result.entry.rebuy_count,
-          totalBuyIn: result.entry.total_buy_in.toString(),
-          newPrizePool: result.newPrizePool.toString(),
-          maxRebuys: tournamentInfo?.tournament.rebuy_config.maxRebuys || 0,
-        },
-        requestId: message.requestId
-      });
-
-      // Broadcast leaderboard update
-      this.broadcastTournamentLeaderboardUpdate(payload.tournamentId);
-
-      logger.info('Player rebuy processed via WebSocket', {
-        playerAddress: ws.playerAddress,
-        tournamentId: payload.tournamentId,
-        rebuyCount: result.entry.rebuy_count,
-      });
-    } catch (error) {
-      logger.error('Error processing rebuy:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to process rebuy';
-      this.sendError(ws, errorMessage, message.requestId);
-    }
-  }
-
   private async handleTournamentGetInfo(ws: WebSocketClient, message: WebSocketMessage) {
     try {
       if (!this.tournamentService) {
@@ -2618,21 +2560,37 @@ export class WebSocketService {
 
   // Helper to get prize percentages from type
   private getPrizePercentagesForType(type: string, custom?: number[]): number[] {
+    let result: number[];
     switch (type) {
       case 'winner_takes_all':
-        return [100];
+        result = [100];
+        break;
       case 'top_3':
-        return [50, 30, 20];
+        result = [50, 30, 20];
+        break;
       case 'top_3_steep':
-        return [60, 25, 15];
+        result = [60, 25, 15];
+        break;
       case 'top_5':
-        return [40, 25, 15, 12, 8];
+        result = [40, 25, 15, 12, 8];
+        break;
       case 'custom':
-        return custom || [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+        result = custom || [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+        break;
       case 'top_10':
       default:
-        return [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+        result = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+        break;
     }
+    // Defensive check: ensure result is always a valid array
+    if (!Array.isArray(result) || result.length === 0) {
+      result = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+    }
+    // Ensure custom array is valid if provided
+    if (type === 'custom' && custom && (!Array.isArray(custom) || custom.length === 0)) {
+      result = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+    }
+    return result;
   }
 
   // Clean shutdown

@@ -46,6 +46,23 @@ exports.morbiusTournamentAbi = [
         type: 'function',
     },
     {
+        inputs: [{ name: 'tournamentId', type: 'uint256' }],
+        name: 'cancelTournament',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    {
+        inputs: [
+            { name: 'tournamentId', type: 'uint256' },
+            { name: 'player', type: 'address' },
+        ],
+        name: 'refund',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    {
         inputs: [
             { name: 'tournamentId', type: 'uint256' },
             { name: 'winner', type: 'address' },

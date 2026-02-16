@@ -34,10 +34,18 @@ export declare function sendEscrowV3RemainderTo(onChainTournamentId: number | bi
     error?: string;
 }>;
 /**
- * Cancel a tournament in the escrow contract. Only callable by authorized server.
+ * Cancel a tournament in the escrow contract (V1/V2). Only callable by authorized server.
  * Marks the tournament as cancelled so creator can reclaim funds.
  */
 export declare function cancelTournamentInEscrow(tournamentId: string): Promise<{
+    success: boolean;
+    txHash?: string;
+    error?: string;
+}>;
+/**
+ * Cancel a tournament in Escrow V3 (uint256 tournament IDs).
+ */
+export declare function cancelEscrowV3Tournament(onChainTournamentId: number | bigint): Promise<{
     success: boolean;
     txHash?: string;
     error?: string;

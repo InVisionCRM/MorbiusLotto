@@ -2779,13 +2779,6 @@ export default function BlackjackPage() {
                       toast.error('Failed to leave tournament');
                     }
                   }}
-                  onRebuy={async () => {
-                    const success = await tournament.requestRebuy();
-                    if (success) {
-                      toast.success('Rebuy successful! Back in the game.');
-                    }
-                  }}
-                  isRebuyLoading={tournament.isLoading}
                 />
               ) : null
             }
@@ -2873,13 +2866,6 @@ export default function BlackjackPage() {
           onPlayAgain={() => {
             setShowTournamentComplete(false);
             setShowTournamentEntry(true);
-          }}
-          onRebuy={async () => {
-            const success = await tournament.requestRebuy();
-            if (success) {
-              setShowTournamentComplete(false);
-              toast.success('Rebuy successful! Back in the game.');
-            }
           }}
           state={tournament.tournamentState}
           tournamentName={tournament.tournamentInfo?.name}

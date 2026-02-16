@@ -373,13 +373,6 @@ export declare class TournamentService {
      */
     joinTournament(playerAddress: string, tournamentId: string, pinCode?: string): Promise<TournamentEntry>;
     /**
-     * Process rebuy for a player
-     */
-    processRebuy(playerAddress: string, tournamentId: string): Promise<{
-        entry: TournamentEntry;
-        newPrizePool: bigint;
-    }>;
-    /**
      * Get extended tournament info including all settings
      */
     getTournamentInfoExtended(tournamentId: string): Promise<{

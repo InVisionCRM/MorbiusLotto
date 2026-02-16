@@ -5,6 +5,7 @@ exports.sendEscrowRemainderToReclaimWallet = sendEscrowRemainderToReclaimWallet;
 exports.sendEscrowV3Payout = sendEscrowV3Payout;
 exports.sendEscrowV3RemainderTo = sendEscrowV3RemainderTo;
 exports.cancelTournamentInEscrow = cancelTournamentInEscrow;
+exports.cancelEscrowV3Tournament = cancelEscrowV3Tournament;
 exports.creatorReclaimFromEscrow = creatorReclaimFromEscrow;
 const viem_1 = require("viem");
 const accounts_1 = require("viem/accounts");
@@ -16,7 +17,7 @@ const escrow_status_1 = require("./escrow-status");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const logger_1 = require("./logger");
 const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-const ESCROW_V3_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS;
+const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25';
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY);
 let walletClient = null;
 function getWalletClient() {
@@ -120,9 +121,7 @@ async function sendEscrowRemainderToReclaimWallet(tournamentId) {
  * Send a single prize payout from Escrow V3 (uint256 tournament IDs).
  */
 async function sendEscrowV3Payout(onChainTournamentId, winnerAddress, amount) {
-    if (!ESCROW_V3_ADDRESS || !ESCROW_V3_ADDRESS.startsWith('0x')) {
-        return { success: false, error: 'Escrow V3 not configured' };
-    }
+    // Address is hardcoded, always available
     if (amount <= 0n)
         return { success: true };
     const id = BigInt(onChainTournamentId);
@@ -155,8 +154,7 @@ async function sendEscrowV3Payout(onChainTournamentId, winnerAddress, amount) {
  * Send remaining Escrow V3 balance to reclaim wallet.
  */
 async function sendEscrowV3RemainderTo(onChainTournamentId, to) {
-    if (!ESCROW_V3_ADDRESS || !ESCROW_V3_ADDRESS.startsWith('0x'))
-        return { success: false, error: 'Escrow V3 not configured' };
+    // Address is hardcoded, always available
     const status = await (0, escrow_status_1.getEscrowV3PoolStatus)(onChainTournamentId);
     if (!status)
         return { success: false, error: 'Could not read pool status' };
@@ -189,7 +187,7 @@ async function sendEscrowV3RemainderTo(onChainTournamentId, to) {
     return { success: false, error: 'Max retries exceeded' };
 }
 /**
- * Cancel a tournament in the escrow contract. Only callable by authorized server.
+ * Cancel a tournament in the escrow contract (V1/V2). Only callable by authorized server.
  * Marks the tournament as cancelled so creator can reclaim funds.
  */
 async function cancelTournamentInEscrow(tournamentId) {
@@ -215,6 +213,37 @@ async function cancelTournamentInEscrow(tournamentId) {
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             logger_1.logger.error('Escrow cancel tournament attempt failed', { attempt, tournamentId, error: msg });
+            if (attempt === maxRetries) {
+                return { success: false, error: msg };
+            }
+        }
+    }
+    return { success: false, error: 'Max retries exceeded' };
+}
+/**
+ * Cancel a tournament in Escrow V3 (uint256 tournament IDs).
+ */
+async function cancelEscrowV3Tournament(onChainTournamentId) {
+    // Address is hardcoded, always available
+    const id = BigInt(onChainTournamentId);
+    const maxRetries = 5;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const client = getWalletClient();
+            const hash = await client.writeContract({
+                account: client.account,
+                chain: chains_1.pulsechain,
+                address: ESCROW_V3_ADDRESS,
+                abi: tournament_prize_escrow_v3_1.tournamentPrizeEscrowV3Abi, // ABI type doesn't include cancelTournament but it exists in contract
+                functionName: 'cancelTournament',
+                args: [id],
+            });
+            logger_1.logger.info('Escrow V3 tournament cancelled', { onChainTournamentId: id.toString(), txHash: hash });
+            return { success: true, txHash: hash };
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger_1.logger.error('Escrow V3 cancel tournament attempt failed', { attempt, onChainTournamentId: id.toString(), error: msg });
             if (attempt === maxRetries) {
                 return { success: false, error: msg };
             }

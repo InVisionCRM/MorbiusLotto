@@ -14,7 +14,6 @@ import {
   PRIZE_DISTRIBUTION_LABELS,
   PrizeDistributionType,
   TIME_LIMIT_LABELS,
-  MAX_REBUYS_LABELS,
 } from '@/lib/tournament-types';
 import { getTableThemeInfo } from '@/app/BLACKJACK/constants';
 import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
@@ -559,7 +558,11 @@ function ExpandedCardContent({
 
   // Prize distribution
   const prizePreset = PRIZE_PRESETS.find((p) => p.id === tournament.prizeDistributionType);
-  const prizePercentages = prizePreset?.percentages ?? [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+  let prizePercentages = prizePreset?.percentages ?? [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+  // Defensive check: ensure it's always a valid array
+  if (!Array.isArray(prizePercentages) || prizePercentages.length === 0) {
+    prizePercentages = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+  }
   const prizePool = BigInt(tournament.prizePool);
   const prizeDistribution = getExamplePrizeDistribution(prizePool, prizePercentages);
   const decimals = tournament.prizeTokenDecimals ?? 18;
@@ -754,24 +757,7 @@ function ExpandedCardContent({
           </div>
         </div>
 
-        {/* d. Rebuys Section */}
-        <div>
-          <SectionHeader>Rebuys</SectionHeader>
-          <div className="text-sm text-gray-300">
-            {tournament.rebuyConfig.enabled ? (
-              <p>
-                Enabled &mdash;{' '}
-                {tournament.rebuyConfig.maxRebuys === 0
-                  ? 'Unlimited'
-                  : MAX_REBUYS_LABELS[tournament.rebuyConfig.maxRebuys] ?? `${tournament.rebuyConfig.maxRebuys} rebuys`}
-              </p>
-            ) : (
-              <p className="text-gray-500">Disabled</p>
-            )}
-          </div>
-        </div>
-
-        {/* e. Players Section */}
+        {/* d. Players Section */}
         <div>
           <SectionHeader>Players ({entries.length})</SectionHeader>
           {loadingEntries ? (
@@ -853,6 +839,7 @@ function ExpandedCardContent({
               prizeTokenAddress={tournament.prizeTokenAddress}
               prizePool={tournament.prizePool}
               entryCount={tournament.entryCount}
+              onChainTournamentId={tournament.onChainTournamentId ?? undefined}
               wsClient={wsClient ?? null}
             />
           </div>
@@ -992,11 +979,6 @@ function TournamentCard({
             {tournament.isPrivate && (
               <span className="px-2 py-0.5 rounded-full bg-purple-500/90 text-white text-[10px] font-medium shadow-lg">
                 Private
-              </span>
-            )}
-            {tournament.rebuyConfig.enabled && (
-              <span className="px-2 py-0.5 rounded-full bg-green-500/90 text-white text-[10px] font-medium shadow-lg">
-                Rebuys
               </span>
             )}
             {timer && (
@@ -1167,11 +1149,6 @@ function ExpandedCard({
             {tournament.isPrivate && (
               <span className="px-2 py-0.5 rounded-full bg-purple-500/90 text-white text-[10px] font-medium">
                 Private
-              </span>
-            )}
-            {tournament.rebuyConfig.enabled && (
-              <span className="px-2 py-0.5 rounded-full bg-green-500/90 text-white text-[10px] font-medium">
-                Rebuys
               </span>
             )}
             {timer && (

@@ -7,18 +7,13 @@ import { Theme } from '@/lib/theme';
 interface TournamentHUDProps {
   state: TournamentState;
   onLeave?: () => void;
-  onRebuy?: () => void;
-  isRebuyLoading?: boolean;
   isCompact?: boolean;
 }
 
-export function TournamentHUD({ state, onLeave, onRebuy, isRebuyLoading = false, isCompact = false }: TournamentHUDProps) {
+export function TournamentHUD({ state, onLeave, isCompact = false }: TournamentHUDProps) {
   const progress = ((state.handsPlayed / state.maxHands) * 100).toFixed(0);
   const chipChangeFromStart = state.chips - state.startingChips;
   const chipChangePercent = ((chipChangeFromStart / state.startingChips) * 100).toFixed(1);
-
-  // Determine if rebuy button should be shown
-  const showRebuyButton = state.rebuyEnabled && state.canRebuy && (state.status === 'busted' || state.chips === 0);
 
   if (isCompact) {
     return (
@@ -48,29 +43,6 @@ export function TournamentHUD({ state, onLeave, onRebuy, isRebuyLoading = false,
           <span className="text-purple-400">#{state.currentRank}</span>
         </div>
 
-        {/* Rebuy Button (compact) */}
-        {showRebuyButton && onRebuy && (
-          <>
-            <div className="w-px h-6 bg-gray-600" />
-            <button
-              onClick={onRebuy}
-              disabled={isRebuyLoading}
-              className="px-3 py-1 rounded-lg bg-green-500 hover:bg-green-400 text-white text-sm font-semibold transition-colors disabled:opacity-50"
-            >
-              {isRebuyLoading ? '...' : 'Rebuy'}
-            </button>
-          </>
-        )}
-
-        {/* Rebuy Count */}
-        {state.rebuyEnabled && state.rebuyCount > 0 && (
-          <>
-            <div className="w-px h-6 bg-gray-600" />
-            <span className="text-gray-400 text-xs">
-              Rebuys: {state.rebuyCount}{state.maxRebuys > 0 ? `/${state.maxRebuys}` : ''}
-            </span>
-          </>
-        )}
       </div>
     );
   }
@@ -153,38 +125,6 @@ export function TournamentHUD({ state, onLeave, onRebuy, isRebuyLoading = false,
         </div>
       </div>
 
-      {/* Rebuy Section */}
-      {state.rebuyEnabled && (
-        <div className="pt-2 border-t border-gray-700">
-          {/* Rebuy Count */}
-          {state.rebuyCount > 0 && (
-            <p className="text-gray-400 text-xs text-center mb-2">
-              Rebuys used: {state.rebuyCount}{state.maxRebuys > 0 ? ` / ${state.maxRebuys}` : ' (unlimited)'}
-            </p>
-          )}
-
-          {/* Rebuy Button */}
-          {showRebuyButton && onRebuy && (
-            <button
-              onClick={onRebuy}
-              disabled={isRebuyLoading}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-semibold transition-all shadow-lg shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isRebuyLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Processing Rebuy...
-                </span>
-              ) : (
-                'Rebuy & Continue'
-              )}
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

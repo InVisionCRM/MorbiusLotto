@@ -65,6 +65,27 @@ export declare const morbiusTournamentAbi: readonly [{
     readonly inputs: readonly [{
         readonly name: "tournamentId";
         readonly type: "uint256";
+    }];
+    readonly name: "cancelTournament";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "uint256";
+    }, {
+        readonly name: "player";
+        readonly type: "address";
+    }];
+    readonly name: "refund";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "uint256";
     }, {
         readonly name: "winner";
         readonly type: "address";

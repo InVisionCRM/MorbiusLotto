@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+
+// Force dynamic rendering to prevent WagmiProviderNotFoundError during static prerender.
+// Wagmi/RainbowKit hooks require client context that isn't available during SSG.
+export const dynamic = 'force-dynamic';
 import { Providers } from "./providers";
 import { Toaster } from "sonner";
 import { BreakReminderWrapper } from "@/components/ResponsibleGaming";

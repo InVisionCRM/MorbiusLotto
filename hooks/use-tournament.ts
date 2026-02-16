@@ -751,46 +751,76 @@ export function useTournament(options: UseTournamentOptions) {
     try {
       let onChainTournamentId: number | undefined;
 
-      if (MORBIUS_TOURNAMENT_ADDRESS && MORBIUS_TOURNAMENT_ADDRESS !== MORBIUS_TOURNAMENT_ZERO && writeContractAsync && publicClient) {
+      // Contract address is hardcoded, contract interaction is REQUIRED
+      const hasWriteContract = !!writeContractAsync;
+      const hasPublicClient = !!publicClient;
+
+      // Contract interaction is always required (address is hardcoded)
+      if (MORBIUS_TOURNAMENT_ADDRESS && MORBIUS_TOURNAMENT_ADDRESS !== MORBIUS_TOURNAMENT_ZERO) {
+        if (!hasWriteContract) {
+          throw new Error('Wallet connection required for on-chain tournament creation. Please connect your wallet.');
+        }
+        if (!hasPublicClient) {
+          throw new Error('Public client required for on-chain tournament creation. Please ensure your wallet is connected.');
+        }
+
+        console.log('Creating tournament on-chain...', {
+          address: MORBIUS_TOURNAMENT_ADDRESS,
+          buyInAmount: params.buyInAmount,
+          maxPlayers: params.maxPlayers,
+        });
+
         const buyInAmount = BigInt(params.buyInAmount);
         const maxPlayers = params.maxPlayers ?? 0;
         const prizeToken = (params.prizeTokenAddress?.trim() || MORBIUS_TOURNAMENT_ZERO) as `0x${string}`;
         const prizeAmount = params.prizeAmount ? BigInt(params.prizeAmount) : 0n;
 
-        const hash = await writeContractAsync({
-          address: MORBIUS_TOURNAMENT_ADDRESS,
-          abi: morbiusTournamentAbi,
-          functionName: 'createTournament',
-          args: [buyInAmount, BigInt(maxPlayers), prizeToken, prizeAmount],
-          chain: pulsechain,
-        });
+        try {
+          const hash = await writeContractAsync({
+            address: MORBIUS_TOURNAMENT_ADDRESS,
+            abi: morbiusTournamentAbi,
+            functionName: 'createTournament',
+            args: [buyInAmount, BigInt(maxPlayers), prizeToken, prizeAmount],
+            chain: pulsechain,
+          });
 
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        const log = receipt.logs.find((l) => {
-          try {
-            const decoded = decodeEventLog({
-              abi: morbiusTournamentAbi,
-              data: l.data,
-              topics: l.topics,
-            });
-            return decoded.eventName === 'TournamentCreated';
-          } catch {
-            return false;
+          console.log('Tournament creation transaction sent:', hash);
+
+          const receipt = await publicClient.waitForTransactionReceipt({ hash });
+          const log = receipt.logs.find((l) => {
+            try {
+              const decoded = decodeEventLog({
+                abi: morbiusTournamentAbi,
+                data: l.data,
+                topics: l.topics,
+              });
+              return decoded.eventName === 'TournamentCreated';
+            } catch {
+              return false;
+            }
+          });
+          if (!log) {
+            throw new Error('TournamentCreated event not found in transaction receipt. Tournament may not have been created on-chain.');
           }
-        });
-        if (!log) {
-          throw new Error('TournamentCreated event not found');
+          const decoded = decodeEventLog({
+            abi: morbiusTournamentAbi,
+            data: log.data,
+            topics: log.topics,
+          });
+          if (decoded.eventName === 'TournamentCreated' && 'tournamentId' in decoded.args) {
+            onChainTournamentId = Number(decoded.args.tournamentId);
+            console.log('On-chain tournament created with ID:', onChainTournamentId);
+          } else {
+            throw new Error('Could not parse tournament ID from TournamentCreated event');
+          }
+        } catch (error: any) {
+          // Contract interaction failed - fail loudly
+          const errorMessage = error?.message || 'Unknown error during on-chain tournament creation';
+          throw new Error(`Failed to create tournament on-chain: ${errorMessage}. Tournament creation cancelled.`);
         }
-        const decoded = decodeEventLog({
-          abi: morbiusTournamentAbi,
-          data: log.data,
-          topics: log.topics,
-        });
-        if (decoded.eventName === 'TournamentCreated' && 'tournamentId' in decoded.args) {
-          onChainTournamentId = Number(decoded.args.tournamentId);
-        } else {
-          throw new Error('Could not parse tournament ID from event');
-        }
+      } else {
+        // This should never happen since address is hardcoded
+        throw new Error('MORBIUS_TOURNAMENT_ADDRESS is not configured. This should not happen.');
       }
 
       const response = await wsClient.sendRequest('tournament_create', {
@@ -906,27 +936,49 @@ export function useTournament(options: UseTournamentOptions) {
     try {
       const { onChainTournamentId, buyInAmount } = options ?? {};
 
-      if (onChainTournamentId != null && MORBIUS_TOURNAMENT_ADDRESS && MORBIUS_TOURNAMENT_ADDRESS !== MORBIUS_TOURNAMENT_ZERO && writeContractAsync && publicClient) {
+      // If this is an on-chain tournament, contract interaction is REQUIRED
+      if (onChainTournamentId != null) {
+        // Address is hardcoded, always available
+        if (!writeContractAsync) {
+          throw new Error('Wallet connection required for on-chain tournament join. Please connect your wallet.');
+        }
+        if (!publicClient) {
+          throw new Error('Public client required for on-chain tournament join. Please ensure your wallet is connected.');
+        }
+
         const buyInWei = buyInAmount ? BigInt(buyInAmount) : 0n;
-        if (buyInWei > 0n) {
-          const { MORBIUS_TOKEN_ADDRESS } = await import('@/lib/contracts');
-          const { ERC20_ABI } = await import('@/abi/erc20');
-          const hash = await writeContractAsync({
-            address: MORBIUS_TOKEN_ADDRESS,
-            abi: ERC20_ABI,
-            functionName: 'approve',
-            args: [MORBIUS_TOURNAMENT_ADDRESS, buyInWei],
+        
+        try {
+          // Approve MORBIUS token if buy-in required
+          if (buyInWei > 0n) {
+            const { MORBIUS_TOKEN_ADDRESS } = await import('@/lib/contracts');
+            const { ERC20_ABI } = await import('@/abi/erc20');
+            const approveHash = await writeContractAsync({
+              address: MORBIUS_TOKEN_ADDRESS,
+              abi: ERC20_ABI,
+              functionName: 'approve',
+              args: [MORBIUS_TOURNAMENT_ADDRESS, buyInWei],
+              chain: pulsechain,
+            });
+            await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          }
+
+          // Join tournament on-chain
+          const joinHash = await writeContractAsync({
+            address: MORBIUS_TOURNAMENT_ADDRESS,
+            abi: morbiusTournamentAbi,
+            functionName: 'joinTournament',
+            args: [BigInt(onChainTournamentId)],
             chain: pulsechain,
           });
-          await publicClient.waitForTransactionReceipt({ hash });
+          
+          // Wait for join transaction to confirm
+          await publicClient.waitForTransactionReceipt({ hash: joinHash });
+        } catch (error: any) {
+          // Contract interaction failed - fail loudly
+          const errorMessage = error?.message || 'Unknown error during on-chain tournament join';
+          throw new Error(`Failed to join tournament on-chain: ${errorMessage}. Join cancelled.`);
         }
-        await writeContractAsync({
-          address: MORBIUS_TOURNAMENT_ADDRESS,
-          abi: morbiusTournamentAbi,
-          functionName: 'joinTournament',
-          args: [BigInt(onChainTournamentId)],
-          chain: pulsechain,
-        });
       }
 
       const response = await wsClient.sendRequest('tournament_join', {
@@ -972,59 +1024,6 @@ export function useTournament(options: UseTournamentOptions) {
       setIsLoading(false);
     }
   }, [wsClient, address, writeContractAsync, publicClient]);
-
-  /**
-   * Request a rebuy in the current tournament
-   */
-  const requestRebuy = useCallback(async (): Promise<boolean> => {
-    if (!wsClient || !tournamentState.tournamentId) {
-      setError('Not in a tournament');
-      return false;
-    }
-
-    if (!tournamentState.rebuyEnabled) {
-      setError('Rebuys not enabled for this tournament');
-      return false;
-    }
-
-    if (!tournamentState.canRebuy) {
-      setError('Cannot rebuy right now');
-      return false;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await wsClient.sendRequest('tournament_rebuy', {
-        tournamentId: tournamentState.tournamentId,
-      });
-
-      setTournamentState(prev => ({
-        ...prev,
-        chips: response.newChips,
-        status: 'playing',
-        rebuyCount: response.rebuyCount,
-        totalBuyIn: response.totalBuyIn,
-        canRebuy: prev.maxRebuys === 0 || response.rebuyCount < prev.maxRebuys,
-      }));
-
-      // Update prize pool in tournament info
-      if (response.newPrizePool) {
-        setTournamentInfo(prev => prev ? {
-          ...prev,
-          prizePool: response.newPrizePool,
-        } : null);
-      }
-
-      return true;
-    } catch (err: any) {
-      setError(err.message || 'Failed to process rebuy');
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [wsClient, tournamentState]);
 
   /**
    * Get extended tournament info by ID
@@ -1113,7 +1112,6 @@ export function useTournament(options: UseTournamentOptions) {
     createFreeroll,
     fetchTournamentList,
     joinTournament,
-    requestRebuy,
     getTournamentInfo,
     clearCreatedTournament,
 

@@ -15,10 +15,8 @@ import {
   TOURNAMENT_VALIDATION,
   FREEROLL_VALIDATION,
   TIME_LIMIT_LABELS,
-  MAX_REBUYS_LABELS,
   PrizeDistributionType,
   TableTheme,
-  RebuyConfig,
   CreateTournamentRequest,
   CreateFreerollRequest,
   FreerollMode,
@@ -36,7 +34,7 @@ import { Theme } from '@/lib/theme';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const isEscrowConfigured = TOURNAMENT_PRIZE_ESCROW_ADDRESS !== ESCROW_ZERO;
-const isEscrowV3Configured = TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS !== ESCROW_ZERO;
+const isEscrowV3Configured = true; // V3 address is hardcoded, always available
 import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
 import { tournamentPrizeEscrowV3Abi } from '@/abi/tournament-prize-escrow-v3';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
@@ -130,8 +128,6 @@ export function TournamentCreator({
   const [maxHands, setMaxHands] = useState<number>(50);
   const [maxHandsInput, setMaxHandsInput] = useState<string>('50');
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
-  const [rebuyEnabled, setRebuyEnabled] = useState(false);
-  const [maxRebuys, setMaxRebuys] = useState<number>(0);
   const [prizeDistributionType, setPrizeDistributionType] = useState<PrizeDistributionType>('top_10');
   const [themeKind, setThemeKind] = useState<'image' | 'video'>('image');
   const [themeId, setThemeId] = useState<string>('BigRich');
@@ -469,10 +465,7 @@ export function TournamentCreator({
       startingChips,
       maxHands,
       timeLimitMinutes,
-      rebuyConfig: {
-        enabled: rebuyEnabled,
-        maxRebuys: rebuyEnabled ? maxRebuys : 0,
-      },
+      rebuyConfig: { enabled: false, maxRebuys: 0 },
       tableTheme: resolvedTableTheme,
       isPrivate,
       prizeDistributionType,
@@ -527,12 +520,11 @@ export function TournamentCreator({
 
   const handleApproveToken = async () => {
     if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
-    const useV3 = Boolean(createdTournament.onChainTournamentId != null && isEscrowV3Configured);
+    const useV3 = Boolean(createdTournament.onChainTournamentId != null);
     const escrow = useV3 ? TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS : TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-    if ((useV3 && !isEscrowV3Configured) || (!useV3 && (!isEscrowConfigured || escrow === ESCROW_ZERO))) {
-      setFundingError(useV3
-        ? 'Escrow V3 not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS to your .env.'
-        : 'Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env.');
+    // Escrow V3 is hardcoded, always available. Only check V1/V2 if using those.
+    if (!useV3 && (!isEscrowConfigured || escrow === ESCROW_ZERO)) {
+      setFundingError('Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env.');
       return;
     }
     if (!address) {
@@ -570,9 +562,10 @@ export function TournamentCreator({
 
   const handleDepositToEscrow = async () => {
     if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
-    const useV3 = Boolean(createdTournament.onChainTournamentId != null && isEscrowV3Configured);
+    const useV3 = Boolean(createdTournament.onChainTournamentId != null);
     const escrow = useV3 ? TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS : TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-    if ((useV3 && !isEscrowV3Configured) || (!useV3 && (!isEscrowConfigured || escrow === ESCROW_ZERO))) return;
+    // Escrow V3 is hardcoded, always available. Only check V1/V2 if using those.
+    if (!useV3 && (!isEscrowConfigured || escrow === ESCROW_ZERO)) return;
     setFundingError(null);
     setFundingStep('depositing');
     try {
@@ -1190,17 +1183,6 @@ export function TournamentCreator({
 
               {tournamentType === 'buyin' && (
                 <>
-                  <div className="flex items-center justify-between p-4 rounded-xl border border-gray-700" style={Theme.panel.base}>
-                    <div><p className="text-white font-medium">Rebuys</p><p className="text-gray-400 text-xs">Buy back in after busting</p></div>
-                    <button onClick={() => setRebuyEnabled(!rebuyEnabled)} className={`relative w-12 h-6 rounded-full ${rebuyEnabled ? 'bg-green-500' : 'bg-gray-600'}`}><div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${rebuyEnabled ? 'translate-x-6' : 'translate-x-1'}`} /></button>
-                  </div>
-                  {rebuyEnabled && (
-                    <div className="grid grid-cols-4 gap-2">
-                      {TOURNAMENT_VALIDATION.MAX_REBUYS_OPTIONS.map((max) => (
-                        <button key={max} onClick={() => setMaxRebuys(max)} className={`py-2 rounded-lg text-sm font-medium ${maxRebuys === max ? 'bg-green-500 text-white' : 'bg-gray-800 text-gray-400'}`}>{MAX_REBUYS_LABELS[max]}</button>
-                      ))}
-                    </div>
-                  )}
                   <div>
                     <label className="block text-gray-300 text-sm mb-1">Creator fee: {creatorFeePercent}%</label>
                     <input type="range" min="0" max="5" step="1" value={creatorFeePercent} onChange={(e) => setCreatorFeePercent(parseInt(e.target.value, 10))} className="w-full h-2 bg-gray-700 rounded-lg accent-purple-500" aria-label="Creator fee percent" />
