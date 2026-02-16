@@ -70,7 +70,7 @@ export function BettingPanelMobile({
     setInputValue(''); // blank when user starts editing
   };
 
-  const PRESETS = [500, 1000, 2500, 10000, 100000];
+  const PRESETS = [500, 2500, 10000, 100000];
   const addPreset = (amount: number) => {
     if (isPlaying) return;
     const current = numValue;
@@ -92,7 +92,7 @@ export function BettingPanelMobile({
     <section className="w-full max-w-md mx-auto px-2 py-1">
       <div className="flex flex-col gap-1 w-full">
         <span className="text-xs text-gray-400 uppercase tracking-wider">Amount</span>
-        <div className="flex items-stretch w-full rounded-lg overflow-hidden" style={{ minHeight: '36px' }}>
+        <div className="flex items-stretch w-full rounded-lg border border-white/20 overflow-hidden" style={{ minHeight: '36px' }}>
           {/* Manual entry + logo — ~2/3 width */}
           <div className="flex-1 flex items-center gap-2 pl-2 pr-2 min-w-0">
             <input
