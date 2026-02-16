@@ -49,6 +49,7 @@ const provably_fair_service_1 = require("./services/provably-fair.service");
 const blackjack_game_service_1 = require("./services/blackjack-game.service");
 const tournament_service_1 = require("./services/tournament.service");
 const freeroll_scheduler_service_1 = require("./services/freeroll-scheduler.service");
+const tournament_scheduler_service_1 = require("./services/tournament-scheduler.service");
 const websocket_service_1 = require("./services/websocket.service");
 const chain_analytics_service_1 = require("./services/chain-analytics.service");
 const logger_1 = require("./utils/logger");
@@ -153,6 +154,9 @@ async function initializeServices() {
         // Freeroll scheduler (polls pending scheduled events: start, elimination_round, end)
         freerollScheduler = new freeroll_scheduler_service_1.FreerollSchedulerService(dbService.getPool(), tournamentService);
         freerollScheduler.start();
+        // Tournament scheduler (time-expired buy-in tournaments, stuck-tournament recovery)
+        tournamentScheduler = new tournament_scheduler_service_1.TournamentSchedulerService(dbService.getPool(), tournamentService);
+        tournamentScheduler.start();
         // Expire any orphaned pending withdrawals from a previous crash (refunds balances)
         try {
             const expired = await dbService.expirePendingWithdrawals();
@@ -355,11 +359,8 @@ async function initializeServices() {
                 const totalWon = range === 'all'
                     ? blackjackWon + plinkoWon + kenoWon + lotteryWon + bigWheelWon
                     : blackjackWon;
-                // Deposits and withdrawals: Query contract events or use placeholder
-                // For now, we'll need to query events from the Blackjack contract
-                // This is a placeholder - you may want to add event indexing for accurate data
-                const totalDeposited = 0n; // TODO: Query Deposit/DepositMORBIUS events
-                const totalWithdrawn = 0n; // TODO: Query Withdrawal events
+                // Deposits and withdrawals: from Blackjack V2 contract events (all-time)
+                const { totalDeposited, totalWithdrawn } = await chainAnalytics.getBlackjackDepositWithdrawTotals();
                 sendJson(res, {
                     range,
                     totalWagered: totalWagered.toString(),
@@ -1134,15 +1135,8 @@ async function initializeServices() {
                 if (normalizedAddress.length !== 42) {
                     return res.status(400).json({ error: 'Invalid address' });
                 }
-                // Reject if player already has a pending (un-expired) withdrawal
-                const existingPending = await dbService.getActivePendingWithdrawal(normalizedAddress);
-                if (existingPending) {
-                    return res.status(409).json({
-                        error: 'A withdrawal is already pending. Submit or wait for it to expire (10 min).',
-                    });
-                }
-                // Expire any old pending withdrawals first (refunds balances)
-                await dbService.expirePendingWithdrawals();
+                // Expire any pending withdrawal for this wallet (refund) so they can request a new one
+                await dbService.expirePendingWithdrawalsForWallet(normalizedAddress);
                 // Get database balance for this specific wallet
                 const dbBalance = await dbService.getPlayerBalance(normalizedAddress);
                 // Get contract reserve for this specific wallet
@@ -1208,11 +1202,13 @@ async function initializeServices() {
         process.exit(1);
     }
 }
-// Graceful shutdown (freerollScheduler ref set in initializeServices)
+// Graceful shutdown (schedulers ref set in initializeServices)
 let freerollScheduler = null;
+let tournamentScheduler = null;
 process.on('SIGTERM', () => {
     logger_1.logger.info('SIGTERM received, shutting down gracefully');
     freerollScheduler?.stop();
+    tournamentScheduler?.stop();
     server.close(() => {
         logger_1.logger.info('Server closed');
         process.exit(0);
@@ -1221,6 +1217,7 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
     logger_1.logger.info('SIGINT received, shutting down gracefully');
     freerollScheduler?.stop();
+    tournamentScheduler?.stop();
     server.close(() => {
         logger_1.logger.info('Server closed');
         process.exit(0);

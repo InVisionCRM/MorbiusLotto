@@ -451,16 +451,6 @@ export function TournamentCreator({
       return;
     }
 
-    // Buy-in validation
-    if (buyInAmountWei < TOURNAMENT_VALIDATION.BUY_IN_MIN) {
-      setError('Minimum buy-in is 100 MORBIUS');
-      return;
-    }
-    if (buyInAmountWei > TOURNAMENT_VALIDATION.BUY_IN_MAX) {
-      setError('Maximum buy-in is 1,000,000 MORBIUS');
-      return;
-    }
-
     // Resolve table theme: ensure id exists for current kind (user may have switched steps and id could be stale)
     const resolvedTableTheme: TableTheme = (() => {
       if (themeKind === 'video') {
@@ -1005,13 +995,12 @@ export function TournamentCreator({
                     type="number"
                     value={buyInAmount}
                     onChange={(e) => setBuyInAmount(e.target.value)}
-                    min="100"
-                    max="1000000"
+                    min="0"
                     step="1"
                     className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-cyan-500"
                     aria-labelledby="buy-in-amount-label"
                   />
-                  <p className="text-gray-500 text-xs mt-1">Min 100 · Max 1,000,000 MORBIUS</p>
+                  <p className="text-gray-500 text-xs mt-1">0 = freeroll (no buy-in)</p>
                 </div>
               )}
 

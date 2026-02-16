@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TournamentService = exports.TOURNAMENT_CONFIG = void 0;
 const logger_1 = require("../utils/logger");
 const escrow_payout_1 = require("../utils/escrow-payout");
+const morbius_tournament_1 = require("../utils/morbius-tournament");
 const escrow_status_1 = require("../utils/escrow-status");
 // Tournament constants
 exports.TOURNAMENT_CONFIG = {
@@ -139,6 +140,7 @@ class TournamentService {
             creator_fee_percent: Number(row.creator_fee_percent ?? 0),
             platform_fee_percent: Number(row.platform_fee_percent ?? 16),
             tournament_type: row.tournament_type ?? null,
+            on_chain_tournament_id: row.on_chain_tournament_id != null ? Number(row.on_chain_tournament_id) : null,
         };
     }
     normalizeEntry(row) {
@@ -650,6 +652,17 @@ class TournamentService {
                     logger_1.logger.warn('Escrow remainder reclaim failed (tournament already completed)', {
                         tournamentId,
                         error: reclaimResult.error,
+                    });
+                }
+            }
+            // Update MorbiusTournament contract status when using on-chain tournament
+            if (tournament.on_chain_tournament_id != null) {
+                const setResult = await (0, morbius_tournament_1.setMorbiusTournamentCompleted)(tournament.on_chain_tournament_id);
+                if (!setResult.success) {
+                    logger_1.logger.warn('MorbiusTournament setCompleted failed (tournament completed in DB)', {
+                        tournamentId,
+                        onChainId: tournament.on_chain_tournament_id,
+                        error: setResult.error,
                     });
                 }
             }

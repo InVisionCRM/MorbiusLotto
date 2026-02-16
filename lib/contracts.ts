@@ -71,6 +71,19 @@ export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = (
     : '0x0000000000000000000000000000000000000000'
 ) as `0x${string}`
 
+// MorbiusTournament (on-chain create/join, uint256 IDs) + Escrow V3
+export const MORBIUS_TOURNAMENT_ADDRESS = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MORBIUS_TOURNAMENT_ADDRESS
+    ? process.env.NEXT_PUBLIC_MORBIUS_TOURNAMENT_ADDRESS
+    : '0x0000000000000000000000000000000000000000'
+) as `0x${string}`
+
+export const TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS
+    ? process.env.NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS
+    : '0x0000000000000000000000000000000000000000'
+) as `0x${string}`
+
 // MORBIUS Holder Distributor (receives MORBIUS; holders claim proportional share)
 // OLD: 0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab (has ~1100 MORBIUS; use this for claims)
 // NEW: 0xc87B4F61460b24A0040AdaaB5452d07f38c876C6 (redeployed with fixed EX_BLACKJACK; currently empty)

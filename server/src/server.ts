@@ -11,6 +11,7 @@ import { ProvablyFairService } from './services/provably-fair.service';
 import { BlackjackGameService } from './services/blackjack-game.service';
 import { TournamentService } from './services/tournament.service';
 import { FreerollSchedulerService } from './services/freeroll-scheduler.service';
+import { TournamentSchedulerService } from './services/tournament-scheduler.service';
 import { WebSocketService } from './services/websocket.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { logger } from './utils/logger';
@@ -130,6 +131,10 @@ async function initializeServices() {
     // Freeroll scheduler (polls pending scheduled events: start, elimination_round, end)
     freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);
     freerollScheduler.start();
+
+    // Tournament scheduler (time-expired buy-in tournaments, stuck-tournament recovery)
+    tournamentScheduler = new TournamentSchedulerService(dbService.getPool(), tournamentService);
+    tournamentScheduler.start();
 
     // Expire any orphaned pending withdrawals from a previous crash (refunds balances)
     try {
@@ -1212,12 +1217,14 @@ async function initializeServices() {
   }
 }
 
-// Graceful shutdown (freerollScheduler ref set in initializeServices)
+// Graceful shutdown (schedulers ref set in initializeServices)
 let freerollScheduler: FreerollSchedulerService | null = null;
+let tournamentScheduler: TournamentSchedulerService | null = null;
 
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
   freerollScheduler?.stop();
+  tournamentScheduler?.stop();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
@@ -1227,6 +1234,7 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully');
   freerollScheduler?.stop();
+  tournamentScheduler?.stop();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChainAnalyticsService = void 0;
+const viem_1 = require("viem");
 const chain_client_1 = require("../utils/chain-client");
 const contracts_1 = require("../config/contracts");
 class ChainAnalyticsService {
@@ -128,6 +129,50 @@ class ChainAnalyticsService {
             console.error('ChainAnalyticsService getBigWheelStats:', err);
             return null;
         }
+    }
+    /**
+     * All-time total MORBIUS deposited and withdrawn for Blackjack V2 (from contract events).
+     * Deposit = PLS swaps (morbiusAmount) + direct DepositMORBIUS(amount). Withdrawal = Withdrawal(amount).
+     */
+    async getBlackjackDepositWithdrawTotals() {
+        const client = (0, chain_client_1.getPublicClient)();
+        let totalDeposited = 0n;
+        let totalWithdrawn = 0n;
+        try {
+            const toBlock = await client.getBlockNumber();
+            const chunkSize = 50000;
+            let fromBlock = 0n;
+            const depositEvent = (0, viem_1.parseAbiItem)('event Deposit(address indexed player, uint256 morbiusAmount, uint256 plsAmount)');
+            const depositMorbiusEvent = (0, viem_1.parseAbiItem)('event DepositMORBIUS(address indexed player, uint256 amount)');
+            const withdrawalEvent = (0, viem_1.parseAbiItem)('event Withdrawal(address indexed player, uint256 amount)');
+            while (fromBlock <= toBlock) {
+                const end = fromBlock + BigInt(chunkSize) > toBlock ? toBlock : fromBlock + BigInt(chunkSize);
+                const [depositLogs, depositMorbiusLogs, withdrawalLogs] = await Promise.all([
+                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: depositEvent, fromBlock, toBlock: end }),
+                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: depositMorbiusEvent, fromBlock, toBlock: end }),
+                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: withdrawalEvent, fromBlock, toBlock: end }),
+                ]);
+                for (const log of depositLogs) {
+                    if (log.args && 'morbiusAmount' in log.args)
+                        totalDeposited += log.args.morbiusAmount;
+                }
+                for (const log of depositMorbiusLogs) {
+                    if (log.args && 'amount' in log.args)
+                        totalDeposited += log.args.amount;
+                }
+                for (const log of withdrawalLogs) {
+                    if (log.args && 'amount' in log.args)
+                        totalWithdrawn += log.args.amount;
+                }
+                fromBlock = end + 1n;
+                if (fromBlock > toBlock)
+                    break;
+            }
+        }
+        catch (err) {
+            console.error('ChainAnalyticsService getBlackjackDepositWithdrawTotals:', err);
+        }
+        return { totalDeposited, totalWithdrawn };
     }
     /** Fetch all on-chain game stats in parallel. */
     async getAllChainStats() {

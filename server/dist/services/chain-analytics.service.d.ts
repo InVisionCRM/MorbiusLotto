@@ -33,6 +33,14 @@ export declare class ChainAnalyticsService {
     getKenoStats(): Promise<KenoChainStats | null>;
     getLotteryStats(): Promise<LotteryChainStats | null>;
     getBigWheelStats(): Promise<BigWheelChainStats | null>;
+    /**
+     * All-time total MORBIUS deposited and withdrawn for Blackjack V2 (from contract events).
+     * Deposit = PLS swaps (morbiusAmount) + direct DepositMORBIUS(amount). Withdrawal = Withdrawal(amount).
+     */
+    getBlackjackDepositWithdrawTotals(): Promise<{
+        totalDeposited: bigint;
+        totalWithdrawn: bigint;
+    }>;
     /** Fetch all on-chain game stats in parallel. */
     getAllChainStats(): Promise<{
         plinko: PlinkoChainStats | null;

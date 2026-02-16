@@ -44,6 +44,8 @@ export interface Tournament {
     prize_token_decimals?: number | null;
     creator_fee_percent: number;
     platform_fee_percent: number;
+    /** uint256 from MorbiusTournament contract; when set, server calls setCompleted after distribute */
+    on_chain_tournament_id?: number | null;
 }
 export interface TournamentEntry {
     id: string;

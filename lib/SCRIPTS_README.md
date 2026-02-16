@@ -86,9 +86,14 @@ Commands are from the **repo root** unless noted. Set required env in `contracts
 
 | Script | Command | Notes |
 |--------|---------|--------|
-| Deploy Tournament Prize Escrow | `cd contracts && AUTHORIZED_SERVER=0x... npx hardhat run scripts/deploy-tournament-prize-escrow.js --network pulsechain` | Set AUTHORIZED_SERVER (or TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_ADDRESS) |
+| Deploy MorbiusTournament | `cd contracts && npx hardhat run scripts/deploy-morbius-tournament.js --network pulsechain` | uint256 IDs; uses MORBIUS_TOKEN, AUTHORIZED_SERVER, PLATFORM_FEE_WALLET |
+| Verify MorbiusTournament | `cd contracts && npx hardhat run scripts/verify-morbius-tournament.js --network pulsechain` | Uses programmatic verify |
+| Deploy Tournament Prize Escrow V3 | `cd contracts && npx hardhat run scripts/deploy-tournament-prize-escrow-v3.js --network pulsechain` | uint256 IDs; works with MorbiusTournament |
+| Verify Tournament Prize Escrow V3 | `cd contracts && npx hardhat run scripts/verify-tournament-escrow-v3.js --network pulsechain` | Uses programmatic verify (avoids bytecode mismatch) |
+| Deploy Tournament Prize Escrow (V1) | `cd contracts && AUTHORIZED_SERVER=0x... npx hardhat run scripts/deploy-tournament-prize-escrow.js --network pulsechain` | bytes32 IDs (legacy) |
+| Deploy Tournament Prize Escrow V2 | `cd contracts && npx hardhat run scripts/deploy-tournament-prize-escrow-v2.js --network pulsechain` | bytes32 IDs; creator tracking, cancel |
 | List escrow reserves | `cd contracts && npx hardhat run scripts/list-escrow-reserves.js --network pulsechain` | TOURNAMENT_PRIZE_ESCROW_ADDRESS. Optional: OUT_CSV |
-| Reclaim escrow remainder | `cd contracts && TOURNAMENT_ID=<uuid> RECLAIM_TO=0x... npx hardhat run scripts/reclaim-escrow-remainder.js --network pulsechain` | Owner only. Or use TOURNAMENT_ID_BYTES32=0x... from list-escrow-reserves |
+| Reclaim escrow remainder | `cd contracts && TOURNAMENT_ID=<uuid> RECLAIM_TO=0x... npx hardhat run scripts/reclaim-escrow-remainder.js --network pulsechain` | Owner only. V1/V2: use TOURNAMENT_ID_BYTES32. V3: use uint256 |
 
 ---
 

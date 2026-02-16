@@ -5,7 +5,7 @@ export declare const LOTTERY_ADDRESS: `0x${string}`;
 export declare const BIGWHEEL_ADDRESS: `0x${string}`;
 /** Blackjack V2; use BLACKJACK_CONTRACT_ADDRESS in .env if different. */
 export declare const BLACKJACK_ADDRESS: `0x${string}`;
-/** Legacy Blackjack contracts (for admin health: reserves per contract). Set via env BLACKJACK_LEGACY_CONTRACT_ADDRESS, _2, _3. */
+/** Legacy Blackjack contracts (for admin health). Accept BLACKJACK_LEGACY_CONTRACT_ADDRESS* or NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS*. */
 export declare const BLACKJACK_LEGACY_ADDRESS: `0x${string}`;
 export declare const BLACKJACK_LEGACY_ADDRESS_2: `0x${string}`;
 export declare const BLACKJACK_LEGACY_ADDRESS_3: `0x${string}`;

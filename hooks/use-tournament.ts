@@ -517,6 +517,7 @@ export function useTournament(options: UseTournamentOptions) {
       currentHandBetRef.current = betAmount;
 
       // Update tournament state (including biggestBet). Don't update displayed state until dealer reveal (commitDisplayState).
+      // Exception: when busted (chips <= 0), update displayed state immediately.
       setTournamentState(prev => {
         const next = {
           ...prev,
@@ -527,6 +528,7 @@ export function useTournament(options: UseTournamentOptions) {
           biggestBet: Math.max(prev.biggestBet, betAmount),
         };
         if (response.status !== 'completed') setDisplayedTournamentState(next);
+        else if (response.tournamentChips <= 0) setDisplayedTournamentState(next); // Bust: show 0 chips immediately
         return next;
       });
 
@@ -606,6 +608,7 @@ export function useTournament(options: UseTournamentOptions) {
         : 0;
 
       // Update tournament state. Don't update displayed state until dealer reveal (commitDisplayState).
+      // Exception: when player busts (chips <= 0), update displayed state immediately since the bust is already visible.
       setTournamentState(prev => {
         const next: TournamentState = {
           ...prev,
@@ -620,6 +623,7 @@ export function useTournament(options: UseTournamentOptions) {
           biggestWin: Math.max(prev.biggestWin, handWin),
         };
         if (gameState.status !== 'completed') setDisplayedTournamentState(next);
+        else if (response.tournamentChips <= 0) setDisplayedTournamentState(next); // Bust: show 0 chips immediately
         return next;
       });
 

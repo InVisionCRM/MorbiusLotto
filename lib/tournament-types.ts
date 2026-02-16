@@ -140,8 +140,6 @@ export interface CreateFreerollRequest {
 export const TOURNAMENT_VALIDATION = {
   NAME_MIN_LENGTH: 3,
   NAME_MAX_LENGTH: 50,
-  BUY_IN_MIN: BigInt('100000000000000000000'),           // 100 MORBIUS (18 decimals)
-  BUY_IN_MAX: BigInt('1000000000000000000000000'),       // 1,000,000 MORBIUS
   STARTING_CHIPS_OPTIONS: [1000, 5000, 10000, 25000] as const,
   MAX_HANDS_MIN: 1,
   MAX_HANDS_MAX: 200,
@@ -342,13 +340,10 @@ export function validateTournamentName(name: string): { valid: boolean; error?: 
   return { valid: true };
 }
 
-// Validate buy-in amount
+// Validate buy-in amount (no min/max; 0 = freeroll)
 export function validateBuyInAmount(amount: bigint): { valid: boolean; error?: string } {
-  if (amount < TOURNAMENT_VALIDATION.BUY_IN_MIN) {
-    return { valid: false, error: 'Minimum buy-in is 100 MORBIUS' };
-  }
-  if (amount > TOURNAMENT_VALIDATION.BUY_IN_MAX) {
-    return { valid: false, error: 'Maximum buy-in is 1,000,000 MORBIUS' };
+  if (amount < 0n) {
+    return { valid: false, error: 'Buy-in cannot be negative' };
   }
   return { valid: true };
 }

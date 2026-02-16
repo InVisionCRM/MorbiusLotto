@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import { logger } from '../utils/logger';
 import { sendEscrowPayout, sendEscrowRemainderToReclaimWallet } from '../utils/escrow-payout';
+import { setMorbiusTournamentCompleted } from '../utils/morbius-tournament';
 import { getEscrowPoolStatus } from '../utils/escrow-status';
 
 // Tournament constants
@@ -61,6 +62,8 @@ export interface Tournament {
   // Fee fields
   creator_fee_percent: number;
   platform_fee_percent: number;
+  /** uint256 from MorbiusTournament contract; when set, server calls setCompleted after distribute */
+  on_chain_tournament_id?: number | null;
 }
 
 export interface TournamentEntry {
@@ -353,6 +356,7 @@ export class TournamentService {
       creator_fee_percent: Number(row.creator_fee_percent ?? 0),
       platform_fee_percent: Number(row.platform_fee_percent ?? 16),
       tournament_type: row.tournament_type ?? null,
+      on_chain_tournament_id: row.on_chain_tournament_id != null ? Number(row.on_chain_tournament_id) : null,
     };
   }
 
@@ -978,6 +982,18 @@ export class TournamentService {
           logger.warn('Escrow remainder reclaim failed (tournament already completed)', {
             tournamentId,
             error: reclaimResult.error,
+          });
+        }
+      }
+
+      // Update MorbiusTournament contract status when using on-chain tournament
+      if (tournament.on_chain_tournament_id != null) {
+        const setResult = await setMorbiusTournamentCompleted(tournament.on_chain_tournament_id);
+        if (!setResult.success) {
+          logger.warn('MorbiusTournament setCompleted failed (tournament completed in DB)', {
+            tournamentId,
+            onChainId: tournament.on_chain_tournament_id,
+            error: setResult.error,
           });
         }
       }

@@ -171,6 +171,8 @@ export declare class DatabaseService {
     } | null>;
     createPendingWithdrawal(walletAddress: string, nonce: bigint, amount: bigint): Promise<void>;
     expirePendingWithdrawals(): Promise<number>;
+    /** Expire all pending withdrawals for a wallet (any age). Used when user requests a new withdrawal. */
+    expirePendingWithdrawalsForWallet(walletAddress: string): Promise<number>;
     syncPlayerBalanceWithContract(walletAddress: string, contractBalance: bigint): Promise<void>;
     getPlayerStats(walletAddress: string): Promise<PlayerStats>;
     getPlayerStatsEnhanced(walletAddress: string): Promise<EnhancedPlayerStats>;

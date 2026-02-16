@@ -258,7 +258,7 @@ class DatabaseService {
         await this.pool.query(query, [nonce.toString(), normalizedAddress, amount.toString()]);
     }
     async expirePendingWithdrawals() {
-        // Expire pending withdrawals older than 10 minutes and refund balances
+        // Expire pending withdrawals older than 10 minutes and refund balances (cleanup orphaned)
         const query = `
       UPDATE pending_withdrawals
       SET status = 'expired'
@@ -266,9 +266,23 @@ class DatabaseService {
       RETURNING wallet_address, amount
     `;
         const result = await this.pool.query(query);
-        // Refund each expired withdrawal
         for (const row of result.rows) {
             await this.addPlayerBalance(row.wallet_address, BigInt(row.amount));
+        }
+        return result.rows.length;
+    }
+    /** Expire all pending withdrawals for a wallet (any age). Used when user requests a new withdrawal. */
+    async expirePendingWithdrawalsForWallet(walletAddress) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const query = `
+      UPDATE pending_withdrawals
+      SET status = 'expired'
+      WHERE wallet_address = $1 AND status = 'pending'
+      RETURNING amount
+    `;
+        const result = await this.pool.query(query, [normalizedAddress]);
+        for (const row of result.rows) {
+            await this.addPlayerBalance(normalizedAddress, BigInt(row.amount));
         }
         return result.rows.length;
     }
