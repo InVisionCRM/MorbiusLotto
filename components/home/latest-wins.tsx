@@ -94,7 +94,7 @@ export function LatestWins() {
           ) : wins.length === 0 ? (
             <EmptyState />
           ) : (
-            <AnimatedList className="gap-3" delay={2500}>
+            <AnimatedList className="gap-3" delay={500}>
               {wins.slice(0, 7).map((win) => (
                 <WinNotification
                   key={win.id}
