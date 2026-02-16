@@ -88,7 +88,7 @@ export const DesktopSidebar = ({
     <>
       <motion.div
         className={cn(
-          "sticky top-0 min-h-screen h-full px-3 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 overflow-hidden rounded-r-xl z-10",
+          "fixed top-0 left-0 min-h-screen h-full px-3 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 overflow-hidden rounded-r-xl z-10",
           className
         )}
         animate={{
@@ -115,7 +115,7 @@ export const MobileSidebar = ({
     <>
       <div
         className={cn(
-          "sticky top-0 z-20 h-10 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-900 border-b border-white/10 w-full shrink-0"
+          "fixed top-0 left-0 right-0 z-20 h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-900 border-b border-white/10 w-full"
         )}
         {...props}
       >

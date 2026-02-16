@@ -532,7 +532,7 @@ export default function GlobalMainNav({
             onSignOut={onSignOut}
           />
         </SidebarBody>
-        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden">{children}</div>
+        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0 md:ml-[60px]">{children}</div>
       </div>
 
       {page === 'blackjack' && onThemeChange && (

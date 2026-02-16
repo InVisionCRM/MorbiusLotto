@@ -38,27 +38,27 @@ export default function Footer() {
               <h3 className="text-purple-500 font-bold text-xs mb-2 md:mb-1">More From Morbius.io!</h3>
               <ul className="space-y-1 md:space-y-0.5 text-center md:text-left">
                 <li>
-                  <a href="/lottery" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="/lottery" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     Lottery
                   </a>
                 </li>
                 <li>
-                  <a href="/keno" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="/keno" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     KENO
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="#" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     Plinko
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="#" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     BlackJack
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="#" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     Dice
                   </a>
                 </li>
@@ -70,17 +70,17 @@ export default function Footer() {
               <h3 className="text-purple-500 font-bold text-xs mb-2 md:mb-1">Quick Links</h3>
               <ul className="space-y-1 md:space-y-0.5 text-center md:text-left">
                 <li>
-                  <a href="/" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="/" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     Home
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="#" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     How to Play
                   </a>
                 </li>
                 <li>
-                  <a href="/swap" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="/swap" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     Buy Morbius
                   </a>
                 </li>
@@ -89,7 +89,7 @@ export default function Footer() {
                     href="https://pulsechain.com"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-700 hover:text-green-600 transition-colors text-xs"
+                    className="text-white/90 hover:text-cyan-500 transition-colors text-xs"
                   >
                     What is PulseChain?
                   </a>
@@ -97,7 +97,7 @@ export default function Footer() {
                 <li>
                   <button
                     onClick={() => setFaqOpen(true)}
-                    className="text-gray-700 hover:text-green-600 transition-colors text-xs text-left"
+                    className="text-white/90 hover:text-cyan-500 transition-colors text-xs text-left"
                   >
                     FAQs
                   </button>
@@ -105,7 +105,7 @@ export default function Footer() {
                 <li>
                   <button
                     onClick={() => setUserAgreementOpen(true)}
-                    className="text-gray-700 hover:text-green-600 transition-colors text-xs text-left"
+                    className="text-white/90 hover:text-cyan-500 transition-colors text-xs text-left"
                   >
                     User Agreement
                   </button>
@@ -120,7 +120,7 @@ export default function Footer() {
                 <li>
                   <button
                     onClick={() => setAboutOpen(true)}
-                    className="text-gray-700 hover:text-green-600 transition-colors text-xs text-left"
+                    className="text-white/90 hover:text-cyan-500 transition-colors text-xs text-left"
                   >
                     About Us
                   </button>
@@ -130,25 +130,25 @@ export default function Footer() {
                     href="https://x.com/Morbius_io"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-700 hover:text-green-600 transition-colors text-xs"
+                    className="text-white/90 hover:text-cyan-500 transition-colors text-xs"
                   >
                     Help Center
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="#" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     Terms of Service
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-700 hover:text-green-600 transition-colors text-xs">
+                  <a href="#" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     Privacy Policy
                   </a>
                 </li>
                 <li>
                   <button
                     onClick={() => setContactOpen(true)}
-                    className="text-gray-700 hover:text-green-600 transition-colors text-xs text-left"
+                    className="text-white/90 hover:text-cyan-500 transition-colors text-xs text-left"
                   >
                     Contact Us
                   </button>
@@ -165,7 +165,7 @@ export default function Footer() {
                     href="https://x.com/Morbius_io"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-700 hover:text-green-600 transition-colors text-xs flex items-center gap-2"
+                    className="text-white/90 hover:text-cyan-500 transition-colors text-xs flex items-center gap-2"
                   >
                     <i className="fab fa-x-twitter"></i>
                     <span>@Morbius_io</span>
@@ -176,7 +176,7 @@ export default function Footer() {
                     href="https://t.me/Morbius_cash"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-700 hover:text-green-600 transition-colors text-xs flex items-center gap-2"
+                    className="text-white/90 hover:text-cyan-500 transition-colors text-xs flex items-center gap-2"
                   >
                     <i className="fab fa-telegram"></i>
                     <span>Morbius_cash</span>
@@ -187,7 +187,7 @@ export default function Footer() {
                     href="https://morbius.io"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-700 hover:text-green-600 transition-colors text-xs flex items-center gap-2"
+                    className="text-white/90 hover:text-cyan-500 transition-colors text-xs flex items-center gap-2"
                   >
                     <i className="fas fa-globe"></i>
                     <span>Morbius.io</span>
