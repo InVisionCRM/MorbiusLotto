@@ -12,6 +12,13 @@ import {
   GameHistoryLayoutE,
   MOCK_HISTORY_ENTRIES,
 } from '@/components/BLACKJACK/GameHistoryLayouts'
+import {
+  TopPlayersLayouts,
+  CarouselLayouts,
+  OverlayLayouts,
+  MOCK_TOP_PLAYER_ENTRIES,
+  MOCK_CAROUSEL_ITEMS,
+} from '@/components/BLACKJACK/BlackjackTopPlayersLayouts'
 
 const TABS = [
   { id: 'recent', label: 'Recent', icon: History },
@@ -367,6 +374,140 @@ export default function LayoutPage() {
                 <GameHistoryLayoutE history={MOCK_HISTORY_ENTRIES} sortBy={historySort} onSortChange={setHistorySort} />
               </div>
             </section>
+          </div>
+        </div>
+
+        {/* Top Players Layout Options */}
+        <div className="pt-16 mt-16 border-t border-white/20">
+          <h1 className="text-2xl font-bold text-white mb-2">Blackjack Top Players Layout Options</h1>
+          <p className="text-white/60 text-sm mb-8">
+            Five different designs for the Top Players table, Carousel, and Overlay. Pick one of each to apply to the main game.
+          </p>
+
+          {/* Top Players Table */}
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold text-cyan-300 mb-6">Top Players Table</h2>
+            <div className="space-y-12">
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Table A — Compact Minimal</h3>
+                <p className="text-white/60 text-sm mb-4">Clean table with minimal borders. Rank highlights for top 3.</p>
+                <div className="max-w-xl">
+                  <TopPlayersLayouts.A entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Table B — Card Rows with Header</h3>
+                <p className="text-white/60 text-sm mb-4">Cyan-bordered panel with row-based layout. Rank badges for podium.</p>
+                <div className="max-w-xl">
+                  <TopPlayersLayouts.B entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Table C — Grid with Alternating Rows</h3>
+                <p className="text-white/60 text-sm mb-4">Grid layout with zebra striping. Compact header.</p>
+                <div className="max-w-xl">
+                  <TopPlayersLayouts.C entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Table D — Card Per Player</h3>
+                <p className="text-white/60 text-sm mb-4">Each player as a bordered card with circular rank badge. More visual.</p>
+                <div className="max-w-md">
+                  <TopPlayersLayouts.D entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Table E — Dashboard with Trophy</h3>
+                <p className="text-white/60 text-sm mb-4">Gradient header with trophy icon. Clean row layout with ring on #1.</p>
+                <div className="max-w-xl">
+                  <TopPlayersLayouts.E entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+            </div>
+          </div>
+
+          {/* Carousel */}
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold text-cyan-300 mb-6">Top Players Carousel</h2>
+            <div className="space-y-12">
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel A — Default Panel</h3>
+                <p className="text-white/60 text-sm mb-4">Standard inset panel. Compact cards, left scroll.</p>
+                <div className="w-full">
+                  <CarouselLayouts.A items={MOCK_CAROUSEL_ITEMS} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel B — Cyan Border</h3>
+                <p className="text-white/60 text-sm mb-4">Cyan-bordered container. Right scroll, slower. Larger cards.</p>
+                <div className="w-full">
+                  <CarouselLayouts.B items={MOCK_CAROUSEL_ITEMS} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel C — Cyan Glow</h3>
+                <p className="text-white/60 text-sm mb-4">Radial cyan glow overlay. Gradient cards, faster scroll.</p>
+                <div className="w-full">
+                  <CarouselLayouts.C items={MOCK_CAROUSEL_ITEMS} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel D — Left Accent Bar</h3>
+                <p className="text-white/60 text-sm mb-4">Cards with cyan left border. Clean, minimal.</p>
+                <div className="w-full">
+                  <CarouselLayouts.D items={MOCK_CAROUSEL_ITEMS} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel E — Glassmorphism</h3>
+                <p className="text-white/60 text-sm mb-4">Cyan border + glow. Right scroll. Glass-style cards.</p>
+                <div className="w-full">
+                  <CarouselLayouts.E items={MOCK_CAROUSEL_ITEMS} />
+                </div>
+              </section>
+            </div>
+          </div>
+
+          {/* Overlay */}
+          <div>
+            <h2 className="text-xl font-semibold text-cyan-300 mb-6">Top Players Overlay (Horizontal Scroll)</h2>
+            <div className="space-y-12">
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay A — Compact Pills</h3>
+                <p className="text-white/60 text-sm mb-4">Minimal pills: rank · address · games. Fast, compact.</p>
+                <div className="w-full max-w-2xl">
+                  <OverlayLayouts.A entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay B — Rank-Bordered Cards</h3>
+                <p className="text-white/60 text-sm mb-4">Cards with gold/silver/bronze borders for top 3. Games + win %.</p>
+                <div className="w-full max-w-2xl">
+                  <OverlayLayouts.B entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay C — Circular Rank Badges</h3>
+                <p className="text-white/60 text-sm mb-4">Cyan-accented cards with circular rank badges. Clean layout.</p>
+                <div className="w-full max-w-2xl">
+                  <OverlayLayouts.C entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay D — Medal Icon + Left Bar</h3>
+                <p className="text-white/60 text-sm mb-4">Medal icon, cyan left border. Compact inline style.</p>
+                <div className="w-full max-w-2xl">
+                  <OverlayLayouts.D entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay E — Award + P/L</h3>
+                <p className="text-white/60 text-sm mb-4">Award icon, glassmorphism. Shows profit/loss per player.</p>
+                <div className="w-full max-w-2xl">
+                  <OverlayLayouts.E entries={MOCK_TOP_PLAYER_ENTRIES} />
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       </div>
