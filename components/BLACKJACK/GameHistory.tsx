@@ -146,7 +146,7 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
 
   if (isLoading) {
     return (
-      <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
+      <Card className="w-full max-w-full bg-gradient-to-br from-gray-900 to-black border-gray-700">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <History className="w-5 h-5" />
@@ -165,7 +165,7 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
 
   if (history.length === 0) {
     return (
-      <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
+      <Card className="w-full max-w-full bg-gradient-to-br from-gray-900 to-black border-gray-700">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <History className="w-5 h-5" />
@@ -184,9 +184,9 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
   }
 
   return (
-    <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
-      <CardHeader>
-        <div className="flex items-center justify-between">
+    <Card className="w-full max-w-full bg-gradient-to-br from-gray-900 to-black border-gray-700 overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center justify-between w-full min-w-0">
           <CardTitle className="text-white flex items-center gap-2">
             <History className="w-5 h-5" />
             Game History ({history.length})
@@ -221,105 +221,75 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                 className="p-4 cursor-pointer hover:bg-gray-800/50 transition-colors"
                 onClick={() => setExpandedGame(expandedGame === entry.id ? null : entry.id)}
               >
-                <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-center text-left">
+                {/* Row 1: Result, time, bet, P/L - flex-wrap for mobile */}
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <Badge className={`${getResultColor(entry.result)} border-0`}>
+                    <Badge className={`${getResultColor(entry.result)} border-0 shrink-0`}>
                       {entry.result === 'blackjack' && <Trophy className="w-3 h-3 mr-1" />}
                       {entry.result.toUpperCase()}
                     </Badge>
                     {entry.wasSplit && (
-                      <Badge className="bg-cyan-900/30 text-cyan-300 border border-cyan-500/30 text-xs">
-                        SPLIT
-                      </Badge>
+                      <Badge className="bg-cyan-900/30 text-cyan-300 border border-cyan-500/30 text-xs shrink-0">SPLIT</Badge>
                     )}
                     {entry.wasDoubleDown && (
-                      <Badge className="bg-amber-900/30 text-amber-300 border border-amber-500/30 text-xs">
-                        2x
-                      </Badge>
+                      <Badge className="bg-amber-900/30 text-amber-300 border border-amber-500/30 text-xs shrink-0">2x</Badge>
                     )}
+                    <span className="text-sm text-gray-400 flex items-center gap-1 shrink-0">
+                      <Clock className="w-3.5 h-3.5" />
+                      {formatTimestamp(entry.timestamp)}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-400 min-w-0">
-                    <Clock className="w-4 h-4 flex-shrink-0" />
-                    <span>{formatTimestamp(entry.timestamp)}</span>
-                  </div>
-                  <div className="text-sm min-w-0">
-                    <div className="flex items-center gap-1 text-gray-300">
-                      <Target className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span>{formatAmount(entry.betAmount)} MORBIUS</span>
-                    </div>
-                  </div>
-                  <div className={`text-sm font-medium min-w-0 ${
-                    getProfit(entry) > 0 ? 'text-green-400' :
-                    getProfit(entry) < 0 ? 'text-red-400' : 'text-yellow-400'
-                  }`}>
-                    {getProfit(entry) > 0 ? '+' : ''}{getProfit(entry).toLocaleString()} MORBIUS
-                  </div>
-                  <div className="flex items-center justify-end">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-sm text-gray-300 shrink-0">{formatAmount(entry.betAmount)} MORBIUS</span>
+                    <span className={`text-sm font-semibold shrink-0 ${
+                      getProfit(entry) > 0 ? 'text-green-400' :
+                      getProfit(entry) < 0 ? 'text-red-400' : 'text-yellow-400'
+                    }`}>
+                      {getProfit(entry) > 0 ? '+' : ''}{getProfit(entry).toLocaleString()} MORBIUS
+                    </span>
                     {expandedGame === entry.id ? (
-                      <ChevronUp className="w-5 h-5 text-gray-400" />
+                      <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" />
                     ) : (
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                      <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
                     )}
                   </div>
                 </div>
 
-                {/* Preview Cards Row - grid: even columns, text left */}
-                <div className="mt-3 grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-4 items-center text-left">
+                {/* Row 2: You vs Dealer - both totals clearly shown */}
+                <div className="flex flex-wrap items-center gap-3 sm:gap-6">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider flex-shrink-0">You:</span>
-                    <div className="flex items-center min-w-0">
-                      {entry.playerHands && entry.playerHands.length > 0 && entry.playerHands[0].cards && entry.playerHands[0].cards.length > 0 ? (
-                        <>
-                          {entry.playerHands[0].cards.slice(0, 3).map((cardValue, idx) => (
-                            <CardImage
-                              key={`preview-player-${idx}`}
-                              value={cardValue}
-                              index={idx}
-                              salt={entryIndex}
-                            />
-                          ))}
-                          {entry.playerHands[0].cards.length > 3 && (
-                            <span className="text-xs text-gray-500 ml-1 self-center">
-                              +{entry.playerHands[0].cards.length - 3}
-                            </span>
-                          )}
-                        </>
+                    <span className="text-xs text-gray-500 uppercase tracking-wider shrink-0">You</span>
+                    <div className="flex items-center gap-1">
+                      {entry.playerHands?.[0]?.cards?.length ? (
+                        entry.playerHands[0].cards.slice(0, 3).map((cardValue, idx) => (
+                          <CardImage key={`p-${idx}`} value={cardValue} index={idx} salt={entryIndex} />
+                        ))
                       ) : (
                         <span className="text-xs text-gray-500">No cards</span>
                       )}
+                      {entry.playerHands?.[0]?.cards?.length > 3 && (
+                        <span className="text-xs text-gray-500">+{entry.playerHands[0].cards.length - 3}</span>
+                      )}
                     </div>
+                    <span className="text-sm font-bold text-cyan-400 ml-1">{entry.playerHands?.[0]?.total ?? 0}</span>
                   </div>
-                  <span className="text-sm font-bold text-white text-left">
-                    {entry.playerHands && entry.playerHands.length > 0 ? entry.playerHands[0].total : '0'}
-                  </span>
-                  <span className="text-gray-600 text-center">vs</span>
+                  <span className="text-gray-500 text-sm shrink-0">vs</span>
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider flex-shrink-0">Dealer:</span>
-                    <div className="flex items-center min-w-0">
-                      {entry.dealerCards && entry.dealerCards.length > 0 ? (
-                        <>
-                          {entry.dealerCards.slice(0, 3).map((cardValue, idx) => (
-                            <CardImage
-                              key={`preview-dealer-${idx}`}
-                              value={cardValue}
-                              index={idx}
-                              salt={entryIndex + 100}
-                            />
-                          ))}
-                          {entry.dealerCards.length > 3 && (
-                            <span className="text-xs text-gray-500 ml-1 self-center">
-                              +{entry.dealerCards.length - 3}
-                            </span>
-                          )}
-                        </>
+                    <span className="text-xs text-gray-500 uppercase tracking-wider shrink-0">Dealer</span>
+                    <div className="flex items-center gap-1">
+                      {entry.dealerCards?.length ? (
+                        entry.dealerCards.slice(0, 3).map((cardValue, idx) => (
+                          <CardImage key={`d-${idx}`} value={cardValue} index={idx} salt={entryIndex + 100} />
+                        ))
                       ) : (
                         <span className="text-xs text-gray-500">No cards</span>
                       )}
+                      {entry.dealerCards?.length > 3 && (
+                        <span className="text-xs text-gray-500">+{entry.dealerCards.length - 3}</span>
+                      )}
                     </div>
+                    <span className="text-sm font-bold text-red-400 ml-1">{entry.dealerTotal ?? 0}</span>
                   </div>
-                  <span className="text-sm font-bold text-white text-left">
-                    {entry.dealerTotal || 0}
-                  </span>
                 </div>
               </div>
 

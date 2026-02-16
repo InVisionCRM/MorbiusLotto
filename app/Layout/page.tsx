@@ -4,6 +4,14 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { History, BookOpen, Award, TrendingUp, Zap, ChevronLeft } from 'lucide-react'
 import { Theme } from '@/lib/theme'
+import {
+  GameHistoryLayoutA,
+  GameHistoryLayoutB,
+  GameHistoryLayoutC,
+  GameHistoryLayoutD,
+  GameHistoryLayoutE,
+  MOCK_HISTORY_ENTRIES,
+} from '@/components/BLACKJACK/GameHistoryLayouts'
 
 const TABS = [
   { id: 'recent', label: 'Recent', icon: History },
@@ -220,6 +228,7 @@ export default function LayoutPage() {
   const [activeC, setActiveC] = useState<TabId>('chart')
   const [activeD, setActiveD] = useState<TabId>('chart')
   const [activeE, setActiveE] = useState<TabId>('chart')
+  const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'profit'>('newest')
 
   return (
     <div
@@ -299,6 +308,66 @@ export default function LayoutPage() {
               <LayoutE activeTab={activeE} setActiveTab={setActiveE} />
             </div>
           </section>
+        </div>
+
+        {/* Game History Layout Options */}
+        <div className="pt-16 mt-16 border-t border-white/20">
+          <h1 className="text-2xl font-bold text-white mb-2">Game History Layout Options</h1>
+          <p className="text-white/60 text-sm mb-8">
+            Five different layouts for the Blackjack game history. Full-width, mobile-friendly, with both player and dealer totals shown.
+          </p>
+
+          <div className="space-y-12">
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-3">History Layout A — Stacked Rows</h2>
+              <p className="text-white/60 text-sm mb-4">
+                Mobile-first stacked layout. Meta info on top, You vs Dealer with totals below. Full width.
+              </p>
+              <div className="w-full max-w-2xl">
+                <GameHistoryLayoutA history={MOCK_HISTORY_ENTRIES} sortBy={historySort} onSortChange={setHistorySort} />
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-3">History Layout B — Two-Column Cards</h2>
+              <p className="text-white/60 text-sm mb-4">
+                Each entry as a card with You | Dealer side by side. Clear separation.
+              </p>
+              <div className="w-full max-w-2xl">
+                <GameHistoryLayoutB history={MOCK_HISTORY_ENTRIES} sortBy={historySort} onSortChange={setHistorySort} />
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-3">History Layout C — Compact List</h2>
+              <p className="text-white/60 text-sm mb-4">
+                Single row per entry: Result, time, bet, P/L, You vs Dealer totals. Tap to expand for cards.
+              </p>
+              <div className="w-full max-w-2xl">
+                <GameHistoryLayoutC history={MOCK_HISTORY_ENTRIES} sortBy={historySort} onSortChange={setHistorySort} />
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-3">History Layout D — Battle Layout</h2>
+              <p className="text-white/60 text-sm mb-4">
+                You vs Dealer with large totals. Cards centered, totals prominent.
+              </p>
+              <div className="w-full max-w-2xl">
+                <GameHistoryLayoutD history={MOCK_HISTORY_ENTRIES} sortBy={historySort} onSortChange={setHistorySort} />
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-3">History Layout E — Table Grid</h2>
+              <p className="text-white/60 text-sm mb-4">
+                Table-like with columns: Result | Time | Bet | P/L | You | Dealer. Horizontal scroll on small screens.
+              </p>
+              <div className="w-full max-w-2xl">
+                <GameHistoryLayoutE history={MOCK_HISTORY_ENTRIES} sortBy={historySort} onSortChange={setHistorySort} />
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>
