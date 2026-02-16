@@ -373,7 +373,6 @@ function NavContent(props: {
           </div>
           <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <i className="fas fa-gamepad w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarLink link={{ label: 'Donate', href: '/donate', icon: <i className="fas fa-heart w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           {isAdmin && (
             <SidebarLink link={{ label: 'Admin', href: '/admin', icon: <i className="fas fa-cog w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           )}

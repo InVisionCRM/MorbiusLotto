@@ -81,26 +81,18 @@ export function BettingPanelMobile({
     onBetAmountChange?.(str);
   };
 
+  const handleClearBet = () => {
+    if (isPlaying) return;
+    setInputValue('0');
+    setIsFocused(false);
+    onBetAmountChange?.('0', undefined, true);
+  };
+
   return (
-    <section
-      className="w-full max-w-md mx-auto px-2 py-1"
-      style={{
-        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-        boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3)',
-        border: '1px solid rgba(6, 182, 212, 0.2)',
-        borderRadius: '8px',
-      }}
-    >
+    <section className="w-full max-w-md mx-auto px-2 py-1">
       <div className="flex flex-col gap-1 w-full">
         <span className="text-xs text-gray-400 uppercase tracking-wider">Amount</span>
-        <div
-          className="flex items-stretch w-full rounded-lg overflow-hidden border border-cyan-500/20"
-          style={{
-            background: 'linear-gradient(145deg, rgba(20, 20, 20, 0.9), rgba(40, 40, 40, 0.6))',
-            boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3)',
-            minHeight: '36px',
-          }}
-        >
+        <div className="flex items-stretch w-full rounded-lg overflow-hidden" style={{ minHeight: '36px' }}>
           {/* Manual entry + logo — ~2/3 width */}
           <div className="flex-1 flex items-center gap-2 pl-2 pr-2 min-w-0">
             <input
@@ -123,8 +115,18 @@ export function BettingPanelMobile({
               className="object-contain flex-shrink-0"
             />
           </div>
-          {/* 1/2 and 2x — ~1/3 width */}
+          {/* Clear, 1/2 and 2x */}
           <div className="flex items-stretch flex-shrink-0">
+            <div className="w-px bg-white/20 self-stretch" aria-hidden />
+            <button
+              type="button"
+              onClick={handleClearBet}
+              disabled={isPlaying}
+              className="flex-1 min-w-[40px] flex items-center justify-center text-white/80 font-bold text-xs hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label="Clear bet"
+            >
+              Clear
+            </button>
             <div className="w-px bg-white/20 self-stretch" aria-hidden />
             <button
               type="button"
@@ -150,7 +152,7 @@ export function BettingPanelMobile({
           </div>
         </div>
         {/* Preset add amounts — 5-col grid, low height, digits only */}
-        <div className="grid grid-cols-5 gap-0 border border-white/20 rounded-lg bg-slate-900/30 overflow-hidden">
+        <div className="grid grid-cols-5 gap-0 overflow-hidden">
           {PRESETS.map((amount) => (
             <button
               key={amount}

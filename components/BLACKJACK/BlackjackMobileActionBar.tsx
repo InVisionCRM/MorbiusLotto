@@ -69,11 +69,6 @@ export function BlackjackMobileActionBar({
       `}</style>
     <section
       className={`w-full mt-0.5 sm:mt-1 px-2 sm:px-4 py-0.5 sm:pt-1 sm:pb-1 ${alwaysVisible ? '' : 'md:hidden'}`}
-      style={{
-        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
-        boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
-        border: '1px solid rgba(6, 182, 212, 0.2)',
-      }}
     >
       {/* Mobile layout: row 1 = HIT, STAND, DOUBLE, SPLIT (grid-4); row 2 = REBET | DEAL — compact */}
       <div className="flex flex-col items-center gap-1.5 sm:gap-4 w-full max-w-full">
@@ -153,7 +148,7 @@ export function BlackjackMobileActionBar({
 
         {/* REBET | DEAL row */}
         <div className="flex items-center gap-2 w-full">
-        <div className="flex-1 flex rounded-lg sm:rounded-xl overflow-hidden border-2 border-white/10" style={{ boxShadow: '0 4px 0 0 rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.15)' }}>
+        <div className="flex-1 flex rounded-lg sm:rounded-xl overflow-hidden">
           {onRebetAndDeal && (
             <button
               type="button"

@@ -545,6 +545,8 @@ export default function BlackjackPage() {
 
   // Ref to track current game for callbacks that can't access gameState directly
   const currentGameRef = useRef<Game | null>(null);
+  // When createGame is in progress, game_created handler skips (handleStartGame handles it)
+  const createGameInProgressRef = useRef(false);
   useEffect(() => {
     currentGameRef.current = gameState.currentGame;
   }, [gameState.currentGame]);
@@ -875,30 +877,48 @@ export default function BlackjackPage() {
 
       // Set up event handlers
       client.on('game_created', (gameState: ServerGameState) => {
+        // When createGame returns, handleStartGame handles it; skip here to avoid duplicate
+        if (createGameInProgressRef.current) return;
         console.log('Game created:', gameState);
-        // Update local game state and get the processed game
-        const processedGame = updateGameStateFromServer(gameState);
-        // Some games can complete immediately on deal (blackjack/push/dealer blackjack).
-        // The server does not emit a separate game_completed event for create_game, so handle it here.
-        if (String((gameState as any)?.status) === 'completed' && processedGame) {
-          const betAmount = processedGame.totalBetAmount ?? BigInt(0);
-          const payout = processedGame.totalPayout ?? BigInt(0);
-          const hasWin = Array.isArray(processedGame.playerHands) && 
-            processedGame.playerHands.some((h: any) => h.result === 'win' || h.result === 'blackjack');
-          const allPush = Array.isArray(processedGame.playerHands) && 
-            processedGame.playerHands.every((h: any) => h.result === 'push');
-          const isBlackjack = Array.isArray(processedGame.playerHands) && 
-            processedGame.playerHands.some((h: any) => h.result === 'blackjack');
-          const overallResult = isBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
-          
-          handleGameCompletion({
-            gameId: processedGame.id,
-            betAmount,
-            payout,
-            result: overallResult,
-            processedGame: processedGame // Pass the processed game with cards already extracted
+        const status = String((gameState as any)?.status);
+        const isBlackjack = Array.isArray((gameState as any)?.playerHands) &&
+          (gameState as any).playerHands.some((h: any) => h.result === 'blackjack' || h.isBlackjack);
+        // Player blackjack: use phased deal so cards animate with same delay as other hands
+        if (status === 'completed' && isBlackjack) {
+          applyPhasedBlackjackDeal(gameState, (processedGame) => {
+            if (processedGame) {
+              const betAmount = processedGame.totalBetAmount ?? BigInt(0);
+              const payout = processedGame.totalPayout ?? BigInt(0);
+              const overallResult = 'blackjack';
+              handleGameCompletion({
+                gameId: processedGame.id,
+                betAmount,
+                payout,
+                result: overallResult,
+                processedGame,
+              });
+            }
           });
-          // Balance refreshes after dealer reveal (handleDealerRevealComplete) for immersion
+        } else {
+          const processedGame = updateGameStateFromServer(gameState);
+          if (status === 'completed' && processedGame) {
+            const betAmount = processedGame.totalBetAmount ?? BigInt(0);
+            const payout = processedGame.totalPayout ?? BigInt(0);
+            const hasWin = Array.isArray(processedGame.playerHands) &&
+              processedGame.playerHands.some((h: any) => h.result === 'win' || h.result === 'blackjack');
+            const allPush = Array.isArray(processedGame.playerHands) &&
+              processedGame.playerHands.every((h: any) => h.result === 'push');
+            const isBJ = Array.isArray(processedGame.playerHands) &&
+              processedGame.playerHands.some((h: any) => h.result === 'blackjack');
+            const overallResult = isBJ ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
+            handleGameCompletion({
+              gameId: processedGame.id,
+              betAmount,
+              payout,
+              result: overallResult,
+              processedGame,
+            });
+          }
         }
       });
 
@@ -1374,8 +1394,9 @@ export default function BlackjackPage() {
   }, [address]);
 
   // Convert server game state (off-chain) to local UI format
-  const updateGameStateFromServer = useCallback((serverGameState: any) => {
-    if (!address) return;
+  // Optional maxPlayerCards/maxDealerCards for phased deal (player blackjack) - limits visible cards per phase
+  const updateGameStateFromServerCore = useCallback((serverGameState: any, maxPlayerCards?: number, maxDealerCards?: number) => {
+    if (!address) return null;
 
     const gameId = String(serverGameState.gameId || serverGameState.id || '');
     const status = String(serverGameState.status || 'waiting');
@@ -1447,17 +1468,28 @@ export default function BlackjackPage() {
 
     const activePlayerHand = playerHands[currentHandIndex] || playerHands[0];
 
+    // Phased deal: limit visible cards when maxPlayerCards/maxDealerCards provided (player blackjack)
+    const playerHandsSliced = maxPlayerCards != null
+      ? playerHands.map(h => {
+          const slicedCards = h.cards.slice(0, maxPlayerCards);
+          const totals = calculateHandTotal(slicedCards);
+          return { ...h, cards: slicedCards, total: totals.total, hasAce: totals.hasAce };
+        })
+      : playerHands;
+    const activePlayerHandSliced = playerHandsSliced[currentHandIndex] || playerHandsSliced[0];
+
     // Dealer cards - server sends only visible card(s) during player turn for security
     // When game completes, server sends all dealer cards for reveal animation
     const rawDealerCards: number[] = Array.isArray(serverGameState.dealerCards)
       ? serverGameState.dealerCards.map((c: any) => Number(c))
       : [];
     
-    const dealerCards = rawDealerCards.map((c, idx) => toCard(c, 100 + idx));
-    const dealerTotals = calculateHandTotal(dealerCards);
+    const dealerCardsRaw = rawDealerCards.map((c, idx) => toCard(c, 100 + idx));
+    const dealerCards = maxDealerCards != null ? dealerCardsRaw.slice(0, maxDealerCards) : dealerCardsRaw;
+    const dealerTotals = calculateHandTotal(dealerCardsRaw);
     const dealerHand: Hand = {
       id: `${gameId}-dealer`,
-      cards: dealerCards,
+      cards: dealerCards, // Sliced when phased deal
       total: Number(serverGameState.dealerTotal ?? dealerTotals.total),
       hasAce: Boolean(serverGameState.dealerHasAce ?? dealerTotals.hasAce),
       isBlackjack: false,
@@ -1484,8 +1516,8 @@ export default function BlackjackPage() {
       player: address,
       betAmount: totalBetAmount,
       state: mappedState,
-      // Keep the legacy single-hand fields used throughout the page
-      playerHand: activePlayerHand || {
+      // Keep the legacy single-hand fields used throughout the page (use sliced for phased deal)
+      playerHand: activePlayerHandSliced || {
         id: `${gameId}-hand-0`,
         cards: [],
         total: 0,
@@ -1501,8 +1533,8 @@ export default function BlackjackPage() {
         canSplit: false,
       },
       dealerHand,
-      // Also keep multi-hand data for split support
-      playerHands,
+      // Also keep multi-hand data for split support (use sliced for phased deal)
+      playerHands: playerHandsSliced,
       currentHandIndex,
       totalBetAmount,
       totalPayout,
@@ -1522,8 +1554,8 @@ export default function BlackjackPage() {
       isPlaying: status === 'completed' ? true : status === 'player_turn' || status === 'dealer_turn',
     }));
     
-    // Track new cards for animations
-    const currentPlayerCardCount = activePlayerHand?.cards.length || 0;
+    // Track new cards for animations (use sliced counts for phased deal)
+    const currentPlayerCardCount = activePlayerHandSliced?.cards.length || 0;
     const currentDealerCardCount = dealerCards.length;
     
     if (currentPlayerCardCount > prevPlayerCardCount.current) {
@@ -1578,6 +1610,29 @@ export default function BlackjackPage() {
     // Return the processed localGame so it can be used immediately
     return localGame;
   }, [address, gameState.clientSeed, soundEnabled, playSound]);
+
+  // Wrapper: normal flow or phased deal for player blackjack (cards animate with same delay as other hands)
+  const updateGameStateFromServer = useCallback((serverGameState: any) => {
+    return updateGameStateFromServerCore(serverGameState);
+  }, [updateGameStateFromServerCore]);
+
+  // Phased deal for player blackjack: simulate deal order (player, dealer, player, dealer)
+  const DEAL_PHASE_MS = 250;
+  const applyPhasedBlackjackDeal = useCallback((serverGameState: any, onComplete: (localGame: any) => void) => {
+    const p1 = updateGameStateFromServerCore(serverGameState, 1, 0);
+    if (!p1) { onComplete(null!); return; }
+    const t1 = setTimeout(() => {
+      updateGameStateFromServerCore(serverGameState, 2, 0);
+      const t2 = setTimeout(() => {
+        updateGameStateFromServerCore(serverGameState, 2, 1);
+        const t3 = setTimeout(() => {
+          const final = updateGameStateFromServerCore(serverGameState);
+          onComplete(final!);
+        }, DEAL_PHASE_MS);
+      }, DEAL_PHASE_MS);
+    }, DEAL_PHASE_MS);
+    return () => { clearTimeout(t1); };
+  }, [updateGameStateFromServerCore]);
 
   // Handle game completion
   const handleGameCompletion = useCallback((data: any) => {
@@ -2001,23 +2056,38 @@ export default function BlackjackPage() {
     try {
       const gameState = await tournament.startTournamentGame(betAmount);
       if (gameState) {
-        // Convert tournament game state to local game state format
-        const processedGame = updateGameStateFromServer(gameState);
-        
-        // If game completed immediately (e.g., blackjack), handle completion (including chart update)
-        if (gameState.status === 'completed' && processedGame) {
-          // Tournament games use chips, convert to wei-equivalent for chart (1 chip = 1e18 wei for display)
-          const betAmountWei = gameState.totalBetAmount ? gameState.totalBetAmount * BigInt(1e18) : BigInt(betAmount) * BigInt(1e18);
-          const payoutWei = gameState.totalPayout ? gameState.totalPayout * BigInt(1e18) : BigInt(0);
-          
-          handleGameCompletion({
-            gameId: processedGame.id,
-            betAmount: betAmountWei,
-            payout: payoutWei,
-            result: processedGame.playerHand?.result || (payoutWei > betAmountWei ? 'win' : payoutWei < betAmountWei ? 'loss' : 'push'),
-            processedGame,
-            gameState: gameState,
+        const status = String(gameState.status);
+        const isPlayerBlackjack = status === 'completed' && Array.isArray(gameState.playerHands) &&
+          gameState.playerHands.some((h: any) => h.result === 'blackjack' || h.isBlackjack);
+        if (isPlayerBlackjack) {
+          applyPhasedBlackjackDeal(gameState, (processedGame) => {
+            if (processedGame) {
+              const betAmountWei = gameState.totalBetAmount ? gameState.totalBetAmount * BigInt(1e18) : BigInt(betAmount) * BigInt(1e18);
+              const payoutWei = gameState.totalPayout ? gameState.totalPayout * BigInt(1e18) : BigInt(0);
+              handleGameCompletion({
+                gameId: processedGame.id,
+                betAmount: betAmountWei,
+                payout: payoutWei,
+                result: 'blackjack',
+                processedGame,
+                gameState: gameState,
+              });
+            }
           });
+        } else {
+          const processedGame = updateGameStateFromServer(gameState);
+          if (status === 'completed' && processedGame) {
+            const betAmountWei = gameState.totalBetAmount ? gameState.totalBetAmount * BigInt(1e18) : BigInt(betAmount) * BigInt(1e18);
+            const payoutWei = gameState.totalPayout ? gameState.totalPayout * BigInt(1e18) : BigInt(0);
+            handleGameCompletion({
+              gameId: processedGame.id,
+              betAmount: betAmountWei,
+              payout: payoutWei,
+              result: processedGame.playerHand?.result || (payoutWei > betAmountWei ? 'win' : payoutWei < betAmountWei ? 'loss' : 'push'),
+              processedGame,
+              gameState: gameState,
+            });
+          }
         }
         // If game completed, isPlaying is set to false in handleDealerRevealComplete after dealer reveal
       } else {
@@ -2028,7 +2098,7 @@ export default function BlackjackPage() {
       toast.error(error.message || 'Failed to start game');
       setGameState(prev => ({ ...prev, isPlaying: false }));
     }
-  }, [tournament, updateGameStateFromServer, handleGameCompletion]);
+  }, [tournament, updateGameStateFromServer, applyPhasedBlackjackDeal, handleGameCompletion]);
 
   // Handle tournament player action
   const handleTournamentPlayerAction = useCallback(async (action: Action) => {
@@ -2126,29 +2196,51 @@ export default function BlackjackPage() {
       console.log('Generated game hash:', gameHash, { totalStake: totalStake.toString(), betAmount: betAmount.toString(), perfectPairs: sideBet.toString() });
 
       // Step 3: Create game on server (off-chain betting; total stake = main + Perfect Pairs)
-      const serverGameState = await wsClient.createGame(betAmount, clientSeed, gameHash, sideBet > 0n ? sideBet : undefined);
+      createGameInProgressRef.current = true;
+      let serverGameState: any;
+      try {
+        serverGameState = await wsClient.createGame(betAmount, clientSeed, gameHash, sideBet > 0n ? sideBet : undefined);
+      } finally {
+        createGameInProgressRef.current = false;
+      }
       console.log('Game started:', serverGameState);
 
-      // Apply returned game state immediately (server response includes requestId so it won't emit as a separate event)
-      const processedGame = updateGameStateFromServer(serverGameState);
-      // Some games complete immediately (player or dealer blackjack). Run completion flow so dealer reveal + REBET unlock.
-      if (String(serverGameState?.status) === 'completed' && processedGame) {
-        const completedBetAmount = processedGame.totalBetAmount ?? BigInt(0);
-        const completedPayout = processedGame.totalPayout ?? BigInt(0);
-        const hasWin = Array.isArray(processedGame.playerHands) &&
-          processedGame.playerHands.some((h: any) => h.result === 'win' || h.result === 'blackjack');
-        const allPush = Array.isArray(processedGame.playerHands) &&
-          processedGame.playerHands.every((h: any) => h.result === 'push');
-        const isBlackjack = Array.isArray(processedGame.playerHands) &&
-          processedGame.playerHands.some((h: any) => h.result === 'blackjack');
-        const overallResult = isBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
-        handleGameCompletion({
-          gameId: processedGame.id,
-          betAmount: completedBetAmount,
-          payout: completedPayout,
-          result: overallResult,
-          processedGame,
+      // Apply returned game state. Player blackjack: use phased deal so cards animate with same delay as other hands.
+      const status = String(serverGameState?.status);
+      const isPlayerBlackjack = status === 'completed' && Array.isArray((serverGameState as any)?.playerHands) &&
+        (serverGameState as any).playerHands.some((h: any) => h.result === 'blackjack' || h.isBlackjack);
+      if (isPlayerBlackjack) {
+        applyPhasedBlackjackDeal(serverGameState, (processedGame) => {
+          if (processedGame) {
+            handleGameCompletion({
+              gameId: processedGame.id,
+              betAmount: processedGame.totalBetAmount ?? BigInt(0),
+              payout: processedGame.totalPayout ?? BigInt(0),
+              result: 'blackjack',
+              processedGame,
+            });
+          }
         });
+      } else {
+        const processedGame = updateGameStateFromServer(serverGameState);
+        if (status === 'completed' && processedGame) {
+          const completedBetAmount = processedGame.totalBetAmount ?? BigInt(0);
+          const completedPayout = processedGame.totalPayout ?? BigInt(0);
+          const hasWin = Array.isArray(processedGame.playerHands) &&
+            processedGame.playerHands.some((h: any) => h.result === 'win' || h.result === 'blackjack');
+          const allPush = Array.isArray(processedGame.playerHands) &&
+            processedGame.playerHands.every((h: any) => h.result === 'push');
+          const isBlackjack = Array.isArray(processedGame.playerHands) &&
+            processedGame.playerHands.some((h: any) => h.result === 'blackjack');
+          const overallResult = isBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
+          handleGameCompletion({
+            gameId: processedGame.id,
+            betAmount: completedBetAmount,
+            payout: completedPayout,
+            result: overallResult,
+            processedGame,
+          });
+        }
       }
       // Refresh balance (bet was deducted off-chain)
       fetchBalance();
@@ -2173,7 +2265,7 @@ export default function BlackjackPage() {
       });
       setGameState(prev => ({ ...prev, isPlaying: false }));
     }
-  }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer, handleGameCompletion]);
+  }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer, applyPhasedBlackjackDeal, handleGameCompletion]);
 
   // When Deal is clicked: if bet came from mobile manual entry, convert to chip stack so table shows chips, then start game
   const handleDealClick = useCallback(() => {
