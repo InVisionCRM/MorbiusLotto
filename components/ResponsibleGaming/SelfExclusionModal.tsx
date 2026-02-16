@@ -143,7 +143,7 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
 
   return (
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[100000] flex items-center justify-center p-4"
       onClick={onClose}
     >
       {/* Backdrop */}
@@ -153,7 +153,7 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
       <div
         className="relative w-full max-w-lg rounded-2xl overflow-hidden border border-amber-500/30 shadow-2xl max-h-[90vh] overflow-y-auto"
         style={{
-          background: 'linear-gradient(145deg, rgb(30, 25, 20), rgb(40, 35, 30))',
+          background: 'linear-gradient(145deg, rgb(3, 2, 2), rgb(2, 2, 2))',
           boxShadow: '0 0 40px rgba(245, 158, 11, 0.15)',
         }}
         onClick={(e) => e.stopPropagation()}

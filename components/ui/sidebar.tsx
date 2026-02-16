@@ -88,7 +88,7 @@ export const DesktopSidebar = ({
     <>
       <motion.div
         className={cn(
-          "fixed top-0 left-0 min-h-screen h-full px-3 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 overflow-hidden rounded-r-xl z-10",
+          "fixed top-0 left-0 min-h-screen h-full px-3 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 overflow-hidden rounded-r-xl z-[99999]",
           className
         )}
         animate={{
@@ -115,7 +115,7 @@ export const MobileSidebar = ({
     <>
       <div
         className={cn(
-          "fixed top-0 left-0 right-0 z-20 h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-900 border-b border-white/10 w-full"
+          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-900 border-b border-white/10 w-full"
         )}
         {...props}
       >
@@ -134,7 +134,7 @@ export const MobileSidebar = ({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed inset-0 bg-black/50 z-[99] md:hidden"
+                className="fixed inset-0 bg-black/50 z-[99998] md:hidden"
                 onClick={() => setOpen(false)}
                 aria-hidden
               />
@@ -147,7 +147,7 @@ export const MobileSidebar = ({
                   ease: "easeInOut",
                 }}
                 className={cn(
-                  "fixed left-0 top-0 bottom-0 w-1/2 min-w-[160px] max-w-[220px] pl-3 pr-2 py-4 z-[100] flex flex-col justify-between overflow-y-auto",
+                  "fixed left-0 top-0 bottom-0 w-1/2 min-w-[160px] max-w-[220px] pl-3 pr-2 py-4 z-[99999] flex flex-col justify-between overflow-y-auto",
                   className
                 )}
                 style={style}

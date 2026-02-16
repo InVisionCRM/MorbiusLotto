@@ -17,7 +17,7 @@ interface HowToPlayModalProps {
 export default function HowToPlayModal({ open, onOpenChange }: HowToPlayModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] bg-black max-h-[85vh] overflow-y-auto border-4 border-[#1BE7FF] shadow-2xl shadow-[#1BE7FF]/40"
+      <DialogContent modalZIndex="z-[100000]" className="sm:max-w-[700px] bg-black max-h-[85vh] overflow-y-auto border-4 border-[#1BE7FF] shadow-2xl shadow-[#1BE7FF]/40"
         style={{
           boxShadow: '0 0 30px rgba(27, 231, 255, 0.5), inset 0 0 20px rgba(27, 231, 255, 0.1)'
         }}>
