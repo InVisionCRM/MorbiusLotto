@@ -3,16 +3,17 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { formatEther } from 'viem'
-import { InfiniteMovingCards, type ImageCardItem } from '@/components/ui/infinite-moving-cards'
 import { type TopPlayerEntry } from '@/hooks/use-blackjack-stats'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
-import { Trophy, Medal, Award } from 'lucide-react'
+import { Trophy, Medal, Award, TrendingUp, Target } from 'lucide-react'
 
 const PANEL_STYLE = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
   boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
   border: '1px inset rgba(60, 60, 60, 0.5)',
 }
+
+const CARD_HEIGHT = 'h-[64px]'
 
 export const MOCK_TOP_PLAYER_ENTRIES: TopPlayerEntry[] = [
   { rank: 1, wallet_address: '0x1234567890abcdef1234567890abcdef12345678', total_games: 1247, total_bet: BigInt(500000e18), total_win: BigInt(520000e18), profit_loss: BigInt(20000e18), win_rate: 52.3 },
@@ -22,12 +23,20 @@ export const MOCK_TOP_PLAYER_ENTRIES: TopPlayerEntry[] = [
   { rank: 5, wallet_address: '0x5555666677778888999900001111222233334444', total_games: 312, total_bet: BigInt(72000e18), total_win: BigInt(78000e18), profit_loss: BigInt(6000e18), win_rate: 53.4 },
 ]
 
-export const MOCK_CAROUSEL_ITEMS: ImageCardItem[] = [
-  { name: 'Most Games · ...5678', subtitle: '1,247 games · 2 weeks', href: '/player/0x1234' },
-  { name: 'Top Wagered · ...cdef', subtitle: '500,000 MORBIUS · 1 month', href: '/player/0xabcd' },
-  { name: 'Best P/L · ...4321', subtitle: '+20,000 MORBIUS · 3 days', href: '/player/0x4321' },
-  { name: 'Win Rate · ...7890', subtitle: '55.8% · 1 week', href: '/player/0x7890' },
-  { name: 'Win Streak · ...abcd', subtitle: '12 wins · Today', href: '/player/0xabcd' },
+/** Carousel item: category leader with clear labels */
+export interface CarouselItem {
+  categoryLabel: string
+  playerShort: string
+  displayValue: string
+  href: string
+}
+
+export const MOCK_CAROUSEL_ITEMS: CarouselItem[] = [
+  { categoryLabel: 'Most Games Played', playerShort: '...5678', displayValue: '1,247 games', href: '/player/0x1234' },
+  { categoryLabel: 'Highest Wagered', playerShort: '...cdef', displayValue: '500,000 MORB', href: '/player/0xabcd' },
+  { categoryLabel: 'Best Profit', playerShort: '...4321', displayValue: '+20,000 MORB', href: '/player/0x4321' },
+  { categoryLabel: 'Best Win Rate', playerShort: '...7890', displayValue: '55.8%', href: '/player/0x7890' },
+  { categoryLabel: 'Longest Win Streak', playerShort: '...abcd', displayValue: '12 wins', href: '/player/0xabcd' },
 ]
 
 function formatMorbius(wei: bigint): string {
@@ -241,175 +250,25 @@ function TopPlayersTableE({ entries }: { entries: TopPlayerEntry[] }) {
   )
 }
 
-// ─── Carousel Layouts ───────────────────────────────────────────────────────
+// ─── Carousel Layouts (5 concepts, clear labels, fixed h-[64px]) ────────────────
 
-function CarouselLayoutA({ items }: { items: ImageCardItem[] }) {
-  return (
-    <div className="w-full py-2 rounded-xl overflow-hidden" style={PANEL_STYLE}>
-      <InfiniteMovingCards
-        items={items}
-        variant="image"
-        direction="left"
-        speed="normal"
-        pauseOnHover
-        className="max-w-5xl mx-auto [&_span]:text-inherit [&_a]:cursor-pointer [&_ul]:py-1 [&_li]:h-[72px] [&_li]:md:h-[88px]"
-      />
-    </div>
-  )
-}
-
-function CarouselLayoutB({ items }: { items: ImageCardItem[] }) {
-  return (
-    <div
-      className="w-full py-3 rounded-xl overflow-hidden border-2 border-cyan-500/30"
-      style={{ background: 'linear-gradient(180deg, rgba(15,23,42,0.95), rgba(15,23,42,0.85))' }}
-    >
-      <InfiniteMovingCards
-        items={items}
-        variant="image"
-        direction="right"
-        speed="slow"
-        pauseOnHover
-        className="max-w-5xl mx-auto [&_li]:min-w-[220px] [&_li]:border-2 [&_li]:border-cyan-500/20 [&_li]:rounded-xl [&_li]:h-[80px]"
-      />
-    </div>
-  )
-}
-
-function CarouselLayoutC({ items }: { items: ImageCardItem[] }) {
-  return (
-    <div className="w-full py-3 rounded-xl overflow-hidden" style={PANEL_STYLE}>
-      <div className="relative">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.15),transparent_70%)]" />
-        <InfiniteMovingCards
-          items={items}
-          variant="image"
-          direction="left"
-          speed="fast"
-          pauseOnHover
-          className="max-w-5xl mx-auto [&_li]:bg-gradient-to-br [&_li]:from-slate-800/90 [&_li]:to-slate-900/90 [&_li]:border [&_li]:border-white/10 [&_li]:shadow-lg [&_li]:h-[84px] [&_li]:min-w-[200px]"
-        />
-      </div>
-    </div>
-  )
-}
-
-function CarouselLayoutD({ items }: { items: ImageCardItem[] }) {
-  return (
-    <div className="w-full py-3 rounded-xl overflow-hidden" style={PANEL_STYLE}>
-      <InfiniteMovingCards
-        items={items}
-        variant="image"
-        direction="left"
-        speed="normal"
-        pauseOnHover
-        className="max-w-5xl mx-auto [&_li]:bg-slate-800/80 [&_li]:border-l-4 [&_li]:border-l-cyan-500 [&_li]:rounded-r-lg [&_li]:h-[76px] [&_li]:min-w-[240px]"
-      />
-    </div>
-  )
-}
-
-function CarouselLayoutE({ items }: { items: ImageCardItem[] }) {
-  return (
-    <div
-      className="w-full py-3 rounded-xl overflow-hidden"
-      style={{
-        background: 'linear-gradient(145deg, rgba(16,26,35,0.95), rgba(35,36,41,0.9))',
-        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.4), 0 0 20px rgba(34,211,238,0.08)',
-        border: '1px solid rgba(34,211,238,0.2)',
-      }}
-    >
-      <InfiniteMovingCards
-        items={items}
-        variant="image"
-        direction="right"
-        speed="normal"
-        pauseOnHover
-        className="max-w-5xl mx-auto [&_li]:backdrop-blur-sm [&_li]:bg-white/5 [&_li]:border [&_li]:border-white/20 [&_li]:rounded-xl [&_li]:h-[80px] [&_li]:min-w-[220px]"
-      />
-    </div>
-  )
-}
-
-// ─── Overlay Layouts (horizontal scroll) ─────────────────────────────────────
-
-function OverlayLayoutA({ entries }: { entries: TopPlayerEntry[] }) {
+function CarouselScroller({ items, direction, children }: { items: CarouselItem[]; direction: 'left' | 'right'; children: (item: CarouselItem) => React.ReactNode }) {
   const ref = useRef<HTMLUListElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [start, setStart] = useState(false)
-
-  useEffect(() => {
-    if (!containerRef.current || !ref.current) return
-    Array.from(ref.current.children).forEach((el) => ref.current?.appendChild(el.cloneNode(true)))
-    containerRef.current.style.setProperty('--animation-duration', '35s')
-    setStart(true)
-  }, [])
-
-  return (
-    <div
-      ref={containerRef}
-      className="scroller overflow-hidden rounded-lg [mask-image:linear-gradient(to_right,transparent,white_15%,white_85%,transparent)]"
-      style={PANEL_STYLE}
-    >
-      <ul ref={ref} className={`flex w-max gap-2 py-2 px-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
-        {entries.map((e) => (
-          <li key={e.wallet_address} className="shrink-0">
-            <Link
-              href={`/player/${e.wallet_address}`}
-              className="block px-3 py-1.5 rounded-md bg-white/5 border border-white/10 hover:border-cyan-500/30 text-white text-xs font-mono"
-            >
-              <span className="text-amber-400/90 font-bold">#{e.rank}</span>
-              <span className="mx-1.5 text-white/70">·</span>
-              <span>...{shortAddress(e.wallet_address)}</span>
-              <span className="ml-1.5 text-white/50">{e.total_games}g</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function OverlayLayoutB({ entries }: { entries: TopPlayerEntry[] }) {
-  const ref = useRef<HTMLUListElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [start, setStart] = useState(false)
-
   useEffect(() => {
     if (!containerRef.current || !ref.current) return
     Array.from(ref.current.children).forEach((el) => ref.current?.appendChild(el.cloneNode(true)))
     containerRef.current.style.setProperty('--animation-duration', '40s')
+    containerRef.current.style.setProperty('--animation-direction', direction === 'left' ? 'forwards' : 'reverse')
     setStart(true)
-  }, [])
-
-  const rankStyle = (r: number) => {
-    if (r === 1) return 'border-amber-400/80 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
-    if (r === 2) return 'border-slate-300/80 shadow-[0_0_10px_rgba(203,213,225,0.3)]'
-    if (r === 3) return 'border-amber-700/80 shadow-[0_0_10px_rgba(180,83,9,0.35)]'
-    return 'border-white/20'
-  }
-
+  }, [direction])
   return (
-    <div
-      ref={containerRef}
-      className="scroller overflow-hidden rounded-xl [mask-image:linear-gradient(to_right,transparent,white_15%,white_85%,transparent)]"
-      style={PANEL_STYLE}
-    >
-      <ul ref={ref} className={`flex w-max gap-3 py-2.5 px-3 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
-        {entries.map((e) => (
-          <li key={e.wallet_address} className="shrink-0 w-[110px]">
-            <Link
-              href={`/player/${e.wallet_address}`}
-              className={`block rounded-lg border-2 bg-gradient-to-b from-slate-800/95 to-slate-900/95 px-2.5 py-2 text-white transition-opacity hover:opacity-95 ${rankStyle(e.rank)}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-400/90">#{e.rank}</span>
-                <span className="text-xs font-mono truncate">...{shortAddress(e.wallet_address)}</span>
-              </div>
-              <div className="mt-1 text-[10px] tabular-nums text-white/70">
-                {e.total_games} games · {e.win_rate.toFixed(0)}%
-              </div>
-            </Link>
+    <div ref={containerRef} className="scroller overflow-hidden [mask-image:linear-gradient(to_right,transparent,white_15%,white_85%,transparent)]">
+      <ul ref={ref} className={`flex w-max gap-3 py-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
+        {items.map((item) => (
+          <li key={item.href + item.categoryLabel} className="shrink-0">
+            {children(item)}
           </li>
         ))}
       </ul>
@@ -417,48 +276,116 @@ function OverlayLayoutB({ entries }: { entries: TopPlayerEntry[] }) {
   )
 }
 
-function OverlayLayoutC({ entries }: { entries: TopPlayerEntry[] }) {
+function CarouselLayoutA({ items }: { items: CarouselItem[] }) {
+  return (
+    <div className="w-full py-2 rounded-xl overflow-hidden" style={PANEL_STYLE}>
+      <CarouselScroller items={items} direction="left">
+        {(item) => (
+          <Link href={item.href} className={`flex flex-col justify-center px-4 rounded-lg bg-slate-800/80 border border-white/10 hover:border-cyan-500/30 ${CARD_HEIGHT} min-w-[200px]`}>
+            <span className="text-[10px] uppercase tracking-wider text-cyan-400/90 font-medium">{item.categoryLabel}</span>
+            <span className="text-sm font-mono text-white mt-0.5">Player {item.playerShort}</span>
+            <span className="text-xs text-white/70 tabular-nums mt-0.5">{item.displayValue}</span>
+          </Link>
+        )}
+      </CarouselScroller>
+    </div>
+  )
+}
+
+function CarouselLayoutB({ items }: { items: CarouselItem[] }) {
+  return (
+    <div className="w-full py-2 rounded-xl overflow-hidden border-2 border-cyan-500/30" style={PANEL_STYLE}>
+      <CarouselScroller items={items} direction="right">
+        {(item) => (
+          <Link href={item.href} className={`flex items-center gap-3 px-4 rounded-lg bg-black/30 border-l-4 border-l-cyan-500 hover:bg-slate-800/50 ${CARD_HEIGHT} min-w-[240px]`}>
+            <Trophy className="w-6 h-6 text-amber-400/80 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold text-cyan-300 truncate">{item.categoryLabel}</div>
+              <div className="text-sm font-mono text-white/90 truncate">{item.playerShort}</div>
+            </div>
+            <span className="text-sm font-bold tabular-nums text-white shrink-0">{item.displayValue}</span>
+          </Link>
+        )}
+      </CarouselScroller>
+    </div>
+  )
+}
+
+function CarouselLayoutC({ items }: { items: CarouselItem[] }) {
+  return (
+    <div className="w-full py-2 rounded-xl overflow-hidden" style={PANEL_STYLE}>
+      <CarouselScroller items={items} direction="left">
+        {(item) => (
+          <Link href={item.href} className={`flex items-center justify-between px-4 rounded-lg bg-gradient-to-r from-slate-800/90 to-slate-900/80 hover:from-cyan-900/30 hover:to-slate-900/80 ${CARD_HEIGHT} min-w-[220px]`}>
+            <div>
+              <span className="text-lg font-bold tabular-nums text-white">{item.displayValue}</span>
+              <div className="text-[10px] text-white/60 mt-0.5">by {item.playerShort}</div>
+            </div>
+            <span className="text-[10px] uppercase text-cyan-400/80 font-medium text-right max-w-[100px]">{item.categoryLabel}</span>
+          </Link>
+        )}
+      </CarouselScroller>
+    </div>
+  )
+}
+
+function CarouselLayoutD({ items }: { items: CarouselItem[] }) {
+  return (
+    <div className="w-full py-2 rounded-xl overflow-hidden" style={PANEL_STYLE}>
+      <CarouselScroller items={items} direction="left">
+        {(item) => (
+          <Link href={item.href} className={`flex items-center gap-3 px-4 rounded-xl bg-white/5 border border-white/10 hover:border-cyan-500/40 ${CARD_HEIGHT} min-w-[200px]`}>
+            <Target className="w-5 h-5 text-cyan-400/70 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-mono text-white truncate">{item.playerShort}</div>
+              <div className="text-[10px] text-white/60 truncate">{item.categoryLabel}</div>
+            </div>
+            <span className="text-sm font-semibold tabular-nums text-cyan-300 shrink-0">{item.displayValue}</span>
+          </Link>
+        )}
+      </CarouselScroller>
+    </div>
+  )
+}
+
+function CarouselLayoutE({ items }: { items: CarouselItem[] }) {
+  return (
+    <div className="w-full py-2 rounded-xl overflow-hidden" style={PANEL_STYLE}>
+      <CarouselScroller items={items} direction="right">
+        {(item) => (
+          <Link href={item.href} className={`flex items-center gap-3 px-4 rounded-lg bg-slate-800/90 border border-cyan-500/20 hover:border-cyan-500/50 ${CARD_HEIGHT} min-w-[260px]`}>
+            <TrendingUp className="w-5 h-5 text-emerald-400/80 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-white/70">{item.playerShort} leads with</div>
+              <div className="text-sm font-bold text-white">{item.displayValue}</div>
+            </div>
+            <span className="text-[10px] text-cyan-400/80 uppercase shrink-0">{item.categoryLabel}</span>
+          </Link>
+        )}
+      </CarouselScroller>
+    </div>
+  )
+}
+
+// ─── Overlay Layouts (5 concepts, clear labels, fixed h-[64px]) ───────────────
+
+function OverlayScroller({ entries, children }: { entries: TopPlayerEntry[]; children: (e: TopPlayerEntry) => React.ReactNode }) {
   const ref = useRef<HTMLUListElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [start, setStart] = useState(false)
-
   useEffect(() => {
     if (!containerRef.current || !ref.current) return
     Array.from(ref.current.children).forEach((el) => ref.current?.appendChild(el.cloneNode(true)))
     containerRef.current.style.setProperty('--animation-duration', '38s')
+    containerRef.current.style.setProperty('--animation-direction', 'forwards')
     setStart(true)
   }, [])
-
   return (
-    <div
-      ref={containerRef}
-      className="scroller overflow-hidden rounded-xl [mask-image:linear-gradient(to_right,transparent,white_15%,white_85%,transparent)]"
-      style={{
-        background: 'linear-gradient(145deg, rgba(16,26,35,0.95), rgba(35,36,41,0.9))',
-        border: '1px solid rgba(34,211,238,0.25)',
-        boxShadow: 'inset 0 0 30px rgba(34,211,238,0.05)',
-      }}
-    >
-      <ul ref={ref} className={`flex w-max gap-2.5 py-2 px-3 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
+    <div ref={containerRef} className="scroller overflow-hidden [mask-image:linear-gradient(to_right,transparent,white_15%,white_85%,transparent)]">
+      <ul ref={ref} className={`flex w-max gap-3 py-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
         {entries.map((e) => (
           <li key={e.wallet_address} className="shrink-0">
-            <Link
-              href={`/player/${e.wallet_address}`}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/80 border border-cyan-500/20 hover:border-cyan-500/50 text-white"
-            >
-              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                e.rank === 1 ? 'bg-amber-500/40 text-amber-200' :
-                e.rank === 2 ? 'bg-slate-400/40' :
-                e.rank === 3 ? 'bg-amber-700/40 text-amber-300' :
-                'bg-white/10 text-white/70'
-              }`}>
-                {e.rank}
-              </span>
-              <div>
-                <div className="text-xs font-mono text-cyan-300">...{shortAddress(e.wallet_address)}</div>
-                <div className="text-[10px] text-white/50">{e.total_games} · {e.win_rate.toFixed(0)}%</div>
-              </div>
-            </Link>
+            {children(e)}
           </li>
         ))}
       </ul>
@@ -466,76 +393,98 @@ function OverlayLayoutC({ entries }: { entries: TopPlayerEntry[] }) {
   )
 }
 
-function OverlayLayoutD({ entries }: { entries: TopPlayerEntry[] }) {
-  const ref = useRef<HTMLUListElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [start, setStart] = useState(false)
-
-  useEffect(() => {
-    if (!containerRef.current || !ref.current) return
-    Array.from(ref.current.children).forEach((el) => ref.current?.appendChild(el.cloneNode(true)))
-    containerRef.current.style.setProperty('--animation-duration', '42s')
-    setStart(true)
-  }, [])
-
+function OverlayLayoutA({ entries, transparent }: { entries: TopPlayerEntry[]; transparent?: boolean }) {
   return (
-    <div ref={containerRef} className="scroller overflow-hidden rounded-lg [mask-image:linear-gradient(to_right,transparent,white_15%,white_85%,transparent)]" style={PANEL_STYLE}>
-      <ul ref={ref} className={`flex w-max gap-2 py-2 px-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
-        {entries.map((e) => (
-          <li key={e.wallet_address} className="shrink-0">
-            <Link
-              href={`/player/${e.wallet_address}`}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded border-l-4 border-l-cyan-500 bg-slate-800/60 hover:bg-slate-700/60 text-white"
-            >
-              <Medal className={`w-4 h-4 shrink-0 ${e.rank <= 3 ? 'text-amber-400' : 'text-white/40'}`} />
-              <span className="text-xs font-mono">...{shortAddress(e.wallet_address)}</span>
-              <span className="text-[10px] text-white/50 tabular-nums">{e.total_games}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+    <div className="rounded-xl overflow-hidden" style={transparent ? undefined : PANEL_STYLE}>
+      <OverlayScroller entries={entries}>
+        {(e) => (
+          <Link href={`/player/${e.wallet_address}`} className={`flex items-center gap-3 px-4 rounded-lg bg-slate-800/80 border border-white/10 hover:border-cyan-500/30 ${CARD_HEIGHT} min-w-[200px]`}>
+            <span className={`w-7 h-7 rounded flex items-center justify-center text-xs font-bold shrink-0 ${e.rank <= 3 ? 'bg-amber-500/30 text-amber-300' : 'bg-white/10 text-white/70'}`}>
+              #{e.rank}
+            </span>
+            <span className="text-sm font-mono text-white">...{shortAddress(e.wallet_address)}</span>
+            <span className="text-xs text-white/60 tabular-nums ml-auto">{e.total_games} games played</span>
+          </Link>
+        )}
+      </OverlayScroller>
     </div>
   )
 }
 
-function OverlayLayoutE({ entries }: { entries: TopPlayerEntry[] }) {
-  const ref = useRef<HTMLUListElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [start, setStart] = useState(false)
-
-  useEffect(() => {
-    if (!containerRef.current || !ref.current) return
-    Array.from(ref.current.children).forEach((el) => ref.current?.appendChild(el.cloneNode(true)))
-    containerRef.current.style.setProperty('--animation-duration', '36s')
-    setStart(true)
-  }, [])
-
+function OverlayLayoutB({ entries, transparent }: { entries: TopPlayerEntry[]; transparent?: boolean }) {
   return (
-    <div
-      ref={containerRef}
-      className="scroller overflow-hidden rounded-xl [mask-image:linear-gradient(to_right,transparent,white_15%,white_85%,transparent)]"
-      style={{
-        background: 'linear-gradient(145deg, rgba(20,20,20,0.9), rgba(40,40,40,0.7))',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.5), 0 0 24px rgba(34,211,238,0.06)',
-      }}
-    >
-      <ul ref={ref} className={`flex w-max gap-2.5 py-2.5 px-3 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
-        {entries.map((e) => (
-          <li key={e.wallet_address} className="shrink-0">
-            <Link
-              href={`/player/${e.wallet_address}`}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-sm bg-white/5 border border-white/10 hover:border-cyan-500/40 text-white"
-            >
-              <Award className={`w-4 h-4 shrink-0 ${e.rank <= 3 ? 'text-amber-400/90' : 'text-white/40'}`} />
-              <div>
-                <div className="text-xs font-mono text-white/90">...{shortAddress(e.wallet_address)}</div>
-                <div className="text-[10px] text-cyan-400/80 tabular-nums">{e.profit_loss >= 0n ? '+' : ''}{formatMorbius(e.profit_loss)} MORB</div>
-              </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
+    <div className="rounded-xl overflow-hidden border-2 border-cyan-500/30" style={transparent ? undefined : PANEL_STYLE}>
+      <OverlayScroller entries={entries}>
+        {(e) => (
+          <Link href={`/player/${e.wallet_address}`} className={`flex items-center gap-3 px-4 rounded-lg bg-black/30 hover:bg-slate-800/50 ${CARD_HEIGHT} min-w-[220px]`}>
+            <span className={`tabular-nums font-bold text-sm shrink-0 ${e.profit_loss >= 0n ? 'text-emerald-400' : 'text-red-400'}`}>
+              {e.profit_loss >= 0n ? '+' : ''}{formatMorbius(e.profit_loss)}
+            </span>
+            <span className="text-xs text-white/60">MORB profit</span>
+            <span className="text-sm font-mono text-cyan-300 ml-auto">...{shortAddress(e.wallet_address)}</span>
+            <span className="text-[10px] text-white/50">Rank #{e.rank}</span>
+          </Link>
+        )}
+      </OverlayScroller>
+    </div>
+  )
+}
+
+function OverlayLayoutC({ entries, transparent }: { entries: TopPlayerEntry[]; transparent?: boolean }) {
+  return (
+    <div className="rounded-xl overflow-hidden" style={transparent ? undefined : PANEL_STYLE}>
+      <OverlayScroller entries={entries}>
+        {(e) => (
+          <Link href={`/player/${e.wallet_address}`} className={`flex flex-col justify-center px-4 rounded-lg bg-gradient-to-r from-slate-800/90 to-slate-900/80 hover:from-cyan-900/20 ${CARD_HEIGHT} min-w-[180px]`}>
+            <div className="flex items-center gap-2">
+              <span className="text-amber-400/90 font-bold">#{e.rank}</span>
+              <span className="text-sm font-mono text-white">...{shortAddress(e.wallet_address)}</span>
+            </div>
+            <div className="text-[10px] text-white/60 mt-0.5">
+              {e.total_games} games · {e.win_rate.toFixed(1)}% win rate · {e.profit_loss >= 0n ? '+' : ''}{formatMorbius(e.profit_loss)} MORB
+            </div>
+          </Link>
+        )}
+      </OverlayScroller>
+    </div>
+  )
+}
+
+function OverlayLayoutD({ entries, transparent }: { entries: TopPlayerEntry[]; transparent?: boolean }) {
+  return (
+    <div className="rounded-xl overflow-hidden" style={transparent ? undefined : PANEL_STYLE}>
+      <OverlayScroller entries={entries}>
+        {(e) => (
+          <Link href={`/player/${e.wallet_address}`} className={`flex items-center gap-3 px-4 rounded-lg border-l-4 border-l-cyan-500 bg-slate-800/60 hover:bg-slate-700/60 ${CARD_HEIGHT} min-w-[200px]`}>
+            <Medal className={`w-5 h-5 shrink-0 ${e.rank <= 3 ? 'text-amber-400' : 'text-white/40'}`} />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-mono text-white truncate">...{shortAddress(e.wallet_address)}</div>
+              <div className="text-[10px] text-white/60">Rank {e.rank} · {e.total_games} games · {e.win_rate.toFixed(0)}% wins</div>
+            </div>
+          </Link>
+        )}
+      </OverlayScroller>
+    </div>
+  )
+}
+
+function OverlayLayoutE({ entries, transparent }: { entries: TopPlayerEntry[]; transparent?: boolean }) {
+  return (
+    <div className="rounded-xl overflow-hidden" style={transparent ? undefined : PANEL_STYLE}>
+      <OverlayScroller entries={entries}>
+        {(e) => (
+          <Link href={`/player/${e.wallet_address}`} className={`flex items-center gap-3 px-4 rounded-xl bg-white/5 border border-white/10 hover:border-cyan-500/40 ${CARD_HEIGHT} min-w-[240px]`}>
+            <Award className={`w-5 h-5 shrink-0 ${e.rank <= 3 ? 'text-amber-400/90' : 'text-white/40'}`} />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-mono text-white truncate">...{shortAddress(e.wallet_address)}</div>
+              <div className="text-[10px] text-white/60">#{e.rank} · {e.total_games} games · {e.win_rate.toFixed(1)}% win rate</div>
+            </div>
+            <span className={`text-sm font-semibold tabular-nums shrink-0 ${e.profit_loss >= 0n ? 'text-emerald-400' : 'text-red-400'}`}>
+              {e.profit_loss >= 0n ? '+' : ''}{formatMorbius(e.profit_loss)}
+            </span>
+          </Link>
+        )}
+      </OverlayScroller>
     </div>
   )
 }

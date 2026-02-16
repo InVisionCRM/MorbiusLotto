@@ -1,19 +1,16 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { InfiniteMovingCards, type ImageCardItem } from '@/components/ui/infinite-moving-cards'
 import { formatEther } from 'viem'
 import { getApiUrlOptional } from '@/lib/api-urls'
+import { CarouselLayouts, type CarouselItem } from './BlackjackTopPlayersLayouts'
 
 interface TopPlayerCard {
   wallet_address: string
   display_name?: string
   profile_image_url?: string | null
-  /** From API: string (wei/count) or number (e.g. win_rate 55.56) */
   value: string | number
   label: string
-  /** From API: ISO string; normalize to Date when needed */
   created_at?: Date | string
   category: string
 }
@@ -27,18 +24,28 @@ const categories: Array<'games' | 'profit_loss' | 'wagered' | 'win_rate' | 'tota
   'win_streak',
 ]
 
-function formatValue(category: string, value: string | number): string {
+const CATEGORY_LABELS: Record<string, string> = {
+  games: 'Most Games Played',
+  profit_loss: 'Best Profit',
+  wagered: 'Highest Wagered',
+  win_rate: 'Best Win Rate',
+  total_won: 'Most Won',
+  win_streak: 'Longest Win Streak',
+}
+
+function formatDisplayValue(category: string, value: string | number): string {
   switch (category) {
     case 'games':
-      return `${Number(value)} games`
+      return `${Number(value).toLocaleString()} games`
     case 'profit_loss':
     case 'wagered':
     case 'total_won': {
-      // Wei amounts: API sends integer string; BigInt() rejects decimals (e.g. win_rate 55.56)
       const raw = value ?? '0'
       const str = typeof raw === 'number' ? String(Math.floor(raw)) : String(raw)
-      const wei = /^\d+$/.test(str) ? BigInt(str) : BigInt(0)
-      return `${Math.floor(Number(formatEther(wei))).toLocaleString()} MORBIUS`
+      const wei = /^-?\d+$/.test(str) ? BigInt(str) : BigInt(0)
+      const num = Math.floor(Number(formatEther(wei)))
+      const prefix = category === 'profit_loss' && num > 0 ? '+' : ''
+      return `${prefix}${num.toLocaleString()} MORB`
     }
     case 'win_rate':
       return `${Number(value).toFixed(1)}%`
@@ -51,23 +58,7 @@ function formatValue(category: string, value: string | number): string {
 
 function formatAddress(address: string): string {
   if (!address || address.length < 8) return address
-  return address.slice(-4)
-}
-
-function formatPlayingDuration(createdAt?: Date | string): string {
-  if (createdAt == null) return 'Unknown'
-  const date = typeof createdAt === 'string' ? new Date(createdAt) : createdAt
-  if (Number.isNaN(date.getTime())) return 'Unknown'
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  
-  if (diffDays < 1) return 'Today'
-  if (diffDays === 1) return '1 day'
-  if (diffDays < 7) return `${diffDays} days`
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks`
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months`
-  return `${Math.floor(diffDays / 365)} years`
+  return `...${address.slice(-4)}`
 }
 
 export function BlackjackTopPlayersCarousel() {
@@ -108,7 +99,6 @@ export function BlackjackTopPlayersCarousel() {
     }
 
     fetchTopPlayers()
-    // Refresh every 5 minutes
     const interval = setInterval(fetchTopPlayers, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
@@ -125,28 +115,16 @@ export function BlackjackTopPlayersCarousel() {
     return null
   }
 
-  const cardItems: ImageCardItem[] = playerCards.map((result) => {
-    const displayName = result.display_name || `...${formatAddress(result.wallet_address)}`
-    const value = formatValue(result.category, result.value)
-    const duration = formatPlayingDuration(result.created_at)
-    const label = result.label.replace(/_/g, ' ')
-    return {
-      name: `${label} · ${displayName}`,
-      subtitle: `${value} · ${duration}`,
-      href: `/player/${result.wallet_address}`,
-    }
-  })
+  const carouselItems: CarouselItem[] = playerCards.map((result) => ({
+    categoryLabel: CATEGORY_LABELS[result.category] ?? result.label.replace(/_/g, ' '),
+    playerShort: formatAddress(result.wallet_address),
+    displayValue: formatDisplayValue(result.category, result.value),
+    href: `/player/${result.wallet_address}`,
+  }))
 
   return (
     <div className="w-full py-1.5 md:py-2 bg-gradient-to-b from-slate-950/95 to-slate-900/95">
-      <InfiniteMovingCards
-        items={cardItems}
-        variant="image"
-        direction="left"
-        speed="normal"
-        pauseOnHover={true}
-        className="max-w-5xl mx-auto [&_span]:text-inherit [&_a]:cursor-pointer [&_ul]:py-1 [&_ul]:md:py-1.5 [&_li]:h-[72px] [&_li]:sm:h-[78px] [&_li]:md:h-[88px] [&_li]:lg:h-[96px]"
-      />
+      <CarouselLayouts.A items={carouselItems} />
     </div>
   )
 }

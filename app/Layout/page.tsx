@@ -426,41 +426,42 @@ export default function LayoutPage() {
             </div>
           </div>
 
-          {/* Carousel */}
+          {/* Carousel — Category leaders (Most Games, Highest Wagered, etc.) */}
           <div className="mb-12">
             <h2 className="text-xl font-semibold text-cyan-300 mb-6">Top Players Carousel</h2>
+            <p className="text-white/60 text-sm mb-6">Shows category leaders with clear labels: metric name, player address, value. All cards 64px height.</p>
             <div className="space-y-12">
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel A — Default Panel</h3>
-                <p className="text-white/60 text-sm mb-4">Standard inset panel. Compact cards, left scroll.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel A — Metric-First</h3>
+                <p className="text-white/60 text-sm mb-4">Category label on top (e.g. &quot;Most Games Played&quot;), then Player ...5678, then value.</p>
                 <div className="w-full">
                   <CarouselLayouts.A items={MOCK_CAROUSEL_ITEMS} />
                 </div>
               </section>
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel B — Cyan Border</h3>
-                <p className="text-white/60 text-sm mb-4">Cyan-bordered container. Right scroll, slower. Larger cards.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel B — Trophy + Value</h3>
+                <p className="text-white/60 text-sm mb-4">Trophy icon, category label, player, value on right. Right scroll.</p>
                 <div className="w-full">
                   <CarouselLayouts.B items={MOCK_CAROUSEL_ITEMS} />
                 </div>
               </section>
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel C — Cyan Glow</h3>
-                <p className="text-white/60 text-sm mb-4">Radial cyan glow overlay. Gradient cards, faster scroll.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel C — Value Prominent</h3>
+                <p className="text-white/60 text-sm mb-4">Big value (e.g. &quot;1,247 games&quot;), &quot;by ...5678&quot;, category label on right.</p>
                 <div className="w-full">
                   <CarouselLayouts.C items={MOCK_CAROUSEL_ITEMS} />
                 </div>
               </section>
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel D — Left Accent Bar</h3>
-                <p className="text-white/60 text-sm mb-4">Cards with cyan left border. Clean, minimal.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel D — Target + Player</h3>
+                <p className="text-white/60 text-sm mb-4">Target icon, player address, category, value. Left accent bar.</p>
                 <div className="w-full">
                   <CarouselLayouts.D items={MOCK_CAROUSEL_ITEMS} />
                 </div>
               </section>
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel E — Glassmorphism</h3>
-                <p className="text-white/60 text-sm mb-4">Cyan border + glow. Right scroll. Glass-style cards.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Carousel E — Sentence Style</h3>
+                <p className="text-white/60 text-sm mb-4">&quot;...5678 leads with 1,247 games&quot; — reads like a headline.</p>
                 <div className="w-full">
                   <CarouselLayouts.E items={MOCK_CAROUSEL_ITEMS} />
                 </div>
@@ -468,41 +469,42 @@ export default function LayoutPage() {
             </div>
           </div>
 
-          {/* Overlay */}
+          {/* Overlay — Ranked players scroll */}
           <div>
             <h2 className="text-xl font-semibold text-cyan-300 mb-6">Top Players Overlay (Horizontal Scroll)</h2>
+            <p className="text-white/60 text-sm mb-6">Shows ranked players with clear labels: rank, address, games played, win rate, profit. All cards 64px height.</p>
             <div className="space-y-12">
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay A — Compact Pills</h3>
-                <p className="text-white/60 text-sm mb-4">Minimal pills: rank · address · games. Fast, compact.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay A — Rank + Games Played</h3>
+                <p className="text-white/60 text-sm mb-4">Rank badge, player address, &quot;X games played&quot;.</p>
                 <div className="w-full max-w-2xl">
                   <OverlayLayouts.A entries={MOCK_TOP_PLAYER_ENTRIES} />
                 </div>
               </section>
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay B — Rank-Bordered Cards</h3>
-                <p className="text-white/60 text-sm mb-4">Cards with gold/silver/bronze borders for top 3. Games + win %.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay B — Profit-First</h3>
+                <p className="text-white/60 text-sm mb-4">Profit/loss prominent, &quot;MORB profit&quot;, player, rank.</p>
                 <div className="w-full max-w-2xl">
                   <OverlayLayouts.B entries={MOCK_TOP_PLAYER_ENTRIES} />
                 </div>
               </section>
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay C — Circular Rank Badges</h3>
-                <p className="text-white/60 text-sm mb-4">Cyan-accented cards with circular rank badges. Clean layout.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay C — Full Stats Line</h3>
+                <p className="text-white/60 text-sm mb-4">Rank, player, then &quot;X games · Y% win rate · ±Z MORB&quot; on one line.</p>
                 <div className="w-full max-w-2xl">
                   <OverlayLayouts.C entries={MOCK_TOP_PLAYER_ENTRIES} />
                 </div>
               </section>
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay D — Medal Icon + Left Bar</h3>
-                <p className="text-white/60 text-sm mb-4">Medal icon, cyan left border. Compact inline style.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay D — Medal + Rank/Games/Wins</h3>
+                <p className="text-white/60 text-sm mb-4">Medal icon, player, &quot;Rank X · Y games · Z% wins&quot;.</p>
                 <div className="w-full max-w-2xl">
                   <OverlayLayouts.D entries={MOCK_TOP_PLAYER_ENTRIES} />
                 </div>
               </section>
               <section>
-                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay E — Award + P/L</h3>
-                <p className="text-white/60 text-sm mb-4">Award icon, glassmorphism. Shows profit/loss per player.</p>
+                <h3 className="text-base font-semibold text-white/90 mb-2">Overlay E — Award + P/L on Right</h3>
+                <p className="text-white/60 text-sm mb-4">Award icon, player, rank/games/win rate, profit on right.</p>
                 <div className="w-full max-w-2xl">
                   <OverlayLayouts.E entries={MOCK_TOP_PLAYER_ENTRIES} />
                 </div>

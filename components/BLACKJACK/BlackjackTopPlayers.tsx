@@ -1,31 +1,23 @@
 'use client'
 
 import React, { useState } from 'react'
-import Image from 'next/image'
 import { formatEther } from 'viem'
 import { useBlackjackTopPlayers, type TopPlayerEntry } from '@/hooks/use-blackjack-stats'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 
 const TOP_N = 25
 
-const tableCls = 'text-white font-poppins bg-transparent'
-const rowCls = 'border-white/10 hover:bg-transparent'
-const headCls = 'text-white/80 font-medium h-9 px-2'
-const cellCls = 'text-white p-2'
+const PANEL_STYLE = {
+  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+  border: '1px inset rgba(60, 60, 60, 0.5)',
+}
 
 function formatMorbius(wei: bigint): string {
   return Math.floor(Number(formatEther(wei))).toLocaleString()
 }
 
-function formatAddress(addr: string): string {
+function shortAddress(addr: string): string {
   if (!addr || addr.length < 8) return addr
   return addr.slice(-4)
 }
@@ -65,66 +57,45 @@ export default function BlackjackTopPlayers() {
 
   return (
     <>
-      <Table className={tableCls}>
-        <TableHeader>
-          <TableRow className={rowCls}>
-            <TableHead className={headCls}>#</TableHead>
-            <TableHead className={headCls}>Player</TableHead>
-            <TableHead className={headCls}>Games</TableHead>
-            <TableHead className={headCls}>Wagered</TableHead>
-            <TableHead className={headCls}>P/L</TableHead>
-            <TableHead className={headCls}>Win %</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {list.map((entry: TopPlayerEntry) => {
-            const isProfit = entry.profit_loss >= BigInt(0)
-            return (
-              <TableRow key={entry.wallet_address} className={rowCls}>
-                <TableCell className={cellCls}>
-                  <span
-                    className={`inline-flex w-7 h-7 items-center justify-center rounded text-xs font-bold font-poppins ${
-                      entry.rank <= 3 ? 'text-amber-300' : 'text-white/70'
-                    }`}
-                  >
-                    {entry.rank}
-                  </span>
-                </TableCell>
-                <TableCell className={`${cellCls} font-mono text-sm text-white/90 truncate max-w-[100px]`} title={entry.wallet_address}>
-                  <button
-                    onClick={() => setSelectedAddress(entry.wallet_address)}
-                    className="text-cyan-400 hover:text-cyan-300 underline transition-colors"
-                  >
-                    {formatAddress(entry.wallet_address)}
-                  </button>
-                </TableCell>
-                <TableCell className={`${cellCls} tabular-nums`}>{entry.total_games}</TableCell>
-                <TableCell className={`${cellCls} tabular-nums text-white/80 flex items-center gap-1`}>
-                  {formatMorbius(entry.total_bet)}{' '}
-                  <Image
-                    src="/morbius/MorbiusLogo (3).png"
-                    alt="MORBIUS"
-                    width={16}
-                    height={16}
-                    className="object-contain inline-block"
-                  />
-                </TableCell>
-                <TableCell className={`${cellCls} tabular-nums font-poppins ${isProfit ? 'text-emerald-400' : 'text-red-400'} flex items-center gap-1`}>
-                  {isProfit ? '+' : ''}{formatMorbius(entry.profit_loss)}{' '}
-                  <Image
-                    src="/morbius/MorbiusLogo (3).png"
-                    alt="MORBIUS"
-                    width={16}
-                    height={16}
-                    className="object-contain inline-block"
-                  />
-                </TableCell>
-                <TableCell className={`${cellCls} tabular-nums text-white/80`}>{entry.win_rate.toFixed(1)}%</TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
+      <div className="rounded-xl overflow-hidden" style={PANEL_STYLE}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left py-2 px-3 text-white/70 font-medium">#</th>
+                <th className="text-left py-2 px-3 text-white/70 font-medium">Player</th>
+                <th className="text-right py-2 px-3 text-white/70 font-medium">Games</th>
+                <th className="text-right py-2 px-3 text-white/70 font-medium">Wagered</th>
+                <th className="text-right py-2 px-3 text-white/70 font-medium">P/L</th>
+                <th className="text-right py-2 px-3 text-white/70 font-medium">Win %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((e: TopPlayerEntry) => (
+                <tr key={e.wallet_address} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="py-2 px-3">
+                    <span className={e.rank <= 3 ? 'text-amber-300 font-bold' : 'text-white/60'}>{e.rank}</span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <button
+                      onClick={() => setSelectedAddress(e.wallet_address)}
+                      className="text-cyan-400 hover:text-cyan-300 font-mono"
+                    >
+                      ...{shortAddress(e.wallet_address)}
+                    </button>
+                  </td>
+                  <td className="py-2 px-3 text-right tabular-nums text-white/90">{e.total_games}</td>
+                  <td className="py-2 px-3 text-right tabular-nums text-white/80">{formatMorbius(e.total_bet)}</td>
+                  <td className={`py-2 px-3 text-right tabular-nums ${e.profit_loss >= BigInt(0) ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {e.profit_loss >= BigInt(0) ? '+' : ''}{formatMorbius(e.profit_loss)}
+                  </td>
+                  <td className="py-2 px-3 text-right tabular-nums text-white/80">{e.win_rate.toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <PlayerProfileModal
         isOpen={!!selectedAddress}
