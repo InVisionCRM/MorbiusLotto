@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import Image from 'next/image'
-import { History, ChevronDown } from 'lucide-react'
+import { History, ChevronDown, Clock } from 'lucide-react'
 import { formatEther } from 'viem'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
