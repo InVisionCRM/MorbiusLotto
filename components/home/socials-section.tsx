@@ -4,7 +4,7 @@ export function SocialsSection() {
   return (
     <section className="py-4 px-4">
       <div className="container mx-auto max-w-4xl">
-        <div className="rounded-2xl p-8" style={Theme.panel.base}>
+        <div className="rounded-2xl p-8">
         <div className="text-center mb-8">
           <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
             Join the Community
@@ -17,7 +17,7 @@ export function SocialsSection() {
         <div className="flex justify-center items-center gap-12 md:gap-16">
           {/* X.com */}
           <a
-            href="https://x.com/morbiusfinance"
+            href="https://x.com/morbius_io"
             target="_blank"
             rel="noopener noreferrer"
             className="group flex flex-col items-center gap-4 hover:scale-105 transition-transform duration-300"
