@@ -223,7 +223,6 @@ async function playBot(
     if (!final) break;
     joinRes.chips = final.tournamentChips ?? 0;
     joinRes.handsRemaining = final.handsRemaining ?? 0;
-    if (final.handsPlayed != null) joinRes.handsPlayed = final.handsPlayed;
     console.log(
       `[${label}] Hand ${handNum} done. Chips: ${final.tournamentChips}, Remaining: ${final.handsRemaining}`
     );
