@@ -21,7 +21,7 @@ const PULSECHAIN_CARDS: ImageCardItem[] = [
 
 export function PulseChainSection() {
   return (
-    <section className="relative py-20 sm:py-24 px-4 sm:px-6 overflow-hidden" style={{ background: Theme.greyGradient.background }}>
+    <section className="relative py-20 sm:py-24 px-4 sm:px-6 overflow-hidden">
       <div className="container mx-auto max-w-7xl relative z-10">
         <div className="text-center mb-10 sm:mb-12 px-2 sm:px-0">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-russo-one font-normal text-cyan-500 mb-2 break-words">
