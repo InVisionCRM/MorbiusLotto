@@ -31,12 +31,14 @@ import {
   BlackjackImageId,
   BlackjackVideoId,
 } from '@/app/BLACKJACK/constants';
-import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS } from '@/lib/contracts';
 import { Theme } from '@/lib/theme';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const isEscrowConfigured = TOURNAMENT_PRIZE_ESCROW_ADDRESS !== ESCROW_ZERO;
+const isEscrowV3Configured = TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS !== ESCROW_ZERO;
 import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
+import { tournamentPrizeEscrowV3Abi } from '@/abi/tournament-prize-escrow-v3';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 
@@ -95,7 +97,7 @@ export function TournamentCreator({
   playerBalance,
 }: TournamentCreatorProps) {
   const [error, setError] = useState<string | null>(null);
-  const [createdTournament, setCreatedTournament] = useState<{ id: string; pinCode?: string } | null>(null);
+  const [createdTournament, setCreatedTournament] = useState<{ id: string; pinCode?: string; onChainTournamentId?: number } | null>(null);
   const [fundingStep, setFundingStep] = useState<FundingStep>('idle');
   const [approvalTxHash, setApprovalTxHash] = useState<string | null>(null);
   const [fundingError, setFundingError] = useState<string | null>(null);
@@ -490,7 +492,7 @@ export function TournamentCreator({
 
     const result = await onCreate(params);
     if (result) {
-      setCreatedTournament({ id: result.tournamentId, pinCode: result.pinCode });
+      setCreatedTournament({ id: result.tournamentId, pinCode: result.pinCode, onChainTournamentId: result.onChainTournamentId });
     }
   };
 
@@ -525,9 +527,12 @@ export function TournamentCreator({
 
   const handleApproveToken = async () => {
     if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
-    const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-    if (!isEscrowConfigured || escrow === ESCROW_ZERO) {
-      setFundingError('Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env.');
+    const useV3 = Boolean(createdTournament.onChainTournamentId != null && isEscrowV3Configured);
+    const escrow = useV3 ? TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS : TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+    if ((useV3 && !isEscrowV3Configured) || (!useV3 && (!isEscrowConfigured || escrow === ESCROW_ZERO))) {
+      setFundingError(useV3
+        ? 'Escrow V3 not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS to your .env.'
+        : 'Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env.');
       return;
     }
     if (!address) {
@@ -565,18 +570,13 @@ export function TournamentCreator({
 
   const handleDepositToEscrow = async () => {
     if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
-    const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-    if (!isEscrowConfigured || escrow === ESCROW_ZERO) return;
+    const useV3 = Boolean(createdTournament.onChainTournamentId != null && isEscrowV3Configured);
+    const escrow = useV3 ? TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS : TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+    if ((useV3 && !isEscrowV3Configured) || (!useV3 && (!isEscrowConfigured || escrow === ESCROW_ZERO))) return;
     setFundingError(null);
     setFundingStep('depositing');
     try {
-      // Ensure we get the connected user's wallet address dynamically.
-      // Import { useAccount } from 'wagmi' at the top of the file if it's not already imported.
-      // At the top level of your component (not inside a function), ensure you have:
-      //   const { address } = useAccount();
-
       const token = prizeTokenAddress.trim() as `0x${string}`;
-      const idBytes32 = tournamentIdToBytes32(createdTournament.id);
 
       if (!address) {
         setFundingError('Please connect your wallet.');
@@ -584,7 +584,6 @@ export function TournamentCreator({
         return;
       }
 
-      // PulseChain config for Viem/Wagmi calls (not always required, but explicit here)
       const pulseChain = {
         id: 369,
         name: 'PulseChain',
@@ -592,20 +591,31 @@ export function TournamentCreator({
         rpcUrls: { default: { http: ['https://rpc.pulsechain.com'] } }
       };
 
-      await writeContractAsync({
-        address: escrow as `0x${string}`,
-        abi: tournamentPrizeEscrowAbi,
-        functionName: 'depositPrizePool',
-        args: [idBytes32, token, fundingAmountWei],
-        // Provide the connected address; hooks always get latest wallet
-        account: address,
-        chain: pulseChain,
-      });
+      if (useV3 && createdTournament.onChainTournamentId != null) {
+        await writeContractAsync({
+          address: escrow as `0x${string}`,
+          abi: tournamentPrizeEscrowV3Abi,
+          functionName: 'depositPrizePool',
+          args: [BigInt(createdTournament.onChainTournamentId), token, fundingAmountWei],
+          account: address,
+          chain: pulseChain,
+        });
+      } else {
+        const idBytes32 = tournamentIdToBytes32(createdTournament.id);
+        await writeContractAsync({
+          address: escrow as `0x${string}`,
+          abi: tournamentPrizeEscrowAbi,
+          functionName: 'depositPrizePool',
+          args: [idBytes32, token, fundingAmountWei],
+          account: address,
+          chain: pulseChain,
+        });
+      }
 
       setFundingStep('done');
     } catch (e) {
       setFundingError(e instanceof Error ? e.message : 'Deposit failed');
-      setFundingStep('approved'); // revert to approved so they can retry deposit
+      setFundingStep('approved');
     }
   };
 

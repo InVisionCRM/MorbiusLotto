@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
-import { formatEther } from 'viem';
+import { formatEther, decodeEventLog } from 'viem';
+import { MORBIUS_TOURNAMENT_ADDRESS } from '@/lib/contracts';
+import { morbiusTournamentAbi } from '@/abi/morbius-tournament';
+import { pulsechain } from '@/lib/chains';
 import {
   CreateTournamentRequest,
   CreateFreerollRequest,
@@ -76,6 +79,8 @@ export interface CreatedTournament {
   tournamentId: string;
   name: string;
   pinCode?: string;
+  /** uint256 from MorbiusTournament.createTournament; used for Escrow V3 funding */
+  onChainTournamentId?: number;
 }
 
 export interface LeaderboardEntry {
@@ -127,9 +132,13 @@ interface UseTournamentOptions {
   onLeaderboardUpdate?: (leaderboard: LeaderboardEntry[]) => void;
 }
 
+const MORBIUS_TOURNAMENT_ZERO = '0x0000000000000000000000000000000000000000' as const;
+
 export function useTournament(options: UseTournamentOptions) {
   const { wsClient, onBusted, onCompleted, onLeaderboardUpdate } = options;
   const { address, isConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
 
   // Tournament state
   const [tournamentState, setTournamentState] = useState<TournamentState>({
@@ -532,8 +541,8 @@ export function useTournament(options: UseTournamentOptions) {
         return next;
       });
 
-      // If game completed immediately (e.g. blackjack), show hand summary
-      if (response.status === 'completed') {
+      // If game completed immediately (e.g. blackjack), show hand summary only when tournament ends for this player
+      if (response.status === 'completed' && (response.tournamentChips <= 0 || response.handsRemaining <= 0)) {
         const chipDelta = response.tournamentChips - tournamentState.chips;
         const hasBlackjack = (response.playerHands || []).some((h: any) => h.result === 'blackjack');
         const hasWin = (response.playerHands || []).some((h: any) => h.result === 'win' || h.result === 'blackjack');
@@ -627,27 +636,29 @@ export function useTournament(options: UseTournamentOptions) {
         return next;
       });
 
-      // Clear game if completed and set hand summary for table overlay
+      // Clear game if completed and set hand summary only when tournament ends for this player
       if (gameState.status === 'completed') {
         setCurrentGame(null);
-        const hasBlackjack = (response.playerHands || []).some((h: any) => h.result === 'blackjack');
-        const hasWin = (response.playerHands || []).some((h: any) => h.result === 'win' || h.result === 'blackjack');
-        const allPush = Array.isArray(response.playerHands) && response.playerHands.length > 0
-          && response.playerHands.every((h: any) => h.result === 'push');
-        const result: TournamentHandSummary['result'] = hasBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
-        if (lastHandSummaryTimeoutRef.current) clearTimeout(lastHandSummaryTimeoutRef.current);
-        setLastHandSummary({
-          chipDelta,
-          chips: response.tournamentChips,
-          rank: response.currentRank,
-          handsRemaining: response.handsRemaining,
-          handsPlayed: response.handsPlayed,
-          result,
-        });
-        lastHandSummaryTimeoutRef.current = setTimeout(() => {
-          setLastHandSummary(null);
-          lastHandSummaryTimeoutRef.current = null;
-        }, 10000);
+        if (response.tournamentChips <= 0 || response.handsRemaining <= 0) {
+          const hasBlackjack = (response.playerHands || []).some((h: any) => h.result === 'blackjack');
+          const hasWin = (response.playerHands || []).some((h: any) => h.result === 'win' || h.result === 'blackjack');
+          const allPush = Array.isArray(response.playerHands) && response.playerHands.length > 0
+            && response.playerHands.every((h: any) => h.result === 'push');
+          const result: TournamentHandSummary['result'] = hasBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
+          if (lastHandSummaryTimeoutRef.current) clearTimeout(lastHandSummaryTimeoutRef.current);
+          setLastHandSummary({
+            chipDelta,
+            chips: response.tournamentChips,
+            rank: response.currentRank,
+            handsRemaining: response.handsRemaining,
+            handsPlayed: response.handsPlayed,
+            result,
+          });
+          lastHandSummaryTimeoutRef.current = setTimeout(() => {
+            setLastHandSummary(null);
+            lastHandSummaryTimeoutRef.current = null;
+          }, 10000);
+        }
       }
 
       return gameState;
@@ -723,7 +734,8 @@ export function useTournament(options: UseTournamentOptions) {
   // ============================================
 
   /**
-   * Create a new custom tournament
+   * Create a new custom tournament.
+   * When MORBIUS_TOURNAMENT_ADDRESS is configured, calls contract first (wallet signature), then registers with server.
    */
   const createTournament = useCallback(async (
     params: CreateTournamentRequest
@@ -737,12 +749,60 @@ export function useTournament(options: UseTournamentOptions) {
     setError(null);
 
     try {
-      const response = await wsClient.sendRequest('tournament_create', params);
+      let onChainTournamentId: number | undefined;
+
+      if (MORBIUS_TOURNAMENT_ADDRESS && MORBIUS_TOURNAMENT_ADDRESS !== MORBIUS_TOURNAMENT_ZERO && writeContractAsync && publicClient) {
+        const buyInAmount = BigInt(params.buyInAmount);
+        const maxPlayers = params.maxPlayers ?? 0;
+        const prizeToken = (params.prizeTokenAddress?.trim() || MORBIUS_TOURNAMENT_ZERO) as `0x${string}`;
+        const prizeAmount = params.prizeAmount ? BigInt(params.prizeAmount) : 0n;
+
+        const hash = await writeContractAsync({
+          address: MORBIUS_TOURNAMENT_ADDRESS,
+          abi: morbiusTournamentAbi,
+          functionName: 'createTournament',
+          args: [buyInAmount, BigInt(maxPlayers), prizeToken, prizeAmount],
+          chain: pulsechain,
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        const log = receipt.logs.find((l) => {
+          try {
+            const decoded = decodeEventLog({
+              abi: morbiusTournamentAbi,
+              data: l.data,
+              topics: l.topics,
+            });
+            return decoded.eventName === 'TournamentCreated';
+          } catch {
+            return false;
+          }
+        });
+        if (!log) {
+          throw new Error('TournamentCreated event not found');
+        }
+        const decoded = decodeEventLog({
+          abi: morbiusTournamentAbi,
+          data: log.data,
+          topics: log.topics,
+        });
+        if (decoded.eventName === 'TournamentCreated' && 'tournamentId' in decoded.args) {
+          onChainTournamentId = Number(decoded.args.tournamentId);
+        } else {
+          throw new Error('Could not parse tournament ID from event');
+        }
+      }
+
+      const response = await wsClient.sendRequest('tournament_create', {
+        ...params,
+        onChainTournamentId: onChainTournamentId ?? undefined,
+      });
 
       const result: CreatedTournament = {
         tournamentId: response.tournamentId,
         name: response.name,
         pinCode: response.pinCode,
+        onChainTournamentId,
       };
 
       setCreatedTournament(result);
@@ -753,7 +813,7 @@ export function useTournament(options: UseTournamentOptions) {
     } finally {
       setIsLoading(false);
     }
-  }, [wsClient, address]);
+  }, [wsClient, address, writeContractAsync, publicClient]);
 
   /**
    * Create a new freeroll tournament
@@ -827,11 +887,13 @@ export function useTournament(options: UseTournamentOptions) {
   }, [address]);
 
   /**
-   * Join a specific tournament by ID
+   * Join a specific tournament by ID.
+   * When onChainTournamentId and buyInAmount are provided, calls MorbiusTournament.joinTournament first (wallet signature).
    */
   const joinTournament = useCallback(async (
     tournamentId: string,
-    pinCode?: string
+    pinCode?: string,
+    options?: { onChainTournamentId?: number | null; buyInAmount?: string }
   ): Promise<boolean> => {
     if (!wsClient || !address) {
       setError('Not connected');
@@ -842,6 +904,31 @@ export function useTournament(options: UseTournamentOptions) {
     setError(null);
 
     try {
+      const { onChainTournamentId, buyInAmount } = options ?? {};
+
+      if (onChainTournamentId != null && MORBIUS_TOURNAMENT_ADDRESS && MORBIUS_TOURNAMENT_ADDRESS !== MORBIUS_TOURNAMENT_ZERO && writeContractAsync && publicClient) {
+        const buyInWei = buyInAmount ? BigInt(buyInAmount) : 0n;
+        if (buyInWei > 0n) {
+          const { MORBIUS_TOKEN_ADDRESS } = await import('@/lib/contracts');
+          const { ERC20_ABI } = await import('@/abi/erc20');
+          const hash = await writeContractAsync({
+            address: MORBIUS_TOKEN_ADDRESS,
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [MORBIUS_TOURNAMENT_ADDRESS, buyInWei],
+            chain: pulsechain,
+          });
+          await publicClient.waitForTransactionReceipt({ hash });
+        }
+        await writeContractAsync({
+          address: MORBIUS_TOURNAMENT_ADDRESS,
+          abi: morbiusTournamentAbi,
+          functionName: 'joinTournament',
+          args: [BigInt(onChainTournamentId)],
+          chain: pulsechain,
+        });
+      }
+
       const response = await wsClient.sendRequest('tournament_join', {
         tournamentId,
         pinCode,
@@ -884,7 +971,7 @@ export function useTournament(options: UseTournamentOptions) {
     } finally {
       setIsLoading(false);
     }
-  }, [wsClient, address]);
+  }, [wsClient, address, writeContractAsync, publicClient]);
 
   /**
    * Request a rebuy in the current tournament

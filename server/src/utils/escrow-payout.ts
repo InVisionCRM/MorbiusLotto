@@ -3,11 +3,13 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
 import { tournamentPrizeEscrowAbi } from '../abi/tournament-prize-escrow';
 import { tournamentPrizeEscrowV2Abi } from '../abi/tournament-prize-escrow-v2';
-import { getEscrowPoolStatus } from './escrow-status';
+import { tournamentPrizeEscrowV3Abi } from '../abi/tournament-prize-escrow-v3';
+import { getEscrowPoolStatus, getEscrowV3PoolStatus } from './escrow-status';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
 import { logger } from './logger';
 
 const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS as `0x${string}` | undefined;
+const ESCROW_V3_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS as `0x${string}` | undefined;
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY) as `0x${string}` | undefined;
 
 let walletClient: ReturnType<typeof createWalletClient> | null = null;
@@ -92,7 +94,7 @@ export async function sendEscrowRemainderToReclaimWallet(tournamentId: string): 
   if (remaining <= 0n) return { success: true };
 
   const idBytes32 = tournamentIdToBytes32(tournamentId);
-  const maxRetries = 2;
+  const maxRetries = 5;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const client = getWalletClient();
@@ -116,6 +118,81 @@ export async function sendEscrowRemainderToReclaimWallet(tournamentId: string): 
 }
 
 /**
+ * Send a single prize payout from Escrow V3 (uint256 tournament IDs).
+ */
+export async function sendEscrowV3Payout(
+  onChainTournamentId: number | bigint,
+  winnerAddress: string,
+  amount: bigint
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  if (!ESCROW_V3_ADDRESS || !ESCROW_V3_ADDRESS.startsWith('0x')) {
+    return { success: false, error: 'Escrow V3 not configured' };
+  }
+  if (amount <= 0n) return { success: true };
+
+  const id = BigInt(onChainTournamentId);
+  const winner = winnerAddress as `0x${string}`;
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const client = getWalletClient();
+      const hash = await client.writeContract({
+        account: client.account!,
+        chain: pulsechain,
+        address: ESCROW_V3_ADDRESS,
+        abi: tournamentPrizeEscrowV3Abi,
+        functionName: 'payout',
+        args: [id, winner, amount],
+      });
+      logger.info('Escrow V3 payout sent', { onChainTournamentId: id.toString(), winner: winnerAddress, amount: amount.toString(), txHash: hash });
+      return { success: true, txHash: hash };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('Escrow V3 payout failed', { attempt, onChainTournamentId: id.toString(), error: msg });
+      if (attempt === maxRetries) return { success: false, error: msg };
+    }
+  }
+  return { success: false, error: 'Max retries exceeded' };
+}
+
+/**
+ * Send remaining Escrow V3 balance to reclaim wallet.
+ */
+export async function sendEscrowV3RemainderTo(
+  onChainTournamentId: number | bigint,
+  to: `0x${string}`
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  if (!ESCROW_V3_ADDRESS || !ESCROW_V3_ADDRESS.startsWith('0x')) return { success: false, error: 'Escrow V3 not configured' };
+  const status = await getEscrowV3PoolStatus(onChainTournamentId);
+  if (!status) return { success: false, error: 'Could not read pool status' };
+  const remaining = status.totalDeposited - status.amountPaidOut;
+  if (remaining <= 0n) return { success: true };
+
+  const id = BigInt(onChainTournamentId);
+  const maxRetries = 5;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const client = getWalletClient();
+      const hash = await client.writeContract({
+        account: client.account!,
+        chain: pulsechain,
+        address: ESCROW_V3_ADDRESS,
+        abi: tournamentPrizeEscrowV3Abi,
+        functionName: 'payoutRemainderTo',
+        args: [id, to],
+      });
+      logger.info('Escrow V3 remainder reclaimed', { onChainTournamentId: id.toString(), to, amount: remaining.toString(), txHash: hash });
+      return { success: true, txHash: hash };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('Escrow V3 remainder reclaim failed', { attempt, onChainTournamentId: id.toString(), error: msg });
+      if (attempt === maxRetries) return { success: false, error: msg };
+    }
+  }
+  return { success: false, error: 'Max retries exceeded' };
+}
+
+/**
  * Cancel a tournament in the escrow contract. Only callable by authorized server.
  * Marks the tournament as cancelled so creator can reclaim funds.
  */
@@ -123,7 +200,7 @@ export async function cancelTournamentInEscrow(tournamentId: string): Promise<{ 
   if (!ESCROW_ADDRESS) return { success: false, error: 'Escrow not configured' };
 
   const idBytes32 = tournamentIdToBytes32(tournamentId);
-  const maxRetries = 2;
+  const maxRetries = 5;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const client = getWalletClient();

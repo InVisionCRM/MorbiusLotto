@@ -1878,6 +1878,7 @@ export class WebSocketService {
         prizeTokenDecimals?: number | null;
         pinCode?: string | null;
         creatorFeePercent?: number;
+        onChainTournamentId?: number | bigint | null;
       };
 
       // Convert buyInAmount string to bigint
@@ -1919,6 +1920,7 @@ export class WebSocketService {
         pinCode: payload.pinCode,
         creatorFeePercent,
         platformFeePercent,
+        onChainTournamentId: payload.onChainTournamentId != null ? payload.onChainTournamentId : undefined,
       });
 
       // Determine prize percentages for response
@@ -2128,6 +2130,7 @@ export class WebSocketService {
         escrowFunded: t.escrow_funded ?? false,
         escrowTotalDeposited: t.escrow_total_deposited ?? '0',
         escrowToken: t.escrow_token ?? null,
+        onChainTournamentId: t.on_chain_tournament_id != null ? t.on_chain_tournament_id : null,
       }));
 
       this.sendMessage(ws, {

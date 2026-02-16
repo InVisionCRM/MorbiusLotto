@@ -58,8 +58,8 @@ interface BlackjackSidebarProps {
   tournamentsLoading?: boolean
   /** Open create tournament flow from sidebar */
   onCreateTournament?: () => void
-  /** Join tournament from sidebar expanded view (tournamentId, isPrivate) */
-  onJoinTournament?: (tournamentId: string, isPrivate: boolean) => void
+  /** Join tournament from sidebar expanded view */
+  onJoinTournament?: (tournament: TournamentListItem) => void
   /** Player balance for Join button state */
   playerBalance?: bigint
   /** Player address for Join button state */

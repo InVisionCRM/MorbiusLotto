@@ -276,6 +276,8 @@ export interface TournamentListItem {
   escrowFunded?: boolean;
   escrowTotalDeposited?: string;
   escrowToken?: string | null;
+  /** uint256 from MorbiusTournament; when set, create/join use on-chain flow */
+  onChainTournamentId?: number | null;
 }
 
 // Extended tournament info

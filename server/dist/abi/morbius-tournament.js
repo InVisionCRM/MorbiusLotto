@@ -30,6 +30,34 @@ exports.morbiusTournamentAbi = [
     },
     {
         inputs: [{ name: 'tournamentId', type: 'uint256' }],
+        name: 'setActive',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    {
+        inputs: [
+            { name: 'tournamentId', type: 'uint256' },
+            { name: 'player', type: 'address' },
+        ],
+        name: 'hasJoined',
+        outputs: [{ name: '', type: 'bool' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+    {
+        inputs: [
+            { name: 'tournamentId', type: 'uint256' },
+            { name: 'winner', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+        ],
+        name: 'payout',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    {
+        inputs: [{ name: 'tournamentId', type: 'uint256' }],
         name: 'getTournament',
         outputs: [
             { name: 'creator', type: 'address' },

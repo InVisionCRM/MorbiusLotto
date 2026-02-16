@@ -18,6 +18,22 @@ export declare function sendEscrowRemainderToReclaimWallet(tournamentId: string)
     error?: string;
 }>;
 /**
+ * Send a single prize payout from Escrow V3 (uint256 tournament IDs).
+ */
+export declare function sendEscrowV3Payout(onChainTournamentId: number | bigint, winnerAddress: string, amount: bigint): Promise<{
+    success: boolean;
+    txHash?: string;
+    error?: string;
+}>;
+/**
+ * Send remaining Escrow V3 balance to reclaim wallet.
+ */
+export declare function sendEscrowV3RemainderTo(onChainTournamentId: number | bigint, to: `0x${string}`): Promise<{
+    success: boolean;
+    txHash?: string;
+    error?: string;
+}>;
+/**
  * Cancel a tournament in the escrow contract. Only callable by authorized server.
  * Marks the tournament as cancelled so creator can reclaim funds.
  */

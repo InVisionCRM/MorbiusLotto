@@ -34,7 +34,7 @@ import {
   TournamentBrowser,
   TournamentPinEntry,
 } from '@/components/BLACKJACK/Tournament';
-import { CreateTournamentRequest } from '@/lib/tournament-types';
+import { CreateTournamentRequest, TournamentListItem } from '@/lib/tournament-types';
 import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
@@ -565,7 +565,7 @@ export default function BlackjackPage() {
   const [tournamentBrowserInitialTab, setTournamentBrowserInitialTab] = useState<'join' | 'my' | 'freeroll' | 'history'>('join');
   const [showTournamentCreator, setShowTournamentCreator] = useState(false);
   const [showTournamentPinEntry, setShowTournamentPinEntry] = useState(false);
-  const [pendingJoinTournamentId, setPendingJoinTournamentId] = useState<string | null>(null);
+  const [pendingJoinTournament, setPendingJoinTournament] = useState<TournamentListItem | null>(null);
 
   // Tournament hook
   const tournament = useTournament({
@@ -2744,12 +2744,12 @@ export default function BlackjackPage() {
             onRefreshTournaments={() => tournament.fetchTournamentList()}
             tournamentsLoading={tournament.isLoading}
             onCreateTournament={() => setShowTournamentCreator(true)}
-            onJoinTournament={(tournamentId, isPrivate) => {
-              if (isPrivate) {
-                setPendingJoinTournamentId(tournamentId);
+            onJoinTournament={(t) => {
+              if (t.isPrivate) {
+                setPendingJoinTournament(t);
                 setShowTournamentPinEntry(true);
               } else {
-                tournament.joinTournament(tournamentId).then(success => {
+                tournament.joinTournament(t.id, undefined, { onChainTournamentId: t.onChainTournamentId ?? undefined, buyInAmount: t.buyInAmount }).then(success => {
                   if (success) {
                     setIsTournamentMode(true);
                     toast.success('Joined tournament!');
@@ -2894,13 +2894,12 @@ export default function BlackjackPage() {
           initialTab={tournamentBrowserInitialTab}
           onClose={() => setShowTournamentBrowser(false)}
           getThemeInfo={getThemeInfo}
-          onJoin={(tournamentId, isPrivate) => {
-            if (isPrivate) {
-              setPendingJoinTournamentId(tournamentId);
+          onJoin={(t) => {
+            if (t.isPrivate) {
+              setPendingJoinTournament(t);
               setShowTournamentPinEntry(true);
             } else {
-              // Join directly
-              tournament.joinTournament(tournamentId).then(success => {
+              tournament.joinTournament(t.id, undefined, { onChainTournamentId: t.onChainTournamentId ?? undefined, buyInAmount: t.buyInAmount }).then(success => {
                 if (success) {
                   setShowTournamentBrowser(false);
                   setIsTournamentMode(true);
@@ -2964,15 +2963,18 @@ export default function BlackjackPage() {
           isOpen={showTournamentPinEntry}
           onClose={() => {
             setShowTournamentPinEntry(false);
-            setPendingJoinTournamentId(null);
+            setPendingJoinTournament(null);
           }}
           onSubmit={async (pin) => {
-            if (!pendingJoinTournamentId) return false;
-            const success = await tournament.joinTournament(pendingJoinTournamentId, pin);
+            if (!pendingJoinTournament) return false;
+            const success = await tournament.joinTournament(pendingJoinTournament.id, pin, {
+              onChainTournamentId: pendingJoinTournament.onChainTournamentId ?? undefined,
+              buyInAmount: pendingJoinTournament.buyInAmount,
+            });
             if (success) {
               setShowTournamentPinEntry(false);
               setShowTournamentBrowser(false);
-              setPendingJoinTournamentId(null);
+              setPendingJoinTournament(null);
               setIsTournamentMode(true);
               toast.success('Joined private tournament!');
               fetchBalance();

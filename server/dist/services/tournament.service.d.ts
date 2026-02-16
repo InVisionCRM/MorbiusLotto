@@ -107,6 +107,8 @@ export interface CreateTournamentParams {
     creatorFeePercent?: number;
     /** Platform fee percentage. Read from env at creation time. */
     platformFeePercent?: number;
+    /** uint256 from MorbiusTournament.createTournament; when set, create/join use on-chain flow */
+    onChainTournamentId?: number | bigint | null;
 }
 /** Create freeroll tournament (no buy-in, scheduled start). */
 export interface CreateFreerollParams {
@@ -194,6 +196,8 @@ export interface TournamentListItem {
     escrow_funded?: boolean;
     escrow_total_deposited?: string;
     escrow_token?: string | null;
+    /** uint256 from MorbiusTournament; when set, create/join use on-chain flow */
+    on_chain_tournament_id?: number | null;
 }
 export interface TournamentGame {
     id: string;

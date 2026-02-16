@@ -1707,6 +1707,7 @@ class WebSocketService {
                 pinCode: payload.pinCode,
                 creatorFeePercent,
                 platformFeePercent,
+                onChainTournamentId: payload.onChainTournamentId != null ? payload.onChainTournamentId : undefined,
             });
             // Determine prize percentages for response
             const prizePercentages = this.getPrizePercentagesForType(tournament.prize_distribution_type, tournament.prize_percentages);
@@ -1876,6 +1877,7 @@ class WebSocketService {
                 escrowFunded: t.escrow_funded ?? false,
                 escrowTotalDeposited: t.escrow_total_deposited ?? '0',
                 escrowToken: t.escrow_token ?? null,
+                onChainTournamentId: t.on_chain_tournament_id != null ? t.on_chain_tournament_id : null,
             }));
             this.sendMessage(ws, {
                 type: 'tournament_list',

@@ -52,4 +52,17 @@ export const morbiusTournamentAbi = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: 'tournamentId', type: 'uint256' },
+      { indexed: true, name: 'creator', type: 'address' },
+      { indexed: false, name: 'buyInAmount', type: 'uint256' },
+      { indexed: false, name: 'maxPlayers', type: 'uint256' },
+      { indexed: false, name: 'prizeToken', type: 'address' },
+      { indexed: false, name: 'prizeAmount', type: 'uint256' },
+    ],
+    name: 'TournamentCreated',
+    type: 'event',
+  },
 ] as const;

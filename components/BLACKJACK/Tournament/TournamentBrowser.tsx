@@ -52,7 +52,7 @@ interface TournamentBrowserProps {
   /** When opening, switch to this tab (e.g. 'history' to open directly to My History) */
   initialTab?: LobbyTab;
   onClose: () => void;
-  onJoin: (tournamentId: string, isPrivate: boolean) => void;
+  onJoin: (tournament: TournamentListItem) => void;
   onCreateNew: () => void;
   onRefresh: () => Promise<TournamentListItem[]>;
   onFetchLeaderboard?: (tournamentId: string) => Promise<LeaderboardEntry[]>;
@@ -538,7 +538,7 @@ function ExpandedCardContent({
   playerBalance: bigint;
   playerAddress?: string | null;
   wsClient?: BlackjackWebSocketClient | null;
-  onJoin: (tournamentId: string, isPrivate: boolean) => void;
+  onJoin: (tournament: TournamentListItem) => void;
   onFundNow?: (tournament: TournamentListItem) => void;
   entries: LeaderboardEntry[];
   loadingEntries: boolean;
@@ -911,7 +911,7 @@ function ExpandedCardContent({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onJoin(tournament.id, tournament.isPrivate);
+            onJoin(tournament);
           }}
           disabled={!canAfford || isFull || notFunded}
           className={`w-full py-3 rounded-xl font-semibold transition-all ${
@@ -939,7 +939,7 @@ function TournamentCard({
 }: {
   tournament: TournamentListItem;
   playerBalance: bigint;
-  onJoin: (tournamentId: string, isPrivate: boolean) => void;
+  onJoin: (tournament: TournamentListItem) => void;
   onSelect: (tournament: TournamentListItem) => void;
   onFundNow?: (tournament: TournamentListItem) => void;
 }) {
@@ -1079,7 +1079,7 @@ function ExpandedCard({
 }: {
   tournament: TournamentListItem;
   onClose: () => void;
-  onJoin: (tournamentId: string, isPrivate: boolean) => void;
+  onJoin: (tournament: TournamentListItem) => void;
   onFundNow?: (tournament: TournamentListItem) => void;
   playerBalance: bigint;
   playerAddress?: string | null;

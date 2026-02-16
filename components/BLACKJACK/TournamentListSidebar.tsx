@@ -63,7 +63,7 @@ export interface TournamentListSidebarProps {
   onRefresh: () => void | Promise<void | TournamentListItem[]>;
   onTournamentLobby: () => void;
   onCreateTournament?: () => void;
-  onJoin?: (tournamentId: string, isPrivate: boolean) => void;
+  onJoin?: (tournament: TournamentListItem) => void;
   playerBalance?: bigint;
   playerAddress?: string | null;
 }
@@ -343,7 +343,7 @@ export function TournamentListSidebar({
                           onClick={(e) => {
                             e.stopPropagation();
                             if (!isDisabled) {
-                              onJoin(active.id, active.isPrivate);
+                              onJoin(active);
                               setActive(null);
                             }
                           }}

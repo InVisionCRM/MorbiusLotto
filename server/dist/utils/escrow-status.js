@@ -1,11 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getEscrowPoolStatus = getEscrowPoolStatus;
+exports.getEscrowV3PoolStatus = getEscrowV3PoolStatus;
 const chain_client_1 = require("./chain-client");
 const tournament_prize_escrow_1 = require("../abi/tournament-prize-escrow");
 const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
+const tournament_prize_escrow_v3_1 = require("../abi/tournament-prize-escrow-v3");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+const ESCROW_V3_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS;
 /**
  * Read tournament prize pool status from the escrow contract.
  * Supports both V1 and V2 contracts. V2 returns additional fields.
@@ -46,6 +49,34 @@ async function getEscrowPoolStatus(tournamentId) {
             });
             return { token, totalDeposited, amountPaidOut };
         }
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Read tournament prize pool status from Escrow V3 (uint256 tournament IDs).
+ */
+async function getEscrowV3PoolStatus(onChainTournamentId) {
+    if (!ESCROW_V3_ADDRESS || !ESCROW_V3_ADDRESS.startsWith('0x'))
+        return null;
+    try {
+        const client = (0, chain_client_1.getPublicClient)();
+        const result = await client.readContract({
+            address: ESCROW_V3_ADDRESS,
+            abi: tournament_prize_escrow_v3_1.tournamentPrizeEscrowV3Abi,
+            functionName: 'getPool',
+            args: [BigInt(onChainTournamentId)],
+        });
+        const [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled] = result;
+        return {
+            token,
+            totalDeposited,
+            amountPaidOut,
+            depositor,
+            depositedAt,
+            cancelled,
+        };
     }
     catch {
         return null;

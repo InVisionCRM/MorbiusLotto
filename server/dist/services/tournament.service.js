@@ -37,6 +37,7 @@ exports.TournamentService = exports.TOURNAMENT_CONFIG = void 0;
 const logger_1 = require("../utils/logger");
 const escrow_payout_1 = require("../utils/escrow-payout");
 const morbius_tournament_1 = require("../utils/morbius-tournament");
+const escrow_payout_2 = require("../utils/escrow-payout");
 const escrow_status_1 = require("../utils/escrow-status");
 // Tournament constants
 exports.TOURNAMENT_CONFIG = {
@@ -552,6 +553,9 @@ class TournamentService {
             const prizesResult = await client.query(prizesQuery, [tournamentId]);
             const distributions = [];
             const useEscrow = Boolean(tournament.prize_token_address);
+            const isOnChain = tournament.on_chain_tournament_id != null;
+            const useMorbiusPayout = isOnChain && !useEscrow;
+            const useEscrowV3 = isOnChain && useEscrow;
             // Apply prizes
             for (const row of prizesResult.rows) {
                 const prizeAmount = this.toBigInt(row.prize_amount);
@@ -560,7 +564,31 @@ class TournamentService {
                     await client.query(`UPDATE tournament_entries
              SET prize_won = $1::NUMERIC, final_rank = $2
              WHERE id = $3`, [prizeAmount.toString(), row.final_rank, row.entry_id]);
-                    if (useEscrow) {
+                    if (useMorbiusPayout) {
+                        const result = await (0, morbius_tournament_1.sendMorbiusTournamentPayout)(tournament.on_chain_tournament_id, row.player_address, prizeAmount);
+                        if (!result.success) {
+                            logger_1.logger.error('MorbiusTournament payout failed; rolling back tournament completion', {
+                                tournamentId,
+                                winner: row.player_address,
+                                amount: prizeAmount.toString(),
+                                error: result.error,
+                            });
+                            throw new Error(`Prize payout failed for ${row.player_address}: ${result.error || 'Unknown error'}`);
+                        }
+                    }
+                    else if (useEscrowV3) {
+                        const result = await (0, escrow_payout_2.sendEscrowV3Payout)(tournament.on_chain_tournament_id, row.player_address, prizeAmount);
+                        if (!result.success) {
+                            logger_1.logger.error('Escrow V3 payout failed; rolling back tournament completion', {
+                                tournamentId,
+                                winner: row.player_address,
+                                amount: prizeAmount.toString(),
+                                error: result.error,
+                            });
+                            throw new Error(`Escrow payout failed for ${row.player_address}: ${result.error || 'Unknown error'}`);
+                        }
+                    }
+                    else if (useEscrow) {
                         const result = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, row.player_address, prizeAmount);
                         if (!result.success) {
                             logger_1.logger.error('Escrow payout failed; rolling back tournament completion', {
@@ -573,7 +601,7 @@ class TournamentService {
                         }
                     }
                     else {
-                        // Add prize to player balance (platform MORBIUS)
+                        // Add prize to player balance (platform MORBIUS, off-chain)
                         await client.query(`UPDATE players
                SET balance = balance + $1::NUMERIC
                WHERE LOWER(wallet_address) = LOWER($2)`, [prizeAmount.toString(), row.player_address]);
@@ -605,7 +633,21 @@ class TournamentService {
                 const platformFeeAmount = (totalPool * BigInt(platformFeePercent)) / 100n;
                 const platformWallet = process.env.PLATFORM_FEE_WALLET;
                 if (platformFeeAmount > 0n && platformWallet) {
-                    if (useEscrow) {
+                    if (useMorbiusPayout) {
+                        const result = await (0, morbius_tournament_1.sendMorbiusTournamentPayout)(tournament.on_chain_tournament_id, platformWallet, platformFeeAmount);
+                        if (!result.success) {
+                            logger_1.logger.error('Platform fee MorbiusTournament payout failed; rolling back', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
+                            throw new Error(`Platform fee payout failed: ${result.error || 'Unknown error'}`);
+                        }
+                    }
+                    else if (useEscrowV3) {
+                        const result = await (0, escrow_payout_2.sendEscrowV3Payout)(tournament.on_chain_tournament_id, platformWallet, platformFeeAmount);
+                        if (!result.success) {
+                            logger_1.logger.error('Platform fee Escrow V3 payout failed; rolling back', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
+                            throw new Error(`Platform fee payout failed: ${result.error || 'Unknown error'}`);
+                        }
+                    }
+                    else if (useEscrow) {
                         const result = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, platformWallet, platformFeeAmount);
                         if (!result.success) {
                             logger_1.logger.error('Platform fee escrow payout failed; rolling back tournament completion', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
@@ -622,7 +664,21 @@ class TournamentService {
             if (creatorFeePercent > 0 && tournament.creator_address) {
                 const creatorFeeAmount = (totalPool * BigInt(creatorFeePercent)) / 100n;
                 if (creatorFeeAmount > 0n) {
-                    if (useEscrow) {
+                    if (useMorbiusPayout) {
+                        const result = await (0, morbius_tournament_1.sendMorbiusTournamentPayout)(tournament.on_chain_tournament_id, tournament.creator_address, creatorFeeAmount);
+                        if (!result.success) {
+                            logger_1.logger.error('Creator fee MorbiusTournament payout failed; rolling back', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
+                            throw new Error(`Creator fee payout failed: ${result.error || 'Unknown error'}`);
+                        }
+                    }
+                    else if (useEscrowV3) {
+                        const result = await (0, escrow_payout_2.sendEscrowV3Payout)(tournament.on_chain_tournament_id, tournament.creator_address, creatorFeeAmount);
+                        if (!result.success) {
+                            logger_1.logger.error('Creator fee Escrow V3 payout failed; rolling back', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
+                            throw new Error(`Creator fee payout failed: ${result.error || 'Unknown error'}`);
+                        }
+                    }
+                    else if (useEscrow) {
                         const result = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, tournament.creator_address, creatorFeeAmount);
                         if (!result.success) {
                             logger_1.logger.error('Creator fee escrow payout failed; rolling back tournament completion', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
@@ -646,7 +702,19 @@ class TournamentService {
             }
             await client.query('COMMIT');
             // Reclaim any remaining escrow balance so funds never sit after tournament ends
-            if (useEscrow) {
+            if (useEscrowV3) {
+                const reclaimWallet = (process.env.ESCROW_REMAINDER_WALLET || process.env.PLATFORM_FEE_WALLET);
+                if (reclaimWallet && reclaimWallet.startsWith('0x')) {
+                    const reclaimResult = await (0, escrow_payout_2.sendEscrowV3RemainderTo)(tournament.on_chain_tournament_id, reclaimWallet);
+                    if (!reclaimResult.success && reclaimResult.error) {
+                        logger_1.logger.warn('Escrow V3 remainder reclaim failed (tournament already completed)', {
+                            tournamentId,
+                            error: reclaimResult.error,
+                        });
+                    }
+                }
+            }
+            else if (useEscrow) {
                 const reclaimResult = await (0, escrow_payout_1.sendEscrowRemainderToReclaimWallet)(tournamentId);
                 if (!reclaimResult.success && reclaimResult.error) {
                     logger_1.logger.warn('Escrow remainder reclaim failed (tournament already completed)', {
@@ -955,6 +1023,7 @@ class TournamentService {
         // Fee percentages: platform from env (or passed param), creator from request
         const platformFeePercent = params.platformFeePercent ?? parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
         const creatorFeePercent = params.creatorFeePercent ?? 0;
+        const onChainId = params.onChainTournamentId != null ? Number(params.onChainTournamentId) : null;
         const query = `
       INSERT INTO tournaments (
         name,
@@ -976,8 +1045,9 @@ class TournamentService {
         prize_token_decimals,
         prize_pool,
         creator_fee_percent,
-        platform_fee_percent
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        platform_fee_percent,
+        on_chain_tournament_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       RETURNING *
     `;
         const result = await this.pool.query(query, [
@@ -1001,6 +1071,7 @@ class TournamentService {
             initialPrizePool,
             creatorFeePercent,
             platformFeePercent,
+            onChainId,
         ]);
         const tournament = this.normalizeTournament(result.rows[0]);
         logger_1.logger.info('Custom tournament created', {
@@ -1320,22 +1391,38 @@ class TournamentService {
                 duration_minutes: row.duration_minutes != null ? Number(row.duration_minutes) : null,
                 creator_fee_percent: Number(row.creator_fee_percent ?? 0),
                 platform_fee_percent: Number(row.platform_fee_percent ?? 16),
+                on_chain_tournament_id: row.on_chain_tournament_id != null ? Number(row.on_chain_tournament_id) : null,
             };
         });
         // For custom-token tournaments, fetch escrow funding status from chain
         await Promise.all(list.map(async (item) => {
             if (!item.prize_token_address)
                 return;
-            const pool = await (0, escrow_status_1.getEscrowPoolStatus)(item.id);
-            if (pool) {
-                item.escrow_funded = pool.totalDeposited > 0n;
-                item.escrow_total_deposited = pool.totalDeposited.toString();
-                item.escrow_token = pool.token;
+            if (item.on_chain_tournament_id != null) {
+                const pool = await (0, escrow_status_1.getEscrowV3PoolStatus)(item.on_chain_tournament_id);
+                if (pool) {
+                    item.escrow_funded = pool.totalDeposited > 0n;
+                    item.escrow_total_deposited = pool.totalDeposited.toString();
+                    item.escrow_token = pool.token;
+                }
+                else {
+                    item.escrow_funded = false;
+                    item.escrow_total_deposited = '0';
+                    item.escrow_token = item.prize_token_address;
+                }
             }
             else {
-                item.escrow_funded = false;
-                item.escrow_total_deposited = '0';
-                item.escrow_token = item.prize_token_address;
+                const pool = await (0, escrow_status_1.getEscrowPoolStatus)(item.id);
+                if (pool) {
+                    item.escrow_funded = pool.totalDeposited > 0n;
+                    item.escrow_total_deposited = pool.totalDeposited.toString();
+                    item.escrow_token = pool.token;
+                }
+                else {
+                    item.escrow_funded = false;
+                    item.escrow_total_deposited = '0';
+                    item.escrow_token = item.prize_token_address;
+                }
             }
         }));
         return list;
@@ -1383,25 +1470,48 @@ class TournamentService {
         if (existingEntry && existingEntry.status === 'playing') {
             throw new Error('Already in this tournament');
         }
-        // Check player balance
-        const balanceQuery = `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`;
-        const balanceResult = await this.pool.query(balanceQuery, [normalizedAddress]);
-        if (balanceResult.rows.length === 0) {
-            throw new Error('Player not found');
+        const isOnChain = tournament.on_chain_tournament_id != null;
+        // For on-chain tournaments: verify player joined on-chain before creating DB entry
+        if (isOnChain) {
+            const joined = await (0, morbius_tournament_1.hasJoinedMorbiusTournament)(tournament.on_chain_tournament_id, normalizedAddress);
+            if (!joined) {
+                throw new Error('You must join the tournament on-chain first. Please sign the transaction in your wallet.');
+            }
         }
-        const balance = this.toBigInt(balanceResult.rows[0].balance);
-        if (balance < tournament.buy_in_amount) {
-            throw new Error(`Insufficient balance for buy-in. Need ${tournament.buy_in_amount.toString()}, have ${balance.toString()}`);
+        else {
+            // Off-chain: check player balance
+            const balanceQuery = `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`;
+            const balanceResult = await this.pool.query(balanceQuery, [normalizedAddress]);
+            if (balanceResult.rows.length === 0) {
+                throw new Error('Player not found');
+            }
+            const balance = this.toBigInt(balanceResult.rows[0].balance);
+            if (balance < tournament.buy_in_amount) {
+                throw new Error(`Insufficient balance for buy-in. Need ${tournament.buy_in_amount.toString()}, have ${balance.toString()}`);
+            }
         }
-        // Process buy-in
+        // Process buy-in (off-chain only; on-chain buy-in already done via contract)
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            // Deduct buy-in
-            await client.query(`UPDATE players SET balance = balance - $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [tournament.buy_in_amount.toString(), normalizedAddress]);
-            // Add to prize pool only for platform (non–custom token) tournaments
-            if (!tournament.prize_token_address) {
+            if (!isOnChain) {
+                // Deduct buy-in from DB balance
+                await client.query(`UPDATE players SET balance = balance - $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [tournament.buy_in_amount.toString(), normalizedAddress]);
+            }
+            // Add to DB prize_pool for prize calculation (both on-chain and off-chain platform MORBIUS)
+            if (!tournament.prize_token_address && tournament.buy_in_amount > 0n) {
                 await client.query(`UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`, [tournament.buy_in_amount.toString(), tournamentId]);
+            }
+            // Call setActive when first player joins an on-chain tournament
+            if (isOnChain && entryCount === 0) {
+                const setActiveResult = await (0, morbius_tournament_1.setMorbiusTournamentActive)(tournament.on_chain_tournament_id);
+                if (!setActiveResult.success) {
+                    logger_1.logger.warn('MorbiusTournament setActive failed (continuing with join)', {
+                        tournamentId,
+                        onChainId: tournament.on_chain_tournament_id,
+                        error: setActiveResult.error,
+                    });
+                }
             }
             // Create entry
             const entryQuery = `
