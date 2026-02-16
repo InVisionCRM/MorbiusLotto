@@ -42,6 +42,7 @@ import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
 import { useTokenApproval } from '@/hooks/use-token-approval';
 import { useAudio } from '@/hooks/use-audio';
@@ -211,6 +212,7 @@ const createCard = (value: number, suit: string, hidden = false): Card => ({
 
 export default function BlackjackPage() {
   const { address, isConnected } = useAccount();
+  const queryClient = useQueryClient();
   const publicClient = usePublicClient();
   const { signTypedDataAsync } = useSignTypedData();
 
@@ -2460,6 +2462,9 @@ export default function BlackjackPage() {
           const res = await wsClient.setDisplayName(displayName, profileImageUrl);
           setProfileDisplayName(res.displayName);
           setProfileImageUrl(res.profileImageUrl);
+          if (address) {
+            queryClient.invalidateQueries({ queryKey: ['playerProfile', address] });
+          }
         }}
       />
 

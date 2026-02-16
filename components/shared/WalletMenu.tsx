@@ -68,7 +68,7 @@ export function WalletMenu({
             onClick={() => setIsWalletDropdownOpen(!isWalletDropdownOpen)}
             className={
               variant === 'sidebar'
-                ? 'flex items-center justify-start gap-2 w-full text-left rounded-lg px-2 py-2 text-white text-sm font-medium transition-colors hover:bg-white/5'
+                ? `flex items-center gap-2 w-full text-left rounded-lg px-2 py-2 text-white text-sm font-medium transition-colors hover:bg-white/5 ${sidebarOpen ? 'justify-start' : 'justify-center'}`
                 : 'flex items-center gap-2 px-2 py-1 rounded-sm text-white text-sm font-bold transition-all hover:bg-white/5'
             }
             style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))' } : undefined}
