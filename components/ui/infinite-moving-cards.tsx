@@ -93,7 +93,7 @@ export const InfiniteMovingCards = ({
       <ul
         ref={scrollerRef}
         className={cn(
-          "flex w-max min-w-full shrink-0 flex-nowrap gap-3 py-3 md:gap-4 md:py-4",
+          "flex w-max min-w-full shrink-0 flex-nowrap gap-4 py-4 md:gap-6 md:py-6",
           start && "animate-scroll",
           pauseOnHover && "hover:[animation-play-state:paused]",
         )}
@@ -102,10 +102,10 @@ export const InfiniteMovingCards = ({
           <li
             className={cn(
               "relative shrink-0 rounded-xl border overflow-hidden flex flex-col",
-              "h-[120px] sm:h-[140px] md:h-[165px] lg:h-[190px]",
+              "h-[200px] sm:h-[240px] md:h-[280px] lg:h-[320px]",
               variant === "quote"
                 ? "min-w-[200px] max-w-[320px] md:min-w-[280px] md:max-w-[420px] w-auto px-3 py-2 md:px-6 md:py-4 border-zinc-200 bg-[linear-gradient(180deg,#fafafa,#f5f5f5)] dark:border-zinc-700 dark:bg-[linear-gradient(180deg,#27272a,#18181b)]"
-                : "min-w-[160px] max-w-[260px] md:min-w-[200px] md:max-w-[340px] w-auto border-cyan-500/20 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(15,23,42,0.85))] dark:border-cyan-500/20",
+                : "min-w-[200px] max-w-[320px] md:min-w-[280px] md:max-w-[400px] w-auto border-cyan-500/20 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(15,23,42,0.85))] dark:border-cyan-500/20",
             )}
             key={variant === "image" ? (item as ImageCardItem).name + idx : (item as QuoteCardItem).name + idx}
           >
@@ -116,7 +116,7 @@ export const InfiniteMovingCards = ({
                   <div className="flex flex-col h-full min-h-0 min-w-0">
                     {imageItem.src ? (
                       <>
-                        <div className="relative w-full h-[72px] sm:h-[88px] md:h-[100px] lg:h-[120px] bg-black/30 shrink-0 overflow-hidden">
+                        <div className="relative w-full h-[120px] sm:h-[150px] md:h-[180px] lg:h-[220px] bg-black/30 shrink-0 overflow-hidden">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={imageItem.src}
@@ -124,19 +124,19 @@ export const InfiniteMovingCards = ({
                             className="w-full h-full object-cover object-center"
                           />
                         </div>
-                        <div className="px-2 py-1.5 md:px-3 md:py-2.5 text-center shrink-0 min-h-0 flex-1 flex items-center justify-center">
-                          <span className="text-xs md:text-sm font-medium text-white line-clamp-2">
+                        <div className="px-3 py-2 md:px-4 md:py-3 text-center shrink-0 min-h-0 flex-1 flex items-center justify-center min-w-0">
+                          <span className="text-sm md:text-base lg:text-lg font-medium text-white break-words line-clamp-3">
                             {imageItem.name}
                           </span>
                         </div>
                       </>
                     ) : (
-                      <div className="flex flex-1 flex-col justify-center px-2 py-1.5 md:px-4 md:py-3 min-h-0 overflow-hidden">
-                        <span className="text-xs md:text-sm font-semibold text-cyan-300/95 leading-tight truncate">
+                      <div className="flex flex-1 flex-col justify-center px-3 py-2 md:px-4 md:py-3 min-h-0 overflow-hidden min-w-0">
+                        <span className="text-sm md:text-base lg:text-lg font-semibold text-cyan-300/95 leading-tight break-words">
                           {imageItem.name}
                         </span>
                         {imageItem.subtitle && (
-                          <span className="text-[10px] md:text-xs text-white/60 mt-0.5 leading-tight tabular-nums line-clamp-2">
+                          <span className="text-xs md:text-sm text-white/60 mt-0.5 leading-tight tabular-nums break-words line-clamp-2">
                             {imageItem.subtitle}
                           </span>
                         )}

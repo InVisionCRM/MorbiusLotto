@@ -13,7 +13,7 @@ export function MorbItSection() {
   return (
     <section className="relative py-24 px-4 overflow-hidden">
       {/* Subtle gradient background */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.08)_0%,transparent_50%)] pointer-events-none" />
+      <div className="absolute inset-0 pointer-events-none" />
 
       <div className="container mx-auto max-w-4xl relative z-10">
         {/* Header — matches other home sections */}
