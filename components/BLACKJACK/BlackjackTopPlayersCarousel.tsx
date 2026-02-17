@@ -124,7 +124,7 @@ export function BlackjackTopPlayersCarousel() {
 
   return (
     <div className="w-full py-1.5 md:py-2 bg-gradient-to-b from-slate-950/95 to-slate-900/95">
-      <CarouselLayouts.A items={carouselItems} />
+      <CarouselLayouts.E items={carouselItems} />
     </div>
   )
 }

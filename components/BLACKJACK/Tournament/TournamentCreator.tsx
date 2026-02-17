@@ -14,12 +14,12 @@ import {
   PRIZE_PRESETS,
   TOURNAMENT_VALIDATION,
   FREEROLL_VALIDATION,
+  getMinPlayersFromPrizeDistribution,
   TIME_LIMIT_LABELS,
   PrizeDistributionType,
   TableTheme,
   CreateTournamentRequest,
   CreateFreerollRequest,
-  FreerollMode,
   getExamplePrizeDistribution,
   DEFAULT_TOUR_CARDS,
 } from '@/lib/tournament-types';
@@ -29,14 +29,12 @@ import {
   BlackjackImageId,
   BlackjackVideoId,
 } from '@/app/BLACKJACK/constants';
-import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS } from '@/lib/contracts';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
 import { Theme } from '@/lib/theme';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const isEscrowConfigured = TOURNAMENT_PRIZE_ESCROW_ADDRESS !== ESCROW_ZERO;
-const isEscrowV3Configured = true; // V3 address is hardcoded, always available
 import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
-import { tournamentPrizeEscrowV3Abi } from '@/abi/tournament-prize-escrow-v3';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 
@@ -61,7 +59,7 @@ interface SelectedToken {
 interface TournamentCreatorProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (params: CreateTournamentRequest) => Promise<{ tournamentId: string; pinCode?: string } | null>;
+  onCreate: (params: CreateTournamentRequest) => Promise<{ tournamentId: string; pinCode?: string; onChainTournamentId?: number } | null>;
   onCreateFreeroll?: (params: CreateFreerollRequest) => Promise<{ tournamentId: string; pinCode?: string } | null>;
   isLoading: boolean;
   playerBalance: bigint;
@@ -124,9 +122,8 @@ export function TournamentCreator({
   const [buyInAmount, setBuyInAmount] = useState('1000'); // In MORBIUS
   const [isPrivate, setIsPrivate] = useState(false);
   const [manualPin, setManualPin] = useState('');
-  const [startingChips, setStartingChips] = useState<number>(5000);
-  const [maxHands, setMaxHands] = useState<number>(50);
-  const [maxHandsInput, setMaxHandsInput] = useState<string>('50');
+  const startingChips = 5000;
+  const maxHands = 25;
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
   const [prizeDistributionType, setPrizeDistributionType] = useState<PrizeDistributionType>('top_10');
   const [themeKind, setThemeKind] = useState<'image' | 'video'>('image');
@@ -144,65 +141,21 @@ export function TournamentCreator({
     return toDatetimeLocal(d.toISOString());
   });
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
-  const [freerollMode, setFreerollMode] = useState<FreerollMode>('standard_chip_count');
-  const [reentryEnabled, setReentryEnabled] = useState(false);
-  const [reentryWindowMinutes, setReentryWindowMinutes] = useState<number>(5);
-  const [actionTimerSeconds, setActionTimerSeconds] = useState<number | null>(null);
-  // Elimination mode
-  const [eliminationIntervalType, setEliminationIntervalType] = useState<'time' | 'hands'>('time');
-  const [eliminationIntervalValue, setEliminationIntervalValue] = useState<number>(10);
-  const [eliminationPercentage, setEliminationPercentage] = useState<number>(20);
-  const [resetChipsAfterRound, setResetChipsAfterRound] = useState(false);
-  const [eliminationRoundsMin, setEliminationRoundsMin] = useState<number>(1);
-  const [eliminationRoundsMax, setEliminationRoundsMax] = useState<number>(10);
   // Freeroll player limits
-  const [minPlayersFreeroll, setMinPlayersFreeroll] = useState<number>(2);
   const [maxPlayersFreeroll, setMaxPlayersFreeroll] = useState<number>(100);
   const [maxPlayersUnlimited, setMaxPlayersUnlimited] = useState<boolean>(false);
+  const minPlayersFreeroll = getMinPlayersFromPrizeDistribution(prizeDistributionType);
 
   // Custom image upload state
   const [customImage, setCustomImage] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Creator fee (0-5%)
-  const [creatorFeePercent, setCreatorFeePercent] = useState(0);
-
   // Custom prize token (when prize type is 'custom')
   const [prizeType, setPrizeType] = useState<'platform' | 'custom'>('platform');
   const [prizeTokenAddress, setPrizeTokenAddress] = useState('');
   const [prizeAmountHuman, setPrizeAmountHuman] = useState('');
   const [prizeTokenDecimals, setPrizeTokenDecimals] = useState<number>(18);
-
-  // Handle max hands slider change
-  const handleMaxHandsSlider = (value: number) => {
-    setMaxHands(value);
-    setMaxHandsInput(value.toString());
-  };
-
-  // Handle max hands direct input
-  const handleMaxHandsInput = (value: string) => {
-    setMaxHandsInput(value);
-    const num = parseInt(value, 10);
-    if (!isNaN(num) && num >= 1 && num <= 200) {
-      setMaxHands(num);
-    }
-  };
-
-  // Handle max hands input blur (validate and clamp)
-  const handleMaxHandsBlur = () => {
-    const num = parseInt(maxHandsInput, 10);
-    if (isNaN(num) || num < 1) {
-      setMaxHands(1);
-      setMaxHandsInput('1');
-    } else if (num > 200) {
-      setMaxHands(200);
-      setMaxHandsInput('200');
-    } else {
-      setMaxHands(num);
-      setMaxHandsInput(num.toString());
-    }
-  };
 
   // Handle image upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -351,9 +304,9 @@ export function TournamentCreator({
     [prizeDistributionType]
   );
 
-  // Example prize distribution preview
+  // Example prize distribution preview (3% protocol + 2% creator = 5%)
   const examplePrizePool = buyInAmountWei * BigInt(10); // Simulate 10 players
-  const totalFeePercent = 16 + creatorFeePercent; // platform fee (16 default) + creator fee
+  const totalFeePercent = 5;
   const prizePreview = useMemo(() => {
     if (!selectedPreset) return [];
     return getExamplePrizeDistribution(examplePrizePool, selectedPreset.percentages, totalFeePercent);
@@ -383,22 +336,7 @@ export function TournamentCreator({
         setError(`Tournament time limit (duration) must be ${FREEROLL_VALIDATION.DURATION_MIN_MINUTES}–${FREEROLL_VALIDATION.DURATION_MAX_MINUTES} minutes`);
         return;
       }
-      if (freerollMode === 'elimination') {
-        if (eliminationRoundsMin > eliminationRoundsMax) {
-          setError('Elimination rounds min cannot exceed max');
-          return;
-        }
-        const pct = Math.min(FREEROLL_VALIDATION.ELIMINATION_PERCENTAGE_MAX, Math.max(FREEROLL_VALIDATION.ELIMINATION_PERCENTAGE_MIN, eliminationPercentage));
-        const interval =
-          eliminationIntervalType === 'time'
-            ? Math.min(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MAX_MINUTES, Math.max(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MIN_MINUTES, eliminationIntervalValue))
-            : Math.min(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MAX_HANDS, Math.max(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MIN_HANDS, eliminationIntervalValue));
-        if (interval < 1) {
-          setError('Elimination interval must be at least 1');
-          return;
-        }
-      }
-      const minP = Math.min(FREEROLL_VALIDATION.MIN_PLAYERS_MAX, Math.max(FREEROLL_VALIDATION.MIN_PLAYERS_MIN, minPlayersFreeroll));
+      const minP = getMinPlayersFromPrizeDistribution(prizeDistributionType);
       const maxP = maxPlayersUnlimited ? null : Math.min(FREEROLL_VALIDATION.MAX_PLAYERS_MAX, Math.max(FREEROLL_VALIDATION.MAX_PLAYERS_MIN, maxPlayersFreeroll));
       if (maxP != null && minP > maxP) {
         setError('Min players cannot exceed max players');
@@ -414,34 +352,18 @@ export function TournamentCreator({
 
       const freerollParams: CreateFreerollRequest = {
         name: trimmedName,
-        freerollMode,
         scheduledStartAt: startAt,
         registrationOpensAt: regOpens,
         durationMinutes,
         startingChips,
         maxHands,
         prizeDistributionType,
-        reentryConfig: { enabled: reentryEnabled, windowMinutes: reentryEnabled ? reentryWindowMinutes : 0 },
-        actionTimerSeconds,
         tableTheme: resolvedTableTheme,
         isPrivate,
-        minPlayers: minP,
         maxPlayers: maxP,
         customImage: customImage || undefined,
         pinCode: isPrivate && manualPin.trim() ? manualPin.trim() : undefined,
       };
-      if (freerollMode === 'elimination') {
-        freerollParams.eliminationConfig = {
-          intervalType: eliminationIntervalType,
-          intervalValue: eliminationIntervalType === 'time'
-            ? Math.min(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MAX_MINUTES, Math.max(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MIN_MINUTES, eliminationIntervalValue))
-            : Math.min(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MAX_HANDS, Math.max(FREEROLL_VALIDATION.ELIMINATION_INTERVAL_MIN_HANDS, eliminationIntervalValue)),
-          eliminationPercentage: Math.min(FREEROLL_VALIDATION.ELIMINATION_PERCENTAGE_MAX, Math.max(FREEROLL_VALIDATION.ELIMINATION_PERCENTAGE_MIN, eliminationPercentage)),
-          resetChipsAfterRound,
-          eliminationRoundsMin: Math.min(FREEROLL_VALIDATION.ELIMINATION_ROUNDS_MAX, Math.max(FREEROLL_VALIDATION.ELIMINATION_ROUNDS_MIN, eliminationRoundsMin)),
-          eliminationRoundsMax: Math.min(FREEROLL_VALIDATION.ELIMINATION_ROUNDS_MAX, Math.max(FREEROLL_VALIDATION.ELIMINATION_ROUNDS_MIN, eliminationRoundsMax)),
-        };
-      }
       const result = await onCreateFreeroll(freerollParams);
       if (result) {
         setCreatedTournament({ id: result.tournamentId, pinCode: result.pinCode });
@@ -465,13 +387,11 @@ export function TournamentCreator({
       startingChips,
       maxHands,
       timeLimitMinutes,
-      rebuyConfig: { enabled: false, maxRebuys: 0 },
       tableTheme: resolvedTableTheme,
       isPrivate,
       prizeDistributionType,
       customImage: customImage || undefined,
       pinCode: isPrivate && manualPin.trim() ? manualPin.trim() : undefined,
-      creatorFeePercent: creatorFeePercent > 0 ? creatorFeePercent : undefined,
     };
     if (prizeType === 'custom' && prizeTokenAddress.trim() && prizeAmountHuman.trim()) {
       const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
@@ -520,10 +440,9 @@ export function TournamentCreator({
 
   const handleApproveToken = async () => {
     if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
-    const useV3 = Boolean(createdTournament.onChainTournamentId != null);
-    const escrow = useV3 ? TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS : TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-    // Escrow V3 is hardcoded, always available. Only check V1/V2 if using those.
-    if (!useV3 && (!isEscrowConfigured || escrow === ESCROW_ZERO)) {
+    // Custom token always uses V2 (bytes32) escrow
+    const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+    if (!isEscrowConfigured || escrow === ESCROW_ZERO) {
       setFundingError('Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env.');
       return;
     }
@@ -562,10 +481,9 @@ export function TournamentCreator({
 
   const handleDepositToEscrow = async () => {
     if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
-    const useV3 = Boolean(createdTournament.onChainTournamentId != null);
-    const escrow = useV3 ? TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS : TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-    // Escrow V3 is hardcoded, always available. Only check V1/V2 if using those.
-    if (!useV3 && (!isEscrowConfigured || escrow === ESCROW_ZERO)) return;
+    // Custom token always uses V2 (bytes32) escrow
+    const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+    if (!isEscrowConfigured || escrow === ESCROW_ZERO) return;
     setFundingError(null);
     setFundingStep('depositing');
     try {
@@ -584,26 +502,15 @@ export function TournamentCreator({
         rpcUrls: { default: { http: ['https://rpc.pulsechain.com'] } }
       };
 
-      if (useV3 && createdTournament.onChainTournamentId != null) {
-        await writeContractAsync({
-          address: escrow as `0x${string}`,
-          abi: tournamentPrizeEscrowV3Abi,
-          functionName: 'depositPrizePool',
-          args: [BigInt(createdTournament.onChainTournamentId), token, fundingAmountWei],
-          account: address,
-          chain: pulseChain,
-        });
-      } else {
-        const idBytes32 = tournamentIdToBytes32(createdTournament.id);
-        await writeContractAsync({
-          address: escrow as `0x${string}`,
-          abi: tournamentPrizeEscrowAbi,
-          functionName: 'depositPrizePool',
-          args: [idBytes32, token, fundingAmountWei],
-          account: address,
-          chain: pulseChain,
-        });
-      }
+      const idBytes32 = tournamentIdToBytes32(createdTournament.id);
+      await writeContractAsync({
+        address: escrow as `0x${string}`,
+        abi: tournamentPrizeEscrowAbi,
+        functionName: 'depositPrizePool',
+        args: [idBytes32, token, fundingAmountWei],
+        account: address,
+        chain: pulseChain,
+      });
 
       setFundingStep('done');
     } catch (e) {
@@ -930,37 +837,7 @@ export function TournamentCreator({
                 </div>
               )}
 
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">Starting chips</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {TOURNAMENT_VALIDATION.STARTING_CHIPS_OPTIONS.map((chips) => (
-                    <button
-                      key={chips}
-                      onClick={() => setStartingChips(chips)}
-                      className={`py-3 rounded-xl font-medium transition-colors ${
-                        startingChips === chips ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      {chips.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">Max hands per player</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="1"
-                    max="200"
-                    value={maxHands}
-                    onChange={(e) => handleMaxHandsSlider(parseInt(e.target.value, 10))}
-                    className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-                    aria-label="Max hands per player"
-                  />
-                  <span className="text-white font-medium w-12">{maxHands}</span>
-                </div>
-              </div>
+              <p className="text-gray-500 text-sm">5,000 chips · 25 hands per player</p>
             </section>
           )}
 
@@ -973,7 +850,7 @@ export function TournamentCreator({
                 <label className="block text-gray-300 text-sm font-medium mb-2">Prize distribution</label>
                 <p className="text-gray-500 text-xs mb-2">How the prize pool is split among top finishers.</p>
                 <div className="space-y-2">
-                  {PRIZE_PRESETS.filter((p) => p.id !== 'custom').map((preset) => (
+                  {PRIZE_PRESETS.map((preset) => (
                     <button
                       key={preset.id}
                       onClick={() => setPrizeDistributionType(preset.id)}
@@ -1010,16 +887,10 @@ export function TournamentCreator({
               {tournamentType === 'freeroll' && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label htmlFor="min-players-freeroll" className="block text-gray-300 text-sm mb-1">Min players</label>
-                    <input
-                      id="min-players-freeroll"
-                      type="number"
-                      min={FREEROLL_VALIDATION.MIN_PLAYERS_MIN}
-                      max={FREEROLL_VALIDATION.MIN_PLAYERS_MAX}
-                      value={minPlayersFreeroll}
-                      onChange={(e) => setMinPlayersFreeroll(parseInt(e.target.value, 10) || 2)}
-                      className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm"
-                    />
+                    <label className="block text-gray-300 text-sm mb-1">Min players</label>
+                    <div className="w-full px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-600 text-gray-400 text-sm">
+                      {minPlayersFreeroll} (from prize distribution)
+                    </div>
                   </div>
                   <div>
                     <label className="block text-gray-300 text-sm mb-1">Max players</label>
@@ -1128,65 +999,8 @@ export function TournamentCreator({
                 </div>
               </div>
 
-              {tournamentType === 'freeroll' && (
-                <div className="space-y-4 p-4 rounded-xl border border-cyan-500/20" style={Theme.panel.base}>
-                  <h4 className="text-sm font-semibold text-cyan-400">Freeroll options</h4>
-                  <div>
-                    <label className="block text-gray-400 text-xs mb-1">Mode</label>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setFreerollMode('standard_chip_count')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${freerollMode === 'standard_chip_count' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'}`}>Chip count</button>
-                      <button type="button" onClick={() => setFreerollMode('elimination')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${freerollMode === 'elimination' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'}`}>Elimination</button>
-                    </div>
-                  </div>
-                  {freerollMode === 'elimination' && (
-                    <div className="space-y-3 text-sm">
-                      <div>
-                        <label className="block text-gray-400 text-xs mb-1">Trigger</label>
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => setEliminationIntervalType('time')} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${eliminationIntervalType === 'time' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'}`}>Every N min</button>
-                          <button type="button" onClick={() => setEliminationIntervalType('hands')} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${eliminationIntervalType === 'hands' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300'}`}>Every N hands</button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-gray-400 text-xs mb-1">{eliminationIntervalType === 'time' ? 'Interval (min)' : 'Interval (hands)'}</label>
-                          <input type="number" min={1} value={eliminationIntervalValue} onChange={(e) => setEliminationIntervalValue(parseInt(e.target.value, 10) || 1)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" aria-label="Elimination interval" />
-                        </div>
-                        <div>
-                          <label className="block text-gray-400 text-xs mb-1">Bottom % out</label>
-                          <input type="number" min={5} max={50} value={eliminationPercentage} onChange={(e) => setEliminationPercentage(parseInt(e.target.value, 10) || 20)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" aria-label="Bottom percent eliminated" />
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-400 text-xs">Reset chips after round</span>
-                        <button type="button" onClick={() => setResetChipsAfterRound(!resetChipsAfterRound)} className={`relative w-10 h-5 rounded-full ${resetChipsAfterRound ? 'bg-cyan-500' : 'bg-gray-600'}`}><div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${resetChipsAfterRound ? 'translate-x-5' : 'translate-x-1'}`} /></button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input type="number" min={1} max={50} value={eliminationRoundsMin} onChange={(e) => setEliminationRoundsMin(parseInt(e.target.value, 10) || 1)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" placeholder="Rounds min" aria-label="Elimination rounds minimum" />
-                        <input type="number" min={1} max={50} value={eliminationRoundsMax} onChange={(e) => setEliminationRoundsMax(parseInt(e.target.value, 10) || 10)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" placeholder="Rounds max" aria-label="Elimination rounds maximum" />
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400 text-sm">Re-entry window</span>
-                    <button type="button" onClick={() => setReentryEnabled(!reentryEnabled)} className={`relative w-12 h-6 rounded-full ${reentryEnabled ? 'bg-cyan-500' : 'bg-gray-600'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${reentryEnabled ? 'translate-x-7' : 'translate-x-1'}`} /></button>
-                  </div>
-                  {reentryEnabled && <input type="number" min={1} max={60} value={reentryWindowMinutes} onChange={(e) => setReentryWindowMinutes(parseInt(e.target.value, 10) || 5)} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" aria-label="Re-entry window minutes" />}
-                  <div>
-                    <label className="block text-gray-400 text-xs mb-1">Action timer (sec)</label>
-                    <select value={actionTimerSeconds ?? ''} onChange={(e) => setActionTimerSeconds(e.target.value === '' ? null : parseInt(e.target.value, 10))} className="w-full px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" aria-label="Action timer seconds">
-                      <option value="">None</option><option value="10">10</option><option value="15">15</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
               {tournamentType === 'buyin' && (
                 <>
-                  <div>
-                    <label className="block text-gray-300 text-sm mb-1">Creator fee: {creatorFeePercent}%</label>
-                    <input type="range" min="0" max="5" step="1" value={creatorFeePercent} onChange={(e) => setCreatorFeePercent(parseInt(e.target.value, 10))} className="w-full h-2 bg-gray-700 rounded-lg accent-purple-500" aria-label="Creator fee percent" />
-                  </div>
                   <div>
                     <label className="block text-gray-300 text-sm font-medium mb-1">Prize source</label>
                     <div className="flex gap-2">

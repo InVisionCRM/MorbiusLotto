@@ -70,7 +70,7 @@ export interface FreerollListItemPayload {
   current_phase: string | null;
   registered_count: number;
   action_timer_seconds: number | null;
-  elimination_config: Record<string, unknown> | null;
+  elimination_config?: Record<string, unknown> | null; // Legacy; unused
   reentry_config: Record<string, unknown> | null;
   prize_distribution_type: string;
   custom_image: string | null;

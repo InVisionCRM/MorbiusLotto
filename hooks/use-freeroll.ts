@@ -97,33 +97,6 @@ export function useFreeroll(options: UseFreerollOptions) {
     [wsClient, address]
   );
 
-  /**
-   * Re-enter a freeroll during the reentry window (after elimination).
-   */
-  const reentryFreeroll = useCallback(
-    async (tournamentId: string): Promise<FreerollEntryPayload | null> => {
-      if (!wsClient || !address) {
-        setError('Not connected');
-        return null;
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const payload = await wsClient.sendRequest('freeroll_reentry', { tournamentId });
-        return payload as FreerollEntryPayload;
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to re-enter';
-        setError(msg);
-        return null;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [wsClient, address]
-  );
-
   const clearError = useCallback(() => setError(null), []);
 
   return {
@@ -133,7 +106,6 @@ export function useFreeroll(options: UseFreerollOptions) {
     fetchFreerollList,
     registerFreeroll,
     joinFreeroll,
-    reentryFreeroll,
     clearError,
   };
 }

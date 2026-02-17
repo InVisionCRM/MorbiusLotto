@@ -357,8 +357,8 @@ function useTournamentTimer(t: TimerInput): { label: string; color: string } | n
       return { label: `Starts in ${formatMs(startAt - now)}`, color: 'bg-cyan-500/90' };
     }
 
-    // Active / elimination round — show time remaining via endsAt or calculated end
-    if (phase === 'active' || phase === 'elimination_round') {
+    // Active — show time remaining via endsAt or calculated end
+    if (phase === 'active') {
       const endsAtMs = t.endsAt ? new Date(t.endsAt).getTime() : null;
       // Freerolls without explicit endsAt: compute from scheduledStartAt + durationMinutes if available
       if (endsAtMs && now < endsAtMs) {
@@ -558,10 +558,9 @@ function ExpandedCardContent({
 
   // Prize distribution
   const prizePreset = PRIZE_PRESETS.find((p) => p.id === tournament.prizeDistributionType);
-  let prizePercentages = prizePreset?.percentages ?? [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
-  // Defensive check: ensure it's always a valid array
+  let prizePercentages = prizePreset?.percentages ?? [56, 20, 10, 2, 2, 2, 2, 2, 2, 2];
   if (!Array.isArray(prizePercentages) || prizePercentages.length === 0) {
-    prizePercentages = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+    prizePercentages = [56, 20, 10, 2, 2, 2, 2, 2, 2, 2];
   }
   const prizePool = BigInt(tournament.prizePool);
   const prizeDistribution = getExamplePrizeDistribution(prizePool, prizePercentages);

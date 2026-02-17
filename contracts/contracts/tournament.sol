@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /**
  * @title TournamentPrizeEscrowV2
  * @notice Holds ERC-20 prize tokens per tournament; authorized server pays out to winners.
- * @dev Enhanced version with creator tracking, timestamps, and better oversight functions.
+ * @dev Enhanced version with creator tracking, timestamps, and active flag for tournaments.
  */
 contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -18,31 +18,32 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
 
     struct Pool {
         address token;
-        address depositor;           // Who deposited the funds (creator)
+        address depositor; // Who deposited the funds (creator)
         uint256 totalDeposited;
         uint256 amountPaidOut;
-        uint256 depositedAt;         // Block timestamp when deposited
-        bool cancelled;              // Whether tournament was cancelled
+        uint256 depositedAt; // Block timestamp when deposited
+        bool cancelled; // Whether tournament was cancelled
+        bool active; // Whether tournament is active
     }
     mapping(bytes32 => Pool) public pools;
-    
+
     // Track all tournament IDs for enumeration
     bytes32[] public tournamentIds;
 
     event PrizePoolDeposited(
-        bytes32 indexed tournamentId, 
-        address indexed token, 
-        uint256 amount, 
+        bytes32 indexed tournamentId,
+        address indexed token,
+        uint256 amount,
         address indexed depositor
     );
     event Payout(
-        bytes32 indexed tournamentId, 
-        address indexed winner, 
+        bytes32 indexed tournamentId,
+        address indexed winner,
         uint256 amount
     );
     event RemainderReclaimed(
-        bytes32 indexed tournamentId, 
-        address indexed to, 
+        bytes32 indexed tournamentId,
+        address indexed to,
         uint256 amount
     );
     event TournamentCancelled(
@@ -76,7 +77,11 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
      * @param token ERC-20 token address
      * @param amount Amount in token's smallest unit (caller must approve this contract first)
      */
-    function depositPrizePool(bytes32 tournamentId, address token, uint256 amount) external nonReentrant {
+    function depositPrizePool(
+        bytes32 tournamentId,
+        address token,
+        uint256 amount
+    ) external nonReentrant {
         require(token != address(0), "Invalid token");
         require(amount > 0, "Zero amount");
         Pool storage pool = pools[tournamentId];
@@ -87,9 +92,9 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
         pool.totalDeposited = amount;
         pool.depositedAt = block.timestamp;
         pool.cancelled = false;
+        pool.active = true;
 
         // Track tournament ID if not already tracked
-        // Check if this is a new tournament ID
         bool exists = false;
         for (uint i = 0; i < tournamentIds.length; i++) {
             if (tournamentIds[i] == tournamentId) {
@@ -112,31 +117,91 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
      * @param winner Winner address to receive tokens
      * @param amount Amount in token's smallest unit
      */
-    function payout(bytes32 tournamentId, address winner, uint256 amount) external onlyAuthorizedServer nonReentrant {
+    function payout(
+        bytes32 tournamentId,
+        address winner,
+        uint256 amount
+    ) external onlyAuthorizedServer nonReentrant {
         require(winner != address(0), "Invalid winner");
         if (amount == 0) return;
 
         Pool storage pool = pools[tournamentId];
         require(pool.token != address(0), "No pool");
-        require(!pool.cancelled, "Tournament cancelled");
-        require(pool.amountPaidOut + amount <= pool.totalDeposited, "Exceeds pool");
+        require(pool.active, "Tournament not active");
+        require(
+            pool.amountPaidOut + amount <= pool.totalDeposited,
+            "Exceeds pool"
+        );
 
         pool.amountPaidOut += amount;
+        if (pool.amountPaidOut == pool.totalDeposited) {
+            pool.active = false;
+        }
+
         IERC20(pool.token).safeTransfer(winner, amount);
 
         emit Payout(tournamentId, winner, amount);
     }
+// ----------------------------------3D Tech Baby ------------------------------->
+    /**
+     * @notice Payout multiple winners in a single call based on percentages.
+     * @param tournamentId Tournament to payout
+     * @param winners Array of winner addresses
+     * @param percentages Array of percentages corresponding to each winner (total should be <= 100)
+     */
+    function payoutMultiple(
+        bytes32 tournamentId,
+        address[] calldata winners,
+        uint256[] calldata percentages
+    ) external onlyAuthorizedServer nonReentrant {
+        Pool storage pool = pools[tournamentId];
+        require(pool.token != address(0), "No pool");
+        require(pool.active, "Tournament not active");
+        require(!pool.cancelled, "Tournament cancelled");
+        require(winners.length == percentages.length, "Mismatched arrays");
+        require(winners.length > 0, "No winners");
 
+        uint256 totalPercent;
+        for (uint256 i = 0; i < percentages.length; i++) {
+            totalPercent += percentages[i];
+        }
+        require(totalPercent <= 100, "Percentages exceed 100");
+
+        uint256 remaining = pool.totalDeposited - pool.amountPaidOut;
+        require(remaining > 0, "No remaining balance");
+
+        for (uint256 i = 0; i < winners.length; i++) {
+            address winner = winners[i];
+            require(winner != address(0), "Invalid winner");
+
+            uint256 payoutAmount = (remaining * percentages[i]) / 100;
+            if (payoutAmount > 0) {
+                pool.amountPaidOut += payoutAmount;
+                IERC20(pool.token).safeTransfer(winner, payoutAmount);
+                emit Payout(tournamentId, winner, payoutAmount);
+            }
+        }
+
+        // If fully paid out, mark inactive
+        if (pool.amountPaidOut >= pool.totalDeposited) {
+            pool.active = false;
+        }
+    }
+// ---------------------------------------------------------------------------
     /**
      * @notice Mark tournament as cancelled. Only callable by authorizedServer.
      * @param tournamentId Tournament to cancel
      */
-    function cancelTournament(bytes32 tournamentId) external onlyAuthorizedServer {
+    function cancelTournament(
+        bytes32 tournamentId
+    ) external onlyAuthorizedServer {
         Pool storage pool = pools[tournamentId];
         require(pool.token != address(0), "No pool");
         require(!pool.cancelled, "Already cancelled");
-        
+
         pool.cancelled = true;
+        pool.active = false;
+
         emit TournamentCancelled(tournamentId, pool.depositor);
     }
 
@@ -149,61 +214,77 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
         require(pool.token != address(0), "No pool");
         require(pool.cancelled, "Tournament not cancelled");
         require(msg.sender == pool.depositor, "Not creator");
-        
+
         uint256 remaining = pool.totalDeposited - pool.amountPaidOut;
         require(remaining > 0, "No remainder");
-        
+
         pool.amountPaidOut = pool.totalDeposited;
+        pool.active = false;
+
         IERC20(pool.token).safeTransfer(msg.sender, remaining);
-        
+
         emit CreatorReclaimed(tournamentId, msg.sender, remaining);
     }
 
     /**
      * @notice Send remaining (unclaimed) prize tokens for a tournament to an address.
-     * Callable by authorized server only (e.g. after distributePrizes to sweep remainder).
-     * Use so escrow never holds leftover funds after a tournament ends.
+     * Callable by authorized server only.
      */
-    function payoutRemainderTo(bytes32 tournamentId, address to) external onlyAuthorizedServer nonReentrant {
+    function payoutRemainderTo(
+        bytes32 tournamentId,
+        address to
+    ) external onlyAuthorizedServer nonReentrant {
         require(to != address(0), "Invalid recipient");
         Pool storage pool = pools[tournamentId];
         require(pool.token != address(0), "No pool");
-        require(!pool.cancelled, "Tournament cancelled");
+        require(pool.active, "Tournament not active");
         uint256 remaining = pool.totalDeposited - pool.amountPaidOut;
         require(remaining > 0, "No remainder");
+
         pool.amountPaidOut = pool.totalDeposited;
+        pool.active = false;
+
         IERC20(pool.token).safeTransfer(to, remaining);
         emit RemainderReclaimed(tournamentId, to, remaining);
     }
 
     /**
      * @notice Owner can reclaim unclaimed prize tokens for a tournament (e.g. old/cancelled tournaments).
-     * Use when the server did not call payoutRemainderTo or for one-off recovery.
      */
-    function reclaimUnclaimed(bytes32 tournamentId, address to) external onlyOwner nonReentrant {
+    function reclaimUnclaimed(
+        bytes32 tournamentId,
+        address to
+    ) external onlyOwner nonReentrant {
         require(to != address(0), "Invalid recipient");
         Pool storage pool = pools[tournamentId];
         require(pool.token != address(0), "No pool");
         uint256 remaining = pool.totalDeposited - pool.amountPaidOut;
         require(remaining > 0, "No remainder");
+
         pool.amountPaidOut = pool.totalDeposited;
+        pool.active = false;
+
         IERC20(pool.token).safeTransfer(to, remaining);
         emit RemainderReclaimed(tournamentId, to, remaining);
     }
 
     // ============ Read Functions for Oversight ============
 
-    /**
-     * @notice View pool info for a tournament (enhanced with creator and timestamp).
-     */
-    function getPool(bytes32 tournamentId) external view returns (
-        address token,
-        address depositor,
-        uint256 totalDeposited,
-        uint256 amountPaidOut,
-        uint256 depositedAt,
-        bool cancelled
-    ) {
+    function getPool(
+        bytes32 tournamentId
+    )
+        external
+        view
+        returns (
+            address token,
+            address depositor,
+            uint256 totalDeposited,
+            uint256 amountPaidOut,
+            uint256 depositedAt,
+            bool cancelled,
+            bool active
+        )
+    {
         Pool storage pool = pools[tournamentId];
         return (
             pool.token,
@@ -211,54 +292,47 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
             pool.totalDeposited,
             pool.amountPaidOut,
             pool.depositedAt,
-            pool.cancelled
+            pool.cancelled,
+            pool.active
         );
     }
 
-    /**
-     * @notice Get remaining balance for a tournament.
-     */
-    function getRemainingBalance(bytes32 tournamentId) external view returns (uint256) {
+    function getRemainingBalance(
+        bytes32 tournamentId
+    ) external view returns (uint256) {
         Pool storage pool = pools[tournamentId];
         if (pool.token == address(0)) return 0;
         return pool.totalDeposited - pool.amountPaidOut;
     }
 
-    /**
-     * @notice Get total number of tournaments in escrow.
-     */
     function getTournamentCount() external view returns (uint256) {
         return tournamentIds.length;
     }
 
-    /**
-     * @notice Get tournament ID at index (for enumeration).
-     */
     function getTournamentId(uint256 index) external view returns (bytes32) {
         require(index < tournamentIds.length, "Index out of bounds");
         return tournamentIds[index];
     }
 
-    /**
-     * @notice Get all tournament IDs (for enumeration).
-     * @dev Gas-intensive for large arrays. Use pagination in frontend.
-     */
     function getAllTournamentIds() external view returns (bytes32[] memory) {
         return tournamentIds;
     }
 
-    /**
-     * @notice Get pools for multiple tournament IDs.
-     * @param tournamentIds_ Array of tournament IDs to query
-     */
-    function getPoolsBatch(bytes32[] calldata tournamentIds_) external view returns (
-        address[] memory tokens,
-        address[] memory depositors,
-        uint256[] memory totalDepositeds,
-        uint256[] memory amountPaidOuts,
-        uint256[] memory depositedAts,
-        bool[] memory cancelleds
-    ) {
+    function getPoolsBatch(
+        bytes32[] calldata tournamentIds_
+    )
+        external
+        view
+        returns (
+            address[] memory tokens,
+            address[] memory depositors,
+            uint256[] memory totalDepositeds,
+            uint256[] memory amountPaidOuts,
+            uint256[] memory depositedAts,
+            bool[] memory cancelleds,
+            bool[] memory actives
+        )
+    {
         uint256 length = tournamentIds_.length;
         tokens = new address[](length);
         depositors = new address[](length);
@@ -266,6 +340,7 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
         amountPaidOuts = new uint256[](length);
         depositedAts = new uint256[](length);
         cancelleds = new bool[](length);
+        actives = new bool[](length);
 
         for (uint256 i = 0; i < length; i++) {
             Pool storage pool = pools[tournamentIds_[i]];
@@ -275,30 +350,29 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
             amountPaidOuts[i] = pool.amountPaidOut;
             depositedAts[i] = pool.depositedAt;
             cancelleds[i] = pool.cancelled;
+            actives[i] = pool.active;
         }
     }
 
-    /**
-     * @notice Get all pools with remaining balance (active pools).
-     * @dev Returns tournament IDs that have remaining balance > 0.
-     */
-    function getActivePools() external view returns (bytes32[] memory activeIds, uint256[] memory balances) {
+    function getActivePools()
+        external
+        view
+        returns (bytes32[] memory activeIds, uint256[] memory balances)
+    {
         uint256 count = 0;
-        // First pass: count active pools
         for (uint256 i = 0; i < tournamentIds.length; i++) {
             Pool storage pool = pools[tournamentIds[i]];
-            if (pool.token != address(0) && pool.totalDeposited > pool.amountPaidOut && !pool.cancelled) {
+            if (pool.active) {
                 count++;
             }
         }
 
-        // Second pass: collect active pools
         activeIds = new bytes32[](count);
         balances = new uint256[](count);
         uint256 index = 0;
         for (uint256 i = 0; i < tournamentIds.length; i++) {
             Pool storage pool = pools[tournamentIds[i]];
-            if (pool.token != address(0) && pool.totalDeposited > pool.amountPaidOut && !pool.cancelled) {
+            if (pool.active) {
                 activeIds[index] = tournamentIds[i];
                 balances[index] = pool.totalDeposited - pool.amountPaidOut;
                 index++;
@@ -306,20 +380,22 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
         }
     }
 
-    /**
-     * @notice Get all pools for a specific depositor (creator).
-     * @param depositor Address of the depositor/creator
-     */
-    function getPoolsByDepositor(address depositor) external view returns (
-        bytes32[] memory ids,
-        address[] memory tokens,
-        uint256[] memory totalDepositeds,
-        uint256[] memory amountPaidOuts,
-        uint256[] memory depositedAts,
-        bool[] memory cancelleds
-    ) {
+    function getPoolsByDepositor(
+        address depositor
+    )
+        external
+        view
+        returns (
+            bytes32[] memory ids,
+            address[] memory tokens,
+            uint256[] memory totalDepositeds,
+            uint256[] memory amountPaidOuts,
+            uint256[] memory depositedAts,
+            bool[] memory cancelleds,
+            bool[] memory actives
+        )
+    {
         uint256 count = 0;
-        // First pass: count pools for this depositor
         for (uint256 i = 0; i < tournamentIds.length; i++) {
             Pool storage pool = pools[tournamentIds[i]];
             if (pool.depositor == depositor) {
@@ -327,13 +403,13 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
             }
         }
 
-        // Second pass: collect pools
         ids = new bytes32[](count);
         tokens = new address[](count);
         totalDepositeds = new uint256[](count);
         amountPaidOuts = new uint256[](count);
         depositedAts = new uint256[](count);
         cancelleds = new bool[](count);
+        actives = new bool[](count);
 
         uint256 index = 0;
         for (uint256 i = 0; i < tournamentIds.length; i++) {
@@ -345,44 +421,45 @@ contract TournamentPrizeEscrowV2 is Ownable, ReentrancyGuard {
                 amountPaidOuts[index] = pool.amountPaidOut;
                 depositedAts[index] = pool.depositedAt;
                 cancelleds[index] = pool.cancelled;
+                actives[index] = pool.active;
                 index++;
             }
         }
     }
 
-    /**
-     * @notice Get total value locked (TVL) across all pools for a specific token.
-     * @param token Token address to query
-     */
-    function getTotalValueLocked(address token) external view returns (uint256) {
+    function getTotalValueLocked(
+        address token
+    ) external view returns (uint256) {
         uint256 total = 0;
         for (uint256 i = 0; i < tournamentIds.length; i++) {
             Pool storage pool = pools[tournamentIds[i]];
-            if (pool.token == token && !pool.cancelled) {
+            if (pool.token == token && pool.active) {
                 total += (pool.totalDeposited - pool.amountPaidOut);
             }
         }
         return total;
     }
 
-    /**
-     * @notice Get summary statistics for oversight.
-     */
-    function getEscrowSummary() external view returns (
-        uint256 totalTournaments,
-        uint256 activeTournaments,
-        uint256 cancelledTournaments,
-        uint256 totalValueLocked
-    ) {
+    function getEscrowSummary()
+        external
+        view
+        returns (
+            uint256 totalTournaments,
+            uint256 activeTournaments,
+            uint256 cancelledTournaments,
+            uint256 totalValueLocked
+        )
+    {
         totalTournaments = tournamentIds.length;
         for (uint256 i = 0; i < tournamentIds.length; i++) {
             Pool storage pool = pools[tournamentIds[i]];
             if (pool.token != address(0)) {
                 if (pool.cancelled) {
                     cancelledTournaments++;
-                } else if (pool.totalDeposited > pool.amountPaidOut) {
+                } else if (pool.active) {
                     activeTournaments++;
-                    totalValueLocked += (pool.totalDeposited - pool.amountPaidOut);
+                    totalValueLocked += (pool.totalDeposited -
+                        pool.amountPaidOut);
                 }
             }
         }

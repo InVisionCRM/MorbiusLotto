@@ -9,7 +9,7 @@ export interface PendingScheduledEvent {
 }
 /**
  * Polls for pending freeroll scheduled events and delegates execution to TournamentService.
- * Event types: 'start' | 'elimination_round' | 'end' | 'reentry_close'
+ * Event types: 'start' | 'end' | 'reentry_close'
  */
 export declare class FreerollSchedulerService {
     private pool;

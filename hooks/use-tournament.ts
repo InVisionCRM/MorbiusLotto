@@ -12,7 +12,6 @@ import {
   CreateFreerollRequest,
   TournamentListItem,
   PlayerTournamentHistoryItem,
-  RebuyConfig,
   TableTheme,
 } from '@/lib/tournament-types';
 import { getApiUrl } from '@/lib/api-urls';
@@ -22,10 +21,10 @@ export const TOURNAMENT_CONFIG = {
   BUY_IN_AMOUNT: BigInt('1000000000000000000000'), // 1,000 MORBIUS
   BUY_IN_DISPLAY: '1,000',
   STARTING_CHIPS: 5000,
-  MAX_HANDS: 50,
+  MAX_HANDS: 25,
   MIN_BET: 50,
   MAX_BET: 5000,
-  PRIZE_PERCENTAGES: [40, 20, 10, 2, 2, 2, 2, 2, 2, 2],
+  PRIZE_PERCENTAGES: [56, 20, 10, 2, 2, 2, 2, 2, 2, 2],
 };
 
 export interface TournamentState {
@@ -67,7 +66,7 @@ export interface TournamentInfo {
   maxPlayers?: number | null;
   timeLimitMinutes?: number | null;
   endsAt?: string | null;
-  rebuyConfig?: RebuyConfig;
+  rebuyConfig?: { enabled: boolean; maxRebuys: number };
   tableTheme?: TableTheme;
   isPrivate?: boolean;
   prizeDistributionType?: string;
@@ -712,7 +711,7 @@ export function useTournament(options: UseTournamentOptions) {
    */
   const getPrizeForRank = useCallback((rank: number, prizePool: bigint): bigint => {
     if (rank < 1 || rank > 10) return 0n;
-    const distributablePool = (prizePool * 84n) / 100n;
+    const distributablePool = (prizePool * 95n) / 100n; // 95% after 3% protocol + 2% creator
     const percentage = TOURNAMENT_CONFIG.PRIZE_PERCENTAGES[rank - 1];
     return (distributablePool * BigInt(percentage)) / 100n;
   }, []);

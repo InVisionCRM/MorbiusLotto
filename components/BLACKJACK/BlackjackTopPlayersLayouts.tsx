@@ -265,7 +265,7 @@ function CarouselScroller({ items, direction, children }: { items: CarouselItem[
   }, [direction])
   return (
     <div ref={containerRef} className="scroller overflow-hidden [mask-image:linear-gradient(to_right,transparent,white_15%,white_85%,transparent)]">
-      <ul ref={ref} className={`flex w-max gap-3 py-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
+      <ul ref={ref} className={`flex flex-nowrap w-max gap-3 py-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
         {items.map((item) => (
           <li key={item.href + item.categoryLabel} className="shrink-0">
             {children(item)}
@@ -353,13 +353,13 @@ function CarouselLayoutE({ items }: { items: CarouselItem[] }) {
     <div className="w-full py-2 rounded-xl overflow-hidden" style={PANEL_STYLE}>
       <CarouselScroller items={items} direction="right">
         {(item) => (
-          <Link href={item.href} className={`flex items-center gap-3 px-4 rounded-lg bg-slate-800/90 border border-cyan-500/20 hover:border-cyan-500/50 ${CARD_HEIGHT} min-w-[260px]`}>
+          <Link href={item.href} className={`flex items-center gap-3 px-4 rounded-lg bg-slate-800/90 border border-cyan-500/20 hover:border-cyan-500/50 ${CARD_HEIGHT} min-w-[260px] w-max flex-shrink-0 flex-nowrap`}>
             <TrendingUp className="w-5 h-5 text-emerald-400/80 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="text-xs text-white/70">{item.playerShort} leads with</div>
-              <div className="text-sm font-bold text-white">{item.displayValue}</div>
+            <div className="flex flex-col justify-center min-w-0">
+              <div className="text-xs text-white/70 whitespace-nowrap">{item.playerShort} leads with</div>
+              <div className="text-sm font-bold text-white whitespace-nowrap">{item.displayValue}</div>
             </div>
-            <span className="text-[10px] text-cyan-400/80 uppercase shrink-0">{item.categoryLabel}</span>
+            <span className="text-[10px] text-cyan-400/80 uppercase shrink-0 whitespace-nowrap">{item.categoryLabel}</span>
           </Link>
         )}
       </CarouselScroller>
@@ -382,7 +382,7 @@ function OverlayScroller({ entries, children }: { entries: TopPlayerEntry[]; chi
   }, [])
   return (
     <div ref={containerRef} className="scroller overflow-hidden [mask-image:linear-gradient(to_right,transparent,white_15%,white_85%,transparent)]">
-      <ul ref={ref} className={`flex w-max gap-3 py-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
+      <ul ref={ref} className={`flex flex-nowrap w-max gap-3 py-2 ${start ? 'animate-scroll' : ''} hover:[animation-play-state:paused]`}>
         {entries.map((e) => (
           <li key={e.wallet_address} className="shrink-0">
             {children(e)}
@@ -435,12 +435,12 @@ function OverlayLayoutC({ entries, transparent }: { entries: TopPlayerEntry[]; t
     <div className="rounded-xl overflow-hidden" style={transparent ? undefined : PANEL_STYLE}>
       <OverlayScroller entries={entries}>
         {(e) => (
-          <Link href={`/player/${e.wallet_address}`} className={`flex flex-col justify-center px-4 rounded-lg bg-gradient-to-r from-slate-800/90 to-slate-900/80 hover:from-cyan-900/20 ${CARD_HEIGHT} min-w-[180px]`}>
-            <div className="flex items-center gap-2">
+          <Link href={`/player/${e.wallet_address}`} className={`flex flex-col justify-center px-4 rounded-lg bg-gradient-to-r from-slate-800/90 to-slate-900/80 hover:from-cyan-900/20 ${CARD_HEIGHT} min-w-[180px] w-max flex-shrink-0 flex-nowrap`}>
+            <div className="flex items-center gap-2 whitespace-nowrap">
               <span className="text-amber-400/90 font-bold">#{e.rank}</span>
               <span className="text-sm font-mono text-white">...{shortAddress(e.wallet_address)}</span>
             </div>
-            <div className="text-[10px] text-white/60 mt-0.5">
+            <div className="text-[10px] text-white/60 mt-0.5 whitespace-nowrap">
               {e.total_games} games · {e.win_rate.toFixed(1)}% win rate · {e.profit_loss >= 0n ? '+' : ''}{formatMorbius(e.profit_loss)} MORB
             </div>
           </Link>

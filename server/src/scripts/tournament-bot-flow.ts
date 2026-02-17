@@ -5,22 +5,22 @@
  * Uses off-chain tournaments only (no contract calls).
  *
  * Modes:
- *   standard (default) - Buy-in tournament, full payout (top_10: 1st 40%, 2nd 20%, etc.)
- *   elimination - Freeroll with time-based elimination rounds (bottom % eliminated each round)
+ *   standard (default) - Buy-in tournament, 5000 chips, 25 hands
+ *   freeroll - Chip-count freeroll, 5000 chips, 25 hands
  *
  * Prerequisites:
  * - Server running (or use production WebSocket URL)
- * - standard: Bot addresses in players table with sufficient balance (5000 MORBIUS each)
- * - elimination: No balance needed (freeroll)
+ * - standard: Bot addresses in players table with sufficient balance (1000 MORBIUS each)
+ * - freeroll: No balance needed
  *
  * Run from server directory:
  *   npm run tournament:bot
- *   TOURNAMENT_BOT_MODE=elimination npm run tournament:bot
+ *   TOURNAMENT_BOT_MODE=freeroll npm run tournament:bot
  *
  * Env:
  *   NEXT_PUBLIC_WEBSOCKET_URL (or WS_URL) - WebSocket URL
  *   TOURNAMENT_BOT_ADDRESSES - comma-separated addresses
- *   TOURNAMENT_BOT_MODE - standard | elimination (default: standard)
+ *   TOURNAMENT_BOT_MODE - standard | freeroll (default: standard)
  */
 
 import path from 'path';
@@ -49,9 +49,9 @@ function getBotAddresses(): string[] {
   return DEFAULT_BOTS;
 }
 
-function getMode(): 'standard' | 'elimination' {
+function getMode(): 'standard' | 'freeroll' {
   const m = process.env.TOURNAMENT_BOT_MODE?.trim().toLowerCase();
-  return m === 'elimination' ? 'elimination' : 'standard';
+  return m === 'freeroll' ? 'freeroll' : 'standard';
 }
 
 const WS_URL =
@@ -247,7 +247,7 @@ async function runBot(
   await playBot(ws, label, tournamentId, joinRes);
 }
 
-/** Run bot in freeroll (handles elimination - stops when eliminated or busted). */
+/** Run bot in freeroll (stops when busted or tournament ends). */
 async function runBotFreeroll(
   ws: WebSocket,
   label: string,
@@ -270,7 +270,7 @@ async function runBotFreeroll(
   }
 
   let handNum = 0;
-  const maxHands = 50;
+  const maxHands = 25;
   let chips = 5000;
 
   while (handNum < maxHands && chips > 0) {
@@ -314,9 +314,8 @@ async function runStandardMode(bots: string[]): Promise<void> {
     name: `Bot Test ${Date.now()}`,
     buyInAmount: BUY_IN_WEI,
     startingChips: 5000,
-    maxHands: 50,
+    maxHands: 25,
     timeLimitMinutes: null,
-    rebuyConfig: { enabled: false, maxRebuys: 0 },
     tableTheme: { kind: 'image', id: 'default' },
     isPrivate: false,
     prizeDistributionType: 'top_10',
@@ -350,12 +349,11 @@ async function runStandardMode(bots: string[]): Promise<void> {
   );
 }
 
-async function runEliminationMode(bots: string[]): Promise<void> {
+async function runFreerollMode(bots: string[]): Promise<void> {
   const now = new Date();
   const registrationOpens = new Date(now.getTime() - 2 * 60 * 1000);
   const scheduledStart = new Date(now.getTime() + 90 * 1000);
   const durationMinutes = 10;
-  const eliminationInterval = 2;
 
   const creator = bots[0];
   const ws1 = await createWsClient(creator);
@@ -363,33 +361,23 @@ async function runEliminationMode(bots: string[]): Promise<void> {
   console.log('\nCreator (Bot_1) connected');
 
   const createRes = (await sendRequest(ws1, 'create_freeroll', {
-    name: `Elimination Test ${Date.now()}`,
-    freerollMode: 'elimination',
+    name: `Freeroll Test ${Date.now()}`,
     scheduledStartAt: scheduledStart.toISOString(),
     registrationOpensAt: registrationOpens.toISOString(),
     durationMinutes,
     startingChips: 5000,
-    maxHands: 100,
-    prizeDistributionType: 'top_10',
-    eliminationConfig: {
-      intervalType: 'time',
-      intervalValue: eliminationInterval,
-      eliminationPercentage: 20,
-      resetChipsAfterRound: false,
-      eliminationRoundsMin: 1,
-      eliminationRoundsMax: 5,
-    },
+    maxHands: 25,
+    prizeDistributionType: 'winner_takes_all', // min 1 player; use top_3/top_10 if testing with more bots
     reentryConfig: { enabled: false },
     actionTimerSeconds: null,
     tableTheme: { kind: 'image', id: 'default' },
     isPrivate: false,
-    minPlayers: 2,
     maxPlayers: bots.length,
   })) as { tournamentId: string };
 
   const tournamentId = createRes.tournamentId;
   console.log(`\nFreeroll created: ${tournamentId}`);
-  console.log(`  Start in ~90s, elimination every ${eliminationInterval} min (bottom 20%)`);
+  console.log(`  Start in ~90s, chip-count winner (5000 chips, 25 hands)`);
 
   const connections: WebSocket[] = [ws1];
 
@@ -430,9 +418,7 @@ async function runEliminationMode(bots: string[]): Promise<void> {
 
   connections.forEach((ws) => ws.close());
   console.log('\n--- Done ---');
-  console.log(
-    'Elimination: Bottom 20% eliminated each round. Payout when tournament ends (scheduler).'
-  );
+  console.log('Payout: Server distributes prizes when tournament ends (chip-count ranking).');
 }
 
 async function main() {
@@ -449,8 +435,8 @@ async function main() {
   console.log('Bots:', bots.length, process.env.TOURNAMENT_BOT_ADDRESSES ? '(from env)' : '(defaults)');
   bots.forEach((a, i) => console.log(`  Bot_${i + 1}: ${a}`));
 
-  if (mode === 'elimination') {
-    await runEliminationMode(bots);
+  if (mode === 'freeroll') {
+    await runFreerollMode(bots);
   } else {
     await runStandardMode(bots);
   }

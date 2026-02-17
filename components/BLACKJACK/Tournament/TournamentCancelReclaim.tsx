@@ -6,9 +6,8 @@ import { Theme } from '@/lib/theme';
 import { formatEther } from 'viem';
 import { pulsechain } from 'viem/chains';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
-import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS } from '@/lib/contracts';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
 import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
-import { tournamentPrizeEscrowV3Abi } from '@/abi/tournament-prize-escrow-v3';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
@@ -94,37 +93,22 @@ export function TournamentCancelReclaim({
     setSuccess(null);
 
     try {
-      const isV3 = onChainTournamentId != null;
-      if (isV3) {
-        // Escrow V3: uint256 tournament ID
-        const hash = await writeContractAsync({
-          address: TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS,
-          abi: tournamentPrizeEscrowV3Abi,
-          functionName: 'creatorReclaim',
-          args: [BigInt(onChainTournamentId)],
-          account: address,
-          chain: pulsechain,
-        });
-        setSuccess(`Funds reclaimed successfully! Transaction: ${hash.slice(0, 10)}...`);
-        onReclaim?.();
-      } else {
-        // Escrow V1/V2: bytes32 tournament ID
-        if (!TOURNAMENT_PRIZE_ESCROW_ADDRESS || TOURNAMENT_PRIZE_ESCROW_ADDRESS === ESCROW_ZERO) {
-          setError('Escrow contract not configured for this tournament type');
-          return;
-        }
-        const idBytes32 = tournamentIdToBytes32(tournamentId);
-        const hash = await writeContractAsync({
-          address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-          abi: tournamentPrizeEscrowV2Abi,
-          functionName: 'creatorReclaim',
-          args: [idBytes32],
-          account: address,
-          chain: pulsechain,
-        });
-        setSuccess(`Funds reclaimed successfully! Transaction: ${hash.slice(0, 10)}...`);
-        onReclaim?.();
+      // Custom token always uses V2 (bytes32) escrow
+      if (!TOURNAMENT_PRIZE_ESCROW_ADDRESS || TOURNAMENT_PRIZE_ESCROW_ADDRESS === ESCROW_ZERO) {
+        setError('Escrow contract not configured for this tournament type');
+        return;
       }
+      const idBytes32 = tournamentIdToBytes32(tournamentId);
+      const hash = await writeContractAsync({
+        address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
+        abi: tournamentPrizeEscrowV2Abi,
+        functionName: 'creatorReclaim',
+        args: [idBytes32],
+        account: address,
+        chain: pulsechain,
+      });
+      setSuccess(`Funds reclaimed successfully! Transaction: ${hash.slice(0, 10)}...`);
+      onReclaim?.();
     } catch (err: any) {
       setError(err.message || 'Failed to reclaim funds');
     } finally {

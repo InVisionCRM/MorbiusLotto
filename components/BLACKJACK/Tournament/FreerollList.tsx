@@ -12,8 +12,6 @@ function formatPhase(phase: string | null): string {
       return 'Registration';
     case 'active':
       return 'Live';
-    case 'elimination_round':
-      return 'Elimination';
     case 'completed':
       return 'Completed';
     default:
@@ -47,7 +45,6 @@ interface FreerollListProps extends Pick<UseFreerollOptions, 'wsClient'> {
   includePast?: boolean;
   onRegistered?: (tournamentId: string) => void;
   onJoined?: (tournamentId: string) => void;
-  onReentered?: (tournamentId: string) => void;
 }
 
 export function FreerollList({
@@ -55,7 +52,6 @@ export function FreerollList({
   includePast = false,
   onRegistered,
   onJoined,
-  onReentered,
 }: FreerollListProps) {
   const {
     freerollList,
@@ -64,7 +60,6 @@ export function FreerollList({
     fetchFreerollList,
     registerFreeroll,
     joinFreeroll,
-    reentryFreeroll,
     clearError,
   } = useFreeroll({ wsClient });
 
@@ -80,11 +75,6 @@ export function FreerollList({
   const handleJoin = async (t: FreerollListItemPayload) => {
     const result = await joinFreeroll(t.id);
     if (result) onJoined?.(t.id);
-  };
-
-  const handleReentry = async (t: FreerollListItemPayload) => {
-    const result = await reentryFreeroll(t.id);
-    if (result) onReentered?.(t.id);
   };
 
   return (
@@ -153,23 +143,14 @@ export function FreerollList({
                         Register
                       </button>
                     )}
-                    {(t.current_phase === 'active' || t.current_phase === 'elimination_round') && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleJoin(t)}
-                          className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:opacity-90 border border-cyan-500/30"
-                        >
-                          Join
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleReentry(t)}
-                          className="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-600 text-white hover:bg-slate-500 border border-white/10"
-                        >
-                          Re-enter
-                        </button>
-                      </>
+                    {t.current_phase === 'active' && (
+                      <button
+                        type="button"
+                        onClick={() => handleJoin(t)}
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:opacity-90 border border-cyan-500/30"
+                      >
+                        Join
+                      </button>
                     )}
                   </div>
                 </div>

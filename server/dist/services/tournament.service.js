@@ -37,20 +37,20 @@ exports.TournamentService = exports.TOURNAMENT_CONFIG = void 0;
 const logger_1 = require("../utils/logger");
 const escrow_payout_1 = require("../utils/escrow-payout");
 const morbius_tournament_1 = require("../utils/morbius-tournament");
-const escrow_payout_2 = require("../utils/escrow-payout");
 const escrow_status_1 = require("../utils/escrow-status");
 // Tournament constants
 exports.TOURNAMENT_CONFIG = {
     BUY_IN_AMOUNT: BigInt('1000000000000000000000'), // 1,000 MORBIUS (18 decimals)
     STARTING_CHIPS: 5000,
-    MAX_HANDS: 50,
+    MAX_HANDS: 25,
     MIN_PLAYERS_FOR_PRIZES: 2,
     // Bet limits for tournament chips
     MIN_BET: 50,
     MAX_BET: 5000, // Can go all-in
-    // Prize distribution percentages (out of 84% distributable pool)
-    PRIZE_PERCENTAGES: [40, 20, 10, 2, 2, 2, 2, 2, 2, 2], // 1st through 10th
-    HOUSE_PERCENTAGE: 16, // Goes to burn/keeper/deployer
+    // Prize distribution percentages (sum to 100% of distributable pool)
+    PRIZE_PERCENTAGES: [56, 20, 10, 2, 2, 2, 2, 2, 2, 2], // 1st through 10th
+    PROTOCOL_FEE_PERCENT: 3,
+    CREATOR_FEE_PERCENT: 2,
 };
 class TournamentService {
     pool;
@@ -68,20 +68,12 @@ class TournamentService {
         return address?.toLowerCase() || address;
     }
     normalizeTournament(row) {
-        // Parse rebuy_config from JSONB
         let rebuyConfig = { enabled: false, maxRebuys: 0 };
         if (row.rebuy_config) {
-            if (typeof row.rebuy_config === 'string') {
-                try {
-                    rebuyConfig = JSON.parse(row.rebuy_config);
-                }
-                catch {
-                    // Keep default
-                }
+            try {
+                rebuyConfig = typeof row.rebuy_config === 'string' ? JSON.parse(row.rebuy_config) : row.rebuy_config;
             }
-            else {
-                rebuyConfig = row.rebuy_config;
-            }
+            catch { /* keep default */ }
         }
         // Parse table_theme from JSONB
         let tableTheme = { kind: 'image', id: 'BigRich' };
@@ -142,8 +134,8 @@ class TournamentService {
             custom_image: row.custom_image || null,
             prize_token_address: row.prize_token_address ?? null,
             prize_token_decimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
-            creator_fee_percent: Number(row.creator_fee_percent ?? 0),
-            platform_fee_percent: Number(row.platform_fee_percent ?? 16),
+            creator_fee_percent: Number(row.creator_fee_percent ?? 2),
+            platform_fee_percent: Number(row.platform_fee_percent ?? 3),
             tournament_type: row.tournament_type ?? null,
             on_chain_tournament_id: row.on_chain_tournament_id != null ? Number(row.on_chain_tournament_id) : null,
         };
@@ -175,38 +167,32 @@ class TournamentService {
     /**
      * Get prize percentages for a distribution type
      */
-    getPrizePercentages(type, custom) {
-        let result;
+    getPrizePercentages(type) {
         switch (type) {
             case 'winner_takes_all':
-                result = [100];
-                break;
+                return [100];
             case 'top_3':
-                result = [50, 30, 20];
-                break;
-            case 'top_3_steep':
-                result = [60, 25, 15];
-                break;
+                return [50, 30, 20];
             case 'top_5':
-                result = [40, 25, 15, 12, 8];
-                break;
-            case 'custom':
-                result = custom || [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
-                break;
+                return [40, 25, 15, 12, 8];
             case 'top_10':
             default:
-                result = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
-                break;
+                return [56, 20, 10, 2, 2, 2, 2, 2, 2, 2];
         }
-        // Defensive check: ensure result is always a valid array
-        if (!Array.isArray(result) || result.length === 0) {
-            result = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+    }
+    /** Min players = number of paid places (industry standard: don't run without full prize pool). */
+    getMinPlayersFromPrizeDistribution(type) {
+        switch (type) {
+            case 'winner_takes_all':
+                return 1;
+            case 'top_3':
+                return 3;
+            case 'top_5':
+                return 5;
+            case 'top_10':
+            default:
+                return 10;
         }
-        // Ensure custom array is valid if provided
-        if (type === 'custom' && custom && (!Array.isArray(custom) || custom.length === 0)) {
-            result = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
-        }
-        return result;
     }
     /**
      * Get the current active tournament, creating one if needed
@@ -591,7 +577,8 @@ class TournamentService {
             const useEscrow = Boolean(tournament.prize_token_address);
             const isOnChain = tournament.on_chain_tournament_id != null;
             const useMorbiusPayout = isOnChain && !useEscrow;
-            const useEscrowV3 = isOnChain && useEscrow;
+            // Custom token: always use V2 (bytes32). V3 deprecated for reliability.
+            const useEscrowV2 = useEscrow;
             // Apply prizes
             for (const row of prizesResult.rows) {
                 const prizeAmount = this.toBigInt(row.prize_amount);
@@ -612,19 +599,7 @@ class TournamentService {
                             throw new Error(`Prize payout failed for ${row.player_address}: ${result.error || 'Unknown error'}`);
                         }
                     }
-                    else if (useEscrowV3) {
-                        const result = await (0, escrow_payout_2.sendEscrowV3Payout)(tournament.on_chain_tournament_id, row.player_address, prizeAmount);
-                        if (!result.success) {
-                            logger_1.logger.error('Escrow V3 payout failed; rolling back tournament completion', {
-                                tournamentId,
-                                winner: row.player_address,
-                                amount: prizeAmount.toString(),
-                                error: result.error,
-                            });
-                            throw new Error(`Escrow payout failed for ${row.player_address}: ${result.error || 'Unknown error'}`);
-                        }
-                    }
-                    else if (useEscrow) {
+                    else if (useEscrowV2) {
                         const result = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, row.player_address, prizeAmount);
                         if (!result.success) {
                             logger_1.logger.error('Escrow payout failed; rolling back tournament completion', {
@@ -661,10 +636,9 @@ class TournamentService {
                     await client.query(`UPDATE tournament_entries SET final_rank = $1 WHERE id = $2`, [row.final_rank, row.entry_id]);
                 }
             }
-            // Distribute fees to platform wallet and creator
-            // Use actualPrizePool (synced from contract for on-chain tournaments)
-            const platformFeePercent = tournament.platform_fee_percent;
-            const creatorFeePercent = tournament.creator_fee_percent;
+            // Distribute fees: hardcoded 3% protocol, 2% creator
+            const platformFeePercent = 3;
+            const creatorFeePercent = 2;
             const totalPool = actualPrizePool; // Use synced pool for accurate fee calculations
             if (platformFeePercent > 0) {
                 const platformFeeAmount = (totalPool * BigInt(platformFeePercent)) / 100n;
@@ -677,14 +651,7 @@ class TournamentService {
                             throw new Error(`Platform fee payout failed: ${result.error || 'Unknown error'}`);
                         }
                     }
-                    else if (useEscrowV3) {
-                        const result = await (0, escrow_payout_2.sendEscrowV3Payout)(tournament.on_chain_tournament_id, platformWallet, platformFeeAmount);
-                        if (!result.success) {
-                            logger_1.logger.error('Platform fee Escrow V3 payout failed; rolling back', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
-                            throw new Error(`Platform fee payout failed: ${result.error || 'Unknown error'}`);
-                        }
-                    }
-                    else if (useEscrow) {
+                    else if (useEscrowV2) {
                         const result = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, platformWallet, platformFeeAmount);
                         if (!result.success) {
                             logger_1.logger.error('Platform fee escrow payout failed; rolling back tournament completion', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
@@ -708,14 +675,7 @@ class TournamentService {
                             throw new Error(`Creator fee payout failed: ${result.error || 'Unknown error'}`);
                         }
                     }
-                    else if (useEscrowV3) {
-                        const result = await (0, escrow_payout_2.sendEscrowV3Payout)(tournament.on_chain_tournament_id, tournament.creator_address, creatorFeeAmount);
-                        if (!result.success) {
-                            logger_1.logger.error('Creator fee Escrow V3 payout failed; rolling back', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
-                            throw new Error(`Creator fee payout failed: ${result.error || 'Unknown error'}`);
-                        }
-                    }
-                    else if (useEscrow) {
+                    else if (useEscrowV2) {
                         const result = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, tournament.creator_address, creatorFeeAmount);
                         if (!result.success) {
                             logger_1.logger.error('Creator fee escrow payout failed; rolling back tournament completion', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
@@ -738,28 +698,6 @@ class TournamentService {
                 await client.query(`UPDATE tournaments SET status = 'completed', ended_at = NOW() WHERE id = $1`, [tournamentId]);
             }
             await client.query('COMMIT');
-            // Reclaim any remaining escrow balance so funds never sit after tournament ends
-            if (useEscrowV3) {
-                const reclaimWallet = (process.env.ESCROW_REMAINDER_WALLET || process.env.PLATFORM_FEE_WALLET);
-                if (reclaimWallet && reclaimWallet.startsWith('0x')) {
-                    const reclaimResult = await (0, escrow_payout_2.sendEscrowV3RemainderTo)(tournament.on_chain_tournament_id, reclaimWallet);
-                    if (!reclaimResult.success && reclaimResult.error) {
-                        logger_1.logger.warn('Escrow V3 remainder reclaim failed (tournament already completed)', {
-                            tournamentId,
-                            error: reclaimResult.error,
-                        });
-                    }
-                }
-            }
-            else if (useEscrow) {
-                const reclaimResult = await (0, escrow_payout_1.sendEscrowRemainderToReclaimWallet)(tournamentId);
-                if (!reclaimResult.success && reclaimResult.error) {
-                    logger_1.logger.warn('Escrow remainder reclaim failed (tournament already completed)', {
-                        tournamentId,
-                        error: reclaimResult.error,
-                    });
-                }
-            }
             // Update MorbiusTournament contract status when using on-chain tournament
             if (tournament.on_chain_tournament_id != null) {
                 const setResult = await (0, morbius_tournament_1.setMorbiusTournamentCompleted)(tournament.on_chain_tournament_id);
@@ -971,7 +909,7 @@ class TournamentService {
         if (t.tournament_type !== 'freeroll') {
             throw new Error('Not a freeroll tournament');
         }
-        if (t.current_phase !== 'registration' && t.current_phase !== 'active' && t.current_phase !== 'elimination_round') {
+        if (t.current_phase !== 'registration' && t.current_phase !== 'active') {
             throw new Error('Cannot join at this phase');
         }
         const statusResult = await this.pool.query(`SELECT registration_status FROM tournament_entries WHERE id = $1`, [entry.id]);
@@ -987,7 +925,7 @@ class TournamentService {
         return updated;
     }
     /**
-     * Re-enter a freeroll during the reentry window (after elimination).
+     * Re-enter a freeroll during the reentry window (if busted).
      */
     async reentryFreeroll(playerAddress, tournamentId) {
         const normalizedAddress = this.normalizeAddress(playerAddress);
@@ -1054,13 +992,11 @@ class TournamentService {
         if (params.timeLimitMinutes) {
             endsAt = new Date(Date.now() + params.timeLimitMinutes * 60 * 1000);
         }
-        // Get prize percentages
-        const prizePercentages = this.getPrizePercentages(params.prizeDistributionType, params.customPrizePercentages);
+        const prizePercentages = this.getPrizePercentages(params.prizeDistributionType);
         const hasCustomPrizeToken = params.prizeTokenAddress != null && params.prizeTokenAddress.trim() !== '';
         const initialPrizePool = hasCustomPrizeToken && params.prizeAmount ? params.prizeAmount : '0';
-        // Fee percentages: platform from env (or passed param), creator from request
-        const platformFeePercent = params.platformFeePercent ?? parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
-        const creatorFeePercent = params.creatorFeePercent ?? 0;
+        const platformFeePercent = 3;
+        const creatorFeePercent = 2;
         const onChainId = params.onChainTournamentId != null ? Number(params.onChainTournamentId) : null;
         const query = `
       INSERT INTO tournaments (
@@ -1095,7 +1031,7 @@ class TournamentService {
             params.startingChips,
             params.maxHands,
             params.timeLimitMinutes,
-            JSON.stringify(params.rebuyConfig),
+            JSON.stringify({ enabled: false, maxRebuys: 0 }),
             JSON.stringify(params.tableTheme),
             params.isPrivate,
             pinCode,
@@ -1157,33 +1093,19 @@ class TournamentService {
         if (params.durationMinutes < 5 || params.durationMinutes > 1440) {
             throw new Error('Duration must be 5–1440 minutes');
         }
-        const validStartingChips = [1000, 5000, 10000, 25000];
-        if (!validStartingChips.includes(params.startingChips)) {
-            throw new Error('Invalid starting chips');
+        if (params.startingChips !== exports.TOURNAMENT_CONFIG.STARTING_CHIPS) {
+            throw new Error('Starting chips must be 5000');
         }
-        if (params.maxHands < 1 || params.maxHands > 200) {
-            throw new Error('Max hands must be 1–200');
+        if (params.maxHands !== exports.TOURNAMENT_CONFIG.MAX_HANDS) {
+            throw new Error('Max hands must be 25');
         }
-        const minPlayers = Math.min(100, Math.max(2, params.minPlayers ?? 2));
+        // Min players = number of paid places (don't run without full prize pool)
+        const minPlayers = this.getMinPlayersFromPrizeDistribution(params.prizeDistributionType);
         const maxPlayers = params.maxPlayers != null
             ? Math.min(1000, Math.max(2, params.maxPlayers))
             : null;
         if (maxPlayers != null && minPlayers > maxPlayers) {
             throw new Error('Min players cannot exceed max players');
-        }
-        if (params.freerollMode === 'elimination') {
-            const ec = params.eliminationConfig;
-            if (!ec || typeof ec.intervalType !== 'string' || typeof ec.intervalValue !== 'number') {
-                throw new Error('Elimination mode requires eliminationConfig with intervalType and intervalValue');
-            }
-            const roundsMin = ec.eliminationRoundsMin ?? 1;
-            const roundsMax = ec.eliminationRoundsMax ?? 20;
-            if (roundsMin < 1 || roundsMax < 1 || roundsMin > roundsMax) {
-                throw new Error('Elimination rounds min/max must be 1+ and min <= max');
-            }
-            if (ec.intervalValue < 1) {
-                throw new Error('Elimination interval must be at least 1');
-            }
         }
         let pinCode = null;
         if (params.isPrivate) {
@@ -1191,11 +1113,10 @@ class TournamentService {
                 ? params.pinCode.trim()
                 : this.generatePinCode();
         }
-        const prizePercentages = this.getPrizePercentages(params.prizeDistributionType, params.customPrizePercentages);
+        const prizePercentages = this.getPrizePercentages(params.prizeDistributionType);
         const rebuyConfig = { enabled: false, maxRebuys: 0 };
-        // Fee percentages
-        const platformFeePercent = params.platformFeePercent ?? parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
-        const creatorFeePercent = params.creatorFeePercent ?? 0;
+        const platformFeePercent = 3;
+        const creatorFeePercent = 2;
         // Calculate ends_at
         const endsAt = new Date(scheduledStart.getTime() + params.durationMinutes * 60 * 1000);
         // Determine initial phase based on current time
@@ -1252,14 +1173,12 @@ class TournamentService {
             scheduledStart.toISOString(),
             registrationOpens.toISOString(),
             params.durationMinutes,
-            params.freerollMode,
-            params.eliminationConfig ? JSON.stringify(params.eliminationConfig) : null,
-            JSON.stringify(params.reentryConfig),
-            params.actionTimerSeconds,
+            'standard_chip_count',
+            null,
+            JSON.stringify({ enabled: false }),
+            null,
             initialPhase,
-            Array.isArray(params.tiebreakerOrder) && params.tiebreakerOrder.length > 0
-                ? JSON.stringify(params.tiebreakerOrder)
-                : JSON.stringify(['highest_chips', 'blackjacks', 'hands_won', 'entry_time']),
+            JSON.stringify(['highest_chips', 'blackjacks', 'hands_won', 'entry_time']),
             creatorFeePercent,
             platformFeePercent,
             endsAt.toISOString(),
@@ -1269,37 +1188,6 @@ class TournamentService {
         const tournamentId = row.id;
         await this.pool.query(`INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
        VALUES ($1, 'start', $2, 'pending'), ($1, 'end', $3, 'pending')`, [tournamentId, scheduledStart.toISOString(), endsAt.toISOString()]);
-        // Time-based elimination: schedule elimination_round events
-        if (params.freerollMode === 'elimination' && params.eliminationConfig?.intervalType === 'time') {
-            const ec = params.eliminationConfig;
-            const intervalMins = Math.max(1, ec.intervalValue);
-            const roundsMin = ec.eliminationRoundsMin ?? 1;
-            const roundsMax = ec.eliminationRoundsMax ?? 20;
-            const possibleByTime = Math.floor(params.durationMinutes / intervalMins);
-            const numRounds = Math.min(roundsMax, Math.max(roundsMin, possibleByTime));
-            if (numRounds >= 1) {
-                const eventRows = [];
-                for (let r = 1; r <= numRounds; r++) {
-                    const at = new Date(scheduledStart.getTime() + r * intervalMins * 60 * 1000);
-                    if (at < endsAt) {
-                        eventRows.push({
-                            tournament_id: tournamentId,
-                            event_type: 'elimination_round',
-                            scheduled_at: at.toISOString(),
-                            status: 'pending',
-                            metadata: JSON.stringify({ round_number: r }),
-                        });
-                    }
-                }
-                if (eventRows.length > 0) {
-                    const values = eventRows
-                        .map((_, i) => `($${1 + i * 5}, $${2 + i * 5}, $${3 + i * 5}, $${4 + i * 5}, $${5 + i * 5}::jsonb)`)
-                        .join(', ');
-                    const flatParams = eventRows.flatMap((e) => [e.tournament_id, e.event_type, e.scheduled_at, e.status, e.metadata]);
-                    await this.pool.query(`INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status, metadata) VALUES ${values}`, flatParams);
-                }
-            }
-        }
         logger_1.logger.info('Freeroll tournament created', {
             tournamentId,
             name,
@@ -1334,14 +1222,11 @@ class TournamentService {
         if (params.buyInAmount > maxBuyIn) {
             return { valid: false, error: 'Maximum buy-in is 1,000,000 MORBIUS' };
         }
-        // Validate starting chips
-        const validStartingChips = [1000, 5000, 10000, 25000];
-        if (!validStartingChips.includes(params.startingChips)) {
-            return { valid: false, error: 'Invalid starting chips amount' };
+        if (params.startingChips !== exports.TOURNAMENT_CONFIG.STARTING_CHIPS) {
+            return { valid: false, error: 'Starting chips must be 5000' };
         }
-        // Validate max hands (1-200 range)
-        if (params.maxHands < 1 || params.maxHands > 200) {
-            return { valid: false, error: 'Max hands must be between 1 and 200' };
+        if (params.maxHands !== exports.TOURNAMENT_CONFIG.MAX_HANDS) {
+            return { valid: false, error: 'Max hands must be 25' };
         }
         // Validate custom prize token (if set)
         if (params.prizeTokenAddress != null && params.prizeTokenAddress.trim() !== '') {
@@ -1361,21 +1246,9 @@ class TournamentService {
         if (!validTimeLimits.includes(params.timeLimitMinutes)) {
             return { valid: false, error: 'Invalid time limit' };
         }
-        // Rebuys are disabled - reject if enabled
-        if (params.rebuyConfig?.enabled) {
-            return { valid: false, error: 'Rebuys are not supported' };
-        }
-        // Validate prize distribution
-        const validTypes = ['winner_takes_all', 'top_3', 'top_3_steep', 'top_5', 'top_10', 'custom'];
+        const validTypes = ['winner_takes_all', 'top_3', 'top_5', 'top_10'];
         if (!validTypes.includes(params.prizeDistributionType)) {
             return { valid: false, error: 'Invalid prize distribution type' };
-        }
-        // Validate custom percentages if provided
-        if (params.prizeDistributionType === 'custom' && params.customPrizePercentages) {
-            const sum = params.customPrizePercentages.reduce((a, b) => a + b, 0);
-            if (sum !== 100) {
-                return { valid: false, error: 'Custom prize percentages must sum to 100' };
-            }
         }
         return { valid: true };
     }
@@ -1424,40 +1297,25 @@ class TournamentService {
                 registration_opens_at: row.registration_opens_at ?? null,
                 current_phase: row.current_phase ?? null,
                 duration_minutes: row.duration_minutes != null ? Number(row.duration_minutes) : null,
-                creator_fee_percent: Number(row.creator_fee_percent ?? 0),
-                platform_fee_percent: Number(row.platform_fee_percent ?? 16),
+                creator_fee_percent: Number(row.creator_fee_percent ?? 2),
+                platform_fee_percent: Number(row.platform_fee_percent ?? 3),
                 on_chain_tournament_id: row.on_chain_tournament_id != null ? Number(row.on_chain_tournament_id) : null,
             };
         });
-        // For custom-token tournaments, fetch escrow funding status from chain
+        // For custom-token tournaments, fetch escrow funding status from V2 (bytes32)
         await Promise.all(list.map(async (item) => {
             if (!item.prize_token_address)
                 return;
-            if (item.on_chain_tournament_id != null) {
-                const pool = await (0, escrow_status_1.getEscrowV3PoolStatus)(item.on_chain_tournament_id);
-                if (pool) {
-                    item.escrow_funded = pool.totalDeposited > 0n;
-                    item.escrow_total_deposited = pool.totalDeposited.toString();
-                    item.escrow_token = pool.token;
-                }
-                else {
-                    item.escrow_funded = false;
-                    item.escrow_total_deposited = '0';
-                    item.escrow_token = item.prize_token_address;
-                }
+            const pool = await (0, escrow_status_1.getEscrowPoolStatus)(item.id);
+            if (pool) {
+                item.escrow_funded = pool.totalDeposited > 0n;
+                item.escrow_total_deposited = pool.totalDeposited.toString();
+                item.escrow_token = pool.token;
             }
             else {
-                const pool = await (0, escrow_status_1.getEscrowPoolStatus)(item.id);
-                if (pool) {
-                    item.escrow_funded = pool.totalDeposited > 0n;
-                    item.escrow_total_deposited = pool.totalDeposited.toString();
-                    item.escrow_token = pool.token;
-                }
-                else {
-                    item.escrow_funded = false;
-                    item.escrow_total_deposited = '0';
-                    item.escrow_token = item.prize_token_address;
-                }
+                item.escrow_funded = false;
+                item.escrow_total_deposited = '0';
+                item.escrow_token = item.prize_token_address;
             }
         }));
         return list;
@@ -1596,7 +1454,7 @@ class TournamentService {
             return null;
         }
         const entryCount = await this.getTournamentEntryCount(tournamentId);
-        const prizePercentages = this.getPrizePercentages(tournament.prize_distribution_type, tournament.prize_percentages);
+        const prizePercentages = this.getPrizePercentages(tournament.prize_distribution_type);
         return {
             tournament,
             entryCount,
@@ -1660,7 +1518,7 @@ class TournamentService {
         };
     }
     /**
-     * Execute a pending freeroll scheduled event (start, elimination_round, end, reentry_close).
+     * Execute a pending freeroll scheduled event (start, end, reentry_close).
      * Called by FreerollSchedulerService. Only marks the event as executed on success.
      */
     async executeScheduledEvent(event) {
@@ -1669,9 +1527,6 @@ class TournamentService {
             switch (eventType) {
                 case 'start':
                     await this.handleFreerollStart(tournamentId);
-                    break;
-                case 'elimination_round':
-                    await this.handleEliminationRound(tournamentId, metadata);
                     break;
                 case 'end':
                     await this.handleFreerollEnd(tournamentId);
@@ -1692,19 +1547,27 @@ class TournamentService {
             throw error;
         }
     }
-    /** Transition freeroll to active and mark no-shows. */
+    /** Transition freeroll to active and mark no-shows. Cancels if min players not met. */
     async handleFreerollStart(tournamentId) {
         logger_1.logger.info('handleFreerollStart: tournamentId=%s', tournamentId);
-        // Get tournament to ensure ends_at is set
-        const tournamentResult = await this.pool.query(`SELECT scheduled_start_at, duration_minutes, ends_at FROM tournaments WHERE id = $1 AND tournament_type = 'freeroll'`, [tournamentId]);
+        const tournamentResult = await this.pool.query(`SELECT t.scheduled_start_at, t.duration_minutes, t.ends_at, t.prize_distribution_type, t.min_players,
+              t.buy_in_amount, t.prize_token_address, t.on_chain_tournament_id, t.creator_address
+       FROM tournaments t WHERE t.id = $1 AND t.tournament_type = 'freeroll'`, [tournamentId]);
         if (tournamentResult.rows.length === 0) {
             logger_1.logger.warn('handleFreerollStart: tournament not found: %s', tournamentId);
             return;
         }
         const t = tournamentResult.rows[0];
+        const minPlayers = Number(t.min_players ?? this.getMinPlayersFromPrizeDistribution(t.prize_distribution_type || 'top_10'));
+        const entryCountResult = await this.pool.query(`SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 AND registration_status IN ('registered', 'joined')`, [tournamentId]);
+        const entryCount = parseInt(entryCountResult.rows[0]?.c ?? '0', 10);
+        if (entryCount < minPlayers) {
+            logger_1.logger.info('handleFreerollStart: insufficient players (%d < %d), cancelling tournament', entryCount, minPlayers);
+            await this.cancelTournamentDueToInsufficientPlayers(tournamentId);
+            return;
+        }
         const scheduledStart = t.scheduled_start_at ? new Date(t.scheduled_start_at) : null;
         const durationMinutes = t.duration_minutes ? Number(t.duration_minutes) : null;
-        // Ensure ends_at is set if not already set
         let endsAt = t.ends_at ? new Date(t.ends_at) : null;
         if (!endsAt && scheduledStart && durationMinutes) {
             endsAt = new Date(scheduledStart.getTime() + durationMinutes * 60 * 1000);
@@ -1713,64 +1576,52 @@ class TournamentService {
         await this.pool.query(`UPDATE tournaments SET current_phase = 'active' WHERE id = $1 AND tournament_type = 'freeroll'`, [tournamentId]);
         await this.pool.query(`UPDATE tournament_entries SET registration_status = 'no_show' WHERE tournament_id = $1 AND registration_status = 'registered'`, [tournamentId]);
     }
-    /** Run elimination round: eliminate bottom % by chips (with tiebreakers), optionally reset chips for survivors. */
-    async handleEliminationRound(tournamentId, metadata) {
-        const roundNumber = typeof metadata?.round_number === 'number' ? metadata.round_number : 1;
-        const tournamentResult = await this.pool.query(`SELECT elimination_config, tiebreaker_order, starting_chips FROM tournaments WHERE id = $1 AND tournament_type = 'freeroll'`, [tournamentId]);
-        if (tournamentResult.rows.length === 0) {
-            logger_1.logger.warn('handleEliminationRound: tournament not found or not freeroll: %s', tournamentId);
-            return;
-        }
-        const row = tournamentResult.rows[0];
-        const eliminationConfig = row.elimination_config;
-        const tiebreakerOrder = row.tiebreaker_order ?? ['highest_chips', 'blackjacks', 'hands_won', 'entry_time'];
-        const startingChips = Number(row.starting_chips);
-        if (!eliminationConfig || typeof eliminationConfig.eliminationPercentage !== 'number') {
-            logger_1.logger.warn('handleEliminationRound: missing elimination_config or eliminationPercentage: %s', tournamentId);
-            return;
-        }
-        const eliminationPct = Math.min(50, Math.max(5, eliminationConfig.eliminationPercentage));
-        const resetChipsAfterRound = Boolean(eliminationConfig.resetChipsAfterRound);
-        const entriesResult = await this.pool.query(`SELECT entry_id, player_address, rank_position, chips_remaining FROM get_entries_for_elimination($1, $2::jsonb)`, [tournamentId, JSON.stringify(tiebreakerOrder)]);
-        const entries = entriesResult.rows;
-        const count = entries.length;
-        if (count === 0) {
-            logger_1.logger.info('handleEliminationRound: no playing entries, skipping round %s', roundNumber);
-            return;
-        }
-        const toEliminate = Math.min(count - 1, Math.ceil((count * eliminationPct) / 100));
-        if (toEliminate <= 0) {
-            await this.pool.query(`UPDATE tournaments SET current_elimination_round = $1, current_phase = 'elimination_round' WHERE id = $2`, [roundNumber, tournamentId]);
-            return;
-        }
-        const toEliminateList = entries.filter((e) => e.rank_position <= toEliminate);
-        const thresholdChips = toEliminateList.length > 0
-            ? toEliminateList[toEliminateList.length - 1].chips_remaining
-            : '0';
-        const eliminatedEntryIds = toEliminateList.map((e) => e.entry_id);
-        const survivorCount = count - eliminatedEntryIds.length;
-        const eliminatedEntriesJson = JSON.stringify(toEliminateList.map((e) => ({ entry_id: e.entry_id, player_address: e.player_address, chips: e.chips_remaining })));
+    /**
+     * Cancel tournament due to insufficient players at scheduled start.
+     * Refunds buy-ins (credit MORBIUS to player balance). Cancels escrow for custom token.
+     */
+    async cancelTournamentDueToInsufficientPlayers(tournamentId) {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            for (const entryId of eliminatedEntryIds) {
-                await client.query(`UPDATE tournament_entries SET status = 'busted', eliminated_in_round = $1, chips_at_elimination = chips_remaining WHERE id = $2`, [roundNumber, entryId]);
+            const tournamentResult = await client.query(`SELECT * FROM tournaments WHERE id = $1 FOR UPDATE`, [tournamentId]);
+            if (tournamentResult.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return;
             }
-            await client.query(`INSERT INTO tournament_eliminations (tournament_id, round_number, eliminated_entries, threshold_chips, survivors_count)
-         VALUES ($1, $2, $3::jsonb, $4::bigint, $5)`, [tournamentId, roundNumber, eliminatedEntriesJson, thresholdChips, survivorCount]);
-            if (resetChipsAfterRound && survivorCount > 0) {
-                await client.query(`UPDATE tournament_entries SET chips_remaining = $1, elimination_stats = '{"blackjacks": 0, "hands_won": 0, "hands_played": 0}' WHERE tournament_id = $2 AND status = 'playing' AND registration_status = 'joined'`, [startingChips, tournamentId]);
+            const tournament = this.normalizeTournament(tournamentResult.rows[0]);
+            const entriesResult = await client.query(`SELECT * FROM tournament_entries WHERE tournament_id = $1`, [tournamentId]);
+            const entries = entriesResult.rows;
+            if (tournament.buy_in_amount > 0n) {
+                for (const entry of entries) {
+                    const refundAmount = this.toBigInt(entry.total_buy_in || tournament.buy_in_amount);
+                    if (refundAmount > 0n) {
+                        await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [refundAmount.toString(), entry.player_address]);
+                        logger_1.logger.info('Refunded buy-in for cancelled tournament (insufficient players)', {
+                            tournamentId,
+                            player: entry.player_address,
+                            amount: refundAmount.toString(),
+                        });
+                    }
+                }
             }
-            await client.query(`UPDATE tournaments SET current_elimination_round = $1, current_phase = 'elimination_round' WHERE id = $2`, [roundNumber, tournamentId]);
+            await client.query(`UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), current_phase = 'completed' WHERE id = $1`, [tournamentId]);
+            if (tournament.prize_token_address) {
+                const { cancelTournamentInEscrow } = await Promise.resolve().then(() => __importStar(require('../utils/escrow-payout')));
+                const cancelResult = await cancelTournamentInEscrow(tournamentId);
+                if (!cancelResult.success && cancelResult.error) {
+                    logger_1.logger.warn('Failed to cancel tournament in escrow (insufficient players)', {
+                        tournamentId,
+                        error: cancelResult.error,
+                    });
+                }
+            }
             await client.query('COMMIT');
-            logger_1.logger.info('handleEliminationRound: tournamentId=%s round=%s eliminated=%s survivors=%s', tournamentId, roundNumber, eliminatedEntryIds.length, survivorCount);
-            if (survivorCount <= 1) {
-                await this.distributePrizes(tournamentId);
-            }
+            logger_1.logger.info('Tournament cancelled due to insufficient players', { tournamentId, entryCount: entries.length });
         }
-        catch (e) {
+        catch (error) {
             await client.query('ROLLBACK');
-            throw e;
+            throw error;
         }
         finally {
             client.release();
@@ -1792,8 +1643,8 @@ class TournamentService {
             buyInAmount: String(row.buy_in_amount ?? '0'),
             prizePool: String(row.prize_pool ?? '0'),
             entryCount: Number(row.entry_count ?? 0),
-            creatorFeePercent: Number(row.creator_fee_percent ?? 0),
-            platformFeePercent: Number(row.platform_fee_percent ?? 16),
+            creatorFeePercent: Number(row.creator_fee_percent ?? 2),
+            platformFeePercent: Number(row.platform_fee_percent ?? 3),
             creatorFeeEarned: String(row.creator_fee_earned ?? '0'),
             prizeDistributionType: row.prize_distribution_type || 'top_10',
             createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
@@ -1938,29 +1789,15 @@ class TournamentService {
             }
             // Mark tournament as cancelled
             await client.query(`UPDATE tournaments SET status = 'cancelled', ended_at = NOW() WHERE id = $1`, [tournamentId]);
-            // If tournament has custom prize token, mark as cancelled in escrow
+            // If tournament has custom prize token, mark as cancelled in escrow (always V2 bytes32)
             if (tournament.prize_token_address) {
-                if (isOnChain) {
-                    // Use Escrow V3 cancellation
-                    const { cancelEscrowV3Tournament } = await Promise.resolve().then(() => __importStar(require('../utils/escrow-payout')));
-                    const cancelResult = await cancelEscrowV3Tournament(tournament.on_chain_tournament_id);
-                    if (!cancelResult.success && cancelResult.error) {
-                        logger_1.logger.warn('Failed to cancel tournament in Escrow V3 (tournament marked cancelled in DB)', {
-                            tournamentId,
-                            error: cancelResult.error,
-                        });
-                    }
-                }
-                else {
-                    // Use V1/V2 cancellation
-                    const { cancelTournamentInEscrow } = await Promise.resolve().then(() => __importStar(require('../utils/escrow-payout')));
-                    const cancelResult = await cancelTournamentInEscrow(tournamentId);
-                    if (!cancelResult.success && cancelResult.error) {
-                        logger_1.logger.warn('Failed to cancel tournament in escrow (tournament marked cancelled in DB)', {
-                            tournamentId,
-                            error: cancelResult.error,
-                        });
-                    }
+                const { cancelTournamentInEscrow } = await Promise.resolve().then(() => __importStar(require('../utils/escrow-payout')));
+                const cancelResult = await cancelTournamentInEscrow(tournamentId);
+                if (!cancelResult.success && cancelResult.error) {
+                    logger_1.logger.warn('Failed to cancel tournament in escrow (tournament marked cancelled in DB)', {
+                        tournamentId,
+                        error: cancelResult.error,
+                    });
                 }
             }
             await client.query('COMMIT');

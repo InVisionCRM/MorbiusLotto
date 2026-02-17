@@ -472,11 +472,6 @@ export class WebSocketService {
           await this.handleFreerollJoin(ws, message);
           break;
 
-        case 'freeroll_reentry':
-          if (!this.requireAuth(ws, message)) return;
-          await this.handleFreerollReentry(ws, message);
-          break;
-
         case 'tournament_entries_list':
           if (!this.requireAuth(ws, message)) return;
           await this.handleTournamentEntriesList(ws, message);
@@ -1861,18 +1856,15 @@ export class WebSocketService {
         startingChips: number;
         maxHands: number;
         timeLimitMinutes: number | null;
-        rebuyConfig: { enabled: boolean; maxRebuys: number };
         tableTheme: { kind: 'image' | 'video'; id: string };
         isPrivate: boolean;
         prizeDistributionType: string;
-        customPrizePercentages?: number[];
         maxPlayers?: number | null;
         customImage?: string | null;
         prizeTokenAddress?: string | null;
         prizeAmount?: string;
         prizeTokenDecimals?: number | null;
         pinCode?: string | null;
-        creatorFeePercent?: number;
         onChainTournamentId?: number | bigint | null;
       };
 
@@ -1884,45 +1876,26 @@ export class WebSocketService {
         return this.sendError(ws, 'Invalid buy-in amount', message.requestId);
       }
 
-      // Validate creator fee (0-5%)
-      const creatorFeePercent = typeof payload.creatorFeePercent === 'number'
-        ? Math.floor(payload.creatorFeePercent)
-        : 0;
-      if (creatorFeePercent < 0 || creatorFeePercent > 5) {
-        return this.sendError(ws, 'Creator fee must be 0-5%', message.requestId);
-      }
-
-      // Read platform fee from env
-      const platformFeePercent = parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
-
       const tournament = await this.tournamentService.createTournament({
         creatorAddress: ws.playerAddress,
         name: payload.name,
         buyInAmount,
-        startingChips: payload.startingChips,
-        maxHands: payload.maxHands,
+        startingChips: 5000,
+        maxHands: 25,
         timeLimitMinutes: payload.timeLimitMinutes,
-        rebuyConfig: payload.rebuyConfig,
         tableTheme: payload.tableTheme,
         isPrivate: payload.isPrivate,
         prizeDistributionType: payload.prizeDistributionType,
-        customPrizePercentages: payload.customPrizePercentages,
         maxPlayers: payload.maxPlayers,
         customImage: payload.customImage,
         prizeTokenAddress: payload.prizeTokenAddress,
         prizeAmount: payload.prizeAmount,
         prizeTokenDecimals: payload.prizeTokenDecimals,
         pinCode: payload.pinCode,
-        creatorFeePercent,
-        platformFeePercent,
         onChainTournamentId: payload.onChainTournamentId != null ? payload.onChainTournamentId : undefined,
       });
 
-      // Determine prize percentages for response
-      const prizePercentages = this.getPrizePercentagesForType(
-        tournament.prize_distribution_type,
-        tournament.prize_percentages
-      );
+      const prizePercentages = this.getPrizePercentagesForType(tournament.prize_distribution_type);
 
       this.sendMessage(ws, {
         type: 'tournament_created',
@@ -2010,67 +1983,33 @@ export class WebSocketService {
       }
       const payload = message.payload as {
         name: string;
-        freerollMode: 'elimination' | 'standard_chip_count';
         scheduledStartAt: string;
         registrationOpensAt: string;
         durationMinutes: number;
         startingChips: number;
         maxHands: number;
         prizeDistributionType: string;
-        customPrizePercentages?: number[];
-        eliminationConfig?: {
-          intervalType: string;
-          intervalValue: number;
-          eliminationPercentage: number;
-          resetChipsAfterRound?: boolean;
-          eliminationRoundsMin?: number;
-          eliminationRoundsMax?: number;
-        } | null;
-        reentryConfig: { enabled: boolean; windowMinutes?: number };
-        actionTimerSeconds: number | null;
-        tiebreakerOrder?: string[];
         tableTheme: { kind: 'image' | 'video'; id: string };
         isPrivate: boolean;
-        minPlayers?: number;
         maxPlayers?: number | null;
         customImage?: string | null;
         pinCode?: string | null;
-        creatorFeePercent?: number;
       };
-
-      // Validate creator fee (0-5%)
-      const creatorFeePercent = typeof payload.creatorFeePercent === 'number'
-        ? Math.floor(payload.creatorFeePercent)
-        : 0;
-      if (creatorFeePercent < 0 || creatorFeePercent > 5) {
-        return this.sendError(ws, 'Creator fee must be 0-5%', message.requestId);
-      }
-
-      const platformFeePercent = parseInt(process.env.PLATFORM_FEE_PERCENT || '16', 10);
 
       const result = await this.tournamentService.createFreeroll({
         creatorAddress: ws.playerAddress,
         name: payload.name,
-        freerollMode: payload.freerollMode,
         scheduledStartAt: payload.scheduledStartAt,
         registrationOpensAt: payload.registrationOpensAt,
         durationMinutes: payload.durationMinutes,
-        startingChips: payload.startingChips,
-        maxHands: payload.maxHands,
+        startingChips: 5000,
+        maxHands: 25,
         prizeDistributionType: payload.prizeDistributionType,
-        customPrizePercentages: payload.customPrizePercentages,
-        eliminationConfig: payload.eliminationConfig,
-        reentryConfig: payload.reentryConfig,
-        actionTimerSeconds: payload.actionTimerSeconds,
-        tiebreakerOrder: payload.tiebreakerOrder,
         tableTheme: payload.tableTheme,
         isPrivate: payload.isPrivate,
-        minPlayers: payload.minPlayers,
         maxPlayers: payload.maxPlayers,
         customImage: payload.customImage,
         pinCode: payload.pinCode,
-        creatorFeePercent,
-        platformFeePercent,
       });
       this.sendMessage(ws, {
         type: 'freeroll_created',
@@ -2120,8 +2059,8 @@ export class WebSocketService {
         registrationOpensAt: t.registration_opens_at?.toISOString() ?? null,
         currentPhase: t.current_phase ?? null,
         durationMinutes: t.duration_minutes ?? null,
-        creatorFeePercent: t.creator_fee_percent ?? 0,
-        platformFeePercent: t.platform_fee_percent ?? 16,
+        creatorFeePercent: t.creator_fee_percent ?? 2,
+        platformFeePercent: t.platform_fee_percent ?? 3,
         escrowFunded: t.escrow_funded ?? false,
         escrowTotalDeposited: t.escrow_total_deposited ?? '0',
         escrowToken: t.escrow_token ?? null,
@@ -2244,8 +2183,8 @@ export class WebSocketService {
           createdAt: info.tournament.created_at.toISOString(),
           prizeTokenAddress: info.tournament.prize_token_address ?? null,
           prizeTokenDecimals: info.tournament.prize_token_decimals ?? null,
-          creatorFeePercent: info.tournament.creator_fee_percent ?? 0,
-          platformFeePercent: info.tournament.platform_fee_percent ?? 16,
+          creatorFeePercent: info.tournament.creator_fee_percent ?? 2,
+          platformFeePercent: info.tournament.platform_fee_percent ?? 3,
         },
         requestId: message.requestId
       });
@@ -2335,34 +2274,6 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error joining freeroll:', error);
       this.sendError(ws, error instanceof Error ? error.message : 'Failed to join', message.requestId);
-    }
-  }
-
-  private async handleFreerollReentry(ws: WebSocketClient, message: WebSocketMessage) {
-    try {
-      if (!ws.playerAddress) {
-        return this.sendError(ws, 'Player address not authenticated', message.requestId);
-      }
-      if (!this.tournamentService) {
-        return this.sendError(ws, 'Tournament mode not available', message.requestId);
-      }
-      const payload = message.payload as { tournamentId: string };
-      if (!payload?.tournamentId) {
-        return this.sendError(ws, 'tournamentId required', message.requestId);
-      }
-      const entry = await this.tournamentService.reentryFreeroll(ws.playerAddress, payload.tournamentId);
-      this.sendMessage(ws, {
-        type: 'freeroll_reentered',
-        payload: {
-          tournamentId: payload.tournamentId,
-          entryId: entry.id,
-          chips: entry.chips_remaining,
-        },
-        requestId: message.requestId,
-      });
-    } catch (error) {
-      logger.error('Error re-entering freeroll:', error);
-      this.sendError(ws, error instanceof Error ? error.message : 'Failed to re-enter', message.requestId);
     }
   }
 
@@ -2558,39 +2469,18 @@ export class WebSocketService {
     }
   }
 
-  // Helper to get prize percentages from type
-  private getPrizePercentagesForType(type: string, custom?: number[]): number[] {
-    let result: number[];
+  private getPrizePercentagesForType(type: string): number[] {
     switch (type) {
       case 'winner_takes_all':
-        result = [100];
-        break;
+        return [100];
       case 'top_3':
-        result = [50, 30, 20];
-        break;
-      case 'top_3_steep':
-        result = [60, 25, 15];
-        break;
+        return [50, 30, 20];
       case 'top_5':
-        result = [40, 25, 15, 12, 8];
-        break;
-      case 'custom':
-        result = custom || [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
-        break;
+        return [40, 25, 15, 12, 8];
       case 'top_10':
       default:
-        result = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
-        break;
+        return [56, 20, 10, 2, 2, 2, 2, 2, 2, 2];
     }
-    // Defensive check: ensure result is always a valid array
-    if (!Array.isArray(result) || result.length === 0) {
-      result = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
-    }
-    // Ensure custom array is valid if provided
-    if (type === 'custom' && custom && (!Array.isArray(custom) || custom.length === 0)) {
-      result = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
-    }
-    return result;
   }
 
   // Clean shutdown

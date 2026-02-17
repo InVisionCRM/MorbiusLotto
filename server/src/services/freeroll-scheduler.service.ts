@@ -15,7 +15,7 @@ const MAX_EVENTS_PER_POLL = 10;
 
 /**
  * Polls for pending freeroll scheduled events and delegates execution to TournamentService.
- * Event types: 'start' | 'elimination_round' | 'end' | 'reentry_close'
+ * Event types: 'start' | 'end' | 'reentry_close'
  */
 export class FreerollSchedulerService {
   private pool: Pool;

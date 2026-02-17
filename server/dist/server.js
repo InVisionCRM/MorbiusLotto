@@ -151,7 +151,7 @@ async function initializeServices() {
         gameService.setTournamentService(tournamentService);
         // Initialize WebSocket service
         const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService, tournamentService);
-        // Freeroll scheduler (polls pending scheduled events: start, elimination_round, end)
+        // Freeroll scheduler (polls pending scheduled events: start, end)
         freerollScheduler = new freeroll_scheduler_service_1.FreerollSchedulerService(dbService.getPool(), tournamentService);
         freerollScheduler.start();
         // Tournament scheduler (time-expired buy-in tournaments, stuck-tournament recovery)

@@ -1,15 +1,13 @@
 // Tournament Creator Types and Constants
 
-// Prize distribution options
+// Prize distribution options (Top 1, Top 3, Top 5, Top 10 only)
 export type PrizeDistributionType =
   | 'winner_takes_all'  // 100% to 1st
   | 'top_3'             // 50/30/20
-  | 'top_3_steep'       // 60/25/15
   | 'top_5'             // 40/25/15/12/8
-  | 'top_10'            // 40/20/10 + 2% each 4th-10th (default)
-  | 'custom';
+  | 'top_10';           // 56/20/10 + 2% each 4th-10th (default)
 
-// Prize presets with percentages
+// Prize presets with percentages (all sum to 100%)
 export const PRIZE_PRESETS: {
   id: PrizeDistributionType;
   name: string;
@@ -18,7 +16,7 @@ export const PRIZE_PRESETS: {
 }[] = [
   {
     id: 'winner_takes_all',
-    name: 'Winner Takes All',
+    name: 'Top 1',
     percentages: [100],
     description: '100% to 1st place'
   },
@@ -29,12 +27,6 @@ export const PRIZE_PRESETS: {
     description: '50% / 30% / 20%'
   },
   {
-    id: 'top_3_steep',
-    name: 'Top 3 Steep',
-    percentages: [60, 25, 15],
-    description: '60% / 25% / 15%'
-  },
-  {
     id: 'top_5',
     name: 'Top 5',
     percentages: [40, 25, 15, 12, 8],
@@ -43,8 +35,8 @@ export const PRIZE_PRESETS: {
   {
     id: 'top_10',
     name: 'Top 10',
-    percentages: [40, 20, 10, 2, 2, 2, 2, 2, 2, 2],
-    description: '40% / 20% / 10% + 2% each for 4th-10th'
+    percentages: [56, 20, 10, 2, 2, 2, 2, 2, 2, 2],
+    description: '56% / 20% / 10% + 2% each for 4th-10th'
   },
 ];
 
@@ -56,37 +48,11 @@ export interface TableTheme {
   id: string;
 }
 
-// Rebuy configuration
-export interface RebuyConfig {
-  enabled: boolean;
-  maxRebuys: number; // 0 = unlimited
-}
-
 // ========== FREEROLL Tournament Types ==========
 
 export type TournamentType = 'standard' | 'freeroll';
 
-export type FreerollMode = 'elimination' | 'standard_chip_count';
-
-export type TournamentPhase = 'registration' | 'active' | 'elimination_round' | 'completed';
-
-export type TiebreakerMetric = 'blackjacks' | 'hands_won' | 'highest_chips' | 'entry_time';
-
-/** Elimination mode: interval (time or hands), % to eliminate, chip reset, min/max rounds */
-export interface EliminationConfig {
-  intervalType: 'time' | 'hands';
-  intervalValue: number;           // minutes (time) or number of hands (hands)
-  eliminationPercentage: number;   // e.g. 20 = bottom 20% eliminated
-  resetChipsAfterRound: boolean;
-  eliminationRoundsMin: number;    // at least this many rounds if duration allows
-  eliminationRoundsMax: number;    // cap on number of elimination events
-}
-
-/** Re-entry: allowed within a time window from tournament start */
-export interface ReentryConfig {
-  enabled: boolean;
-  windowMinutes: number;           // 0 = until start only
-}
+export type TournamentPhase = 'registration' | 'active' | 'completed';
 
 /** Registration status for freeroll entries */
 export type RegistrationStatus = 'registered' | 'joined' | 'no_show';
@@ -97,39 +63,34 @@ export const FREEROLL_VALIDATION = {
   ACTION_TIMER_MAX_SECONDS: 15,
   DURATION_MIN_MINUTES: 5,
   DURATION_MAX_MINUTES: 1440,      // 24h
-  ELIMINATION_PERCENTAGE_MIN: 5,
-  ELIMINATION_PERCENTAGE_MAX: 50,
-  ELIMINATION_ROUNDS_MIN: 1,
-  ELIMINATION_ROUNDS_MAX: 50,
-  ELIMINATION_INTERVAL_MIN_MINUTES: 1,
-  ELIMINATION_INTERVAL_MAX_MINUTES: 120,
-  ELIMINATION_INTERVAL_MIN_HANDS: 1,
-  ELIMINATION_INTERVAL_MAX_HANDS: 100,
   MIN_PLAYERS_MIN: 2,
   MIN_PLAYERS_MAX: 100,
   MAX_PLAYERS_MIN: 2,
   MAX_PLAYERS_MAX: 1000,
-  REENTRY_WINDOW_MAX_MINUTES: 60,
-  TIEBREAKER_ORDER_DEFAULT: ['highest_chips', 'blackjacks', 'hands_won', 'entry_time'] as TiebreakerMetric[],
+  TIEBREAKER_ORDER_DEFAULT: ['highest_chips', 'blackjacks', 'hands_won', 'entry_time'] as string[],
 };
+
+/** Min players = number of paid places (don't run without full prize pool). */
+export function getMinPlayersFromPrizeDistribution(type: PrizeDistributionType): number {
+  switch (type) {
+    case 'winner_takes_all': return 1;
+    case 'top_3': return 3;
+    case 'top_5': return 5;
+    case 'top_10':
+    default: return 10;
+  }
+}
 
 export interface CreateFreerollRequest {
   name: string;
-  freerollMode: FreerollMode;
   scheduledStartAt: string;        // ISO date string
   registrationOpensAt: string;     // ISO date string
   durationMinutes: number;
   startingChips: number;
   maxHands: number;
   prizeDistributionType: PrizeDistributionType;
-  customPrizePercentages?: number[];
-  eliminationConfig?: EliminationConfig;   // Required when freerollMode === 'elimination'
-  reentryConfig: ReentryConfig;
-  actionTimerSeconds: number | null;      // 10–15 or null for all tournament types
-  tiebreakerOrder?: TiebreakerMetric[];   // For elimination mode
   tableTheme: TableTheme;
   isPrivate: boolean;
-  minPlayers?: number;             // 2–100, default 2; minimum to start / payout
   maxPlayers?: number | null;     // null = unlimited, else e.g. 2–1000
   customImage?: string | null;
   /** Optional PIN for private freerolls; if not set, server generates one */
@@ -140,12 +101,7 @@ export interface CreateFreerollRequest {
 export const TOURNAMENT_VALIDATION = {
   NAME_MIN_LENGTH: 3,
   NAME_MAX_LENGTH: 50,
-  STARTING_CHIPS_OPTIONS: [1000, 5000, 10000, 25000] as const,
-  MAX_HANDS_MIN: 1,
-  MAX_HANDS_MAX: 200,
-  MAX_HANDS_OPTIONS: [25, 50, 100, 200, 500] as const, // Legacy: kept for backwards compatibility
   TIME_LIMIT_OPTIONS: [null, 60, 120, 240, 1440] as const, // minutes (null = no limit)
-  MAX_REBUYS_OPTIONS: [0, 1, 3, 5] as const, // 0 = unlimited when enabled
   PIN_LENGTH: 4,
 };
 
@@ -158,14 +114,6 @@ export const TIME_LIMIT_LABELS: Record<number | 'null', string> = {
   1440: '24 Hours',
 };
 
-// Max rebuys labels for display
-export const MAX_REBUYS_LABELS: Record<number, string> = {
-  0: 'Unlimited',
-  1: '1 Rebuy',
-  3: '3 Rebuys',
-  5: '5 Rebuys',
-};
-
 // Create tournament request
 export interface CreateTournamentRequest {
   name: string;
@@ -173,11 +121,9 @@ export interface CreateTournamentRequest {
   startingChips: number;
   maxHands: number;
   timeLimitMinutes: number | null;
-  rebuyConfig: RebuyConfig;
   tableTheme: TableTheme;
   isPrivate: boolean;
   prizeDistributionType: PrizeDistributionType;
-  customPrizePercentages?: number[]; // Only used when type is 'custom'
   maxPlayers?: number | null;
   customImage?: string; // Base64 data URL or null for default
   /** When set, prize pool is funded by creator via escrow (custom token) */
@@ -186,8 +132,6 @@ export interface CreateTournamentRequest {
   prizeTokenDecimals?: number | null;
   /** Optional PIN for private tournaments; if not set, server generates one */
   pinCode?: string | null;
-  /** Creator fee percentage (0-5%). Deducted from prize pool and paid to creator. */
-  creatorFeePercent?: number;
 }
 
 // Create tournament response
@@ -200,7 +144,7 @@ export interface CreateTournamentResponse {
   maxHands: number;
   timeLimitMinutes: number | null;
   endsAt: string | null;
-  rebuyConfig: RebuyConfig;
+  rebuyConfig: { enabled: boolean; maxRebuys: number };
   tableTheme: TableTheme;
   isPrivate: boolean;
   prizeDistributionType: PrizeDistributionType;
@@ -254,7 +198,7 @@ export interface TournamentListItem {
   maxPlayers: number | null;
   timeLimitMinutes: number | null;
   endsAt: string | null;
-  rebuyConfig: RebuyConfig;
+  rebuyConfig: { enabled: boolean; maxRebuys: number };
   tableTheme: TableTheme;
   isPrivate: boolean;
   prizeDistributionType: PrizeDistributionType;
@@ -294,7 +238,7 @@ export interface TournamentInfoExtended {
   maxPlayers: number | null;
   timeLimitMinutes: number | null;
   endsAt: string | null;
-  rebuyConfig: RebuyConfig;
+  rebuyConfig: { enabled: boolean; maxRebuys: number };
   tableTheme: TableTheme;
   isPrivate: boolean;
   prizeDistributionType: PrizeDistributionType;
@@ -307,23 +251,12 @@ export interface TournamentInfoExtended {
   platformFeePercent?: number;
 }
 
-// Rebuy result
-export interface RebuyResult {
-  success: boolean;
-  newChips: number;
-  rebuyCount: number;
-  totalBuyIn: string;
-  newPrizePool: string;
-}
-
 // Display-friendly labels for prize distribution types
 export const PRIZE_DISTRIBUTION_LABELS: Record<PrizeDistributionType, string> = {
-  winner_takes_all: 'Winner Takes All',
+  winner_takes_all: 'Top 1',
   top_3: 'Top 3',
-  top_3_steep: 'Top 3 (Steep)',
   top_5: 'Top 5',
   top_10: 'Top 10',
-  custom: 'Custom',
 };
 
 // Validate tournament name
@@ -355,7 +288,7 @@ export function calculatePrizeForRank(
   rank: number,
   prizePool: bigint,
   prizePercentages: number[],
-  totalFeePercent: number = 16
+  totalFeePercent: number = 5
 ): bigint {
   if (rank < 1 || rank > prizePercentages.length) return 0n;
   const percentage = prizePercentages[rank - 1];
@@ -368,15 +301,13 @@ export function calculatePrizeForRank(
 export function getExamplePrizeDistribution(
   prizePool: bigint,
   prizePercentages: number[],
-  totalFeePercent: number = 16
+  totalFeePercent: number = 5
 ): { rank: number; percentage: number; amount: bigint }[] {
   const result: { rank: number; percentage: number; amount: bigint }[] = [];
   const distributablePool = (prizePool * BigInt(100 - totalFeePercent)) / 100n;
 
-  // Defensive check: ensure prizePercentages is a valid array
   if (!Array.isArray(prizePercentages) || prizePercentages.length === 0) {
-    // Default to top_10 distribution if invalid
-    prizePercentages = [40, 20, 10, 2, 2, 2, 2, 2, 2, 2];
+    prizePercentages = [56, 20, 10, 2, 2, 2, 2, 2, 2, 2];
   }
 
   for (let i = 0; i < prizePercentages.length; i++) {

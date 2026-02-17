@@ -7,12 +7,9 @@ export declare const TOURNAMENT_CONFIG: {
     MIN_BET: number;
     MAX_BET: number;
     PRIZE_PERCENTAGES: number[];
-    HOUSE_PERCENTAGE: number;
+    PROTOCOL_FEE_PERCENT: number;
+    CREATOR_FEE_PERCENT: number;
 };
-export interface RebuyConfig {
-    enabled: boolean;
-    maxRebuys: number;
-}
 export interface TableTheme {
     kind: 'image' | 'video';
     id: string;
@@ -31,7 +28,10 @@ export interface Tournament {
     tournament_type?: string | null;
     creator_address?: string;
     time_limit_minutes?: number;
-    rebuy_config: RebuyConfig;
+    rebuy_config: {
+        enabled: boolean;
+        maxRebuys: number;
+    };
     table_theme: TableTheme;
     is_private: boolean;
     pin_code?: string;
@@ -90,11 +90,9 @@ export interface CreateTournamentParams {
     startingChips: number;
     maxHands: number;
     timeLimitMinutes: number | null;
-    rebuyConfig: RebuyConfig;
     tableTheme: TableTheme;
     isPrivate: boolean;
     prizeDistributionType: string;
-    customPrizePercentages?: number[];
     maxPlayers?: number | null;
     customImage?: string | null;
     /** When set, prize pool is funded by creator via escrow; prizeAmount in token smallest unit */
@@ -103,49 +101,24 @@ export interface CreateTournamentParams {
     prizeTokenDecimals?: number | null;
     /** Optional PIN for private tournaments; if provided and valid, used instead of generating */
     pinCode?: string | null;
-    /** Creator fee percentage (0-5%). Deducted from prize pool and paid to creator. */
-    creatorFeePercent?: number;
-    /** Platform fee percentage. Read from env at creation time. */
-    platformFeePercent?: number;
     /** uint256 from MorbiusTournament.createTournament; when set, create/join use on-chain flow */
     onChainTournamentId?: number | bigint | null;
 }
-/** Create freeroll tournament (no buy-in, scheduled start). */
+/** Create freeroll tournament (no buy-in, scheduled start). Chip-count only. */
 export interface CreateFreerollParams {
     creatorAddress: string;
     name: string;
-    freerollMode: 'elimination' | 'standard_chip_count';
     scheduledStartAt: string;
     registrationOpensAt: string;
     durationMinutes: number;
     startingChips: number;
     maxHands: number;
     prizeDistributionType: string;
-    customPrizePercentages?: number[];
-    eliminationConfig?: {
-        intervalType: string;
-        intervalValue: number;
-        eliminationPercentage: number;
-        resetChipsAfterRound?: boolean;
-        eliminationRoundsMin?: number;
-        eliminationRoundsMax?: number;
-    } | null;
-    reentryConfig: {
-        enabled: boolean;
-        windowMinutes?: number;
-    };
-    actionTimerSeconds: number | null;
-    tiebreakerOrder?: string[];
     tableTheme: TableTheme;
     isPrivate: boolean;
-    minPlayers?: number;
     maxPlayers?: number | null;
     customImage?: string | null;
     pinCode?: string | null;
-    /** Creator fee percentage (0-5%). */
-    creatorFeePercent?: number;
-    /** Platform fee percentage. Read from env at creation time. */
-    platformFeePercent?: number;
 }
 export interface FreerollListItem {
     id: string;
@@ -160,7 +133,7 @@ export interface FreerollListItem {
     current_phase: string | null;
     registered_count: number;
     action_timer_seconds: number | null;
-    elimination_config: Record<string, unknown> | null;
+    elimination_config?: Record<string, unknown> | null;
     reentry_config: Record<string, unknown> | null;
     prize_distribution_type: string;
     custom_image: string | null;
@@ -178,7 +151,10 @@ export interface TournamentListItem {
     max_players: number | null;
     time_limit_minutes: number | null;
     ends_at: Date | null;
-    rebuy_config: RebuyConfig;
+    rebuy_config: {
+        enabled: boolean;
+        maxRebuys: number;
+    };
     table_theme: TableTheme;
     is_private: boolean;
     prize_distribution_type: string;
@@ -254,6 +230,8 @@ export declare class TournamentService {
      * Get prize percentages for a distribution type
      */
     private getPrizePercentages;
+    /** Min players = number of paid places (industry standard: don't run without full prize pool). */
+    private getMinPlayersFromPrizeDistribution;
     /**
      * Get the current active tournament, creating one if needed
      */
@@ -332,7 +310,7 @@ export declare class TournamentService {
      */
     joinFreeroll(playerAddress: string, tournamentId: string): Promise<TournamentEntry>;
     /**
-     * Re-enter a freeroll during the reentry window (after elimination).
+     * Re-enter a freeroll during the reentry window (if busted).
      */
     reentryFreeroll(playerAddress: string, tournamentId: string): Promise<TournamentEntry>;
     /**
@@ -391,7 +369,7 @@ export declare class TournamentService {
         rebuyEnabled: boolean;
     }) | null>;
     /**
-     * Execute a pending freeroll scheduled event (start, elimination_round, end, reentry_close).
+     * Execute a pending freeroll scheduled event (start, end, reentry_close).
      * Called by FreerollSchedulerService. Only marks the event as executed on success.
      */
     executeScheduledEvent(event: {
@@ -401,10 +379,13 @@ export declare class TournamentService {
         scheduled_at: Date;
         metadata: Record<string, unknown> | null;
     }): Promise<void>;
-    /** Transition freeroll to active and mark no-shows. */
+    /** Transition freeroll to active and mark no-shows. Cancels if min players not met. */
     private handleFreerollStart;
-    /** Run elimination round: eliminate bottom % by chips (with tiebreakers), optionally reset chips for survivors. */
-    private handleEliminationRound;
+    /**
+     * Cancel tournament due to insufficient players at scheduled start.
+     * Refunds buy-ins (credit MORBIUS to player balance). Cancels escrow for custom token.
+     */
+    private cancelTournamentDueToInsufficientPlayers;
     /**
      * Get all tournaments created by an address (active + completed)
      */

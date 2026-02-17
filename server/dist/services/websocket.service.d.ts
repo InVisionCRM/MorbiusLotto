@@ -74,7 +74,6 @@ export declare class WebSocketService {
     private handleFreerollList;
     private handleFreerollRegister;
     private handleFreerollJoin;
-    private handleFreerollReentry;
     private handleTournamentEntriesList;
     private handleCreatorTournaments;
     private handleCreatorEarnings;
