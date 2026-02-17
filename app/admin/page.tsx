@@ -8,7 +8,7 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon } from 'lucide-react';
 import AdminTablesTab from '@/components/admin/AdminTablesTab';
 import AdminHealthTab from '@/components/admin/AdminHealthTab';
 import AdminMetricsTab from '@/components/admin/AdminMetricsTab';
@@ -16,6 +16,7 @@ import AdminConfigTab from '@/components/admin/AdminConfigTab';
 import AdminContractsTab from '@/components/admin/AdminContractsTab';
 import { AdminEscrowTab } from '@/components/admin/AdminEscrowTab';
 import AdminChatTab from '@/components/admin/AdminChatTab';
+import AdminMemesTab from '@/components/admin/AdminMemesTab';
 
 export default function AdminPage() {
   const { address } = useAccount();
@@ -44,7 +45,7 @@ export default function AdminPage() {
       <div className="min-h-screen bg-slate-950 text-white pt-4 md:pt-2">
         <main className="container mx-auto px-3 py-3 max-w-6xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="h-8 w-full grid grid-cols-6 sm:grid-cols-7 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
+          <TabsList className="h-8 w-full grid grid-cols-7 sm:grid-cols-8 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
             <TabsTrigger value="tables" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <LayoutGrid className="w-3 h-3 mr-1 hidden sm:inline" /> Tables
             </TabsTrigger>
@@ -65,6 +66,9 @@ export default function AdminPage() {
             </TabsTrigger>
             <TabsTrigger value="chat" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <MessageSquare className="w-3 h-3 mr-1 hidden sm:inline" /> Chat
+            </TabsTrigger>
+            <TabsTrigger value="memes" className="rounded data-[state=active]:bg-pink-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
+              <ImageIcon className="w-3 h-3 mr-1 hidden sm:inline" /> Memes
             </TabsTrigger>
           </TabsList>
 
@@ -94,6 +98,10 @@ export default function AdminPage() {
 
           <TabsContent value="chat" className="mt-3 focus-visible:outline-none">
             <AdminChatTab />
+          </TabsContent>
+
+          <TabsContent value="memes" className="mt-3 focus-visible:outline-none">
+            <AdminMemesTab />
           </TabsContent>
         </Tabs>
         </main>

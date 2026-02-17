@@ -13,6 +13,7 @@ interface SavedMeme {
   image_data: string;
   template_name: string;
   wallet_address: string;
+  approval_status?: string;
   created_at: string;
 }
 
@@ -569,10 +570,11 @@ export default function MorbItPage() {
           image_data: imageData,
           template_name: selectedMeme.name,
           wallet_address: address || '',
+          approval_status: 'pending',
           created_at: data.meme.created_at,
         }, ...prev]);
         setHasUnsavedChanges(false);
-        alert('Meme saved successfully!');
+        alert('Meme saved! It will appear in the gallery after admin approval.');
       } else {
         alert('Failed to save meme. Please try again.');
       }
@@ -1101,35 +1103,19 @@ export default function MorbItPage() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                       <span className="text-xs text-cyan-300 truncate">
-                        {new Date(meme.created_at).toLocaleDateString()}
+                        {meme.approval_status === 'pending' ? 'Pending approval' : new Date(meme.created_at).toLocaleDateString()}
                       </span>
-                      <div className="flex gap-1">
+                      {(address && meme.wallet_address === address) && (
                         <button
-                          onClick={() => {
-                            const link = document.createElement('a');
-                            link.download = `meme-${meme.id}.png`;
-                            link.href = meme.image_data;
-                            link.click();
-                          }}
-                          className="p-1.5 rounded bg-cyan-500/80 hover:bg-cyan-500 transition-colors"
-                          title="Download"
+                          onClick={() => deleteMeme(meme.id)}
+                          className="p-1.5 rounded bg-red-500/80 hover:bg-red-500 transition-colors"
+                          title="Delete"
                         >
                           <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                           </svg>
                         </button>
-                        {(address && meme.wallet_address === address) && (
-                          <button
-                            onClick={() => deleteMeme(meme.id)}
-                            className="p-1.5 rounded bg-red-500/80 hover:bg-red-500 transition-colors"
-                            title="Delete"
-                          >
-                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                            </svg>
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>

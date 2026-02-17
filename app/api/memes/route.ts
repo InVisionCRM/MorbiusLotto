@@ -12,9 +12,13 @@ async function initializeTable() {
       template_name VARCHAR(255),
       layers_json TEXT,
       wallet_address VARCHAR(42),
+      approval_status VARCHAR(20) DEFAULT 'pending',
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     )
   `;
+  // Add approval_status to existing tables (no-op if already exists)
+  await sql`ALTER TABLE memes ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) DEFAULT 'pending'`;
+  await sql`UPDATE memes SET approval_status = 'approved' WHERE approval_status IS NULL`;
 }
 
 // GET - Fetch all memes
@@ -27,10 +31,11 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const walletAddress = searchParams.get('wallet');
 
+    // Public gallery: only approved memes. With wallet: show user's own memes (all statuses).
     let memes;
     if (walletAddress) {
       memes = await sql`
-        SELECT id, image_data, template_name, wallet_address, created_at
+        SELECT id, image_data, template_name, wallet_address, approval_status, created_at
         FROM memes
         WHERE wallet_address = ${walletAddress}
         ORDER BY created_at DESC
@@ -38,8 +43,9 @@ export async function GET(request: NextRequest) {
       `;
     } else {
       memes = await sql`
-        SELECT id, image_data, template_name, wallet_address, created_at
+        SELECT id, image_data, template_name, wallet_address, approval_status, created_at
         FROM memes
+        WHERE approval_status = 'approved'
         ORDER BY created_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
@@ -71,8 +77,8 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await sql`
-      INSERT INTO memes (image_data, template_name, layers_json, wallet_address)
-      VALUES (${imageData}, ${templateName || null}, ${layersJson || null}, ${walletAddress || null})
+      INSERT INTO memes (image_data, template_name, layers_json, wallet_address, approval_status)
+      VALUES (${imageData}, ${templateName || null}, ${layersJson || null}, ${walletAddress || null}, 'pending')
       RETURNING id, created_at
     `;
 

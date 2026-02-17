@@ -92,8 +92,7 @@ export function BlackjackMobileActionBar({
             boxShadow: canHit ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <Plus className="w-5 h-5 sm:hidden text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
-          <span className="hidden sm:inline text-white font-black text-sm tracking-wider drop-shadow-sm">HIT</span>
+          <Plus className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
         </button>
 
         {/* STAND */}
@@ -108,8 +107,7 @@ export function BlackjackMobileActionBar({
             boxShadow: canStand ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <Hand className="w-5 h-5 sm:hidden text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
-          <span className="hidden sm:inline text-white font-black text-sm tracking-wider drop-shadow-sm">STAND</span>
+          <Hand className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
         </button>
 
         {/* DOUBLE */}
@@ -129,8 +127,7 @@ export function BlackjackMobileActionBar({
             boxShadow: canDoubleDown ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <Copy className="w-5 h-5 sm:hidden text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
-          <span className="hidden sm:inline text-white font-black text-xs tracking-wider drop-shadow-sm">DOUBLE</span>
+          <Copy className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
         </button>
 
         {/* SPLIT */}
@@ -150,8 +147,7 @@ export function BlackjackMobileActionBar({
             boxShadow: canSplit ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <Split className="w-5 h-5 sm:hidden text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
-          <span className="hidden sm:inline text-white font-black text-sm tracking-wider drop-shadow-sm">SPLIT</span>
+          <Split className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
         </button>
         </div>
 
