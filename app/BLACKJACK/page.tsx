@@ -2690,8 +2690,8 @@ export default function BlackjackPage() {
               canSplit={canSplit && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
             />
           ) : (
-            <div className="flex flex-row items-stretch w-full">
-              <div className="w-1/2 border-r border-white/10 flex items-center min-w-0">
+            <div className="flex flex-row lg:flex-col items-stretch w-full">
+              <div className="w-1/2 lg:w-full lg:border-r-0 lg:border-b border-white/10 flex items-center min-w-0">
                 <BettingPanelMobile
                   onStartGame={(betBigInt, _clientSeed) => {
                     const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
@@ -2707,7 +2707,7 @@ export default function BlackjackPage() {
                   onDoubleBet={handleDoubleBet}
                 />
               </div>
-              <div className="w-1/2 flex items-center min-w-0">
+              <div className="w-1/2 lg:w-full flex items-center min-w-0">
                 <BlackjackMobileActionBar
                   onRebetAndDeal={handleRebetAndDeal}
                   onStartGame={handleDealClick}
