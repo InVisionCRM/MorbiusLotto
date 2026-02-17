@@ -578,11 +578,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     // freeze the reveal (hole card never shown, cards never clear).
     const noRevealNeeded = gameState === GameState.COMPLETE && totalCards >= 2 && visibleDealerCards >= totalCards;
     if (noRevealNeeded && !hasCalledRevealCompleteRef.current) {
-      // Small delay to ensure cards are rendered before signaling completion (especially for blackjack)
+      // Delay to ensure dealer hand animation is fully visible before unlocking DEAL/REBET buttons.
+      // Must be long enough for player to see the complete dealer hand and result.
       revealTimeoutRef.current = setTimeout(() => {
         hasCalledRevealCompleteRef.current = true;
         onDealerRevealCompleteRef.current?.();
-      }, totalCards >= 2 ? 500 : 0); // 500ms delay for 2-card scenarios (blackjack) to ensure cards render
+      }, 1500); // 1.5s — gives player time to see dealer's complete hand
     }
     else if (shouldStartReveal) {
       if (revealTimeoutRef.current) {
@@ -605,10 +606,13 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               cardIndex++;
               revealTimeoutRef.current = setTimeout(revealNextCard, 2000);
             } else {
-              // All cards revealed
-              setIsRevealing(false);
-              hasCalledRevealCompleteRef.current = true;
-              onDealerRevealCompleteRef.current?.();
+              // All cards revealed — wait for last card animation to finish
+              // before signaling completion (which unlocks DEAL/REBET buttons)
+              revealTimeoutRef.current = setTimeout(() => {
+                setIsRevealing(false);
+                hasCalledRevealCompleteRef.current = true;
+                onDealerRevealCompleteRef.current?.();
+              }, 1500); // 1.5s after last card — lets player see complete dealer hand
             }
           };
           
@@ -624,9 +628,13 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         // Then reveal hole card after delay to ensure cards are rendered
         revealTimeoutRef.current = setTimeout(() => {
           setVisibleDealerCards(2);
-          setIsRevealing(false);
-          hasCalledRevealCompleteRef.current = true;
-          onDealerRevealCompleteRef.current?.();
+          // Wait for hole card to render and player to see the full dealer hand
+          // before signaling reveal complete (which unlocks DEAL/REBET buttons)
+          revealTimeoutRef.current = setTimeout(() => {
+            setIsRevealing(false);
+            hasCalledRevealCompleteRef.current = true;
+            onDealerRevealCompleteRef.current?.();
+          }, 1500); // 1.5s after hole card revealed — lets player see the result
         }, 1000); // 1 second delay before revealing hole card - gives time for cards to render
       }
     }

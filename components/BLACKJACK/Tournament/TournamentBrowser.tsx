@@ -1256,15 +1256,36 @@ function MyHistoryContent({
         <div className="text-6xl mb-4">📋</div>
         <p className="text-gray-400">You haven&apos;t entered any tournaments yet.</p>
         <p className="text-gray-500 text-sm mt-1">Join one from the Browse tab to see it here.</p>
+        {onFetchHistory && (
+          <button
+            type="button"
+            onClick={() => onFetchHistory()}
+            className="mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 transition-colors"
+          >
+            Refresh
+          </button>
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-400 mb-2">
-        Every tournament you&apos;ve entered. Prizes are paid automatically when the tournament ends.
-      </p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-gray-400">
+          Every tournament you&apos;ve entered. Prizes are paid automatically when the tournament ends.
+        </p>
+        {onFetchHistory && (
+          <button
+            type="button"
+            onClick={() => onFetchHistory()}
+            disabled={isLoading}
+            className="shrink-0 ml-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 disabled:opacity-50 transition-colors"
+          >
+            {isLoading ? 'Loading...' : 'Refresh'}
+          </button>
+        )}
+      </div>
       {history.map((item) => {
         const hasPrize = BigInt(item.prizeWon) > 0n;
         const prizeHuman = formatEther(BigInt(item.prizeWon));
@@ -1406,7 +1427,7 @@ export function TournamentBrowser({
 
   // When modal opens, switch to initialTab so e.g. "View tournament history" opens to History tab
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && initialTab) {
       setActiveTab(initialTab);
     }
   }, [isOpen, initialTab]);
@@ -1418,12 +1439,20 @@ export function TournamentBrowser({
     }
   }, [isOpen, activeTab]);
 
-  // Fetch My History when opening that tab
+  // Fetch My History when opening that tab (guard against re-fetch while loading)
+  const historyFetchedRef = useRef(false);
   useEffect(() => {
-    if (isOpen && activeTab === 'history' && onFetchHistory) {
-      onFetchHistory();
+    if (isOpen && activeTab === 'history' && onFetchHistory && !isHistoryLoading) {
+      if (!historyFetchedRef.current) {
+        historyFetchedRef.current = true;
+        onFetchHistory();
+      }
     }
-  }, [isOpen, activeTab, onFetchHistory]);
+    // Reset the flag when the modal closes so the next open re-fetches
+    if (!isOpen) {
+      historyFetchedRef.current = false;
+    }
+  }, [isOpen, activeTab, onFetchHistory, isHistoryLoading]);
 
   // Close expanded card when browser closes
   useEffect(() => {

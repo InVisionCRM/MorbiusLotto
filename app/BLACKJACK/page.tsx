@@ -2916,7 +2916,7 @@ export default function BlackjackPage() {
           }}
           tournamentHistory={tournament.tournamentHistory}
           isHistoryLoading={tournament.isHistoryLoading}
-          onFetchHistory={() => tournament.fetchTournamentHistory()}
+          onFetchHistory={tournament.fetchTournamentHistory}
         />
 
         {/* Tournament Creator Modal */}
