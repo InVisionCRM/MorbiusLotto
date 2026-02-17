@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconMenu2, IconX } from "@tabler/icons-react";
+import { SystemTime } from "@/components/ui/system-time";
 
 interface Links {
   label: string;
@@ -115,11 +116,12 @@ export const MobileSidebar = ({
     <>
       <div
         className={cn(
-          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-900 border-b border-white/10 w-full"
+          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between gap-2 bg-neutral-900 border-b border-white/10 w-full"
         )}
         {...props}
       >
-        <div className="flex justify-end z-20 w-full">
+        <SystemTime className="!static !top-0 !right-0 shrink-0 text-xs" showDate={false} />
+        <div className="flex justify-end z-20 shrink-0">
           <IconMenu2
             className="text-white/80 hover:text-white cursor-pointer"
             onClick={() => setOpen(!open)}

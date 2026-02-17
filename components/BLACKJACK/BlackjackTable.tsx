@@ -904,8 +904,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-      {/* System Time Display (top-right) */}
-      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex flex-col items-end gap-0.5 sm:gap-1 pointer-events-auto">
+      {/* System Time Display (top-right) — hidden on mobile, shown in GlobalMainNav collapsed bar */}
+      <div className="absolute top-2 left-2 sm:top-4 sm:right-4 z-20 flex flex-col items-end gap-0.5 sm:gap-1 pointer-events-auto hidden md:flex">
         <SystemTime className="!static pointer-events-none" />
       </div>
 
