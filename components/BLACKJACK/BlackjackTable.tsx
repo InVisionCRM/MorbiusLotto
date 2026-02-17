@@ -567,16 +567,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
     // Game completed: Start reveal sequence
     // Trigger if: gameState just became COMPLETE OR gameState is COMPLETE and dealer cards increased
+    // Note: dealerCardsArrived must NOT require prevCardCount>=2 — phased blackjack deal sends 0->1->2 cards,
+    // so we need to trigger when going from 1 to 2 cards (prevCardCount=1)
     const gameJustCompleted = gameState === GameState.COMPLETE && prevState !== GameState.COMPLETE;
-    const dealerCardsArrived = gameState === GameState.COMPLETE && totalCards > prevCardCount && prevCardCount >= 2;
+    const dealerCardsArrived = gameState === GameState.COMPLETE && totalCards > prevCardCount;
     const shouldStartReveal = (gameJustCompleted || dealerCardsArrived) && !isRevealing && visibleDealerCards < totalCards;
     
-    // When game is COMPLETE and there's nothing to reveal (0–1 cards or all already visible), signal completion immediately so REBET/DEAL unlock (fixes blackjack freeze)
-    // BUT: For blackjack scenarios (2 cards), ensure cards are visible first - don't skip reveal if cards haven't been shown yet
-    const noRevealNeeded = gameState === GameState.COMPLETE && (
-      totalCards < 2 || 
-      (visibleDealerCards >= totalCards && totalCards > 0) // Only skip if cards are actually visible
-    );
+    // When game is COMPLETE and all dealer cards are already visible, signal completion immediately so REBET/DEAL unlock.
+    // Do NOT run this when totalCards < 2 — phased blackjack deal sends 0 then 1 then 2 cards; calling early would
+    // freeze the reveal (hole card never shown, cards never clear).
+    const noRevealNeeded = gameState === GameState.COMPLETE && totalCards >= 2 && visibleDealerCards >= totalCards;
     if (noRevealNeeded && !hasCalledRevealCompleteRef.current) {
       // Small delay to ensure cards are rendered before signaling completion (especially for blackjack)
       revealTimeoutRef.current = setTimeout(() => {
@@ -585,6 +585,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       }, totalCards >= 2 ? 500 : 0); // 500ms delay for 2-card scenarios (blackjack) to ensure cards render
     }
     else if (shouldStartReveal) {
+      if (revealTimeoutRef.current) {
+        clearTimeout(revealTimeoutRef.current);
+        revealTimeoutRef.current = null;
+      }
       setIsRevealing(true);
       
       if (totalCards > 2) {

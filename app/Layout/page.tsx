@@ -650,19 +650,18 @@ export default function LayoutPage() {
               </div>
             </section>
 
-            {/* Combo K — Inline Bar at md */}
+            {/* Combo K — Inline Bar (always horizontal) */}
             <section>
-              <h2 className="text-lg font-semibold text-cyan-300 mb-1">Combo K — Inline Bar at md</h2>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-1">Combo K — Inline Bar</h2>
               <p className="text-white/60 text-sm mb-4">
-                On mobile: standard stack. At md: a single horizontal bar — betting input on the left,
-                action buttons compressed into a single row on the right. Minimal vertical footprint.
+                Always horizontal: betting input left, action buttons right. Minimal vertical footprint.
               </p>
-              <div className="w-full max-w-4xl rounded-xl overflow-hidden" style={PANEL_STYLE}>
-                <div className="flex flex-col md:flex-row md:items-stretch">
-                  <div className="w-full md:w-1/2 md:border-r md:border-white/10 flex items-center">
+              <div className="w-full rounded-xl overflow-hidden" style={PANEL_STYLE}>
+                <div className="flex flex-row items-stretch">
+                  <div className="w-1/2 border-r border-white/10 flex items-center">
                     <BettingPanelMobile {...BETTING_PROPS} />
                   </div>
-                  <div className="w-full md:w-1/2 flex items-center">
+                  <div className="w-1/2 flex items-center">
                     <BlackjackMobileActionBar {...ACTION_PROPS} />
                   </div>
                 </div>

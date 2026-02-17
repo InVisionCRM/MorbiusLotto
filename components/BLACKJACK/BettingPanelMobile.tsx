@@ -115,18 +115,8 @@ export function BettingPanelMobile({
               className="object-contain flex-shrink-0"
             />
           </div>
-          {/* Clear, 1/2 and 2x */}
+          {/* 1/2 and 2x */}
           <div className="flex items-stretch flex-shrink-0">
-            <div className="w-px bg-white/20 self-stretch" aria-hidden />
-            <button
-              type="button"
-              onClick={handleClearBet}
-              disabled={isPlaying}
-              className="flex-1 min-w-[40px] flex items-center justify-center text-white/80 font-bold text-xs hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Clear bet"
-            >
-              Clear
-            </button>
             <div className="w-px bg-white/20 self-stretch" aria-hidden />
             <button
               type="button"
@@ -151,7 +141,7 @@ export function BettingPanelMobile({
             </button>
           </div>
         </div>
-        {/* Preset add amounts — 5-col grid, low height, digits only */}
+        {/* Preset add amounts + Clear — 5-col grid */}
         <div className="grid grid-cols-5 gap-0 overflow-hidden">
           {PRESETS.map((amount) => (
             <button
@@ -159,12 +149,21 @@ export function BettingPanelMobile({
               type="button"
               onClick={() => addPreset(amount)}
               disabled={isPlaying}
-              className="h-7 min-h-0 py-0 px-0 text-white/90 text-xs font-medium hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-r border-white/20 last:border-r-0"
+              className="h-7 min-h-0 py-0 px-0 text-white/90 text-xs font-medium hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-r border-white/20"
               aria-label={`Add ${amount} to bet`}
             >
               {amount >= 1000 ? `${amount / 1000}k` : amount}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={handleClearBet}
+            disabled={isPlaying}
+            className="h-7 min-h-0 py-0 px-0 text-white/80 text-xs font-bold hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Clear bet"
+          >
+            Clear
+          </button>
         </div>
       </div>
     </section>
