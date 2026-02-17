@@ -118,36 +118,35 @@ export default function BlackjackSidebar({
     if (typeof window !== 'undefined') window.open('/BLACKJACK/verify', '_blank')
   }
 
-  const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? 'Chart'
-
   return (
-    <div className="w-full min-w-0 flex flex-col h-full min-h-0">
-      {/* Compact icon bar — icons only with active label */}
-      <div className="flex items-center gap-1 px-2 py-2 shrink-0 relative z-10 bg-black/20 border-b border-white/10 rounded-t-xl">
-        <div className="flex gap-0.5 flex-wrap">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={`p-2 rounded-lg transition-colors ${
-                activeTab === id ? 'bg-cyan-500/30 text-cyan-400' : 'text-white/60 hover:text-white hover:bg-white/5'
-              }`}
-              title={label}
-            >
-              <Icon className="w-4 h-4" />
-            </button>
-          ))}
-        </div>
-        <span className="ml-2 text-sm font-medium text-cyan-300 truncate min-w-0">{activeLabel}</span>
+    <div className="w-full min-w-0 flex flex-col h-full min-h-0 rounded-xl overflow-hidden" style={Theme.panel.sidebar}>
+      {/* Layout E — Card grid: each tab as a card with icon + label */}
+      <div
+        className={`grid gap-2 p-3 shrink-0 bg-black/20 ${tabs.length === 6 ? 'grid-cols-6' : 'grid-cols-5'}`}
+      >
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all ${
+              activeTab === id
+                ? 'bg-cyan-600/40 border-2 border-cyan-500/50 text-cyan-200'
+                : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
+            }`}
+            title={label}
+          >
+            <Icon className="w-5 h-5 shrink-0" />
+            <span className="text-xs font-medium truncate w-full text-center">{label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Content — padding only for howto/tournaments/chart/tournament-play; Recent/Top have their own */}
       <div
-        className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar relative flex flex-col ${
+        className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar relative flex flex-col border-t border-white/10 ${
           activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'tournament-play' ? 'p-4' : ''
         }`}
-        style={Theme.panel.sidebar}
       >
         {activeTab === 'recent' && (
           <QuickHistory
