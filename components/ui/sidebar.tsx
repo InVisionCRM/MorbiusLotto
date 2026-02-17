@@ -15,6 +15,7 @@ interface SidebarContextProps {
   open: boolean;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   animate: boolean;
+  mobileBarContent?: React.ReactNode;
 }
 
 const SidebarContext = createContext<SidebarContextProps | undefined>(
@@ -34,11 +35,13 @@ export const SidebarProvider = ({
   open: openProp,
   setOpen: setOpenProp,
   animate = true,
+  mobileBarContent,
 }: {
   children: React.ReactNode;
   open?: boolean;
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
+  mobileBarContent?: React.ReactNode;
 }) => {
   const [openState, setOpenState] = useState(false);
 
@@ -46,7 +49,7 @@ export const SidebarProvider = ({
   const setOpen = setOpenProp !== undefined ? setOpenProp : setOpenState;
 
   return (
-    <SidebarContext.Provider value={{ open, setOpen, animate: animate }}>
+    <SidebarContext.Provider value={{ open, setOpen, animate: animate, mobileBarContent }}>
       {children}
     </SidebarContext.Provider>
   );
@@ -57,14 +60,16 @@ export const Sidebar = ({
   open,
   setOpen,
   animate,
+  mobileBarContent,
 }: {
   children: React.ReactNode;
   open?: boolean;
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
+  mobileBarContent?: React.ReactNode;
 }) => {
   return (
-    <SidebarProvider open={open} setOpen={setOpen} animate={animate}>
+    <SidebarProvider open={open} setOpen={setOpen} animate={animate} mobileBarContent={mobileBarContent}>
       {children}
     </SidebarProvider>
   );
@@ -111,7 +116,7 @@ export const MobileSidebar = ({
   children,
   ...props
 }: React.ComponentProps<"div">) => {
-  const { open, setOpen } = useSidebar();
+  const { open, setOpen, mobileBarContent } = useSidebar();
   return (
     <>
       <div
@@ -120,7 +125,10 @@ export const MobileSidebar = ({
         )}
         {...props}
       >
-        <SystemTime className="!static !top-0 !right-0 shrink-0 text-xs" showDate={false} />
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <SystemTime className="!static !top-0 !right-0 shrink-0 text-xs" showDate={false} />
+          {mobileBarContent}
+        </div>
         <div className="flex justify-end z-20 shrink-0">
           <IconMenu2
             className="text-white/80 hover:text-white cursor-pointer"
