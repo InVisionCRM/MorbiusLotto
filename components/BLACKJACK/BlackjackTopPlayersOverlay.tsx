@@ -12,7 +12,7 @@ export function BlackjackTopPlayersOverlay() {
   if (isLoading || !players?.length) return null
 
   return (
-    <div className="absolute top-0 left-0 right-0 z-10">
+    <div className="absolute top-0 left-0 right-0 z-10 hidden md:block">
       <OverlayLayouts.C entries={players} transparent />
     </div>
   )
