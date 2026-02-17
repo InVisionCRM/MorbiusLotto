@@ -19,6 +19,9 @@ import {
   MOCK_TOP_PLAYER_ENTRIES,
   MOCK_CAROUSEL_ITEMS,
 } from '@/components/BLACKJACK/BlackjackTopPlayersLayouts'
+import { BlackjackMobileActionBar } from '@/components/BLACKJACK/BlackjackMobileActionBar'
+import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile'
+import { Action } from '@/app/BLACKJACK/types'
 
 const TABS = [
   { id: 'recent', label: 'Recent', icon: History },
@@ -236,6 +239,39 @@ export default function LayoutPage() {
   const [activeD, setActiveD] = useState<TabId>('chart')
   const [activeE, setActiveE] = useState<TabId>('chart')
   const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'profit'>('newest')
+
+  // Demo state for action bar + betting panel layouts
+  const [demoBet, setDemoBet] = useState('5000')
+  const noop = () => {}
+  const noopAction = (_a: Action) => {}
+  const ACTION_PROPS = {
+    onAction: noopAction,
+    onRebetAndDeal: noop,
+    onStartGame: noop,
+    onDoubleDownChips: noop,
+    onSplitChips: noop,
+    isPlaying: false,
+    canHit: true,
+    canStand: true,
+    canDoubleDown: true,
+    canSplit: true,
+    canDeal: true,
+    chipStackLength: 3,
+    lastBetAmount: '5000',
+    soundEnabled: false,
+    alwaysVisible: true,
+  }
+  const BETTING_PROPS = {
+    onStartGame: (_bet: bigint, _seed: string) => {},
+    isPlaying: false,
+    reserveBalance: BigInt('100000000000000000000000'),
+    onBetAmountChange: (v: string) => setDemoBet(v),
+    currentBetAmount: demoBet,
+    lastBetAmount: '5000',
+    onRebet: noop,
+    onHalfBet: noop,
+    onDoubleBet: noop,
+  }
 
   return (
     <div
@@ -510,6 +546,128 @@ export default function LayoutPage() {
                 </div>
               </section>
             </div>
+          </div>
+        </div>
+
+        {/* Betting Panel + Action Bar Combo Layouts */}
+        <div className="pt-16 mt-16 border-t border-white/20">
+          <h1 className="text-2xl font-bold text-white mb-2">Betting Panel + Action Bar Combo Layouts</h1>
+          <p className="text-white/60 text-sm mb-8">
+            Different grid arrangements of BettingPanelMobile and BlackjackMobileActionBar.
+            Focused on mobile (&lt;768px) and md (768px+) breakpoints.
+          </p>
+
+          <div className="space-y-16">
+            {/* Combo F — Stacked Full Width */}
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-1">Combo F — Stacked Full Width</h2>
+              <p className="text-white/60 text-sm mb-4">
+                Classic mobile stack: betting input on top, action buttons below. Both full width. Same layout at all breakpoints.
+              </p>
+              <div className="w-full max-w-md rounded-xl overflow-hidden" style={PANEL_STYLE}>
+                <BettingPanelMobile {...BETTING_PROPS} />
+                <BlackjackMobileActionBar {...ACTION_PROPS} />
+              </div>
+            </section>
+
+            {/* Combo G — Side by Side at md */}
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-1">Combo G — Side by Side at md</h2>
+              <p className="text-white/60 text-sm mb-4">
+                Stacked on mobile; at md, betting panel (left 55%) and action bar (right 45%) sit side by side.
+                Actions become a 2x2 grid at md to fit the narrower column.
+              </p>
+              <div className="w-full max-w-2xl rounded-xl overflow-hidden" style={PANEL_STYLE}>
+                <div className="flex flex-col md:flex-row">
+                  <div className="w-full md:w-[55%] md:border-r md:border-white/10">
+                    <BettingPanelMobile {...BETTING_PROPS} />
+                  </div>
+                  <div className="w-full md:w-[45%] flex items-center">
+                    <BlackjackMobileActionBar {...ACTION_PROPS} />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Combo H — Unified Card */}
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-1">Combo H — Unified Card</h2>
+              <p className="text-white/60 text-sm mb-4">
+                Everything inside one embossed card. Betting input up top with a subtle divider,
+                action buttons below. At md, the card stays centered at max-w-md for a focused feel.
+              </p>
+              <div className="w-full max-w-md mx-auto rounded-xl overflow-hidden border-2 border-cyan-500/30" style={PANEL_STYLE}>
+                <div className="px-3 pt-3 pb-1">
+                  <span className="text-xs font-semibold text-cyan-400 uppercase tracking-widest">Place Your Bet</span>
+                </div>
+                <BettingPanelMobile {...BETTING_PROPS} />
+                <div className="mx-3 border-t border-white/10" />
+                <div className="px-1 pt-1 pb-2">
+                  <span className="text-xs font-semibold text-cyan-400 uppercase tracking-widest px-3">Actions</span>
+                  <BlackjackMobileActionBar {...ACTION_PROPS} />
+                </div>
+              </div>
+            </section>
+
+            {/* Combo I — Actions Top, Bet Bottom */}
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-1">Combo I — Actions Top, Bet Bottom</h2>
+              <p className="text-white/60 text-sm mb-4">
+                Reverse order: action buttons sit at the top for thumb reach; betting input below.
+                At md, wraps in a wider container (max-w-lg) with more padding.
+              </p>
+              <div className="w-full max-w-md md:max-w-lg rounded-xl overflow-hidden" style={PANEL_STYLE}>
+                <div className="md:p-2">
+                  <BlackjackMobileActionBar {...ACTION_PROPS} />
+                  <div className="mx-3 border-t border-white/10 my-1" />
+                  <BettingPanelMobile {...BETTING_PROPS} />
+                </div>
+              </div>
+            </section>
+
+            {/* Combo J — 3-Column Grid at md */}
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-1">Combo J — 3-Column Grid at md</h2>
+              <p className="text-white/60 text-sm mb-4">
+                On mobile: stacked. At md: 3-column grid where betting panel spans 2 columns
+                and action buttons sit in a compact single column with a vertical stack.
+              </p>
+              <div className="w-full max-w-3xl rounded-xl overflow-hidden" style={PANEL_STYLE}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
+                  <div className="md:col-span-2 md:border-r md:border-white/10">
+                    <div className="p-2">
+                      <span className="text-xs font-semibold text-cyan-400 uppercase tracking-widest px-2">Bet Amount</span>
+                    </div>
+                    <BettingPanelMobile {...BETTING_PROPS} />
+                  </div>
+                  <div className="md:col-span-1 flex flex-col justify-center">
+                    <div className="p-2 md:p-0">
+                      <span className="text-xs font-semibold text-cyan-400 uppercase tracking-widest px-3 md:px-2">Game Actions</span>
+                    </div>
+                    <BlackjackMobileActionBar {...ACTION_PROPS} />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Combo K — Inline Bar at md */}
+            <section>
+              <h2 className="text-lg font-semibold text-cyan-300 mb-1">Combo K — Inline Bar at md</h2>
+              <p className="text-white/60 text-sm mb-4">
+                On mobile: standard stack. At md: a single horizontal bar — betting input on the left,
+                action buttons compressed into a single row on the right. Minimal vertical footprint.
+              </p>
+              <div className="w-full max-w-4xl rounded-xl overflow-hidden" style={PANEL_STYLE}>
+                <div className="flex flex-col md:flex-row md:items-stretch">
+                  <div className="w-full md:w-1/2 md:border-r md:border-white/10 flex items-center">
+                    <BettingPanelMobile {...BETTING_PROPS} />
+                  </div>
+                  <div className="w-full md:w-1/2 flex items-center">
+                    <BlackjackMobileActionBar {...ACTION_PROPS} />
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </div>
