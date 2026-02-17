@@ -8,11 +8,8 @@ import { BET_LIMITS } from '@/app/BLACKJACK/constants';
 export interface BettingPanelMobileProps {
   onStartGame: (betAmount: bigint, clientSeed: string) => void;
   isPlaying: boolean;
-  reserveBalance: bigint;
   onBetAmountChange?: (betAmount: string, chipValue?: number, clearAll?: boolean) => void;
   currentBetAmount?: string;
-  lastBetAmount?: string;
-  onRebet?: () => void;
   onHalfBet?: () => void;
   onDoubleBet?: () => void;
 }
@@ -21,11 +18,8 @@ export interface BettingPanelMobileProps {
 export function BettingPanelMobile({
   onStartGame,
   isPlaying,
-  reserveBalance,
   onBetAmountChange,
   currentBetAmount = '0',
-  lastBetAmount = '0',
-  onRebet,
   onHalfBet,
   onDoubleBet,
 }: BettingPanelMobileProps) {

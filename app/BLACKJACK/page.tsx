@@ -2698,16 +2698,13 @@ export default function BlackjackPage() {
                     handleStartGame(betBigInt, clientSeed, ppBetWei);
                   }}
                   isPlaying={gameState.isPlaying}
-                  reserveBalance={offChainBalance}
                   onBetAmountChange={manageChipStack}
-                  currentBetAmount={displayBetAmount}
-                  lastBetAmount={lastBetAmount}
-                  onRebet={handleRebet}
-                  onHalfBet={handleHalfBet}
+                currentBetAmount={displayBetAmount}
+                onHalfBet={handleHalfBet}
                   onDoubleBet={handleDoubleBet}
                 />
               </div>
-              <div className="w-1/2 lg:w-full flex items-center min-w-0">
+              <div className="w-1/2 lg:w-full flex items-stretch min-w-0">
                 <BlackjackMobileActionBar
                   onRebetAndDeal={handleRebetAndDeal}
                   onStartGame={handleDealClick}

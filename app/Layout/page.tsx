@@ -264,11 +264,8 @@ export default function LayoutPage() {
   const BETTING_PROPS = {
     onStartGame: (_bet: bigint, _seed: string) => {},
     isPlaying: false,
-    reserveBalance: BigInt('100000000000000000000000'),
     onBetAmountChange: (v: string) => setDemoBet(v),
     currentBetAmount: demoBet,
-    lastBetAmount: '5000',
-    onRebet: noop,
     onHalfBet: noop,
     onDoubleBet: noop,
   }
