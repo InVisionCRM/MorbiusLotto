@@ -2690,42 +2690,46 @@ export default function BlackjackPage() {
               canSplit={canSplit && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
             />
           ) : (
-            <>
-              <BettingPanelMobile
-                onStartGame={(betBigInt, _clientSeed) => {
-                  const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
-                  handleStartGame(betBigInt, clientSeed, ppBetWei);
-                }}
-                isPlaying={gameState.isPlaying}
-                reserveBalance={offChainBalance}
-                onBetAmountChange={manageChipStack}
-                currentBetAmount={displayBetAmount}
-                lastBetAmount={lastBetAmount}
-                onRebet={handleRebet}
-                onHalfBet={handleHalfBet}
-                onDoubleBet={handleDoubleBet}
-              />
-              <BlackjackMobileActionBar
-                onRebetAndDeal={handleRebetAndDeal}
-                onStartGame={handleDealClick}
-                onAction={handlePlayerAction}
-                onDoubleDownChips={handleDoubleDownChips}
-                onSplitChips={handleSplitChips}
-                isPlaying={gameState.isPlaying}
-                canHit={canHit}
-                canStand={canStand}
-                canDoubleDown={canDoubleDown}
-                canSplit={canSplit}
-                canDeal={!gameState.isPlaying && totalBetAmount > 0}
-                chipStackLength={chipStack.length}
-                lastBetAmount={lastBetAmount}
-                soundEnabled={soundEnabled}
-                onPlaySfx={playSound}
-                alwaysVisible
-                perfectPairsBet={perfectPairsBet}
-                onPerfectPairsBetChange={setPerfectPairsBet}
-              />
-            </>
+            <div className="flex flex-row items-stretch w-full">
+              <div className="w-1/2 border-r border-white/10 flex items-center min-w-0">
+                <BettingPanelMobile
+                  onStartGame={(betBigInt, _clientSeed) => {
+                    const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
+                    handleStartGame(betBigInt, clientSeed, ppBetWei);
+                  }}
+                  isPlaying={gameState.isPlaying}
+                  reserveBalance={offChainBalance}
+                  onBetAmountChange={manageChipStack}
+                  currentBetAmount={displayBetAmount}
+                  lastBetAmount={lastBetAmount}
+                  onRebet={handleRebet}
+                  onHalfBet={handleHalfBet}
+                  onDoubleBet={handleDoubleBet}
+                />
+              </div>
+              <div className="w-1/2 flex items-center min-w-0">
+                <BlackjackMobileActionBar
+                  onRebetAndDeal={handleRebetAndDeal}
+                  onStartGame={handleDealClick}
+                  onAction={handlePlayerAction}
+                  onDoubleDownChips={handleDoubleDownChips}
+                  onSplitChips={handleSplitChips}
+                  isPlaying={gameState.isPlaying}
+                  canHit={canHit}
+                  canStand={canStand}
+                  canDoubleDown={canDoubleDown}
+                  canSplit={canSplit}
+                  canDeal={!gameState.isPlaying && totalBetAmount > 0}
+                  chipStackLength={chipStack.length}
+                  lastBetAmount={lastBetAmount}
+                  soundEnabled={soundEnabled}
+                  onPlaySfx={playSound}
+                  alwaysVisible
+                  perfectPairsBet={perfectPairsBet}
+                  onPerfectPairsBetChange={setPerfectPairsBet}
+                />
+              </div>
+            </div>
           )}
           <BlackjackSidebar
             history={gameState.history}
