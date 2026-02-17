@@ -376,7 +376,7 @@ function OverlayScroller({ entries, children }: { entries: TopPlayerEntry[]; chi
   useEffect(() => {
     if (!containerRef.current || !ref.current) return
     Array.from(ref.current.children).forEach((el) => ref.current?.appendChild(el.cloneNode(true)))
-    containerRef.current.style.setProperty('--animation-duration', '38s')
+    containerRef.current.style.setProperty('--animation-duration', '120s')
     containerRef.current.style.setProperty('--animation-direction', 'forwards')
     setStart(true)
   }, [])
@@ -435,10 +435,10 @@ function OverlayLayoutC({ entries, transparent }: { entries: TopPlayerEntry[]; t
     <div className="rounded-xl overflow-hidden" style={transparent ? undefined : PANEL_STYLE}>
       <OverlayScroller entries={entries}>
         {(e) => (
-          <Link href={`/player/${e.wallet_address}`} className={`flex flex-col justify-center px-4 rounded-lg bg-gradient-to-r from-slate-800/90 to-slate-900/80 hover:from-cyan-900/20 ${CARD_HEIGHT} min-w-[180px] w-max flex-shrink-0 flex-nowrap`}>
+          <Link href={`/player/${e.wallet_address}`} className={`flex flex-col justify-center px-4 rounded-lg bg-gradient-to-r from-slate-800/90 to-slate-900/80 hover:from-cyan-900/20 cursor-pointer ${CARD_HEIGHT} min-w-[180px] w-max flex-shrink-0 flex-nowrap`}>
             <div className="flex items-center gap-2 whitespace-nowrap">
               <span className="text-amber-400/90 font-bold">#{e.rank}</span>
-              <span className="text-sm font-mono text-white">...{shortAddress(e.wallet_address)}</span>
+              <span className="text-sm font-mono text-white hover:text-cyan-300">{shortAddress(e.wallet_address)}</span>
             </div>
             <div className="text-[10px] text-white/60 mt-0.5 whitespace-nowrap">
               {e.total_games} games · {e.win_rate.toFixed(1)}% win rate · {e.profit_loss >= 0n ? '+' : ''}{formatMorbius(e.profit_loss)} MORB
