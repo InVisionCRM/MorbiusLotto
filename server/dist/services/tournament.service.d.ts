@@ -415,6 +415,8 @@ export declare class TournamentService {
         tournamentId: string;
         tournamentName: string;
         prizePool: string;
+        prizeTokenAddress: string | null;
+        prizeTokenDecimals: number | null;
         feePercent: number;
         feeEarned: string;
         completedAt: string;

@@ -3,6 +3,7 @@
 import React, { useRef, useCallback } from 'react';
 import type { CreatorTournamentItem } from '@/lib/tournament-types';
 import { getDefaultTourCard } from '@/lib/tournament-types';
+import { Theme } from '@/lib/theme';
 
 interface CreatorShareCardProps {
   tournaments: CreatorTournamentItem[];
@@ -43,7 +44,8 @@ export function CreatorShareCard({ tournaments }: CreatorShareCardProps) {
         return (
           <div
             key={t.id}
-            className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl border border-gray-700 overflow-hidden"
+            className="rounded-xl border border-gray-600 overflow-hidden"
+            style={Theme.panel.base}
           >
             {/* Card preview */}
             <div className="relative aspect-[3/2] overflow-hidden">
@@ -60,13 +62,13 @@ export function CreatorShareCard({ tournaments }: CreatorShareCardProps) {
                     <i className="fas fa-coins mr-1" />
                     {formatMorbius(t.buyInAmount)} Buy-in
                   </span>
-                  <span className="text-green-300">
+                  <span className="text-gray-300">
                     <i className="fas fa-users mr-1" />
                     {t.entryCount} players
                   </span>
                 </div>
                 {BigInt(t.prizePool || '0') > 0n && (
-                  <p className="text-yellow-300 text-sm mt-1">
+                  <p className="text-cyan-300 text-sm mt-1">
                     <i className="fas fa-trophy mr-1" />
                     {formatMorbius(t.prizePool)} MORBIUS pool
                   </p>

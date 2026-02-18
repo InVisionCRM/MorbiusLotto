@@ -665,6 +665,27 @@ class WebSocketService {
                 payload: gameState,
                 requestId: message.requestId
             });
+            // If game completed immediately (e.g. dealer blackjack), broadcast to Live Results
+            if (gameState.status === 'completed') {
+                const hasWin = gameState.playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
+                const hasBlackjack = gameState.playerHands.some(h => h.result === 'blackjack');
+                const allPush = gameState.playerHands.every(h => h.result === 'push');
+                const overallResult = hasWin ? (hasBlackjack ? 'blackjack' : 'win') : allPush ? 'push' : 'loss';
+                const playerCardCount = gameState.playerHands.reduce((sum, h) => sum + (h.cards?.length ?? 0), 0);
+                const dealerCardCount = gameState.dealerCards?.length ?? 0;
+                this.broadcastToAll({
+                    type: 'global_game_completed',
+                    payload: {
+                        gameId: gameState.gameId,
+                        playerAddress: ws.playerAddress || '',
+                        result: overallResult,
+                        payout: gameState.totalPayout.toString(),
+                        betAmount: gameState.totalBetAmount.toString(),
+                        playerCardCount,
+                        dealerCardCount
+                    }
+                });
+            }
         }
         catch (error) {
             logger_1.logger.error('Error creating game:', {
@@ -707,8 +728,9 @@ class WebSocketService {
             if (gameState.status === 'completed') {
                 // Calculate overall result from hands
                 const hasWin = gameState.playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
+                const hasBlackjack = gameState.playerHands.some(h => h.result === 'blackjack');
                 const allPush = gameState.playerHands.every(h => h.result === 'push');
-                const overallResult = hasWin ? 'win' : allPush ? 'push' : 'loss';
+                const overallResult = hasWin ? (hasBlackjack ? 'blackjack' : 'win') : allPush ? 'push' : 'loss';
                 // Send as event (no requestId) - client will handle via event listener
                 this.sendMessage(ws, {
                     type: 'game_completed',
@@ -721,6 +743,8 @@ class WebSocketService {
                     // No requestId - this is an event, not a response
                 });
                 // Broadcast global_game_completed to all clients for GlobalWinsFeed
+                const playerCardCount = gameState.playerHands.reduce((sum, h) => sum + (h.cards?.length ?? 0), 0);
+                const dealerCardCount = gameState.dealerCards?.length ?? 0;
                 const globalMessage = {
                     type: 'global_game_completed',
                     payload: {
@@ -728,7 +752,9 @@ class WebSocketService {
                         playerAddress: ws.playerAddress || '',
                         result: overallResult,
                         payout: gameState.totalPayout.toString(),
-                        betAmount: gameState.totalBetAmount.toString()
+                        betAmount: gameState.totalBetAmount.toString(),
+                        playerCardCount,
+                        dealerCardCount
                     }
                 };
                 this.broadcastToAll(globalMessage);
@@ -1428,9 +1454,30 @@ class WebSocketService {
                 payload: gameState,
                 requestId: message.requestId
             });
-            // If game completed immediately (blackjack), broadcast leaderboard update
+            // If game completed immediately (blackjack), broadcast leaderboard update and Live Results
             if (gameState.status === 'completed') {
                 this.broadcastTournamentLeaderboardUpdate(state.tournamentId);
+                const hasWin = gameState.playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
+                const hasBlackjack = gameState.playerHands.some(h => h.result === 'blackjack');
+                const allPush = gameState.playerHands.every(h => h.result === 'push');
+                const overallResult = hasWin ? (hasBlackjack ? 'blackjack' : 'win') : allPush ? 'push' : 'loss';
+                const playerCardCount = gameState.playerHands.reduce((sum, h) => sum + (h.cards?.length ?? 0), 0);
+                const dealerCardCount = gameState.dealerCards?.length ?? 0;
+                const chipDelta = Number(gameState.totalPayout) - Number(gameState.totalBetAmount);
+                this.broadcastToAll({
+                    type: 'global_game_completed',
+                    payload: {
+                        gameId: gameState.gameId,
+                        playerAddress: ws.playerAddress || '',
+                        result: overallResult,
+                        betAmount: gameState.totalBetAmount.toString(),
+                        payout: gameState.totalPayout.toString(),
+                        playerCardCount,
+                        dealerCardCount,
+                        isTournament: true,
+                        chipDelta,
+                    },
+                });
                 // Check if player busted or completed
                 if (gameState.tournamentChips <= 0) {
                     this.sendMessage(ws, {
@@ -1487,6 +1534,28 @@ class WebSocketService {
             // If game completed, send additional notifications
             if (gameState.status === 'completed') {
                 this.broadcastTournamentLeaderboardUpdate(state.tournamentId);
+                // Broadcast to Live Results with chip amounts (tournament games use chips, not MORBIUS)
+                const hasWin = gameState.playerHands.some(h => h.result === 'win' || h.result === 'blackjack');
+                const hasBlackjack = gameState.playerHands.some(h => h.result === 'blackjack');
+                const allPush = gameState.playerHands.every(h => h.result === 'push');
+                const overallResult = hasWin ? (hasBlackjack ? 'blackjack' : 'win') : allPush ? 'push' : 'loss';
+                const playerCardCount = gameState.playerHands.reduce((sum, h) => sum + (h.cards?.length ?? 0), 0);
+                const dealerCardCount = gameState.dealerCards?.length ?? 0;
+                const chipDelta = Number(gameState.totalPayout) - Number(gameState.totalBetAmount);
+                this.broadcastToAll({
+                    type: 'global_game_completed',
+                    payload: {
+                        gameId: gameState.gameId,
+                        playerAddress: ws.playerAddress || '',
+                        result: overallResult,
+                        betAmount: gameState.totalBetAmount.toString(),
+                        payout: gameState.totalPayout.toString(),
+                        playerCardCount,
+                        dealerCardCount,
+                        isTournament: true,
+                        chipDelta,
+                    },
+                });
                 // Check for bust or completion
                 if (gameState.tournamentChips <= 0) {
                     this.sendMessage(ws, {
@@ -2157,7 +2226,7 @@ class WebSocketService {
     async handleRecentGlobalWins(ws, message) {
         try {
             const limit = Math.min(parseInt(message.payload?.limit) || 20, 100);
-            // Query database for recent completed games
+            // Query database for recent completed games (with card counts, tournament chip amounts)
             const query = `
         SELECT 
           g.id as game_id,
@@ -2165,10 +2234,20 @@ class WebSocketService {
           g.total_payout,
           g.result,
           g.completed_at,
-          p.wallet_address as player_address
+          p.wallet_address as player_address,
+          COALESCE((
+            SELECT SUM(jsonb_array_length(gh.cards))
+            FROM game_hands gh
+            WHERE gh.game_id = g.id
+          ), 0)::int as player_card_count,
+          jsonb_array_length(COALESCE(g.dealer_cards, '[]'::jsonb))::int as dealer_card_count,
+          tg.bet_amount as tg_bet_amount,
+          tg.chips_before as tg_chips_before,
+          tg.chips_after as tg_chips_after
         FROM games g
         JOIN game_sessions gs ON g.session_id = gs.id
         JOIN players p ON gs.player_id = p.id
+        LEFT JOIN tournament_games tg ON tg.game_id = g.id
         WHERE g.result IS NOT NULL 
           AND g.result != 'ongoing'
           AND g.completed_at IS NOT NULL
@@ -2177,16 +2256,29 @@ class WebSocketService {
       `;
             const result = await this.dbService.getPool().query(query, [limit]);
             const wins = result.rows.map((row) => {
-                // Calculate overall result from game result
                 const hasWin = row.result === 'win' || row.result === 'blackjack';
                 const overallResult = hasWin ? row.result : row.result === 'push' ? 'push' : 'loss';
+                const isTournament = row.tg_bet_amount != null;
+                const betAmount = isTournament
+                    ? String(row.tg_bet_amount ?? 0)
+                    : (row.total_bet_amount?.toString() || '0');
+                const chipDelta = isTournament
+                    ? Number(row.tg_chips_after ?? 0) - Number(row.tg_chips_before ?? 0)
+                    : null;
+                const payout = isTournament
+                    ? String(Number(row.tg_chips_before ?? 0) + (chipDelta ?? 0))
+                    : (row.total_payout?.toString() || '0');
                 return {
                     gameId: row.game_id,
                     playerAddress: row.player_address || '',
                     result: overallResult,
-                    betAmount: row.total_bet_amount?.toString() || '0',
-                    payout: row.total_payout?.toString() || '0',
+                    betAmount,
+                    payout,
                     timestamp: row.completed_at ? new Date(row.completed_at).getTime() : Date.now(),
+                    playerCardCount: row.player_card_count ?? 0,
+                    dealerCardCount: row.dealer_card_count ?? 0,
+                    isTournament: !!isTournament,
+                    chipDelta: isTournament ? chipDelta : undefined,
                 };
             });
             this.sendMessage(ws, {

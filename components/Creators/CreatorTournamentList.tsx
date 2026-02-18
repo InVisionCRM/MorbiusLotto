@@ -142,10 +142,10 @@ export function CreatorTournamentList({ tournaments, wsClient, onRefresh, creato
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         t.status === 'active'
-                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                          ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                           : t.status === 'completed'
-                          ? 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
-                          : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          ? 'bg-gray-600/50 text-gray-400 border border-gray-500/30'
+                          : 'bg-gray-600/50 text-gray-500 border border-gray-500/30'
                       }`}
                     >
                       {t.status}
@@ -153,8 +153,8 @@ export function CreatorTournamentList({ tournaments, wsClient, onRefresh, creato
                   </TableCell>
                   <TableCell className="text-gray-300">{t.entryCount}</TableCell>
                   <TableCell className="text-gray-300">{formatMorbius(t.prizePool)}</TableCell>
-                  <TableCell className="text-purple-400">{t.creatorFeePercent}%</TableCell>
-                  <TableCell className="text-yellow-400 font-medium">
+                  <TableCell className="text-cyan-400">{t.creatorFeePercent}%</TableCell>
+                  <TableCell className="text-cyan-400 font-medium">
                     {t.status === 'completed' && t.creatorFeePercent > 0
                       ? formatMorbius(t.creatorFeeEarned)
                       : '-'}

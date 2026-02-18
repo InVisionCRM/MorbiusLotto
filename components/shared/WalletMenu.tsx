@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { motion } from 'motion/react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useDisconnect } from 'wagmi'
+import { useProfile } from '@/hooks/use-player-profile'
 
 export interface WalletMenuProps {
   /** When provided, shows Deposit/Withdraw button that calls this */
@@ -44,6 +45,9 @@ export function WalletMenu({
 }: WalletMenuProps) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
+  const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook } = useProfile()
+  const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook
+  const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const walletDropdownRef = useRef<HTMLDivElement>(null)
@@ -97,8 +101,8 @@ export function WalletMenu({
             <div
               className={`rounded-full bg-slate-700 border border-cyan-500/30 overflow-hidden flex-shrink-0 flex items-center justify-center ${variant === 'sidebar' ? 'w-5 h-5' : 'w-7 h-7'}`}
             >
-              {profileImageUrl ? (
-                <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
+              {effectiveProfileImageUrl ? (
+                <img src={effectiveProfileImageUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <span className={`text-xs ${variant === 'sidebar' ? 'text-white/70' : 'text-gray-400'}`}>?</span>
               )}
@@ -109,7 +113,7 @@ export function WalletMenu({
                   animate={{ display: sidebarOpen ? 'inline-block' : 'none', opacity: sidebarOpen ? 1 : 0 }}
                   className="text-white truncate min-w-0 text-sm"
                 >
-                  {profileDisplayName ?? `…${address.slice(-4)}`}
+                  {effectiveProfileDisplayName ?? `…${address.slice(-4)}`}
                 </motion.span>
                 <motion.span
                   animate={{ display: sidebarOpen ? 'inline-block' : 'none', opacity: sidebarOpen ? 1 : 0 }}
@@ -124,7 +128,7 @@ export function WalletMenu({
             ) : (
               <>
                 <span className="text-white truncate min-w-0">
-                  {profileDisplayName ?? `…${address.slice(-4)}`}
+                  {effectiveProfileDisplayName ?? `…${address.slice(-4)}`}
                 </span>
                 <i
                   className={`fas fa-chevron-down text-white text-sm transition-transform flex-shrink-0 ${isWalletDropdownOpen ? 'rotate-180' : ''}`}

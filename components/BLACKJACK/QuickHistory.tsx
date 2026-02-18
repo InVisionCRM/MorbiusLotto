@@ -53,6 +53,12 @@ function formatMorbius(wei: bigint): string {
   return Math.floor(Number(formatEther(wei))).toLocaleString()
 }
 
+/** Format bet or P/L for display: chips when tournament, MORBIUS wei otherwise */
+function formatAmount(amount: bigint, isTournament: boolean): string {
+  if (isTournament) return Math.abs(Number(amount)).toLocaleString()
+  return formatEther(amount)
+}
+
 const tableCls = 'text-white font-poppins bg-transparent'
 const rowCls = 'border-white/10 hover:bg-transparent'
 const headCls = 'text-white/80 font-medium h-9 px-2'
@@ -109,6 +115,7 @@ export default function QuickHistory({ history, reserveBalance, onVerifyGame }: 
             <TableHead className={headCls}>Result</TableHead>
             <TableHead className={headCls}>Bet</TableHead>
             <TableHead className={headCls}>P/L</TableHead>
+            <TableHead className={`${headCls} whitespace-nowrap min-w-[4rem]`} title="Player vs Dealer card count">P vs D</TableHead>
             {showBalance && <TableHead className={headCls}>Balance</TableHead>}
             <TableHead className={headCls}>Bet ID</TableHead>
           </TableRow>
@@ -123,6 +130,7 @@ export default function QuickHistory({ history, reserveBalance, onVerifyGame }: 
             const wasSplit = result.wasSplit ?? hands.length > 1
             const config = RESULT_CONFIG[resultType]
             const isWin = resultType === 'win' || resultType === 'blackjack'
+            const isTournament = result.isTournament === true
 
             return (
               <TableRow key={result.gameId ?? `qh-${globalIndex}`} className={rowCls}>
@@ -130,12 +138,24 @@ export default function QuickHistory({ history, reserveBalance, onVerifyGame }: 
                   <span className={config.className}>{config.label}</span>
                   {wasSplit && <span className="text-cyan-400/90 text-xs ml-1">SPLIT</span>}
                 </TableCell>
-                <TableCell className={cellCls}>{formatEther(betAmount)}</TableCell>
+                <TableCell className={cellCls}>
+                  {formatAmount(betAmount, isTournament)}
+                  {isTournament && <span className="text-white/60 text-xs ml-0.5">chips</span>}
+                </TableCell>
                 <TableCell className={cellCls}>
                   <span className={config.className}>
                     {resultType === 'loss' ? '−' : '+'}
-                    {formatEther(winLoss < BigInt(0) ? -winLoss : winLoss)}
+                    {formatAmount(winLoss < BigInt(0) ? -winLoss : winLoss, isTournament)}
+                    {isTournament && <span className="text-white/60 text-xs ml-0.5">chips</span>}
                   </span>
+                </TableCell>
+                <TableCell className={`${cellCls} text-white/70 text-xs font-mono whitespace-nowrap`} title="Player vs Dealer card count">
+                  {(() => {
+                    const hands = result.playerHands?.length ? result.playerHands : [result.playerHand]
+                    const pCount = hands.reduce((s, h) => s + (h.cards?.length ?? 0), 0)
+                    const dCount = result.dealerHand?.cards?.length ?? 0
+                    return pCount > 0 || dCount > 0 ? `P-${pCount} vs D-${dCount}` : '—'
+                  })()}
                 </TableCell>
                 {showBalance && (
                   <TableCell className={cellCls}>

@@ -7,7 +7,8 @@ const tournament_prize_escrow_1 = require("../abi/tournament-prize-escrow");
 const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
 const tournament_prize_escrow_v3_1 = require("../abi/tournament-prize-escrow-v3");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
-const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+/** Tournament Prize Escrow V2 (bytes32 tournament IDs) - hardcoded for reliability */
+const ESCROW_V2_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1';
 const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25';
 /**
  * Read tournament prize pool status from the escrow contract.
@@ -15,15 +16,13 @@ const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25';
  * Returns null if escrow is not configured or the call fails.
  */
 async function getEscrowPoolStatus(tournamentId) {
-    if (!ESCROW_ADDRESS)
-        return null;
     try {
         const client = (0, chain_client_1.getPublicClient)();
         const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
         // Try V2 first (has more fields)
         try {
             const result = await client.readContract({
-                address: ESCROW_ADDRESS,
+                address: ESCROW_V2_ADDRESS,
                 abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'getPool',
                 args: [idBytes32],
@@ -42,7 +41,7 @@ async function getEscrowPoolStatus(tournamentId) {
         catch (v2Error) {
             // Fallback to V1 if V2 call fails (backwards compatibility)
             const [token, totalDeposited, amountPaidOut] = await client.readContract({
-                address: ESCROW_ADDRESS,
+                address: ESCROW_V2_ADDRESS,
                 abi: tournament_prize_escrow_1.tournamentPrizeEscrowAbi,
                 functionName: 'getPool',
                 args: [idBytes32],

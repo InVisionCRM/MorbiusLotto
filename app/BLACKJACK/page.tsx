@@ -5,8 +5,8 @@ import { useAccount, usePublicClient, useSignTypedData } from 'wagmi';
 import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
-import { BlackjackTopPlayersCarousel } from '@/components/BLACKJACK/BlackjackTopPlayersCarousel';
 import { BlackjackTopPlayersOverlay } from '@/components/BLACKJACK/BlackjackTopPlayersOverlay';
+import { ChatPanel } from '@/components/chat/ChatPanel';
 import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
@@ -1253,6 +1253,7 @@ export default function BlackjackPage() {
               })) }),
               ...(result.wasSplit && { wasSplit: true }),
               ...(result.wasDoubleDown && { wasDoubleDown: true }),
+              ...(result.isTournament && { isTournament: true }),
             }));
             localStorage.setItem(storageKey, JSON.stringify(historyToStore));
           } catch (error) {
@@ -1374,6 +1375,7 @@ export default function BlackjackPage() {
             }),
             ...(result.wasSplit && { wasSplit: true }),
             ...(result.wasDoubleDown && { wasDoubleDown: true }),
+            ...(result.isTournament && { isTournament: true }),
           };
         });
 
@@ -1487,13 +1489,15 @@ export default function BlackjackPage() {
     const dealerCardsRaw = rawDealerCards.map((c, idx) => toCard(c, 100 + idx));
     const dealerCards = maxDealerCards != null ? dealerCardsRaw.slice(0, maxDealerCards) : dealerCardsRaw;
     const dealerTotals = calculateHandTotal(dealerCardsRaw);
+    const dealerTotalNum = Number(serverGameState.dealerTotal ?? dealerTotals.total);
+    const dealerHasBlackjack = status === 'completed' && dealerCardsRaw.length === 2 && dealerTotalNum === 21;
     const dealerHand: Hand = {
       id: `${gameId}-dealer`,
       cards: dealerCards, // Sliced when phased deal
-      total: Number(serverGameState.dealerTotal ?? dealerTotals.total),
+      total: dealerTotalNum,
       hasAce: Boolean(serverGameState.dealerHasAce ?? dealerTotals.hasAce),
-      isBlackjack: false,
-      isBust: Number(serverGameState.dealerTotal ?? dealerTotals.total) > 21,
+      isBlackjack: dealerHasBlackjack,
+      isBust: dealerTotalNum > 21,
       betAmount: BigInt(0),
       payout: BigInt(0),
       actions: Array.isArray(serverGameState.dealerActions) ? serverGameState.dealerActions : [],
@@ -1867,17 +1871,24 @@ export default function BlackjackPage() {
       const wasDoubleDown = allPlayerHands.some((h: Hand) =>
         Array.isArray(h.actions) && h.actions.some((a: any) => a.type === 'double_down'));
 
+      // For tournament: store bet/payout in chips for history display (QuickHistory uses chips, not wei)
+      const isTournament = !!data.isTournament;
+      const payoutForHistory = isTournament
+        ? BigInt(Math.floor(Number(payout) / 1e18))
+        : (currentGame?.totalPayout ?? payout);
+
       // Add to history
       const gameResult: GameResult = {
         gameId: data?.gameId ? String(data.gameId) : `game-${Date.now()}`,
         playerHand,
         dealerHand,
-        payout: currentGame?.totalPayout ?? payout,
+        payout: payoutForHistory,
         isBlackjack: data.result === 'blackjack',
         timestamp: Date.now(),
         ...(allPlayerHands.length > 0 && { playerHands: allPlayerHands }),
         ...(wasSplit && { wasSplit: true }),
         ...(wasDoubleDown && { wasDoubleDown: true }),
+        ...(isTournament && { isTournament: true }),
       };
 
       // Store game result + chart data in ref — flushed in handleDealerRevealComplete for immersion
@@ -1914,8 +1925,15 @@ export default function BlackjackPage() {
     if (tournament.tournamentState.inTournament) {
       tournament.commitDisplayState();
     }
-    // Allow REBET/DEAL only after dealer hand is fully revealed
-    setGameState(prev => ({ ...prev, isPlaying: false }));
+    // Allow REBET/DEAL only after dealer hand is fully revealed.
+    // Do NOT overwrite if user already started a new game (avoids race where DEAL was pressed
+    // before reveal timeout fired — we'd incorrectly hide the action buttons).
+    setGameState(prev => {
+      if (prev.currentGame?.state === GameState.COMPLETE) {
+        return { ...prev, isPlaying: false };
+      }
+      return prev;
+    });
     // Trigger chip animation now that dealer reveal is complete
     if (pendingChipResult) {
       chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
@@ -1925,8 +1943,8 @@ export default function BlackjackPage() {
       if (soundEnabled && pendingChipResult === 'loss') {
         playSound('/BlackJack/sounds/DealerWins.mp3');
       }
-      // Play sound: player wins (including player blackjack — same as any other win)
-      if (soundEnabled && (pendingChipResult === 'win' || pendingChipResult === 'blackjack')) {
+      // Play sound: player wins (including player blackjack — same as any other win). Never on push.
+      if (soundEnabled && pendingChipResult !== 'push' && (pendingChipResult === 'win' || pendingChipResult === 'blackjack')) {
         playSound('/BlackJack/sounds/PlayerWins.mp3');
       }
     }
@@ -2014,6 +2032,7 @@ export default function BlackjackPage() {
               })) }),
               ...(result.wasSplit && { wasSplit: true }),
               ...(result.wasDoubleDown && { wasDoubleDown: true }),
+              ...(result.isTournament && { isTournament: true }),
             }));
             localStorage.setItem(storageKey, JSON.stringify(historyToStore));
           } catch (error) {
@@ -2071,6 +2090,7 @@ export default function BlackjackPage() {
                 result: 'blackjack',
                 processedGame,
                 gameState: gameState,
+                isTournament: true,
               });
             }
           });
@@ -2086,6 +2106,7 @@ export default function BlackjackPage() {
               result: processedGame.playerHand?.result || (payoutWei > betAmountWei ? 'win' : payoutWei < betAmountWei ? 'loss' : 'push'),
               processedGame,
               gameState: gameState,
+              isTournament: true,
             });
           }
         }
@@ -2122,9 +2143,10 @@ export default function BlackjackPage() {
             result: processedGame.playerHand?.result || (payoutWei > betAmountWei ? 'win' : payoutWei < betAmountWei ? 'loss' : 'push'),
             processedGame,
             gameState: gameStateResult,
+            isTournament: true,
           });
-          
-          setGameState(prev => ({ ...prev, isPlaying: false }));
+          // Do NOT set isPlaying=false here — wait for handleDealerRevealComplete so DEAL
+          // doesn't appear too soon and cause a race (cards deal but action buttons don't show).
         }
       }
     } catch (error: any) {
@@ -2590,7 +2612,6 @@ export default function BlackjackPage() {
           {/* 1. Table + mobile controls (right of table on mobile) */}
           <div className="min-w-0 flex flex-row md:flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1 gap-2 md:gap-0">
           <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
-            <BlackjackTopPlayersOverlay />
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
               playerHands={currentGame?.playerHands}
@@ -2647,15 +2668,16 @@ export default function BlackjackPage() {
               hideBettingPanel={true}
               completedGameId={currentGame?.state === GameState.COMPLETE ? currentGame?.id : undefined}
               onCardsClearComplete={handleCardsClearComplete}
-              perfectPairsBet={perfectPairsBet}
-              onPerfectPairsBetChange={setPerfectPairsBet}
-              perfectPairsResult={currentGame?.perfectPairsResult}
+              perfectPairsBet={tournament.tournamentState.inTournament ? 0 : perfectPairsBet}
+              onPerfectPairsBetChange={tournament.tournamentState.inTournament ? undefined : setPerfectPairsBet}
+              perfectPairsResult={tournament.tournamentState.inTournament ? undefined : currentGame?.perfectPairsResult}
               tournamentHandSummary={tournament.tournamentState.inTournament ? tournament.lastHandSummary : null}
               onDismissTournamentSummary={tournament.clearLastHandSummary}
               onOpenTournamentHistory={() => {
                 setTournamentBrowserInitialTab('history');
                 setShowTournamentBrowser(true);
               }}
+              inTournament={tournament.tournamentState.inTournament}
             />
 
             {/* Win Notification */}
@@ -2746,6 +2768,10 @@ export default function BlackjackPage() {
             tournamentsLoading={tournament.isLoading}
             onCreateTournament={() => setShowTournamentCreator(true)}
             onJoinTournament={(t) => {
+              if (tournament.tournamentState.inTournament && tournament.tournamentState.tournamentId === t.id) {
+                toast.success('You\'re already in this tournament — check the Tournament tab');
+                return;
+              }
               if (t.isPrivate) {
                 setPendingJoinTournament(t);
                 setShowTournamentPinEntry(true);
@@ -2770,6 +2796,7 @@ export default function BlackjackPage() {
                 <TournamentHUD
                   state={tournament.displayedTournamentState ?? tournament.tournamentState}
                   onLeave={async () => {
+                    if (!confirm('Forfeit tournament? You will not be able to rejoin. This cannot be undone.')) return;
                     const success = await tournament.leaveTournament();
                     if (success) {
                       setShowTournamentComplete(false);
@@ -2787,8 +2814,20 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Top Players Carousel */}
-        <BlackjackTopPlayersCarousel />
+        {/* Top Players + Chat: grid 2-col on md-lg, stack on mobile */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <BlackjackTopPlayersOverlay />
+          <div className="min-h-[280px] md:min-h-[340px] flex flex-col min-w-0">
+            <ChatPanel
+              roomId="blackjack"
+              title="Blackjack Chat"
+              collapsible={false}
+              wsClient={wsClient}
+              wsConnected={wsConnected}
+              className="h-full min-h-0 flex-1"
+            />
+          </div>
+        </div>
 
         {/* Tournament Leaderboard (shown when in tournament) */}
         {tournament.tournamentState.inTournament && (
@@ -2881,7 +2920,14 @@ export default function BlackjackPage() {
           initialTab={tournamentBrowserInitialTab}
           onClose={() => setShowTournamentBrowser(false)}
           getThemeInfo={getThemeInfo}
+          currentTournamentId={tournament.tournamentState.inTournament ? tournament.tournamentState.tournamentId : null}
           onJoin={(t) => {
+            // Already in this tournament — resume without re-joining (no sign, no pay)
+            if (tournament.tournamentState.inTournament && tournament.tournamentState.tournamentId === t.id) {
+              setShowTournamentBrowser(false);
+              toast.success('Resuming tournament');
+              return;
+            }
             if (t.isPrivate) {
               setPendingJoinTournament(t);
               setShowTournamentPinEntry(true);
@@ -2917,6 +2963,14 @@ export default function BlackjackPage() {
           tournamentHistory={tournament.tournamentHistory}
           isHistoryLoading={tournament.isHistoryLoading}
           onFetchHistory={tournament.fetchTournamentHistory}
+          onUnregister={async (tournamentId) => {
+            const success = await tournament.unregisterTournament(tournamentId);
+            if (success) {
+              await tournament.fetchTournamentList();
+              fetchBalance();
+            }
+            return success;
+          }}
         />
 
         {/* Tournament Creator Modal */}

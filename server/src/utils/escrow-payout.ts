@@ -8,7 +8,9 @@ import { getEscrowPoolStatus, getEscrowV3PoolStatus } from './escrow-status';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
 import { logger } from './logger';
 
-const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS as `0x${string}` | undefined;
+/** Tournament Prize Escrow V2 (bytes32 tournament IDs) - hardcoded for reliability */
+const ESCROW_V2_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1' as const;
+/** V3 (uint256 IDs) - kept for cancel/reclaim of legacy V3-funded tournaments */
 const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25' as const;
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY) as `0x${string}` | undefined;
 
@@ -38,10 +40,6 @@ export async function sendEscrowPayout(
   winnerAddress: string,
   amount: bigint
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
-  if (!ESCROW_ADDRESS) {
-    logger.warn('TOURNAMENT_PRIZE_ESCROW_ADDRESS not set; skipping escrow payout');
-    return { success: false, error: 'Escrow not configured' };
-  }
   if (amount <= 0n) {
     return { success: true };
   }
@@ -56,7 +54,7 @@ export async function sendEscrowPayout(
       const hash = await client.writeContract({
         account: client.account!,
         chain: pulsechain,
-        address: ESCROW_ADDRESS,
+        address: ESCROW_V2_ADDRESS,
         abi: tournamentPrizeEscrowAbi,
         functionName: 'payout',
         args: [idBytes32, winner, amount],
@@ -82,7 +80,6 @@ const RECLAIM_WALLET = (process.env.ESCROW_REMAINDER_WALLET || process.env.PLATF
  * Uses same authorized server key as payouts. Set ESCROW_REMAINDER_WALLET or PLATFORM_FEE_WALLET.
  */
 export async function sendEscrowRemainderToReclaimWallet(tournamentId: string): Promise<{ success: boolean; txHash?: string; error?: string }> {
-  if (!ESCROW_ADDRESS) return { success: false, error: 'Escrow not configured' };
   if (!RECLAIM_WALLET || !RECLAIM_WALLET.startsWith('0x')) {
     logger.warn('ESCROW_REMAINDER_WALLET / PLATFORM_FEE_WALLET not set; skipping escrow remainder reclaim');
     return { success: false, error: 'Reclaim wallet not configured' };
@@ -101,7 +98,7 @@ export async function sendEscrowRemainderToReclaimWallet(tournamentId: string): 
       const hash = await client.writeContract({
         account: client.account!,
         chain: pulsechain,
-        address: ESCROW_ADDRESS,
+        address: ESCROW_V2_ADDRESS,
         abi: tournamentPrizeEscrowAbi,
         functionName: 'payoutRemainderTo',
         args: [idBytes32, RECLAIM_WALLET],
@@ -195,8 +192,6 @@ export async function sendEscrowV3RemainderTo(
  * Marks the tournament as cancelled so creator can reclaim funds.
  */
 export async function cancelTournamentInEscrow(tournamentId: string): Promise<{ success: boolean; txHash?: string; error?: string }> {
-  if (!ESCROW_ADDRESS) return { success: false, error: 'Escrow not configured' };
-
   const idBytes32 = tournamentIdToBytes32(tournamentId);
   const maxRetries = 5;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -206,7 +201,7 @@ export async function cancelTournamentInEscrow(tournamentId: string): Promise<{ 
       const hash = await client.writeContract({
         account: client.account!,
         chain: pulsechain,
-        address: ESCROW_ADDRESS,
+        address: ESCROW_V2_ADDRESS,
         abi: tournamentPrizeEscrowV2Abi,
         functionName: 'cancelTournament',
         args: [idBytes32],

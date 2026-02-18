@@ -1666,6 +1666,8 @@ class TournamentService {
         t.id AS tournament_id,
         t.name AS tournament_name,
         t.prize_pool,
+        t.prize_token_address,
+        t.prize_token_decimals,
         COALESCE(t.creator_fee_percent, 0) AS creator_fee_percent,
         (t.prize_pool * COALESCE(t.creator_fee_percent, 0)) / 100 AS fee_earned,
         t.ended_at
@@ -1680,6 +1682,8 @@ class TournamentService {
             tournamentId: row.tournament_id,
             tournamentName: row.tournament_name,
             prizePool: String(row.prize_pool ?? '0'),
+            prizeTokenAddress: row.prize_token_address ?? null,
+            prizeTokenDecimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
             feePercent: Number(row.creator_fee_percent ?? 0),
             feeEarned: String(row.fee_earned ?? '0'),
             completedAt: row.ended_at ? new Date(row.ended_at).toISOString() : '',

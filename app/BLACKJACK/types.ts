@@ -83,6 +83,8 @@ export interface GameResult {
   wasSplit?: boolean;
   /** True if any hand was doubled down. */
   wasDoubleDown?: boolean;
+  /** True when from tournament — bet/payout are in chips, not MORBIUS wei */
+  isTournament?: boolean;
 }
 
 export interface GameStateUI {

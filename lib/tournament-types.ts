@@ -222,6 +222,10 @@ export interface TournamentListItem {
   escrowToken?: string | null;
   /** uint256 from MorbiusTournament; when set, create/join use on-chain flow */
   onChainTournamentId?: number | null;
+  /** Tournament status: registration (waiting for players) or active */
+  status?: 'registration' | 'active' | 'completed' | 'cancelled';
+  /** Minimum players to start (for registration display) */
+  minPlayers?: number;
 }
 
 // Extended tournament info
@@ -373,6 +377,9 @@ export interface CreatorEarning {
   tournamentId: string;
   tournamentName: string;
   prizePool: string;
+  /** When set, prize pool and fee are in this custom token (not MORBIUS) */
+  prizeTokenAddress?: string | null;
+  prizeTokenDecimals?: number | null;
   feePercent: number;
   feeEarned: string;
   completedAt: string;

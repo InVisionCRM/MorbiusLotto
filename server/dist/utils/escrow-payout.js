@@ -16,7 +16,9 @@ const tournament_prize_escrow_v3_1 = require("../abi/tournament-prize-escrow-v3"
 const escrow_status_1 = require("./escrow-status");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const logger_1 = require("./logger");
-const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+/** Tournament Prize Escrow V2 (bytes32 tournament IDs) - hardcoded for reliability */
+const ESCROW_V2_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1';
+/** V3 (uint256 IDs) - kept for cancel/reclaim of legacy V3-funded tournaments */
 const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25';
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY);
 let walletClient = null;
@@ -39,10 +41,6 @@ function getWalletClient() {
  * Caller must ensure total payouts do not exceed the pool.
  */
 async function sendEscrowPayout(tournamentId, winnerAddress, amount) {
-    if (!ESCROW_ADDRESS) {
-        logger_1.logger.warn('TOURNAMENT_PRIZE_ESCROW_ADDRESS not set; skipping escrow payout');
-        return { success: false, error: 'Escrow not configured' };
-    }
     if (amount <= 0n) {
         return { success: true };
     }
@@ -55,7 +53,7 @@ async function sendEscrowPayout(tournamentId, winnerAddress, amount) {
             const hash = await client.writeContract({
                 account: client.account,
                 chain: chains_1.pulsechain,
-                address: ESCROW_ADDRESS,
+                address: ESCROW_V2_ADDRESS,
                 abi: tournament_prize_escrow_1.tournamentPrizeEscrowAbi,
                 functionName: 'payout',
                 args: [idBytes32, winner, amount],
@@ -80,8 +78,6 @@ const RECLAIM_WALLET = (process.env.ESCROW_REMAINDER_WALLET || process.env.PLATF
  * Uses same authorized server key as payouts. Set ESCROW_REMAINDER_WALLET or PLATFORM_FEE_WALLET.
  */
 async function sendEscrowRemainderToReclaimWallet(tournamentId) {
-    if (!ESCROW_ADDRESS)
-        return { success: false, error: 'Escrow not configured' };
     if (!RECLAIM_WALLET || !RECLAIM_WALLET.startsWith('0x')) {
         logger_1.logger.warn('ESCROW_REMAINDER_WALLET / PLATFORM_FEE_WALLET not set; skipping escrow remainder reclaim');
         return { success: false, error: 'Reclaim wallet not configured' };
@@ -100,7 +96,7 @@ async function sendEscrowRemainderToReclaimWallet(tournamentId) {
             const hash = await client.writeContract({
                 account: client.account,
                 chain: chains_1.pulsechain,
-                address: ESCROW_ADDRESS,
+                address: ESCROW_V2_ADDRESS,
                 abi: tournament_prize_escrow_1.tournamentPrizeEscrowAbi,
                 functionName: 'payoutRemainderTo',
                 args: [idBytes32, RECLAIM_WALLET],
@@ -191,8 +187,6 @@ async function sendEscrowV3RemainderTo(onChainTournamentId, to) {
  * Marks the tournament as cancelled so creator can reclaim funds.
  */
 async function cancelTournamentInEscrow(tournamentId) {
-    if (!ESCROW_ADDRESS)
-        return { success: false, error: 'Escrow not configured' };
     const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
     const maxRetries = 5;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -202,7 +196,7 @@ async function cancelTournamentInEscrow(tournamentId) {
             const hash = await client.writeContract({
                 account: client.account,
                 chain: chains_1.pulsechain,
-                address: ESCROW_ADDRESS,
+                address: ESCROW_V2_ADDRESS,
                 abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'cancelTournament',
                 args: [idBytes32],

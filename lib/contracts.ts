@@ -64,16 +64,13 @@ export const LEGACY_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   ...(BLACKJACK_LEGACY_ADDRESS_3 ? [BLACKJACK_LEGACY_ADDRESS_3] : []),
 ]
 
-// Tournament Prize Escrow (custom token prize pools for tournaments)
-export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = (
-  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS
-    ? process.env.NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS
-    : '0x0000000000000000000000000000000000000000'
-) as `0x${string}`
+// Tournament Prize Escrow V2 (custom token prize pools) - hardcoded for reliability
+export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1' as const
 
-// MorbiusTournament (on-chain create/join, uint256 IDs) + Escrow V3
+// MorbiusTournament (on-chain create/join, uint256 IDs)
 export const MORBIUS_TOURNAMENT_ADDRESS = '0x1F30Aa16B4Da0124308E33b8650C351BBCA70704' as const
 
+/** @deprecated Use TOURNAMENT_PRIZE_ESCROW_ADDRESS (V2) - V3 kept for legacy cancel/reclaim */
 export const TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25' as const
 
 // MORBIUS Holder Distributor (receives MORBIUS; holders claim proportional share)

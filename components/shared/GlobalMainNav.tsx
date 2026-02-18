@@ -489,18 +489,32 @@ export default function GlobalMainNav({
   const handleOpenHowToPlay = onOpenHowToPlay ?? (() => setHowToPlayOpen(true));
   const handleOpenSwap = onOpenSwap ?? (() => setSwapOpen(true));
 
-  const mobileBarContent = isConnected && reserveBalance !== undefined && onOpenDepositModal ? (
-    <button
-      type="button"
-      onClick={onOpenDepositModal}
-      className="flex items-center gap-1 rounded-md py-1 px-2 text-xs shrink-0 hover:bg-white/10 transition-colors"
-      aria-label={`Reserve: ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
-      title={`Deposit/Withdraw — ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
-    >
-      <NumberTicker value={Math.floor(Number(reserveBalance) / 1e18)} className="text-white font-bold text-xs" animateOnChange={true} />
-      <Image src="/morbius/MorbiusLogo (3).png" alt="" width={14} height={14} className="object-contain shrink-0" />
-    </button>
-  ) : null;
+  const mobileBarContent = (
+    <div className="flex items-center gap-2 min-w-0">
+      <WalletMenu
+        onOpenDepositModal={onOpenDepositModal}
+        reserveBalance={reserveBalance}
+        profileDisplayName={effectiveProfileDisplayName}
+        profileImageUrl={effectiveProfileImageUrl}
+        onOpenProfileSettings={onOpenProfileSettings}
+        dropdownPlacement="below"
+        variant="default"
+        className="shrink-0"
+      />
+      {isConnected && reserveBalance !== undefined && onOpenDepositModal && (
+        <button
+          type="button"
+          onClick={onOpenDepositModal}
+          className="flex items-center gap-1 rounded-md py-1 px-2 text-xs shrink-0 hover:bg-white/10 transition-colors"
+          aria-label={`Reserve: ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
+          title={`Deposit/Withdraw — ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
+        >
+          <NumberTicker value={Math.floor(Number(reserveBalance) / 1e18)} className="text-white font-bold text-xs" animateOnChange={true} />
+          <Image src="/morbius/MorbiusLogo (3).png" alt="" width={14} height={14} className="object-contain shrink-0" />
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <Sidebar mobileBarContent={mobileBarContent}>

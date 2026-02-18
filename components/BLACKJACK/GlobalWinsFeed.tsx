@@ -20,6 +20,14 @@ export interface GlobalWinEntry {
   amount: bigint
   payout: bigint
   timestamp: number
+  /** Player card count for P-X vs D-X verification */
+  playerCardCount?: number
+  /** Dealer card count for P-X vs D-X verification */
+  dealerCardCount?: number
+  /** When true, amount/payout are in tournament chips (display as chips, not MORBIUS) */
+  isTournament?: boolean
+  /** Chip delta for tournament games (chips_after - chips_before); use for P/L when isTournament */
+  chipDelta?: number
 }
 
 interface GlobalWinsFeedProps {
@@ -71,6 +79,10 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
             amount: BigInt(String(win.betAmount || '0')),
             payout: BigInt(String(win.payout || '0')),
             timestamp: win.timestamp || Date.now(),
+            playerCardCount: win.playerCardCount,
+            dealerCardCount: win.dealerCardCount,
+            isTournament: win.isTournament,
+            chipDelta: win.chipDelta,
           }))
           setEntries(recentEntries)
         }
@@ -97,6 +109,10 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
           amount: BigInt(String(data.betAmount || '0')),
           payout: BigInt(String(data.payout || '0')),
           timestamp: Date.now(),
+          playerCardCount: data.playerCardCount,
+          dealerCardCount: data.dealerCardCount,
+          isTournament: data.isTournament,
+          chipDelta: data.chipDelta,
         }
 
         setEntries(prev => {
@@ -146,6 +162,7 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
               <TableHead className={headCls}>Result</TableHead>
               <TableHead className={headCls}>Player</TableHead>
               <TableHead className={headCls}>P/L</TableHead>
+              <TableHead className={`${headCls} whitespace-nowrap min-w-[4rem]`} title="Player vs Dealer card count for verification">P vs D</TableHead>
               <TableHead className={headCls}>Time</TableHead>
             </TableRow>
           </TableHeader>
@@ -153,8 +170,10 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
             {entries.map((entry) => {
               const isWin = entry.result === 'win' || entry.result === 'blackjack'
               const isPush = entry.result === 'push'
-              const profit = entry.payout - entry.amount
-              const profitAmount = Math.abs(Math.floor(Number(formatEther(profit))))
+              const isTournament = entry.isTournament === true
+              const profitAmount = isTournament
+                ? Math.abs(typeof entry.chipDelta === 'number' ? entry.chipDelta : Number(entry.payout) - Number(entry.amount))
+                : Math.abs(Math.floor(Number(formatEther(entry.payout - entry.amount))))
 
               const resultLabel = entry.result === 'blackjack' ? 'BJ' : isWin ? 'W' : isPush ? 'P' : 'L'
               const resultCls =
@@ -185,15 +204,24 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
                     ) : (
                       <span className={`font-poppins text-sm tabular-nums ${resultCls}`}>
                         {isWin ? '+' : '−'}{profitAmount.toLocaleString()}
-                        <Image
-                          src="/morbius/MorbiusLogo (3).png"
-                          alt="MORBIUS"
-                          width={12}
-                          height={12}
-                          className="inline object-contain ml-0.5 align-middle"
-                        />
+                        {isTournament ? (
+                          <span className="text-white/60 text-xs ml-0.5">chips</span>
+                        ) : (
+                          <Image
+                            src="/morbius/MorbiusLogo (3).png"
+                            alt="MORBIUS"
+                            width={12}
+                            height={12}
+                            className="inline object-contain ml-0.5 align-middle"
+                          />
+                        )}
                       </span>
                     )}
+                  </TableCell>
+                  <TableCell className={`${cellCls} text-white/70 text-xs font-mono whitespace-nowrap`} title="Player card count vs Dealer card count">
+                    {typeof entry.playerCardCount === 'number' && typeof entry.dealerCardCount === 'number'
+                      ? `P-${entry.playerCardCount} vs D-${entry.dealerCardCount}`
+                      : '—'}
                   </TableCell>
                   <TableCell className={`${cellCls} text-white/60 text-xs font-poppins`}>
                     {timeAgo(entry.timestamp)}

@@ -53,7 +53,7 @@ export default function HomePage() {
 
       <div className="w-full flex flex-col items-center gap-y-16 py-8 px-4">
         {/* Lobby Chat */}
-        <div className="w-full max-w-5xl min-h-[320px] md:min-h-[420px] flex flex-col min-w-0">
+        <div className="w-full max-w-5xl min-h-[280px] md:min-h-[340px] flex flex-col min-w-0">
           <ChatPanel
             roomId="main"
             title="Lobby Chat"

@@ -2,7 +2,8 @@ import { getPublicClient } from './chain-client';
 import { tournamentPrizeEscrowV2Abi } from '../abi/tournament-prize-escrow-v2';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
 
-const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS as `0x${string}` | undefined;
+/** Tournament Prize Escrow V2 - hardcoded for reliability */
+const ESCROW_V2_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1' as const;
 
 export interface EscrowPoolDetails {
   tournamentId: string;
@@ -27,11 +28,10 @@ export interface EscrowSummary {
  * Get escrow summary statistics
  */
 export async function getEscrowSummary(): Promise<EscrowSummary | null> {
-  if (!ESCROW_ADDRESS) return null;
   try {
     const client = getPublicClient();
     const result = await client.readContract({
-      address: ESCROW_ADDRESS,
+      address: ESCROW_V2_ADDRESS,
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getEscrowSummary',
     });
@@ -58,11 +58,10 @@ export async function getEscrowSummary(): Promise<EscrowSummary | null> {
  * Get all tournament IDs in escrow
  */
 export async function getAllTournamentIds(): Promise<string[]> {
-  if (!ESCROW_ADDRESS) return [];
   try {
     const client = getPublicClient();
     const ids = await client.readContract({
-      address: ESCROW_ADDRESS,
+      address: ESCROW_V2_ADDRESS,
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getAllTournamentIds',
     });
@@ -78,11 +77,10 @@ export async function getAllTournamentIds(): Promise<string[]> {
  * Get pools by depositor (creator)
  */
 export async function getPoolsByDepositor(depositor: `0x${string}`): Promise<EscrowPoolDetails[]> {
-  if (!ESCROW_ADDRESS) return [];
   try {
     const client = getPublicClient();
     const result = await client.readContract({
-      address: ESCROW_ADDRESS,
+      address: ESCROW_V2_ADDRESS,
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getPoolsByDepositor',
       args: [depositor],
@@ -124,11 +122,10 @@ export async function getPoolsByDepositor(depositor: `0x${string}`): Promise<Esc
  * Get active pools (non-cancelled with remaining balance)
  */
 export async function getActivePools(): Promise<Array<{ tournamentId: string; balance: bigint }>> {
-  if (!ESCROW_ADDRESS) return [];
   try {
     const client = getPublicClient();
     const result = await client.readContract({
-      address: ESCROW_ADDRESS,
+      address: ESCROW_V2_ADDRESS,
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getActivePools',
     });
@@ -148,12 +145,11 @@ export async function getActivePools(): Promise<Array<{ tournamentId: string; ba
  * Get pool details for a specific tournament
  */
 export async function getPoolDetails(tournamentId: string): Promise<EscrowPoolDetails | null> {
-  if (!ESCROW_ADDRESS) return null;
   try {
     const client = getPublicClient();
     const idBytes32 = tournamentIdToBytes32(tournamentId);
     const result = await client.readContract({
-      address: ESCROW_ADDRESS,
+      address: ESCROW_V2_ADDRESS,
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getPool',
       args: [idBytes32],
@@ -192,11 +188,10 @@ export async function getPoolDetails(tournamentId: string): Promise<EscrowPoolDe
  * Get total value locked for a specific token
  */
 export async function getTotalValueLocked(token: `0x${string}`): Promise<bigint> {
-  if (!ESCROW_ADDRESS) return 0n;
   try {
     const client = getPublicClient();
     const result = await client.readContract({
-      address: ESCROW_ADDRESS,
+      address: ESCROW_V2_ADDRESS,
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getTotalValueLocked',
       args: [token],

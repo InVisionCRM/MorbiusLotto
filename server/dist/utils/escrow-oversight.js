@@ -9,17 +9,16 @@ exports.getTotalValueLocked = getTotalValueLocked;
 const chain_client_1 = require("./chain-client");
 const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
-const ESCROW_ADDRESS = process.env.TOURNAMENT_PRIZE_ESCROW_ADDRESS;
+/** Tournament Prize Escrow V2 - hardcoded for reliability */
+const ESCROW_V2_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1';
 /**
  * Get escrow summary statistics
  */
 async function getEscrowSummary() {
-    if (!ESCROW_ADDRESS)
-        return null;
     try {
         const client = (0, chain_client_1.getPublicClient)();
         const result = await client.readContract({
-            address: ESCROW_ADDRESS,
+            address: ESCROW_V2_ADDRESS,
             abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
             functionName: 'getEscrowSummary',
         });
@@ -39,12 +38,10 @@ async function getEscrowSummary() {
  * Get all tournament IDs in escrow
  */
 async function getAllTournamentIds() {
-    if (!ESCROW_ADDRESS)
-        return [];
     try {
         const client = (0, chain_client_1.getPublicClient)();
         const ids = await client.readContract({
-            address: ESCROW_ADDRESS,
+            address: ESCROW_V2_ADDRESS,
             abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
             functionName: 'getAllTournamentIds',
         });
@@ -59,12 +56,10 @@ async function getAllTournamentIds() {
  * Get pools by depositor (creator)
  */
 async function getPoolsByDepositor(depositor) {
-    if (!ESCROW_ADDRESS)
-        return [];
     try {
         const client = (0, chain_client_1.getPublicClient)();
         const result = await client.readContract({
-            address: ESCROW_ADDRESS,
+            address: ESCROW_V2_ADDRESS,
             abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
             functionName: 'getPoolsByDepositor',
             args: [depositor],
@@ -96,12 +91,10 @@ async function getPoolsByDepositor(depositor) {
  * Get active pools (non-cancelled with remaining balance)
  */
 async function getActivePools() {
-    if (!ESCROW_ADDRESS)
-        return [];
     try {
         const client = (0, chain_client_1.getPublicClient)();
         const result = await client.readContract({
-            address: ESCROW_ADDRESS,
+            address: ESCROW_V2_ADDRESS,
             abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
             functionName: 'getActivePools',
         });
@@ -119,13 +112,11 @@ async function getActivePools() {
  * Get pool details for a specific tournament
  */
 async function getPoolDetails(tournamentId) {
-    if (!ESCROW_ADDRESS)
-        return null;
     try {
         const client = (0, chain_client_1.getPublicClient)();
         const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
         const result = await client.readContract({
-            address: ESCROW_ADDRESS,
+            address: ESCROW_V2_ADDRESS,
             abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
             functionName: 'getPool',
             args: [idBytes32],
@@ -154,12 +145,10 @@ async function getPoolDetails(tournamentId) {
  * Get total value locked for a specific token
  */
 async function getTotalValueLocked(token) {
-    if (!ESCROW_ADDRESS)
-        return 0n;
     try {
         const client = (0, chain_client_1.getPublicClient)();
         const result = await client.readContract({
-            address: ESCROW_ADDRESS,
+            address: ESCROW_V2_ADDRESS,
             abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
             functionName: 'getTotalValueLocked',
             args: [token],

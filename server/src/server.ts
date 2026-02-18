@@ -1,9 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import { createPublicClient, http } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { DatabaseService } from './services/database.service';
@@ -23,9 +23,6 @@ import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BLACKJACK_ADDRESS, MORBI
 const ERC20_BALANCE_OF_ABI = [
   { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 ] as const;
-
-// Load environment variables
-dotenv.config();
 
 // Admin: comma-separated wallet addresses (server-side, for /api/admin/*)
 const ADMIN_WALLETS: string[] = (process.env.ADMIN_WALLETS || '')

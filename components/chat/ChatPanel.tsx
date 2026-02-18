@@ -11,10 +11,8 @@ import type { ChatMessagePayload } from '@/lib/websocket-client';
 const CHAT_MESSAGE_MAX_LENGTH = 150;
 
 const EMOJI_LIST = [
-  '😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂',
-  '👍', '👎', '👏', '🙌', '🤝', '✌️', '🤞', '🤟', '👋', '💪',
-  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💯', '🔥',
-  '🎉', '🎊', '⭐', '🌟', '💀', '👀', '🤔', '😎', '🥳', '🙃',
+  '😀', '😂', '🤣','👍', '👎', '👏','👋', '💪',
+  '❤️', '💯', '🔥','🎉', '👀', '🤔', '😎', '🥳', '🙃',
 ];
 
 function formatTime(iso: string): string {
@@ -199,7 +197,7 @@ export function ChatPanel({
     }
   };
 
-  const messageListMaxHeight = collapsible ? 'max-h-[280px]' : 'min-h-0';
+  const messageListMaxHeight = collapsible ? 'max-h-[150px]' : 'max-h-[28rem]'; // ~10 messages when embedded
   const panelContent = (
     <>
       <div className={`relative flex-1 min-h-[120px] flex flex-col ${messageListMaxHeight}`}>

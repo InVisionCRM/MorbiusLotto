@@ -14,8 +14,6 @@ import {
   PlayerTournamentHistoryItem,
   TableTheme,
 } from '@/lib/tournament-types';
-import { getApiUrl } from '@/lib/api-urls';
-
 // Tournament configuration (matches server defaults)
 export const TOURNAMENT_CONFIG = {
   BUY_IN_AMOUNT: BigInt('1000000000000000000000'), // 1,000 MORBIUS
@@ -236,6 +234,7 @@ export function useTournament(options: UseTournamentOptions) {
       setTournamentState(prev => {
         const next: TournamentState = {
           ...prev,
+          inTournament: false,
           status: 'busted',
           chips: 0,
           canRebuy: prev.rebuyEnabled && (prev.maxRebuys === 0 || prev.rebuyCount < prev.maxRebuys),
@@ -263,6 +262,7 @@ export function useTournament(options: UseTournamentOptions) {
       setTournamentState(prev => {
         const next: TournamentState = {
           ...prev,
+          inTournament: false,
           status: 'completed',
           chips: payload.finalChips,
           currentRank: payload.currentRank,
@@ -901,8 +901,7 @@ export function useTournament(options: UseTournamentOptions) {
     if (!address) return [];
     setIsHistoryLoading(true);
     try {
-      const base = getApiUrl().replace(/\/$/, '');
-      const res = await fetch(`${base}/api/tournament/player/${encodeURIComponent(address)}/history`);
+      const res = await fetch(`/api/tournament/player/${encodeURIComponent(address)}/history`);
       if (!res.ok) return [];
       const data = await res.json();
       setTournamentHistory(Array.isArray(data) ? data : []);
@@ -985,7 +984,7 @@ export function useTournament(options: UseTournamentOptions) {
         pinCode,
       });
 
-      setTournamentState({
+      const nextState: TournamentState = {
         inTournament: true,
         entryId: response.entryId,
         tournamentId: response.tournamentId,
@@ -1005,7 +1004,9 @@ export function useTournament(options: UseTournamentOptions) {
         biggestBet: 0,
         biggestWin: 0,
         tableTheme: response.tableTheme,
-      });
+      };
+      setTournamentState(nextState);
+      setDisplayedTournamentState(nextState);
 
       // Update tournament info
       if (response.prizePool) {
@@ -1023,6 +1024,54 @@ export function useTournament(options: UseTournamentOptions) {
       setIsLoading(false);
     }
   }, [wsClient, address, writeContractAsync, publicClient]);
+
+  /**
+   * Unregister from a tournament during registration phase. MORBIUS platform tournaments only.
+   */
+  const unregisterTournament = useCallback(async (tournamentId: string): Promise<boolean> => {
+    if (!wsClient || !address) {
+      setError('Not connected');
+      return false;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await wsClient.sendRequest('tournament_unregister', { tournamentId });
+
+      const emptyState: TournamentState = {
+          inTournament: false,
+          entryId: null,
+          tournamentId: null,
+          chips: 0,
+          handsPlayed: 0,
+          handsRemaining: 0,
+          highestChips: 0,
+          currentRank: 0,
+          status: null,
+          maxHands: 0,
+          startingChips: 0,
+          rebuyCount: 0,
+          totalBuyIn: '0',
+          canRebuy: false,
+          maxRebuys: 0,
+          rebuyEnabled: false,
+          biggestBet: 0,
+          biggestWin: 0,
+        };
+      setTournamentState(emptyState);
+      setDisplayedTournamentState(emptyState);
+      setTournamentInfo(null);
+
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Failed to unregister from tournament');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [wsClient, address]);
 
   /**
    * Get extended tournament info by ID
@@ -1111,6 +1160,7 @@ export function useTournament(options: UseTournamentOptions) {
     createFreeroll,
     fetchTournamentList,
     joinTournament,
+    unregisterTournament,
     getTournamentInfo,
     clearCreatedTournament,
 

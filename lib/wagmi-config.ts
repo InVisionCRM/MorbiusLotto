@@ -8,8 +8,8 @@ import {
   rainbowWallet,
 } from '@rainbow-me/rainbowkit/wallets'
 
-const injectedWalletRenamed: typeof injectedWallet = (params) => ({
-  ...injectedWallet(params),
+const injectedWalletRenamed = () => ({
+  ...injectedWallet(),
   name: 'Injected',
 })
 

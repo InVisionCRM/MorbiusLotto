@@ -36,12 +36,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+require("dotenv/config");
 const express_1 = __importDefault(require("express"));
 const http_1 = require("http");
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
-const dotenv_1 = __importDefault(require("dotenv"));
 const viem_1 = require("viem");
 const chains_1 = require("viem/chains");
 const database_service_1 = require("./services/database.service");
@@ -60,8 +60,6 @@ const contracts_1 = require("./config/contracts");
 const ERC20_BALANCE_OF_ABI = [
     { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 ];
-// Load environment variables
-dotenv_1.default.config();
 // Admin: comma-separated wallet addresses (server-side, for /api/admin/*)
 const ADMIN_WALLETS = (process.env.ADMIN_WALLETS || '')
     .split(',')

@@ -4,6 +4,14 @@ import React, { useState } from 'react'
 import { formatEther } from 'viem'
 import { useBlackjackTopPlayers, type TopPlayerEntry } from '@/hooks/use-blackjack-stats'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 const TOP_N = 25
 
@@ -58,43 +66,44 @@ export default function BlackjackTopPlayers() {
   return (
     <>
       <div className="rounded-xl overflow-hidden" style={PANEL_STYLE}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-left py-2 px-3 text-white/70 font-medium">#</th>
-                <th className="text-left py-2 px-3 text-white/70 font-medium">Player</th>
-                <th className="text-right py-2 px-3 text-white/70 font-medium">Games</th>
-                <th className="text-right py-2 px-3 text-white/70 font-medium">Wagered</th>
-                <th className="text-right py-2 px-3 text-white/70 font-medium">P/L</th>
-                <th className="text-right py-2 px-3 text-white/70 font-medium">Win %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((e: TopPlayerEntry) => (
-                <tr key={e.wallet_address} className="border-b border-white/5 hover:bg-white/5">
-                  <td className="py-2 px-3">
-                    <span className={e.rank <= 3 ? 'text-amber-300 font-bold' : 'text-white/60'}>{e.rank}</span>
-                  </td>
-                  <td className="py-2 px-3">
-                    <button
-                      onClick={() => setSelectedAddress(e.wallet_address)}
-                      className="text-cyan-400 hover:text-cyan-300 font-mono"
-                    >
-                      ...{shortAddress(e.wallet_address)}
-                    </button>
-                  </td>
-                  <td className="py-2 px-3 text-right tabular-nums text-white/90">{e.total_games}</td>
-                  <td className="py-2 px-3 text-right tabular-nums text-white/80">{formatMorbius(e.total_bet)}</td>
-                  <td className={`py-2 px-3 text-right tabular-nums ${e.profit_loss >= BigInt(0) ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {e.profit_loss >= BigInt(0) ? '+' : ''}{formatMorbius(e.profit_loss)}
-                  </td>
-                  <td className="py-2 px-3 text-right tabular-nums text-white/80">{e.win_rate.toFixed(1)}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="px-3 py-2 border-b border-white/10">
+          <h3 className="text-cyan-300 font-semibold text-sm">Leaderboard</h3>
         </div>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-white/10 hover:bg-transparent">
+              <TableHead className="text-white/70 font-medium">#</TableHead>
+              <TableHead className="text-white/70 font-medium">Player</TableHead>
+              <TableHead className="text-right text-white/70 font-medium">Games</TableHead>
+              <TableHead className="text-right text-white/70 font-medium">Wagered</TableHead>
+              <TableHead className="text-right text-white/70 font-medium">P/L</TableHead>
+              <TableHead className="text-right text-white/70 font-medium">Win %</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {list.map((e: TopPlayerEntry) => (
+              <TableRow key={e.wallet_address} className="border-white/5 hover:bg-white/5">
+                <TableCell className="text-white/90">
+                  <span className={e.rank <= 3 ? 'text-amber-300 font-bold' : 'text-white/60'}>{e.rank}</span>
+                </TableCell>
+                <TableCell>
+                  <button
+                    onClick={() => setSelectedAddress(e.wallet_address)}
+                    className="text-cyan-400 hover:text-cyan-300 font-mono"
+                  >
+                    ...{shortAddress(e.wallet_address)}
+                  </button>
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-white/90">{e.total_games}</TableCell>
+                <TableCell className="text-right tabular-nums text-white/80">{formatMorbius(e.total_bet)}</TableCell>
+                <TableCell className={`text-right tabular-nums ${e.profit_loss >= 0n ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {e.profit_loss >= 0n ? '+' : ''}{formatMorbius(e.profit_loss)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-white/80">{e.win_rate.toFixed(1)}%</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
 
       <PlayerProfileModal

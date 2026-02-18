@@ -31,6 +31,8 @@ import {
 } from '@/app/BLACKJACK/constants';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
 import { Theme } from '@/lib/theme';
+import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
+import { TokenWithLogo } from '@/components/Creators/TokenWithLogo';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const isEscrowConfigured = TOURNAMENT_PRIZE_ESCROW_ADDRESS !== ESCROW_ZERO;
@@ -299,6 +301,20 @@ export function TournamentCreator({
 
   const canAffordBuyIn = playerBalance >= buyInAmountWei;
 
+  // USD value for custom prize (DexScreener)
+  const prizeTokenPriceUsd = useTokenPriceUsd(prizeType === 'custom' && prizeTokenAddress ? prizeTokenAddress : null);
+  const prizeAmountWeiForReview = useMemo(() => {
+    if (prizeType !== 'custom' || !prizeAmountHuman.trim()) return 0n;
+    const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
+    return BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
+  }, [prizeType, prizeAmountHuman, prizeTokenDecimals]);
+  const prizeUsdValue = useMemo(() => {
+    if (prizeAmountWeiForReview === 0n || prizeTokenPriceUsd == null) return null;
+    const dec = prizeTokenDecimals;
+    const human = Number(prizeAmountWeiForReview) / 10 ** dec;
+    return human * prizeTokenPriceUsd;
+  }, [prizeAmountWeiForReview, prizeTokenPriceUsd, prizeTokenDecimals]);
+
   const selectedPreset = useMemo(
     () => PRIZE_PRESETS.find(p => p.id === prizeDistributionType),
     [prizeDistributionType]
@@ -468,10 +484,14 @@ export function TournamentCreator({
         account: address,
         chain: pulseChain,
       });
-      if (publicClient && hash) {
-        await publicClient.waitForTransactionReceipt({ hash });
-      }
       setApprovalTxHash(hash);
+      if (publicClient && hash) {
+        try {
+          await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+        } catch {
+          // Tx was broadcast; if wait times out or RPC fails, still proceed so user can deposit
+        }
+      }
       setFundingStep('approved');
     } catch (e) {
       setFundingError(e instanceof Error ? e.message : 'Approval failed');
@@ -503,7 +523,7 @@ export function TournamentCreator({
       };
 
       const idBytes32 = tournamentIdToBytes32(createdTournament.id);
-      await writeContractAsync({
+      const hash = await writeContractAsync({
         address: escrow as `0x${string}`,
         abi: tournamentPrizeEscrowAbi,
         functionName: 'depositPrizePool',
@@ -511,6 +531,13 @@ export function TournamentCreator({
         account: address,
         chain: pulseChain,
       });
+      if (publicClient && hash) {
+        try {
+          await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+        } catch {
+          // Tx was broadcast; proceed
+        }
+      }
 
       setFundingStep('done');
     } catch (e) {
@@ -526,8 +553,8 @@ export function TournamentCreator({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
-        <div className="relative rounded-2xl border border-green-500/30 shadow-2xl shadow-green-500/20 max-w-md w-full mx-4 overflow-hidden" style={Theme.panel.base}>
-          <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-4 text-center">
+        <div className="relative rounded-2xl max-w-md w-full mx-4 overflow-hidden" style={{ ...Theme.panel.base, border: `1px solid ${Theme.cyan.rgba.border}` }}>
+          <div className={`p-4 text-center ${Theme.cyan.gradient.button}`}>
             <h2 className="text-2xl font-bold text-white">Tournament Created!</h2>
           </div>
           <div className="p-6 space-y-4 text-center">
@@ -553,7 +580,7 @@ export function TournamentCreator({
                 </div>
 
                 {!isEscrowConfigured ? (
-                  <p className="text-amber-400 text-xs">
+                  <p className="text-cyan-400 text-xs">
                     Prize escrow is not configured. Set <code className="bg-gray-700 px-1 rounded">NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS</code> in your environment.
                   </p>
                 ) : (
@@ -570,7 +597,7 @@ export function TournamentCreator({
                     <div className="flex items-center gap-3">
                       <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${
                         fundingStep === 'approved' || fundingStep === 'depositing' || funded
-                          ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-300'
+                          ? 'bg-cyan-500 text-white' : 'bg-gray-700 text-gray-300'
                       }`}>
                         {fundingStep === 'approved' || fundingStep === 'depositing' || funded ? (
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -589,17 +616,26 @@ export function TournamentCreator({
                           </button>
                         )}
                         {fundingStep === 'approving' && (
-                          <div className="flex items-center gap-2 py-2">
-                            <svg className="animate-spin h-4 w-4 text-cyan-400" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                            </svg>
-                            <span className="text-cyan-300 text-sm">Confirm in wallet...</span>
+                          <div className="flex flex-col gap-2 py-2">
+                            <div className="flex items-center gap-2">
+                              <svg className="animate-spin h-4 w-4 text-cyan-400 shrink-0" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              <span className="text-cyan-300 text-sm">Confirm in wallet...</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setFundingStep('approved')}
+                              className="text-xs text-cyan-400/80 hover:text-cyan-300 hover:underline"
+                            >
+                              Already approved? Proceed to deposit
+                            </button>
                           </div>
                         )}
                         {(fundingStep === 'approved' || fundingStep === 'depositing' || funded) && (
                           <div>
-                            <span className="text-green-400 text-sm font-medium">Approved</span>
+                            <span className="text-cyan-400 text-sm font-medium">Approved</span>
                             {approvalTxHash && (
                               <p className="text-gray-500 text-xs font-mono mt-0.5">
                                 tx: {approvalTxHash.slice(0, 10)}...{approvalTxHash.slice(-6)}
@@ -613,7 +649,7 @@ export function TournamentCreator({
                     {/* Step 2: Deposit */}
                     <div className="flex items-center gap-3">
                       <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${
-                        funded ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-300'
+                        funded ? 'bg-cyan-500 text-white' : 'bg-gray-700 text-gray-300'
                       }`}>
                         {funded ? (
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -625,22 +661,22 @@ export function TournamentCreator({
                         {fundingStep === 'approved' && (
                           <button
                             onClick={handleDepositToEscrow}
-                            className="w-full py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-medium hover:from-emerald-500 hover:to-green-500 transition-all"
+                            className={`w-full py-2 rounded-lg ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white text-sm font-medium transition-all`}
                           >
                             Deposit to Escrow
                           </button>
                         )}
                         {fundingStep === 'depositing' && (
                           <div className="flex items-center gap-2 py-2">
-                            <svg className="animate-spin h-4 w-4 text-emerald-400" viewBox="0 0 24 24">
+                            <svg className={`animate-spin h-4 w-4 ${Theme.cyan.text.primary} shrink-0`} viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                             </svg>
-                            <span className="text-emerald-300 text-sm">Confirm in wallet...</span>
+                            <span className="text-cyan-300 text-sm">Confirming deposit...</span>
                           </div>
                         )}
                         {funded && (
-                          <span className="text-green-400 text-sm font-medium">Funded</span>
+                          <span className="text-cyan-400 text-sm font-medium">Funded</span>
                         )}
                         {(fundingStep === 'idle' || fundingStep === 'approving') && (
                           <span className="text-gray-500 text-sm">Deposit to Escrow</span>
@@ -653,9 +689,9 @@ export function TournamentCreator({
             )}
 
             {createdTournament.pinCode && (
-              <div className="rounded-xl p-4 border border-yellow-500/30" style={Theme.panel.base}>
+              <div className="rounded-xl p-4 border border-cyan-500/30" style={Theme.panel.base}>
                 <p className="text-gray-400 text-sm mb-2">Private Tournament PIN</p>
-                <p className="text-4xl font-mono font-bold text-yellow-400 tracking-wider">
+                <p className={`text-4xl font-mono font-bold ${Theme.cyan.text.primary} tracking-wider`}>
                   {createdTournament.pinCode}
                 </p>
                 <p className="text-gray-500 text-xs mt-2">Share this PIN with players you want to invite</p>
@@ -663,7 +699,7 @@ export function TournamentCreator({
             )}
             <button
               onClick={handleClose}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-semibold transition-all"
+              className={`w-full py-3 rounded-xl ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white font-semibold transition-all`}
             >
               Done
             </button>
@@ -676,7 +712,7 @@ export function TournamentCreator({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 border-cyan-500/30 overflow-hidden" style={Theme.panel.base}>
-        <DialogHeader className="p-4 pb-0 border-b border-gray-700 bg-gradient-to-r from-purple-600 to-cyan-600">
+        <DialogHeader className={`p-4 pb-0 border-b border-gray-600 ${Theme.cyan.gradient.button}`}>
           <DialogTitle className="text-xl font-bold text-white text-center">Create Tournament</DialogTitle>
           <div className="flex justify-center gap-1.5 pt-3 pb-2">
             {[1, 2, 3, 4, 5].map((s) => (
@@ -704,6 +740,7 @@ export function TournamentCreator({
           {wizardStep === 1 && (
             <section className="space-y-6 max-w-lg mx-auto">
               <h3 className="text-lg font-semibold text-cyan-300">What kind of tournament?</h3>
+              <p className="text-gray-400 text-sm">Choose buy-in (players pay to enter) or freeroll (free to join, scheduled start).</p>
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -733,6 +770,7 @@ export function TournamentCreator({
 
               <div>
                 <label className="block text-gray-300 font-medium mb-2">Tournament name</label>
+                <p className="text-gray-500 text-xs mb-1">Give your tournament a memorable name (3–50 characters).</p>
                 <input
                   type="text"
                   value={name}
@@ -752,6 +790,11 @@ export function TournamentCreator({
               <h3 className="text-lg font-semibold text-cyan-300">
                 {tournamentType === 'freeroll' ? 'When does it run?' : 'Time limit & rules'}
               </h3>
+              <p className="text-gray-400 text-sm">
+                {tournamentType === 'freeroll'
+                  ? 'Set when registration opens and when the game starts. Players join during registration and play begins at the scheduled time.'
+                  : 'Optional time limit per player. No limit = players can take their time.'}
+              </p>
 
               {tournamentType === 'freeroll' ? (
                 <>
@@ -837,7 +880,7 @@ export function TournamentCreator({
                 </div>
               )}
 
-              <p className="text-gray-500 text-sm">5,000 chips · 25 hands per player</p>
+              <p className="text-gray-500 text-sm">Each player gets 5,000 chips and up to 25 hands. Higher chip count at the end wins.</p>
             </section>
           )}
 
@@ -845,10 +888,11 @@ export function TournamentCreator({
           {wizardStep === 3 && (
             <section className="space-y-6 max-w-lg mx-auto">
               <h3 className="text-lg font-semibold text-cyan-300">Prizes & entry</h3>
+              <p className="text-gray-400 text-sm">Configure how prizes are split and the entry cost (buy-in tournaments only).</p>
 
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-2">Prize distribution</label>
-                <p className="text-gray-500 text-xs mb-2">How the prize pool is split among top finishers.</p>
+                <p className="text-gray-500 text-xs mb-2">How the prize pool is split among top finishers. More places = more winners.</p>
                 <div className="space-y-2">
                   {PRIZE_PRESETS.map((preset) => (
                     <button
@@ -870,6 +914,7 @@ export function TournamentCreator({
               {tournamentType === 'buyin' && (
                 <div>
                   <label id="buy-in-amount-label" htmlFor="buy-in-amount-input" className="block text-gray-300 text-sm font-medium mb-1">Buy-in (MORBIUS)</label>
+                  <p className="text-gray-500 text-xs mb-1">Amount each player pays to enter. Use Platform (MORBIUS) or a custom token in Options.</p>
                   <input
                     id="buy-in-amount-input"
                     type="number"
@@ -880,7 +925,7 @@ export function TournamentCreator({
                     className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-cyan-500"
                     aria-labelledby="buy-in-amount-label"
                   />
-                  <p className="text-gray-500 text-xs mt-1">0 = freeroll (no buy-in)</p>
+                  <p className="text-gray-500 text-xs mt-1">0 = freeroll (no buy-in). Your balance: {formatEther(playerBalance)} MORBIUS</p>
                 </div>
               )}
 
@@ -935,7 +980,7 @@ export function TournamentCreator({
                 </div>
                 <button
                   onClick={() => setIsPrivate(!isPrivate)}
-                  className={`relative w-14 h-8 rounded-full transition-colors ${isPrivate ? 'bg-purple-500' : 'bg-gray-600'}`}
+                  className={`relative w-14 h-8 rounded-full transition-colors ${isPrivate ? 'bg-cyan-500' : 'bg-gray-600'}`}
                 >
                   <div className={`absolute top-1 w-6 h-6 rounded-full bg-white transition-transform ${isPrivate ? 'translate-x-7' : 'translate-x-1'}`} />
                 </button>
@@ -1003,6 +1048,7 @@ export function TournamentCreator({
                 <>
                   <div>
                     <label className="block text-gray-300 text-sm font-medium mb-1">Prize source</label>
+                    <p className="text-gray-500 text-xs mb-2">Platform uses MORBIUS from player buy-ins. Custom lets you fund a prize pool with any ERC-20 token.</p>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => setPrizeType('platform')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${prizeType === 'platform' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Platform (MORBIUS)</button>
                       <button type="button" onClick={() => setPrizeType('custom')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${prizeType === 'custom' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Custom token</button>
@@ -1010,6 +1056,7 @@ export function TournamentCreator({
                   </div>
                   {prizeType === 'custom' && (
                     <div className="space-y-2 p-3 rounded-lg border border-gray-700" style={Theme.panel.base}>
+                      <p className="text-gray-400 text-xs">Search by name/symbol or paste a token contract address. You&apos;ll fund the prize pool after creating.</p>
                       {selectedToken ? (
                         <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-900">
                           <span className="text-white text-sm truncate">{selectedToken.symbol}</span>
@@ -1017,7 +1064,7 @@ export function TournamentCreator({
                         </div>
                       ) : (
                         <div ref={tokenDropdownRef}>
-                          <input type="text" value={tokenQuery} onChange={(e) => handleTokenQueryChange(e.target.value)} placeholder="Search or paste token address" className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" />
+                          <input type="text" value={tokenQuery} onChange={(e) => handleTokenQueryChange(e.target.value)} placeholder="Search token (e.g. HEX, WPLS) or paste 0x..." className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" />
                           {tokenSearchResults.length > 0 && (
                             <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-gray-600 bg-gray-800">
                               {tokenSearchResults.map((r) => (
@@ -1029,7 +1076,13 @@ export function TournamentCreator({
                           )}
                         </div>
                       )}
-                      <input type="text" value={prizeAmountHuman} onChange={(e) => setPrizeAmountHuman(e.target.value)} placeholder="Prize amount" className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" />
+                      <div>
+                        <label className="block text-gray-400 text-xs mb-1">Prize amount (total pool)</label>
+                        <input type="text" value={prizeAmountHuman} onChange={(e) => setPrizeAmountHuman(e.target.value)} placeholder="e.g. 1000" className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" />
+                        {prizeAmountHuman && selectedToken && prizeUsdValue != null && (
+                          <p className="text-cyan-400 text-xs mt-1">≈ ${prizeUsdValue >= 1 ? prizeUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : prizeUsdValue >= 0.01 ? prizeUsdValue.toFixed(2) : prizeUsdValue.toFixed(4)} USD</p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </>
@@ -1041,6 +1094,7 @@ export function TournamentCreator({
           {wizardStep === 5 && (
             <section className="space-y-4 max-w-lg mx-auto">
               <h3 className="text-lg font-semibold text-cyan-300">Review</h3>
+              <p className="text-gray-400 text-sm">Confirm your tournament settings before creating. You can go back to any step to make changes.</p>
               <div className="rounded-xl border border-gray-700 p-4 space-y-3 text-sm" style={Theme.panel.base}>
                 <p><span className="text-gray-500">Name:</span> <span className="text-white font-medium">{name || '—'}</span></p>
                 <p><span className="text-gray-500">Type:</span> <span className="text-white">{tournamentType === 'buyin' ? 'Buy-in' : 'Freeroll'}</span></p>
@@ -1049,7 +1103,24 @@ export function TournamentCreator({
                 )}
                 <p><span className="text-gray-500">Chips:</span> <span className="text-white">{startingChips.toLocaleString()}</span> · <span className="text-gray-500">Max hands:</span> <span className="text-white">{maxHands}</span></p>
                 <p><span className="text-gray-500">Prizes:</span> <span className="text-white">{PRIZE_PRESETS.find(p => p.id === prizeDistributionType)?.name ?? prizeDistributionType}</span></p>
-                {tournamentType === 'buyin' && <p><span className="text-gray-500">Buy-in:</span> <span className="text-white">{buyInAmount} MORBIUS</span></p>}
+                {tournamentType === 'buyin' && (
+                  <p>
+                    <span className="text-gray-500">Buy-in:</span>{' '}
+                    {prizeType === 'platform' ? (
+                      <span className="text-white">{buyInAmount} MORBIUS</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-2 flex-wrap">
+                        <span className="text-white">{prizeAmountHuman || '0'} {selectedToken?.symbol ?? 'tokens'}</span>
+                        <TokenWithLogo address={prizeTokenAddress || null} logoSize="sm" />
+                        {prizeUsdValue != null && (
+                          <span className="text-cyan-400 font-medium">
+                            (≈ {prizeUsdValue >= 1 ? `$${prizeUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : prizeUsdValue >= 0.01 ? `$${prizeUsdValue.toFixed(2)}` : `$${prizeUsdValue.toFixed(4)}`})
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </p>
+                )}
                 {tournamentType === 'freeroll' && <p><span className="text-gray-500">Players:</span> <span className="text-white">{minPlayersFreeroll} – {maxPlayersUnlimited ? '∞' : maxPlayersFreeroll}</span></p>}
                 <p><span className="text-gray-500">Private:</span> <span className="text-white">{isPrivate ? 'Yes' : 'No'}</span></p>
                 <p><span className="text-gray-500">Table:</span> <span className="text-white">{themeKind === 'video' ? (BLACKJACK_VIDEO_BACKGROUNDS.find(b => b.id === themeId)?.label ?? themeId) : (BLACKJACK_IMAGE_BACKGROUNDS.find(b => b.id === themeId)?.label ?? themeId)}</span></p>
@@ -1074,7 +1145,7 @@ export function TournamentCreator({
               Next
             </button>
           ) : (
-            <button type="button" onClick={handleCreate} disabled={isLoading || !name.trim()} className={`flex-1 py-3 rounded-xl font-semibold transition-all ${!isLoading && name.trim() ? 'bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-400 hover:to-cyan-400 text-white shadow-lg shadow-purple-500/30' : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`}>
+            <button type="button" onClick={handleCreate} disabled={isLoading || !name.trim()} className={`flex-1 py-3 rounded-xl font-semibold transition-all ${!isLoading && name.trim() ? `${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white` : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`}>
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>

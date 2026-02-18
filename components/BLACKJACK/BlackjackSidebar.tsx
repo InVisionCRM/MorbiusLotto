@@ -26,14 +26,14 @@ function useIsDesktop() {
 const PANEL_CLASS = ''
 
 const BASE_TABS = [
-  { id: 'recent', label: 'Recent', icon: History },
-  { id: 'wins', label: 'Global', icon: Zap },
-  { id: 'chart', label: 'Chart', icon: TrendingUp },
-  { id: 'howto', label: 'How to Play', icon: BookOpen },
-  { id: 'tournaments', label: 'Tournaments', icon: Award },
+  { id: 'recent', label: 'Recent', shortLabel: 'Recent', icon: History },
+  { id: 'wins', label: 'Global', shortLabel: 'Global', icon: Zap },
+  { id: 'chart', label: 'Chart', shortLabel: 'Chart', icon: TrendingUp },
+  { id: 'howto', label: 'How to Play', shortLabel: 'How', icon: BookOpen },
+  { id: 'tournaments', label: 'Tournaments', shortLabel: 'Tours', icon: Award },
 ] as const
 
-const TOURNAMENT_PLAY_TAB = { id: 'tournament-play' as const, label: 'Tournament', icon: Gamepad2 }
+const TOURNAMENT_PLAY_TAB = { id: 'tournament-play' as const, label: 'Tournament', shortLabel: 'Play', icon: Gamepad2 }
 
 export type BlackjackSidebarTabId = (typeof BASE_TABS)[number]['id'] | 'tournament-play'
 
@@ -120,26 +120,30 @@ export default function BlackjackSidebar({
 
   return (
     <div className="w-full min-w-0 flex flex-col h-full min-h-0 rounded-xl overflow-hidden" style={Theme.panel.sidebar}>
-      {/* Layout E — Card grid: each tab as a card with icon + label */}
+      {/* Layout E — Card grid: each tab as a card with icon + label. 3 cols = 2 rows for 6 tabs, more space per tab */}
       <div
-        className={`grid gap-2 p-3 shrink-0 bg-black/20 ${tabs.length === 6 ? 'grid-cols-6' : 'grid-cols-5'}`}
+        className={`grid gap-2 p-3 shrink-0 bg-black/20 ${tabs.length === 6 ? 'grid-cols-3' : 'grid-cols-5'}`}
       >
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all ${
-              activeTab === id
-                ? 'bg-cyan-600/40 border-2 border-cyan-500/50 text-cyan-200'
-                : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
-            }`}
-            title={label}
-          >
-            <Icon className="w-5 h-5 shrink-0" />
-            <span className="text-xs font-medium truncate w-full text-center">{label}</span>
-          </button>
-        ))}
+        {tabs.map((tab) => {
+          const { id, label, icon: Icon } = tab
+          const shortLabel = 'shortLabel' in tab ? (tab as { shortLabel?: string }).shortLabel : label
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all min-w-0 ${
+                activeTab === id
+                  ? 'bg-cyan-600/40 border-2 border-cyan-500/50 text-cyan-200'
+                  : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
+              }`}
+              title={label}
+            >
+              <Icon className="w-5 h-5 shrink-0" />
+              <span className="text-xs font-medium truncate w-full text-center">{shortLabel}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Content — padding only for howto/tournaments/chart/tournament-play; Recent/Top have their own */}
@@ -151,7 +155,7 @@ export default function BlackjackSidebar({
         {activeTab === 'recent' && (
           <QuickHistory
             history={history}
-            reserveBalance={reserveBalance}
+            reserveBalance={inTournament ? undefined : reserveBalance}
             onVerifyGame={handleQuickHistoryVerify}
           />
         )}

@@ -93,6 +93,8 @@ interface BlackjackTableProps {
   onDismissTournamentSummary?: () => void;
   /** Open tournament history (e.g. from summary overlay) */
   onOpenTournamentHistory?: () => void;
+  /** When true (tournament mode), use longer delay before DEAL/REBET appears to avoid race where pressing DEAL too soon causes action buttons to not show */
+  inTournament?: boolean;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -152,6 +154,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   tournamentHandSummary,
   onDismissTournamentSummary,
   onOpenTournamentHistory,
+  inTournament = false,
 }) => {
   const videoSrc = videoSrcProp ?? BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const imageSrc = imageSrcProp ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
@@ -579,11 +582,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     const noRevealNeeded = gameState === GameState.COMPLETE && totalCards >= 2 && visibleDealerCards >= totalCards;
     if (noRevealNeeded && !hasCalledRevealCompleteRef.current) {
       // Delay to ensure dealer hand animation is fully visible before unlocking DEAL/REBET buttons.
-      // Must be long enough for player to see the complete dealer hand and result.
+      // Tournament: longer delay (2.5s) to avoid race where pressing DEAL too soon causes cards to deal but action buttons not to appear.
+      const delayMs = inTournament ? 2500 : 1500;
       revealTimeoutRef.current = setTimeout(() => {
         hasCalledRevealCompleteRef.current = true;
         onDealerRevealCompleteRef.current?.();
-      }, 1500); // 1.5s — gives player time to see dealer's complete hand
+      }, delayMs);
     }
     else if (shouldStartReveal) {
       if (revealTimeoutRef.current) {
@@ -608,11 +612,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             } else {
               // All cards revealed — wait for last card animation to finish
               // before signaling completion (which unlocks DEAL/REBET buttons)
+              const postRevealDelayMs = inTournament ? 2500 : 1500;
               revealTimeoutRef.current = setTimeout(() => {
                 setIsRevealing(false);
                 hasCalledRevealCompleteRef.current = true;
                 onDealerRevealCompleteRef.current?.();
-              }, 1500); // 1.5s after last card — lets player see complete dealer hand
+              }, postRevealDelayMs);
             }
           };
           
@@ -620,22 +625,30 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           revealTimeoutRef.current = setTimeout(revealNextCard, 2000);
         }, 1000); // 1 second delay before revealing hole card
       } else {
-        // Only 2 cards (blackjack scenario): ensure first card is visible, then reveal hole card after brief delay
-        // First, ensure at least 1 card is visible if not already
-        if (visibleDealerCards < 1 && totalCards >= 1) {
-          setVisibleDealerCards(1);
-        }
-        // Then reveal hole card after delay to ensure cards are rendered
-        revealTimeoutRef.current = setTimeout(() => {
-          setVisibleDealerCards(2);
-          // Wait for hole card to render and player to see the full dealer hand
-          // before signaling reveal complete (which unlocks DEAL/REBET buttons)
+        // Only 2 cards (blackjack scenario): show both cards immediately when dealer has blackjack
+        if (dealerHand.isBlackjack) {
+          setVisibleDealerCards(totalCards);
+          setIsRevealing(false);
+          const delayMs = inTournament ? 1000 : 500;
           revealTimeoutRef.current = setTimeout(() => {
-            setIsRevealing(false);
             hasCalledRevealCompleteRef.current = true;
             onDealerRevealCompleteRef.current?.();
-          }, 1500); // 1.5s after hole card revealed — lets player see the result
-        }, 1000); // 1 second delay before revealing hole card - gives time for cards to render
+          }, delayMs);
+        } else {
+          // Player blackjack or other 2-card complete: ensure first card visible, then reveal hole card
+          if (visibleDealerCards < 1 && totalCards >= 1) {
+            setVisibleDealerCards(1);
+          }
+          const postRevealDelayMs = inTournament ? 2500 : 1500;
+          revealTimeoutRef.current = setTimeout(() => {
+            setVisibleDealerCards(2);
+            revealTimeoutRef.current = setTimeout(() => {
+              setIsRevealing(false);
+              hasCalledRevealCompleteRef.current = true;
+              onDealerRevealCompleteRef.current?.();
+            }, postRevealDelayMs);
+          }, 1000);
+        }
       }
     }
     // During play (WAITING, PLAYER_TURN, DEALER_TURN): Show only first card
@@ -688,7 +701,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       // 1. Component unmounts (React will handle this)
       // 2. State transitions away from COMPLETE (handled above)
     };
-  }, [gameState, dealerHand.cards.length, isRevealing, visibleDealerCards, completedGameId]);
+  }, [gameState, dealerHand.cards.length, isRevealing, visibleDealerCards, completedGameId, inTournament]);
 
   // Track visibleDealerCards changes
   useEffect(() => {
@@ -696,15 +709,18 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   }, [visibleDealerCards, dealerHand.cards.length, gameState, isRevealing]);
 
   // 2s after game complete (reveal done), start card exit animation; then call onCardsClearComplete
-  // For blackjack scenarios, ensure cards are actually visible before clearing
+  // For blackjack (player or dealer): keep cards on table until user clicks DEAL/REBET — never auto-clear
   useEffect(() => {
     const revealDone = gameState === GameState.COMPLETE && !isRevealing &&
       dealerHand.cards.length > 0 && visibleDealerCards >= dealerHand.cards.length;
     if (!revealDone || !onCardsClearComplete || cardsExiting) return;
 
-    // Additional check: ensure cards have been visible for at least a brief moment (especially for blackjack)
-    // This prevents cards from being cleared before they're rendered
-    const minDisplayTime = dealerHand.cards.length === 2 ? 1500 : CARD_CLEAR_HOLD_MS; // Extra time for 2-card blackjack scenarios
+    // Blackjack: cards stay visible until user clicks DEAL/REBET
+    const isBlackjack = gameResult === 'blackjack' || dealerHand.isBlackjack;
+    if (isBlackjack) return;
+
+    // Additional check: ensure cards have been visible for at least a brief moment
+    const minDisplayTime = dealerHand.cards.length === 2 ? 1500 : CARD_CLEAR_HOLD_MS;
 
     if (cardsClearTimeoutRef.current) return; // already scheduled
     cardsClearTimeoutRef.current = setTimeout(() => {
@@ -726,7 +742,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         cardsClearCompleteRef.current = null;
       }
     };
-  }, [gameState, isRevealing, dealerHand.cards.length, visibleDealerCards, onCardsClearComplete, cardsExiting]);
+  }, [gameState, isRevealing, dealerHand.cards.length, dealerHand.isBlackjack, visibleDealerCards, onCardsClearComplete, cardsExiting, gameResult]);
 
   // Reset cardsExiting when leaving COMPLETE (new game)
   useEffect(() => {
@@ -1105,7 +1121,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                       padding: gameState === GameState.DEALER_TURN ? '8px' : '4px',
                     }}>
                       <span className="text-white font-black text-lg sm:text-3xl relative z-10">
-                        {isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal())}
+                        {dealerHand.isBlackjack ? dealerHand.total : (isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal()))}
                       </span>
                     </div>
                     {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-sm sm:text-base">BUST</span>}

@@ -115,12 +115,14 @@ export function BlackjackTopPlayersCarousel() {
     return null
   }
 
-  const carouselItems: CarouselItem[] = playerCards.map((result) => ({
-    categoryLabel: CATEGORY_LABELS[result.category] ?? result.label.replace(/_/g, ' '),
-    playerShort: formatAddress(result.wallet_address),
-    displayValue: formatDisplayValue(result.category, result.value),
-    href: `/player/${result.wallet_address}`,
-  }))
+  const carouselItems: CarouselItem[] = playerCards
+    .map((result) => ({
+      categoryLabel: CATEGORY_LABELS[result.category] ?? result.label.replace(/_/g, ' '),
+      playerShort: formatAddress(result.wallet_address),
+      displayValue: formatDisplayValue(result.category, result.value),
+      href: `/player/${result.wallet_address}`,
+    }))
+    .slice(0, 10)
 
   return (
     <div className="w-full py-1.5 md:py-2 bg-gradient-to-b from-slate-950/95 to-slate-900/95">
