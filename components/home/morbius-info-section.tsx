@@ -16,7 +16,7 @@ export function MorbiusInfoSection() {
           Morbius Token
         </h2>
         <p className="text-white/50 text-sm">
-          The Morbius token was created on Pump.Tires on PulseChain on November 11th, 2025. Holders of Morbius may be see direct benefits from holding the token but it is not required to play any games on the site. 
+          The Morbius token was created on Pump.Tires on PulseChain on November 11th, 2025. Holders of Morbius may see direct benefits from holding the token but it is not required to play any games on the site. 
         </p>
       </div>
       <div

@@ -95,6 +95,10 @@ export interface CreateFreerollRequest {
   customImage?: string | null;
   /** Optional PIN for private freerolls; if not set, server generates one */
   pinCode?: string | null;
+  /** When set, prize pool is funded by creator via escrow (custom token). Buy-ins are always MORBIUS. */
+  prizeTokenAddress?: string | null;
+  prizeAmount?: string; // token smallest unit
+  prizeTokenDecimals?: number | null;
 }
 
 // Validation constants

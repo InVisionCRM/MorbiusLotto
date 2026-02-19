@@ -10,6 +10,7 @@ import {
   type PrizeDistributionType,
 } from '@/lib/tournament-types';
 import { useOutsideClick } from '@/hooks/use-outside-click';
+import { useTokenInfo } from '@/hooks/use-token-info';
 import { Theme } from '@/lib/theme';
 
 const PAGE_SIZE = 10;
@@ -45,12 +46,22 @@ function formatBuyIn(t: TournamentListItem): string {
   return `${val.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${t.prizeTokenAddress ? 'token' : 'MORBIUS'}`;
 }
 
-function formatPrize(t: TournamentListItem, tokenSymbol?: string): string {
-  const amt = BigInt(t.prizePool);
-  if (amt === 0n) return '0';
-  const decimals = t.prizeTokenDecimals ?? 18;
+/** For custom-token tournaments: use escrow total when funded, else prize_pool from DB. */
+function getEffectivePrizeAmount(t: TournamentListItem): string {
+  if (t.prizeTokenAddress && BigInt(t.escrowTotalDeposited ?? '0') > 0n) {
+    return t.escrowTotalDeposited ?? '0';
+  }
+  return t.prizePool ?? '0';
+}
+
+function PrizeCell({ tournament }: { tournament: TournamentListItem }) {
+  const tokenInfo = useTokenInfo(tournament.prizeTokenAddress ?? undefined);
+  const amt = BigInt(getEffectivePrizeAmount(tournament));
+  const symbol = tournament.prizeTokenAddress ? (tokenInfo?.symbol ?? 'token') : 'MORBIUS';
+  if (amt === 0n) return <span>0</span>;
+  const decimals = tournament.prizeTokenDecimals ?? 18;
   const val = Number(amt / BigInt(10 ** Math.max(0, decimals - 4))) / 10000;
-  return `${val.toLocaleString()} ${tokenSymbol ?? (t.prizeTokenAddress ? 'token' : 'MORBIUS')}`;
+  return <span className="whitespace-nowrap">{val.toLocaleString()} {symbol}</span>;
 }
 
 function formatChipCount(t: TournamentListItem): string {
@@ -181,7 +192,7 @@ export function TournamentListSidebar({
                       </td>
                       <td className="py-1.5 px-1 whitespace-nowrap">{formatRegStart(t)}</td>
                       <td className="py-1.5 px-1 whitespace-nowrap">{formatBuyIn(t)}</td>
-                      <td className="py-1.5 px-1 whitespace-nowrap">{formatPrize(t)}</td>
+                      <td className="py-1.5 px-1 whitespace-nowrap"><PrizeCell tournament={t} /></td>
                       <td className="py-1.5 px-1 whitespace-nowrap">{formatChipCount(t)}</td>
                       <td className="py-1.5 px-1 font-mono text-white/70">
                         <a
@@ -305,7 +316,7 @@ export function TournamentListSidebar({
                       <span className="text-white/50">Buy-in</span>
                       <span>{formatBuyIn(active)}</span>
                       <span className="text-white/50">Prize</span>
-                      <span>{formatPrize(active)}</span>
+                      <span><PrizeCell tournament={active} /></span>
                       <span className="text-white/50">Chips / Hands</span>
                       <span>{formatChipCount(active)}</span>
                       <span className="text-white/50">Players</span>

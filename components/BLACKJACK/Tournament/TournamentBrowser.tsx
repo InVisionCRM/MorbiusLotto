@@ -28,6 +28,14 @@ import { ERC20_ABI } from '@/abi/erc20';
 import { useTokenInfo, type TokenInfo } from '@/hooks/use-token-info';
 import { TokenWithLogo } from '@/components/Creators/TokenWithLogo';
 import { Theme } from '@/lib/theme';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface LeaderboardEntry {
   entry_id: string;
@@ -75,6 +83,14 @@ interface TournamentBrowserProps {
 // ============================
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const PULSECHAIN = { id: 369, name: 'PulseChain', nativeCurrency: { name: 'Pulse', symbol: 'PLS', decimals: 18 }, rpcUrls: { default: { http: ['https://rpc.pulsechain.com'] } } };
+
+/** For custom-token tournaments: use escrow total when funded, else prize_pool from DB. */
+function getEffectivePrizeAmount(t: TournamentListItem): string {
+  if (t.prizeTokenAddress && BigInt(t.escrowTotalDeposited ?? '0') > 0n) {
+    return t.escrowTotalDeposited ?? '0';
+  }
+  return t.prizePool ?? '0';
+}
 
 function FundTournamentEscrowModal({
   tournament,
@@ -577,7 +593,7 @@ function ExpandedCardContent({
   if (!Array.isArray(prizePercentages) || prizePercentages.length === 0) {
     prizePercentages = [56, 20, 10, 2, 2, 2, 2, 2, 2, 2];
   }
-  const prizePool = BigInt(tournament.prizePool);
+  const prizePool = BigInt(getEffectivePrizeAmount(tournament));
   const prizeDistribution = getExamplePrizeDistribution(prizePool, prizePercentages);
   const decimals = tournament.prizeTokenDecimals ?? 18;
 
@@ -645,9 +661,12 @@ function ExpandedCardContent({
                     </>
                   ) : (
                     <span className="text-cyan-400 font-medium">
-                      {tournament.escrowTotalDeposited && tokenInfo
-                        ? `${Number(BigInt(tournament.escrowTotalDeposited) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} ${tokenInfo.symbol}`
-                        : `${Number(formatEther(BigInt(tournament.prizePool ?? '0'))).toLocaleString()} ${tokenInfo?.symbol ?? 'token'}`}
+                      {(() => {
+                        const amt = BigInt(getEffectivePrizeAmount(tournament));
+                        const dec = tournament.prizeTokenDecimals ?? 18;
+                        const human = Number(amt / BigInt(10 ** dec)).toLocaleString();
+                        return `${human} ${tokenInfo?.symbol ?? 'token'}`;
+                      })()}
                     </span>
                   )}
                 </div>
@@ -855,8 +874,8 @@ function ExpandedCardContent({
               status={tournament.status as 'active' | 'completed' | 'cancelled'}
               creatorAddress={tournament.creatorAddress}
               playerAddress={playerAddress}
-              prizeTokenAddress={tournament.prizeTokenAddress}
-              prizePool={tournament.prizePool}
+              prizeTokenAddress={tournament.prizeTokenAddress ?? tournament.escrowToken ?? undefined}
+              prizePool={getEffectivePrizeAmount(tournament)}
               entryCount={tournament.entryCount}
               onChainTournamentId={tournament.onChainTournamentId ?? undefined}
               wsClient={wsClient ?? null}
@@ -962,12 +981,13 @@ function TournamentCard({
   onSelect: (tournament: TournamentListItem) => void;
   onFundNow?: (tournament: TournamentListItem) => void;
 }) {
-  const tokenInfo = useTokenInfo(tournament.prizeTokenAddress);
+  const isCustomToken = Boolean(tournament.prizeTokenAddress || (tournament.escrowToken && BigInt(tournament.escrowTotalDeposited ?? '0') > 0n));
+  const prizeTokenAddress = tournament.prizeTokenAddress || tournament.escrowToken || null;
+  const tokenInfo = useTokenInfo(prizeTokenAddress);
   const timer = useTournamentTimer(tournament);
 
   const buyInBigInt = BigInt(tournament.buyInAmount);
   const tournamentImage = tournament.customImage || getDefaultTourCard(tournament.id);
-  const isCustomToken = Boolean(tournament.prizeTokenAddress);
   const notFunded = isCustomToken && !tournament.escrowFunded;
 
   return (
@@ -987,10 +1007,10 @@ function TournamentCard({
           />
           {/* Overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent">
-            {/* Prize token badge - center */}
+            {/* Prize token badge - center: custom token when set, else MORBIUS */}
             <div className="absolute inset-0 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-black/60 backdrop-blur-sm border border-white/10">
-                <TokenWithLogo address={tournament.prizeTokenAddress} logoSize="lg" variant="symbol" className="text-white hover:text-cyan-400" />
+                <TokenWithLogo address={prizeTokenAddress} logoSize="lg" variant="symbol" className="text-white hover:text-cyan-400" />
               </div>
             </div>
             <div className="absolute bottom-0 left-0 right-0 p-3">
@@ -1071,14 +1091,17 @@ function TournamentCard({
               </>
             ) : (
               <span className="text-cyan-400 font-semibold">
-                {tournament.escrowTotalDeposited && tokenInfo
-                  ? `${Number(BigInt(tournament.escrowTotalDeposited) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} ${tokenInfo.symbol}`
-                  : `${Number(formatEther(BigInt(tournament.prizePool ?? '0'))).toLocaleString()} ${tokenInfo?.symbol ?? 'token'}`}
+                {(() => {
+                  const amt = BigInt(getEffectivePrizeAmount(tournament));
+                  const decimals = tournament.prizeTokenDecimals ?? 18;
+                  const human = Number(amt / BigInt(10 ** decimals)).toLocaleString();
+                  return `${human} ${tokenInfo?.symbol ?? 'token'}`;
+                })()}
               </span>
             )
           ) : (
             <span className="text-cyan-400 font-semibold">
-              {Number(formatEther(BigInt(tournament.prizePool))).toLocaleString()} MORBIUS
+              {Number(formatEther(BigInt(getEffectivePrizeAmount(tournament)))).toLocaleString()} MORBIUS
             </span>
           )}
         </div>
@@ -1117,7 +1140,8 @@ function ExpandedCard({
   currentTournamentId?: string | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const tokenInfo = useTokenInfo(tournament.prizeTokenAddress);
+  const prizeTokenAddress = tournament.prizeTokenAddress || tournament.escrowToken || null;
+  const tokenInfo = useTokenInfo(prizeTokenAddress);
   const timer = useTournamentTimer(tournament);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(true);
@@ -1191,10 +1215,10 @@ function ExpandedCard({
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-black/40 to-transparent" />
-            {/* Prize token badge - center */}
+            {/* Prize token badge - center: custom token when set, else MORBIUS */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-black/60 backdrop-blur-sm border border-white/10">
-                <TokenWithLogo address={tournament.prizeTokenAddress} logoSize="lg" variant="symbol" className="text-white hover:text-cyan-400" />
+                <TokenWithLogo address={prizeTokenAddress} logoSize="lg" variant="symbol" className="text-white hover:text-cyan-400" />
               </div>
             </div>
           </div>
@@ -1229,9 +1253,13 @@ function ExpandedCard({
                 {tournament.entryCount}{tournament.maxPlayers ? `/${tournament.maxPlayers}` : ''} players
               </span>
               <span className="text-cyan-400 font-bold">
-                Pool: {tournament.prizeTokenAddress && tokenInfo
-                  ? `${Number(BigInt(tournament.prizePool) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} ${tokenInfo.symbol}`
-                  : `${Number(formatEther(BigInt(tournament.prizePool))).toLocaleString()} MORBIUS`}
+                Pool: {tournament.prizeTokenAddress || tournament.escrowToken ? (
+                  tokenInfo
+                    ? `${Number(BigInt(getEffectivePrizeAmount(tournament)) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} ${tokenInfo.symbol}`
+                    : `${Number(BigInt(getEffectivePrizeAmount(tournament)) / BigInt(10 ** (tournament.prizeTokenDecimals ?? 18))).toLocaleString()} token`
+                ) : (
+                  `${Number(formatEther(BigInt(getEffectivePrizeAmount(tournament)))).toLocaleString()} MORBIUS`
+                )}
               </span>
             </div>
           </div>
@@ -1268,6 +1296,7 @@ function ExpandedCard({
 
 // ============================
 // My History content (past tournaments this player entered)
+// Expandable table: click row to expand full stats, payouts, rankings, time remaining
 // ============================
 function MyHistoryContent({
   history,
@@ -1280,6 +1309,8 @@ function MyHistoryContent({
   playerAddress?: string | null;
   onFetchHistory?: () => Promise<void | PlayerTournamentHistoryItem[]>;
 }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   // Re-render every minute so "time remaining" for in-progress entries stays current (hooks at top)
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -1332,7 +1363,7 @@ function MyHistoryContent({
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm text-gray-400">
-          Every tournament you&apos;ve entered. Prizes are paid automatically when the tournament ends.
+          Every tournament you&apos;ve entered. Click a row to expand details. Prizes are paid automatically when the tournament ends.
         </p>
         {onFetchHistory && (
           <button
@@ -1345,78 +1376,133 @@ function MyHistoryContent({
           </button>
         )}
       </div>
-      {history.map((item) => {
-        const hasPrize = BigInt(item.prizeWon) > 0n;
-        const prizeHuman = formatEther(BigInt(item.prizeWon));
-        const isCustomToken = Boolean(item.prizeTokenAddress);
-        const outcome =
-          item.entryStatus === 'busted'
-            ? 'Busted out'
-            : item.entryStatus === 'completed' && item.finalRank != null
-              ? `Rank #${item.finalRank}`
-              : item.entryStatus === 'playing'
-                ? 'In progress'
-                : 'Completed';
-        const dateStr = item.boughtInAt
-          ? new Date(item.boughtInAt).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })
-          : '';
-        const timeRemaining =
-          item.entryStatus === 'playing' && item.endsAt ? formatTimeRemaining(item.endsAt) : null;
-        return (
-          <div
-            key={item.entryId}
-            className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-slate-900/90 to-slate-800/90 p-4 shadow-lg"
-            style={{
-              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            }}
-          >
-            <div className="flex flex-col gap-2">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="font-semibold text-white truncate">{item.tournamentName}</h3>
-                <span
-                  className={`shrink-0 text-xs px-2 py-0.5 rounded ${
-                    item.tournamentStatus === 'completed'
-                      ? 'bg-slate-600 text-gray-300'
-                      : item.tournamentStatus === 'active'
-                        ? 'bg-cyan-500/20 text-cyan-300'
-                        : 'bg-gray-600 text-gray-400'
-                  }`}
-                >
-                  {item.tournamentStatus}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-300">
-                <span>Your result: <strong className="text-white">{outcome}</strong></span>
-                {item.handsPlayed > 0 && (
-                  <span>{item.handsPlayed} hands</span>
-                )}
-                {timeRemaining && (
-                  <span className="text-cyan-300/90">Time left: {timeRemaining}</span>
-                )}
-                {dateStr && <span className="text-gray-500">{dateStr}</span>}
-              </div>
-              {hasPrize && (
-                <div className="mt-1 pt-2 border-t border-gray-600/50">
-                  <p className="text-sm text-cyan-400 font-medium">
-                    Prize: {Number(prizeHuman).toLocaleString()} {isCustomToken ? 'tokens' : 'MORBIUS'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {isCustomToken
-                      ? 'Sent to your wallet when the tournament ended.'
-                      : 'Added to your platform balance.'}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
+      <div className="rounded-xl border border-cyan-500/30 overflow-hidden" style={{ background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))', boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)', border: '1px inset rgba(60, 60, 60, 0.5)' }}>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-gray-600/50 hover:bg-transparent">
+              <TableHead className="text-gray-400 font-medium">Tournament</TableHead>
+              <TableHead className="text-gray-400 font-medium">Status</TableHead>
+              <TableHead className="text-gray-400 font-medium">Result</TableHead>
+              <TableHead className="text-gray-400 font-medium">Date</TableHead>
+              <TableHead className="text-gray-400 font-medium w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {history.map((item) => {
+              const hasPrize = BigInt(item.prizeWon) > 0n;
+              const prizeHuman = formatEther(BigInt(item.prizeWon));
+              const isCustomToken = Boolean(item.prizeTokenAddress);
+              const outcome =
+                item.entryStatus === 'busted'
+                  ? 'Busted out'
+                  : item.entryStatus === 'completed' && item.finalRank != null
+                    ? `Rank #${item.finalRank}`
+                    : item.entryStatus === 'playing'
+                      ? 'In progress'
+                      : 'Completed';
+              const dateStr = item.boughtInAt
+                ? new Date(item.boughtInAt).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : '';
+              const timeRemaining =
+                item.entryStatus === 'playing' && item.endsAt ? formatTimeRemaining(item.endsAt) : null;
+              const isExpanded = expandedId === item.entryId;
+
+              return (
+                <React.Fragment key={item.entryId}>
+                  <TableRow
+                    className={`cursor-pointer border-gray-600/50 transition-colors ${
+                      isExpanded ? 'bg-cyan-500/10' : 'hover:bg-gray-800/60'
+                    }`}
+                    onClick={() => setExpandedId(isExpanded ? null : item.entryId)}
+                  >
+                    <TableCell className="font-medium text-white">{item.tournamentName}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded ${
+                          item.tournamentStatus === 'completed'
+                            ? 'bg-slate-600 text-gray-300'
+                            : item.tournamentStatus === 'active'
+                              ? 'bg-cyan-500/20 text-cyan-300'
+                              : 'bg-gray-600 text-gray-400'
+                        }`}
+                      >
+                        {item.tournamentStatus}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-gray-300">{outcome}</TableCell>
+                    <TableCell className="text-gray-500 text-sm">{dateStr}</TableCell>
+                    <TableCell className="w-8">
+                      <svg
+                        className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded && (
+                    <TableRow className="border-gray-600/50 bg-gray-900/80 hover:bg-gray-900/80">
+                      <TableCell colSpan={5} className="p-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-0.5">Stats</p>
+                            <p className="text-gray-300">Hands played: <strong className="text-white">{item.handsPlayed}</strong></p>
+                            <p className="text-gray-300">Highest chips: <strong className="text-cyan-400">{item.highestChipCount.toLocaleString()}</strong></p>
+                            <p className="text-gray-300">Chips remaining: <strong className="text-white">{item.chipsRemaining.toLocaleString()}</strong></p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-0.5">Ranking</p>
+                            <p className="text-gray-300">
+                              {item.finalRank != null ? (
+                                <>Final rank: <strong className="text-cyan-400">#{item.finalRank}</strong></>
+                              ) : (
+                                <>Status: <strong className="text-white">{outcome}</strong></>
+                              )}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-0.5">Payout</p>
+                            {hasPrize ? (
+                              <>
+                                <p className="text-cyan-400 font-medium">
+                                  {Number(prizeHuman).toLocaleString()} {isCustomToken ? 'tokens' : 'MORBIUS'}
+                                </p>
+                                <p className="text-gray-500 text-xs">
+                                  {isCustomToken ? 'Sent to wallet when ended' : 'Added to platform balance'}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-gray-500">—</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-0.5">Time</p>
+                            {timeRemaining ? (
+                              <p className="text-cyan-300 font-medium">Time left: {timeRemaining}</p>
+                            ) : item.endedAt ? (
+                              <p className="text-gray-400">Ended {new Date(item.endedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                            ) : (
+                              <p className="text-gray-500">—</p>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

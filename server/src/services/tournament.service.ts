@@ -138,6 +138,10 @@ export interface CreateFreerollParams {
   maxPlayers?: number | null;
   customImage?: string | null;
   pinCode?: string | null;
+  /** When set, prize pool is funded by creator via escrow (custom token). */
+  prizeTokenAddress?: string | null;
+  prizeAmount?: string;
+  prizeTokenDecimals?: number | null;
 }
 
 // Freeroll list item (from list_freeroll_tournaments)
@@ -1510,6 +1514,9 @@ export class TournamentService {
     const platformFeePercent = 3;
     const creatorFeePercent = 2;
 
+    const hasCustomPrizeToken = params.prizeTokenAddress != null && params.prizeTokenAddress.trim() !== '';
+    const initialPrizePool = hasCustomPrizeToken && params.prizeAmount ? params.prizeAmount : '0';
+
     // Calculate ends_at
     const endsAt = new Date(scheduledStart.getTime() + params.durationMinutes * 60 * 1000);
     
@@ -1548,8 +1555,10 @@ export class TournamentService {
         tiebreaker_order,
         creator_fee_percent,
         platform_fee_percent,
-        ends_at
-      ) VALUES ($1, $2, 0, $3, $4, $25, 'active', 0, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, $20, 0, $21, $22, $23, $24)
+        ends_at,
+        prize_token_address,
+        prize_token_decimals
+      ) VALUES ($1, $2, 0, $3, $4, $25, 'active', $26, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, $20, 0, $21, $22, $23, $24, $27, $28)
       RETURNING id, pin_code
     `;
     const result = await this.pool.query(query, [
@@ -1578,6 +1587,9 @@ export class TournamentService {
       platformFeePercent,
       endsAt.toISOString(),
       minPlayers,
+      initialPrizePool,
+      hasCustomPrizeToken ? params.prizeTokenAddress : null,
+      params.prizeTokenDecimals ?? null,
     ]);
     const row = result.rows[0];
     const tournamentId = row.id;

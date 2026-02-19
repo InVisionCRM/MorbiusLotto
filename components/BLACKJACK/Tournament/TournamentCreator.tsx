@@ -358,6 +358,16 @@ export function TournamentCreator({
         setError('Min players cannot exceed max players');
         return;
       }
+      if (prizeType === 'custom') {
+        if (!selectedToken || !prizeTokenAddress.trim()) {
+          setError('Select a custom token for the prize pool.');
+          return;
+        }
+        if (!prizeAmountHuman.trim() || BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') <= BigInt(0)) {
+          setError('Enter a valid prize amount.');
+          return;
+        }
+      }
       const resolvedTableTheme: TableTheme = themeKind === 'video'
         ? (BLACKJACK_VIDEO_BACKGROUNDS.find((b) => b.id === themeId)
           ? { kind: 'video', id: themeId }
@@ -380,6 +390,15 @@ export function TournamentCreator({
         customImage: customImage || undefined,
         pinCode: isPrivate && manualPin.trim() ? manualPin.trim() : undefined,
       };
+      if (prizeType === 'custom' && selectedToken && prizeTokenAddress.trim() && prizeAmountHuman.trim()) {
+        const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
+        const prizeAmountWei = BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
+        if (prizeAmountWei > BigInt(0)) {
+          freerollParams.prizeTokenAddress = prizeTokenAddress.trim();
+          freerollParams.prizeAmount = prizeAmountWei.toString();
+          freerollParams.prizeTokenDecimals = dec;
+        }
+      }
       const result = await onCreateFreeroll(freerollParams);
       if (result) {
         setCreatedTournament({ id: result.tournamentId, pinCode: result.pinCode });
@@ -848,6 +867,7 @@ export function TournamentCreator({
                   </div>
                   <div>
                     <label id="duration-minutes-label" className="block text-gray-300 text-sm font-medium mb-1">Duration (minutes)</label>
+                    <p className="text-gray-500 text-xs mb-1.5">Total length of the tournament from game start to end. The tournament ends automatically after this many minutes.</p>
                     <input
                       id="duration-minutes-input"
                       type="number"
@@ -1044,11 +1064,15 @@ export function TournamentCreator({
                 </div>
               </div>
 
-              {tournamentType === 'buyin' && (
+              {(tournamentType === 'buyin' || tournamentType === 'freeroll') && (
                 <>
                   <div>
                     <label className="block text-gray-300 text-sm font-medium mb-1">Prize source</label>
-                    <p className="text-gray-500 text-xs mb-2">Platform uses MORBIUS from player buy-ins. Custom lets you fund a prize pool with any ERC-20 token.</p>
+                    <p className="text-gray-500 text-xs mb-2">
+                      {tournamentType === 'buyin'
+                        ? 'Platform uses MORBIUS from player buy-ins. Custom lets you fund a prize pool with any ERC-20 token.'
+                        : 'Platform prize (chip-count only). Custom lets you fund a prize pool with any ERC-20 token.'}
+                    </p>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => setPrizeType('platform')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${prizeType === 'platform' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Platform (MORBIUS)</button>
                       <button type="button" onClick={() => setPrizeType('custom')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${prizeType === 'custom' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Custom token</button>
@@ -1104,24 +1128,46 @@ export function TournamentCreator({
                 <p><span className="text-gray-500">Chips:</span> <span className="text-white">{startingChips.toLocaleString()}</span> · <span className="text-gray-500">Max hands:</span> <span className="text-white">{maxHands}</span></p>
                 <p><span className="text-gray-500">Prizes:</span> <span className="text-white">{PRIZE_PRESETS.find(p => p.id === prizeDistributionType)?.name ?? prizeDistributionType}</span></p>
                 {tournamentType === 'buyin' && (
-                  <p>
-                    <span className="text-gray-500">Buy-in:</span>{' '}
-                    {prizeType === 'platform' ? (
+                  <>
+                    <p>
+                      <span className="text-gray-500">Buy-in:</span>{' '}
                       <span className="text-white">{buyInAmount} MORBIUS</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-2 flex-wrap">
-                        <span className="text-white">{prizeAmountHuman || '0'} {selectedToken?.symbol ?? 'tokens'}</span>
-                        <TokenWithLogo address={prizeTokenAddress || null} logoSize="sm" />
-                        {prizeUsdValue != null && (
-                          <span className="text-cyan-400 font-medium">
-                            (≈ {prizeUsdValue >= 1 ? `$${prizeUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : prizeUsdValue >= 0.01 ? `$${prizeUsdValue.toFixed(2)}` : `$${prizeUsdValue.toFixed(4)}`})
-                          </span>
-                        )}
-                      </span>
+                    </p>
+                    {prizeType === 'custom' && (
+                      <p>
+                        <span className="text-gray-500">Prize pool:</span>{' '}
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          <span className="text-white">{prizeAmountHuman || '0'} {selectedToken?.symbol ?? 'tokens'}</span>
+                          <TokenWithLogo address={prizeTokenAddress || null} logoSize="sm" />
+                          {prizeUsdValue != null && (
+                            <span className="text-cyan-400 font-medium">
+                              (≈ {prizeUsdValue >= 1 ? `$${prizeUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : prizeUsdValue >= 0.01 ? `$${prizeUsdValue.toFixed(2)}` : `$${prizeUsdValue.toFixed(4)}`})
+                            </span>
+                          )}
+                        </span>
+                      </p>
                     )}
-                  </p>
+                  </>
                 )}
-                {tournamentType === 'freeroll' && <p><span className="text-gray-500">Players:</span> <span className="text-white">{minPlayersFreeroll} – {maxPlayersUnlimited ? '∞' : maxPlayersFreeroll}</span></p>}
+                {tournamentType === 'freeroll' && (
+                  <>
+                    <p><span className="text-gray-500">Players:</span> <span className="text-white">{minPlayersFreeroll} – {maxPlayersUnlimited ? '∞' : maxPlayersFreeroll}</span></p>
+                    {prizeType === 'custom' && (
+                      <p>
+                        <span className="text-gray-500">Prize pool:</span>{' '}
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          <span className="text-white">{prizeAmountHuman || '0'} {selectedToken?.symbol ?? 'tokens'}</span>
+                          <TokenWithLogo address={prizeTokenAddress || null} logoSize="sm" />
+                          {prizeUsdValue != null && (
+                            <span className="text-cyan-400 font-medium">
+                              (≈ {prizeUsdValue >= 1 ? `$${prizeUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : prizeUsdValue >= 0.01 ? `$${prizeUsdValue.toFixed(2)}` : `$${prizeUsdValue.toFixed(4)}`})
+                            </span>
+                          )}
+                        </span>
+                      </p>
+                    )}
+                  </>
+                )}
                 <p><span className="text-gray-500">Private:</span> <span className="text-white">{isPrivate ? 'Yes' : 'No'}</span></p>
                 <p><span className="text-gray-500">Table:</span> <span className="text-white">{themeKind === 'video' ? (BLACKJACK_VIDEO_BACKGROUNDS.find(b => b.id === themeId)?.label ?? themeId) : (BLACKJACK_IMAGE_BACKGROUNDS.find(b => b.id === themeId)?.label ?? themeId)}</span></p>
               </div>

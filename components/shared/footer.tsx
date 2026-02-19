@@ -43,28 +43,28 @@ export function Footer() {
           <div className="flex flex-col items-center gap-6">
             {/* Navigation Links */}
             <div className="flex flex-wrap justify-center gap-6 text-sm">
-              <Link href="/" className="text-white/60 hover:text-white/90 transition-colors">
+              <Link href="/" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Home
               </Link>
-              <Link href="/" className="text-white/60 hover:text-white/90 transition-colors">
+              <Link href="/" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Lottery
               </Link>
-              <Link href="/keno" className="text-white/60 hover:text-white/90 transition-colors">
+              <Link href="/keno" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Keno
               </Link>
-              <Link href="/PLINKO" className="text-white/60 hover:text-white/90 transition-colors">
+              <Link href="/PLINKO" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Plinko
               </Link>
-              <Link href="/plinko-dashboard" className="text-white/60 hover:text-white/90 transition-colors">
+              <Link href="/plinko-dashboard" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Dashboard
               </Link>
-              <Link href="/plinko-verifier" className="text-white/60 hover:text-white/90 transition-colors">
+              <Link href="/plinko-verifier" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Verifier
               </Link>
-              <Link href="/donate" className="text-white/60 hover:text-white/90 transition-colors">
+              <Link href="/donate" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Donate
               </Link>
-              <Link href="/swap" className="text-white/60 hover:text-white/90 transition-colors">
+              <Link href="/swap" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Buy Morbius
               </Link>
             </div>
@@ -73,37 +73,37 @@ export function Footer() {
             <div className="flex flex-wrap justify-center gap-4 text-xs">
               <button
                 onClick={() => setShowPulseChain(true)}
-                className="text-white/50 hover:text-white/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
               >
                 What is PulseChain?
               </button>
               <button
                 onClick={() => setShowFAQ(true)}
-                className="text-white/50 hover:text-white/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
               >
                 FAQ
               </button>
               <button
                 onClick={() => setShowPrivacy(true)}
-                className="text-white/50 hover:text-white/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
               >
                 Privacy Policy
               </button>
               <button
                 onClick={() => setShowTerms(true)}
-                className="text-white/50 hover:text-white/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
               >
                 Terms of Service
               </button>
               <button
                 onClick={() => setShowUserAgreement(true)}
-                className="text-white/50 hover:text-white/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
               >
                 User Agreement
               </button>
               <button
                 onClick={() => setShowAbout(true)}
-                className="text-white/50 hover:text-white/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
               >
                 About Us
               </button>
@@ -118,7 +118,7 @@ export function Footer() {
             {/* Disclaimer Button */}
             <button
               onClick={() => setShowDisclaimer(true)}
-              className="text-white/60 hover:text-white/90 text-sm underline transition-colors"
+              className="text-white/90 hover:text-cyan-500/80 text-sm underline transition-colors"
             >
               Important Disclaimer
             </button>

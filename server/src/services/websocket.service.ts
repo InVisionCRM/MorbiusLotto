@@ -2071,6 +2071,9 @@ export class WebSocketService {
         maxPlayers?: number | null;
         customImage?: string | null;
         pinCode?: string | null;
+        prizeTokenAddress?: string | null;
+        prizeAmount?: string;
+        prizeTokenDecimals?: number | null;
       };
 
       const result = await this.tournamentService.createFreeroll({
@@ -2079,14 +2082,17 @@ export class WebSocketService {
         scheduledStartAt: payload.scheduledStartAt,
         registrationOpensAt: payload.registrationOpensAt,
         durationMinutes: payload.durationMinutes,
-        startingChips: 5000,
-        maxHands: 25,
+        startingChips: payload.startingChips ?? 5000,
+        maxHands: payload.maxHands ?? 25,
         prizeDistributionType: payload.prizeDistributionType,
         tableTheme: payload.tableTheme,
         isPrivate: payload.isPrivate,
         maxPlayers: payload.maxPlayers,
         customImage: payload.customImage,
         pinCode: payload.pinCode,
+        prizeTokenAddress: payload.prizeTokenAddress,
+        prizeAmount: payload.prizeAmount,
+        prizeTokenDecimals: payload.prizeTokenDecimals,
       });
       this.sendMessage(ws, {
         type: 'freeroll_created',

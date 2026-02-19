@@ -388,13 +388,22 @@ export class BlackjackGameService {
   }
 
   /**
-   * Check if hand can be split (same rank 1-13)
+   * Split value: 10/J/Q/K (ranks 10-13) all map to 10; 2-9 and Ace use rank.
+   * Standard blackjack allows splitting any two 10-value cards (e.g. King+Jack).
+   */
+  private getSplitValue(rank: number): number {
+    if (rank >= 10 && rank <= 13) return 10;
+    return rank;
+  }
+
+  /**
+   * Check if hand can be split (same blackjack value: 10/J/Q/K interchangeable)
    */
   private canSplit(cards: number[]): boolean {
     if (cards.length !== 2) return false;
-    const v1 = this.pfService.decodeCardValue(cards[0]);
-    const v2 = this.pfService.decodeCardValue(cards[1]);
-    return v1 === v2;
+    const r1 = this.pfService.decodeCardValue(cards[0]);
+    const r2 = this.pfService.decodeCardValue(cards[1]);
+    return this.getSplitValue(r1) === this.getSplitValue(r2);
   }
 
   /**
@@ -410,13 +419,13 @@ export class BlackjackGameService {
   }
 
   /**
-   * Check if hand can be split — v2 card indices (0-51): same rank
+   * Check if hand can be split — v2 card indices (0-51): same blackjack value (10/J/Q/K interchangeable)
    */
   private canSplitV2(cards: number[]): boolean {
     if (cards.length !== 2) return false;
     const r1 = this.pfService.cardIndexToRank(cards[0]);
     const r2 = this.pfService.cardIndexToRank(cards[1]);
-    return r1 === r2;
+    return this.getSplitValue(r1) === this.getSplitValue(r2);
   }
 
   /**
@@ -1560,7 +1569,7 @@ export class BlackjackGameService {
         canHit: true,
         canStand: true,
         canDoubleDown: tournamentState.chips >= request.betAmount * 2,
-        canSplit: this.canSplit(initialPlayerCards) && tournamentState.chips >= request.betAmount * 2
+        canSplit: this.canSplitV2(initialPlayerCards) && tournamentState.chips >= request.betAmount * 2
       };
 
       const dealerVisibleHand = this.pfService.calculateHandTotalV2([dealerCards[0]]);

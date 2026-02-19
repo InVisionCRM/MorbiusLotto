@@ -2462,14 +2462,14 @@ export default function BlackjackPage() {
     activeHand.cards.length === 2 &&
     canDoubleDownByBetLimit; // Also check bet limit
 
-  // Can split when player has exactly 2 cards of the same value (only on first hand, not after split)
+  // Can split when player has exactly 2 cards of the same blackjack value (10/J/Q/K interchangeable)
   // Also check if splitting would exceed MAX_BET (split requires 2x bet)
   const canSplitByBetLimit = doubleBetAmount <= BET_LIMITS.MAX_BET;
-  
+  const getSplitValue = (v: number) => (v >= 10 && v <= 13) ? 10 : v;
   const canSplit = currentGame?.state === GameState.PLAYER_TURN &&
     activeHand &&
     activeHand.cards.length === 2 &&
-    activeHand.cards[0].value === activeHand.cards[1].value &&
+    getSplitValue(activeHand.cards[0].value) === getSplitValue(activeHand.cards[1].value) &&
     (!currentGame.playerHands || currentGame.playerHands.length <= 1) && // Can't split again if already split
     canSplitByBetLimit; // Also check bet limit
 

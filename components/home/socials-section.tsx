@@ -34,7 +34,7 @@ export function SocialsSection() {
 
           {/* Telegram */}
           <a
-            href="https://t.me/morbiusfinance"
+            href="https://t.me/morbius_cash"
             target="_blank"
             rel="noopener noreferrer"
             className="group flex flex-col items-center gap-4 hover:scale-105 transition-transform duration-300"
