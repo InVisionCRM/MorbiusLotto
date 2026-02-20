@@ -868,6 +868,20 @@ export class TournamentService {
       const useEscrow = Boolean(tournament.prize_token_address);
       const isOnChain = tournament.on_chain_tournament_id != null;
       const useMorbiusPayout = isOnChain && !useEscrow;
+
+      // Transition contract to Active before payouts (payout() requires Active or Completed).
+      // We defer setActive() from join-time to here so joinTournament() keeps working on-chain
+      // (the contract requires status==Open for joins).
+      if (isOnChain) {
+        const setActiveResult = await setMorbiusTournamentActive(tournament.on_chain_tournament_id!);
+        if (!setActiveResult.success) {
+          logger.warn('MorbiusTournament setActive failed before distribution', {
+            tournamentId,
+            onChainId: tournament.on_chain_tournament_id,
+            error: setActiveResult.error,
+          });
+        }
+      }
       // Custom token: always use V2 (bytes32). V3 deprecated for reliability.
       const useEscrowV2 = useEscrow;
 
@@ -1879,17 +1893,10 @@ export class TournamentService {
           `UPDATE tournaments SET status = 'active', activated_at = NOW(), ends_at = NOW() + INTERVAL '24 hours' WHERE id = $1`,
           [tournamentId]
         );
-        if (isOnChain && tournament.on_chain_tournament_id != null) {
-          const setActiveResult = await setMorbiusTournamentActive(tournament.on_chain_tournament_id);
-          if (!setActiveResult.success) {
-            logger.warn('MorbiusTournament setActive failed (continuing with join)', {
-              tournamentId,
-              onChainId: tournament.on_chain_tournament_id,
-              error: setActiveResult.error,
-            });
-          }
-        }
-        logger.info('Tournament transitioned to active (min players reached)', {
+        // NOTE: Do NOT call setActive() on-chain here. The contract requires status==Open
+        // for joinTournament(), so we must keep the on-chain status as Open until prize
+        // distribution. setActive() is called in distributePrizes() before payouts instead.
+        logger.info('Tournament transitioned to active in DB (min players reached)', {
           tournamentId,
           entryCount: finalEntryCount,
           minPlayers,
