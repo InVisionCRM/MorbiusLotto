@@ -624,27 +624,23 @@ export default function BlackjackPage() {
     chartSessionStartTime.current = Date.now();
   }, [address]);
 
-  // Fetch off-chain balance from server
-  const fetchBalance = useCallback(async () => {
-    const client = wsClient;
-    const connected = wsConnected;
+  // Fetch off-chain balance from server. Pass clientOverride when calling right after connect (before state updates).
+  const fetchBalance = useCallback(async (clientOverride?: BlackjackWebSocketClient) => {
+    const client = clientOverride ?? wsClient;
+    const connected = clientOverride ? true : wsConnected;
     console.log('[Balance] fetchBalance called | wsClient:', !!client, '| wsConnected:', connected);
-    // #region agent log
-    // #endregion
-    if (!client || !connected) return;
+    if (!client || !connected) {
+      throw new Error('Not connected to game server. Please wait for connection or refresh the page.');
+    }
     try {
       const { balance } = await client.getBalance();
       const balanceBigInt = BigInt(balance);
-      // #region agent log
-      const contractReserveValue = typeof playerReserve !== 'undefined' && playerReserve !== null ? playerReserve.toString() : 'undefined';
-      // #endregion
       console.log('[Balance] Server returned balance:', balance, '| as BigInt:', balanceBigInt.toString());
       setOffChainBalance(balanceBigInt);
       setGameState(prev => ({ ...prev, balance: balanceBigInt }));
     } catch (error) {
       console.error('[Balance] Failed to fetch balance:', error);
-      // #region agent log
-      // #endregion
+      throw error;
     }
   }, [wsClient, wsConnected, address, offChainBalance, playerReserve]);
 
@@ -652,14 +648,12 @@ export default function BlackjackPage() {
   const syncBalance = useCallback(async () => {
     const client = wsClient;
     const connected = wsConnected;
-    // #region agent log
-    // #endregion
-    if (!client || !connected) return;
+    if (!client || !connected) {
+      throw new Error('Not connected to game server. Please wait for connection or refresh the page.');
+    }
     try {
       const { balance } = await client.syncBalance();
       const balanceBigInt = BigInt(balance);
-      // #region agent log
-      // #endregion
       setOffChainBalance(balanceBigInt);
       setGameState(prev => ({ ...prev, balance: balanceBigInt }));
       
@@ -669,8 +663,7 @@ export default function BlackjackPage() {
       }
     } catch (error) {
       console.error('Failed to sync balance:', error);
-      // #region agent log
-      // #endregion
+      throw error;
     }
   }, [wsClient, wsConnected, refetchPlayerReserve, offChainBalance, playerReserve, address]);
 
@@ -816,24 +809,21 @@ export default function BlackjackPage() {
   const handleDepositEvent = useCallback((player: string, morbiusAmount: bigint, plsAmount: bigint) => {
     if (player.toLowerCase() === address?.toLowerCase()) {
       console.log('Deposit event detected, syncing balance...', { player, morbiusAmount });
-      // Immediately sync balance after deposit
-      syncBalance();
+      syncBalance().catch(() => {});
     }
   }, [address, syncBalance]);
 
   const handleDepositMORBIUSEvent = useCallback((player: string, amount: bigint) => {
     if (player.toLowerCase() === address?.toLowerCase()) {
       console.log('MORBIUS deposit event detected, syncing balance...', { player, amount });
-      // Immediately sync balance after deposit
-      syncBalance();
+      syncBalance().catch(() => {});
     }
   }, [address, syncBalance]);
 
   const handleWithdrawalEvent = useCallback((player: string, amount: bigint) => {
     if (player.toLowerCase() === address?.toLowerCase()) {
       console.log('Withdrawal event detected, syncing balance...', { player, amount });
-      // Immediately sync balance after withdrawal
-      syncBalance();
+      syncBalance().catch(() => {});
     }
   }, [address, syncBalance]);
 
@@ -985,8 +975,8 @@ export default function BlackjackPage() {
           setWsConnected(true);
           setWsClient(client);
           console.log('[WS Page] Connected and authenticated to blackjack server');
-          // Fetch initial balance
-          fetchBalance();
+          // Fetch initial balance (pass client - state may not have updated yet)
+          fetchBalance(client).catch(() => {});
         })
         .catch((error) => {
           setWsConnected(false);
@@ -1030,7 +1020,7 @@ export default function BlackjackPage() {
             console.log('[Balance] Auto-syncing on connection: on-chain balance detected', {
               onChain: onChainBalanceAtConnection.toString()
             });
-            syncBalance();
+            syncBalance().catch(() => {});
           }
         }, 200);
       }).catch((error) => {
@@ -2057,7 +2047,7 @@ export default function BlackjackPage() {
     }
 
     // Refresh reserve display only after dealer hand is fully revealed (preserves immersion)
-    fetchBalance();
+    fetchBalance().catch(() => {});
   }, [pendingWinData, pendingChipResult, soundEnabled, playSound, fetchBalance, address, tournament]);
 
   // Handle intro completion
@@ -2293,7 +2283,7 @@ export default function BlackjackPage() {
         }
       }
       // Refresh balance (bet was deducted off-chain)
-      fetchBalance();
+      fetchBalance().catch(() => {});
       return;
     } catch (error: any) {
       console.error('Failed to start game:', error);
@@ -2389,7 +2379,7 @@ export default function BlackjackPage() {
       }
 
       // Refresh balance in case it's a balance-related error
-      fetchBalance();
+      fetchBalance().catch(() => {});
     }
   }, [gameState.currentGame, wsClient, wsConnected, updateGameStateFromServer, fetchBalance]);
 
@@ -2797,7 +2787,7 @@ export default function BlackjackPage() {
                     if (success) {
                       setShowTournamentComplete(false);
                       setIsTournamentMode(false);
-                      fetchBalance(); // Refresh balance after leaving
+                      fetchBalance().catch(() => {}); // Refresh balance after leaving
                       toast.success('Left tournament successfully');
                     } else {
                       toast.error('Failed to leave tournament');
@@ -2930,7 +2920,7 @@ export default function BlackjackPage() {
               setIsTournamentMode(true);
               toast.success('Welcome to the tournament!');
               // Sync balance after buy-in
-              fetchBalance();
+              fetchBalance().catch(() => {});
             }
           }}
           isLoading={tournament.isLoading}
@@ -2996,7 +2986,7 @@ export default function BlackjackPage() {
                   setShowTournamentBrowser(false);
                   setIsTournamentMode(true);
                   toast.success('Joined tournament!');
-                  fetchBalance();
+                  fetchBalance().catch(() => {});
                 }
               });
             }
@@ -3027,7 +3017,7 @@ export default function BlackjackPage() {
             const success = await tournament.unregisterTournament(tournamentId);
             if (success) {
               await tournament.fetchTournamentList();
-              fetchBalance();
+              fetchBalance().catch(() => {});
             }
             return success;
           }}
@@ -3078,7 +3068,7 @@ export default function BlackjackPage() {
               setPendingJoinTournament(null);
               setIsTournamentMode(true);
               toast.success('Joined private tournament!');
-              fetchBalance();
+              fetchBalance().catch(() => {});
             }
             return success;
           }}
