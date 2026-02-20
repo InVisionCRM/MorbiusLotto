@@ -938,8 +938,42 @@ export class WebSocketService {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
 
-      // Get off-chain balance
-      const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
+      let balance = await this.dbService.getPlayerBalance(ws.playerAddress);
+
+      // Guard against stale DB balances from previous contract deployments:
+      // if DB > 0, verify the player actually has on-chain reserves on the current contract.
+      if (balance > 0n) {
+        try {
+          const playerAddress = getAddress(ws.playerAddress) as `0x${string}`;
+          const contractBalance = await this.publicClient.readContract({
+            address: this.contractAddress,
+            abi: GET_PLAYER_RESERVE_ABI,
+            functionName: 'getPlayerReserve',
+            args: [playerAddress],
+          }) as bigint;
+
+          if (contractBalance === 0n) {
+            const [hasActive, hasPending] = await Promise.all([
+              this.dbService.hasActiveGames(ws.playerAddress),
+              this.dbService.getActivePendingWithdrawal(ws.playerAddress),
+            ]);
+
+            if (!hasActive && !hasPending) {
+              logger.info('getBalance: resetting stale DB balance (on-chain 0, no active games/withdrawals)', {
+                playerAddress: ws.playerAddress,
+                previousDbBalance: balance.toString(),
+              });
+              await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, 0n);
+              balance = 0n;
+            }
+          }
+        } catch (rpcErr) {
+          logger.warn('getBalance: contract check failed, returning DB balance as-is', {
+            playerAddress: ws.playerAddress,
+            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+          });
+        }
+      }
 
       this.sendMessage(ws, {
         type: 'balance',

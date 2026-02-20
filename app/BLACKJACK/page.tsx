@@ -1006,22 +1006,23 @@ export default function BlackjackPage() {
       // Store the on-chain balance at connection time (playerReserve may be unknown from contract read)
       const onChainBalanceAtConnection: bigint = typeof playerReserve === 'bigint' ? playerReserve : BigInt(0);
       
-      // First fetch the current DB balance, then always sync with the contract.
-      // The server-side sync handles all cases: deposits (on-chain > DB), stale balances
-      // after contract upgrades (on-chain 0 + no active games → reset DB), and active play
-      // (preserves DB when games are in progress).
-      fetchBalance().then(() => {
-        setTimeout(() => {
-          if (!currentGameRef.current) {
-            console.log('[Balance] Auto-syncing on connection', {
-              onChain: onChainBalanceAtConnection.toString()
-            });
-            syncBalance().catch(() => {});
-          }
-        }, 200);
-      }).catch((error) => {
-        console.error('[Balance] Failed to fetch balance on connection:', error);
-      });
+      // Sync with contract on every connection. The server-side sync validates the
+      // DB balance against the on-chain reserve and resets stale balances (e.g. after
+      // a contract upgrade). This must happen before any getBalance call so the player
+      // never sees or plays with phantom funds.
+      if (!currentGameRef.current) {
+        console.log('[Balance] Syncing on connection', {
+          onChain: onChainBalanceAtConnection.toString()
+        });
+        syncBalance().catch((error) => {
+          console.error('[Balance] Sync failed on connection, falling back to fetch:', error);
+          fetchBalance().catch(() => {});
+        });
+      } else {
+        fetchBalance().catch((error) => {
+          console.error('[Balance] Failed to fetch balance on connection:', error);
+        });
+      }
     }
   }, [wsConnected, wsClient, address, playerReserve, fetchBalance, syncBalance]);
 
