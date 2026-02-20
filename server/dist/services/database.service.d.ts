@@ -290,6 +290,7 @@ export declare class DatabaseService {
     /** Up to N player wallet addresses (by recent activity) for admin reserve sampling. */
     getPlayerAddressesForReserveCheck(limit?: number): Promise<string[]>;
     getBlackjackTables(enabledOnly?: boolean): Promise<BlackjackTableRow[]>;
+    hasBlackjackTableByKindSrc(kind: string, src: string): Promise<boolean>;
     createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow>;
     updateBlackjackTable(id: string, updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'sort_order' | 'enabled'>>): Promise<BlackjackTableRow | null>;
     deleteBlackjackTable(id: string): Promise<boolean>;

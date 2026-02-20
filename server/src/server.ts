@@ -594,6 +594,43 @@ async function initializeServices() {
       }
     });
 
+    app.post('/api/admin/tables/seed', async (req, res) => {
+      try {
+        const { tables } = req.body;
+        if (!Array.isArray(tables) || tables.length === 0) {
+          res.status(400).json({ error: 'Body must include tables array with at least one item' });
+          return;
+        }
+        let inserted = 0;
+        for (const t of tables) {
+          const kind = t.kind;
+          const name = t.name;
+          const src = t.src;
+          if (!kind || !name || !src || (kind !== 'image' && kind !== 'video')) continue;
+          const exists = await dbService.hasBlackjackTableByKindSrc(kind, src);
+          if (exists) continue;
+          await dbService.createBlackjackTable({
+            kind,
+            name: String(name).trim(),
+            src: String(src).trim(),
+            description: null,
+            token_contract_address: null,
+            logo_url: null,
+            ticker: null,
+            iframe_url: null,
+            sort_order: inserted,
+            enabled: true,
+          });
+          inserted++;
+        }
+        sendJson(res, { inserted, total: tables.length });
+      } catch (error) {
+        logger.error('Error seeding blackjack tables:', error);
+        const msg = dbSchemaError(error);
+        res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
+      }
+    });
+
     app.post('/api/admin/tables', async (req, res) => {
       try {
         const { kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled } = req.body;

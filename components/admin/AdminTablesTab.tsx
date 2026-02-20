@@ -24,7 +24,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { FileUpload } from '@/components/ui/file-upload';
-import { Plus, Pencil, Trash2, ExternalLink, ImageIcon, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, ExternalLink, ImageIcon, Copy, Database } from 'lucide-react';
+import {
+  BLACKJACK_IMAGE_BACKGROUNDS,
+  BLACKJACK_VIDEO_BACKGROUNDS,
+} from '@/app/BLACKJACK/constants';
 import Image from 'next/image';
 
 /** Canonical reference image for table viewpoint. New table images should match this perspective so chips and cards align. */
@@ -66,6 +70,7 @@ export default function AdminTablesTab() {
   const [editRow, setEditRow] = useState<BlackjackTableRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
   const fetchTables = useCallback(async () => {
     if (!address) return;
@@ -92,6 +97,31 @@ export default function AdminTablesTab() {
   useEffect(() => {
     fetchTables();
   }, [fetchTables]);
+
+  const handleSeedFromDefaults = useCallback(async () => {
+    if (!address) return;
+    setSeeding(true);
+    try {
+      const tables = [
+        ...BLACKJACK_IMAGE_BACKGROUNDS.map((x) => ({ kind: 'image' as const, name: x.label, src: x.src })),
+        ...BLACKJACK_VIDEO_BACKGROUNDS.map((x) => ({ kind: 'video' as const, name: x.label, src: x.src })),
+      ];
+      const res = await fetch('/api/admin/tables/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-wallet': address },
+        body: JSON.stringify({ tables }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
+      await fetchTables();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Seed failed');
+    } finally {
+      setSeeding(false);
+    }
+  }, [address, fetchTables]);
 
   if (!address) {
     return (
@@ -131,14 +161,25 @@ export default function AdminTablesTab() {
       <Card className="bg-slate-900/60 border-slate-700/50">
         <CardHeader className="py-2 px-3 flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-xs font-medium text-slate-200">Blackjack tables</CardTitle>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-[11px] border-slate-600 text-slate-300"
-            onClick={() => setAddOpen(true)}
-          >
-            <Plus className="w-3 h-3 mr-1" /> Add
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px] border-slate-600 text-slate-300"
+              onClick={handleSeedFromDefaults}
+              disabled={seeding || loading}
+            >
+              <Database className="w-3 h-3 mr-1" /> Seed from defaults
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px] border-slate-600 text-slate-300"
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus className="w-3 h-3 mr-1" /> Add
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="py-2 px-3">
           {loading && <p className="text-[11px] text-slate-500">Loading…</p>}
@@ -334,108 +375,116 @@ function AddTableDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 max-w-md">
-        <DialogHeader>
+      <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm">Add table</DialogTitle>
           <DialogDescription className="text-xs text-slate-500">
             Upload an image or video and set name. Optional: description and token contract (DexScreener).
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <Label className="text-[11px] text-slate-400">Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              placeholder="e.g. High Roller"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="add-table-kind" className="text-[11px] text-slate-400">Kind</Label>
-            <select
-              id="add-table-kind"
-              value={kind}
-              onChange={(e) => setKind(e.target.value as 'image' | 'video')}
-              className="mt-0.5 h-8 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-200"
-              aria-label="Table kind: image or video"
-            >
-              <option value="image">Image</option>
-              <option value="video">Video</option>
-            </select>
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Description</Label>
-            <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              placeholder="Optional"
-            />
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Token contract (DexScreener)</Label>
-            <Input
-              value={tokenContract}
-              onChange={(e) => setTokenContract(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600 font-mono"
-              placeholder="0x… (optional)"
-            />
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Logo URL</Label>
-            <Input
-              value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              placeholder="https://… (optional)"
-            />
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Ticker</Label>
-            <Input
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              placeholder="e.g. MORBIUS (optional)"
-            />
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Morbius.io / Norbius.io iframe URL</Label>
-            <Input
-              value={iframeUrl}
-              onChange={(e) => setIframeUrl(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              placeholder="https://morbius.io/geicko?address=0x… (optional)"
-            />
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">File</Label>
-            <div className="mt-0.5">
-              <FileUpload onChange={(f) => setFiles(f)} />
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 gap-3">
+          <div className="overflow-y-auto min-h-0 space-y-3 pr-1 -mr-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px] text-slate-400">Name</Label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="e.g. High Roller"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="add-table-kind" className="text-[11px] text-slate-400">Kind</Label>
+                <select
+                  id="add-table-kind"
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as 'image' | 'video')}
+                  className="mt-0.5 h-8 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-200"
+                  aria-label="Table kind: image or video"
+                >
+                  <option value="image">Image</option>
+                  <option value="video">Video</option>
+                </select>
+              </div>
             </div>
-          </div>
-          {kind === 'image' && files.length > 0 && (
-            <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
-              <p className="text-[10px] text-slate-500 mb-1.5">Compare with reference (align table/card area)</p>
-              <div className="flex gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] text-slate-500 mb-0.5">Reference</p>
-                  <div className="relative w-full aspect-[4/3] rounded overflow-hidden border border-slate-600">
-                    <Image src={REFERENCE_VIEWPOINT_SRC} alt="Reference" fill className="object-cover" sizes="140px" />
+            <div>
+              <Label className="text-[11px] text-slate-400">File</Label>
+              <div className="mt-0.5">
+                <FileUpload onChange={(f) => setFiles(f)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px] text-slate-400">Description</Label>
+                <Input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="Optional"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] text-slate-400">Ticker</Label>
+                <Input
+                  value={ticker}
+                  onChange={(e) => setTicker(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="e.g. MORBIUS (optional)"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-[11px] text-slate-400">Token contract (DexScreener)</Label>
+              <Input
+                value={tokenContract}
+                onChange={(e) => setTokenContract(e.target.value)}
+                className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600 font-mono"
+                placeholder="0x… (optional)"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px] text-slate-400">Logo URL</Label>
+                <Input
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="https://… (optional)"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] text-slate-400">Iframe URL</Label>
+                <Input
+                  value={iframeUrl}
+                  onChange={(e) => setIframeUrl(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="morbius.io/geicko?… (optional)"
+                />
+              </div>
+            </div>
+            {kind === 'image' && files.length > 0 && (
+              <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
+                <p className="text-[10px] text-slate-500 mb-1.5">Compare with reference (align table/card area)</p>
+                <div className="flex gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-slate-500 mb-0.5">Reference</p>
+                    <div className="relative w-full aspect-[4/3] rounded overflow-hidden border border-slate-600">
+                      <Image src={REFERENCE_VIEWPOINT_SRC} alt="Reference" fill className="object-cover" sizes="140px" />
+                    </div>
                   </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] text-slate-500 mb-0.5">Your image</p>
-                  <div className="relative w-full aspect-[4/3] rounded overflow-hidden border border-cyan-500/40 bg-slate-800">
-                    <ImagePreview file={files[0]} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-slate-500 mb-0.5">Your image</p>
+                    <div className="relative w-full aspect-[4/3] rounded overflow-hidden border border-cyan-500/40 bg-slate-800">
+                      <ImagePreview file={files[0]} />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-          <DialogFooter className="gap-2 pt-2">
+            )}
+          </div>
+          <DialogFooter className="gap-2 pt-2 shrink-0 border-t border-slate-700/50">
             <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
@@ -515,73 +564,81 @@ function EditTableDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 max-w-md">
-        <DialogHeader>
+      <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm">Edit table</DialogTitle>
           <DialogDescription className="text-xs text-slate-500">
             Update description and token contract (DexScreener link).
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <Label className="text-[11px] text-slate-400">Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              required
-            />
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 gap-3">
+          <div className="overflow-y-auto min-h-0 space-y-3 pr-1 -mr-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px] text-slate-400">Name</Label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  required
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-6">
+                <Switch checked={enabled} onCheckedChange={setEnabled} />
+                <Label className="text-[11px] text-slate-400">Enabled</Label>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px] text-slate-400">Description</Label>
+                <Input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="Optional"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] text-slate-400">Ticker</Label>
+                <Input
+                  value={ticker}
+                  onChange={(e) => setTicker(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="e.g. MORBIUS (optional)"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-[11px] text-slate-400">Token contract (DexScreener)</Label>
+              <Input
+                value={tokenContract}
+                onChange={(e) => setTokenContract(e.target.value)}
+                className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600 font-mono"
+                placeholder="0x…"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px] text-slate-400">Logo URL</Label>
+                <Input
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="https://… (optional)"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] text-slate-400">Iframe URL</Label>
+                <Input
+                  value={iframeUrl}
+                  onChange={(e) => setIframeUrl(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="morbius.io/geicko?… (optional)"
+                />
+              </div>
+            </div>
           </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Description</Label>
-            <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              placeholder="Optional"
-            />
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Token contract (DexScreener)</Label>
-            <Input
-              value={tokenContract}
-              onChange={(e) => setTokenContract(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600 font-mono"
-              placeholder="0x…"
-            />
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Logo URL</Label>
-            <Input
-              value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              placeholder="https://… (optional)"
-            />
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Ticker</Label>
-            <Input
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              placeholder="e.g. MORBIUS (optional)"
-            />
-          </div>
-          <div>
-            <Label className="text-[11px] text-slate-400">Morbius.io / Norbius.io iframe URL</Label>
-            <Input
-              value={iframeUrl}
-              onChange={(e) => setIframeUrl(e.target.value)}
-              className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-              placeholder="https://morbius.io/geicko?address=0x… (optional)"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
-            <Label className="text-[11px] text-slate-400">Enabled</Label>
-          </div>
-          <DialogFooter className="gap-2 pt-2">
+          <DialogFooter className="gap-2 pt-2 shrink-0 border-t border-slate-700/50">
             <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

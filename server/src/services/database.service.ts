@@ -1693,6 +1693,14 @@ export class DatabaseService {
     }
   }
 
+  async hasBlackjackTableByKindSrc(kind: string, src: string): Promise<boolean> {
+    const r = await this.pool.query(
+      'SELECT 1 FROM blackjack_tables WHERE kind = $1 AND src = $2 LIMIT 1',
+      [kind, src]
+    );
+    return (r.rowCount ?? 0) > 0;
+  }
+
   async createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow> {
     const withExtended = async () => {
       const r = await this.pool.query(

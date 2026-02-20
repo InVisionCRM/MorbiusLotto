@@ -1366,6 +1366,10 @@ class DatabaseService {
             throw err;
         }
     }
+    async hasBlackjackTableByKindSrc(kind, src) {
+        const r = await this.pool.query('SELECT 1 FROM blackjack_tables WHERE kind = $1 AND src = $2 LIMIT 1', [kind, src]);
+        return (r.rowCount ?? 0) > 0;
+    }
     async createBlackjackTable(row) {
         const withExtended = async () => {
             const r = await this.pool.query(`INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled)
