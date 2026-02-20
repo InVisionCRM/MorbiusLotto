@@ -71,6 +71,8 @@ function formatChipCount(t: TournamentListItem): string {
 export interface TournamentListSidebarProps {
   tournaments: TournamentListItem[];
   isLoading: boolean;
+  /** When true, a join is in progress — show on Join button */
+  isJoinLoading?: boolean;
   onRefresh: () => void | Promise<void | TournamentListItem[]>;
   onTournamentLobby: () => void;
   onCreateTournament?: () => void;
@@ -82,6 +84,7 @@ export interface TournamentListSidebarProps {
 export function TournamentListSidebar({
   tournaments,
   isLoading,
+  isJoinLoading = false,
   onRefresh,
   onTournamentLobby,
   onCreateTournament,
@@ -341,7 +344,7 @@ export function TournamentListSidebar({
                     {onJoin && (() => {
                       const isFull = active.maxPlayers != null && active.entryCount >= active.maxPlayers;
                       const canAfford = active.tournamentType === 'freeroll' || playerBalance >= BigInt(active.buyInAmount);
-                      const isDisabled = !canAfford || isFull;
+                      const isDisabled = isJoinLoading || !canAfford || isFull;
                       
                       return (
                         <button
@@ -350,13 +353,14 @@ export function TournamentListSidebar({
                             e.stopPropagation();
                             if (!isDisabled) {
                               onJoin(active);
-                              setActive(null);
                             }
                           }}
                           disabled={isDisabled}
-                          className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-semibold text-xs transition-colors"
+                          className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2"
                           title={
-                            isFull
+                            isJoinLoading
+                              ? 'Confirm in wallet...'
+                              : isFull
                               ? 'Tournament is full'
                               : !canAfford && active.tournamentType !== 'freeroll'
                               ? `Insufficient balance. Need ${formatBuyIn(active)}`
@@ -365,13 +369,23 @@ export function TournamentListSidebar({
                               : 'Click to join tournament'
                           }
                         >
-                          {isFull
-                            ? 'Tournament Full'
-                            : !canAfford && active.tournamentType !== 'freeroll'
-                            ? 'Insufficient Balance'
-                            : active.isPrivate
-                            ? 'Join (PIN required)'
-                            : 'Join Tournament'}
+                          {isJoinLoading ? (
+                            <>
+                              <svg className="animate-spin h-4 w-4 shrink-0" viewBox="0 0 24 24" aria-hidden>
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              <span>Confirm in wallet...</span>
+                            </>
+                          ) : isFull ? (
+                            'Tournament Full'
+                          ) : !canAfford && active.tournamentType !== 'freeroll' ? (
+                            'Insufficient Balance'
+                          ) : active.isPrivate ? (
+                            'Join (PIN required)'
+                          ) : (
+                            'Join Tournament'
+                          )}
                         </button>
                       );
                     })()}

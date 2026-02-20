@@ -56,6 +56,8 @@ interface BlackjackSidebarProps {
   onRefreshTournaments?: () => void | Promise<void | TournamentListItem[]>
   /** Whether tournament list is loading */
   tournamentsLoading?: boolean
+  /** Whether a join (approve + on-chain + server) is in progress — show on Join button */
+  isJoinLoading?: boolean
   /** Open create tournament flow from sidebar */
   onCreateTournament?: () => void
   /** Join tournament from sidebar expanded view */
@@ -82,6 +84,7 @@ export default function BlackjackSidebar({
   tournaments = [],
   onRefreshTournaments,
   tournamentsLoading = false,
+  isJoinLoading = false,
   onCreateTournament,
   onJoinTournament,
   playerBalance,
@@ -208,6 +211,7 @@ export default function BlackjackSidebar({
             <TournamentListSidebar
               tournaments={tournaments}
               isLoading={tournamentsLoading}
+              isJoinLoading={isJoinLoading}
               onRefresh={onRefreshTournaments ?? (() => {})}
               onTournamentLobby={onTournamentLobby ?? (() => {})}
               onCreateTournament={onCreateTournament}

@@ -60,6 +60,8 @@ interface TournamentBrowserProps {
   onFetchLeaderboard?: (tournamentId: string) => Promise<LeaderboardEntry[]>;
   tournaments: TournamentListItem[];
   isLoading: boolean;
+  /** When true, a join (approve + on-chain + server) is in progress — show on Join button */
+  isJoinLoading?: boolean;
   playerBalance: bigint;
   /** For "My Tournaments" tab: filter by creator address */
   playerAddress?: string | null;
@@ -551,6 +553,7 @@ function ExpandedCardContent({
   loadingEntries,
   getThemeInfo,
   currentTournamentId,
+  isJoinLoading,
 }: {
   tournament: TournamentListItem;
   tokenInfo: TokenInfo | null;
@@ -565,6 +568,7 @@ function ExpandedCardContent({
   loadingEntries: boolean;
   getThemeInfo?: (theme: { kind: 'image' | 'video'; id: string }) => TableThemeInfo;
   currentTournamentId?: string | null;
+  isJoinLoading?: boolean;
 }) {
   const buyInBigInt = BigInt(tournament.buyInAmount);
   const canAfford = playerBalance >= buyInBigInt;
@@ -949,16 +953,34 @@ function ExpandedCardContent({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onJoin(tournament);
+            if (!isJoinLoading) onJoin(tournament);
           }}
-          disabled={!isAlreadyIn && (!canAfford || isFull || notFunded)}
-          className={`w-full py-3 rounded-xl font-semibold transition-all ${
+          disabled={isJoinLoading || (!isAlreadyIn && (!canAfford || isFull || notFunded))}
+          className={`w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
             isAlreadyIn || (canAfford && !isFull && !notFunded)
               ? `${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white`
               : 'bg-gray-700 text-gray-500 cursor-not-allowed'
           }`}
         >
-          {isAlreadyIn ? 'Resume Tournament' : notFunded ? 'Fund pool first' : isFull ? 'Tournament Full' : !canAfford ? 'Insufficient Balance' : 'Join Tournament'}
+          {isJoinLoading ? (
+            <>
+              <svg className="animate-spin h-5 w-5 shrink-0" viewBox="0 0 24 24" aria-hidden>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span>Confirm in wallet...</span>
+            </>
+          ) : isAlreadyIn ? (
+            'Resume Tournament'
+          ) : notFunded ? (
+            'Fund pool first'
+          ) : isFull ? (
+            'Tournament Full'
+          ) : !canAfford ? (
+            'Insufficient Balance'
+          ) : (
+            'Join Tournament'
+          )}
         </button>
       </div>
     </div>
@@ -1127,6 +1149,7 @@ function ExpandedCard({
   wsClient,
   getThemeInfo,
   currentTournamentId,
+  isJoinLoading,
 }: {
   tournament: TournamentListItem;
   onClose: () => void;
@@ -1138,6 +1161,7 @@ function ExpandedCard({
   wsClient?: BlackjackWebSocketClient | null;
   getThemeInfo?: (theme: { kind: 'image' | 'video'; id: string }) => TableThemeInfo;
   currentTournamentId?: string | null;
+  isJoinLoading?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const prizeTokenAddress = tournament.prizeTokenAddress || tournament.escrowToken || null;
@@ -1287,6 +1311,7 @@ function ExpandedCard({
             loadingEntries={loadingEntries}
             getThemeInfo={getThemeInfo}
             currentTournamentId={currentTournamentId}
+            isJoinLoading={isJoinLoading}
           />
         </motion.div>
       </motion.div>
@@ -1556,6 +1581,7 @@ export function TournamentBrowser({
   onFetchLeaderboard,
   tournaments,
   isLoading,
+  isJoinLoading = false,
   playerBalance,
   playerAddress,
   wsClient,
@@ -1800,6 +1826,7 @@ export function TournamentBrowser({
               wsClient={wsClient}
               getThemeInfo={getThemeInfo}
               currentTournamentId={currentTournamentId}
+              isJoinLoading={isJoinLoading}
             />
           </>
         )}

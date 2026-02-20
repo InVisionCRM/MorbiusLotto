@@ -162,6 +162,7 @@ export function useTournament(options: UseTournamentOptions) {
   const [tournamentInfo, setTournamentInfo] = useState<TournamentInfo | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isJoinLoading, setIsJoinLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentGame, setCurrentGame] = useState<TournamentGameState | null>(null);
 
@@ -928,7 +929,7 @@ export function useTournament(options: UseTournamentOptions) {
       return false;
     }
 
-    setIsLoading(true);
+    setIsJoinLoading(true);
     setError(null);
 
     try {
@@ -1021,7 +1022,7 @@ export function useTournament(options: UseTournamentOptions) {
       setError(err.message || 'Failed to join tournament');
       return false;
     } finally {
-      setIsLoading(false);
+      setIsJoinLoading(false);
     }
   }, [wsClient, address, writeContractAsync, publicClient]);
 
@@ -1130,6 +1131,7 @@ export function useTournament(options: UseTournamentOptions) {
     leaderboard,
     currentGame,
     isLoading,
+    isJoinLoading,
     error,
 
     // Last hand summary (for table overlay when a tournament hand completes)

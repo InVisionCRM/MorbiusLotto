@@ -2766,6 +2766,7 @@ export default function BlackjackPage() {
             tournaments={tournament.tournamentList}
             onRefreshTournaments={() => tournament.fetchTournamentList()}
             tournamentsLoading={tournament.isLoading}
+            isJoinLoading={tournament.isJoinLoading}
             onCreateTournament={() => setShowTournamentCreator(true)}
             onJoinTournament={(t) => {
               if (tournament.tournamentState.inTournament && tournament.tournamentState.tournamentId === t.id) {
@@ -2950,6 +2951,7 @@ export default function BlackjackPage() {
           onFetchLeaderboard={(tournamentId) => tournament.fetchTournamentLeaderboard(tournamentId)}
           tournaments={tournament.tournamentList}
           isLoading={tournament.isLoading}
+          isJoinLoading={tournament.isJoinLoading}
           playerBalance={offChainBalance}
           playerAddress={address ?? null}
           wsClient={wsClient}
@@ -3022,7 +3024,7 @@ export default function BlackjackPage() {
             }
             return success;
           }}
-          isLoading={tournament.isLoading}
+          isLoading={tournament.isJoinLoading}
         />
 
         {currentView === 'history' && (

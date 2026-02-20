@@ -730,17 +730,17 @@ export function TournamentCreator({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 border-cyan-500/30 overflow-hidden" style={Theme.panel.base}>
-        <DialogHeader className={`p-4 pb-0 border-b border-gray-600 ${Theme.cyan.gradient.button}`}>
-          <DialogTitle className="text-xl font-bold text-white text-center">Create Tournament</DialogTitle>
-          <div className="flex justify-center gap-1.5 pt-3 pb-2">
+      <DialogContent className="max-w-xl max-h-[85vh] flex flex-col gap-0 p-0 border-cyan-500/30 overflow-hidden min-h-0" style={Theme.panel.base}>
+        <DialogHeader className={`p-3 pb-0 border-b border-gray-600 shrink-0 ${Theme.cyan.gradient.button}`}>
+          <DialogTitle className="text-lg font-bold text-white text-center">Create Tournament</DialogTitle>
+          <div className="flex justify-center gap-1.5 pt-2 pb-1.5">
             {[1, 2, 3, 4, 5].map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => setWizardStep(s)}
-                className={`h-2 rounded-full transition-all ${
-                  wizardStep === s ? 'w-6 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'
+                className={`h-1.5 rounded-full transition-all ${
+                  wizardStep === s ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/60'
                 }`}
                 aria-label={`Step ${s}`}
               />
@@ -748,7 +748,7 @@ export function TournamentCreator({
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
           {error && (
             <div className="p-3 rounded-lg bg-red-900/30 border border-red-500/30 text-red-400 text-sm mb-4">
               {error}
@@ -757,7 +757,7 @@ export function TournamentCreator({
 
           {/* Step 1: Basics */}
           {wizardStep === 1 && (
-            <section className="space-y-6 max-w-lg mx-auto">
+            <section className="space-y-4 max-w-lg mx-auto">
               <h3 className="text-lg font-semibold text-cyan-300">What kind of tournament?</h3>
               <p className="text-gray-400 text-sm">Choose buy-in (players pay to enter) or freeroll (free to join, scheduled start).</p>
               <div className="flex gap-3">
@@ -805,7 +805,7 @@ export function TournamentCreator({
 
           {/* Step 2: When & Rules */}
           {wizardStep === 2 && (
-            <section className="space-y-6 max-w-lg mx-auto">
+            <section className="space-y-4 max-w-lg mx-auto">
               <h3 className="text-lg font-semibold text-cyan-300">
                 {tournamentType === 'freeroll' ? 'When does it run?' : 'Time limit & rules'}
               </h3>
@@ -906,7 +906,7 @@ export function TournamentCreator({
 
           {/* Step 3: Prizes & Entry */}
           {wizardStep === 3 && (
-            <section className="space-y-6 max-w-lg mx-auto">
+            <section className="space-y-4 max-w-lg mx-auto">
               <h3 className="text-lg font-semibold text-cyan-300">Prizes & entry</h3>
               <p className="text-gray-400 text-sm">Configure how prizes are split and the entry cost (buy-in tournaments only).</p>
 
@@ -990,24 +990,45 @@ export function TournamentCreator({
 
           {/* Step 4: Options */}
           {wizardStep === 4 && (
-            <section className="space-y-6 max-w-lg mx-auto">
-              <h3 className="text-lg font-semibold text-cyan-300">Options</h3>
+            <section className="space-y-4 max-w-lg mx-auto">
+              <h3 className="text-base font-semibold text-cyan-300">Options</h3>
 
-              <div className="flex items-center justify-between p-4 rounded-xl border border-gray-700" style={Theme.panel.base}>
-                <div>
-                  <p className="text-white font-medium">Private tournament</p>
-                  <p className="text-gray-400 text-sm">Requires PIN to join</p>
+              {/* Visibility & Branding: Private + Card image in one compact row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-gray-700 p-3 flex items-center justify-between gap-3" style={Theme.panel.base}>
+                  <div className="min-w-0">
+                    <p className="text-white font-medium text-sm">Private</p>
+                    <p className="text-gray-400 text-xs truncate">PIN required to join</p>
+                  </div>
+                  <button
+                    onClick={() => setIsPrivate(!isPrivate)}
+                    className={`relative w-12 h-6 rounded-full shrink-0 transition-colors ${isPrivate ? 'bg-cyan-500' : 'bg-gray-600'}`}
+                  >
+                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${isPrivate ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setIsPrivate(!isPrivate)}
-                  className={`relative w-14 h-8 rounded-full transition-colors ${isPrivate ? 'bg-cyan-500' : 'bg-gray-600'}`}
-                >
-                  <div className={`absolute top-1 w-6 h-6 rounded-full bg-white transition-transform ${isPrivate ? 'translate-x-7' : 'translate-x-1'}`} />
-                </button>
+                <div className="rounded-xl border border-gray-700 p-3" style={Theme.panel.base}>
+                  <p className="text-white font-medium text-sm mb-2">Card image</p>
+                  {imagePreview ? (
+                    <div className="relative inline-block">
+                      <div className="aspect-[3/2] w-24 h-16 rounded-lg overflow-hidden border border-cyan-500/50">
+                        <img src={imagePreview} alt="Card preview" className="w-full h-full object-cover" />
+                      </div>
+                      <button onClick={handleRemoveImage} className="absolute -top-1 -right-1 p-1 rounded-full bg-red-500/90 hover:bg-red-500 text-white" aria-label="Remove image">
+                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => fileInputRef.current?.click()} className="w-24 h-16 rounded-lg border-2 border-dashed border-gray-600 hover:border-cyan-500/50 bg-gray-800/50 flex flex-col items-center justify-center gap-0.5">
+                      <span className="text-gray-500 text-[10px]">Upload</span>
+                    </button>
+                  )}
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" aria-label="Upload card image" />
+                </div>
               </div>
               {isPrivate && (
                 <div>
-                  <label className="block text-gray-300 text-sm mb-1">PIN (optional)</label>
+                  <label className="block text-gray-300 text-xs mb-1">PIN (optional)</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -1021,65 +1042,47 @@ export function TournamentCreator({
                 </div>
               )}
 
-              <div>
-                <label className="block text-gray-300 text-sm font-medium mb-2">Card image (optional)</label>
-                {imagePreview ? (
-                  <div className="relative inline-block max-w-[200px]">
-                    <div className="aspect-[3/2] max-h-28 rounded-lg overflow-hidden border-2 border-cyan-500/50">
-                      <img src={imagePreview} alt="Card preview" className="w-full h-full object-cover" />
-                    </div>
-                    <button onClick={handleRemoveImage} className="absolute top-1 right-1 p-1.5 rounded-full bg-red-500/80 hover:bg-red-500 text-white">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => fileInputRef.current?.click()} className="w-32 h-20 rounded-lg border-2 border-dashed border-gray-600 hover:border-cyan-500/50 bg-gray-800/50 flex flex-col items-center justify-center gap-1">
-                      <span className="text-gray-500 text-xs">Upload</span>
-                    </button>
-                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" aria-label="Upload card image" />
-                  </div>
-                )}
-              </div>
-
-              <div>
+              {/* Table theme: constrained scrollable grid */}
+              <div className="rounded-xl border border-gray-700 p-3" style={Theme.panel.base}>
                 <label className="block text-gray-300 text-sm font-medium mb-2">Table theme</label>
-                <div className="flex gap-2 mb-2">
-                  <button type="button" onClick={() => { setThemeKind('image'); setThemeId(BLACKJACK_IMAGE_BACKGROUNDS[0].id); }} className={`flex-1 py-2 rounded-lg text-sm font-medium ${themeKind === 'image' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Image</button>
-                  <button type="button" onClick={() => { setThemeKind('video'); setThemeId(BLACKJACK_VIDEO_BACKGROUNDS[0].id); }} className={`flex-1 py-2 rounded-lg text-sm font-medium ${themeKind === 'video' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Video</button>
+                <div className="flex gap-1.5 mb-2">
+                  <button type="button" onClick={() => { setThemeKind('image'); setThemeId(BLACKJACK_IMAGE_BACKGROUNDS[0].id); }} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${themeKind === 'image' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-300'}`}>Image</button>
+                  <button type="button" onClick={() => { setThemeKind('video'); setThemeId(BLACKJACK_VIDEO_BACKGROUNDS[0].id); }} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${themeKind === 'video' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-300'}`}>Video</button>
                 </div>
-                <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
-                  {themeKind === 'image' && BLACKJACK_IMAGE_BACKGROUNDS.map((bg) => (
-                    <button key={bg.id} type="button" onClick={() => setThemeId(bg.id)} className={`relative aspect-video rounded-lg overflow-hidden border-2 ${themeId === bg.id ? 'border-cyan-500' : 'border-gray-600'}`}>
-                      <img src={bg.src} alt={bg.label} className="w-full h-full object-cover" />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 px-1"><p className="text-white text-xs truncate">{bg.label}</p></div>
-                    </button>
-                  ))}
-                  {themeKind === 'video' && BLACKJACK_VIDEO_BACKGROUNDS.map((bg) => (
-                    <button key={bg.id} type="button" onClick={() => setThemeId(bg.id)} className={`relative aspect-video rounded-lg overflow-hidden border-2 ${themeId === bg.id ? 'border-cyan-500' : 'border-gray-600'}`}>
-                      <video src={bg.src} className="w-full h-full object-cover" muted loop autoPlay playsInline />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 px-1"><p className="text-white text-xs truncate">{bg.label}</p></div>
-                    </button>
-                  ))}
+                <div className="h-36 overflow-y-auto overflow-x-hidden rounded-lg border border-gray-700/80 bg-black/30">
+                  <div className="grid grid-cols-4 gap-1.5 p-1.5">
+                    {themeKind === 'image' && BLACKJACK_IMAGE_BACKGROUNDS.map((bg) => (
+                      <button key={bg.id} type="button" onClick={() => setThemeId(bg.id)} className={`relative aspect-video rounded overflow-hidden border-2 shrink-0 ${themeId === bg.id ? 'border-cyan-500 ring-1 ring-cyan-500/50' : 'border-gray-600 hover:border-gray-500'}`}>
+                        <img src={bg.src} alt={bg.label} className="w-full h-full object-cover" />
+                        <div className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 px-1"><p className="text-white text-[10px] truncate">{bg.label}</p></div>
+                      </button>
+                    ))}
+                    {themeKind === 'video' && BLACKJACK_VIDEO_BACKGROUNDS.map((bg) => (
+                      <button key={bg.id} type="button" onClick={() => setThemeId(bg.id)} className={`relative aspect-video rounded overflow-hidden border-2 shrink-0 ${themeId === bg.id ? 'border-cyan-500 ring-1 ring-cyan-500/50' : 'border-gray-600 hover:border-gray-500'}`}>
+                        <video src={bg.src} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                        <div className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 px-1"><p className="text-white text-[10px] truncate">{bg.label}</p></div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {(tournamentType === 'buyin' || tournamentType === 'freeroll') && (
                 <>
-                  <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-1">Prize source</label>
+                  <div className="rounded-xl border border-gray-700 p-3" style={Theme.panel.base}>
+                    <label className="block text-gray-300 text-sm font-medium mb-1.5">Prize source</label>
                     <p className="text-gray-500 text-xs mb-2">
                       {tournamentType === 'buyin'
-                        ? 'Platform uses MORBIUS from player buy-ins. Custom lets you fund a prize pool with any ERC-20 token.'
-                        : 'Platform prize (chip-count only). Custom lets you fund a prize pool with any ERC-20 token.'}
+                        ? 'Platform: MORBIUS from buy-ins. Custom: fund with any ERC-20.'
+                        : 'Platform: chip-count only. Custom: fund with any ERC-20.'}
                     </p>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setPrizeType('platform')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${prizeType === 'platform' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Platform (MORBIUS)</button>
-                      <button type="button" onClick={() => setPrizeType('custom')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${prizeType === 'custom' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400'}`}>Custom token</button>
+                      <button type="button" onClick={() => setPrizeType('platform')} className={`flex-1 py-2 rounded-lg text-xs font-medium ${prizeType === 'platform' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-300'}`}>Platform (MORBIUS)</button>
+                      <button type="button" onClick={() => setPrizeType('custom')} className={`flex-1 py-2 rounded-lg text-xs font-medium ${prizeType === 'custom' ? 'bg-cyan-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-300'}`}>Custom token</button>
                     </div>
                   </div>
                   {prizeType === 'custom' && (
-                    <div className="space-y-2 p-3 rounded-lg border border-gray-700" style={Theme.panel.base}>
+                    <div className="space-y-2 p-3 rounded-xl border border-gray-700" style={Theme.panel.base}>
                       <p className="text-gray-400 text-xs">Search by name/symbol or paste a token contract address. You&apos;ll fund the prize pool after creating.</p>
                       {selectedToken ? (
                         <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-900">
@@ -1116,7 +1119,7 @@ export function TournamentCreator({
 
           {/* Step 5: Review */}
           {wizardStep === 5 && (
-            <section className="space-y-4 max-w-lg mx-auto">
+            <section className="space-y-3 max-w-lg mx-auto">
               <h3 className="text-lg font-semibold text-cyan-300">Review</h3>
               <p className="text-gray-400 text-sm">Confirm your tournament settings before creating. You can go back to any step to make changes.</p>
               <div className="rounded-xl border border-gray-700 p-4 space-y-3 text-sm" style={Theme.panel.base}>
@@ -1177,21 +1180,21 @@ export function TournamentCreator({
 
         </div>
 
-        <DialogFooter className="p-4 border-t border-gray-700 flex-row gap-3" style={Theme.panel.base}>
-          <button type="button" onClick={handleClose} className="py-3 px-4 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors">
+        <DialogFooter className="p-3 border-t border-gray-700 flex-row gap-2 shrink-0" style={Theme.panel.base}>
+          <button type="button" onClick={handleClose} className="py-2.5 px-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors">
             Cancel
           </button>
           {wizardStep > 1 && (
-            <button type="button" onClick={() => { setWizardStep((s) => s - 1); setError(null); }} className="py-3 px-4 rounded-xl bg-gray-600 hover:bg-gray-500 text-white font-medium transition-colors">
+            <button type="button" onClick={() => { setWizardStep((s) => s - 1); setError(null); }} className="py-2.5 px-3 rounded-xl bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium transition-colors">
               Back
             </button>
           )}
           {wizardStep < TOTAL_WIZARD_STEPS ? (
-            <button type="button" onClick={() => { setWizardStep((s) => s + 1); setError(null); }} disabled={wizardStep === 1 && !name.trim()} className="flex-1 py-3 rounded-xl font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="button" onClick={() => { setWizardStep((s) => s + 1); setError(null); }} disabled={wizardStep === 1 && !name.trim()} className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-cyan-600 hover:bg-cyan-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               Next
             </button>
           ) : (
-            <button type="button" onClick={handleCreate} disabled={isLoading || !name.trim()} className={`flex-1 py-3 rounded-xl font-semibold transition-all ${!isLoading && name.trim() ? `${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white` : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`}>
+            <button type="button" onClick={handleCreate} disabled={isLoading || !name.trim()} className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${!isLoading && name.trim() ? `${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white` : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`}>
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
