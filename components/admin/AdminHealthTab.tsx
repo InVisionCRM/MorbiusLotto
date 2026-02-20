@@ -6,6 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatEther } from 'viem';
 import { Activity, RefreshCw, CheckCircle, XCircle, Copy } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+  BLACKJACK_LEGACY_ADDRESS,
+  BLACKJACK_LEGACY_ADDRESS_2,
+  BLACKJACK_LEGACY_ADDRESS_3,
+  BLACKJACK_LEGACY_ADDRESS_4,
+} from '@/lib/contracts';
 
 export interface BlackjackContractReserves {
   contractAddress: string;
@@ -187,20 +193,53 @@ export default function AdminHealthTab() {
               <div>
                 <p className="text-slate-500 mb-1">Contract addresses (click to copy)</p>
                 <div className="space-y-1.5">
-                  {(['blackjack', 'plinko', 'keno', 'lottery'] as const).map((game) => {
-                    const addr = data.contractAddresses?.[game];
-                    if (!addr) return null;
+                  {[
+                    ...(['blackjack', 'plinko', 'keno', 'lottery'] as const).map((game) => ({
+                      key: game,
+                      label: game,
+                      address: data.contractAddresses?.[game] ?? '',
+                    })),
+                    ...(BLACKJACK_LEGACY_ADDRESS
+                      ? [{
+                          key: 'blackjack-legacy-1',
+                          label: 'blackjack legacy 1',
+                          address: BLACKJACK_LEGACY_ADDRESS,
+                        }]
+                      : []),
+                    ...(BLACKJACK_LEGACY_ADDRESS_2
+                      ? [{
+                          key: 'blackjack-legacy-2',
+                          label: 'blackjack legacy 2',
+                          address: BLACKJACK_LEGACY_ADDRESS_2,
+                        }]
+                      : []),
+                    ...(BLACKJACK_LEGACY_ADDRESS_3
+                      ? [{
+                          key: 'blackjack-legacy-3',
+                          label: 'blackjack legacy 3',
+                          address: BLACKJACK_LEGACY_ADDRESS_3,
+                        }]
+                      : []),
+                    ...(BLACKJACK_LEGACY_ADDRESS_4
+                      ? [{
+                          key: 'blackjack-legacy-4',
+                          label: 'blackjack legacy 4',
+                          address: BLACKJACK_LEGACY_ADDRESS_4,
+                        }]
+                      : []),
+                  ].map((entry) => {
+                    if (!entry.address) return null;
                     return (
-                      <div key={game} className="flex items-center gap-2 flex-wrap">
-                        <span className="capitalize text-slate-400 w-20 shrink-0">{game}</span>
+                      <div key={entry.key} className="flex items-center gap-2 flex-wrap">
+                        <span className="capitalize text-slate-400 w-32 shrink-0">{entry.label}</span>
                         <button
                           type="button"
-                          onClick={() => copyToClipboard(addr)}
+                          onClick={() => copyToClipboard(entry.address)}
                           className="font-mono text-[10px] text-cyan-300/90 hover:text-cyan-200 break-all text-left bg-slate-800/80 px-2 py-1 rounded border border-slate-600 hover:border-cyan-500/40 flex items-center gap-1.5 max-w-full"
                           title="Copy full address"
                         >
                           <Copy className="w-3 h-3 shrink-0" />
-                          {addr}
+                          {entry.address}
                         </button>
                       </div>
                     );
