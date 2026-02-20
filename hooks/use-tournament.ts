@@ -301,7 +301,7 @@ export function useTournament(options: UseTournamentOptions) {
    * Fetch current tournament state
    */
   const fetchTournamentState = useCallback(async () => {
-    if (!wsClient) return;
+    if (!wsClient || !wsClient.isConnected()) return;
 
     try {
       const response = await wsClient.sendRequest('tournament_state', {});
@@ -341,7 +341,7 @@ export function useTournament(options: UseTournamentOptions) {
    * Fetch tournament info
    */
   const fetchTournamentInfo = useCallback(async () => {
-    if (!wsClient) return;
+    if (!wsClient || !wsClient.isConnected()) return;
 
     try {
       const response = await wsClient.sendRequest('tournament_info', {});

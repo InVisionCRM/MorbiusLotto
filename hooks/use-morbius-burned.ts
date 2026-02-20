@@ -44,6 +44,20 @@ export function useMorbiusBurned() {
         let pageCount = 0
         const maxPages = 10 // Safety limit
 
+        const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
+          for (let i = 0; i < retries; i++) {
+            const response = await fetch(url)
+            const isRetryable = response.status === 503 || response.status === 502 || response.status === 429
+            if (response.ok || !isRetryable) return response
+            if (i < retries - 1) {
+              await new Promise(r => setTimeout(r, 1500 * (i + 1)))
+            } else {
+              return response
+            }
+          }
+          throw new Error('Failed after retries')
+        }
+
         do {
           // Build URL with pagination params
           let url = `https://api.scan.pulsechain.com/api/v2/tokens/${MORBIUS_TOKEN}/holders`
@@ -56,7 +70,7 @@ export function useMorbiusBurned() {
             url += `?${params.toString()}`
           }
 
-          const response = await fetch(url)
+          const response = await fetchWithRetry(url)
 
           if (!response.ok) {
             throw new Error(`Failed to fetch holders: ${response.status}`)
