@@ -13,8 +13,8 @@ interface EscrowSummary {
 
 interface EscrowPool {
   tournamentId: string;
-  token: string;
-  depositor: string;
+  token: string | null;
+  depositor: string | null;
   totalDeposited: string;
   amountPaidOut: string;
   remainingBalance: string;
@@ -76,7 +76,10 @@ export function AdminEscrowTab() {
     Promise.all([fetchSummary(), fetchPools()]).finally(() => setLoading(false));
   }, [depositorFilter]);
 
-  const truncAddr = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  const truncAddr = (addr: string | null | undefined) => {
+    if (!addr) return '—';
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
 
   const formatToken = (amount: string) => {
     try {

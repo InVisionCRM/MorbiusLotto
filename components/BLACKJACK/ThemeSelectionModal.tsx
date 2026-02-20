@@ -204,6 +204,7 @@ export default function ThemeSelectionModal({
                         fill
                         className="object-cover pointer-events-none"
                         sizes="(max-width: 640px) 50vw, 20vw"
+                        unoptimized={/^https?:\/\//.test(img.src)}
                       />
                       <button
                         type="button"
@@ -380,6 +381,7 @@ export default function ThemeSelectionModal({
                 width={1920}
                 height={1080}
                 className="max-w-full max-h-full object-contain rounded-lg"
+                unoptimized={/^https?:\/\//.test(expandSrc)}
                 onClick={() => {
                   setExpandSrc(null)
                   setExpandVideo(false)

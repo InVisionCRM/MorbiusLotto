@@ -174,6 +174,11 @@ export declare class DatabaseService {
     /** Expire all pending withdrawals for a wallet (any age). Used when user requests a new withdrawal. */
     expirePendingWithdrawalsForWallet(walletAddress: string): Promise<number>;
     syncPlayerBalanceWithContract(walletAddress: string, contractBalance: bigint): Promise<void>;
+    /**
+     * Check whether a player has any in-progress (non-completed) blackjack games.
+     * Used to guard balance resets during contract upgrades.
+     */
+    hasActiveGames(walletAddress: string): Promise<boolean>;
     getPlayerStats(walletAddress: string): Promise<PlayerStats>;
     getPlayerStatsEnhanced(walletAddress: string): Promise<EnhancedPlayerStats>;
     getGlobalAnalytics(): Promise<GlobalAnalytics>;

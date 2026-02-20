@@ -4,6 +4,15 @@ import webpack from "webpack";
 const nextConfig: NextConfig = {
   // Empty turbopack config to satisfy Next.js requirement (we use webpack)
   turbopack: {},
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'morbiuslotto-production.up.railway.app',
+        pathname: '/uploads/**',
+      },
+    ],
+  },
   // Set output file tracing root to fix workspace detection warning
   outputFileTracingRoot: __dirname,
   // Mark server-only packages as external to prevent bundling

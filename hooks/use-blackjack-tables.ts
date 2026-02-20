@@ -58,10 +58,15 @@ export function useBlackjackTables() {
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
       .then((rows: Array<{ id: string; kind: string; name: string; src: string; description?: string; token_contract_address?: string; logo_url?: string; ticker?: string; iframe_url?: string }>) => {
         if (cancelled || !Array.isArray(rows)) return;
+        const normalizeSrc = (src: string) => {
+          if (!src) return src;
+          if (/^https?:\/\//.test(src) || src.startsWith('/')) return src;
+          return `https://${src}`;
+        };
         const mapRow = (r: (typeof rows)[0]) => ({
           id: r.id,
           label: r.name,
-          src: r.src,
+          src: normalizeSrc(r.src),
           description: r.description ?? null,
           token_contract_address: r.token_contract_address ?? null,
           logo_url: r.logo_url ?? null,

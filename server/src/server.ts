@@ -651,8 +651,11 @@ async function initializeServices() {
           return;
         }
         const kind = (req.body?.kind as string)?.toLowerCase() || (req.file.mimetype?.startsWith('video/') ? 'video' : 'image');
-        const baseUrl = (process.env.BACKEND_PUBLIC_URL || process.env.RAILWAY_STATIC_URL || '').trim()
+        let baseUrl = (process.env.BACKEND_PUBLIC_URL || process.env.RAILWAY_STATIC_URL || '').trim()
           || `${req.protocol}://${req.get('host') || 'localhost'}`;
+        if (baseUrl && !/^https?:\/\//i.test(baseUrl)) {
+          baseUrl = `https://${baseUrl}`;
+        }
         const relPath = kind === 'video'
           ? `BlackJack/video%20table/${encodeURIComponent(req.file.filename)}`
           : `BlackJack/BrandedTable/${encodeURIComponent(req.file.filename)}`;
@@ -1053,10 +1056,34 @@ async function initializeServices() {
           })));
         } else {
           const activePools = await getActivePools();
-          sendJson(res, activePools.map(p => ({
-            tournamentId: p.tournamentId,
-            balance: p.balance.toString(),
-          })));
+          const detailed = await Promise.all(
+            activePools.map(async (p) => {
+              try {
+                const details = await getPoolDetails(p.tournamentId);
+                if (details) {
+                  return {
+                    ...details,
+                    totalDeposited: details.totalDeposited.toString(),
+                    amountPaidOut: details.amountPaidOut.toString(),
+                    remainingBalance: details.remainingBalance.toString(),
+                    depositedAt: details.depositedAt.toString(),
+                  };
+                }
+              } catch { /* fall through */ }
+              return {
+                tournamentId: p.tournamentId,
+                token: null,
+                depositor: null,
+                totalDeposited: '0',
+                amountPaidOut: '0',
+                remainingBalance: p.balance.toString(),
+                depositedAt: '0',
+                cancelled: false,
+                ageDays: 0,
+              };
+            })
+          );
+          sendJson(res, detailed);
         }
       } catch (error) {
         logger.error('Error fetching escrow pools:', error);

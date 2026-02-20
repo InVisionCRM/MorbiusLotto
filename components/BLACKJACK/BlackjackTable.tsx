@@ -158,6 +158,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 }) => {
   const videoSrc = videoSrcProp ?? BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const imageSrc = imageSrcProp ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
+  const isExternalImage = /^https?:\/\//.test(imageSrc);
   // State for progressive dealer card reveal
   // Industry standard: Show only first card during play, reveal all when game completes
   const [visibleDealerCards, setVisibleDealerCards] = useState(() => {
@@ -869,6 +870,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
           style={{ zIndex: 0 }}
           priority
+          unoptimized={isExternalImage}
         />
       )}
 

@@ -290,6 +290,23 @@ class DatabaseService {
         const normalizedAddress = this.normalizeAddress(walletAddress);
         await this.updatePlayerBalance(normalizedAddress, contractBalance, 'set');
     }
+    /**
+     * Check whether a player has any in-progress (non-completed) blackjack games.
+     * Used to guard balance resets during contract upgrades.
+     */
+    async hasActiveGames(walletAddress) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const query = `
+      SELECT 1 FROM games g
+      JOIN game_sessions gs ON g.session_id = gs.id
+      JOIN players p ON gs.player_id = p.id
+      WHERE LOWER(p.wallet_address) = LOWER($1)
+        AND g.result = 'ongoing'
+      LIMIT 1
+    `;
+        const result = await this.pool.query(query, [normalizedAddress]);
+        return result.rows.length > 0;
+    }
     async getPlayerStats(walletAddress) {
         const normalizedAddress = this.normalizeAddress(walletAddress);
         const query = `SELECT * FROM get_player_stats($1)`;
