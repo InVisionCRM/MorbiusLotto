@@ -7,7 +7,7 @@ builder = "railpack"
 buildCommand = "npm install && npm run build"
 
 [deploy]
-startCommand = "node dist/server.js"
+startCommand = "npm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"

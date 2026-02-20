@@ -358,6 +358,9 @@ export class BlackjackWebSocketClient {
 
       // Set timeout for request
       const timeout = setTimeout(() => {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H1',location:'lib/websocket-client.ts:timeout',message:'Client request timed out',data:{type,requestId,wsReadyState:this.ws?.readyState ?? null,pendingRequests:this.requestPromises.size},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         this.requestPromises.delete(requestId);
         logger.error('Request timeout', { type, requestId, payload });
         reject(new Error(`Request timeout: ${type} (requestId: ${requestId})`));
@@ -378,6 +381,9 @@ export class BlackjackWebSocketClient {
       });
 
       try {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H2',location:'lib/websocket-client.ts:sendRequest',message:'Client sending request',data:{type,requestId,wsReadyState:this.ws?.readyState ?? null,pendingRequests:this.requestPromises.size},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         logger.debug('Sending request', { type, requestId, payload });
         this.send({ type, payload, requestId });
       } catch (error) {
@@ -400,6 +406,9 @@ export class BlackjackWebSocketClient {
       // Handle request responses
       if (message.requestId) {
         const promise = this.requestPromises.get(message.requestId);
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H3',location:'lib/websocket-client.ts:handleMessage',message:'Client received message with requestId',data:{messageType:message.type,requestId:message.requestId,promiseFound:!!promise,pendingRequests:this.requestPromises.size},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (promise) {
           this.requestPromises.delete(message.requestId);
           logger.debug('Found promise for request', { requestId: message.requestId, type: message.type });

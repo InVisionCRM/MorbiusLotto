@@ -96,7 +96,12 @@ const videoTableDir = path.join(uploadsDir, 'BlackJack', 'video table');
     // ignore if exists or permission error
   }
 });
-app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res) => {
+    // Uploaded table assets are intentionally embedded cross-origin by the frontend.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  },
+}));
 
 const ALLOWED_IMAGE = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const ALLOWED_VIDEO = ['video/mp4', 'video/webm'];
