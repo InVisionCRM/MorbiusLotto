@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { pulsechain } from 'viem/chains'
 import { formatUnits, parseUnits } from 'viem'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -90,6 +91,8 @@ function AdvancedAdminSection({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'setFee',
         args: [BigInt(feeBps), feeRecipient as `0x${string}`],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -109,6 +112,8 @@ function AdvancedAdminSection({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'withdrawBankroll',
         args: [withdrawAmount, toAddress as `0x${string}`],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to withdraw')
@@ -125,6 +130,8 @@ function AdvancedAdminSection({ address }: { address?: `0x${string}` }) {
       address: KENO_ADDRESS as `0x${string}`,
       abi: KENO_ABI,
       functionName: 'pause',
+      account: address,
+      chain: pulsechain,
     })
   }
 
@@ -138,6 +145,8 @@ function AdvancedAdminSection({ address }: { address?: `0x${string}` }) {
       address: KENO_ADDRESS as `0x${string}`,
       abi: KENO_ABI,
       functionName: 'unpause',
+      account: address,
+      chain: pulsechain,
     })
   }
 
@@ -265,6 +274,8 @@ function RandomnessManagement({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'commitRandom',
         args: [BigInt(roundId), commitment as `0x${string}`],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to commit')
@@ -283,6 +294,8 @@ function RandomnessManagement({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'revealRandom',
         args: [BigInt(roundId), seed as `0x${string}`],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to reveal')
@@ -301,6 +314,8 @@ function RandomnessManagement({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'setRandomnessProvider',
         args: [provider as `0x${string}`],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to set provider')
@@ -429,6 +444,8 @@ function OwnershipManagement({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'transferOwnership',
         args: [newOwner as `0x${string}`],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to transfer')
@@ -450,6 +467,8 @@ function OwnershipManagement({ address }: { address?: `0x${string}` }) {
         address: KENO_ADDRESS as `0x${string}`,
         abi: KENO_ABI,
         functionName: 'renounceOwnership',
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to renounce')
@@ -927,6 +946,8 @@ function BuyTicketSection({ address }: { address?: `0x${string}` }) {
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [KENO_ADDRESS, amount],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to approve')
@@ -952,6 +973,8 @@ function BuyTicketSection({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'buyTicket',
         args: [parsedRoundId, parsedNumbers, parsedSpotSize, parsedDraws, wager],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to buy ticket')
@@ -1141,6 +1164,8 @@ function ClaimPrizeSection({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'claim',
         args: [parsedRoundId, parsedTicketId],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to claim')
@@ -1251,6 +1276,8 @@ function AutoClaimSection({ address }: { address?: `0x${string}` }) {
       abi: KENO_ABI,
       functionName: 'setAutoClaim',
       args: [!currentStatus],
+      account: address,
+      chain: pulsechain,
     })
   }
 
@@ -1333,6 +1360,8 @@ function RoundManagementSection({ address }: { address?: `0x${string}` }) {
       address: KENO_ADDRESS as `0x${string}`,
       abi: KENO_ABI,
       functionName: 'startNextRound',
+      account: address,
+      chain: pulsechain,
     })
   }
 
@@ -1410,6 +1439,8 @@ function PaytableConfigSection({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'setPaytable',
         args: [parseInt(spotSize), parseInt(hits), BigInt(multiplier)],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update paytable')
@@ -1530,6 +1561,8 @@ function ContractConfigSection({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'setRoundDuration',
         args: [BigInt(roundDuration)],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -1549,6 +1582,8 @@ function ContractConfigSection({ address }: { address?: `0x${string}` }) {
         abi: KENO_ABI,
         functionName: 'setMaxWagerPerDraw',
         args: [wager],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')

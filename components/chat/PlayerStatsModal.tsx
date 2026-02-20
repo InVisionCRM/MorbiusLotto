@@ -89,11 +89,11 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
         const [blackjackRes, plinkoData] = await Promise.all([
           fetch(`/api/player/${address}/stats`).then(res => res.ok ? res.json() : null).catch(() => null),
           publicClient.readContract({
-            address: PLINKO_ADDRESS,
+            address: PLINKO_ADDRESS as `0x${string}`,
             abi: PLINKO_ABI,
             functionName: 'getPlayerInfo',
             args: [address as `0x${string}`],
-          }).catch(() => null),
+          } as unknown as Parameters<typeof publicClient.readContract>[0]).catch(() => null),
         ]);
 
         if (blackjackRes) {

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { pulsechain } from 'viem/chains'
 import { formatUnits, parseUnits } from 'viem'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -84,6 +85,8 @@ function BuyTicketsSection({ address }: { address?: `0x${string}` }) {
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [LOTTERY_ADDRESS, amount],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to approve')
@@ -110,6 +113,8 @@ function BuyTicketsSection({ address }: { address?: `0x${string}` }) {
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'buyTickets',
         args: [parsedTickets],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to buy tickets')
@@ -255,6 +260,8 @@ function BuyTicketsMultiRoundSection({ address }: { address?: `0x${string}` }) {
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'buyTicketsForRounds',
         args: [parsedGroups, parsedOffsets],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to buy tickets')
@@ -370,6 +377,8 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [LOTTERY_ADDRESS, amount],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to approve')
@@ -393,6 +402,8 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
           abi: LOTTERY_6OF55_V2_ABI,
           functionName: 'buyTicketsWithWPLSAndBuffer',
           args: [parsedTickets, BigInt(bufferBps)],
+          account: address,
+          chain: pulsechain,
         })
       } else {
         // Use standard version
@@ -401,6 +412,8 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
           abi: LOTTERY_6OF55_V2_ABI,
           functionName: 'buyTicketsWithWPLS',
           args: [parsedTickets],
+          account: address,
+          chain: pulsechain,
         })
       }
     } catch (error: any) {
@@ -547,6 +560,8 @@ function ClaimWinningsSection({ address }: { address?: `0x${string}` }) {
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'claimWinnings',
         args: [parsedRoundId],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to claim winnings')
@@ -638,6 +653,8 @@ function FinalizeRoundSection({ address }: { address?: `0x${string}` }) {
       address: LOTTERY_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'finalizeRound',
+      account: address,
+      chain: pulsechain,
     })
   }
 
@@ -720,6 +737,8 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'updateRoundDuration',
         args: [duration],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -739,6 +758,8 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'updateMegaMillionsInterval',
         args: [interval],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -758,6 +779,8 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'updateBlockDelay',
         args: [delay],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
