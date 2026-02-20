@@ -35,7 +35,7 @@ import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
 import { TokenWithLogo } from '@/components/Creators/TokenWithLogo';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
-const isEscrowConfigured = TOURNAMENT_PRIZE_ESCROW_ADDRESS !== ESCROW_ZERO;
+const isEscrowConfigured = (TOURNAMENT_PRIZE_ESCROW_ADDRESS as string) !== ESCROW_ZERO;
 import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
@@ -477,7 +477,7 @@ export function TournamentCreator({
     if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
     // Custom token always uses V2 (bytes32) escrow
     const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-    if (!isEscrowConfigured || escrow === ESCROW_ZERO) {
+    if (!isEscrowConfigured || (escrow as string) === ESCROW_ZERO) {
       setFundingError('Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env.');
       return;
     }
@@ -522,7 +522,7 @@ export function TournamentCreator({
     if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
     // Custom token always uses V2 (bytes32) escrow
     const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-    if (!isEscrowConfigured || escrow === ESCROW_ZERO) return;
+    if (!isEscrowConfigured || (escrow as string) === ESCROW_ZERO) return;
     setFundingError(null);
     setFundingStep('depositing');
     try {

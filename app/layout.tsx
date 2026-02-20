@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 // Force dynamic rendering to prevent WagmiProviderNotFoundError during static prerender.
 // Wagmi/RainbowKit hooks require client context that isn't available during SSG.
@@ -54,6 +55,7 @@ export default function RootLayout({
             {children}
             <Toaster position="top-right" theme="dark" richColors />
             <BreakReminderWrapper />
+            <Analytics />
           </Providers>
         </div>
       </body>
