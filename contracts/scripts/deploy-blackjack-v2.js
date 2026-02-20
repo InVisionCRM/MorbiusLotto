@@ -15,14 +15,18 @@ async function main() {
   const PULSEX_ROUTER = process.env.BLACKJACK_ROUTER || "0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02";
   const AUTHORIZED_SERVER = process.env.BLACKJACK_AUTHORIZED_SERVER || deployer.address;
   const EMERGENCY_ADMIN = process.env.BLACKJACK_EMERGENCY_ADMIN || deployer.address;
+  const DISTRIBUTION_RECIPIENT = process.env.MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS || "0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab";
+  const PLATFORM_FEE_RECIPIENT = process.env.PLATFORM_FEE_WALLET || deployer.address;
 
   console.log("\nConfig:");
-  console.log("INITIAL_OWNER      :", INITIAL_OWNER);
-  console.log("MORBIUS_TOKEN      :", MORBIUS_TOKEN);
-  console.log("WPLS_TOKEN         :", WPLS_TOKEN);
-  console.log("PULSEX_ROUTER      :", PULSEX_ROUTER);
-  console.log("AUTHORIZED_SERVER  :", AUTHORIZED_SERVER);
-  console.log("EMERGENCY_ADMIN    :", EMERGENCY_ADMIN);
+  console.log("INITIAL_OWNER          :", INITIAL_OWNER);
+  console.log("MORBIUS_TOKEN          :", MORBIUS_TOKEN);
+  console.log("WPLS_TOKEN             :", WPLS_TOKEN);
+  console.log("PULSEX_ROUTER          :", PULSEX_ROUTER);
+  console.log("AUTHORIZED_SERVER      :", AUTHORIZED_SERVER);
+  console.log("EMERGENCY_ADMIN        :", EMERGENCY_ADMIN);
+  console.log("DISTRIBUTION_RECIPIENT :", DISTRIBUTION_RECIPIENT);
+  console.log("PLATFORM_FEE_RECIPIENT :", PLATFORM_FEE_RECIPIENT);
 
   const BlackjackV2 = await hre.ethers.getContractFactory("BlackjackV2");
   console.log("\nDeploying BlackjackV2…");
@@ -32,7 +36,9 @@ async function main() {
     WPLS_TOKEN,
     PULSEX_ROUTER,
     AUTHORIZED_SERVER,
-    EMERGENCY_ADMIN
+    EMERGENCY_ADMIN,
+    DISTRIBUTION_RECIPIENT,
+    PLATFORM_FEE_RECIPIENT
   );
 
   const deploymentTx = blackjack.deploymentTransaction();
@@ -48,12 +54,12 @@ async function main() {
   console.log(`   BLACKJACK_ADDRESS=${addr}`);
   console.log("2. Copy ABI: node -e \"const a=require('./contracts/artifacts/contracts/BlackjackV2.sol/BlackjackV2.json').abi; require('fs').writeFileSync('abi/blackjack.json', JSON.stringify(a,null,2)); require('fs').writeFileSync('contracts/abi/blackjack-v2.json', JSON.stringify({contractName:'BlackjackV2',abi:a},null,2)); require('fs').writeFileSync('server/src/abi/blackjack-v2.json', JSON.stringify(a,null,2));\"");
   console.log("3. Fund the contract with MORBIUS for payouts");
-  console.log("4. Configure withdrawal fees (optional; defaults: 1% distribution, 1% burn):");
-  console.log("   npx hardhat run scripts/configure-blackjack-v2-fees.js --network " + hre.network.name);
+  console.log("4. Fees are set in constructor (2.5% distribution, 2.5% platform, 1.5% PLS deposit).");
+  console.log("   To reconfigure: npx hardhat run scripts/configure-blackjack-v2-fees.js --network " + hre.network.name);
   console.log("5. If this deploy replaces a previous contract, set legacy so users can withdraw from old contract:");
   console.log("   NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_3=<previous_blackjack_address>");
   console.log("6. Verify contract:");
-  console.log(`   npx hardhat verify --network ${hre.network.name} ${addr} "${INITIAL_OWNER}" "${MORBIUS_TOKEN}" "${WPLS_TOKEN}" "${PULSEX_ROUTER}" "${AUTHORIZED_SERVER}" "${EMERGENCY_ADMIN}"`);
+  console.log(`   npx hardhat verify --network ${hre.network.name} ${addr} "${INITIAL_OWNER}" "${MORBIUS_TOKEN}" "${WPLS_TOKEN}" "${PULSEX_ROUTER}" "${AUTHORIZED_SERVER}" "${EMERGENCY_ADMIN}" "${DISTRIBUTION_RECIPIENT}" "${PLATFORM_FEE_RECIPIENT}"`);
 }
 
 main().catch((err) => {

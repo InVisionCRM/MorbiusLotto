@@ -46,10 +46,13 @@ contract MorbiusHolderDistributor is Ownable, ReentrancyGuard {
     uint256 public lastBalance;
     mapping(address => uint256) public userRewardPerTokenPaid;
 
+    uint256 public minHolding = 1_000_000e18; // 1M MORBIUS required to claim
+
     event Claimed(address indexed account, uint256 amount);
     event PoolUpdated(uint256 newBalance, uint256 circulating);
     event ExcludedAddressAdded(address indexed addr);
     event ExcludedAddressRemoved(address indexed addr);
+    event MinHoldingUpdated(uint256 oldMin, uint256 newMin);
 
     constructor(address _morbiusToken) Ownable(msg.sender) {
         require(_morbiusToken != address(0), "Invalid token");
@@ -89,12 +92,13 @@ contract MorbiusHolderDistributor is Ownable, ReentrancyGuard {
 
     function earned(address account) public view returns (uint256) {
         uint256 bal = MORBIUS_TOKEN.balanceOf(account);
-        if (bal == 0) return 0;
+        if (bal < minHolding) return 0;
         return (bal * (rewardPerTokenStored - userRewardPerTokenPaid[account])) / SCALE;
     }
 
-    /// @notice Claim accumulated MORBIUS; caller pays gas.
+    /// @notice Claim accumulated MORBIUS; caller pays gas. Must hold >= minHolding MORBIUS.
     function claim() external nonReentrant {
+        require(MORBIUS_TOKEN.balanceOf(msg.sender) >= minHolding, "Below minimum holding");
         updatePool();
         uint256 amount = earned(msg.sender);
         require(amount > 0, "Nothing to claim");
@@ -139,6 +143,12 @@ contract MorbiusHolderDistributor is Ownable, ReentrancyGuard {
     /// @notice List of owner-added excluded addresses (LPs/contracts).
     function getOwnerExcluded() external view returns (address[] memory) {
         return ownerExcluded;
+    }
+
+    /// @notice Update the minimum MORBIUS balance required to claim rewards.
+    function setMinHolding(uint256 _minHolding) external onlyOwner {
+        emit MinHoldingUpdated(minHolding, _minHolding);
+        minHolding = _minHolding;
     }
 
     /// @notice Rescue tokens other than MORBIUS, or owner emergency withdraw (use with care).

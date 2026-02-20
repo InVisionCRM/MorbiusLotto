@@ -553,8 +553,10 @@ function BlackjackAdminSection() {
   const [emergencyAdmin, setEmergencyAdmin] = useState('');
   const [distributionFeeBps, setDistributionFeeBps] = useState('');
   const [distributionRecipient, setDistributionRecipient] = useState('');
-  const [burnFeeBps, setBurnFeeBps] = useState('');
-  const [burnAddress, setBurnAddress] = useState('');
+  const [platformFeeBps, setPlatformFeeBps] = useState('');
+  const [platformFeeRecipient, setPlatformFeeRecipient] = useState('');
+  const [plsDepositFeeBps, setPlsDepositFeeBps] = useState('');
+  const [plsDepositFeeRecipient, setPlsDepositFeeRecipient] = useState('');
   const [emergencyPause, setEmergencyPause] = useState('true');
   const [emergencyAmount, setEmergencyAmount] = useState('');
   const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
@@ -582,7 +584,7 @@ function BlackjackAdminSection() {
   const addr = BLACKJACK_ADDRESS as `0x${string}`;
 
   return (
-    <ContractSection title="Blackjack V2">
+    <ContractSection title="Blackjack">
       <WriteRow
         label="setAuthorizedServer(address)"
         onExecute={() => {
@@ -664,9 +666,9 @@ function BlackjackAdminSection() {
         <Input value={distributionRecipient} onChange={(e) => setDistributionRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="setBurnFee(uint256 bps) — max 2000 (20%)"
+        label="setPlatformFee(uint256 bps) — max 2000 (20%)"
         onExecute={() => {
-          if (!burnFeeBps.trim()) {
+          if (!platformFeeBps.trim()) {
             toast.error('Enter basis points (0–2000)');
             return;
           }
@@ -674,19 +676,19 @@ function BlackjackAdminSection() {
             writeContract({
               address: addr,
               abi: blackjackAbi,
-              functionName: 'setBurnFee',
-              args: [BigInt(burnFeeBps)],
+              functionName: 'setPlatformFee',
+              args: [BigInt(platformFeeBps)],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={burnFeeBps} onChange={(e) => setBurnFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={platformFeeBps} onChange={(e) => setPlatformFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="setBurnAddress(address)"
+        label="setPlatformFeeRecipient(address)"
         onExecute={() => {
-          if (!burnAddress.trim() || !burnAddress.startsWith('0x')) {
+          if (!platformFeeRecipient.trim() || !platformFeeRecipient.startsWith('0x')) {
             toast.error('Enter valid 0x address');
             return;
           }
@@ -694,14 +696,54 @@ function BlackjackAdminSection() {
             writeContract({
               address: addr,
               abi: blackjackAbi,
-              functionName: 'setBurnAddress',
-              args: [burnAddress as `0x${string}`],
+              functionName: 'setPlatformFeeRecipient',
+              args: [platformFeeRecipient as `0x${string}`],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={burnAddress} onChange={(e) => setBurnAddress(e.target.value)} placeholder="0x… dead" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={platformFeeRecipient} onChange={(e) => setPlatformFeeRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="setPlsDepositFee(uint256 bps) — max 2000 (20%)"
+        onExecute={() => {
+          if (!plsDepositFeeBps.trim()) {
+            toast.error('Enter basis points (0–2000)');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: blackjackAbi,
+              functionName: 'setPlsDepositFee',
+              args: [BigInt(plsDepositFeeBps)],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={plsDepositFeeBps} onChange={(e) => setPlsDepositFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="setPlsDepositFeeRecipient(address)"
+        onExecute={() => {
+          if (!plsDepositFeeRecipient.trim() || !plsDepositFeeRecipient.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: blackjackAbi,
+              functionName: 'setPlsDepositFeeRecipient',
+              args: [plsDepositFeeRecipient as `0x${string}`],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={plsDepositFeeRecipient} onChange={(e) => setPlsDepositFeeRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setEmergencyPause(bool) — emergency admin only"

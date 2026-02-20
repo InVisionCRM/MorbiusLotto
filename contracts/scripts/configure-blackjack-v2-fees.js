@@ -1,7 +1,6 @@
 import hre from "hardhat";
 
 const DISTRIBUTION_RECIPIENT = process.env.MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS || "0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab";
-const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
 async function main() {
   const CONTRACT_ADDRESS = process.env.BLACKJACK_ADDRESS || "0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8";
@@ -16,7 +15,7 @@ async function main() {
   const blackjack = new hre.ethers.Contract(CONTRACT_ADDRESS, artifact.abi, owner);
 
   // Distribution fee (0–2000 bps = 0–20%), recipient
-  const distBps = process.env.BLACKJACK_DISTRIBUTION_FEE_BPS || "100";
+  const distBps = process.env.BLACKJACK_DISTRIBUTION_FEE_BPS || "250";
   console.log("\nSetting distribution fee to", distBps, "bps (max 2000)...");
   let tx = await blackjack.setDistributionFee(Number(distBps), { gasLimit: 100000 });
   await tx.wait();
@@ -27,23 +26,39 @@ async function main() {
   await tx.wait();
   console.log("✅ setDistributionRecipient tx:", tx.hash);
 
-  // Burn fee (0–2000 bps), burn address
-  const burnBps = process.env.BLACKJACK_BURN_FEE_BPS || "100";
-  console.log("\nSetting burn fee to", burnBps, "bps (max 2000)...");
-  tx = await blackjack.setBurnFee(Number(burnBps), { gasLimit: 100000 });
+  // Platform fee (0–2000 bps), recipient
+  const platformBps = process.env.BLACKJACK_PLATFORM_FEE_BPS || "250";
+  const platformRecipient = process.env.PLATFORM_FEE_WALLET || owner.address;
+  console.log("\nSetting platform fee to", platformBps, "bps (max 2000)...");
+  tx = await blackjack.setPlatformFee(Number(platformBps), { gasLimit: 100000 });
   await tx.wait();
-  console.log("✅ setBurnFee tx:", tx.hash);
+  console.log("✅ setPlatformFee tx:", tx.hash);
 
-  console.log("Setting burn address to", BURN_ADDRESS, "...");
-  tx = await blackjack.setBurnAddress(BURN_ADDRESS, { gasLimit: 100000 });
+  console.log("Setting platform fee recipient to", platformRecipient, "...");
+  tx = await blackjack.setPlatformFeeRecipient(platformRecipient, { gasLimit: 100000 });
   await tx.wait();
-  console.log("✅ setBurnAddress tx:", tx.hash);
+  console.log("✅ setPlatformFeeRecipient tx:", tx.hash);
+
+  // PLS deposit fee (0–2000 bps), recipient
+  const plsDepositBps = process.env.BLACKJACK_PLS_DEPOSIT_FEE_BPS || "150";
+  const plsDepositRecipient = process.env.PLATFORM_FEE_WALLET || owner.address;
+  console.log("\nSetting PLS deposit fee to", plsDepositBps, "bps (max 2000)...");
+  tx = await blackjack.setPlsDepositFee(Number(plsDepositBps), { gasLimit: 100000 });
+  await tx.wait();
+  console.log("✅ setPlsDepositFee tx:", tx.hash);
+
+  console.log("Setting PLS deposit fee recipient to", plsDepositRecipient, "...");
+  tx = await blackjack.setPlsDepositFeeRecipient(plsDepositRecipient, { gasLimit: 100000 });
+  await tx.wait();
+  console.log("✅ setPlsDepositFeeRecipient tx:", tx.hash);
 
   console.log("\nVerification:");
   console.log("  distributionFeeBps:", (await blackjack.distributionFeeBps()).toString());
   console.log("  distributionRecipient:", await blackjack.distributionRecipient());
-  console.log("  burnFeeBps:", (await blackjack.burnFeeBps()).toString());
-  console.log("  burnAddress:", await blackjack.burnAddress());
+  console.log("  platformFeeBps:", (await blackjack.platformFeeBps()).toString());
+  console.log("  platformFeeRecipient:", await blackjack.platformFeeRecipient());
+  console.log("  plsDepositFeeBps:", (await blackjack.plsDepositFeeBps()).toString());
+  console.log("  plsDepositFeeRecipient:", await blackjack.plsDepositFeeRecipient());
 }
 
 main().catch((err) => {

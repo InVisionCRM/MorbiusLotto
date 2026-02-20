@@ -28,7 +28,9 @@ export const PLINKO_ADDRESS = '0x37B1db8F06870BFFeFed862C06535BEFc4383ff8' as co
 export const BIGWHEEL_ADDRESS = '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F' as const
 
 // BlackjackV2 contract (6-deck provably fair blackjack with withdrawal fees)
-export const BLACKJACK_ADDRESS = '0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8' as const
+// V3: 0x1b38626A12085547C35bD80455d054950AD72Cde (2.5% dist + 2.5% platform + 1.5% PLS deposit fee)
+// Previous: 0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8 (set as BLACKJACK_LEGACY_ADDRESS_3 for user withdrawals)
+export const BLACKJACK_ADDRESS = '0x1b38626A12085547C35bD80455d054950AD72Cde' as const
 
 // Previous Blackjack contracts (if upgraded: players with balance here can withdraw from them)
 export const BLACKJACK_LEGACY_ADDRESS = (
@@ -49,12 +51,19 @@ export const BLACKJACK_LEGACY_ADDRESS_3 = (
     : ''
 ) as `0x${string}`
 
+export const BLACKJACK_LEGACY_ADDRESS_4 = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_4
+    ? process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_4
+    : ''
+) as `0x${string}`
+
 /** All Blackjack contract addresses: current + legacy (for reserve/withdraw UI and scripts) */
 export const ALL_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   BLACKJACK_ADDRESS,
   ...(BLACKJACK_LEGACY_ADDRESS ? [BLACKJACK_LEGACY_ADDRESS] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_2 ? [BLACKJACK_LEGACY_ADDRESS_2] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_3 ? [BLACKJACK_LEGACY_ADDRESS_3] : []),
+  ...(BLACKJACK_LEGACY_ADDRESS_4 ? [BLACKJACK_LEGACY_ADDRESS_4] : []),
 ]
 
 /** Legacy-only (previous contracts from which players can withdraw reserves) */
@@ -62,6 +71,7 @@ export const LEGACY_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   ...(BLACKJACK_LEGACY_ADDRESS ? [BLACKJACK_LEGACY_ADDRESS] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_2 ? [BLACKJACK_LEGACY_ADDRESS_2] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_3 ? [BLACKJACK_LEGACY_ADDRESS_3] : []),
+  ...(BLACKJACK_LEGACY_ADDRESS_4 ? [BLACKJACK_LEGACY_ADDRESS_4] : []),
 ]
 
 // Tournament Prize Escrow V2 (custom token prize pools) - hardcoded for reliability
@@ -74,16 +84,17 @@ export const MORBIUS_TOURNAMENT_ADDRESS = '0x1F30Aa16B4Da0124308E33b8650C351BBCA
 export const TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25' as const
 
 // MORBIUS Holder Distributor (receives MORBIUS; holders claim proportional share)
-// OLD: 0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab (has ~1100 MORBIUS; use this for claims)
-// NEW: 0xc87B4F61460b24A0040AdaaB5452d07f38c876C6 (redeployed with fixed EX_BLACKJACK; currently empty)
-export const MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS = '0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab' as const
+// V1: 0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab (original; has ~1100 MORBIUS)
+// V2: 0xc87B4F61460b24A0040AdaaB5452d07f38c876C6 (redeployed with fixed EX_BLACKJACK)
+// V3: 0x0416947cd08Fc3cd8923dD857c58472F337aa42B (minHolding 1M MORBIUS; used by BlackjackV2 V3)
+export const MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS = '0x0416947cd08Fc3cd8923dD857c58472F337aa42B' as const
 
 // Contract deployment info
 export const LOTTERY_DEPLOY_BLOCK = 25329129
 export const KENO_DEPLOY_BLOCK = 25341670 // Deployed Dec 21, 2025
 export const PLINKO_DEPLOY_BLOCK = 25557180 // V8: New deployment block 25,557,180
 export const BIGWHEEL_DEPLOY_BLOCK = 25575736 // Deployed Jan 20, 2026
-export const BLACKJACK_DEPLOY_BLOCK = 25666579 // Deployed Jan 30, 2026 (1M daily limit)
+export const BLACKJACK_DEPLOY_BLOCK = 25836210 // V3: Deployed Feb 19, 2026 (2.5% dist + 2.5% platform + 1.5% PLS deposit fee)
 
 // Lottery constants
 export const TICKET_PRICE = BigInt(100_000_000_000_000_000_000) // 100 tokens (18 decimals)

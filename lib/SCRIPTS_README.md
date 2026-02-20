@@ -69,7 +69,7 @@ Commands are from the **repo root** unless noted. Set required env in `contracts
 | Fund Blackjack | `cd contracts && npx hardhat run scripts/fund-blackjack.js --network pulsechain` | Optional: `--amount=5000` |
 | Configure Blackjack | `cd contracts && npx hardhat run scripts/configure-blackjack.js --network pulsechain` | |
 | Configure Blackjack owner | `cd contracts && npx hardhat run scripts/configure-blackjack-owner.js --network pulsechain` | |
-| Configure Blackjack V2 fees | `cd contracts && npx hardhat run scripts/configure-blackjack-v2-fees.js --network pulsechain` | |
+| Configure Blackjack V2 fees | `cd contracts && npx hardhat run scripts/configure-blackjack-v2-fees.js --network pulsechain` | Defaults: 2.5% distribution, 2.5% platform, 1.5% PLS deposit. Set PLATFORM_FEE_WALLET in .env |
 | Get server info | `cd contracts && npx hardhat run scripts/get-server-info.js --network pulsechain` | For server/configure step |
 | Verify Blackjack functions | `cd contracts && npx hardhat run scripts/verify-blackjack-functions.js --network pulsechain` | ABI vs deployed |
 | Emergency withdraw (legacy) | `cd contracts && npx hardhat run scripts/emergency-withdraw-blackjack.js --network pulsechain` | Owner/emergencyAdmin; set BLACKJACK_LEGACY_ADDRESS. Optional: DRY_RUN=1, BACKUP_PRIVATE_KEY |

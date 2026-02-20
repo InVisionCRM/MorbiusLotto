@@ -110,13 +110,18 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     // Used nonces for signature-based withdrawals (prevents replay attacks)
     mapping(uint256 => bool) public usedNonces;
 
-    // Withdrawal fees: percentage of requested (gross) amount; user receives net = amount - distributionFee - burnFee
-    uint256 public distributionFeeBps;           // 0–2000 (0%–20%), default 100 (1%)
+    // Withdrawal fees: percentage of requested (gross) amount; user receives net = amount - distributionFee - platformFee
+    uint256 public distributionFeeBps;           // 0–2000 (0%–20%), default 250 (2.5%)
     address public distributionRecipient;        // receives distribution fee (e.g. MORBIUS holder distributor)
-    uint256 public burnFeeBps;                    // 0–2000 (0%–20%), default 100 (1%)
-    address public burnAddress;                   // receives burn fee (e.g. dead address)
+    uint256 public platformFeeBps;               // 0–2000 (0%–20%), default 250 (2.5%)
+    address public platformFeeRecipient;         // receives platform fee
     uint256 public totalDistributionFeesCollected;
-    uint256 public totalBurned;
+    uint256 public totalPlatformFeesCollected;
+
+    // PLS deposit fee: percentage of PLS skimmed before swap, sent as raw PLS to recipient
+    uint256 public plsDepositFeeBps;             // 0–2000 (0%–20%), default 150 (1.5%)
+    address public plsDepositFeeRecipient;       // receives PLS deposit fee
+    uint256 public totalPlsDepositFeesCollected;
 
     // EIP-712 Domain Separator
     bytes32 public immutable DOMAIN_SEPARATOR;
@@ -147,9 +152,12 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     event EmergencyAdminUpdated(address indexed oldAdmin, address indexed newAdmin);
     event DistributionFeeUpdated(uint256 oldBps, uint256 newBps);
     event DistributionRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
-    event BurnFeeUpdated(uint256 oldBps, uint256 newBps);
-    event BurnAddressUpdated(address indexed oldAddress, address indexed newAddress);
-    event WithdrawalFeesCollected(address indexed player, uint256 amount, uint256 distributionFee, uint256 burnFee, uint256 netToUser);
+    event PlatformFeeUpdated(uint256 oldBps, uint256 newBps);
+    event PlatformFeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+    event WithdrawalFeesCollected(address indexed player, uint256 amount, uint256 distributionFee, uint256 platformFee, uint256 netToUser);
+    event PlsDepositFeeCollected(address indexed player, uint256 plsAmount, uint256 feeAmount);
+    event PlsDepositFeeUpdated(uint256 oldBps, uint256 newBps);
+    event PlsDepositFeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
 
     constructor(
         address _initialOwner,
@@ -157,7 +165,9 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         address _wplsToken,
         address _pulseXRouter,
         address _authorizedServer,
-        address _emergencyAdmin
+        address _emergencyAdmin,
+        address _distributionRecipient,
+        address _platformFeeRecipient
     ) Ownable(_initialOwner) {
         MORBIUS_TOKEN = IERC20(_morbiusToken);
         WPLS_TOKEN = IWrappedPulseV2(_wplsToken);
@@ -165,10 +175,12 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         authorizedServer = _authorizedServer;
         emergencyAdmin = _emergencyAdmin;
 
-        distributionFeeBps = 100; // 1%
-        distributionRecipient = 0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab;
-        burnFeeBps = 100; // 1%
-        burnAddress = 0x000000000000000000000000000000000000dEaD;
+        distributionFeeBps = 250; // 2.5%
+        distributionRecipient = _distributionRecipient;
+        platformFeeBps = 250; // 2.5%
+        platformFeeRecipient = _platformFeeRecipient;
+        plsDepositFeeBps = 150; // 1.5%
+        plsDepositFeeRecipient = _platformFeeRecipient;
 
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
@@ -183,41 +195,51 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
 
     // ============ Internal Helpers ============
 
-    function _computeWithdrawalFees(uint256 amount) internal view returns (uint256 netToUser, uint256 feeDistribution, uint256 feeBurn) {
+    function _computeWithdrawalFees(uint256 amount) internal view returns (uint256 netToUser, uint256 feeDistribution, uint256 feePlatform) {
         feeDistribution = (amount * distributionFeeBps) / BPS_DENOMINATOR;
-        feeBurn = (amount * burnFeeBps) / BPS_DENOMINATOR;
-        netToUser = amount - feeDistribution - feeBurn;
+        feePlatform = (amount * platformFeeBps) / BPS_DENOMINATOR;
+        netToUser = amount - feeDistribution - feePlatform;
     }
 
     // ============ External Functions ============
 
     /**
      * @notice Deposit PLS and automatically swap to MORBIUS
-     * @dev PLS is wrapped to WPLS, then swapped to MORBIUS via PulseX
-     *      V2 fix: uses getAmountsOut instead of getAmountsIn for correct slippage
+     * @dev PLS is wrapped to WPLS, then swapped to MORBIUS via PulseX.
+     *      A configurable PLS fee is skimmed before the swap and sent to plsDepositFeeRecipient.
      */
     function deposit() external payable nonReentrant whenNotPaused {
         require(msg.value >= MIN_DEPOSIT, "Deposit too small");
         require(!emergencyPaused, "Emergency pause active");
 
-        // Wrap PLS to WPLS
-        WPLS_TOKEN.deposit{value: msg.value}();
+        // Skim PLS deposit fee before swap
+        uint256 plsFee = (msg.value * plsDepositFeeBps) / BPS_DENOMINATOR;
+        uint256 swapAmount = msg.value - plsFee;
+
+        if (plsFee > 0 && plsDepositFeeRecipient != address(0)) {
+            (bool sent, ) = plsDepositFeeRecipient.call{value: plsFee}("");
+            require(sent, "PLS fee transfer failed");
+            totalPlsDepositFeesCollected += plsFee;
+            emit PlsDepositFeeCollected(msg.sender, msg.value, plsFee);
+        }
+
+        // Wrap remaining PLS to WPLS
+        WPLS_TOKEN.deposit{value: swapAmount}();
 
         // Calculate minimum MORBIUS output (with slippage protection)
         address[] memory path = new address[](2);
         path[0] = address(WPLS_TOKEN);
         path[1] = address(MORBIUS_TOKEN);
 
-        // V2 fix: getAmountsOut gives expected output for a given input amount
-        uint256[] memory amounts = pulseXRouter.getAmountsOut(msg.value, path);
+        uint256[] memory amounts = pulseXRouter.getAmountsOut(swapAmount, path);
         uint256 minMorbiusOut = (amounts[amounts.length - 1] * (10000 - 500)) / 10000; // 5% slippage
 
         // Approve WPLS for swap
-        WPLS_TOKEN.approve(address(pulseXRouter), msg.value);
+        WPLS_TOKEN.approve(address(pulseXRouter), swapAmount);
 
         // Swap WPLS to MORBIUS
         uint256[] memory swapResult = pulseXRouter.swapExactTokensForTokens(
-            msg.value,
+            swapAmount,
             minMorbiusOut,
             path,
             address(this),
@@ -248,7 +270,7 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Withdraw MORBIUS from reserve. Amount is gross (requested); fees are deducted and sent to distribution/burn; user receives net.
+     * @notice Withdraw MORBIUS from reserve. Amount is gross (requested); fees are deducted and sent to distribution/platform; user receives net.
      */
     function withdraw(uint256 amount) external nonReentrant whenNotPaused {
         require(amount >= MIN_WITHDRAWAL, "Withdrawal too small");
@@ -259,7 +281,7 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         require(dailyWithdrawals[msg.sender][today] + amount <= MAX_DAILY_WITHDRAWAL, "Daily withdrawal limit exceeded");
         require(dailyWithdrawalTotals[today] + amount <= MAX_DAILY_WITHDRAWAL * 10, "Global daily limit exceeded");
 
-        (uint256 netToUser, uint256 feeDistribution, uint256 feeBurn) = _computeWithdrawalFees(amount);
+        (uint256 netToUser, uint256 feeDistribution, uint256 feePlatform) = _computeWithdrawalFees(amount);
 
         dailyWithdrawals[msg.sender][today] += amount;
         dailyWithdrawalTotals[today] += amount;
@@ -274,13 +296,13 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
             MORBIUS_TOKEN.safeTransfer(distributionRecipient, feeDistribution);
             totalDistributionFeesCollected += feeDistribution;
         }
-        if (feeBurn > 0 && burnAddress != address(0)) {
-            MORBIUS_TOKEN.safeTransfer(burnAddress, feeBurn);
-            totalBurned += feeBurn;
+        if (feePlatform > 0 && platformFeeRecipient != address(0)) {
+            MORBIUS_TOKEN.safeTransfer(platformFeeRecipient, feePlatform);
+            totalPlatformFeesCollected += feePlatform;
         }
 
         emit Withdrawal(msg.sender, amount);
-        emit WithdrawalFeesCollected(msg.sender, amount, feeDistribution, feeBurn, netToUser);
+        emit WithdrawalFeesCollected(msg.sender, amount, feeDistribution, feePlatform, netToUser);
     }
 
     /**
@@ -314,7 +336,7 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         require(dailyWithdrawals[msg.sender][today] + amount <= MAX_DAILY_WITHDRAWAL, "Daily withdrawal limit exceeded");
         require(dailyWithdrawalTotals[today] + amount <= MAX_DAILY_WITHDRAWAL * 10, "Global daily limit exceeded");
 
-        (uint256 netToUser, uint256 feeDistribution, uint256 feeBurn) = _computeWithdrawalFees(amount);
+        (uint256 netToUser, uint256 feeDistribution, uint256 feePlatform) = _computeWithdrawalFees(amount);
 
         dailyWithdrawals[msg.sender][today] += amount;
         dailyWithdrawalTotals[today] += amount;
@@ -341,13 +363,13 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
             MORBIUS_TOKEN.safeTransfer(distributionRecipient, feeDistribution);
             totalDistributionFeesCollected += feeDistribution;
         }
-        if (feeBurn > 0 && burnAddress != address(0)) {
-            MORBIUS_TOKEN.safeTransfer(burnAddress, feeBurn);
-            totalBurned += feeBurn;
+        if (feePlatform > 0 && platformFeeRecipient != address(0)) {
+            MORBIUS_TOKEN.safeTransfer(platformFeeRecipient, feePlatform);
+            totalPlatformFeesCollected += feePlatform;
         }
 
         emit Withdrawal(msg.sender, amount);
-        emit WithdrawalFeesCollected(msg.sender, amount, feeDistribution, feeBurn, netToUser);
+        emit WithdrawalFeesCollected(msg.sender, amount, feeDistribution, feePlatform, netToUser);
     }
 
     /**
@@ -481,7 +503,7 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     function getWithdrawalNet(uint256 amount) external view returns (
         uint256 netToUser,
         uint256 feeDistribution,
-        uint256 feeBurn
+        uint256 feePlatform
     ) {
         return _computeWithdrawalFees(amount);
     }
@@ -509,15 +531,26 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
         distributionRecipient = _distributionRecipient;
     }
 
-    function setBurnFee(uint256 _burnFeeBps) external onlyOwner {
-        require(_burnFeeBps <= 2000, "Burn fee cannot exceed 20%");
-        emit BurnFeeUpdated(burnFeeBps, _burnFeeBps);
-        burnFeeBps = _burnFeeBps;
+    function setPlatformFee(uint256 _platformFeeBps) external onlyOwner {
+        require(_platformFeeBps <= 2000, "Platform fee cannot exceed 20%");
+        emit PlatformFeeUpdated(platformFeeBps, _platformFeeBps);
+        platformFeeBps = _platformFeeBps;
     }
 
-    function setBurnAddress(address _burnAddress) external onlyOwner {
-        emit BurnAddressUpdated(burnAddress, _burnAddress);
-        burnAddress = _burnAddress;
+    function setPlatformFeeRecipient(address _platformFeeRecipient) external onlyOwner {
+        emit PlatformFeeRecipientUpdated(platformFeeRecipient, _platformFeeRecipient);
+        platformFeeRecipient = _platformFeeRecipient;
+    }
+
+    function setPlsDepositFee(uint256 _plsDepositFeeBps) external onlyOwner {
+        require(_plsDepositFeeBps <= 2000, "PLS deposit fee cannot exceed 20%");
+        emit PlsDepositFeeUpdated(plsDepositFeeBps, _plsDepositFeeBps);
+        plsDepositFeeBps = _plsDepositFeeBps;
+    }
+
+    function setPlsDepositFeeRecipient(address _plsDepositFeeRecipient) external onlyOwner {
+        emit PlsDepositFeeRecipientUpdated(plsDepositFeeRecipient, _plsDepositFeeRecipient);
+        plsDepositFeeRecipient = _plsDepositFeeRecipient;
     }
 
     function setEmergencyPause(bool _paused) external onlyEmergencyAdmin {

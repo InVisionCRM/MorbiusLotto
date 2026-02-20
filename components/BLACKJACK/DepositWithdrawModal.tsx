@@ -11,7 +11,7 @@ import { usePlsQuote } from '@/hooks/use-pls-quote'
 import { useBlackjackContract, useLegacyPlayerReserveAt, useLegacyEmergencyPausedAt } from '@/hooks/use-blackjack-contract'
 import { useTokenApproval } from '@/hooks/use-token-approval'
 import { getBlackjackServerUrl } from '@/lib/api-urls'
-import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, BLACKJACK_LEGACY_ADDRESS_4, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -69,6 +69,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const legacy2Paused = useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS_2)
   const legacy3Reserve = useLegacyPlayerReserveAt(BLACKJACK_LEGACY_ADDRESS_3)
   const legacy3Paused = useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS_3)
+  const legacy4Reserve = useLegacyPlayerReserveAt(BLACKJACK_LEGACY_ADDRESS_4)
+  const legacy4Paused = useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS_4)
   const legacyItems: { address: `0x${string}`; reserve: bigint; paused: boolean; refetch: () => void; label: string }[] = []
   if (BLACKJACK_LEGACY_ADDRESS) {
     legacyItems.push({
@@ -94,7 +96,16 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       reserve: (legacy3Reserve.data ?? BigInt(0)) as bigint,
       paused: legacy3Paused.data === true,
       refetch: legacy3Reserve.refetch ?? (() => {}),
-      label: (BLACKJACK_LEGACY_ADDRESS || BLACKJACK_LEGACY_ADDRESS_2) ? 'Previous contract (3)' : 'Previous contract',
+      label: 'Previous contract (3)',
+    })
+  }
+  if (BLACKJACK_LEGACY_ADDRESS_4) {
+    legacyItems.push({
+      address: BLACKJACK_LEGACY_ADDRESS_4,
+      reserve: (legacy4Reserve.data ?? BigInt(0)) as bigint,
+      paused: legacy4Paused.data === true,
+      refetch: legacy4Reserve.refetch ?? (() => {}),
+      label: 'Previous contract (4)',
     })
   }
   const hasAnyLegacyBalance = legacyItems.some((item) => item.reserve > BigInt(0))
@@ -482,17 +493,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                 </CardHeader>
 
                 <CardContent className="px-4 pb-4 pt-2 flex flex-col min-h-0 overflow-hidden">
-                  <div className="flex items-center gap-3 shrink-0 mb-2">
-                    <div className="text-center py-1 px-3 rounded bg-red-950/80 border border-red-500/60 text-red-200 font-bold text-xs tracking-wide flex-1">
-                      DO NOT DEPOSIT
+                  {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
+                    <div className="flex items-center gap-1.5 py-1 px-2 rounded text-xs text-yellow-400 border border-cyan-500/30 bg-cyan-950/20 shrink-0 mb-2">
+                      <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                      <span>Confirming...</span>
                     </div>
-                    {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
-                      <div className="flex items-center gap-1.5 py-1 px-2 rounded text-xs text-yellow-400 border border-cyan-500/30 bg-cyan-950/20">
-                        <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-                        <span>Confirming...</span>
-                      </div>
-                    )}
-                  </div>
+                  )}
 
                   {/* Always 2 cols: left = balances, right = deposit/withdraw — width only, no extra height */}
                   <div className="grid grid-cols-2 gap-4 min-h-0 flex-1 overflow-hidden">
@@ -605,6 +611,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                             )}
                           </div>
                         )}
+                      </div>
+                      <div className="rounded border border-cyan-500/20 bg-slate-900/50 p-2 shrink-0">
+                        <p className="text-[10px] text-cyan-300/70 leading-snug">
+                          Withdrawals are capped at 1,000,000 MORBIUS per user per day. Our contracts and code are battle-tested, but we recommend withdrawing your funds at the end of each play session as a safe practice.
+                        </p>
                       </div>
                     </div>
 

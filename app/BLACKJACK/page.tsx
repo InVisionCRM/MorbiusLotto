@@ -252,7 +252,7 @@ export default function BlackjackPage() {
     '/BlackJack/music/Top-Tier.mp3',
     '/BlackJack/music/Chances.mp3',
   ] as const;
-  const [musicTrackIndex, setMusicTrackIndex] = useState(0);
+  const [musicTrackIndex, setMusicTrackIndex] = useState(1); // Start with song 2 (Lucky-Ducky)
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
   const [musicVolume, setMusicVolume] = useState(25); // 0–100
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
