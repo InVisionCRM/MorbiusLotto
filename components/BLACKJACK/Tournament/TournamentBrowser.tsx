@@ -1084,7 +1084,8 @@ function TournamentCard({
 
           {/* Quick stats top-left */}
           <div className="absolute top-2.5 left-2.5 flex flex-col gap-1">
-            <span className="px-2 py-0.5 rounded-full bg-black/60 text-cyan-400 text-[10px] font-bold">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 text-cyan-400 text-[10px] font-bold">
+              <img src="/morbius/MorbiusLogo-2.svg" alt="" className="w-3.5 h-3.5 object-contain shrink-0" />
               {Number(formatEther(buyInBigInt)).toLocaleString()} MORBIUS
             </span>
             <span className="px-2 py-0.5 rounded-full bg-black/60 text-cyan-400 text-[10px] font-bold">
@@ -1270,7 +1271,8 @@ function ExpandedCard({
               {tournament.name}
             </motion.h3>
             <div className="flex items-center gap-3 mt-1 text-xs">
-              <span className="text-cyan-400 font-bold">
+              <span className="inline-flex items-center gap-1.5 text-cyan-400 font-bold">
+                <img src="/morbius/MorbiusLogo-2.svg" alt="" className="w-4 h-4 object-contain shrink-0" />
                 {Number(formatEther(BigInt(tournament.buyInAmount))).toLocaleString()} MORBIUS
               </span>
               <span className="text-cyan-400 font-bold">

@@ -16,23 +16,32 @@ import { Theme } from '@/lib/theme';
 interface TournamentCompleteProps {
   isOpen: boolean;
   onClose: () => void;
+  /** When completed: "Play Again". When busted: "Browse Tournaments" if provided */
   onPlayAgain?: () => void;
+  /** When busted: opens tournament browser to join another. Falls back to onPlayAgain if not set */
+  onBrowseTournaments?: () => void;
   state: TournamentState;
   tournamentName?: string;
   prizeWon?: bigint;
+  /** Prize pool (wei string) for payout eligibility messaging */
+  prizePool?: string;
 }
 
 export function TournamentComplete({
   isOpen,
   onClose,
   onPlayAgain,
+  onBrowseTournaments,
   state,
   tournamentName,
   prizeWon = BigInt(0),
+  prizePool,
 }: TournamentCompleteProps) {
   const isBusted = state.status === 'busted';
   const chipChange = state.chips - state.startingChips;
   const prizeWonFormatted = Number(formatEther(prizeWon)).toLocaleString();
+  const hasPrizePool = prizePool && BigInt(prizePool) > 0n;
+  const isInPayoutRange = !isBusted && state.currentRank >= 1 && state.currentRank <= 10;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -140,22 +149,53 @@ export function TournamentComplete({
             </div>
           )}
 
+          {/* Next steps & payout eligibility */}
+          <div className="rounded-xl p-3 border border-white/10 bg-white/5 space-y-2">
+            <p className="text-gray-400 text-[10px] uppercase tracking-widest font-medium">What&apos;s next</p>
+            {isBusted ? (
+              <p className="text-sm text-gray-300">
+                You ran out of chips and are out of this tournament. No payout. Browse the lobby to join another tournament or try a different game.
+              </p>
+            ) : (
+              <>
+                {isInPayoutRange && hasPrizePool ? (
+                  <>
+                    <p className="text-sm text-cyan-300 font-medium">
+                      You&apos;re in the running for a payout!
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Prizes are distributed when all players finish. Your estimated prize will be sent to your wallet once the tournament ends. Check back or view your balance.
+                    </p>
+                  </>
+                ) : isInPayoutRange && !hasPrizePool ? (
+                  <p className="text-sm text-gray-300">
+                    You finished in the top 10. This was a freeroll with no prize pool. Join a buy-in tournament to compete for MORBIUS prizes.
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-300">
+                    You finished outside the top 10. No prize for this tournament. Join another to try again!
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
         </div>
 
         {/* Actions */}
-        <DialogFooter className="px-6 pb-6 pt-2 flex-row gap-3 sm:flex-row">
+        <DialogFooter className="px-6 pb-6 pt-2 flex-row gap-3 sm:flex-row flex-wrap">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-lg bg-gray-700/80 hover:bg-gray-600 text-white text-sm font-semibold transition-colors border border-white/10"
+            className="flex-1 min-w-[120px] py-2.5 rounded-lg bg-gray-700/80 hover:bg-gray-600 text-white text-sm font-semibold transition-colors border border-white/10"
           >
-            Exit Tournament
+            {isBusted ? 'Exit' : 'Exit Tournament'}
           </button>
-          {onPlayAgain && !isBusted ? (
+          {(isBusted ? onBrowseTournaments : onPlayAgain) ? (
             <button
-              onClick={onPlayAgain}
-              className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white text-sm font-bold transition-all shadow-lg shadow-cyan-500/20 border border-cyan-400/30"
+              onClick={isBusted ? onBrowseTournaments! : onPlayAgain!}
+              className="flex-1 min-w-[120px] py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white text-sm font-bold transition-all shadow-lg shadow-cyan-500/20 border border-cyan-400/30"
             >
-              Play Again
+              {isBusted ? 'Browse Tournaments' : 'Play Again'}
             </button>
           ) : null}
         </DialogFooter>

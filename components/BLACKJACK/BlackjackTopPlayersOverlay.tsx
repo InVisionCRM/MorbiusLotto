@@ -61,7 +61,7 @@ export function BlackjackTopPlayersOverlay() {
                   href={`/player/${e.wallet_address}`}
                   className="text-cyan-400 hover:text-cyan-300 font-mono"
                 >
-                  ...{shortAddress(e.wallet_address)}
+                  {shortAddress(e.wallet_address)}
                 </Link>
               </TableCell>
               <TableCell className="text-right tabular-nums text-white/90">{e.total_games}</TableCell>

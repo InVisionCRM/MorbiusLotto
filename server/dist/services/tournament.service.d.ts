@@ -21,7 +21,7 @@ export interface Tournament {
     starting_chips: number;
     max_hands: number;
     min_players: number;
-    status: 'active' | 'completed' | 'cancelled';
+    status: 'registration' | 'active' | 'completed' | 'cancelled';
     prize_pool: bigint;
     created_at: Date;
     ended_at?: Date;
@@ -119,6 +119,10 @@ export interface CreateFreerollParams {
     maxPlayers?: number | null;
     customImage?: string | null;
     pinCode?: string | null;
+    /** When set, prize pool is funded by creator via escrow (custom token). */
+    prizeTokenAddress?: string | null;
+    prizeAmount?: string;
+    prizeTokenDecimals?: number | null;
 }
 export interface FreerollListItem {
     id: string;
@@ -174,6 +178,10 @@ export interface TournamentListItem {
     escrow_token?: string | null;
     /** uint256 from MorbiusTournament; when set, create/join use on-chain flow */
     on_chain_tournament_id?: number | null;
+    /** Tournament status: registration or active */
+    status?: string;
+    /** Minimum players to start */
+    min_players?: number;
 }
 export interface TournamentGame {
     id: string;
@@ -248,6 +256,10 @@ export declare class TournamentService {
      * Get player's tournament entry
      */
     getTournamentEntry(playerAddress: string, tournamentId?: string): Promise<TournamentEntry | null>;
+    /**
+     * Get tournament state by entry ID (for split/double-down validation during a game)
+     */
+    getTournamentStateByEntryId(entryId: string): Promise<TournamentState | null>;
     /**
      * Get player's active tournament entry with full state
      */
@@ -351,6 +363,11 @@ export declare class TournamentService {
      */
     joinTournament(playerAddress: string, tournamentId: string, pinCode?: string): Promise<TournamentEntry>;
     /**
+     * Unregister from a tournament during registration phase. MORBIUS only (platform tournaments).
+     * Refunds buy-in to player balance and removes entry.
+     */
+    unregisterTournament(playerAddress: string, tournamentId: string): Promise<void>;
+    /**
      * Get extended tournament info including all settings
      */
     getTournamentInfoExtended(tournamentId: string): Promise<{
@@ -430,6 +447,11 @@ export declare class TournamentService {
      * Refunds buy-ins to players if tournament hasn't started.
      */
     cancelTournament(tournamentId: string, cancellerAddress: string): Promise<void>;
+    /**
+     * Handle time-expired tournament: mark forfeits, then either distribute prizes (with forfeit bonus to 1st)
+     * or refund everyone if all forfeited.
+     */
+    handleTimeExpiredTournament(tournamentId: string): Promise<void>;
     /**
      * Creator reclaims funds from a cancelled tournament with custom prize token.
      * Only works if tournament is cancelled and caller is the creator.

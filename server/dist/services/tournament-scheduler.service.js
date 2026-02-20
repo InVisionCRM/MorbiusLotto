@@ -59,7 +59,7 @@ class TournamentSchedulerService {
                     name: row.name,
                     endsAt: row.ends_at,
                 });
-                await this.tournamentService.distributePrizes(row.id);
+                await this.tournamentService.handleTimeExpiredTournament(row.id);
             }
             catch (err) {
                 logger_1.logger.error('TournamentScheduler: failed to complete time-expired tournament %s: %s', row.id, err);
@@ -86,7 +86,7 @@ class TournamentSchedulerService {
                     name: row.name,
                     createdAt: row.created_at,
                 });
-                await this.tournamentService.distributePrizes(row.id);
+                await this.tournamentService.handleTimeExpiredTournament(row.id);
             }
             catch (err) {
                 logger_1.logger.error('TournamentScheduler: failed to complete stuck tournament %s: %s', row.id, err);

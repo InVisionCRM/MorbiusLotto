@@ -1289,7 +1289,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                               const payoutAmount = handBetTotal; // Win pays 1:1
                               const winningChips: number[] = [];
                               let remaining = payoutAmount;
-                              const chipValues = [100000, 10000, 2500, 1000, 500];
+                              // Include tournament chip values (50, 100, 250) for small payouts
+                              const chipValues = [100000, 10000, 2500, 1000, 500, 250, 100, 50];
 
                               for (const chipValue of chipValues) {
                                 while (remaining >= chipValue) {

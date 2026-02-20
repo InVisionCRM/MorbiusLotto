@@ -118,34 +118,28 @@ export function GamesSection() {
 
         {/* BlackJack Card */}
         <motion.div variants={fadeInUp}>
-          <div className="group block relative">
-          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs" style={Theme.panel.base}>
+          <Link href="/BLACKJACK" className="group block">
+          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+            {/* New badge */}
+            <div className="absolute top-2 right-2 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg border border-cyan-300/50">
+              NEW!
+            </div>
             <div className="relative h-full w-full rounded-2xl overflow-hidden">
               <Image
                 src="/BlackJack/TableBackground1.png"
                 alt="BlackJack"
                 fill
-                className="object-cover opacity-40 transition-opacity duration-300"
+                className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               <PaymentBadges />
-              
-              {/* Under Construction Overlay */}
-              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-20">
-                <div className="text-center px-4">
-                  <div className="text-3xl sm:text-4xl mb-3">🚧</div>
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-2">Under Construction</h3>
-                  <p className="text-white/70 text-sm sm:text-base">Blackjack is being updated</p>
-                </div>
-              </div>
-              
-              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6 z-10">
+              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6">
                 <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-1 sm:mb-2">BlackJack</h3>
                 <p className="text-white/60 text-sm sm:text-base">Get 21 or beat the dealer</p>
               </div>
             </div>
           </div>
-        </div>
+        </Link>
         </motion.div>
 
         {/* Dice Card - Coming Soon */}

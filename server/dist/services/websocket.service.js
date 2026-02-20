@@ -408,6 +408,11 @@ class WebSocketService {
                         return;
                     await this.handleTournamentJoin(ws, message);
                     break;
+                case 'tournament_unregister':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleTournamentUnregister(ws, message);
+                    break;
                 case 'tournament_get_info':
                     if (!this.requireAuth(ws, message))
                         return;
@@ -1845,14 +1850,17 @@ class WebSocketService {
                 scheduledStartAt: payload.scheduledStartAt,
                 registrationOpensAt: payload.registrationOpensAt,
                 durationMinutes: payload.durationMinutes,
-                startingChips: 5000,
-                maxHands: 25,
+                startingChips: payload.startingChips ?? 5000,
+                maxHands: payload.maxHands ?? 25,
                 prizeDistributionType: payload.prizeDistributionType,
                 tableTheme: payload.tableTheme,
                 isPrivate: payload.isPrivate,
                 maxPlayers: payload.maxPlayers,
                 customImage: payload.customImage,
                 pinCode: payload.pinCode,
+                prizeTokenAddress: payload.prizeTokenAddress,
+                prizeAmount: payload.prizeAmount,
+                prizeTokenDecimals: payload.prizeTokenDecimals,
             });
             this.sendMessage(ws, {
                 type: 'freeroll_created',
@@ -1906,6 +1914,8 @@ class WebSocketService {
                 escrowTotalDeposited: t.escrow_total_deposited ?? '0',
                 escrowToken: t.escrow_token ?? null,
                 onChainTournamentId: t.on_chain_tournament_id != null ? t.on_chain_tournament_id : null,
+                status: t.status ?? 'active',
+                minPlayers: t.min_players ?? 2,
             }));
             this.sendMessage(ws, {
                 type: 'tournament_list',
@@ -1966,6 +1976,32 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error joining tournament:', error);
             const errorMessage = error instanceof Error ? error.message : 'Failed to join tournament';
+            this.sendError(ws, errorMessage, message.requestId);
+        }
+    }
+    async handleTournamentUnregister(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            if (!this.tournamentService) {
+                return this.sendError(ws, 'Tournament mode not available', message.requestId);
+            }
+            const payload = message.payload;
+            if (!payload.tournamentId) {
+                return this.sendError(ws, 'Tournament ID required', message.requestId);
+            }
+            await this.tournamentService.unregisterTournament(ws.playerAddress, payload.tournamentId);
+            this.sendMessage(ws, {
+                type: 'tournament_unregistered',
+                payload: { tournamentId: payload.tournamentId },
+                requestId: message.requestId
+            });
+            this.broadcastTournamentLeaderboardUpdate(payload.tournamentId);
+        }
+        catch (error) {
+            logger_1.logger.error('Error unregistering from tournament:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to unregister from tournament';
             this.sendError(ws, errorMessage, message.requestId);
         }
     }

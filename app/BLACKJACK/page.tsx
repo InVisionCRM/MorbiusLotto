@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import { BlackjackTopPlayersOverlay } from '@/components/BLACKJACK/BlackjackTopPlayersOverlay';
+import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
@@ -583,27 +584,31 @@ export default function BlackjackPage() {
     },
   });
 
-  // Tournament chip stack - derived from current game bet amount
+  // Tournament chip stack - derived from all player hands' bet amounts (supports split)
   // In tournament mode, betAmount is in chips (not MORBIUS), so we use it directly
   const tournamentChipStack = useMemo(() => {
-    if (!tournament.tournamentState.inTournament || !gameState.currentGame?.playerHand?.betAmount) {
+    if (!tournament.tournamentState.inTournament || !gameState.currentGame) {
       return [];
     }
-    // Convert BigInt betAmount to number (it's already in chips for tournament)
-    const betAmount = Number(gameState.currentGame.playerHand.betAmount);
-    // For tournament, we want to show chips as individual units, so use smaller denominations
-    // Convert to chip stack using tournament chip values (50, 100, 250, 500, 1000)
+    const hands = gameState.currentGame.playerHands ?? (gameState.currentGame.playerHand ? [gameState.currentGame.playerHand] : []);
+    if (hands.length === 0) return [];
+
     const TOURNAMENT_CHIP_VALUES = [1000, 500, 250, 100, 50];
-    const chips: number[] = [];
-    let remaining = Math.floor(betAmount);
-    for (const chipValue of TOURNAMENT_CHIP_VALUES) {
-      while (remaining >= chipValue) {
-        chips.push(chipValue);
-        remaining -= chipValue;
+    const allChips: number[] = [];
+
+    for (const hand of hands) {
+      const betAmount = Number(hand.betAmount ?? 0);
+      if (betAmount <= 0) continue;
+      let remaining = Math.floor(betAmount);
+      for (const chipValue of TOURNAMENT_CHIP_VALUES) {
+        while (remaining >= chipValue) {
+          allChips.push(chipValue);
+          remaining -= chipValue;
+        }
       }
     }
-    return chips;
-  }, [tournament.tournamentState.inTournament, gameState.currentGame?.playerHand?.betAmount]);
+    return allChips;
+  }, [tournament.tournamentState.inTournament, gameState.currentGame]);
 
   // Real-time P&L chart (Stake-style break-even line)
   const chartRef = useRef<BlackjackRealTimeBetChartRef>(null);
@@ -1051,6 +1056,13 @@ export default function BlackjackPage() {
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [address, wsConnected, wsClient]);
+
+  // Fetch tournament list when game view is shown (tournaments panel is always visible)
+  useEffect(() => {
+    if (currentView === 'game' && wsClient) {
+      tournament.fetchTournamentList();
+    }
+  }, [currentView, wsClient]);
 
   // Load game history from database when wallet connects
   useEffect(() => {
@@ -2099,11 +2111,18 @@ export default function BlackjackPage() {
           if (status === 'completed' && processedGame) {
             const betAmountWei = gameState.totalBetAmount ? gameState.totalBetAmount * BigInt(1e18) : BigInt(betAmount) * BigInt(1e18);
             const payoutWei = gameState.totalPayout ? gameState.totalPayout * BigInt(1e18) : BigInt(0);
+            // For split, compute overall result from all hands (needed for chip animations)
+            const hands = processedGame.playerHands ?? (processedGame.playerHand ? [processedGame.playerHand] : []);
+            const hasWin = hands.some((h: any) => h.result === 'win' || h.result === 'blackjack');
+            const allPush = hands.length > 0 && hands.every((h: any) => h.result === 'push');
+            const isBlackjack = hands.some((h: any) => h.result === 'blackjack');
+            const overallResult = isBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
+
             handleGameCompletion({
               gameId: processedGame.id,
               betAmount: betAmountWei,
               payout: payoutWei,
-              result: processedGame.playerHand?.result || (payoutWei > betAmountWei ? 'win' : payoutWei < betAmountWei ? 'loss' : 'push'),
+              result: overallResult,
               processedGame,
               gameState: gameState,
               isTournament: true,
@@ -2126,7 +2145,9 @@ export default function BlackjackPage() {
     if (!gameState.currentGame || !tournament.tournamentState.inTournament) return;
 
     try {
-      const gameStateResult = await tournament.performAction(action);
+      // Pass currentHandIndex for split/double so server acts on the correct hand
+      const handIndex = gameState.currentGame.currentHandIndex ?? 0;
+      const gameStateResult = await tournament.performAction(action, handIndex);
       if (gameStateResult) {
         const processedGame = updateGameStateFromServer(gameStateResult);
 
@@ -2136,11 +2157,18 @@ export default function BlackjackPage() {
           const betAmountWei = gameStateResult.totalBetAmount ? gameStateResult.totalBetAmount * BigInt(1e18) : BigInt(0);
           const payoutWei = gameStateResult.totalPayout ? gameStateResult.totalPayout * BigInt(1e18) : BigInt(0);
           
+          // For split, compute overall result from all hands (needed for chip animations)
+          const hands = processedGame.playerHands ?? (processedGame.playerHand ? [processedGame.playerHand] : []);
+          const hasWin = hands.some((h: any) => h.result === 'win' || h.result === 'blackjack');
+          const allPush = hands.length > 0 && hands.every((h: any) => h.result === 'push');
+          const isBlackjack = hands.some((h: any) => h.result === 'blackjack');
+          const overallResult = isBlackjack ? 'blackjack' : hasWin ? 'win' : allPush ? 'push' : 'loss';
+
           handleGameCompletion({
             gameId: processedGame.id,
             betAmount: betAmountWei,
             payout: payoutWei,
-            result: processedGame.playerHand?.result || (payoutWei > betAmountWei ? 'win' : payoutWei < betAmountWei ? 'loss' : 'push'),
+            result: overallResult,
             processedGame,
             gameState: gameStateResult,
             isTournament: true,
@@ -2753,45 +2781,12 @@ export default function BlackjackPage() {
           <BlackjackSidebar
             history={gameState.history}
             reserveBalance={offChainBalance}
-            onTournamentLobby={() => {
-          setTournamentBrowserInitialTab('join');
-          setShowTournamentBrowser(true);
-        }}
             chartRef={chartRef}
             chartSessionStartTime={chartSessionStartTime.current}
             wsClient={wsClient}
             wsConnected={wsConnected}
             onVerifyGameRequest={openVerifyView}
             inTournament={tournament.tournamentState.inTournament}
-            tournaments={tournament.tournamentList}
-            onRefreshTournaments={() => tournament.fetchTournamentList()}
-            tournamentsLoading={tournament.isLoading}
-            isJoinLoading={tournament.isJoinLoading}
-            onCreateTournament={() => setShowTournamentCreator(true)}
-            onJoinTournament={(t) => {
-              if (tournament.tournamentState.inTournament && tournament.tournamentState.tournamentId === t.id) {
-                toast.success('You\'re already in this tournament — check the Tournament tab');
-                return;
-              }
-              if (t.isPrivate) {
-                setPendingJoinTournament(t);
-                setShowTournamentPinEntry(true);
-              } else {
-                tournament.joinTournament(t.id, undefined, { onChainTournamentId: t.onChainTournamentId ?? undefined, buyInAmount: t.buyInAmount }).then(success => {
-                  if (success) {
-                    setIsTournamentMode(true);
-                    toast.success('Joined tournament!');
-                    fetchBalance();
-                  }
-                });
-              }
-            }}
-            playerBalance={offChainBalance}
-            playerAddress={address ?? null}
-            onOpenTournamentHistory={() => {
-              setTournamentBrowserInitialTab('history');
-              setShowTournamentBrowser(true);
-            }}
             tournamentTabContent={
               tournament.tournamentState.inTournament ? (
                 <TournamentHUD
@@ -2815,10 +2810,65 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Top Players + Chat: grid 2-col on md-lg, stack on mobile */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        {/* Top Players + Tournaments + Chat: grid 3-col on lg, stack on smaller */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
           <BlackjackTopPlayersOverlay />
-          <div className="min-h-[280px] md:min-h-[340px] flex flex-col min-w-0">
+          <div
+            className="min-h-[280px] lg:min-h-[340px] rounded-xl overflow-hidden flex flex-col min-w-0"
+            style={{
+              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+            }}
+          >
+            <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-cyan-300 font-semibold text-sm">Tournaments</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setTournamentBrowserInitialTab('history');
+                  setShowTournamentBrowser(true);
+                }}
+                className="py-1.5 px-2.5 rounded-lg text-xs font-medium bg-slate-700/60 hover:bg-slate-600/60 text-cyan-300 border border-cyan-500/20 transition-colors"
+              >
+                History
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-auto">
+              <TournamentListSidebar
+                tournaments={tournament.tournamentList}
+                isLoading={tournament.isLoading}
+                isJoinLoading={tournament.isJoinLoading}
+                onRefresh={() => tournament.fetchTournamentList()}
+                onTournamentLobby={() => {
+                  setTournamentBrowserInitialTab('join');
+                  setShowTournamentBrowser(true);
+                }}
+                onCreateTournament={() => setShowTournamentCreator(true)}
+                onJoin={(t) => {
+                  if (tournament.tournamentState.inTournament && tournament.tournamentState.tournamentId === t.id) {
+                    toast.success('You\'re already in this tournament');
+                    return;
+                  }
+                  if (t.isPrivate) {
+                    setPendingJoinTournament(t);
+                    setShowTournamentPinEntry(true);
+                  } else {
+                    tournament.joinTournament(t.id, undefined, { onChainTournamentId: t.onChainTournamentId ?? undefined, buyInAmount: t.buyInAmount }).then(success => {
+                      if (success) {
+                        setIsTournamentMode(true);
+                        toast.success('Joined tournament!');
+                        fetchBalance();
+                      }
+                    });
+                  }
+                }}
+                playerBalance={offChainBalance}
+                playerAddress={address ?? null}
+              />
+            </div>
+          </div>
+          <div className="min-h-[280px] lg:min-h-[340px] flex flex-col min-w-0">
             <ChatPanel
               roomId="blackjack"
               title="Blackjack Chat"
@@ -2908,11 +2958,17 @@ export default function BlackjackPage() {
             setShowTournamentComplete(false);
             setShowTournamentEntry(true);
           }}
+          onBrowseTournaments={() => {
+            setShowTournamentComplete(false);
+            setShowTournamentBrowser(true);
+            setIsTournamentMode(false);
+          }}
           state={tournament.tournamentState}
           tournamentName={tournament.tournamentInfo?.name}
           prizeWon={tournament.tournamentState.status === 'completed' && tournament.tournamentState.currentRank <= 10
             ? tournament.getPrizeForRank(tournament.tournamentState.currentRank, BigInt(tournament.tournamentInfo?.prizePool || '0'))
             : 0n}
+          prizePool={tournament.tournamentInfo?.prizePool}
         />
 
         {/* Tournament Browser Modal */}

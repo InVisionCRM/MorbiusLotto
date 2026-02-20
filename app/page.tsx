@@ -5,6 +5,7 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { useAuth } from '@/hooks/use-auth'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { HeroSection } from '@/components/home/hero-section'
+import { BlackjackSection } from '@/components/home/blackjack-section'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import { GamesSection } from '@/components/home/games-section'
 import { RoadMap } from '@/components/home/RoadMap'
@@ -52,6 +53,9 @@ export default function HomePage() {
       <HeroSection />
 
       <div className="w-full flex flex-col items-center gap-y-16 py-8 px-4">
+        {/* Blackjack Promo + Tournaments */}
+        <BlackjackSection />
+
         {/* Lobby Chat */}
         <div className="w-full max-w-5xl min-h-[280px] md:min-h-[340px] flex flex-col min-w-0">
           <ChatPanel

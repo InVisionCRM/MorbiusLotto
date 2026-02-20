@@ -36,14 +36,9 @@ function formatBuyIn(t: TournamentListItem): string {
   if (t.tournamentType === 'freeroll') return 'Freeroll';
   const amt = BigInt(t.buyInAmount ?? 0);
   if (amt === 0n) return '0';
-  const decimals = t.prizeTokenDecimals ?? 18;
-  if (decimals === 18 && !t.prizeTokenAddress) {
-    const ether = formatEther(amt);
-    const num = Number(ether);
-    return `${num >= 1e6 ? num.toExponential(0) : num.toLocaleString(undefined, { maximumFractionDigits: 4 })} MORBIUS`;
-  }
-  const val = Number(amt / BigInt(10 ** Math.max(0, Math.min(decimals, 36) - 4))) / 10000;
-  return `${val.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${t.prizeTokenAddress ? 'token' : 'MORBIUS'}`;
+  const ether = formatEther(amt);
+  const num = Number(ether);
+  return `${num >= 1e6 ? num.toExponential(0) : num.toLocaleString(undefined, { maximumFractionDigits: 4 })} MORBIUS`;
 }
 
 /** For custom-token tournaments: use escrow total when funded, else prize_pool from DB. */
@@ -66,6 +61,21 @@ function PrizeCell({ tournament }: { tournament: TournamentListItem }) {
 
 function formatChipCount(t: TournamentListItem): string {
   return `${t.startingChips.toLocaleString()} / ${t.maxHands}`;
+}
+
+const MORBIUS_LOGO = '/morbius/MorbiusLogo-2.svg';
+
+function BuyInCell({ tournament }: { tournament: TournamentListItem }) {
+  const text = formatBuyIn(tournament);
+  // Buy-ins are always MORBIUS (except freeroll)
+  const showLogo = tournament.tournamentType !== 'freeroll';
+  if (!showLogo) return <span className="whitespace-nowrap">{text}</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <img src={MORBIUS_LOGO} alt="" className="w-4 h-4 object-contain shrink-0" />
+      {text}
+    </span>
+  );
 }
 
 export interface TournamentListSidebarProps {
@@ -194,7 +204,7 @@ export function TournamentListSidebar({
                         {t.name}
                       </td>
                       <td className="py-1.5 px-1 whitespace-nowrap">{formatRegStart(t)}</td>
-                      <td className="py-1.5 px-1 whitespace-nowrap">{formatBuyIn(t)}</td>
+                      <td className="py-1.5 px-1 whitespace-nowrap"><BuyInCell tournament={t} /></td>
                       <td className="py-1.5 px-1 whitespace-nowrap"><PrizeCell tournament={t} /></td>
                       <td className="py-1.5 px-1 whitespace-nowrap">{formatChipCount(t)}</td>
                       <td className="py-1.5 px-1 font-mono text-white/70">
@@ -317,7 +327,7 @@ export function TournamentListSidebar({
                       <span className="text-white/50">Registration</span>
                       <span>{formatRegStart(active)}</span>
                       <span className="text-white/50">Buy-in</span>
-                      <span>{formatBuyIn(active)}</span>
+                      <span><BuyInCell tournament={active} /></span>
                       <span className="text-white/50">Prize</span>
                       <span><PrizeCell tournament={active} /></span>
                       <span className="text-white/50">Chips / Hands</span>

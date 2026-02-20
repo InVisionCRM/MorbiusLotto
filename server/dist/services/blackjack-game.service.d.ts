@@ -73,6 +73,8 @@ export interface PlayerActionRequest {
     action: 'hit' | 'stand' | 'double_down' | 'split';
     handIndex?: number;
     clientSeed?: string;
+    /** When set, use tournament chips instead of MORBIUS balance (split/double-down) */
+    tournamentEntryId?: string;
 }
 export declare class BlackjackGameService {
     private dbService;
@@ -95,7 +97,12 @@ export declare class BlackjackGameService {
      */
     createGame(request: CreateGameRequest): Promise<GameState>;
     /**
-     * Check if hand can be split (same rank 1-13)
+     * Split value: 10/J/Q/K (ranks 10-13) all map to 10; 2-9 and Ace use rank.
+     * Standard blackjack allows splitting any two 10-value cards (e.g. King+Jack).
+     */
+    private getSplitValue;
+    /**
+     * Check if hand can be split (same blackjack value: 10/J/Q/K interchangeable)
      */
     private canSplit;
     /**
@@ -103,7 +110,7 @@ export declare class BlackjackGameService {
      */
     private classifyPerfectPair;
     /**
-     * Check if hand can be split — v2 card indices (0-51): same rank
+     * Check if hand can be split — v2 card indices (0-51): same blackjack value (10/J/Q/K interchangeable)
      */
     private canSplitV2;
     /**

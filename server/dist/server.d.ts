@@ -1,2 +1,2 @@
-import 'dotenv/config';
+export {};
 //# sourceMappingURL=server.d.ts.map

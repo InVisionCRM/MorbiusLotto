@@ -317,6 +317,40 @@ class TournamentService {
         return result.rows[0] ? this.normalizeEntry(result.rows[0]) : null;
     }
     /**
+     * Get tournament state by entry ID (for split/double-down validation during a game)
+     */
+    async getTournamentStateByEntryId(entryId) {
+        const query = `
+      SELECT
+        te.*,
+        t.max_hands,
+        t.starting_chips,
+        tl.current_rank
+      FROM tournament_entries te
+      JOIN tournaments t ON te.tournament_id = t.id
+      LEFT JOIN tournament_leaderboard tl ON tl.entry_id = te.id
+      WHERE te.id = $1 AND te.status = 'playing'
+    `;
+        const result = await this.pool.query(query, [entryId]);
+        if (result.rows.length === 0) {
+            return null;
+        }
+        const row = result.rows[0];
+        return {
+            entryId: row.id,
+            tournamentId: row.tournament_id,
+            chips: Number(row.chips_remaining),
+            handsPlayed: Number(row.hands_played),
+            handsRemaining: Number(row.max_hands) - Number(row.hands_played),
+            highestChips: Number(row.highest_chip_count),
+            currentRank: Number(row.current_rank || 1),
+            status: row.status,
+            prizeWon: this.toBigInt(row.prize_won),
+            maxHands: Number(row.max_hands),
+            startingChips: Number(row.starting_chips),
+        };
+    }
+    /**
      * Get player's active tournament entry with full state
      */
     async getTournamentState(playerAddress) {
@@ -577,6 +611,19 @@ class TournamentService {
             const useEscrow = Boolean(tournament.prize_token_address);
             const isOnChain = tournament.on_chain_tournament_id != null;
             const useMorbiusPayout = isOnChain && !useEscrow;
+            // Transition contract to Active before payouts (payout() requires Active or Completed).
+            // We defer setActive() from join-time to here so joinTournament() keeps working on-chain
+            // (the contract requires status==Open for joins).
+            if (isOnChain) {
+                const setActiveResult = await (0, morbius_tournament_1.setMorbiusTournamentActive)(tournament.on_chain_tournament_id);
+                if (!setActiveResult.success) {
+                    logger_1.logger.warn('MorbiusTournament setActive failed before distribution', {
+                        tournamentId,
+                        onChainId: tournament.on_chain_tournament_id,
+                        error: setActiveResult.error,
+                    });
+                }
+            }
             // Custom token: always use V2 (bytes32). V3 deprecated for reliability.
             const useEscrowV2 = useEscrow;
             // Apply prizes
@@ -987,17 +1034,14 @@ class TournamentService {
                 pinCode = this.generatePinCode();
             }
         }
-        // Calculate ends_at if time limit is set
-        let endsAt = null;
-        if (params.timeLimitMinutes) {
-            endsAt = new Date(Date.now() + params.timeLimitMinutes * 60 * 1000);
-        }
+        // Buy-in tournaments start in registration; ends_at is set when min_players reached (24h window)
         const prizePercentages = this.getPrizePercentages(params.prizeDistributionType);
         const hasCustomPrizeToken = params.prizeTokenAddress != null && params.prizeTokenAddress.trim() !== '';
         const initialPrizePool = hasCustomPrizeToken && params.prizeAmount ? params.prizeAmount : '0';
         const platformFeePercent = 3;
         const creatorFeePercent = 2;
         const onChainId = params.onChainTournamentId != null ? Number(params.onChainTournamentId) : null;
+        const minPlayers = this.getMinPlayersFromPrizeDistribution(params.prizeDistributionType);
         const query = `
       INSERT INTO tournaments (
         name,
@@ -1005,6 +1049,7 @@ class TournamentService {
         buy_in_amount,
         starting_chips,
         max_hands,
+        min_players,
         time_limit_minutes,
         rebuy_config,
         table_theme,
@@ -1020,8 +1065,10 @@ class TournamentService {
         prize_pool,
         creator_fee_percent,
         platform_fee_percent,
-        on_chain_tournament_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        on_chain_tournament_id,
+        status,
+        activated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, 'registration', NULL)
       RETURNING *
     `;
         const result = await this.pool.query(query, [
@@ -1030,6 +1077,7 @@ class TournamentService {
             params.buyInAmount.toString(),
             params.startingChips,
             params.maxHands,
+            minPlayers,
             params.timeLimitMinutes,
             JSON.stringify({ enabled: false, maxRebuys: 0 }),
             JSON.stringify(params.tableTheme),
@@ -1038,7 +1086,7 @@ class TournamentService {
             params.prizeDistributionType,
             JSON.stringify(prizePercentages),
             params.maxPlayers,
-            endsAt,
+            null,
             params.customImage || null,
             hasCustomPrizeToken ? params.prizeTokenAddress.trim() : null,
             hasCustomPrizeToken && params.prizeTokenDecimals != null ? params.prizeTokenDecimals : null,
@@ -1117,6 +1165,8 @@ class TournamentService {
         const rebuyConfig = { enabled: false, maxRebuys: 0 };
         const platformFeePercent = 3;
         const creatorFeePercent = 2;
+        const hasCustomPrizeToken = params.prizeTokenAddress != null && params.prizeTokenAddress.trim() !== '';
+        const initialPrizePool = hasCustomPrizeToken && params.prizeAmount ? params.prizeAmount : '0';
         // Calculate ends_at
         const endsAt = new Date(scheduledStart.getTime() + params.durationMinutes * 60 * 1000);
         // Determine initial phase based on current time
@@ -1153,8 +1203,10 @@ class TournamentService {
         tiebreaker_order,
         creator_fee_percent,
         platform_fee_percent,
-        ends_at
-      ) VALUES ($1, $2, 0, $3, $4, $25, 'active', 0, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, $20, 0, $21, $22, $23, $24)
+        ends_at,
+        prize_token_address,
+        prize_token_decimals
+      ) VALUES ($1, $2, 0, $3, $4, $25, 'active', $26, NULL, $5, $6, $7, $8, $9, $10, $11, $12, 'freeroll', $13, $14, $15, $16, $17, $18, $19, $20, 0, $21, $22, $23, $24, $27, $28)
       RETURNING id, pin_code
     `;
         const result = await this.pool.query(query, [
@@ -1183,6 +1235,9 @@ class TournamentService {
             platformFeePercent,
             endsAt.toISOString(),
             minPlayers,
+            initialPrizePool,
+            hasCustomPrizeToken ? params.prizeTokenAddress : null,
+            params.prizeTokenDecimals ?? null,
         ]);
         const row = result.rows[0];
         const tournamentId = row.id;
@@ -1279,9 +1334,11 @@ class TournamentService {
                 buy_in_amount: this.toBigInt(row.buy_in_amount),
                 starting_chips: Number(row.starting_chips),
                 max_hands: Number(row.max_hands),
+                min_players: Number(row.min_players ?? 2),
                 prize_pool: this.toBigInt(row.prize_pool),
                 entry_count: Number(row.entry_count),
                 max_players: row.max_players ? Number(row.max_players) : null,
+                status: row.status || 'active',
                 time_limit_minutes: row.time_limit_minutes ? Number(row.time_limit_minutes) : null,
                 ends_at: row.ends_at,
                 rebuy_config: rebuyConfig,
@@ -1330,11 +1387,11 @@ class TournamentService {
         if (!tournament) {
             throw new Error('Tournament not found');
         }
-        if (tournament.status !== 'active') {
-            throw new Error('Tournament is not active');
+        if (tournament.status !== 'registration' && tournament.status !== 'active') {
+            throw new Error('Tournament is not open for registration or play');
         }
-        // Check time limit
-        if (tournament.ends_at && new Date(tournament.ends_at) <= new Date()) {
+        // Check time limit (only when active; registration has no ends_at yet)
+        if (tournament.status === 'active' && tournament.ends_at && new Date(tournament.ends_at) <= new Date()) {
             throw new Error('Tournament has ended');
         }
         // Custom-token tournaments: must be funded before anyone can join
@@ -1401,21 +1458,6 @@ class TournamentService {
             if (!tournament.prize_token_address && tournament.buy_in_amount > 0n) {
                 await client.query(`UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`, [tournament.buy_in_amount.toString(), tournamentId]);
             }
-            // Call setActive when first player joins an on-chain tournament
-            // Get entry count after adding the new entry
-            const finalEntryCountQuery = `SELECT COUNT(*) FROM tournament_entries WHERE tournament_id = $1`;
-            const finalEntryCountResult = await client.query(finalEntryCountQuery, [tournamentId]);
-            const finalEntryCount = parseInt(finalEntryCountResult.rows[0].count, 10);
-            if (isOnChain && finalEntryCount === 1) {
-                const setActiveResult = await (0, morbius_tournament_1.setMorbiusTournamentActive)(tournament.on_chain_tournament_id);
-                if (!setActiveResult.success) {
-                    logger_1.logger.warn('MorbiusTournament setActive failed (continuing with join)', {
-                        tournamentId,
-                        onChainId: tournament.on_chain_tournament_id,
-                        error: setActiveResult.error,
-                    });
-                }
-            }
             // Create entry
             const entryQuery = `
         INSERT INTO tournament_entries (
@@ -1429,6 +1471,21 @@ class TournamentService {
                 tournament.starting_chips,
                 tournament.buy_in_amount.toString(),
             ]);
+            // Transition from registration to active when min_players reached
+            const minPlayers = tournament.min_players ?? this.getMinPlayersFromPrizeDistribution(tournament.prize_distribution_type || 'top_10');
+            const finalEntryCountResult = await client.query(`SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1`, [tournamentId]);
+            const finalEntryCount = parseInt(finalEntryCountResult.rows[0].c, 10);
+            if (tournament.status === 'registration' && finalEntryCount >= minPlayers) {
+                await client.query(`UPDATE tournaments SET status = 'active', activated_at = NOW(), ends_at = NOW() + INTERVAL '24 hours' WHERE id = $1`, [tournamentId]);
+                // NOTE: Do NOT call setActive() on-chain here. The contract requires status==Open
+                // for joinTournament(), so we must keep the on-chain status as Open until prize
+                // distribution. setActive() is called in distributePrizes() before payouts instead.
+                logger_1.logger.info('Tournament transitioned to active in DB (min players reached)', {
+                    tournamentId,
+                    entryCount: finalEntryCount,
+                    minPlayers,
+                });
+            }
             await client.query('COMMIT');
             logger_1.logger.info('Player joined tournament', {
                 playerAddress: normalizedAddress,
@@ -1436,6 +1493,54 @@ class TournamentService {
                 entryId: entryResult.rows[0].id,
             });
             return this.normalizeEntry(entryResult.rows[0]);
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    }
+    /**
+     * Unregister from a tournament during registration phase. MORBIUS only (platform tournaments).
+     * Refunds buy-in to player balance and removes entry.
+     */
+    async unregisterTournament(playerAddress, tournamentId) {
+        const normalizedAddress = this.normalizeAddress(playerAddress);
+        const tournament = await this.getTournament(tournamentId);
+        if (!tournament) {
+            throw new Error('Tournament not found');
+        }
+        if (tournament.status !== 'registration') {
+            throw new Error('Can only unregister before the tournament starts');
+        }
+        if (tournament.prize_token_address) {
+            throw new Error('Unregister not supported for custom token tournaments');
+        }
+        if (tournament.on_chain_tournament_id != null) {
+            throw new Error('Unregister not supported for on-chain tournaments');
+        }
+        const entry = await this.getTournamentEntry(normalizedAddress, tournamentId);
+        if (!entry) {
+            throw new Error('You are not in this tournament');
+        }
+        if (entry.status !== 'playing') {
+            throw new Error('Cannot unregister: entry is not active');
+        }
+        const refundAmount = entry.total_buy_in > 0n ? entry.total_buy_in : tournament.buy_in_amount;
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [refundAmount.toString(), normalizedAddress]);
+            await client.query(`UPDATE tournaments SET prize_pool = prize_pool - $1::NUMERIC WHERE id = $2`, [refundAmount.toString(), tournamentId]);
+            await client.query(`DELETE FROM tournament_entries WHERE id = $1`, [entry.id]);
+            await client.query('COMMIT');
+            logger_1.logger.info('Player unregistered from tournament', {
+                playerAddress: normalizedAddress,
+                tournamentId,
+                refundAmount: refundAmount.toString(),
+            });
         }
         catch (error) {
             await client.query('ROLLBACK');
@@ -1809,6 +1914,92 @@ class TournamentService {
                 tournamentId,
                 cancelledBy: normalizedCanceller,
                 entriesRefunded: entries.length,
+            });
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    }
+    /**
+     * Handle time-expired tournament: mark forfeits, then either distribute prizes (with forfeit bonus to 1st)
+     * or refund everyone if all forfeited.
+     */
+    async handleTimeExpiredTournament(tournamentId) {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            const tournamentResult = await client.query(`SELECT * FROM tournaments WHERE id = $1 FOR UPDATE`, [tournamentId]);
+            if (tournamentResult.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return;
+            }
+            const tournament = this.normalizeTournament(tournamentResult.rows[0]);
+            if (tournament.status !== 'active') {
+                await client.query('ROLLBACK');
+                return;
+            }
+            // Mark all still-playing as forfeited
+            const forfeitResult = await client.query(`UPDATE tournament_entries SET status = 'forfeited', finished_at = NOW() WHERE tournament_id = $1 AND status = 'playing' RETURNING id, player_address, total_buy_in`, [tournamentId]);
+            const forfeitedEntries = forfeitResult.rows;
+            // Count by status
+            const countResult = await client.query(`SELECT status, COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 GROUP BY status`, [tournamentId]);
+            const completedCount = countResult.rows.find((r) => r.status === 'completed')?.c ?? 0;
+            const bustedCount = countResult.rows.find((r) => r.status === 'busted')?.c ?? 0;
+            const forfeitedCount = countResult.rows.find((r) => r.status === 'forfeited')?.c ?? 0;
+            const hasFinishers = parseInt(completedCount, 10) + parseInt(bustedCount, 10) > 0;
+            if (hasFinishers) {
+                // Prize pool already includes forfeited buy-ins (added when they joined).
+                // calculate_tournament_prizes excludes forfeited from ranking; full pool goes to completed/busted.
+                await client.query('COMMIT');
+                client.release();
+                await this.distributePrizes(tournamentId);
+                return;
+            }
+            // All forfeited: refund each player
+            const entriesResult = await client.query(`SELECT * FROM tournament_entries WHERE tournament_id = $1`, [tournamentId]);
+            const entries = entriesResult.rows;
+            const isOnChain = tournament.on_chain_tournament_id != null;
+            const useCustomToken = Boolean(tournament.prize_token_address);
+            if (isOnChain && !useCustomToken) {
+                const { cancelMorbiusTournament, refundMorbiusTournamentPlayer } = await Promise.resolve().then(() => __importStar(require('../utils/morbius-tournament')));
+                const cancelResult = await cancelMorbiusTournament(tournament.on_chain_tournament_id);
+                if (!cancelResult.success) {
+                    await client.query('ROLLBACK');
+                    throw new Error(`Failed to cancel on-chain tournament for refund: ${cancelResult.error || 'Unknown error'}`);
+                }
+                for (const entry of entries) {
+                    const refundResult = await refundMorbiusTournamentPlayer(tournament.on_chain_tournament_id, entry.player_address);
+                    if (!refundResult.success) {
+                        logger_1.logger.warn('Failed to refund player (everyone forfeited)', {
+                            tournamentId,
+                            player: entry.player_address,
+                            error: refundResult.error,
+                        });
+                    }
+                }
+            }
+            else if (!isOnChain) {
+                for (const entry of entries) {
+                    const refundAmount = this.toBigInt(entry.total_buy_in || tournament.buy_in_amount);
+                    if (refundAmount > 0n) {
+                        await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [refundAmount.toString(), entry.player_address]);
+                    }
+                }
+            }
+            // On-chain custom token: buy-ins went to platform; refund would need platform logic - skip for now
+            await client.query(`UPDATE tournaments SET status = 'cancelled', ended_at = NOW() WHERE id = $1`, [tournamentId]);
+            if (useCustomToken) {
+                const { cancelTournamentInEscrow } = await Promise.resolve().then(() => __importStar(require('../utils/escrow-payout')));
+                await cancelTournamentInEscrow(tournamentId);
+            }
+            await client.query('COMMIT');
+            logger_1.logger.info('Tournament cancelled (everyone forfeited), refunds processed', {
+                tournamentId,
+                entryCount: entries.length,
             });
         }
         catch (error) {

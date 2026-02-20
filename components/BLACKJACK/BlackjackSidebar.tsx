@@ -1,14 +1,12 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
-import { History, BookOpen, Award, TrendingUp, Zap, Gamepad2 } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { History, BookOpen, TrendingUp, Zap, Gamepad2 } from 'lucide-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
 import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
 import GlobalWinsFeed from '@/components/BLACKJACK/GlobalWinsFeed'
 import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart'
 import { GameResult } from '@/app/BLACKJACK/types'
-import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar'
-import type { TournamentListItem } from '@/lib/tournament-types'
 import { Theme } from '@/lib/theme'
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false)
@@ -30,7 +28,6 @@ const BASE_TABS = [
   { id: 'wins', label: 'Global', shortLabel: 'Global', icon: Zap },
   { id: 'chart', label: 'Chart', shortLabel: 'Chart', icon: TrendingUp },
   { id: 'howto', label: 'How to Play', shortLabel: 'How', icon: BookOpen },
-  { id: 'tournaments', label: 'Tournaments', shortLabel: 'Tours', icon: Award },
 ] as const
 
 const TOURNAMENT_PLAY_TAB = { id: 'tournament-play' as const, label: 'Tournament', shortLabel: 'Play', icon: Gamepad2 }
@@ -40,7 +37,6 @@ export type BlackjackSidebarTabId = (typeof BASE_TABS)[number]['id'] | 'tourname
 interface BlackjackSidebarProps {
   history: GameResult[]
   reserveBalance?: bigint
-  onTournamentLobby?: () => void
   chartRef?: React.RefObject<BlackjackRealTimeBetChartRef | null>
   chartSessionStartTime?: number
   wsClient?: unknown
@@ -50,30 +46,11 @@ interface BlackjackSidebarProps {
   inTournament?: boolean
   /** Content for the tournament tab (TournamentHUD + TournamentBetPanel) */
   tournamentTabContent?: React.ReactNode
-  /** Tournament list for sidebar "Tournaments" tab (expandable table + pagination) */
-  tournaments?: TournamentListItem[]
-  /** Refetch tournament list (e.g. when user opens Tournaments tab) */
-  onRefreshTournaments?: () => void | Promise<void | TournamentListItem[]>
-  /** Whether tournament list is loading */
-  tournamentsLoading?: boolean
-  /** Whether a join (approve + on-chain + server) is in progress — show on Join button */
-  isJoinLoading?: boolean
-  /** Open create tournament flow from sidebar */
-  onCreateTournament?: () => void
-  /** Join tournament from sidebar expanded view */
-  onJoinTournament?: (tournament: TournamentListItem) => void
-  /** Player balance for Join button state */
-  playerBalance?: bigint
-  /** Player address for Join button state */
-  playerAddress?: string | null
-  /** Open tournament lobby to "My History" tab */
-  onOpenTournamentHistory?: () => void
 }
 
 export default function BlackjackSidebar({
   history,
   reserveBalance,
-  onTournamentLobby,
   chartRef,
   chartSessionStartTime,
   wsClient,
@@ -81,15 +58,6 @@ export default function BlackjackSidebar({
   onVerifyGameRequest,
   inTournament = false,
   tournamentTabContent,
-  tournaments = [],
-  onRefreshTournaments,
-  tournamentsLoading = false,
-  isJoinLoading = false,
-  onCreateTournament,
-  onJoinTournament,
-  playerBalance,
-  playerAddress,
-  onOpenTournamentHistory,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'chart')
@@ -107,15 +75,6 @@ export default function BlackjackSidebar({
     }
   }, [inTournament])
 
-  // Refresh tournament list when user opens Tournaments tab (only when tab becomes active)
-  const onRefreshTournamentsRef = useRef(onRefreshTournaments)
-  onRefreshTournamentsRef.current = onRefreshTournaments
-  useEffect(() => {
-    if (activeTab === 'tournaments') {
-      onRefreshTournamentsRef.current?.()
-    }
-  }, [activeTab])
-
   const handleQuickHistoryVerify = (gameId: string) => {
     onVerifyGameRequest?.(gameId)
     if (typeof window !== 'undefined') window.open('/BLACKJACK/verify', '_blank')
@@ -125,7 +84,7 @@ export default function BlackjackSidebar({
     <div className="w-full min-w-0 flex flex-col h-full min-h-0 rounded-xl overflow-hidden" style={Theme.panel.sidebar}>
       {/* Layout E — Card grid: each tab as a card with icon + label. 3 cols = 2 rows for 6 tabs, more space per tab */}
       <div
-        className={`grid gap-2 p-3 shrink-0 bg-black/20 ${tabs.length === 6 ? 'grid-cols-3' : 'grid-cols-5'}`}
+        className={`grid gap-2 p-3 shrink-0 bg-black/20 ${tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}
       >
         {tabs.map((tab) => {
           const { id, label, icon: Icon } = tab
@@ -152,7 +111,7 @@ export default function BlackjackSidebar({
       {/* Content — padding only for howto/tournaments/chart/tournament-play; Recent/Top have their own */}
       <div
         className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar relative flex flex-col border-t border-white/10 ${
-          activeTab === 'howto' || activeTab === 'tournaments' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'tournament-play' ? 'p-4' : ''
+          activeTab === 'howto' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'tournament-play' ? 'p-4' : ''
         }`}
       >
         {activeTab === 'recent' && (
@@ -194,31 +153,6 @@ export default function BlackjackSidebar({
               <li><strong>Split</strong> — on a pair, split into two hands (double bet).</li>
               <li>Blackjack (Ace + 10) pays 3:2. Dealer stands on 17.</li>
             </ul>
-          </div>
-        )}
-        {activeTab === 'tournaments' && (
-          <div className="flex flex-col flex-1 min-h-0 text-sm text-white/90">
-            {onOpenTournamentHistory && (
-              <button
-                type="button"
-                onClick={onOpenTournamentHistory}
-                className="mb-2 w-full py-2 px-3 rounded-lg text-xs font-medium bg-slate-700/60 hover:bg-slate-600/60 text-cyan-300 border border-cyan-500/20 transition-colors flex items-center justify-center gap-2"
-              >
-                <History className="w-3.5 h-3.5" />
-                View all tournament history
-              </button>
-            )}
-            <TournamentListSidebar
-              tournaments={tournaments}
-              isLoading={tournamentsLoading}
-              isJoinLoading={isJoinLoading}
-              onRefresh={onRefreshTournaments ?? (() => {})}
-              onTournamentLobby={onTournamentLobby ?? (() => {})}
-              onCreateTournament={onCreateTournament}
-              onJoin={onJoinTournament}
-              playerBalance={playerBalance}
-              playerAddress={playerAddress}
-            />
           </div>
         )}
         {activeTab === 'tournament-play' && inTournament && tournamentTabContent != null && (

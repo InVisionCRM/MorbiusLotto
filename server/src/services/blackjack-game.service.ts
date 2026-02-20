@@ -81,6 +81,8 @@ export interface PlayerActionRequest {
   action: 'hit' | 'stand' | 'double_down' | 'split';
   handIndex?: number; // For multi-hand games
   clientSeed?: string; // Revealed on first action
+  /** When set, use tournament chips instead of MORBIUS balance (split/double-down) */
+  tournamentEntryId?: string;
 }
 
 /** Perfect Pairs payout multipliers (stake returned on win).
@@ -422,9 +424,13 @@ export class BlackjackGameService {
    * Check if hand can be split — v2 card indices (0-51): same blackjack value (10/J/Q/K interchangeable)
    */
   private canSplitV2(cards: number[]): boolean {
-    if (cards.length !== 2) return false;
-    const r1 = this.pfService.cardIndexToRank(cards[0]);
-    const r2 = this.pfService.cardIndexToRank(cards[1]);
+    if (!Array.isArray(cards) || cards.length !== 2) return false;
+    // Normalize: DB/JSON may return string numbers; ensure we have numeric indices
+    const c1 = Number(cards[0]);
+    const c2 = Number(cards[1]);
+    if (Number.isNaN(c1) || Number.isNaN(c2)) return false;
+    const r1 = this.pfService.cardIndexToRank(c1);
+    const r2 = this.pfService.cardIndexToRank(c2);
     return this.getSplitValue(r1) === this.getSplitValue(r2);
   }
 
@@ -581,7 +587,7 @@ export class BlackjackGameService {
         let deckPosition = rngCounter;
 
         if (request.action === 'split') {
-          return this.handleSplitV2(request.gameId, game, playerHands, handIndex, deck, deckPosition);
+          return this.handleSplitV2(request.gameId, game, playerHands, handIndex, deck, deckPosition, request.tournamentEntryId);
         } else {
           return this.handleHandActionV2(request.gameId, game, playerHands, handIndex, request.action, deck, deckPosition);
         }
@@ -1068,18 +1074,42 @@ export class BlackjackGameService {
     playerHands: Hand[],
     handIndex: number,
     deck: number[],
-    deckPosition: number
+    deckPosition: number,
+    tournamentEntryId?: string
   ): Promise<GameState> {
     const handToSplit = playerHands[handIndex];
 
     if (!this.canSplitV2(handToSplit.cards)) {
+      logger.warn('Split rejected: canSplitV2 failed', {
+        gameId,
+        handIndex,
+        cards: handToSplit.cards,
+        cardsLength: handToSplit.cards?.length,
+      });
       throw new Error('Cannot split this hand');
     }
 
-    const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
-    const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
-    if (currentBalance < handToSplit.betAmount) {
-      throw new Error(`Insufficient balance to split. Need ${handToSplit.betAmount.toString()}, have ${currentBalance.toString()}`);
+    const betAmountChips = Number(handToSplit.betAmount);
+
+    if (tournamentEntryId && this.tournamentService) {
+      // Tournament: validate and deduct from chips
+      const tournamentState = await this.tournamentService.getTournamentStateByEntryId(tournamentEntryId);
+      if (!tournamentState) {
+        throw new Error('Tournament entry not found');
+      }
+      if (tournamentState.chips < betAmountChips) {
+        throw new Error(`Insufficient chips to split. Need ${betAmountChips}, have ${tournamentState.chips}`);
+      }
+      await this.tournamentService.updateChips(tournamentEntryId, tournamentState.chips - betAmountChips);
+    } else {
+      // Regular game: validate and deduct from MORBIUS balance
+      const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
+      const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
+      if (currentBalance < handToSplit.betAmount) {
+        throw new Error(`Insufficient balance to split. Need ${handToSplit.betAmount.toString()}, have ${currentBalance.toString()}`);
+      }
+      await this.dbService.deductPlayerBalance(playerAddress, handToSplit.betAmount);
+      await this.dbService.updateSessionStats(game.session_id, handToSplit.betAmount, 0n, false);
     }
 
     const card1 = [handToSplit.cards[0]];
@@ -1118,9 +1148,6 @@ export class BlackjackGameService {
     };
 
     const totalBetAmount = game.total_bet_amount + handToSplit.betAmount;
-
-    await this.dbService.deductPlayerBalance(playerAddress, handToSplit.betAmount);
-    await this.dbService.updateSessionStats(game.session_id, handToSplit.betAmount, 0n, false);
 
     hand1.id = handToSplit.id;
     await this.dbService.updateGameHand(handToSplit.id, {
@@ -1720,11 +1747,12 @@ export class BlackjackGameService {
     }
 
     try {
-      // Get the regular game state first
+      // Get the regular game state first (pass entryId so split/double use tournament chips)
       const gameState = await this.handlePlayerAction({
         gameId,
         action,
         handIndex,
+        tournamentEntryId: entryId,
       });
 
       // Get tournament entry

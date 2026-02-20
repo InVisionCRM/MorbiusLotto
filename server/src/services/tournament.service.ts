@@ -545,6 +545,44 @@ export class TournamentService {
   }
 
   /**
+   * Get tournament state by entry ID (for split/double-down validation during a game)
+   */
+  async getTournamentStateByEntryId(entryId: string): Promise<TournamentState | null> {
+    const query = `
+      SELECT
+        te.*,
+        t.max_hands,
+        t.starting_chips,
+        tl.current_rank
+      FROM tournament_entries te
+      JOIN tournaments t ON te.tournament_id = t.id
+      LEFT JOIN tournament_leaderboard tl ON tl.entry_id = te.id
+      WHERE te.id = $1 AND te.status = 'playing'
+    `;
+
+    const result = await this.pool.query(query, [entryId]);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0];
+    return {
+      entryId: row.id,
+      tournamentId: row.tournament_id,
+      chips: Number(row.chips_remaining),
+      handsPlayed: Number(row.hands_played),
+      handsRemaining: Number(row.max_hands) - Number(row.hands_played),
+      highestChips: Number(row.highest_chip_count),
+      currentRank: Number(row.current_rank || 1),
+      status: row.status,
+      prizeWon: this.toBigInt(row.prize_won),
+      maxHands: Number(row.max_hands),
+      startingChips: Number(row.starting_chips),
+    };
+  }
+
+  /**
    * Get player's active tournament entry with full state
    */
   async getTournamentState(playerAddress: string): Promise<TournamentState | null> {
