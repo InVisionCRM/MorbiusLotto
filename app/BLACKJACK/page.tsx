@@ -51,35 +51,13 @@ import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 
 // Intro screen component
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
-  const [progress, setProgress] = useState(0);
-
   useEffect(() => {
     const duration = 2500;
-    const interval = 50;
-    const steps = duration / interval;
-    let currentStep = 0;
-
-    const progressInterval = setInterval(() => {
-      currentStep++;
-      const newProgress = (currentStep / steps) * 100;
-      setProgress(Math.min(newProgress, 100));
-
-      if (currentStep >= steps) {
-        clearInterval(progressInterval);
-        setTimeout(onComplete, 200);
-      }
-    }, interval);
-
     const fallbackTimeout = setTimeout(() => {
-      clearInterval(progressInterval);
-      setProgress(100);
       setTimeout(onComplete, 200);
-    }, 4000);
+    }, duration);
 
-    return () => {
-      clearInterval(progressInterval);
-      clearTimeout(fallbackTimeout);
-    };
+    return () => clearTimeout(fallbackTimeout);
   }, [onComplete]);
 
   return (
@@ -90,10 +68,10 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
       }}
       suppressHydrationWarning
     >
-      {/* Animated card dealing effect */}
-      <div className="absolute top-1/4 right-1/2 -translate-x-1/2 transform ">
-        <div className="relative">
-          {/* Stack of cards animation */}
+      {/* Wrapper: cards 30px above text, stacked vertically so they never overlap */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
+        {/* Animated card dealing effect */}
+        <div className="relative w-24 h-32 shrink-0 overflow-visible">
           {[...Array(6)].map((_, i) => (
             <div
               key={i}
@@ -110,48 +88,15 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
             </div>
           ))}
         </div>
-      </div>
 
-      {/* Progress Bar */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 max-w-sm">
-        <div
-          className="rounded-full h-3 overflow-hidden"
-          style={{
-            background: 'linear-gradient(145deg, rgba(25, 35, 45, 0.56), rgba(16, 26, 35, 0.62))',
-            boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
-          }}
-        >
-          <div
-            className="h-full rounded-full transition-all duration-75 ease-out"
-            style={{
-              width: `${progress}%`,
-              background: 'linear-gradient(90deg, rgba(6, 182, 212, 0.6), rgba(6, 182, 212, 0.8))',
-              boxShadow: '0 0 10px rgba(6, 182, 212, 0.5)',
-            }}
-          />
-        </div>
-        <div className="text-center mt-4 space-y-2">
-          <span className="text-cyan-300/80 text-lg font-semibold">
-            Loading... {Math.round(progress)}%
-          </span>
-          <div>
-            <button
-              onClick={onComplete}
-              className="text-cyan-300/50 text-sm hover:text-cyan-300 underline transition-colors"
-            >
-              Skip Intro
-            </button>
+        {/* Loading text — separate block, 30px below cards */}
+        <div className="text-center shrink-0">
+          <div className="text-white text-xl font-bold animate-pulse mb-2">
+            SHUFFLING DECK...
           </div>
-        </div>
-      </div>
-
-      {/* Loading text */}
-      <div className="absolute top-3/4 left-1/2 transform -translate-x-1/2 text-center">
-        <div className="text-white text-xl font-bold animate-pulse mb-2">
-          SHUFFLING DECK...
-        </div>
-        <div className="text-gray-400 text-sm">
-          Preparing provably fair blackjack
+          <div className="text-gray-400 text-sm">
+            Preparing provably fair blackjack
+          </div>
         </div>
       </div>
 

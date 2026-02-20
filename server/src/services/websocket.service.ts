@@ -371,7 +371,7 @@ export class WebSocketService {
           break;
 
         case 'join_room':
-          if (!this.requireAuth(ws, message)) return;
+          // No auth required for viewing chat; handleJoinRoom enforces wallet for tournament rooms
           await this.handleJoinRoom(ws, message);
           break;
 
@@ -391,7 +391,7 @@ export class WebSocketService {
           break;
 
         case 'get_chat_history':
-          if (!this.requireAuth(ws, message)) return;
+          // No auth required for viewing chat history (load more)
           await this.handleGetChatHistory(ws, message);
           break;
 

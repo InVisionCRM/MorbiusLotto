@@ -118,12 +118,21 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
       setMessages((prev) => prev.filter((m) => m.id !== payload.messageId));
     };
 
+    const onError = (payload: { message?: string; error?: string }) => {
+      const msg = payload?.message ?? payload?.error ?? 'Something went wrong';
+      setError(msg);
+      // Clear after 5s so user can try again
+      setTimeout(() => setError(null), 5000);
+    };
+
     internal.on('chat_message', onChat);
     internal.on('chat_message_deleted', onDeleted);
+    internal.on('error', onError);
 
     return () => {
       internal.off('chat_message', onChat);
       internal.off('chat_message_deleted', onDeleted);
+      internal.off('error', onError);
       internal.disconnect();
       internalClientRef.current = null;
       setConnected(false);
@@ -172,11 +181,19 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
       setMessages((prev) => prev.filter((m) => m.id !== payload.messageId));
     };
 
+    const onError = (payload: { message?: string; error?: string }) => {
+      const msg = payload?.message ?? payload?.error ?? 'Something went wrong';
+      setError(msg);
+      setTimeout(() => setError(null), 5000);
+    };
+
     externalClient.on('chat_message', onChat);
     externalClient.on('chat_message_deleted', onDeleted);
+    externalClient.on('error', onError);
     return () => {
       externalClient.off('chat_message', onChat);
       externalClient.off('chat_message_deleted', onDeleted);
+      externalClient.off('error', onError);
     };
   }, [roomId, externalClient, externalConnected]);
 
