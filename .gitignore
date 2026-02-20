@@ -28,6 +28,9 @@ node_modules
 /contracts/.env
 /docs
 
+# server uploads (admin table images/videos)
+server/uploads/
+
 # misc
 .DS_Store
 *.pem

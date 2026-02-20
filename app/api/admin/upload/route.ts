@@ -12,6 +12,14 @@ function isAdminWallet(addr: string | undefined): boolean {
   return ADMIN_WALLETS.includes(addr.toLowerCase());
 }
 
+function getBackendUrl(): string | null {
+  const url =
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.BLACKJACK_SERVER_URL;
+  if (!url || url.trim() === '') return null;
+  return url.trim().replace(/\/$/, '');
+}
+
 const ALLOWED_IMAGE = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const ALLOWED_VIDEO = ['video/mp4', 'video/webm'];
 const MAX_SIZE_IMAGE = 5 * 1024 * 1024; // 5MB
@@ -21,13 +29,43 @@ const MAX_SIZE_VIDEO = 50 * 1024 * 1024; // 50MB
  * POST /api/admin/upload
  * Body: multipart/form-data with "file" and optional "kind" (image | video).
  * Headers: x-admin-wallet (must be in ADMIN_WALLETS).
- * Writes to public/BlackJack/BrandedTable/ (image) or public/BlackJack/video table/ (video).
- * Returns { path: string } for use as table src.
+ * Proxies to backend when configured (production); otherwise writes to public/ (local dev).
+ * Returns { path: string } for use as table src (full URL when proxied, relative path when local).
  */
 export async function POST(req: NextRequest) {
   const wallet = req.headers.get('x-admin-wallet')?.trim();
   if (!wallet || !isAdminWallet(wallet)) {
     return NextResponse.json({ error: 'Forbidden', message: 'Admin wallet required' }, { status: 403 });
+  }
+
+  const backendUrl = getBackendUrl();
+  if (backendUrl) {
+    try {
+      const contentType = req.headers.get('content-type') || '';
+      const body = await req.arrayBuffer();
+      const res = await fetch(`${backendUrl}/api/admin/upload`, {
+        method: 'POST',
+        headers: {
+          'x-admin-wallet': wallet,
+          'content-type': contentType,
+        },
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return NextResponse.json(
+          { error: data.error || data.message || 'Upload failed' },
+          { status: res.status }
+        );
+      }
+      return NextResponse.json(data);
+    } catch (err) {
+      console.error('Admin upload proxy error:', err);
+      return NextResponse.json(
+        { error: 'Failed to reach backend. Check NEXT_PUBLIC_API_URL.' },
+        { status: 502 }
+      );
+    }
   }
 
   let formData: FormData;
@@ -72,7 +110,10 @@ export async function POST(req: NextRequest) {
     await writeFile(fullPath, Buffer.from(bytes));
   } catch (err) {
     console.error('Admin upload error:', err);
-    return NextResponse.json({ error: 'Failed to save file' }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to save file' },
+      { status: 500 }
+    );
   }
 
   const urlPath =

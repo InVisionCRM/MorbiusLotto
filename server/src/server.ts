@@ -1,5 +1,8 @@
 import express from 'express';
 import { createServer } from 'http';
+import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -81,6 +84,50 @@ app.use('/api/', limiter);
 // Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Uploaded files: serve from uploads/ (relative to process cwd when running from dist/)
+const uploadsDir = path.join(process.cwd(), 'uploads');
+const brandedTableDir = path.join(uploadsDir, 'BlackJack', 'BrandedTable');
+const videoTableDir = path.join(uploadsDir, 'BlackJack', 'video table');
+[brandedTableDir, videoTableDir].forEach((d) => {
+  try {
+    fs.mkdirSync(d, { recursive: true });
+  } catch {
+    // ignore if exists or permission error
+  }
+});
+app.use('/uploads', express.static(uploadsDir));
+
+const ALLOWED_IMAGE = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const ALLOWED_VIDEO = ['video/mp4', 'video/webm'];
+const MAX_SIZE_IMAGE = 5 * 1024 * 1024;
+const MAX_SIZE_VIDEO = 50 * 1024 * 1024;
+
+const uploadStorage = multer.diskStorage({
+  destination: (_req, file, cb) => {
+    const kind = (file.mimetype || '').startsWith('video/') ? 'video' : 'image';
+    cb(null, kind === 'video' ? videoTableDir : brandedTableDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || (file.mimetype?.startsWith('video/') ? '.mp4' : '.png');
+    const base = path.basename(file.originalname, path.extname(file.originalname));
+    const safe = `${base.replace(/[^a-zA-Z0-9-_]/g, '_')}_${Date.now()}${ext}`;
+    cb(null, safe);
+  },
+});
+
+const uploadMulter = multer({
+  storage: uploadStorage,
+  limits: { fileSize: MAX_SIZE_VIDEO },
+  fileFilter: (_req, file, cb) => {
+    const allowed = file.mimetype?.startsWith('video/') ? ALLOWED_VIDEO : ALLOWED_IMAGE;
+    if (!allowed.includes(file.mimetype || '')) {
+      cb(new Error(`Invalid type. Allowed: ${allowed.join(', ')}`));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 // Admin API: require x-admin-wallet header and that it's in ADMIN_WALLETS
 app.use('/api/admin', (req, res, next) => {
@@ -581,6 +628,36 @@ async function initializeServices() {
       }
       return null;
     };
+
+    app.post('/api/admin/upload', (req, res, next) => {
+      uploadMulter.single('file')(req, res, (err: unknown) => {
+        if (err) {
+          logger.error('Admin upload multer error:', err);
+          const msg = err instanceof Error ? err.message : 'Upload failed';
+          res.status(400).json({ error: msg });
+          return;
+        }
+        next();
+      });
+    }, (req, res) => {
+      try {
+        if (!req.file) {
+          res.status(400).json({ error: 'Missing or invalid file' });
+          return;
+        }
+        const kind = (req.body?.kind as string)?.toLowerCase() || (req.file.mimetype?.startsWith('video/') ? 'video' : 'image');
+        const baseUrl = (process.env.BACKEND_PUBLIC_URL || process.env.RAILWAY_STATIC_URL || '').trim()
+          || `${req.protocol}://${req.get('host') || 'localhost'}`;
+        const relPath = kind === 'video'
+          ? `BlackJack/video%20table/${encodeURIComponent(req.file.filename)}`
+          : `BlackJack/BrandedTable/${encodeURIComponent(req.file.filename)}`;
+        const fullUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${relPath}`;
+        sendJson(res, { path: fullUrl });
+      } catch (err) {
+        logger.error('Admin upload error:', err);
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to save file' });
+      }
+    });
 
     app.get('/api/admin/tables', async (req, res) => {
       try {
