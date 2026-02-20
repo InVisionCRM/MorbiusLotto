@@ -11,7 +11,16 @@ const uuid_1 = require("uuid");
 const crypto_1 = __importDefault(require("crypto"));
 const viem_1 = require("viem");
 const chains_1 = require("viem/chains");
-const blackjack_1 = require("../abi/blackjack");
+// Minimal ABI for getPlayerReserve - avoids full ABI parse issues in readContract
+const GET_PLAYER_RESERVE_ABI = [
+    {
+        inputs: [{ name: 'player', type: 'address' }],
+        name: 'getPlayerReserve',
+        outputs: [{ type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+];
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
     name: 'MORBlotto Blackjack',
@@ -776,12 +785,14 @@ class WebSocketService {
             if (!ws.playerAddress) {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
-            // Get contract reserve balance
+            // Normalize address (checksum) to avoid viem encodeFunctionData issues
+            const playerAddress = (0, viem_1.getAddress)(ws.playerAddress);
+            // Get contract reserve balance (use minimal ABI to avoid full-ABI parse errors)
             const contractBalance = await this.publicClient.readContract({
                 address: this.contractAddress,
-                abi: blackjack_1.blackjackAbi,
+                abi: GET_PLAYER_RESERVE_ABI,
                 functionName: 'getPlayerReserve',
-                args: [ws.playerAddress]
+                args: [playerAddress],
             });
             // Safety: only increase DB balance, never decrease.
             // This prevents wiping off-chain winnings that exceed the on-chain reserve.

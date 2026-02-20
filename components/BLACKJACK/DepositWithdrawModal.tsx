@@ -186,9 +186,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       // Wait a brief moment for contract state to update, then sync balance
       await new Promise(resolve => setTimeout(resolve, 1000))
 
-      // Sync off-chain balance with contract
+      // Sync off-chain balance with contract (non-blocking: deposit already succeeded)
       if (onBalanceSync) {
-        await onBalanceSync()
+        try {
+          await onBalanceSync()
+        } catch (syncErr) {
+          console.error('Balance sync failed after deposit:', syncErr)
+          toast.info('Refresh the page to update your balance', { duration: 4000 })
+        }
       }
       setDepositAmount('')
     } catch (error: any) {
@@ -235,9 +240,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         duration: 5000,
       })
 
-      // Sync off-chain balance with contract
+      // Sync off-chain balance with contract (non-blocking: deposit already succeeded)
       if (onBalanceSync) {
-        await onBalanceSync()
+        try {
+          await onBalanceSync()
+        } catch (syncErr) {
+          console.error('Balance sync failed after deposit:', syncErr)
+          toast.info('Refresh the page to update your balance', { duration: 4000 })
+        }
       }
       setDepositAmount('')
     } catch (error: any) {
@@ -358,7 +368,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
       await new Promise(resolve => setTimeout(resolve, 1000))
       if (onBalanceSync) {
-        await onBalanceSync()
+        try {
+          await onBalanceSync()
+        } catch (syncErr) {
+          console.error('Balance sync failed after withdrawal:', syncErr)
+          toast.info('Refresh the page to update your balance', { duration: 4000 })
+        }
       }
       setWithdrawAmount('')
     } catch (error: any) {

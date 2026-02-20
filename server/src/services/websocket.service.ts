@@ -6,9 +6,20 @@ import { TournamentService, TournamentState, LeaderboardEntry, TOURNAMENT_CONFIG
 import { logger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
-import { createPublicClient, http, verifyTypedData } from 'viem';
+import { createPublicClient, http, verifyTypedData, getAddress } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { blackjackAbi } from '../abi/blackjack';
+
+// Minimal ABI for getPlayerReserve - avoids full ABI parse issues in readContract
+const GET_PLAYER_RESERVE_ABI = [
+  {
+    inputs: [{ name: 'player', type: 'address' }],
+    name: 'getPlayerReserve',
+    outputs: [{ type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
 
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
@@ -851,12 +862,15 @@ export class WebSocketService {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
 
-      // Get contract reserve balance
+      // Normalize address (checksum) to avoid viem encodeFunctionData issues
+      const playerAddress = getAddress(ws.playerAddress) as `0x${string}`;
+
+      // Get contract reserve balance (use minimal ABI to avoid full-ABI parse errors)
       const contractBalance = await this.publicClient.readContract({
         address: this.contractAddress,
-        abi: blackjackAbi,
+        abi: GET_PLAYER_RESERVE_ABI,
         functionName: 'getPlayerReserve',
-        args: [ws.playerAddress as `0x${string}`]
+        args: [playerAddress],
       }) as bigint;
 
       // Safety: only increase DB balance, never decrease.

@@ -12,7 +12,11 @@ export function BlackjackPromoCard() {
 
   const handleMouseEnter = () => {
     setIsHovering(true)
-    videoRef.current?.play().catch(() => {})
+    if (videoRef.current) {
+      videoRef.current.muted = true
+      videoRef.current.volume = 0
+      videoRef.current.play().catch(() => {})
+    }
   }
 
   const handleMouseLeave = () => {
@@ -29,7 +33,7 @@ export function BlackjackPromoCard() {
       onMouseLeave={handleMouseLeave}
     >
       <div
-        className="relative overflow-hidden rounded-2xl w-full aspect-[4/3] max-w-lg mx-auto transition-all duration-300 hover:scale-[1.02]"
+        className="relative overflow-hidden rounded-2xl w-full aspect-[4/3] max-w-[16rem] mx-auto transition-all duration-300 hover:scale-[1.02]"
         style={Theme.panel.base}
       >
         <div className="relative h-full w-full rounded-2xl overflow-hidden">
@@ -48,6 +52,7 @@ export function BlackjackPromoCard() {
             muted
             loop
             playsInline
+            preload="metadata"
             className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
             style={{ opacity: isHovering ? 1 : 0 }}
           />

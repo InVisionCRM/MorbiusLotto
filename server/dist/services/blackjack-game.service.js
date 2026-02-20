@@ -311,10 +311,15 @@ class BlackjackGameService {
      * Check if hand can be split — v2 card indices (0-51): same blackjack value (10/J/Q/K interchangeable)
      */
     canSplitV2(cards) {
-        if (cards.length !== 2)
+        if (!Array.isArray(cards) || cards.length !== 2)
             return false;
-        const r1 = this.pfService.cardIndexToRank(cards[0]);
-        const r2 = this.pfService.cardIndexToRank(cards[1]);
+        // Normalize: DB/JSON may return string numbers; ensure we have numeric indices
+        const c1 = Number(cards[0]);
+        const c2 = Number(cards[1]);
+        if (Number.isNaN(c1) || Number.isNaN(c2))
+            return false;
+        const r1 = this.pfService.cardIndexToRank(c1);
+        const r2 = this.pfService.cardIndexToRank(c2);
         return this.getSplitValue(r1) === this.getSplitValue(r2);
     }
     /**
@@ -876,6 +881,12 @@ class BlackjackGameService {
     async handleSplitV2(gameId, game, playerHands, handIndex, deck, deckPosition, tournamentEntryId) {
         const handToSplit = playerHands[handIndex];
         if (!this.canSplitV2(handToSplit.cards)) {
+            logger_1.logger.warn('Split rejected: canSplitV2 failed', {
+                gameId,
+                handIndex,
+                cards: handToSplit.cards,
+                cardsLength: handToSplit.cards?.length,
+            });
             throw new Error('Cannot split this hand');
         }
         const betAmountChips = Number(handToSplit.betAmount);
