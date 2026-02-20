@@ -8,7 +8,6 @@ import { usePathname } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import { useProfile } from '@/hooks/use-player-profile';
 import { WalletMenu } from '@/components/shared/WalletMenu';
-import { NumberTicker } from '@/components/ui/number-ticker';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
 import {
@@ -126,7 +125,6 @@ function useNavPage(pageProp?: NavPage): NavPage {
 function NavContent(props: {
   page: NavPage;
   onOpenDepositModal?: () => void;
-  reserveBalance?: bigint;
   currentView?: string;
   onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics') => void;
   setThemeModalOpen: (open: boolean) => void;
@@ -165,7 +163,6 @@ function NavContent(props: {
   const {
     page,
     onOpenDepositModal,
-    reserveBalance,
     currentView = 'game',
     onViewChange,
     setThemeModalOpen,
@@ -233,7 +230,7 @@ function NavContent(props: {
       {/* Logo / Brand */}
       <div className="shrink-0 py-4">
         <Link href="/" className="flex items-center gap-2 group/sidebar" aria-label="MORBIUS.IO Home">
-          <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden bg-white/10" style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.3)' }}>
+          <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
             <Image src="/morbius/MorbiusLogo (3).png" alt="" width={24} height={24} className="object-contain" />
           </span>
           <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-base font-semibold text-white whitespace-nowrap overflow-hidden">
@@ -242,12 +239,11 @@ function NavContent(props: {
         </Link>
       </div>
 
-      {/* Wallet + Reserve */}
-      <div className="shrink-0 py-2 space-y-2">
+      {/* Wallet */}
+      <div className="shrink-0 py-2">
         <div className="px-2">
           <WalletMenu
             onOpenDepositModal={onOpenDepositModal}
-            reserveBalance={reserveBalance}
             profileDisplayName={profileDisplayName}
             profileImageUrl={profileImageUrl}
             onOpenProfileSettings={onOpenProfileSettings}
@@ -256,19 +252,6 @@ function NavContent(props: {
             sidebarOpen={open}
           />
         </div>
-        {isConnected && reserveBalance !== undefined && onOpenDepositModal && (
-          <button
-            onClick={onOpenDepositModal}
-            className="flex items-center gap-2 py-2 rounded-lg px-2 hover:bg-white/5 transition-colors text-left w-full"
-            aria-label="MORBIUS reserve balance"
-            title={`Deposit/Withdraw — ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
-          >
-            <Image src="/morbius/MorbiusLogo (3).png" alt="" width={20} height={20} className="object-contain shrink-0" />
-            <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-white font-bold text-sm truncate min-w-0">
-              <NumberTicker value={Math.floor(Number(reserveBalance) / 1e18)} className="text-white font-bold" animateOnChange={true} />
-            </motion.span>
-          </button>
-        )}
       </div>
 
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5">
@@ -493,7 +476,6 @@ export default function GlobalMainNav({
     <div className="flex items-center gap-2 min-w-0">
       <WalletMenu
         onOpenDepositModal={onOpenDepositModal}
-        reserveBalance={reserveBalance}
         profileDisplayName={effectiveProfileDisplayName}
         profileImageUrl={effectiveProfileImageUrl}
         onOpenProfileSettings={onOpenProfileSettings}
@@ -501,18 +483,6 @@ export default function GlobalMainNav({
         variant="default"
         className="shrink-0"
       />
-      {isConnected && reserveBalance !== undefined && onOpenDepositModal && (
-        <button
-          type="button"
-          onClick={onOpenDepositModal}
-          className="flex items-center gap-1 rounded-md py-1 px-2 text-xs shrink-0 hover:bg-white/10 transition-colors"
-          aria-label={`Reserve: ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
-          title={`Deposit/Withdraw — ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS`}
-        >
-          <NumberTicker value={Math.floor(Number(reserveBalance) / 1e18)} className="text-white font-bold text-xs" animateOnChange={true} />
-          <Image src="/morbius/MorbiusLogo (3).png" alt="" width={14} height={14} className="object-contain shrink-0" />
-        </button>
-      )}
     </div>
   );
 
@@ -523,7 +493,6 @@ export default function GlobalMainNav({
           <NavContent
             page={page}
             onOpenDepositModal={onOpenDepositModal}
-            reserveBalance={reserveBalance}
             currentView={currentView}
             onViewChange={onViewChange}
             setThemeModalOpen={setThemeModalOpen}

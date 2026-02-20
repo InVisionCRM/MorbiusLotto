@@ -169,14 +169,6 @@ export function WalletMenu({
                     <span className="text-sm font-medium">Deposit/Withdraw</span>
                   </button>
                 )}
-                {reserveBalance !== undefined && (
-                  <div className={`flex items-center gap-3 px-3 py-2 ${variant === 'sidebar' ? 'text-white/90' : 'text-gray-400'}`}>
-                    <i className="fas fa-coins w-4 text-center" />
-                    <span className="text-sm">
-                      Balance: {Math.floor(Number(reserveBalance) / 1e18)} MORBIUS
-                    </span>
-                  </div>
-                )}
                 {onOpenProfileSettings && (
                   <button
                     type="button"
