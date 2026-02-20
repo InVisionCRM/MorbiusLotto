@@ -2810,9 +2810,10 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Top Players + Tournaments + Chat: grid 3-col on lg, stack on smaller */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+        {/* Top Players + Chat: grid 2-col on lg (Tournament card commented out) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
           <BlackjackTopPlayersOverlay />
+          {/* Tournament card - commented out
           <div
             className="min-h-[280px] lg:min-h-[340px] rounded-xl overflow-hidden flex flex-col min-w-0"
             style={{
@@ -2868,6 +2869,7 @@ export default function BlackjackPage() {
               />
             </div>
           </div>
+          */}
           <div className="min-h-[280px] lg:min-h-[340px] flex flex-col min-w-0">
             <ChatPanel
               roomId="blackjack"

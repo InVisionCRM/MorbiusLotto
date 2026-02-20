@@ -281,9 +281,9 @@ function NavContent(props: {
             {isDeployer && (
               <SidebarButton label="Analytics" icon={<i className={`fas fa-chart-line w-5 text-center shrink-0 ${navItem('', 'fa-chart-line', currentView === 'analytics')}`} aria-hidden />} onClick={() => onViewChange?.('analytics')} active={currentView === 'analytics'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'analytics')}`} />
             )}
-            {onTournamentLobby && (
+            {/* {onTournamentLobby && (
               <SidebarButton label="Tournament Lobby" icon={<i className="fas fa-trophy w-5 text-center text-white shrink-0" aria-hidden />} onClick={onTournamentLobby} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-            )}
+            )} */}
             {onThemeChange && (
               <SidebarButton label="Table theme" icon={<i className="fas fa-palette w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => setThemeModalOpen(true)} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
             )}
