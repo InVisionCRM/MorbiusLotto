@@ -180,6 +180,10 @@ app.get('/health', (req, res) => {
 // Initialize services
 async function initializeServices() {
     try {
+        // Start HTTP server immediately so /health responds during init (avoids Railway health-check timeout)
+        server.listen(PORT, () => {
+            logger_1.logger.info(`Blackjack server running on port ${PORT}`);
+        });
         // Initialize database
         const dbService = new database_service_1.DatabaseService();
         await dbService.connect();
@@ -1300,12 +1304,8 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
-        // Start server
-        server.listen(PORT, () => {
-            logger_1.logger.info(`Blackjack server running on port ${PORT}`);
-            logger_1.logger.info('WebSocket server initialized');
-            logger_1.logger.info('Database connected');
-        });
+        logger_1.logger.info('WebSocket server initialized');
+        logger_1.logger.info('Database connected');
     }
     catch (error) {
         logger_1.logger.error('Failed to initialize services:', error);
