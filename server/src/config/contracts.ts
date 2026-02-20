@@ -19,7 +19,7 @@ export const KENO_ADDRESS = (process.env.KENO_ADDRESS || '0x734A1460b4131F8cFE49
 export const LOTTERY_ADDRESS = (process.env.LOTTERY_ADDRESS || '0xD66b4489fbfF99A8d62f969203899840F2ec69c5') as `0x${string}`;
 export const BIGWHEEL_ADDRESS = (process.env.BIGWHEEL_ADDRESS || '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F') as `0x${string}`;
 /** Blackjack V2; use BLACKJACK_CONTRACT_ADDRESS in .env if different. */
-export const BLACKJACK_ADDRESS = (process.env.BLACKJACK_CONTRACT_ADDRESS || process.env.BLACKJACK_ADDRESS || '0xFCE49ab8b53366C397A0205c4c0CF42aE2B658A8') as `0x${string}`;
+export const BLACKJACK_ADDRESS = (process.env.BLACKJACK_CONTRACT_ADDRESS || process.env.BLACKJACK_ADDRESS || '0x1b38626A12085547C35bD80455d054950AD72Cde') as `0x${string}`;
 
 /** Legacy Blackjack contracts (for admin health). Accept BLACKJACK_LEGACY_CONTRACT_ADDRESS* or NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS*. */
 export const BLACKJACK_LEGACY_ADDRESS = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS || '') as `0x${string}`;
