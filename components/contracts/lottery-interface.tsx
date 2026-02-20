@@ -377,8 +377,6 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [LOTTERY_ADDRESS, amount],
-        account: address,
-        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to approve')
