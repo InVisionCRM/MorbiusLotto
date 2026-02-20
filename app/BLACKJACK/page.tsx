@@ -1006,18 +1006,14 @@ export default function BlackjackPage() {
       // Store the on-chain balance at connection time (playerReserve may be unknown from contract read)
       const onChainBalanceAtConnection: bigint = typeof playerReserve === 'bigint' ? playerReserve : BigInt(0);
       
-      // First fetch the current DB balance
+      // First fetch the current DB balance, then always sync with the contract.
+      // The server-side sync handles all cases: deposits (on-chain > DB), stale balances
+      // after contract upgrades (on-chain 0 + no active games → reset DB), and active play
+      // (preserves DB when games are in progress).
       fetchBalance().then(() => {
-        // After fetchBalance completes, check if we need to sync
-        // Use a small delay to ensure state is updated, then re-read current values
         setTimeout(() => {
-          // Re-read current balance from the getBalance call result
-          // We'll trigger syncBalance which will handle the comparison server-side
-          // But first check if there's an active game
-          if (!currentGameRef.current && onChainBalanceAtConnection > BigInt(0)) {
-            // The server-side sync logic will only increase DB balance if on-chain > DB
-            // So it's safe to call syncBalance here
-            console.log('[Balance] Auto-syncing on connection: on-chain balance detected', {
+          if (!currentGameRef.current) {
+            console.log('[Balance] Auto-syncing on connection', {
               onChain: onChainBalanceAtConnection.toString()
             });
             syncBalance().catch(() => {});

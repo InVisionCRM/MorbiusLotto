@@ -873,14 +873,45 @@ export class WebSocketService {
         args: [playerAddress],
       }) as bigint;
 
-      // Safety: only increase DB balance, never decrease.
-      // This prevents wiping off-chain winnings that exceed the on-chain reserve.
       const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
 
-      const newBalance = contractBalance > currentDbBalance ? contractBalance : currentDbBalance;
-      await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
+      let newBalance: bigint;
 
-      logger.debug('Balance synced (max-safe)', {
+      if (contractBalance === 0n && currentDbBalance > 0n) {
+        // On-chain is 0 but DB has a balance. This happens after a contract upgrade
+        // when the DB still holds a stale balance from the previous contract.
+        // Only preserve the DB balance if the player has an active (in-progress) game
+        // or a pending withdrawal — otherwise reset to match the contract.
+        const [hasActive, hasPending] = await Promise.all([
+          this.dbService.hasActiveGames(ws.playerAddress),
+          this.dbService.getActivePendingWithdrawal(ws.playerAddress),
+        ]);
+
+        if (hasActive || hasPending) {
+          newBalance = currentDbBalance;
+          logger.debug('Balance sync: on-chain 0 but active game/withdrawal exists, preserving DB balance', {
+            playerAddress: ws.playerAddress,
+            currentDbBalance: currentDbBalance.toString(),
+            hasActiveGame: hasActive,
+            hasPendingWithdrawal: !!hasPending,
+          });
+        } else {
+          newBalance = 0n;
+          await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, 0n);
+          logger.info('Balance sync: reset stale DB balance (on-chain 0, no active games/withdrawals)', {
+            playerAddress: ws.playerAddress,
+            previousDbBalance: currentDbBalance.toString(),
+          });
+        }
+      } else {
+        // Normal case: use max(contract, db) to avoid wiping off-chain winnings
+        newBalance = contractBalance > currentDbBalance ? contractBalance : currentDbBalance;
+        if (newBalance !== currentDbBalance) {
+          await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
+        }
+      }
+
+      logger.debug('Balance synced', {
         playerAddress: ws.playerAddress,
         contractBalance: contractBalance.toString(),
         previousDbBalance: currentDbBalance.toString(),
