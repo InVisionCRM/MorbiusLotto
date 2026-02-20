@@ -58,11 +58,14 @@ const allowedOrigins = (process.env.FRONTEND_URL || 'https://win.morbius.io')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: false,
+}));
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // same-origin or non-browser
-    if (allowedOrigins.includes(origin)) return cb(null, true); // reflect allowed origin
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
     return cb(null, false);
   },
   credentials: true,
@@ -98,8 +101,9 @@ const videoTableDir = path.join(uploadsDir, 'BlackJack', 'video table');
 });
 app.use('/uploads', express.static(uploadsDir, {
   setHeaders: (res) => {
-    // Uploaded table assets are intentionally embedded cross-origin by the frontend.
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
   },
 }));
 
@@ -568,6 +572,12 @@ async function initializeServices() {
       }
     });
 
+    const ensureProtocol = (url: string) => {
+      if (!url) return url;
+      if (/^https?:\/\//.test(url) || url.startsWith('/')) return url;
+      return `https://${url}`;
+    };
+
     // Public: Blackjack table list (for picker; enabled only)
     app.get('/api/blackjack/tables', async (req, res) => {
       try {
@@ -577,7 +587,7 @@ async function initializeServices() {
           id: r.id,
           kind: r.kind,
           name: r.name,
-          src: r.src,
+          src: ensureProtocol(r.src),
           description: r.description,
           token_contract_address: r.token_contract_address,
           logo_url: r.logo_url,
@@ -676,7 +686,7 @@ async function initializeServices() {
       try {
         const enabledOnly = (req.query.enabledOnly as string) === 'true';
         const rows = await dbService.getBlackjackTables(enabledOnly);
-        sendJson(res, rows);
+        sendJson(res, rows.map((r: any) => ({ ...r, src: ensureProtocol(r.src) })));
       } catch (error) {
         logger.error('Error fetching admin blackjack tables:', error);
         const msg = dbSchemaError(error);
@@ -1364,6 +1374,16 @@ async function initializeServices() {
 let freerollScheduler: FreerollSchedulerService | null = null;
 let tournamentScheduler: TournamentSchedulerService | null = null;
 
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception — keeping server alive:', err);
+  logger.error('Uncaught exception:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled rejection — keeping server alive:', reason);
+  logger.error('Unhandled rejection:', reason);
+});
+
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
   freerollScheduler?.stop();
@@ -1386,6 +1406,7 @@ process.on('SIGINT', () => {
 
 // Start the server
 initializeServices().catch((error) => {
+  console.error('[FATAL] Failed to start server:', error);
   logger.error('Failed to start server:', error);
   process.exit(1);
 });
