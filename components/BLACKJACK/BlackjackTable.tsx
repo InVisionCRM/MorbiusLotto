@@ -941,10 +941,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           <video
             ref={blackjackVideoRef}
             src="/BlackJack/VIDEOS/AnimatedBLACKJACK .mp4"
-            className="max-w-full max-h-full object-contain"
+            className="max-w-[200px] max-h-[100px] border-2 border-cyan-500/80 object-contain"
             onEnded={handleBlackjackVideoEnd}
             playsInline
-            muted={false}
+            muted={true}
           />
         </div>
       )}

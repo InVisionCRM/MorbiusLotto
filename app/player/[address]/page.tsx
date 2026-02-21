@@ -62,8 +62,8 @@ export default function PlayerProfilePage() {
         <main className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent mb-2">
-            Player Profile
+          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-500 to-purple-500 bg-clip-text text-transparent mb-2">
+            Player Stats
           </h1>
           <p className="text-xl text-white/80 font-mono text-cyan-300">
             {formatAddress(address)}

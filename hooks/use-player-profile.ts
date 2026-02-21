@@ -102,11 +102,18 @@ export function usePlayerProfileStats(address: string | null) {
         throw new Error('Failed to fetch player stats')
       }
       const data = await response.json()
+      const totalBet = BigInt(data.total_bet || 0)
+      const totalWin = BigInt(data.total_win || 0)
+      // When backend returns only basic stats (e.g. enhanced failed), profit_loss is missing; derive it
+      const profitLoss =
+        data.profit_loss !== undefined && data.profit_loss !== null && data.profit_loss !== ''
+          ? BigInt(data.profit_loss)
+          : totalWin - totalBet
       return {
         total_games: data.total_games || 0,
-        total_bet: BigInt(data.total_bet || 0),
-        total_win: BigInt(data.total_win || 0),
-        profit_loss: BigInt(data.profit_loss || 0),
+        total_bet: totalBet,
+        total_win: totalWin,
+        profit_loss: profitLoss,
         win_rate: data.win_rate || 0,
         biggest_win: BigInt(data.biggest_win || 0),
         biggest_loss: BigInt(data.biggest_loss || 0),
