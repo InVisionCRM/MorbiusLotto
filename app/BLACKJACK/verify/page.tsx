@@ -205,59 +205,68 @@ function BlackjackVerifyContent() {
       let cardErrors: Array<{ position: number; expected: number; actual: number }> = []
       let recalculatedDeck: number[] = []
 
-      if (hashVerified && data.rngVersion === 2) {
-        // V2: Fisher-Yates shuffle
-        recalculatedDeck = await fisherYatesShuffle(
-          data.serverSeed,
-          data.clientSeed,
-          data.gameNumber
-        )
+      if (hashVerified && Number(data.rngVersion) === 2) {
+        // V2: Fisher-Yates shuffle — nonce must be numeric (game number)
+        const nonce = Number(data.gameNumber)
+        if (Number.isNaN(nonce)) {
+          // Invalid or missing game number — skip card verification
+        } else {
+          recalculatedDeck = await fisherYatesShuffle(
+            String(data.serverSeed),
+            String(data.clientSeed ?? 'default'),
+            nonce
+          )
 
-        // Collect all cards in deal order: player[0], dealer[0], player[1], dealer[1], then any additional cards
-        const allCards: number[] = []
-        
-        // Initial deal order: player card 1, dealer card 1, player card 2, dealer card 2
-        const firstPlayerHand = data.playerHands[0]
-        if (firstPlayerHand && firstPlayerHand.cards.length >= 2) {
-          allCards.push(firstPlayerHand.cards[0]) // shuffledDeck[0] - player card 1
-          if (data.dealerCards.length >= 1) {
-            allCards.push(data.dealerCards[0]) // shuffledDeck[1] - dealer card 1
-          }
-          allCards.push(firstPlayerHand.cards[1]) // shuffledDeck[2] - player card 2
-          if (data.dealerCards.length >= 2) {
-            allCards.push(data.dealerCards[1]) // shuffledDeck[3] - dealer card 2
-          }
-        }
-        
-        // Additional player cards (hits, splits) - in order they were dealt
-        // Start from card index 2 (third card) of first hand, then any split hands
-        if (firstPlayerHand && firstPlayerHand.cards.length > 2) {
-          for (let i = 2; i < firstPlayerHand.cards.length; i++) {
-            allCards.push(firstPlayerHand.cards[i])
-          }
-        }
-        
-        // Additional split hands (if any) - all cards from each split hand
-        for (let handIdx = 1; handIdx < data.playerHands.length; handIdx++) {
-          const hand = data.playerHands[handIdx]
-          allCards.push(...hand.cards)
-        }
-        
-        // Additional dealer cards (hits) - start from card index 2 (third card)
-        if (data.dealerCards.length > 2) {
-          for (let i = 2; i < data.dealerCards.length; i++) {
-            allCards.push(data.dealerCards[i])
-          }
-        }
+          // Normalize card values to number (API/JSON may return strings from DB)
+          const toCardNum = (c: unknown): number => (typeof c === 'number' && !Number.isNaN(c) ? c : Number(c))
 
-        // Verify cards match
-        cardsVerified = true
-        for (let i = 0; i < allCards.length; i++) {
-          const expected = recalculatedDeck[i]
-          const actual = allCards[i]
-          if (expected !== actual) {
-            cardsVerified = false
-            cardErrors.push({ position: i, expected, actual })
+          // Collect all cards in deal order: player[0], dealer[0], player[1], dealer[1], then any additional cards
+          const allCards: number[] = []
+
+          // Initial deal order: player card 1, dealer card 1, player card 2, dealer card 2
+          const firstPlayerHand = data.playerHands?.[0]
+          if (firstPlayerHand && firstPlayerHand.cards?.length >= 2) {
+            allCards.push(toCardNum(firstPlayerHand.cards[0])) // shuffledDeck[0] - player card 1
+            if (data.dealerCards?.length >= 1) {
+              allCards.push(toCardNum(data.dealerCards[0])) // shuffledDeck[1] - dealer card 1
+            }
+            allCards.push(toCardNum(firstPlayerHand.cards[1])) // shuffledDeck[2] - player card 2
+            if (data.dealerCards?.length >= 2) {
+              allCards.push(toCardNum(data.dealerCards[1])) // shuffledDeck[3] - dealer card 2
+            }
+          }
+
+          // Additional player cards (hits, splits) - in order they were dealt
+          if (firstPlayerHand && firstPlayerHand.cards?.length > 2) {
+            for (let i = 2; i < firstPlayerHand.cards.length; i++) {
+              allCards.push(toCardNum(firstPlayerHand.cards[i]))
+            }
+          }
+
+          // Additional split hands (if any) - all cards from each split hand
+          for (let handIdx = 1; handIdx < (data.playerHands?.length ?? 0); handIdx++) {
+            const hand = data.playerHands[handIdx]
+            if (hand?.cards?.length) {
+              for (const c of hand.cards) allCards.push(toCardNum(c))
+            }
+          }
+
+          // Additional dealer cards (hits) - start from card index 2 (third card)
+          if (data.dealerCards?.length > 2) {
+            for (let i = 2; i < data.dealerCards.length; i++) {
+              allCards.push(toCardNum(data.dealerCards[i]))
+            }
+          }
+
+          // Verify cards match (compare as numbers)
+          cardsVerified = true
+          for (let i = 0; i < allCards.length; i++) {
+            const expected = recalculatedDeck[i]
+            const actual = allCards[i]
+            if (expected !== actual) {
+              cardsVerified = false
+              cardErrors.push({ position: i, expected, actual })
+            }
           }
         }
       } else if (hashVerified && data.rngVersion === 1) {
