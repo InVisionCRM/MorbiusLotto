@@ -1089,7 +1089,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
             const dealerIsWinner = gameCompleteAndRevealed && gameResult === 'loss';
             return (
-              <div className="absolute top-30 left-1/2 -translate-x-1/2 flex flex-row items-center">
+              <div className="absolute top-36 sm:top-24 left-1/2 -translate-x-1/2 flex flex-row items-center">
                 <div className="flex gap-1 sm:gap-0">
                   {dealerHand.cards.map((card, index) => {
                     if (index >= visibleDealerCards) return null;
@@ -1135,7 +1135,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           })()}
 
           {/* Player Area — fixed offset from top (gap below dealer is fixed, no bottom anchor) */}
-          <div className="absolute top-54 left-1/2 -translate-x-1/2 flex flex-col gap-2 items-center">
+          <div className="absolute top-54 sm:top-40 left-1/2 -translate-x-1/2 flex flex-col gap-2 items-center">
             <div className={`flex ${hasSplit ? 'gap-2' : 'gap-0'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
