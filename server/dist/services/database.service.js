@@ -1350,7 +1350,7 @@ class DatabaseService {
         return result.rows.map((r) => r.wallet_address);
     }
     async getBlackjackTables(enabledOnly = false) {
-        const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
+        const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled, created_at, updated_at';
         const colsBase = 'id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at';
         const whereOrder = enabledOnly
             ? ' WHERE enabled = true ORDER BY sort_order ASC, created_at ASC'
@@ -1365,6 +1365,7 @@ class DatabaseService {
             logo_url: withExtended ? (r.logo_url ?? null) : null,
             ticker: withExtended ? (r.ticker ?? null) : null,
             iframe_url: withExtended ? (r.iframe_url ?? null) : null,
+            website_url: withExtended ? (r.website_url ?? null) : null,
             sort_order: r.sort_order,
             enabled: r.enabled,
             created_at: new Date(r.created_at),
@@ -1389,9 +1390,9 @@ class DatabaseService {
     }
     async createBlackjackTable(row) {
         const withExtended = async () => {
-            const r = await this.pool.query(`INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         RETURNING id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at`, [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.logo_url ?? null, row.ticker ?? null, row.iframe_url ?? null, row.sort_order, row.enabled]);
+            const r = await this.pool.query(`INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled, created_at, updated_at`, [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.logo_url ?? null, row.ticker ?? null, row.iframe_url ?? null, row.website_url ?? null, row.sort_order, row.enabled]);
             const x = r.rows[0];
             return { x, extended: true };
         };
@@ -1414,6 +1415,7 @@ class DatabaseService {
                 logo_url: extended ? (x.logo_url ?? null) : null,
                 ticker: extended ? (x.ticker ?? null) : null,
                 iframe_url: extended ? (x.iframe_url ?? null) : null,
+                website_url: extended ? (x.website_url ?? null) : null,
                 sort_order: x.sort_order,
                 enabled: x.enabled,
                 created_at: new Date(x.created_at),
@@ -1435,6 +1437,7 @@ class DatabaseService {
                 logo_url: extended ? (x.logo_url ?? null) : null,
                 ticker: extended ? (x.ticker ?? null) : null,
                 iframe_url: extended ? (x.iframe_url ?? null) : null,
+                website_url: extended ? (x.website_url ?? null) : null,
                 sort_order: x.sort_order,
                 enabled: x.enabled,
                 created_at: new Date(x.created_at),
@@ -1475,6 +1478,10 @@ class DatabaseService {
                 fields.push(`iframe_url = $${i++}`);
                 values.push(updates.iframe_url);
             }
+            if (includeExtended && updates.website_url !== undefined) {
+                fields.push(`website_url = $${i++}`);
+                values.push(updates.website_url);
+            }
             if (updates.sort_order !== undefined) {
                 fields.push(`sort_order = $${i++}`);
                 values.push(updates.sort_order);
@@ -1492,7 +1499,7 @@ class DatabaseService {
         }
         const fields = [...f, 'updated_at = NOW()'];
         const values = [...v, id];
-        const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled, created_at, updated_at';
+        const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled, created_at, updated_at';
         const colsBase = 'id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at';
         const mapReturn = (x, extended) => ({
             id: x.id,
@@ -1504,6 +1511,7 @@ class DatabaseService {
             logo_url: extended ? (x.logo_url ?? null) : null,
             ticker: extended ? (x.ticker ?? null) : null,
             iframe_url: extended ? (x.iframe_url ?? null) : null,
+            website_url: extended ? (x.website_url ?? null) : null,
             sort_order: x.sort_order,
             enabled: x.enabled,
             created_at: new Date(x.created_at),

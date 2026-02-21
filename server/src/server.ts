@@ -718,6 +718,7 @@ async function initializeServices() {
             logo_url: null,
             ticker: null,
             iframe_url: null,
+            website_url: null,
             sort_order: inserted,
             enabled: true,
           });

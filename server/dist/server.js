@@ -91,13 +91,16 @@ const allowedOrigins = (process.env.FRONTEND_URL || 'https://win.morbius.io')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
-app.use((0, helmet_1.default)());
+app.use((0, helmet_1.default)({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: false,
+}));
 app.use((0, cors_1.default)({
     origin: (origin, cb) => {
         if (!origin)
-            return cb(null, true); // same-origin or non-browser
+            return cb(null, true);
         if (allowedOrigins.includes(origin))
-            return cb(null, true); // reflect allowed origin
+            return cb(null, true);
         return cb(null, false);
     },
     credentials: true,
@@ -129,7 +132,13 @@ const videoTableDir = path_1.default.join(uploadsDir, 'BlackJack', 'video table'
         // ignore if exists or permission error
     }
 });
-app.use('/uploads', express_1.default.static(uploadsDir));
+app.use('/uploads', express_1.default.static(uploadsDir, {
+    setHeaders: (res) => {
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    },
+}));
 const ALLOWED_IMAGE = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const ALLOWED_VIDEO = ['video/mp4', 'video/webm'];
 const MAX_SIZE_IMAGE = 5 * 1024 * 1024;
@@ -570,6 +579,13 @@ async function initializeServices() {
                 res.status(status).json({ error: error.message || 'Internal server error' });
             }
         });
+        const ensureProtocol = (url) => {
+            if (!url)
+                return url;
+            if (/^https?:\/\//.test(url) || url.startsWith('/'))
+                return url;
+            return `https://${url}`;
+        };
         // Public: Blackjack table list (for picker; enabled only)
         app.get('/api/blackjack/tables', async (req, res) => {
             try {
@@ -579,7 +595,7 @@ async function initializeServices() {
                     id: r.id,
                     kind: r.kind,
                     name: r.name,
-                    src: r.src,
+                    src: ensureProtocol(r.src),
                     description: r.description,
                     token_contract_address: r.token_contract_address,
                     logo_url: r.logo_url,
@@ -681,7 +697,7 @@ async function initializeServices() {
             try {
                 const enabledOnly = req.query.enabledOnly === 'true';
                 const rows = await dbService.getBlackjackTables(enabledOnly);
-                sendJson(res, rows);
+                sendJson(res, rows.map((r) => ({ ...r, src: ensureProtocol(r.src) })));
             }
             catch (error) {
                 logger_1.logger.error('Error fetching admin blackjack tables:', error);
@@ -715,6 +731,7 @@ async function initializeServices() {
                         logo_url: null,
                         ticker: null,
                         iframe_url: null,
+                        website_url: null,
                         sort_order: inserted,
                         enabled: true,
                     });
@@ -730,7 +747,7 @@ async function initializeServices() {
         });
         app.post('/api/admin/tables', async (req, res) => {
             try {
-                const { kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled } = req.body;
+                const { kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled } = req.body;
                 if (!kind || !name || !src) {
                     res.status(400).json({ error: 'Missing required fields: kind, name, src' });
                     return;
@@ -748,6 +765,7 @@ async function initializeServices() {
                     logo_url: logo_url ?? null,
                     ticker: ticker ?? null,
                     iframe_url: iframe_url ?? null,
+                    website_url: website_url ?? null,
                     sort_order: typeof sort_order === 'number' ? sort_order : 0,
                     enabled: enabled !== false,
                 });
@@ -771,6 +789,7 @@ async function initializeServices() {
                     logo_url: updates.logo_url,
                     ticker: updates.ticker,
                     iframe_url: updates.iframe_url,
+                    website_url: updates.website_url,
                     sort_order: updates.sort_order,
                     enabled: updates.enabled,
                 });
@@ -1341,6 +1360,14 @@ async function initializeServices() {
 // Graceful shutdown (schedulers ref set in initializeServices)
 let freerollScheduler = null;
 let tournamentScheduler = null;
+process.on('uncaughtException', (err) => {
+    console.error('[FATAL] Uncaught exception — keeping server alive:', err);
+    logger_1.logger.error('Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[FATAL] Unhandled rejection — keeping server alive:', reason);
+    logger_1.logger.error('Unhandled rejection:', reason);
+});
 process.on('SIGTERM', () => {
     logger_1.logger.info('SIGTERM received, shutting down gracefully');
     freerollScheduler?.stop();
@@ -1361,6 +1388,7 @@ process.on('SIGINT', () => {
 });
 // Start the server
 initializeServices().catch((error) => {
+    console.error('[FATAL] Failed to start server:', error);
     logger_1.logger.error('Failed to start server:', error);
     process.exit(1);
 });

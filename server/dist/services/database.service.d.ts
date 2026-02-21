@@ -134,6 +134,7 @@ export interface BlackjackTableRow {
     logo_url: string | null;
     ticker: string | null;
     iframe_url: string | null;
+    website_url: string | null;
     sort_order: number;
     enabled: boolean;
     created_at: Date;
@@ -297,7 +298,7 @@ export declare class DatabaseService {
     getBlackjackTables(enabledOnly?: boolean): Promise<BlackjackTableRow[]>;
     hasBlackjackTableByKindSrc(kind: string, src: string): Promise<boolean>;
     createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow>;
-    updateBlackjackTable(id: string, updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'sort_order' | 'enabled'>>): Promise<BlackjackTableRow | null>;
+    updateBlackjackTable(id: string, updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'website_url' | 'sort_order' | 'enabled'>>): Promise<BlackjackTableRow | null>;
     deleteBlackjackTable(id: string): Promise<boolean>;
 }
 //# sourceMappingURL=database.service.d.ts.map
