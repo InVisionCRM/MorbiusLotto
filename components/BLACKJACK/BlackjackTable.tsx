@@ -1082,14 +1082,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       )}
 
       <div className="relative z-10 flex flex-col" style={{ height: '100%' }}>
-        {/* Play Area — 2-row grid so dealer and player stay close together */}
-        <div className="grid grid-rows-2 gap-y-4 sm:gap-y-6 items-center justify-items-center flex-1 relative w-full z-10 min-h-[340px]">
-          {/* Dealer Area — row 1 */}
+        {/* Play Area — both dealer and player positioned from top so gap is fixed */}
+        <div className="flex-1 relative w-full z-10">
+          {/* Dealer Area — fixed offset from top */}
           {(() => {
             const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
             const dealerIsWinner = gameCompleteAndRevealed && gameResult === 'loss';
             return (
-              <div className="flex flex-row items-center justify-center">
+              <div className="absolute top-16 left-1/2 -translate-x-1/2 flex flex-row items-center">
                 <div className="flex gap-1 sm:gap-0">
                   {dealerHand.cards.map((card, index) => {
                     if (index >= visibleDealerCards) return null;
@@ -1134,8 +1134,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             );
           })()}
 
-          {/* Player Area — row 2 */}
-          <div className="flex flex-col gap-2 items-center justify-center">
+          {/* Player Area — fixed offset from top (gap below dealer is fixed, no bottom anchor) */}
+          <div className="absolute top-44 left-1/2 -translate-x-1/2 flex flex-col gap-2 items-center">
             <div className={`flex ${hasSplit ? 'gap-2' : 'gap-0'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
