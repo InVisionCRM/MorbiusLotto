@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import { BlackjackTopPlayersOverlay } from '@/components/BLACKJACK/BlackjackTopPlayersOverlay';
+import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
@@ -179,7 +180,7 @@ export default function BlackjackPage() {
   const [perfectPairsBet, setPerfectPairsBet] = useState(0);
 
   // Background preference state (persisted per wallet). imageSource/videoSource can be static id or API table UUID.
-  const { imageOptions, videoOptions, getThemeInfo } = useBlackjackTables();
+  const { imageOptions, videoOptions, getThemeInfo, getTableProfile } = useBlackjackTables();
   const [theme, setTheme] = useState<BlackjackThemeKind>('video');
   const [imageSource, setImageSource] = useState<string>(DEFAULT_BLACKJACK_IMAGE_ID);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -2742,9 +2743,25 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Top Players + Chat: grid 2-col on lg (Tournament card commented out) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        {/* Top Players + Chat + Table token: grid 3-col on lg (Tournament card commented out) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
           <BlackjackTopPlayersOverlay />
+          <div className="min-h-[280px] lg:min-h-[340px] flex flex-col min-w-0">
+            <ChatPanel
+              roomId="blackjack"
+              title="Blackjack Chat"
+              collapsible={false}
+              wsClient={wsClient}
+              wsConnected={wsConnected}
+              className="h-full min-h-0 flex-1"
+            />
+          </div>
+          <TableTokenProfileCard
+            themeKind={theme}
+            themeId={useVideoBackground ? videoSource : imageSource}
+            getThemeInfo={getThemeInfo}
+            getTableProfile={getTableProfile}
+          />
           {/* Tournament card - commented out
           <div
             className="min-h-[280px] lg:min-h-[340px] rounded-xl overflow-hidden flex flex-col min-w-0"
@@ -2802,16 +2819,6 @@ export default function BlackjackPage() {
             </div>
           </div>
           */}
-          <div className="min-h-[280px] lg:min-h-[340px] flex flex-col min-w-0">
-            <ChatPanel
-              roomId="blackjack"
-              title="Blackjack Chat"
-              collapsible={false}
-              wsClient={wsClient}
-              wsConnected={wsConnected}
-              className="h-full min-h-0 flex-1"
-            />
-          </div>
         </div>
 
         {/* Tournament Leaderboard (shown when in tournament) */}

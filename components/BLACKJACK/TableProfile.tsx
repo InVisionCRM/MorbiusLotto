@@ -1,10 +1,11 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { ExternalLink, ShoppingCart, BarChart3 } from 'lucide-react'
+import { ExternalLink, Copy } from 'lucide-react'
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 
 const SWAP_PAGE_URL = '/swap'
+const VIEW_ON_MORBIUS_BASE = 'https://morbius.io/geicko?address='
 
 interface DexScreenerPair {
   url?: string
@@ -78,12 +79,12 @@ export function TableProfile({
   const tokenPairs = pairs.filter(
     (p) => p.baseToken?.address?.toLowerCase() === normalizedAddress
   )
-  const uniqueUrls = Array.from(
-    new Map(tokenPairs.map((p) => [p.url ?? p.pairAddress, p]).filter(([, p]) => p.url)).values()
-  ).slice(0, 6)
   const logoUrl = logoUrlProp ?? tokenPairs[0]?.info?.imageUrl
   const name = tokenPairs[0]?.baseToken?.name ?? tokenSymbol ?? tickerProp ?? 'Token'
   const symbol = tickerProp ?? tokenPairs[0]?.baseToken?.symbol ?? tokenSymbol ?? '—'
+  const socials = tokenPairs[0]?.info?.socials ?? []
+  const websites = tokenPairs[0]?.info?.websites ?? []
+  const morbiusUrl = `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress)}`
 
   const panelStyle = {
     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
@@ -122,34 +123,58 @@ export function TableProfile({
             {description && (
               <p className="text-gray-400 text-sm max-w-md">{description}</p>
             )}
+            {tokenAddress && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-slate-500 text-xs">Contract</span>
+                <span className="font-mono text-xs text-slate-300 truncate max-w-[200px]" title={tokenAddress}>
+                  {tokenAddress}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(tokenAddress)}
+                  className="p-1.5 rounded-md text-slate-500 hover:text-cyan-400 hover:bg-slate-700/50 transition-colors"
+                  title="Copy address"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <a
-                href={buyLink}
-                target={buyLink.startsWith('http') ? '_blank' : undefined}
-                rel={buyLink.startsWith('http') ? 'noopener noreferrer' : undefined}
+                href={morbiusUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-sm font-medium transition-colors"
               >
-                <ShoppingCart className="w-4 h-4" />
-                Buy (Internet Money Swap)
+                <ExternalLink className="w-4 h-4" />
+                View on Morbius
               </a>
-              {uniqueUrls.slice(0, 4).map((pair) => (
+              {socials.map((s, i) => (
                 <a
-                  key={pair.url ?? pair.pairAddress}
-                  href={pair.url}
+                  key={`s-${i}`}
+                  href={s.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700/80 hover:bg-slate-600/80 text-cyan-300 text-sm border border-cyan-500/30 transition-colors"
                 >
-                  <BarChart3 className="w-4 h-4" />
-                  <span className="capitalize">{pair.dexId ?? 'Dex'}</span>
-                  {Array.isArray(pair.labels) && pair.labels[0] && (
-                    <span className="text-xs text-gray-400">{pair.labels[0]}</span>
-                  )}
+                  <span className="capitalize text-xs">{s.type || 'Social'}</span>
+                  <ExternalLink className="w-3 h-3 opacity-70" />
+                </a>
+              ))}
+              {websites.map((w, i) => (
+                <a
+                  key={`w-${i}`}
+                  href={w.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700/80 hover:bg-slate-600/80 text-cyan-300 text-sm border border-cyan-500/30 transition-colors"
+                >
+                  <span className="text-xs">{w.label || 'Website'}</span>
                   <ExternalLink className="w-3 h-3 opacity-70" />
                 </a>
               ))}
               {error && (
-                <span className="text-red-400/80 text-xs">Links unavailable</span>
+                <span className="text-red-400/80 text-xs">Token data unavailable</span>
               )}
             </div>
           </div>

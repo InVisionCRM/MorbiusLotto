@@ -30,6 +30,56 @@ import {
   BLACKJACK_VIDEO_BACKGROUNDS,
 } from '@/app/BLACKJACK/constants';
 import Image from 'next/image';
+import { Theme } from '@/lib/theme';
+import { TableProfile } from '@/components/BLACKJACK/TableProfile';
+
+/** In-game token profile card styling (matches TableTokenProfileCard) */
+const TOKEN_CARD_PANEL_STYLE = {
+  background: Theme.panel.sidebar.background,
+  boxShadow: Theme.panel.sidebar.boxShadow,
+  border: Theme.panel.sidebar.border,
+} as const;
+
+/** Live preview of the token profile card as it appears in-game. Updates as form fields change. */
+function TokenProfilePreviewCard({
+  tableName,
+  description,
+  tokenContract,
+  logoUrl,
+  ticker,
+}: {
+  tableName: string;
+  description: string;
+  tokenContract: string;
+  logoUrl: string;
+  ticker: string;
+}) {
+  const tokenAddress =
+    tokenContract.trim().startsWith('0x') && tokenContract.trim().length >= 42
+      ? tokenContract.trim()
+      : undefined;
+  return (
+    <div
+      className="rounded-xl overflow-hidden flex flex-col min-w-0 border border-slate-600"
+      style={TOKEN_CARD_PANEL_STYLE}
+    >
+      <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between shrink-0">
+        <h3 className={`${Theme.cyan.text.primary} font-semibold text-sm`}>Table token</h3>
+        <span className="text-slate-400 text-xs truncate max-w-[140px]" title={tableName || 'Table name'}>
+          {tableName || '—'}
+        </span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-auto p-2 min-h-[200px]">
+        <TableProfile
+          tokenAddress={tokenAddress}
+          description={description.trim() || undefined}
+          logoUrl={logoUrl.trim() || undefined}
+          ticker={ticker.trim() || undefined}
+        />
+      </div>
+    </div>
+  );
+}
 
 /** Canonical reference image for table viewpoint. New table images should match this perspective so chips and cards align. */
 const REFERENCE_VIEWPOINT_SRC = '/BlackJack/BrandedTable/High-Roller.png';
@@ -464,6 +514,16 @@ function AddTableDialog({
                 />
               </div>
             </div>
+            <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
+              <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
+              <TokenProfilePreviewCard
+                tableName={name}
+                description={description}
+                tokenContract={tokenContract}
+                logoUrl={logoUrl}
+                ticker={ticker}
+              />
+            </div>
             {kind === 'image' && files.length > 0 && (
               <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
                 <p className="text-[10px] text-slate-500 mb-1.5">Compare with reference (align table/card area)</p>
@@ -636,6 +696,16 @@ function EditTableDialog({
                   placeholder="morbius.io/geicko?… (optional)"
                 />
               </div>
+            </div>
+            <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
+              <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
+              <TokenProfilePreviewCard
+                tableName={name}
+                description={description}
+                tokenContract={tokenContract}
+                logoUrl={logoUrl}
+                ticker={ticker}
+              />
             </div>
           </div>
           <DialogFooter className="gap-2 pt-2 shrink-0 border-t border-slate-700/50">
