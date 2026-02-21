@@ -12,7 +12,7 @@ interface MemeSelectorProps {
 export const MemeSelector: React.FC<MemeSelectorProps> = ({ templates, selectedId, onSelect }) => {
   return (
     <div
-      className="p-4 rounded-xl"
+      className="p-3 sm:p-4 rounded-xl"
       style={{
         background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
         boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
@@ -20,12 +20,12 @@ export const MemeSelector: React.FC<MemeSelectorProps> = ({ templates, selectedI
       }}
     >
       <h2 className="text-lg font-bold mb-4 text-cyan-300">Choose Template</h2>
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 gap-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 gap-2 sm:gap-2 max-h-[280px] sm:max-h-[360px] md:max-h-[400px] overflow-y-auto custom-scrollbar">
         {templates.map((template) => (
           <button
             key={template.id}
             onClick={() => onSelect(template)}
-            className={`relative aspect-square rounded-lg overflow-hidden transition-all hover:scale-105 ${
+            className={`relative aspect-square rounded-lg overflow-hidden transition-all hover:scale-105 active:scale-95 touch-manipulation min-w-0 ${
               selectedId === template.id
                 ? 'ring-2 ring-cyan-400'
                 : ''

@@ -724,9 +724,9 @@ export default function MorbItPage() {
         outline: 'none',
         textAlign: 'center',
         whiteSpace: 'pre-wrap',
-        minWidth: '200px',
+        minWidth: 'min(200px, 85vw)',
         width: 'auto',
-        maxWidth: '90%',
+        maxWidth: 'min(90%, 100vw)',
         overflow: 'hidden',
         lineHeight: '1.2',
         zIndex: 20,
@@ -881,18 +881,18 @@ export default function MorbItPage() {
   return (
     <GlobalMainNav>
       <div
-        className="min-h-screen text-white p-4 md:p-8 font-sans pt-4 md:pt-2"
+        className="min-h-screen text-white p-3 sm:p-4 md:p-8 font-sans pt-4 md:pt-2"
         style={{
           background: 'linear-gradient(145deg, rgb(10, 15, 20), rgb(16, 26, 35))',
         }}
       >
-        <main className="max-w-7xl mx-auto space-y-6 pt-4">
+        <main className="max-w-7xl mx-auto space-y-4 sm:space-y-6 pt-2 sm:pt-4">
 
         {/* 2-Column Grid: Meme Selector + Canvas (single column on mobile) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
 
           {/* Meme Selector */}
-          <div className="order-1 space-y-4">
+          <div className="order-1 space-y-3 sm:space-y-4">
             <MemeSelector
                 templates={MEME_TEMPLATES}
                 selectedId={selectedMeme.id}
@@ -901,7 +901,7 @@ export default function MorbItPage() {
 
             {/* Upload Image Section */}
             <div
-              className="p-4 rounded-xl"
+              className="p-3 sm:p-4 rounded-xl"
               style={{
                 background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
                 boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
@@ -919,7 +919,7 @@ export default function MorbItPage() {
               />
               <label
                 htmlFor="image-upload"
-                className="flex items-center justify-center gap-2 w-full text-white font-bold py-3 px-6 rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                className="flex items-center justify-center gap-2 w-full text-white font-bold py-3 px-6 rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer touch-manipulation min-h-[44px]"
                 style={{
                   background: 'linear-gradient(145deg, rgba(139, 92, 246, 0.8), rgba(124, 58, 237, 0.8))',
                   boxShadow: 'inset 3px 3px 6px rgba(0, 0, 0, 0.3), inset -3px -3px 6px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(139, 92, 246, 0.2)',
@@ -942,7 +942,7 @@ export default function MorbItPage() {
               {/* Add Text Button - Top Right */}
               <button
                 onClick={addLayer}
-                className="absolute -top-2 -right-2 z-40 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-all hover:scale-105 flex items-center gap-1"
+                className="absolute top-1 right-1 sm:-top-2 sm:-right-2 z-40 text-white text-xs font-bold px-3 py-2 sm:py-1.5 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-1 min-h-[36px] touch-manipulation"
                 style={{
                   background: 'linear-gradient(145deg, rgba(6, 182, 212, 0.8), rgba(8, 145, 178, 0.8))',
                   boxShadow: '0 4px 12px rgba(6, 182, 212, 0.3)',
@@ -956,7 +956,7 @@ export default function MorbItPage() {
               </button>
               <div
                 ref={containerRef}
-                className="rounded-xl flex justify-center items-center min-h-[400px] relative group overflow-hidden"
+                className="rounded-xl flex justify-center items-center min-h-[260px] sm:min-h-[360px] md:min-h-[400px] relative group overflow-hidden"
                 style={{
                   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
                   boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
@@ -980,8 +980,8 @@ export default function MorbItPage() {
                             onPointerUp={handlePointerUp}
                             onPointerLeave={handlePointerUp}
                             onDoubleClick={handleDoubleClick}
-                            className="max-w-full h-auto shadow-2xl rounded-sm object-contain max-h-[70vh] touch-none cursor-default"
-                            style={{ maxWidth: '100%', maxHeight: '70vh' }}
+                            className="max-w-full h-auto shadow-2xl rounded-sm object-contain max-h-[55vh] sm:max-h-[70vh] touch-none cursor-default"
+                            style={{ maxWidth: '100%' }}
                         />
                         {renderEditingOverlay()}
                         {renderFloatingToolbar()}
@@ -990,12 +990,12 @@ export default function MorbItPage() {
               </div>
             </div>
 
-            {/* Action Buttons - 4 Column Grid */}
-            <div className="grid grid-cols-4 gap-2">
+            {/* Action Buttons — 2x2 on mobile for larger touch targets, 4 cols on sm+ */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2">
                 <button
                     onClick={saveMeme}
                     disabled={isSaving}
-                    className="flex items-center justify-center gap-1.5 text-white font-bold py-2.5 px-3 rounded-xl transition-all hover:scale-105 active:scale-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center justify-center gap-1.5 text-white font-bold py-3 sm:py-2.5 px-3 rounded-xl transition-all hover:scale-105 active:scale-95 text-sm min-h-[44px] sm:min-h-0 disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{
                       background: 'linear-gradient(145deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.8))',
                       boxShadow: 'inset 3px 3px 6px rgba(0, 0, 0, 0.3), inset -3px -3px 6px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(34, 197, 94, 0.2)',
@@ -1014,7 +1014,7 @@ export default function MorbItPage() {
                 </button>
                 <button
                     onClick={shareToTwitter}
-                    className="flex items-center justify-center gap-1.5 text-white font-bold py-2.5 px-3 rounded-xl transition-all hover:scale-105 active:scale-95 text-sm"
+                    className="flex items-center justify-center gap-1.5 text-white font-bold py-3 sm:py-2.5 px-3 rounded-xl transition-all hover:scale-105 active:scale-95 text-sm min-h-[44px] sm:min-h-0"
                     style={{
                       background: 'linear-gradient(145deg, rgba(29, 161, 242, 0.8), rgba(29, 161, 242, 0.6))',
                       boxShadow: 'inset 3px 3px 6px rgba(0, 0, 0, 0.3), inset -3px -3px 6px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(29, 161, 242, 0.2)',
@@ -1026,7 +1026,7 @@ export default function MorbItPage() {
                 </button>
                 <button
                     onClick={copyMeme}
-                    className="flex items-center justify-center gap-1.5 text-white font-bold py-2.5 px-3 rounded-xl transition-all hover:scale-105 active:scale-95 text-sm"
+                    className="flex items-center justify-center gap-1.5 text-white font-bold py-3 sm:py-2.5 px-3 rounded-xl transition-all hover:scale-105 active:scale-95 text-sm min-h-[44px] sm:min-h-0"
                     style={{
                       background: 'linear-gradient(145deg, rgba(6, 182, 212, 0.8), rgba(8, 145, 178, 0.8))',
                       boxShadow: 'inset 3px 3px 6px rgba(0, 0, 0, 0.3), inset -3px -3px 6px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(6, 182, 212, 0.2)',
@@ -1038,7 +1038,7 @@ export default function MorbItPage() {
                 </button>
                 <button
                     onClick={downloadMeme}
-                    className="flex items-center justify-center gap-1.5 text-white font-bold py-2.5 px-3 rounded-xl transition-all hover:scale-105 active:scale-95 text-sm"
+                    className="flex items-center justify-center gap-1.5 text-white font-bold py-3 sm:py-2.5 px-3 rounded-xl transition-all hover:scale-105 active:scale-95 text-sm min-h-[44px] sm:min-h-0"
                     style={{
                       background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
                       boxShadow: 'inset 3px 3px 6px rgba(0, 0, 0, 0.3), inset -3px -3px 6px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.2)',
@@ -1055,14 +1055,14 @@ export default function MorbItPage() {
 
         {/* Community Meme Gallery */}
         <div
-          className="mt-8 p-6 rounded-xl"
+          className="mt-6 sm:mt-8 p-4 sm:p-6 rounded-xl"
           style={{
             background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(25, 35, 45))',
             boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)',
             border: '1px solid rgba(6, 182, 212, 0.2)',
           }}
         >
-          <h2 className="text-xl font-bold mb-4 text-cyan-300 flex items-center gap-2">
+          <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-cyan-300 flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
@@ -1141,7 +1141,7 @@ export default function MorbItPage() {
             <p className="text-gray-300 mb-6">
               You have unsaved changes. Would you like to save your meme before leaving?
             </p>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={async () => {
                   await saveMeme();
@@ -1150,7 +1150,7 @@ export default function MorbItPage() {
                     window.location.href = pendingNavigation;
                   }
                 }}
-                className="flex-1 py-2.5 px-4 rounded-lg font-bold text-white transition-all hover:scale-105"
+                className="flex-1 py-3 sm:py-2.5 px-4 rounded-lg font-bold text-white transition-all hover:scale-105 min-h-[44px]"
                 style={{
                   background: 'linear-gradient(145deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.8))',
                   border: '1px solid rgba(34, 197, 94, 0.4)',
@@ -1166,7 +1166,7 @@ export default function MorbItPage() {
                     window.location.href = pendingNavigation;
                   }
                 }}
-                className="flex-1 py-2.5 px-4 rounded-lg font-bold text-white transition-all hover:scale-105"
+                className="flex-1 py-3 sm:py-2.5 px-4 rounded-lg font-bold text-white transition-all hover:scale-105 min-h-[44px]"
                 style={{
                   background: 'linear-gradient(145deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.8))',
                   border: '1px solid rgba(239, 68, 68, 0.4)',
@@ -1179,7 +1179,7 @@ export default function MorbItPage() {
                   setShowExitModal(false);
                   setPendingNavigation(null);
                 }}
-                className="flex-1 py-2.5 px-4 rounded-lg font-bold text-gray-300 transition-all hover:scale-105"
+                className="flex-1 py-3 sm:py-2.5 px-4 rounded-lg font-bold text-gray-300 transition-all hover:scale-105 min-h-[44px]"
                 style={{
                   background: 'linear-gradient(145deg, rgb(35, 45, 55), rgb(25, 35, 45))',
                   border: '1px solid rgba(60, 60, 60, 0.5)',

@@ -1083,7 +1083,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
       <div className="relative z-10 flex flex-col flex-1 min-h-0" style={{ height: '100%' }}>
         {/* Play Area — dealer and player in flow, centered as a group with gap between rows */}
-        <div className="flex-1 flex flex-col justify-center items-center gap-8 sm:gap-10 min-h-0">
+        <div className="flex-1 flex flex-col justify-center items-center gap-2 sm:gap-3 min-h-0">
           {/* Dealer row */}
           {(() => {
             const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
@@ -1134,8 +1134,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             );
           })()}
 
-          {/* Player row */}
-          <div className="flex flex-col gap-2 items-center justify-center">
+          {/* Player row — pulled up 30px so cards don't overlay chip stack */}
+          <div className="flex flex-col gap-2 items-center justify-center -mt-[30px]">
             <div className={`flex ${hasSplit ? 'gap-2' : 'gap-0'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
@@ -1145,7 +1145,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   <div
                     key={`hand-container-${handIndex}`}
                     className={`flex flex-col items-center transition-all duration-300 ${
-                      hasSplit ? 'px-2 py-1 sm:px-4 sm:py-2 rounded-xl' : ''
+                      hasSplit ? 'px-2 py-1 sm:px-4 sm:py-2 rounded-md' : ''
                     }`}
                     style={hasSplit ? {
                       background: isActiveHand
