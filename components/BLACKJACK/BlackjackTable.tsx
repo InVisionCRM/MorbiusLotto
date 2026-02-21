@@ -1686,13 +1686,13 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 );
               });
             })()}
-            {/* Total Bet Amount Display */}
+            {/* Total Bet Amount Display — below chip stack */}
             <div
               className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
                 chipAnimationState !== 'none' ? 'opacity-0' : ''
               }`}
               style={{
-                top: `-20px`,
+                bottom: `-24px`,
                 transition: 'opacity 0.3s ease-out',
               }}
             >
