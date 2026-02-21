@@ -1135,7 +1135,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           })()}
 
           {/* Player Area */}
-          <div className="absolute bottom-36 sm:bottom-55 left-1/2 -translate-x-1/2 flex flex-col gap-2 sm:gap-4 items-center">
+          <div className="absolute bottom-24 sm:bottom-36 left-1/2 -translate-x-1/2 flex flex-col gap-2 sm:gap-4 items-center">
             <div className={`flex ${hasSplit ? 'gap-2 sm:gap-8' : 'gap-4'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
@@ -1169,7 +1169,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                     {hasSplit && (
                       <div className="mb-0 flex items-center gap-1 sm:gap-2">
                         <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
-                          isActiveHand ? 'text-cyan-400' : 'text-white/40'
+                          isActiveHand ? 'text-cyan-500' : 'text-white/40'
                         }`}>
                           Hand {handIndex + 1}
                         </span>
