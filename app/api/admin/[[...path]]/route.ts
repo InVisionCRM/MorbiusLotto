@@ -70,6 +70,9 @@ async function proxy(
     });
 
     const text = await res.text();
+    if (res.status === 204) {
+      return new NextResponse(null, { status: 204 });
+    }
     let data: unknown;
     try {
       data = text ? JSON.parse(text) : null;

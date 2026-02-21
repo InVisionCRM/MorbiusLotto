@@ -733,7 +733,7 @@ async function initializeServices() {
 
     app.post('/api/admin/tables', async (req, res) => {
       try {
-        const { kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, sort_order, enabled } = req.body;
+        const { kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled } = req.body;
         if (!kind || !name || !src) {
           res.status(400).json({ error: 'Missing required fields: kind, name, src' });
           return;
@@ -751,6 +751,7 @@ async function initializeServices() {
           logo_url: logo_url ?? null,
           ticker: ticker ?? null,
           iframe_url: iframe_url ?? null,
+          website_url: website_url ?? null,
           sort_order: typeof sort_order === 'number' ? sort_order : 0,
           enabled: enabled !== false,
         });
@@ -774,6 +775,7 @@ async function initializeServices() {
           logo_url: updates.logo_url,
           ticker: updates.ticker,
           iframe_url: updates.iframe_url,
+          website_url: updates.website_url,
           sort_order: updates.sort_order,
           enabled: updates.enabled,
         });

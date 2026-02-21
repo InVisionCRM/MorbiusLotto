@@ -38,6 +38,8 @@ export interface TableProfileProps {
   logoUrl?: string
   /** Optional ticker/symbol override (overrides DexScreener when set) */
   ticker?: string
+  /** Optional website URL (admin-configured, shown as "Website" link) */
+  websiteUrl?: string
 }
 
 export function TableProfile({
@@ -47,6 +49,7 @@ export function TableProfile({
   buyLink = SWAP_PAGE_URL,
   logoUrl: logoUrlProp,
   ticker: tickerProp,
+  websiteUrl: websiteUrlProp,
 }: TableProfileProps) {
   const [data, setData] = useState<DexScreenerTokenResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -149,6 +152,17 @@ export function TableProfile({
                 <ExternalLink className="w-4 h-4" />
                 View on Morbius
               </a>
+              {websiteUrlProp && (
+                <a
+                  href={websiteUrlProp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700/80 hover:bg-slate-600/80 text-cyan-300 text-sm border border-cyan-500/30 transition-colors"
+                >
+                  <span className="text-xs">Website</span>
+                  <ExternalLink className="w-3 h-3 opacity-70" />
+                </a>
+              )}
               {socials.map((s, i) => (
                 <a
                   key={`s-${i}`}

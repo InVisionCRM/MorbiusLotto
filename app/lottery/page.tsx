@@ -51,8 +51,67 @@ type ContractTicket = {
   isFreeTicket: boolean;
 };
 
+function LotteryIntroScreen({ onComplete }: { onComplete: () => void }) {
+  useEffect(() => {
+    const duration = 2500;
+    const fallbackTimeout = setTimeout(() => {
+      setTimeout(onComplete, 200);
+    }, duration);
+    return () => clearTimeout(fallbackTimeout);
+  }, [onComplete]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50"
+      style={{
+        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(10, 15, 20))',
+      }}
+      suppressHydrationWarning
+    >
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
+        <div className="relative flex gap-1 shrink-0">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-purple-700 flex items-center justify-center text-white text-sm font-bold"
+              style={{
+                animation: 'lotteryBallIn 0.4s ease-out both',
+                animationDelay: `${i * 0.08}s`,
+              }}
+            >
+              {i + 1}
+            </div>
+          ))}
+        </div>
+        <div className="text-center shrink-0">
+          <div className="text-white text-xl font-bold animate-pulse mb-2">
+            DRAWING NUMBERS...
+          </div>
+          <div className="text-gray-400 text-sm">
+            Preparing lottery
+          </div>
+        </div>
+      </div>
+      <style jsx>{`
+        @keyframes lotteryBallIn {
+          0% {
+            transform: scale(0);
+            opacity: 0;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function LotteryPage() {
   const { address } = useAccount();
+  const [showIntro, setShowIntro] = useState(true);
+  const handleIntroComplete = useCallback(() => setShowIntro(false), []);
   const publicClient = usePublicClient();
   const [selectedTickets, setSelectedTickets] = useState<number[][]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -347,6 +406,10 @@ export default function LotteryPage() {
 
   // Check if contract is deployed
   const isContractDeployed = (LOTTERY_ADDRESS as string).toLowerCase() !== '0x0000000000000000000000000000000000000000'
+
+  if (showIntro) {
+    return <LotteryIntroScreen onComplete={handleIntroComplete} />;
+  }
 
   if (!isContractDeployed) {
     return (

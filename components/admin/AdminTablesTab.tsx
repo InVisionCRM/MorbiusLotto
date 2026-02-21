@@ -47,12 +47,14 @@ function TokenProfilePreviewCard({
   tokenContract,
   logoUrl,
   ticker,
+  websiteUrl,
 }: {
   tableName: string;
   description: string;
   tokenContract: string;
   logoUrl: string;
   ticker: string;
+  websiteUrl: string;
 }) {
   const tokenAddress =
     tokenContract.trim().startsWith('0x') && tokenContract.trim().length >= 42
@@ -75,6 +77,7 @@ function TokenProfilePreviewCard({
           description={description.trim() || undefined}
           logoUrl={logoUrl.trim() || undefined}
           ticker={ticker.trim() || undefined}
+          websiteUrl={websiteUrl.trim() || undefined}
         />
       </div>
     </div>
@@ -105,6 +108,7 @@ export interface BlackjackTableRow {
   logo_url: string | null;
   ticker: string | null;
   iframe_url: string | null;
+  website_url: string | null;
   sort_order: number;
   enabled: boolean;
   created_at?: string;
@@ -369,6 +373,7 @@ function AddTableDialog({
   const [logoUrl, setLogoUrl] = useState('');
   const [ticker, setTicker] = useState('');
   const [iframeUrl, setIframeUrl] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [files, setFiles] = useState<File[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -401,6 +406,7 @@ function AddTableDialog({
           logo_url: logoUrl.trim() || null,
           ticker: ticker.trim() || null,
           iframe_url: iframeUrl.trim() || null,
+          website_url: websiteUrl.trim() || null,
           enabled: true,
         }),
       });
@@ -415,6 +421,7 @@ function AddTableDialog({
       setLogoUrl('');
       setTicker('');
       setIframeUrl('');
+      setWebsiteUrl('');
       setFiles([]);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed');
@@ -514,6 +521,15 @@ function AddTableDialog({
                 />
               </div>
             </div>
+            <div>
+              <Label className="text-[11px] text-slate-400">Website URL</Label>
+              <Input
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                placeholder="https://… (optional)"
+              />
+            </div>
             <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
               <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
               <TokenProfilePreviewCard
@@ -522,6 +538,7 @@ function AddTableDialog({
                 tokenContract={tokenContract}
                 logoUrl={logoUrl}
                 ticker={ticker}
+                websiteUrl={websiteUrl}
               />
             </div>
             {kind === 'image' && files.length > 0 && (
@@ -581,6 +598,7 @@ function EditTableDialog({
   const [logoUrl, setLogoUrl] = useState(row.logo_url ?? '');
   const [ticker, setTicker] = useState(row.ticker ?? '');
   const [iframeUrl, setIframeUrl] = useState(row.iframe_url ?? '');
+  const [websiteUrl, setWebsiteUrl] = useState(row.website_url ?? '');
   const [enabled, setEnabled] = useState(row.enabled);
 
   useEffect(() => {
@@ -590,6 +608,7 @@ function EditTableDialog({
     setLogoUrl(row.logo_url ?? '');
     setTicker(row.ticker ?? '');
     setIframeUrl(row.iframe_url ?? '');
+    setWebsiteUrl(row.website_url ?? '');
     setEnabled(row.enabled);
   }, [row]);
 
@@ -607,6 +626,7 @@ function EditTableDialog({
           logo_url: logoUrl.trim() || null,
           ticker: ticker.trim() || null,
           iframe_url: iframeUrl.trim() || null,
+          website_url: websiteUrl.trim() || null,
           enabled,
         }),
       });
@@ -697,6 +717,15 @@ function EditTableDialog({
                 />
               </div>
             </div>
+            <div>
+              <Label className="text-[11px] text-slate-400">Website URL</Label>
+              <Input
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                placeholder="https://… (optional)"
+              />
+            </div>
             <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
               <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
               <TokenProfilePreviewCard
@@ -705,6 +734,7 @@ function EditTableDialog({
                 tokenContract={tokenContract}
                 logoUrl={logoUrl}
                 ticker={ticker}
+                websiteUrl={websiteUrl}
               />
             </div>
           </div>
@@ -743,7 +773,13 @@ function DeleteConfirmDialog({
         method: 'DELETE',
         headers: { 'x-admin-wallet': address },
       });
-      if (!res.ok) throw new Error('Delete failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const msg = (data && typeof data === 'object' && 'error' in data && typeof (data as { error: unknown }).error === 'string')
+          ? (data as { error: string }).error
+          : `Delete failed (${res.status})`;
+        throw new Error(msg);
+      }
       onSuccess();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed');

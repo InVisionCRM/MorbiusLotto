@@ -54,6 +54,7 @@ export function TableTokenProfileCard({
           description={profile?.description ?? undefined}
           logoUrl={profile?.logo_url ?? undefined}
           ticker={profile?.ticker ?? undefined}
+          websiteUrl={profile?.website_url ?? undefined}
         />
       </div>
     </div>

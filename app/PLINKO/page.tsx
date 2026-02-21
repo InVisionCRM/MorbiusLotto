@@ -54,95 +54,56 @@ interface IntroScreenProps {
 }
 
 function IntroScreen({ onComplete }: IntroScreenProps) {
-  const [progress, setProgress] = useState(0);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
   useEffect(() => {
-    const duration = 3000; // 3 seconds (reduced from 5)
-    const interval = 50; // Update every 50ms
-    const steps = duration / interval;
-    let currentStep = 0;
-
-    const progressInterval = setInterval(() => {
-      currentStep++;
-      const newProgress = (currentStep / steps) * 100;
-      setProgress(Math.min(newProgress, 100));
-
-      if (currentStep >= steps) {
-        clearInterval(progressInterval);
-        setTimeout(onComplete, 200); // Small delay after completion
-      }
-    }, interval);
-
-    // Fallback: ensure completion after maximum 5 seconds
+    const duration = 2500;
     const fallbackTimeout = setTimeout(() => {
-      clearInterval(progressInterval);
-      setProgress(100);
       setTimeout(onComplete, 200);
-    }, 5000);
-
-    // Start video playback (optional - don't block on it)
-    if (videoRef.current) {
-      videoRef.current.play().catch(() => {
-        // Video failed to play, continue with progress bar only
-        console.log('Intro video failed to play, continuing with progress bar');
-      });
-    }
-
-    return () => {
-      clearInterval(progressInterval);
-      clearTimeout(fallbackTimeout);
-    };
+    }, duration);
+    return () => clearTimeout(fallbackTimeout);
   }, [onComplete]);
 
   return (
-    <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-50">
-      {/* Video Background */}
-      <video
-        ref={videoRef}
-        className="absolute inset-0 w-full h-full object-cover"
-        muted
-        playsInline
-        preload="auto"
-        onError={() => {
-          console.log('Intro video failed to load, continuing with progress bar only');
-        }}
-      >
-        <source src="/PLINKO/Intro.mp4" type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
-
-      {/* Overlay Content */}
-      <div className="relative z-10 flex flex-col justify-between h-full py-12">
-        {/* Empty top space */}
-        <div></div>
-
-        {/* Progress Bar at Bottom */}
-        <div className="w-80 max-w-sm mx-auto">
-          <div className="bg-white/20 rounded-full h-3 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 rounded-full transition-all duration-75 ease-out"
-              style={{ width: `${progress}%` }}
-            />
+    <div
+      className="fixed inset-0 z-50"
+      style={{
+        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(10, 15, 20))',
+      }}
+      suppressHydrationWarning
+    >
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
+        {/* Animated ball */}
+        <div className="relative w-20 h-20 shrink-0">
+          <div
+            className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500 to-purple-700 flex items-center justify-center shadow-lg"
+            style={{
+              animation: 'plinkoBallDrop 0.6s ease-out both',
+              boxShadow: '0 4px 20px rgba(6, 182, 212, 0.4)',
+            }}
+          >
+            <span className="text-white text-2xl font-bold">●</span>
           </div>
-          <div className="text-center mt-4 space-y-2">
-            <span className="text-white text-lg font-semibold">
-              Loading... {Math.round(progress)}%
-            </span>
-            <div>
-              <button
-                onClick={onComplete}
-                className="text-white/70 text-sm hover:text-white underline transition-colors"
-              >
-                Skip Intro
-              </button>
-            </div>
+        </div>
+        <div className="text-center shrink-0">
+          <div className="text-white text-xl font-bold animate-pulse mb-2">
+            DROPPING BALLS...
+          </div>
+          <div className="text-gray-400 text-sm">
+            Preparing Plinko
           </div>
         </div>
       </div>
-
-      {/* Vignette Effect */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30 pointer-events-none" />
+      <style jsx>{`
+        @keyframes plinkoBallDrop {
+          0% {
+            transform: translateY(-80px);
+            opacity: 0;
+          }
+          100% {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   );
 }

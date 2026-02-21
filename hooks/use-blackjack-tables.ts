@@ -17,6 +17,7 @@ export interface TableOption {
   logo_url?: string | null;
   ticker?: string | null;
   iframe_url?: string | null;
+  website_url?: string | null;
 }
 
 export interface TableProfileData {
@@ -25,6 +26,7 @@ export interface TableProfileData {
   logo_url?: string | null;
   ticker?: string | null;
   iframe_url?: string | null;
+  website_url?: string | null;
 }
 
 export interface TableThemeInfo {
@@ -56,7 +58,7 @@ export function useBlackjackTables() {
     setLoading(true);
     fetch(`${apiBase}/api/blackjack/tables?enabledOnly=true`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
-      .then((rows: Array<{ id: string; kind: string; name: string; src: string; description?: string; token_contract_address?: string; logo_url?: string; ticker?: string; iframe_url?: string }>) => {
+      .then((rows: Array<{ id: string; kind: string; name: string; src: string; description?: string; token_contract_address?: string; logo_url?: string; ticker?: string; iframe_url?: string; website_url?: string }>) => {
         if (cancelled || !Array.isArray(rows)) return;
         const normalizeSrc = (src: string) => {
           if (!src) return src;
@@ -72,6 +74,7 @@ export function useBlackjackTables() {
           logo_url: r.logo_url ?? null,
           ticker: r.ticker ?? null,
           iframe_url: r.iframe_url ?? null,
+          website_url: r.website_url ?? null,
         });
         const images = rows.filter((r) => r.kind === 'image').map(mapRow);
         const videos = rows.filter((r) => r.kind === 'video').map(mapRow);
@@ -119,6 +122,7 @@ export function useBlackjackTables() {
         logo_url: row.logo_url ?? null,
         ticker: row.ticker ?? null,
         iframe_url: row.iframe_url ?? null,
+        website_url: row.website_url ?? null,
       };
     },
     [imageOptions, videoOptions]

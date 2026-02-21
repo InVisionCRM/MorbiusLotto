@@ -186,10 +186,69 @@ function formatCountdown(target: number | null) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+function KenoIntroScreen({ onComplete }: { onComplete: () => void }) {
+  useEffect(() => {
+    const duration = 2500
+    const fallbackTimeout = setTimeout(() => {
+      setTimeout(onComplete, 200)
+    }, duration)
+    return () => clearTimeout(fallbackTimeout)
+  }, [onComplete])
+
+  return (
+    <div
+      className="fixed inset-0 z-50"
+      style={{
+        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(10, 15, 20))',
+      }}
+      suppressHydrationWarning
+    >
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
+        <div className="grid grid-cols-5 gap-1 shrink-0">
+          {[...Array(10)].map((_, i) => (
+            <div
+              key={i}
+              className="w-8 h-8 rounded bg-gradient-to-br from-cyan-500 to-purple-700 flex items-center justify-center text-white text-xs font-bold"
+              style={{
+                animation: 'kenoCellIn 0.35s ease-out both',
+                animationDelay: `${i * 0.05}s`,
+              }}
+            >
+              {i + 1}
+            </div>
+          ))}
+        </div>
+        <div className="text-center shrink-0">
+          <div className="text-white text-xl font-bold animate-pulse mb-2">
+            PICKING NUMBERS...
+          </div>
+          <div className="text-gray-400 text-sm">
+            Preparing Keno
+          </div>
+        </div>
+      </div>
+      <style jsx>{`
+        @keyframes kenoCellIn {
+          0% {
+            transform: scale(0);
+            opacity: 0;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 export default function KenoPage() {
   const { address, isConnected } = useAccount()
   const publicClient = usePublicClient()
 
+  const [showIntro, setShowIntro] = useState(true)
+  const handleIntroComplete = useCallback(() => setShowIntro(false), [])
 
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([])
   const [spotSize, setSpotSize] = useState(8)
@@ -663,6 +722,10 @@ export default function KenoPage() {
   useEffect(() => {
     if (buyConfirmError) toast.error(buyConfirmError.message || 'Transaction failed.')
   }, [buyConfirmError])
+
+  if (showIntro) {
+    return <KenoIntroScreen onComplete={handleIntroComplete} />
+  }
 
   return (
     <div 
