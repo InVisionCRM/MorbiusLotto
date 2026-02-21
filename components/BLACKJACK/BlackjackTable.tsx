@@ -1083,13 +1083,13 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
       <div className="relative z-10 flex flex-col flex-1 min-h-0" style={{ height: '100%' }}>
         {/* Play Area — dealer and player in flow, centered as a group with gap between rows */}
-        <div className="flex-1 flex flex-col justify-center items-center gap-2 sm:gap-3 min-h-0 -mt-[30px]">
-          {/* Dealer row */}
+        <div className="flex-1 flex flex-col justify-center items-center gap-2 sm:gap-3 min-h-0">
+          {/* Dealer row — shifted up 30px */}
           {(() => {
             const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
             const dealerIsWinner = gameCompleteAndRevealed && gameResult === 'loss';
             return (
-              <div className="flex flex-row items-center justify-center">
+              <div className="flex flex-row items-center justify-center -mt-[30px]">
                 <div className="flex gap-1 sm:gap-0">
                   {dealerHand.cards.map((card, index) => {
                     if (index >= visibleDealerCards) return null;
