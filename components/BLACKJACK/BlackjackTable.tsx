@@ -1899,8 +1899,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-        {/* Reserve - bottom right corner (hidden on mobile; shown in GlobalMainNav collapsed bar) */}
-        <div className="absolute bottom-2 right-2 z-50 pointer-events-auto hidden md:flex">
+        {/* Reserve - bottom right corner */}
+        <div className="absolute bottom-2 right-2 z-50 pointer-events-auto flex">
           <button
             type="button"
             onClick={onOpenDepositModal}
