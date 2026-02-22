@@ -7,6 +7,7 @@ import { useAccount, useSignTypedData } from 'wagmi';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { PokerTableState } from '@/lib/websocket-client';
+import { defaultPokerLayout, getChatRect } from '@/lib/poker-layout';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer';
 import { PokerTable } from '@/components/poker/PokerTable';
@@ -126,47 +127,64 @@ export default function PokerTablePage() {
       .catch((err) => toast.error((err as Error).message));
   }, [tableId, router]);
 
+  const chatRect = getChatRect(defaultPokerLayout);
+
   return (
     <GlobalMainNav page="home">
-      <div
-        className="min-h-screen text-white relative bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: 'url(/POKER/Pokerbg.jpg)' }}
-      >
-        <div className="absolute inset-0 bg-black/40" />
-        <div className="relative w-full max-w-5xl mx-auto px-4 py-4">
-          <Link href="/poker" className="text-cyan-400 hover:text-cyan-300 text-sm mb-2 inline-block z-10 relative">
-            ← Lobby
-          </Link>
-
-          {error && (
-            <p className="text-red-400 mb-4 relative z-10">{error}</p>
-          )}
-
-          {state && (
-            <PokerTable
-              state={state}
-              currentPlayerAddress={normalizedAddress}
-              onFold={handleFold}
-              onCheck={handleCheck}
-              onCall={handleCall}
-              onBet={handleBet}
-              onRaise={handleRaise}
-              onLeave={handleLeave}
-            />
-          )}
-
-          {!state && !error && (
-            <p className="text-slate-300 relative z-10">Loading table...</p>
-          )}
-
-          <div className="fixed right-4 top-24 z-20 max-w-xs">
-            <ChatPanel
-              roomId={`poker:table:${tableId}`}
-              title="Table chat"
-              wsClient={wsClient ?? undefined}
-              wsConnected={wsConnected}
-              collapsible
-            />
+      <div className="min-h-screen text-white flex items-center justify-center bg-slate-950">
+        {/* Canvas: true aspect ratio of Pokerbg.jpg, no scaling */}
+        <div className="relative max-w-full max-h-screen w-fit">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/POKER/Pokerbg.jpg"
+            alt=""
+            className="block max-w-full max-h-[100vh] w-auto h-auto object-contain pointer-events-none"
+          />
+          <div className="absolute inset-0 bg-black/40 pointer-events-none" aria-hidden />
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute inset-0 pointer-events-auto">
+              <Link href="/poker" className="absolute left-2 top-2 z-20 text-cyan-400 hover:text-cyan-300 text-sm">
+                ← Lobby
+              </Link>
+              {error && (
+                <p className="absolute left-2 top-8 z-20 text-red-400 text-sm">{error}</p>
+              )}
+              {state && (
+                <PokerTable
+                  layout={defaultPokerLayout}
+                  state={state}
+                  currentPlayerAddress={normalizedAddress}
+                  onFold={handleFold}
+                  onCheck={handleCheck}
+                  onCall={handleCall}
+                  onBet={handleBet}
+                  onRaise={handleRaise}
+                  onLeave={handleLeave}
+                />
+              )}
+              {!state && !error && (
+                <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-slate-300">Loading table...</p>
+              )}
+              {chatRect && (
+                <div
+                  className="absolute z-20 flex flex-col min-h-0"
+                  style={{
+                    left: `${chatRect.x}%`,
+                    top: `${chatRect.y}%`,
+                    width: `${chatRect.width}%`,
+                    height: `${chatRect.height}%`,
+                  }}
+                >
+                  <ChatPanel
+                    roomId={`poker:table:${tableId}`}
+                    title="Table chat"
+                    wsClient={wsClient ?? undefined}
+                    wsConnected={wsConnected}
+                    collapsible
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <Footer />

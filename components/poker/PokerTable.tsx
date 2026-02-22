@@ -5,24 +5,11 @@ import { PokerSeat } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
 import { PokerActions } from './PokerActions';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
-
-/** Place 6 seats around a horizontal oval. Position 0 = bottom center (current player), then clockwise. */
-const OVAL_POSITIONS = [
-  { x: 50, y: 90 },   // 0 bottom center (you)
-  { x: 82, y: 70 },   // 1 bottom-right
-  { x: 92, y: 50 },   // 2 right
-  { x: 82, y: 30 },   // 3 top-right
-  { x: 50, y: 10 },   // 4 top center
-  { x: 18, y: 30 },   // 5 top-left
-  { x: 8, y: 50 },    // 6 left (fallback)
-];
-
-function getSeatPosition(seatIndex: number, mySeatIndex: number, maxSeats: number) {
-  const p = (seatIndex - mySeatIndex + maxSeats) % maxSeats;
-  return OVAL_POSITIONS[p] ?? OVAL_POSITIONS[0];
-}
+import type { PokerLayout } from '@/lib/poker-layout';
+import { getTableRect, getSeatRect, getCommunityRect, getActionBarRect } from '@/lib/poker-layout';
 
 export interface PokerTableProps {
+  layout: PokerLayout;
   state: TableState;
   currentPlayerAddress: string | null;
   onFold: () => void;
@@ -34,6 +21,7 @@ export interface PokerTableProps {
 }
 
 export function PokerTable({
+  layout,
   state,
   currentPlayerAddress,
   onFold,
@@ -54,72 +42,98 @@ export function PokerTable({
     !mySeat.folded;
   const canCheck = hand?.toCall === '0' || hand?.toCall === '';
   const callAmount = hand?.toCall ?? '0';
-  const maxSeats = state.maxSeats;
+
+  const tableRect = getTableRect(layout);
+  const communityRect = getCommunityRect(layout);
+  const actionBarRect = getActionBarRect(layout);
 
   return (
-    <div className="relative w-full min-h-[80vh] flex flex-col">
+    <div className="absolute inset-0">
       {/* Top bar: blinds, leave */}
-      <div className="flex items-center justify-between px-2 py-2 z-10">
-        <div className="w-20" />
-        <span className="text-cyan-400 font-medium text-sm">
-          {state.smallBlind}/{state.bigBlind} · {state.seats.filter((s) => s.playerAddress).length}/{maxSeats} seats
+      <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-2 py-1.5 z-10">
+        <div className="w-16" />
+        <span className="text-cyan-400 font-medium text-xs md:text-sm">
+          {state.smallBlind}/{state.bigBlind} · {state.seats.filter((s) => s.playerAddress).length}/{state.maxSeats} seats
         </span>
         <button
           type="button"
           onClick={onLeave}
-          className="px-3 py-1.5 rounded-lg border border-red-500/50 text-red-400 hover:bg-red-500/20 text-sm w-20"
+          className="px-2 py-1 rounded border border-red-500/50 text-red-400 hover:bg-red-500/20 text-xs md:text-sm"
         >
           Leave
         </button>
       </div>
 
-      {/* Oval table surface + seats */}
-      <div className="relative flex-1 min-h-[420px] w-full max-w-4xl mx-auto">
-        {/* Horizontal oval table (green felt) */}
+      {/* Oval table (layout %) */}
+      {tableRect && (
         <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] max-w-2xl aspect-[2.2/1] rounded-[50%] overflow-hidden border-4 border-black/60 shadow-2xl"
+          className="absolute rounded-[50%] overflow-hidden border-2 border-black/50"
           style={{
+            left: `${tableRect.x}%`,
+            top: `${tableRect.y}%`,
+            width: `${tableRect.width}%`,
+            height: `${tableRect.height}%`,
             background: 'linear-gradient(160deg, #0d5c2e 0%, #0a4d26 50%, #083d1e 100%)',
             boxShadow: 'inset 0 2px 12px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.5)',
           }}
         >
-          {/* Inner oval line */}
-          <div className="absolute inset-4 rounded-[50%] border border-black/20 pointer-events-none" />
-          {/* Center: community cards + pot */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2 w-full px-4">
-            {hand && (
-              <>
-                <PokerBoard communityCards={hand.communityCards} pot={hand.pot} />
-              </>
-            )}
-          </div>
+          <div className="absolute inset-[15%] rounded-[50%] border border-black/20 pointer-events-none" />
         </div>
+      )}
 
-        {/* Seats around the oval */}
-        {state.seats.map((seat, idx) => {
-          const pos = getSeatPosition(idx, mySeatIndex >= 0 ? mySeatIndex : 0, maxSeats);
-          const inHand = !!hand && seat.playerAddress && !seat.folded;
-          return (
-            <div
-              key={idx}
-              className="absolute transform -translate-x-1/2 -translate-y-1/2"
-              style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-            >
-              <PokerSeat
-                seat={seat}
-                index={idx}
-                holeCards={mySeatIndex === idx ? state.myHoleCards ?? undefined : undefined}
-                isCurrentPlayer={idx === mySeatIndex}
-                showCardBacks={inHand && idx !== mySeatIndex}
-              />
-            </div>
-          );
-        })}
-      </div>
+      {/* Community cards + pot (layout %) */}
+      {communityRect && hand && (
+        <div
+          className="absolute flex flex-col items-center justify-center gap-0.5 min-h-0"
+          style={{
+            left: `${communityRect.x}%`,
+            top: `${communityRect.y}%`,
+            width: `${communityRect.width}%`,
+            height: `${communityRect.height}%`,
+          }}
+        >
+          <PokerBoard communityCards={hand.communityCards} pot={hand.pot} />
+        </div>
+      )}
 
-      {/* Action bar at bottom */}
-      {hand && (
-        <div className="mt-4 flex justify-center">
+      {/* Seats (layout %: seat0 = index 0, seat1 = index 1, …) */}
+      {state.seats.map((seat, idx) => {
+        const rect = getSeatRect(layout, idx);
+        const inHand = !!hand && seat.playerAddress && !seat.folded;
+        if (!rect) return null;
+        return (
+          <div
+            key={idx}
+            className="absolute flex items-center justify-center min-h-0"
+            style={{
+              left: `${rect.x}%`,
+              top: `${rect.y}%`,
+              width: `${rect.width}%`,
+              height: `${rect.height}%`,
+            }}
+          >
+            <PokerSeat
+              seat={seat}
+              index={idx}
+              holeCards={mySeatIndex === idx ? state.myHoleCards ?? undefined : undefined}
+              isCurrentPlayer={idx === mySeatIndex}
+              showCardBacks={inHand && idx !== mySeatIndex}
+            />
+          </div>
+        );
+      })}
+
+      {/* Action bar (layout %) */}
+      {hand && actionBarRect && (
+        <div
+          className="absolute flex items-center justify-center min-h-0"
+          style={{
+            left: `${actionBarRect.x}%`,
+            top: `${actionBarRect.y}%`,
+            width: `${actionBarRect.width}%`,
+            height: `${actionBarRect.height}%`,
+          }}
+        >
           <PokerActions
             canAct={!!canAct}
             canCheck={canCheck}
