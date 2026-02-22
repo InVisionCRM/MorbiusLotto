@@ -134,7 +134,10 @@ export default function PokerLobbyPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)]" />
         <div className="relative w-full max-w-4xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-8">
-            <Link href="/" className="text-cyan-400 hover:text-cyan-300 text-sm">← Back</Link>
+            <div className="flex items-center gap-4">
+              <Link href="/" className="text-cyan-400 hover:text-cyan-300 text-sm">← Back</Link>
+              <Link href="/poker/designer" className="text-slate-400 hover:text-cyan-400 text-sm">Design layout</Link>
+            </div>
             <h1 className="text-2xl md:text-3xl font-bold text-cyan-400">Texas Hold&apos;em</h1>
           </div>
           <p className="text-slate-400 mb-6">Multiplayer no-limit Hold&apos;em. Join a table and play.</p>
