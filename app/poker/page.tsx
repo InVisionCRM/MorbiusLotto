@@ -10,9 +10,74 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer';
 import { Theme } from '@/lib/theme';
 
+// Intro screen component (same style as Blackjack)
+function IntroScreen({ onComplete }: { onComplete: () => void }) {
+  useEffect(() => {
+    const duration = 2500;
+    const fallbackTimeout = setTimeout(() => {
+      setTimeout(onComplete, 200);
+    }, duration);
+
+    return () => clearTimeout(fallbackTimeout);
+  }, [onComplete]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50"
+      style={{
+        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(10, 15, 20))',
+      }}
+      suppressHydrationWarning
+    >
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
+        <div className="relative w-24 h-32 shrink-0 overflow-visible">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute items-center justify-center w-20 h-28 bg-white rounded-lg border-2 border-gray-300 shadow-lg"
+              style={{
+                transform: `translate(${i * 2}px, ${i * 2}px) rotate(${i * 10}deg)`,
+                animation: `dealCard 0.5s ease-out ${i * 0.1}s both`,
+                zIndex: 6 - i,
+              }}
+            >
+              <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-purple-700 rounded-lg flex items-center justify-center">
+                <span className="text-white text-2xl font-bold">♠</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="text-center shrink-0">
+          <div className="text-white text-xl font-bold animate-pulse mb-2">
+            DEALING CARDS...
+          </div>
+          <div className="text-gray-400 text-sm">
+            Preparing provably fair Texas Hold&apos;em
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes dealCard {
+          0% {
+            transform: translate(0, -100px) rotate(0deg);
+            opacity: 0;
+          }
+          100% {
+            transform: translate(12px, 12px) rotate(30deg);
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function PokerLobbyPage() {
   const { address, isConnected } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
+  const [showIntro, setShowIntro] = useState(true);
   const [tables, setTables] = useState<PokerTableSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +123,10 @@ export default function PokerLobbyPage() {
       setJoining(false);
     }
   };
+
+  if (showIntro) {
+    return <IntroScreen onComplete={() => setShowIntro(false)} />;
+  }
 
   return (
     <GlobalMainNav page="home">

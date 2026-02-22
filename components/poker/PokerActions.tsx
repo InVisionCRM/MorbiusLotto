@@ -47,7 +47,7 @@ export function PokerActions({
     <div
       className="flex flex-wrap items-center gap-2 p-3 rounded-xl border border-cyan-500/30"
       style={{
-        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.56), rgba(40, 40, 40, 0.6))',
         boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.6)',
       }}
     >
