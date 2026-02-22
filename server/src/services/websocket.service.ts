@@ -1171,7 +1171,8 @@ export class WebSocketService {
       this.roomToClients.get(roomId)!.add(ws.connectionId!);
 
       this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
-      this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: state });
+      const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+      this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: broadcastState });
     } catch (error) {
       logger.error('Error joining poker table:', error);
       this.sendError(ws, (error as Error).message || 'Failed to join table', message.requestId);
@@ -1201,7 +1202,10 @@ export class WebSocketService {
       ws.currentRoom = undefined;
 
       this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
-      if (state) this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: state });
+      if (state) {
+        const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+        this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: broadcastState });
+      }
     } catch (error) {
       logger.error('Error leaving poker table:', error);
       this.sendError(ws, (error as Error).message || 'Failed to leave table', message.requestId);
@@ -1227,7 +1231,8 @@ export class WebSocketService {
       const amount = payload.amount != null ? String(payload.amount) : undefined;
       const state = await this.pokerGameService.playerAction(tableId, handId, ws.playerAddress, action, amount);
       this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
-      this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: state });
+      const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+      this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: broadcastState });
     } catch (error) {
       logger.error('Error poker action:', error);
       this.sendError(ws, (error as Error).message || 'Action failed', message.requestId);

@@ -12,11 +12,23 @@ export interface CardDisplayProps {
   cardIndex: number | null | undefined;
   /** Smaller card for board/opponent */
   small?: boolean;
+  /** Show card back (for opponent hole cards) */
+  faceDown?: boolean;
   className?: string;
 }
 
-export function CardDisplay({ cardIndex, small, className = '' }: CardDisplayProps) {
-  if (cardIndex == null || cardIndex < 0 || cardIndex > 51) {
+export function CardDisplay({ cardIndex, small, faceDown, className = '' }: CardDisplayProps) {
+  if (faceDown || (cardIndex != null && (cardIndex < 0 || cardIndex > 51))) {
+    return (
+      <div
+        className={`rounded border border-amber-800/60 bg-gradient-to-br from-amber-900 to-amber-950 flex items-center justify-center ${small ? 'w-8 h-11 text-xs' : 'w-10 h-14 text-sm'} ${className}`}
+        style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.3)' }}
+      >
+        <span className="text-amber-700/80 font-bold">♠</span>
+      </div>
+    );
+  }
+  if (cardIndex == null) {
     return (
       <div
         className={`rounded border border-cyan-500/30 bg-slate-800 flex items-center justify-center ${small ? 'w-8 h-11 text-xs' : 'w-10 h-14 text-sm'} ${className}`}

@@ -11,10 +11,14 @@ export interface PokerSeatProps {
   /** Show hole cards (only for current player when visible) */
   holeCards?: number[];
   isCurrentPlayer?: boolean;
+  /** Show two card backs for opponents in the hand (do not reveal their cards) */
+  showCardBacks?: boolean;
 }
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer }: PokerSeatProps) {
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks }: PokerSeatProps) {
   const empty = !seat.playerAddress;
+  const showMyCards = holeCards && holeCards.length > 0 && isCurrentPlayer;
+  const showBacks = showCardBacks && !showMyCards && !empty && !seat.folded;
   return (
     <div
       className={`rounded-xl border p-3 min-w-[100px] ${
@@ -36,10 +40,16 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer }: PokerSeatProps) 
         </span>
         <span className="text-cyan-400 text-sm font-medium">{seat.stack}</span>
         {seat.folded && <span className="text-xs text-red-400">Folded</span>}
-        {holeCards && holeCards.length > 0 && isCurrentPlayer && (
+        {showMyCards && (
           <div className="flex gap-0.5 mt-1">
-            <CardDisplay cardIndex={holeCards[0]} small />
-            <CardDisplay cardIndex={holeCards[1]} small />
+            <CardDisplay cardIndex={holeCards![0]} small />
+            <CardDisplay cardIndex={holeCards![1]} small />
+          </div>
+        )}
+        {showBacks && (
+          <div className="flex gap-0.5 mt-1">
+            <CardDisplay cardIndex={null} small faceDown />
+            <CardDisplay cardIndex={null} small faceDown />
           </div>
         )}
       </div>

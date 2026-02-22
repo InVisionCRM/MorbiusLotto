@@ -40,7 +40,11 @@ export default function PokerTablePage() {
     setWsClient(client);
 
     client.on('poker_table_state', (payload: PokerTableState) => {
-      if (payload.tableId === tableId) setState(payload);
+      if (payload.tableId !== tableId) return;
+      setState((prev) => ({
+        ...payload,
+        myHoleCards: payload.myHoleCards ?? prev?.myHoleCards ?? null,
+      }));
     });
 
     client
@@ -124,15 +128,18 @@ export default function PokerTablePage() {
 
   return (
     <GlobalMainNav page="home">
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)]" />
-        <div className="relative w-full max-w-5xl mx-auto px-4 py-6">
-          <Link href="/poker" className="text-cyan-400 hover:text-cyan-300 text-sm mb-4 inline-block">
+      <div
+        className="min-h-screen text-white relative bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: 'url(/POKER/Pokerbg.jpg)' }}
+      >
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative w-full max-w-5xl mx-auto px-4 py-4">
+          <Link href="/poker" className="text-cyan-400 hover:text-cyan-300 text-sm mb-2 inline-block z-10 relative">
             ← Lobby
           </Link>
 
           {error && (
-            <p className="text-red-400 mb-4">{error}</p>
+            <p className="text-red-400 mb-4 relative z-10">{error}</p>
           )}
 
           {state && (
@@ -149,10 +156,10 @@ export default function PokerTablePage() {
           )}
 
           {!state && !error && (
-            <p className="text-slate-400">Loading table...</p>
+            <p className="text-slate-300 relative z-10">Loading table...</p>
           )}
 
-          <div className="mt-8 max-w-md">
+          <div className="fixed right-4 top-24 z-20 max-w-xs">
             <ChatPanel
               roomId={`poker:table:${tableId}`}
               title="Table chat"
