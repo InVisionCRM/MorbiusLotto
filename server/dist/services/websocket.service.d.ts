@@ -1,6 +1,7 @@
 import { DatabaseService } from './database.service';
 import { BlackjackGameService } from './blackjack-game.service';
 import { TournamentService } from './tournament.service';
+import { PokerGameService } from './poker-game.service';
 export declare class WebSocketService {
     private gameService;
     private dbService;
@@ -13,8 +14,9 @@ export declare class WebSocketService {
     private publicClient;
     private contractAddress;
     private tournamentService?;
+    private pokerGameService;
     private betLimitsCache;
-    constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService, tournamentService?: TournamentService);
+    constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService, tournamentService?: TournamentService, pokerGameService?: PokerGameService | null);
     /** Prune addresses with no timestamps in the current window to avoid unbounded map growth. */
     private cleanupChatRateLimitMap;
     /** Resolve Blackjack min/max bet from admin config (cached). Uses defaults if missing/invalid. */
@@ -40,6 +42,11 @@ export declare class WebSocketService {
     private handleGetBalance;
     private handleGetGameState;
     private handleJoinRoom;
+    private handlePokerListTables;
+    private handlePokerJoinTable;
+    private handlePokerLeaveTable;
+    private handlePokerAction;
+    private handlePokerGetState;
     private handleGetChatHistory;
     private handleSetDisplayName;
     private handleGetProfile;

@@ -15,6 +15,7 @@ import { TournamentService } from './services/tournament.service';
 import { FreerollSchedulerService } from './services/freeroll-scheduler.service';
 import { TournamentSchedulerService } from './services/tournament-scheduler.service';
 import { WebSocketService } from './services/websocket.service';
+import { PokerGameService } from './services/poker-game.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
@@ -182,8 +183,16 @@ async function initializeServices() {
     const tournamentService = new TournamentService(dbService.getPool());
     gameService.setTournamentService(tournamentService);
 
+    // Initialize poker game service
+    const pokerGameService = new PokerGameService(dbService, pfService);
+    const existingTables = await pokerGameService.listTables();
+    if (existingTables.length === 0) {
+      await pokerGameService.createTable(10n, 20n, 6);
+      logger.info('Poker: created default table (10/20, 6 seats)');
+    }
+
     // Initialize WebSocket service
-    const wsService = new WebSocketService(server, gameService, dbService, tournamentService);
+    const wsService = new WebSocketService(server, gameService, dbService, tournamentService, pokerGameService);
 
     // Freeroll scheduler (polls pending scheduled events: start, end)
     freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);

@@ -85,6 +85,53 @@ export interface FreerollEntryPayload {
   startingChips?: number;
 }
 
+// === Poker types (MVP multiplayer Texas Hold'em) ===
+
+export interface PokerTableSummary {
+  id: string;
+  smallBlind: string;
+  bigBlind: string;
+  maxSeats: number;
+  status: string;
+  seatedCount: number;
+  emptySeats: number;
+}
+
+export interface PokerSeatState {
+  position: number;
+  playerAddress: string | null;
+  stack: string;
+  status: string;
+  isDealer: boolean;
+  isSmallBlind: boolean;
+  isBigBlind: boolean;
+  isActing: boolean;
+  folded: boolean;
+  currentBet: string;
+}
+
+export interface PokerCurrentHand {
+  handId: string;
+  street: string;
+  communityCards: number[];
+  pot: string;
+  actingPosition: number | null;
+  lastAction: { position: number; action: string; amount: string } | null;
+  minRaise: string;
+  toCall: string;
+}
+
+export interface PokerTableState {
+  tableId: string;
+  smallBlind: string;
+  bigBlind: string;
+  maxSeats: number;
+  status: string;
+  seats: PokerSeatState[];
+  currentHand: PokerCurrentHand | null;
+  myHoleCards: number[] | null;
+}
+
 /** EIP-712 domain for WebSocket auth (must match server) */
 const AUTH_EIP712_DOMAIN = {
   name: 'MORBlotto Blackjack' as const,
@@ -472,6 +519,8 @@ export class BlackjackWebSocketClient {
           'chat_message',
           'chat_message_deleted',
           'room_joined',
+          'poker_table_state',
+          'poker_table_list',
         ]);
         if (!knownEventTypes.has(message.type)) {
           logger.warn('Unhandled message type:', message.type);
@@ -570,6 +619,35 @@ export class BlackjackWebSocketClient {
    */
   async getGameResult(gameId: string): Promise<any> {
     return this.sendRequest('get_game_state', { gameId });
+  }
+
+  // === Poker API (MVP multiplayer Texas Hold'em) ===
+
+  /** List available poker tables (no auth required). */
+  async pokerListTables(): Promise<{ tables: PokerTableSummary[] }> {
+    return this.sendRequest('poker_list_tables', {});
+  }
+
+  /** Join a table with buy-in chips. Auth required. Subscribe to 'poker_table_state' for broadcasts. */
+  async pokerJoinTable(tableId: string, buyInChips: string): Promise<PokerTableState> {
+    return this.sendRequest('poker_join_table', { tableId, buyInChips });
+  }
+
+  /** Leave a table (stack is credited back to balance). Auth required. */
+  async pokerLeaveTable(tableId: string): Promise<PokerTableState | null> {
+    return this.sendRequest('poker_leave_table', { tableId });
+  }
+
+  /** Send a poker action: fold, check, call, bet, raise. For bet/raise pass amount as string. Auth required. */
+  async pokerAction(tableId: string, handId: string, action: string, amount?: string): Promise<PokerTableState> {
+    const payload: { tableId: string; handId: string; action: string; amount?: string } = { tableId, handId, action };
+    if (amount != null) payload.amount = amount;
+    return this.sendRequest('poker_action', payload);
+  }
+
+  /** Get current table state (e.g. after reconnect). Auth required. */
+  async pokerGetState(tableId: string): Promise<PokerTableState> {
+    return this.sendRequest('poker_get_state', { tableId });
   }
 
   // === Chat API (main + per-game rooms) ===

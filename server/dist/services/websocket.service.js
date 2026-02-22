@@ -80,11 +80,13 @@ class WebSocketService {
     publicClient;
     contractAddress;
     tournamentService;
+    pokerGameService = null;
     betLimitsCache = null;
-    constructor(server, gameService, dbService, tournamentService) {
+    constructor(server, gameService, dbService, tournamentService, pokerGameService) {
         this.gameService = gameService;
         this.dbService = dbService;
         this.tournamentService = tournamentService;
+        this.pokerGameService = pokerGameService ?? null;
         this.wss = new ws_1.WebSocketServer({ server });
         // Initialize public client for reading contract state
         this.publicClient = (0, viem_1.createPublicClient)({
@@ -476,6 +478,30 @@ class WebSocketService {
                 case 'recent_global_wins':
                     // No auth required for public global wins feed
                     await this.handleRecentGlobalWins(ws, message);
+                    break;
+                // Poker
+                case 'poker_list_tables':
+                    await this.handlePokerListTables(ws, message);
+                    break;
+                case 'poker_join_table':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerJoinTable(ws, message);
+                    break;
+                case 'poker_leave_table':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerLeaveTable(ws, message);
+                    break;
+                case 'poker_action':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerAction(ws, message);
+                    break;
+                case 'poker_get_state':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerGetState(ws, message);
                     break;
                 default:
                     this.sendError(ws, 'Unknown message type', message.requestId);
@@ -946,7 +972,8 @@ class WebSocketService {
                 return this.sendError(ws, 'roomId required', message.requestId);
             }
             const normalized = roomId.toLowerCase().trim();
-            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized)) {
+            const isPokerTableRoom = normalized.startsWith('poker:table:');
+            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             // Tournament rooms require participant check
@@ -974,7 +1001,7 @@ class WebSocketService {
                 this.roomToClients.set(normalized, new Set());
             }
             this.roomToClients.get(normalized).add(ws.connectionId);
-            const recent = await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
+            const recent = isPokerTableRoom ? [] : await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
             const addresses = [...new Set(recent.map(m => m.sender_address).filter(Boolean))];
             const displayNames = await this.dbService.getDisplayNames(addresses);
             const config = await this.dbService.getAdminGameConfig();
@@ -1001,6 +1028,128 @@ class WebSocketService {
             this.sendError(ws, 'Failed to join room', message.requestId);
         }
     }
+    async handlePokerListTables(ws, message) {
+        try {
+            if (!this.pokerGameService) {
+                return this.sendError(ws, 'Poker not available', message.requestId);
+            }
+            const tables = await this.pokerGameService.listTables();
+            this.sendMessage(ws, { type: 'poker_table_list', payload: { tables }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error listing poker tables:', error);
+            this.sendError(ws, error.message || 'Failed to list tables', message.requestId);
+        }
+    }
+    async handlePokerJoinTable(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { tableId, buyInChips } = payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            if (!buyInChips || typeof buyInChips !== 'string') {
+                return this.sendError(ws, 'buyInChips required', message.requestId);
+            }
+            const state = await this.pokerGameService.joinTable(tableId, ws.playerAddress, buyInChips);
+            const roomId = `poker:table:${tableId}`;
+            if (ws.currentRoom && ws.connectionId) {
+                const prevSet = this.roomToClients.get(ws.currentRoom);
+                if (prevSet) {
+                    prevSet.delete(ws.connectionId);
+                    if (prevSet.size === 0)
+                        this.roomToClients.delete(ws.currentRoom);
+                }
+            }
+            ws.currentRoom = roomId;
+            if (!this.roomToClients.has(roomId))
+                this.roomToClients.set(roomId, new Set());
+            this.roomToClients.get(roomId).add(ws.connectionId);
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+            this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: state });
+        }
+        catch (error) {
+            logger_1.logger.error('Error joining poker table:', error);
+            this.sendError(ws, error.message || 'Failed to join table', message.requestId);
+        }
+    }
+    async handlePokerLeaveTable(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const tableId = payload?.tableId;
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            const state = await this.pokerGameService.leaveTable(tableId, ws.playerAddress);
+            const roomId = `poker:table:${tableId}`;
+            if (ws.connectionId) {
+                const set = this.roomToClients.get(roomId);
+                if (set) {
+                    set.delete(ws.connectionId);
+                    if (set.size === 0)
+                        this.roomToClients.delete(roomId);
+                }
+            }
+            ws.currentRoom = undefined;
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+            if (state)
+                this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: state });
+        }
+        catch (error) {
+            logger_1.logger.error('Error leaving poker table:', error);
+            this.sendError(ws, error.message || 'Failed to leave table', message.requestId);
+        }
+    }
+    async handlePokerAction(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { tableId, handId, action } = payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            if (!handId || typeof handId !== 'string') {
+                return this.sendError(ws, 'handId required', message.requestId);
+            }
+            if (!action || typeof action !== 'string') {
+                return this.sendError(ws, 'action required', message.requestId);
+            }
+            const amount = payload.amount != null ? String(payload.amount) : undefined;
+            const state = await this.pokerGameService.playerAction(tableId, handId, ws.playerAddress, action, amount);
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+            this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: state });
+        }
+        catch (error) {
+            logger_1.logger.error('Error poker action:', error);
+            this.sendError(ws, error.message || 'Action failed', message.requestId);
+        }
+    }
+    async handlePokerGetState(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const tableId = payload?.tableId;
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            const state = await this.pokerGameService.getTableState(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error getting poker state:', error);
+            this.sendError(ws, error.message || 'Failed to get state', message.requestId);
+        }
+    }
     async handleGetChatHistory(ws, message) {
         try {
             const payload = message.payload;
@@ -1012,7 +1161,8 @@ class WebSocketService {
                 return this.sendError(ws, 'beforeId required', message.requestId);
             }
             const normalized = roomId.toLowerCase().trim();
-            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized)) {
+            const isPokerTableRoom = normalized.startsWith('poker:table:');
+            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             const limitNum = typeof limit === 'number' && limit > 0 && limit <= CHAT_RECENT_MESSAGES_LIMIT
@@ -1119,7 +1269,8 @@ class WebSocketService {
                 return this.sendError(ws, `Message too long (max ${CHAT_MAX_LENGTH})`, message.requestId);
             }
             const normalizedRoom = roomId.toLowerCase().trim();
-            if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom)) {
+            const isPokerTableRoom = normalizedRoom.startsWith('poker:table:');
+            if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom) && !isPokerTableRoom) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             // Tournament rooms require participant check on send

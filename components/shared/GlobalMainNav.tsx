@@ -26,13 +26,14 @@ import HowToPlayModal from '@/components/PLINKO/HowToPlayModal';
 import SwapModal from '@/components/PLINKO/SwapModal';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal';
 
-export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'home';
+export type NavPage = 'blackjack' | 'plinko' | 'poker' | 'lottery' | 'keno' | 'home';
 
 const PATH_TO_PAGE: Record<string, NavPage> = {
   '/BLACKJACK': 'blackjack',
   '/PLINKO': 'plinko',
   '/plinko-dashboard': 'plinko',
   '/plinko-verifier': 'plinko',
+  '/poker': 'poker',
   '/lottery': 'lottery',
   '/keno': 'keno',
   '/keno-dashboard': 'keno',
@@ -41,6 +42,7 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
 const OTHER_GAMES = [
   { label: 'Plinko', href: '/PLINKO', icon: 'fa-circle' },
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
+  { label: 'Poker', href: '/poker', icon: 'fa-th' },
   { label: 'Lottery', href: '/lottery', icon: 'fa-ticket-alt' },
   { label: 'Keno', href: '/keno', icon: 'fa-th' },
 ] as const;

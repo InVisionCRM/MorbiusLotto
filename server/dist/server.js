@@ -53,6 +53,7 @@ const tournament_service_1 = require("./services/tournament.service");
 const freeroll_scheduler_service_1 = require("./services/freeroll-scheduler.service");
 const tournament_scheduler_service_1 = require("./services/tournament-scheduler.service");
 const websocket_service_1 = require("./services/websocket.service");
+const poker_game_service_1 = require("./services/poker-game.service");
 const chain_analytics_service_1 = require("./services/chain-analytics.service");
 const logger_1 = require("./utils/logger");
 const withdraw_sign_1 = require("./utils/withdraw-sign");
@@ -203,8 +204,15 @@ async function initializeServices() {
         // Initialize tournament service
         const tournamentService = new tournament_service_1.TournamentService(dbService.getPool());
         gameService.setTournamentService(tournamentService);
+        // Initialize poker game service
+        const pokerGameService = new poker_game_service_1.PokerGameService(dbService, pfService);
+        const existingTables = await pokerGameService.listTables();
+        if (existingTables.length === 0) {
+            await pokerGameService.createTable(10n, 20n, 6);
+            logger_1.logger.info('Poker: created default table (10/20, 6 seats)');
+        }
         // Initialize WebSocket service
-        const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService, tournamentService);
+        const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService, tournamentService, pokerGameService);
         // Freeroll scheduler (polls pending scheduled events: start, end)
         freerollScheduler = new freeroll_scheduler_service_1.FreerollSchedulerService(dbService.getPool(), tournamentService);
         freerollScheduler.start();

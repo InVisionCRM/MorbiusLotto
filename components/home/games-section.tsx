@@ -142,6 +142,28 @@ export function GamesSection() {
         </Link>
         </motion.div>
 
+        {/* Poker Card */}
+        <motion.div variants={fadeInUp}>
+          <Link href="/poker" className="group block">
+          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+            <div className="relative h-full w-full rounded-2xl overflow-hidden">
+              <Image
+                src="/morbius/Poker.png"
+                alt="Texas Hold'em"
+                fill
+                className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              <PaymentBadges />
+              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6">
+                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-1 sm:mb-2">Texas Hold&apos;em</h3>
+                <p className="text-white/60 text-sm sm:text-base">Multiplayer no-limit Hold&apos;em</p>
+              </div>
+            </div>
+          </div>
+        </Link>
+        </motion.div>
+
         {/* Dice Card - Coming Soon */}
         <motion.div variants={fadeInUp}>
           <div className="group block relative">
