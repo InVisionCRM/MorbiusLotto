@@ -44,13 +44,15 @@ export function useMorbiusBurned() {
         let pageCount = 0
         const maxPages = 10 // Safety limit
 
-        const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
+        // 502/503/429 = PulseChain scan API overloaded or down; retry with backoff
+        const fetchWithRetry = async (url: string, retries = 4): Promise<Response> => {
           for (let i = 0; i < retries; i++) {
             const response = await fetch(url)
             const isRetryable = response.status === 503 || response.status === 502 || response.status === 429
-            if (response.ok || !isRetryable) return response
+            if (response.ok) return response
+            if (!isRetryable) return response
             if (i < retries - 1) {
-              await new Promise(r => setTimeout(r, 1500 * (i + 1)))
+              await new Promise(r => setTimeout(r, 2000 * (i + 1)))
             } else {
               return response
             }
@@ -73,7 +75,8 @@ export function useMorbiusBurned() {
           const response = await fetchWithRetry(url)
 
           if (!response.ok) {
-            throw new Error(`Failed to fetch holders: ${response.status}`)
+            // 502 = PulseChain scan API Bad Gateway (their upstream is down/overloaded)
+            throw new Error(`Scan API unavailable (${response.status}). Try again later.`)
           }
 
           const data: HoldersResponse = await response.json()
@@ -103,11 +106,13 @@ export function useMorbiusBurned() {
           console.log('🔥 Burned amount updated:', total.toString())
         }
       } catch (err) {
-        console.error('Error fetching burned morbius:', err)
         if (isMounted) {
           setError(err instanceof Error ? err : new Error('Unknown error'))
           setIsLoading(false)
-          console.log('🔥 Burned amount hook failed, keeping current value')
+          // Keep last burned amount; UI can show "unavailable" or previous value
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Burned amount: scan API failed (e.g. 502). Keeping previous value.', err)
+          }
         }
       }
     }

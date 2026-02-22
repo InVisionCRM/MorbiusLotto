@@ -62,10 +62,16 @@ export function WalletMenu({
       // fallback for older browsers
       const ta = document.createElement('textarea')
       ta.value = address
+      ta.setAttribute('aria-hidden', 'true')
+      ta.style.position = 'fixed'
+      ta.style.left = '-9999px'
       document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
+      try {
+        ta.select()
+        document.execCommand('copy')
+      } finally {
+        if (ta.isConnected) document.body.removeChild(ta)
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }

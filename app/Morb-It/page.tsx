@@ -747,9 +747,11 @@ export default function MorbItPage() {
                 const selEnd = textarea.selectionEnd;
                 const newText = layer.isUppercase ? e.target.value.toUpperCase() : e.target.value;
                 updateLayer({ ...layer, text: newText });
-                // Restore cursor position after React re-render
+                // Restore cursor position after React re-render (guard: node may be detached)
                 requestAnimationFrame(() => {
-                    textarea.setSelectionRange(selStart, selEnd);
+                    if (textarea.isConnected) {
+                        textarea.setSelectionRange(selStart, selEnd);
+                    }
                 });
             }}
             onBlur={() => setEditingLayerId(null)}

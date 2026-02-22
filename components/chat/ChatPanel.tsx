@@ -173,6 +173,7 @@ export function ChatPanel({
       const next = (before + emoji + after).slice(0, CHAT_MESSAGE_MAX_LENGTH);
       setInput(next);
       requestAnimationFrame(() => {
+        if (!el.isConnected) return;
         const newPos = Math.min(start + emoji.length, next.length);
         el.setSelectionRange(newPos, newPos);
         el.focus();
