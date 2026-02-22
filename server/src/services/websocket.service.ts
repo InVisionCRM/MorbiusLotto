@@ -328,9 +328,6 @@ export class WebSocketService {
         message.type === 'tournament_info' ||
         message.type === 'tournament_list'
       ) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H2',location:'server/src/services/websocket.service.ts:handleMessage',message:'Server received request message',data:{type:message.type,requestId:message.requestId ?? null,connectionId:ws.connectionId,isAuthenticated:!!ws.isAuthenticated,hasPlayerAddress:!!ws.playerAddress},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
       }
 
       switch (message.type) {
@@ -897,9 +894,6 @@ export class WebSocketService {
 
   private async handleSyncBalance(ws: WebSocketClient, message: WebSocketMessage) {
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H4',location:'server/src/services/websocket.service.ts:handleSyncBalance:start',message:'Entered handleSyncBalance',data:{requestId:message.requestId ?? null,hasPlayerAddress:!!ws.playerAddress},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!ws.playerAddress) {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
@@ -959,9 +953,6 @@ export class WebSocketService {
         previousDbBalance: currentDbBalance.toString(),
         newBalance: newBalance.toString(),
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H4',location:'server/src/services/websocket.service.ts:handleSyncBalance:beforeSend',message:'About to send balance_synced response',data:{requestId:message.requestId ?? null,newBalance:newBalance.toString()},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       this.sendMessage(ws, {
         type: 'balance_synced',
@@ -979,9 +970,6 @@ export class WebSocketService {
 
   private async handleGetBalance(ws: WebSocketClient, message: WebSocketMessage) {
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H4',location:'server/src/services/websocket.service.ts:handleGetBalance:start',message:'Entered handleGetBalance',data:{requestId:message.requestId ?? null,hasPlayerAddress:!!ws.playerAddress},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!ws.playerAddress) {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
@@ -1447,11 +1435,6 @@ export class WebSocketService {
   private sendMessage(ws: WebSocketClient, message: WebSocketMessage) {
     if (ws.readyState === WebSocket.OPEN) {
       try {
-        if (message.requestId) {
-          // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H3',location:'server/src/services/websocket.service.ts:sendMessage',message:'Server sending response with requestId',data:{type:message.type,requestId:message.requestId,wsReadyState:ws.readyState},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
-        }
         // Convert BigInt values to strings for JSON serialization
         // This replacer handles nested objects and arrays
         const replacer = (key: string, value: any): any => {
@@ -2125,18 +2108,12 @@ export class WebSocketService {
 
   private async handleGetTournamentInfo(ws: WebSocketClient, message: WebSocketMessage) {
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H5',location:'server/src/services/websocket.service.ts:handleGetTournamentInfo:start',message:'Entered handleGetTournamentInfo',data:{requestId:message.requestId ?? null,tournamentServiceReady:!!this.tournamentService},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!this.tournamentService) {
         return this.sendError(ws, 'Tournament mode not available', message.requestId);
       }
 
       const tournament = await this.tournamentService.getActiveTournament();
       const entryCount = await this.tournamentService.getTournamentEntryCount(tournament.id);
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H5',location:'server/src/services/websocket.service.ts:handleGetTournamentInfo:beforeSend',message:'About to send tournament_info response',data:{requestId:message.requestId ?? null,tournamentId:tournament.id,entryCount},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       this.sendMessage(ws, {
         type: 'tournament_info',
@@ -2377,18 +2354,12 @@ export class WebSocketService {
 
   private async handleTournamentList(ws: WebSocketClient, message: WebSocketMessage) {
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H5',location:'server/src/services/websocket.service.ts:handleTournamentList:start',message:'Entered handleTournamentList',data:{requestId:message.requestId ?? null,tournamentServiceReady:!!this.tournamentService},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!this.tournamentService) {
         return this.sendError(ws, 'Tournament mode not available', message.requestId);
       }
 
       // Include private tournaments so creators see their own and others can discover (with PIN)
       const tournaments = await this.tournamentService.listTournaments(true);
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'initial',hypothesisId:'H5',location:'server/src/services/websocket.service.ts:handleTournamentList:afterList',message:'Tournament list query returned',data:{requestId:message.requestId ?? null,tournamentCount:tournaments.length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       // Convert to response format
       const tournamentList = tournaments.map(t => ({

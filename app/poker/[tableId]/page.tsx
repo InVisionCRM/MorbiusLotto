@@ -131,9 +131,9 @@ export default function PokerTablePage() {
 
   return (
     <GlobalMainNav page="home">
-      <div className="min-h-screen text-white flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen text-white flex flex-col items-center justify-center bg-slate-950">
         {/* Canvas: true aspect ratio of Pokerbg.jpg, no scaling */}
-        <div className="relative max-w-full max-h-screen w-fit">
+        <div className="relative max-w-full max-h-screen w-fit flex-shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/POKER/Pokerbg.jpg"
