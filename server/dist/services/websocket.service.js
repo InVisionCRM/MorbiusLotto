@@ -10,7 +10,7 @@ const logger_1 = require("../utils/logger");
 const uuid_1 = require("uuid");
 const crypto_1 = __importDefault(require("crypto"));
 const viem_1 = require("viem");
-const chains_1 = require("viem/chains");
+const chain_client_1 = require("../utils/chain-client");
 // Minimal ABI for getPlayerReserve - avoids full ABI parse issues in readContract
 const GET_PLAYER_RESERVE_ABI = [
     {
@@ -89,10 +89,7 @@ class WebSocketService {
         this.pokerGameService = pokerGameService ?? null;
         this.wss = new ws_1.WebSocketServer({ server });
         // Initialize public client for reading contract state
-        this.publicClient = (0, viem_1.createPublicClient)({
-            chain: chains_1.pulsechain,
-            transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com')
-        });
+        this.publicClient = (0, chain_client_1.getPublicClient)();
         const envAddr = process.env.BLACKJACK_CONTRACT_ADDRESS;
         if (!envAddr) {
             throw new Error('BLACKJACK_CONTRACT_ADDRESS env var is required');
@@ -281,9 +278,6 @@ class WebSocketService {
                 message.type === 'sync_balance' ||
                 message.type === 'tournament_info' ||
                 message.type === 'tournament_list') {
-                // #region agent log
-                fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: 'initial', hypothesisId: 'H2', location: 'server/src/services/websocket.service.ts:handleMessage', message: 'Server received request message', data: { type: message.type, requestId: message.requestId ?? null, connectionId: ws.connectionId, isAuthenticated: !!ws.isAuthenticated, hasPlayerAddress: !!ws.playerAddress }, timestamp: Date.now() }) }).catch(() => { });
-                // #endregion
             }
             switch (message.type) {
                 // Auth response is always allowed (unauthenticated clients need it)
@@ -814,9 +808,6 @@ class WebSocketService {
     }
     async handleSyncBalance(ws, message) {
         try {
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: 'initial', hypothesisId: 'H4', location: 'server/src/services/websocket.service.ts:handleSyncBalance:start', message: 'Entered handleSyncBalance', data: { requestId: message.requestId ?? null, hasPlayerAddress: !!ws.playerAddress }, timestamp: Date.now() }) }).catch(() => { });
-            // #endregion
             if (!ws.playerAddress) {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
@@ -871,9 +862,6 @@ class WebSocketService {
                 previousDbBalance: currentDbBalance.toString(),
                 newBalance: newBalance.toString(),
             });
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: 'initial', hypothesisId: 'H4', location: 'server/src/services/websocket.service.ts:handleSyncBalance:beforeSend', message: 'About to send balance_synced response', data: { requestId: message.requestId ?? null, newBalance: newBalance.toString() }, timestamp: Date.now() }) }).catch(() => { });
-            // #endregion
             this.sendMessage(ws, {
                 type: 'balance_synced',
                 payload: {
@@ -890,9 +878,6 @@ class WebSocketService {
     }
     async handleGetBalance(ws, message) {
         try {
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: 'initial', hypothesisId: 'H4', location: 'server/src/services/websocket.service.ts:handleGetBalance:start', message: 'Entered handleGetBalance', data: { requestId: message.requestId ?? null, hasPlayerAddress: !!ws.playerAddress }, timestamp: Date.now() }) }).catch(() => { });
-            // #endregion
             if (!ws.playerAddress) {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
@@ -1069,7 +1054,8 @@ class WebSocketService {
                 this.roomToClients.set(roomId, new Set());
             this.roomToClients.get(roomId).add(ws.connectionId);
             this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
-            this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: state });
+            const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+            this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: broadcastState });
         }
         catch (error) {
             logger_1.logger.error('Error joining poker table:', error);
@@ -1098,8 +1084,10 @@ class WebSocketService {
             }
             ws.currentRoom = undefined;
             this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
-            if (state)
-                this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: state });
+            if (state) {
+                const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+                this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: broadcastState });
+            }
         }
         catch (error) {
             logger_1.logger.error('Error leaving poker table:', error);
@@ -1125,7 +1113,8 @@ class WebSocketService {
             const amount = payload.amount != null ? String(payload.amount) : undefined;
             const state = await this.pokerGameService.playerAction(tableId, handId, ws.playerAddress, action, amount);
             this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
-            this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: state });
+            const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+            this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: broadcastState });
         }
         catch (error) {
             logger_1.logger.error('Error poker action:', error);
@@ -1327,11 +1316,6 @@ class WebSocketService {
     sendMessage(ws, message) {
         if (ws.readyState === ws_1.WebSocket.OPEN) {
             try {
-                if (message.requestId) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: 'initial', hypothesisId: 'H3', location: 'server/src/services/websocket.service.ts:sendMessage', message: 'Server sending response with requestId', data: { type: message.type, requestId: message.requestId, wsReadyState: ws.readyState }, timestamp: Date.now() }) }).catch(() => { });
-                    // #endregion
-                }
                 // Convert BigInt values to strings for JSON serialization
                 // This replacer handles nested objects and arrays
                 const replacer = (key, value) => {
@@ -1920,17 +1904,11 @@ class WebSocketService {
     }
     async handleGetTournamentInfo(ws, message) {
         try {
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: 'initial', hypothesisId: 'H5', location: 'server/src/services/websocket.service.ts:handleGetTournamentInfo:start', message: 'Entered handleGetTournamentInfo', data: { requestId: message.requestId ?? null, tournamentServiceReady: !!this.tournamentService }, timestamp: Date.now() }) }).catch(() => { });
-            // #endregion
             if (!this.tournamentService) {
                 return this.sendError(ws, 'Tournament mode not available', message.requestId);
             }
             const tournament = await this.tournamentService.getActiveTournament();
             const entryCount = await this.tournamentService.getTournamentEntryCount(tournament.id);
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: 'initial', hypothesisId: 'H5', location: 'server/src/services/websocket.service.ts:handleGetTournamentInfo:beforeSend', message: 'About to send tournament_info response', data: { requestId: message.requestId ?? null, tournamentId: tournament.id, entryCount }, timestamp: Date.now() }) }).catch(() => { });
-            // #endregion
             this.sendMessage(ws, {
                 type: 'tournament_info',
                 payload: {
@@ -2128,17 +2106,11 @@ class WebSocketService {
     }
     async handleTournamentList(ws, message) {
         try {
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: 'initial', hypothesisId: 'H5', location: 'server/src/services/websocket.service.ts:handleTournamentList:start', message: 'Entered handleTournamentList', data: { requestId: message.requestId ?? null, tournamentServiceReady: !!this.tournamentService }, timestamp: Date.now() }) }).catch(() => { });
-            // #endregion
             if (!this.tournamentService) {
                 return this.sendError(ws, 'Tournament mode not available', message.requestId);
             }
             // Include private tournaments so creators see their own and others can discover (with PIN)
             const tournaments = await this.tournamentService.listTournaments(true);
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/3e24c92c-45ff-45dc-a058-ffe6e9196f8c', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: 'initial', hypothesisId: 'H5', location: 'server/src/services/websocket.service.ts:handleTournamentList:afterList', message: 'Tournament list query returned', data: { requestId: message.requestId ?? null, tournamentCount: tournaments.length }, timestamp: Date.now() }) }).catch(() => { });
-            // #endregion
             // Convert to response format
             const tournamentList = tournaments.map(t => ({
                 id: t.id,

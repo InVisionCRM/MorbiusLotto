@@ -63,3 +63,11 @@ DITRIBUTION OF ALL PURCHASES Wether through MORBIUS, PLS or WPLS goes as follows
 ROLLOVER MACHANIC
 
 100% of remaining bracket should be rolled over to next round.
+
+----
+
+Migrations (server): Run a single migration with server/run-migration.js. Path is relative to the server directory. From repo root:
+  node server/run-migration.js migrations/<filename>.sql
+Example:
+  node server/run-migration.js migrations/037_get_player_stats_enhanced_single_row.sql
+Loads .env from the server directory; uses DATABASE_URL. Run migrations in order by number when applying multiple.

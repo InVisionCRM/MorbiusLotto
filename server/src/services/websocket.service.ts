@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { createPublicClient, http, verifyTypedData, getAddress } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { blackjackAbi } from '../abi/blackjack';
+import { getPublicClient } from '../utils/chain-client';
 
 // Minimal ABI for getPlayerReserve - avoids full ABI parse issues in readContract
 const GET_PLAYER_RESERVE_ABI = [
@@ -121,10 +122,7 @@ export class WebSocketService {
     this.wss = new WebSocketServer({ server });
     
     // Initialize public client for reading contract state
-    this.publicClient = createPublicClient({
-      chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com')
-    });
+    this.publicClient = getPublicClient();
     
     const envAddr = process.env.BLACKJACK_CONTRACT_ADDRESS;
     if (!envAddr) {

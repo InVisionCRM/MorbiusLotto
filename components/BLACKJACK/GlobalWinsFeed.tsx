@@ -162,7 +162,6 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
               <TableHead className={headCls}>Result</TableHead>
               <TableHead className={headCls}>Player</TableHead>
               <TableHead className={headCls}>P/L</TableHead>
-              <TableHead className={`${headCls} whitespace-nowrap min-w-[4rem]`} title="Player vs Dealer card count for verification">P vs D</TableHead>
               <TableHead className={headCls}>Time</TableHead>
             </TableRow>
           </TableHeader>
@@ -217,11 +216,6 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
                         )}
                       </span>
                     )}
-                  </TableCell>
-                  <TableCell className={`${cellCls} text-white/70 text-xs font-mono whitespace-nowrap`} title="Player card count vs Dealer card count">
-                    {typeof entry.playerCardCount === 'number' && typeof entry.dealerCardCount === 'number'
-                      ? `P-${entry.playerCardCount} vs D-${entry.dealerCardCount}`
-                      : '—'}
                   </TableCell>
                   <TableCell className={`${cellCls} text-white/60 text-xs font-poppins`}>
                     {timeAgo(entry.timestamp)}

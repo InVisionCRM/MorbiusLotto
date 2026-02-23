@@ -4,7 +4,15 @@ exports.ChainAnalyticsService = void 0;
 const viem_1 = require("viem");
 const chain_client_1 = require("../utils/chain-client");
 const contracts_1 = require("../config/contracts");
+const DEPOSIT_EVENT = (0, viem_1.parseAbiItem)('event Deposit(address indexed player, uint256 morbiusAmount, uint256 plsAmount)');
+const DEPOSIT_MORBIUS_EVENT = (0, viem_1.parseAbiItem)('event DepositMORBIUS(address indexed player, uint256 amount)');
+const WITHDRAWAL_EVENT = (0, viem_1.parseAbiItem)('event Withdrawal(address indexed player, uint256 amount)');
+const CHUNK_SIZE = 50000;
 class ChainAnalyticsService {
+    dbService;
+    constructor(dbService) {
+        this.dbService = dbService;
+    }
     async getPlinkoStats() {
         try {
             const client = (0, chain_client_1.getPublicClient)();
@@ -131,26 +139,25 @@ class ChainAnalyticsService {
         }
     }
     /**
-     * All-time total MORBIUS deposited and withdrawn for Blackjack V2 (from contract events).
-     * Deposit = PLS swaps (morbiusAmount) + direct DepositMORBIUS(amount). Withdrawal = Withdrawal(amount).
+     * All-time total MORBIUS deposited and withdrawn for Blackjack V2.
+     * Derived from our own data: total_withdrawn is updated when we create a pending withdrawal;
+     * total_deposited is updated by incremental chain scan (from last_scanned_block to current).
+     * On first run or if no last_scanned_block, runs a full chain scan and persists to DB.
      */
     async getBlackjackDepositWithdrawTotals() {
         const client = (0, chain_client_1.getPublicClient)();
-        let totalDeposited = 0n;
-        let totalWithdrawn = 0n;
-        try {
+        const stored = await this.dbService.getBlackjackPlatformTotals();
+        const runFullScan = async () => {
+            let totalDeposited = 0n;
+            let totalWithdrawn = 0n;
             const toBlock = await client.getBlockNumber();
-            const chunkSize = 50000;
             let fromBlock = 0n;
-            const depositEvent = (0, viem_1.parseAbiItem)('event Deposit(address indexed player, uint256 morbiusAmount, uint256 plsAmount)');
-            const depositMorbiusEvent = (0, viem_1.parseAbiItem)('event DepositMORBIUS(address indexed player, uint256 amount)');
-            const withdrawalEvent = (0, viem_1.parseAbiItem)('event Withdrawal(address indexed player, uint256 amount)');
             while (fromBlock <= toBlock) {
-                const end = fromBlock + BigInt(chunkSize) > toBlock ? toBlock : fromBlock + BigInt(chunkSize);
+                const end = fromBlock + BigInt(CHUNK_SIZE) > toBlock ? toBlock : fromBlock + BigInt(CHUNK_SIZE);
                 const [depositLogs, depositMorbiusLogs, withdrawalLogs] = await Promise.all([
-                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: depositEvent, fromBlock, toBlock: end }),
-                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: depositMorbiusEvent, fromBlock, toBlock: end }),
-                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: withdrawalEvent, fromBlock, toBlock: end }),
+                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: DEPOSIT_EVENT, fromBlock, toBlock: end }),
+                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: DEPOSIT_MORBIUS_EVENT, fromBlock, toBlock: end }),
+                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: WITHDRAWAL_EVENT, fromBlock, toBlock: end }),
                 ]);
                 for (const log of depositLogs) {
                     if (log.args && 'morbiusAmount' in log.args)
@@ -168,11 +175,54 @@ class ChainAnalyticsService {
                 if (fromBlock > toBlock)
                     break;
             }
+            return { totalDeposited, totalWithdrawn, toBlock };
+        };
+        try {
+            if (!stored) {
+                const { totalDeposited, totalWithdrawn } = await runFullScan();
+                return { totalDeposited, totalWithdrawn };
+            }
+            if (stored.lastScannedBlock == null) {
+                const { totalDeposited, totalWithdrawn, toBlock } = await runFullScan();
+                await this.dbService.updateBlackjackPlatformTotals(totalDeposited, totalWithdrawn, toBlock);
+                return { totalDeposited, totalWithdrawn };
+            }
+            const toBlock = await client.getBlockNumber();
+            if (toBlock <= stored.lastScannedBlock) {
+                return { totalDeposited: stored.totalDeposited, totalWithdrawn: stored.totalWithdrawn };
+            }
+            let fromBlock = stored.lastScannedBlock + 1n;
+            let newDeposited = 0n;
+            while (fromBlock <= toBlock) {
+                const end = fromBlock + BigInt(CHUNK_SIZE) > toBlock ? toBlock : fromBlock + BigInt(CHUNK_SIZE);
+                const [depositLogs, depositMorbiusLogs] = await Promise.all([
+                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: DEPOSIT_EVENT, fromBlock, toBlock: end }),
+                    client.getLogs({ address: contracts_1.BLACKJACK_ADDRESS, event: DEPOSIT_MORBIUS_EVENT, fromBlock, toBlock: end }),
+                ]);
+                for (const log of depositLogs) {
+                    if (log.args && 'morbiusAmount' in log.args)
+                        newDeposited += log.args.morbiusAmount;
+                }
+                for (const log of depositMorbiusLogs) {
+                    if (log.args && 'amount' in log.args)
+                        newDeposited += log.args.amount;
+                }
+                fromBlock = end + 1n;
+                if (fromBlock > toBlock)
+                    break;
+            }
+            const totalDeposited = stored.totalDeposited + newDeposited;
+            const totalWithdrawn = stored.totalWithdrawn;
+            await this.dbService.updateBlackjackPlatformTotals(totalDeposited, totalWithdrawn, toBlock);
+            return { totalDeposited, totalWithdrawn };
         }
         catch (err) {
             console.error('ChainAnalyticsService getBlackjackDepositWithdrawTotals:', err);
+            if (stored) {
+                return { totalDeposited: stored.totalDeposited, totalWithdrawn: stored.totalWithdrawn };
+            }
+            return { totalDeposited: 0n, totalWithdrawn: 0n };
         }
-        return { totalDeposited, totalWithdrawn };
     }
     /** Fetch all on-chain game stats in parallel. */
     async getAllChainStats() {

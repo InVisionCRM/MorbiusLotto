@@ -171,6 +171,16 @@ export declare class DatabaseService {
         amount: string;
     } | null>;
     createPendingWithdrawal(walletAddress: string, nonce: bigint, amount: bigint): Promise<void>;
+    /** Get stored Blackjack platform totals (deposit/withdraw). Used by chain-analytics for derived totals. */
+    getBlackjackPlatformTotals(): Promise<{
+        totalDeposited: bigint;
+        totalWithdrawn: bigint;
+        lastScannedBlock: bigint | null;
+    } | null>;
+    /** Update Blackjack platform totals (after full or incremental chain scan). */
+    updateBlackjackPlatformTotals(totalDeposited: bigint, totalWithdrawn: bigint, lastScannedBlock: bigint | null): Promise<void>;
+    /** Add amount to stored total_withdrawn when a pending withdrawal is created. */
+    addToBlackjackWithdrawnTotal(amount: bigint): Promise<void>;
     expirePendingWithdrawals(): Promise<number>;
     /** Expire all pending withdrawals for a wallet (any age). Used when user requests a new withdrawal. */
     expirePendingWithdrawalsForWallet(walletAddress: string): Promise<number>;

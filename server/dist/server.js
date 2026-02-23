@@ -44,8 +44,6 @@ const multer_1 = __importDefault(require("multer"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
-const viem_1 = require("viem");
-const chains_1 = require("viem/chains");
 const database_service_1 = require("./services/database.service");
 const provably_fair_service_1 = require("./services/provably-fair.service");
 const blackjack_game_service_1 = require("./services/blackjack-game.service");
@@ -183,6 +181,26 @@ const sendJson = (res, data) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(JSON.stringify(data, jsonReplacer));
 };
+// In-memory TTL cache for read-heavy analytics routes (30–60s to reduce DB/RPC load)
+const ANALYTICS_CACHE_TTL_MS = Number(process.env.ANALYTICS_CACHE_TTL_MS) || 60_000;
+const analyticsCache = new Map();
+function getAnalyticsCacheKey(path, query) {
+    const q = Object.keys(query)
+        .filter((k) => query[k] != null)
+        .sort()
+        .map((k) => `${k}=${query[k]}`)
+        .join('&');
+    return q ? `${path}?${q}` : path;
+}
+function getCachedAnalytics(key) {
+    const entry = analyticsCache.get(key);
+    if (!entry || Date.now() > entry.expiresAt)
+        return null;
+    return entry.data;
+}
+function setCachedAnalytics(key, data) {
+    analyticsCache.set(key, { data, expiresAt: Date.now() + ANALYTICS_CACHE_TTL_MS });
+}
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -230,7 +248,7 @@ async function initializeServices() {
             logger_1.logger.error('Startup: failed to expire pending withdrawals', err);
         }
         // Chain analytics (on-chain games: Plinko, Keno, Lottery, BigWheel)
-        const chainAnalytics = new chain_analytics_service_1.ChainAnalyticsService();
+        const chainAnalytics = new chain_analytics_service_1.ChainAnalyticsService(dbService);
         // API routes
         app.get('/api/player/:address/profile', async (req, res) => {
             try {
@@ -322,6 +340,11 @@ async function initializeServices() {
         });
         // Platform analytics: Blackjack (DB) + Plinko, Keno, Lottery, BigWheel (chain)
         app.get('/api/analytics/platform', async (req, res) => {
+            const cacheKey = getAnalyticsCacheKey('/api/analytics/platform', {});
+            const cached = getCachedAnalytics(cacheKey);
+            if (cached != null) {
+                return sendJson(res, cached);
+            }
             try {
                 const [blackjack, chain] = await Promise.all([
                     dbService.getGlobalAnalytics(),
@@ -347,14 +370,16 @@ async function initializeServices() {
                     totalVolume: bjVolume + plinkoVolume + kenoVolume + lotteryVolume + bigWheelVolume,
                     totalPayouts: bjPayouts + plinkoPayouts + kenoPayouts + lotteryPayouts + bigWheelPayouts,
                 };
-                sendJson(res, {
+                const payload = {
                     blackjack,
                     plinko: chain.plinko,
                     keno: chain.keno,
                     lottery: chain.lottery,
                     bigWheel: chain.bigWheel,
                     combined,
-                });
+                };
+                setCachedAnalytics(cacheKey, payload);
+                sendJson(res, payload);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching platform analytics:', error);
@@ -363,10 +388,17 @@ async function initializeServices() {
         });
         // Public: recent Blackjack wins (for Latest Wins feed)
         app.get('/api/analytics/recent-wins', async (req, res) => {
+            const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+            const cacheKey = getAnalyticsCacheKey('/api/analytics/recent-wins', { limit: String(limit) });
+            const cached = getCachedAnalytics(cacheKey);
+            if (cached != null) {
+                return sendJson(res, cached);
+            }
             try {
-                const limit = Math.min(parseInt(req.query.limit) || 20, 50);
                 const wins = await dbService.getRecentGlobalWins(limit);
-                sendJson(res, { wins });
+                const payload = { wins };
+                setCachedAnalytics(cacheKey, payload);
+                sendJson(res, payload);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching recent wins:', error);
@@ -375,14 +407,21 @@ async function initializeServices() {
         });
         // Public: metrics time-series for charts (24h hourly, 7d/30d/all daily)
         app.get('/api/analytics/series', async (req, res) => {
+            const range = (req.query.range || '24h');
+            if (!['24h', '7d', '30d', 'all'].includes(range)) {
+                res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
+                return;
+            }
+            const cacheKey = getAnalyticsCacheKey('/api/analytics/series', { range });
+            const cached = getCachedAnalytics(cacheKey);
+            if (cached != null) {
+                return sendJson(res, cached);
+            }
             try {
-                const range = (req.query.range || '24h');
-                if (!['24h', '7d', '30d', 'all'].includes(range)) {
-                    res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
-                    return;
-                }
                 const series = await dbService.getMetricsSeries(range);
-                sendJson(res, { range, series });
+                const payload = { range, series };
+                setCachedAnalytics(cacheKey, payload);
+                sendJson(res, payload);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching metrics series:', error);
@@ -391,12 +430,17 @@ async function initializeServices() {
         });
         // Public: global metrics aggregates (wagered, won, deposited, withdrawn) with time range filtering
         app.get('/api/analytics/global-metrics', async (req, res) => {
+            const range = (req.query.range || '24h');
+            if (!['24h', '7d', '30d', 'all'].includes(range)) {
+                res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
+                return;
+            }
+            const cacheKey = getAnalyticsCacheKey('/api/analytics/global-metrics', { range });
+            const cached = getCachedAnalytics(cacheKey);
+            if (cached != null) {
+                return sendJson(res, cached);
+            }
             try {
-                const range = (req.query.range || '24h');
-                if (!['24h', '7d', '30d', 'all'].includes(range)) {
-                    res.status(400).json({ error: 'Invalid range. Use 24h, 7d, 30d, or all' });
-                    return;
-                }
                 // Get Blackjack metrics (filtered by range)
                 const aggregates = await dbService.getMetricsAggregates(range);
                 // Get chain stats (all-time, but we'll use them for "all" range)
@@ -421,9 +465,9 @@ async function initializeServices() {
                 const totalWon = range === 'all'
                     ? blackjackWon + plinkoWon + kenoWon + lotteryWon + bigWheelWon
                     : blackjackWon;
-                // Deposits and withdrawals: from Blackjack V2 contract events (all-time)
+                // Deposits and withdrawals: from DB-derived totals (updated on withdraw; deposits incremental from chain)
                 const { totalDeposited, totalWithdrawn } = await chainAnalytics.getBlackjackDepositWithdrawTotals();
-                sendJson(res, {
+                const payload = {
                     range,
                     totalWagered: totalWagered.toString(),
                     totalWon: totalWon.toString(),
@@ -451,7 +495,9 @@ async function initializeServices() {
                             won: bigWheelWon.toString(),
                         },
                     },
-                });
+                };
+                setCachedAnalytics(cacheKey, payload);
+                sendJson(res, payload);
             }
             catch (error) {
                 logger_1.logger.error('Error fetching global metrics:', error);
@@ -1267,10 +1313,7 @@ async function initializeServices() {
             }
         });
         // Withdraw prepare: server signs withdrawal approval (amount = min(DB balance, contract reserve))
-        const withdrawPublicClient = (0, viem_1.createPublicClient)({
-            chain: chains_1.pulsechain,
-            transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
-        });
+        const publicClient = (0, chain_client_1.getPublicClient)();
         const blackjackContractAddress = process.env.BLACKJACK_CONTRACT_ADDRESS;
         if (!blackjackContractAddress) {
             throw new Error('BLACKJACK_CONTRACT_ADDRESS env var is required');
@@ -1307,7 +1350,7 @@ async function initializeServices() {
                 // Get database balance for this specific wallet
                 const dbBalance = await dbService.getPlayerBalance(normalizedAddress);
                 // Get contract reserve for this specific wallet
-                const contractReserve = await withdrawPublicClient.readContract({
+                const contractReserve = await publicClient.readContract({
                     address: blackjackContractAddress,
                     abi: blackjack_1.blackjackAbi,
                     functionName: 'getPlayerReserve',
@@ -1368,11 +1411,26 @@ async function initializeServices() {
 // Graceful shutdown (schedulers ref set in initializeServices)
 let freerollScheduler = null;
 let tournamentScheduler = null;
+const PG_POOL_DOUBLE_RELEASE_MSG = 'Release called on client which has already been released to the pool';
 process.on('uncaughtException', (err) => {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes(PG_POOL_DOUBLE_RELEASE_MSG)) {
+        logger_1.logger.warn('pg-pool double-release (known race under load/disconnect) — ignoring', {
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        return;
+    }
     console.error('[FATAL] Uncaught exception — keeping server alive:', err);
     logger_1.logger.error('Uncaught exception:', err);
 });
 process.on('unhandledRejection', (reason) => {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    if (message.includes(PG_POOL_DOUBLE_RELEASE_MSG)) {
+        logger_1.logger.warn('pg-pool double-release (unhandled rejection) — ignoring', {
+            stack: reason instanceof Error ? reason.stack : undefined,
+        });
+        return;
+    }
     console.error('[FATAL] Unhandled rejection — keeping server alive:', reason);
     logger_1.logger.error('Unhandled rejection:', reason);
 });

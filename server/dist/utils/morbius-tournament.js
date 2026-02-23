@@ -13,6 +13,7 @@ const accounts_1 = require("viem/accounts");
 const chains_1 = require("viem/chains");
 const morbius_tournament_1 = require("../abi/morbius-tournament");
 const logger_1 = require("./logger");
+const chain_client_1 = require("./chain-client");
 const MORBIUS_TOURNAMENT_ADDRESS = '0x1F30Aa16B4Da0124308E33b8650C351BBCA70704';
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY);
 let walletClient = null;
@@ -100,10 +101,7 @@ async function setMorbiusTournamentActive(onChainTournamentId) {
 async function hasJoinedMorbiusTournament(onChainTournamentId, playerAddress) {
     // Address is hardcoded, always available
     try {
-        const publicClient = (0, viem_1.createPublicClient)({
-            chain: chains_1.pulsechain,
-            transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
-        });
+        const publicClient = (0, chain_client_1.getPublicClient)();
         const result = await publicClient.readContract({
             address: MORBIUS_TOURNAMENT_ADDRESS,
             abi: morbius_tournament_1.morbiusTournamentAbi,
@@ -128,10 +126,7 @@ async function joinMorbiusTournament(onChainTournamentId, playerAddress, buyInAm
     // This is a verification-only function.
     const id = BigInt(onChainTournamentId);
     try {
-        const publicClient = (0, viem_1.createPublicClient)({
-            chain: chains_1.pulsechain,
-            transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
-        });
+        const publicClient = (0, chain_client_1.getPublicClient)();
         const hasJoined = await publicClient.readContract({
             address: MORBIUS_TOURNAMENT_ADDRESS,
             abi: morbius_tournament_1.morbiusTournamentAbi,
@@ -216,10 +211,7 @@ async function refundMorbiusTournamentPlayer(onChainTournamentId, playerAddress)
  */
 async function getMorbiusTournamentPrizePool(onChainTournamentId) {
     try {
-        const publicClient = (0, viem_1.createPublicClient)({
-            chain: chains_1.pulsechain,
-            transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
-        });
+        const publicClient = (0, chain_client_1.getPublicClient)();
         const result = await publicClient.readContract({
             address: MORBIUS_TOURNAMENT_ADDRESS,
             abi: morbius_tournament_1.morbiusTournamentAbi,

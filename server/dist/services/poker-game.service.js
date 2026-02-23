@@ -258,6 +258,9 @@ class PokerGameService {
             return this.getTableState(tableId, normalized);
         }
         if (action === 'check') {
+            const toCall = await this.getCurrentBetToCall(pool, handId, street, actingPosition, maxSeats);
+            if (toCall > 0n)
+                throw new Error('Cannot check when there is a bet to call');
             await pool.query(`INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order") VALUES ($1, $2, $3, 'check', 0, $4)`, [handId, normalized, street, nextOrder]);
             await this.advanceOrShowdown(pool, tableId, handId, hand, table, maxSeats);
             return this.getTableState(tableId, normalized);

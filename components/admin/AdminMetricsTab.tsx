@@ -3,15 +3,25 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount, useReadContract } from 'wagmi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatEther } from 'viem';
-import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
-import { BarChart3, RefreshCw } from 'lucide-react';
+import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { BarChart3, RefreshCw, Activity } from 'lucide-react';
 import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BIGWHEEL_ADDRESS } from '@/lib/contracts';
 import { PLINKO_ABI } from '@/abi/plinko';
 import { KENO_ABI } from '@/lib/keno-abi';
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2';
 
 type Range = '24h' | '7d' | '30d' | 'all';
+
+export interface GlobalMetricsPayload {
+  range: string;
+  totalWagered: string;
+  totalWon: string;
+  totalDeposited: string;
+  totalWithdrawn: string;
+  breakdown?: Record<string, { wagered: string; won: string }>;
+}
 
 export interface AdminMetricsData {
   range: string;
@@ -78,6 +88,41 @@ const RANGES: { value: Range; label: string }[] = [
   { value: 'all', label: 'All' },
 ];
 
+// Shared embossed panel style (Plinko/theme)
+const EMBOSSED_PANEL = {
+  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+  border: '1px inset rgba(60, 60, 60, 0.5)',
+};
+
+/** Single grouped card: one panel with a grid of label/value pairs. */
+function MetricPanel({
+  title,
+  children,
+  className,
+}: { title?: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-lg border border-cyan-500/30 p-3 ${className ?? ''}`} style={EMBOSSED_PANEL}>
+      {title && <h3 className="text-xs font-semibold text-cyan-400 mb-3">{title}</h3>}
+      {children}
+    </div>
+  );
+}
+
+/** One label + value row inside a MetricPanel grid. */
+function MetricRow({
+  label,
+  value,
+  valueClassName = 'text-white font-mono text-sm font-bold',
+}: { label: string; value: React.ReactNode; valueClassName?: string }) {
+  return (
+    <div>
+      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-0.5">{label}</p>
+      <p className={valueClassName}>{value}</p>
+    </div>
+  );
+}
+
 // BigWheel ABI for getGlobalStats
 const BIGWHEEL_GET_GLOBAL_STATS_ABI = [
   {
@@ -98,7 +143,9 @@ const BIGWHEEL_GET_GLOBAL_STATS_ABI = [
 export default function AdminMetricsTab() {
   const { address } = useAccount();
   const [range, setRange] = useState<Range>('24h');
+  const [gameTab, setGameTab] = useState<string>('overview');
   const [data, setData] = useState<AdminMetricsData | null>(null);
+  const [globalMetrics, setGlobalMetrics] = useState<GlobalMetricsPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,21 +206,26 @@ export default function AdminMetricsTab() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch Blackjack stats from the same endpoint the home page uses (works correctly)
-      const [platformRes, adminRes] = await Promise.all([
+      const [platformRes, adminRes, globalRes] = await Promise.all([
         fetch('/api/analytics/platform'),
         fetch(`/api/admin/metrics?range=${range}`, {
           headers: { 'x-admin-wallet': address },
         }),
+        fetch(`/api/analytics/global-metrics?range=${range}`),
       ]);
-      
+
       if (!platformRes.ok) throw new Error(`Platform API HTTP ${platformRes.status}`);
       if (!adminRes.ok) throw new Error(`Admin API HTTP ${adminRes.status}`);
-      
+
       const platformData = await platformRes.json();
       const adminData = await adminRes.json();
-      
-      // Merge: Use full Blackjack data from platform API (works), tournaments and series from admin API
+      if (globalRes.ok) {
+        const globalData = await globalRes.json();
+        setGlobalMetrics(globalData);
+      } else {
+        setGlobalMetrics(null);
+      }
+
       setData({
         range: adminData.range || range,
         blackjack: platformData.blackjack || {
@@ -221,6 +273,13 @@ export default function AdminMetricsTab() {
   useEffect(() => {
     fetchMetrics();
   }, [fetchMetrics]);
+
+  // Auto-refresh for realtime charts (every 60s when range is 24h)
+  useEffect(() => {
+    if (!address || range !== '24h') return;
+    const interval = setInterval(fetchMetrics, 60_000);
+    return () => clearInterval(interval);
+  }, [address, range, fetchMetrics]);
 
   if (!address) {
     return (
@@ -300,424 +359,236 @@ export default function AdminMetricsTab() {
         <CardContent className="py-2 px-3">
           {error && <p className="text-[11px] text-red-400 mb-2">{error}</p>}
           {loading && !data && <p className="text-[11px] text-slate-500">Loading…</p>}
-          {(data || plinkoData || kenoData || lotteryData || bigWheelData) && (
-            <div className="space-y-4 text-[11px]">
-              {/* Blackjack Metrics */}
-              {data && (
-                <div>
-                  <h3 className="text-xs font-semibold text-cyan-400 mb-3">Blackjack</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {/* Total Players */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Total Players</p>
-                      <p className="text-white font-mono text-sm font-bold">{formatNumber(data.blackjack?.total_players || 0)}</p>
-                    </div>
 
-                    {/* Active Players */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Active Players</p>
-                      <p className="text-emerald-400 font-mono text-sm font-bold">{formatNumber(data.blackjack?.active_players || 0)}</p>
-                    </div>
+          <Tabs value={gameTab} onValueChange={setGameTab} className="mt-2">
+            <TabsList className="h-9 w-full grid grid-cols-4 sm:grid-cols-7 bg-slate-800/80 border border-slate-700/50 rounded-lg p-1 text-xs">
+              <TabsTrigger value="overview" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">Overview</TabsTrigger>
+              <TabsTrigger value="blackjack" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">Blackjack</TabsTrigger>
+              <TabsTrigger value="plinko" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">Plinko</TabsTrigger>
+              <TabsTrigger value="keno" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">Keno</TabsTrigger>
+              <TabsTrigger value="lottery" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">Lottery</TabsTrigger>
+              <TabsTrigger value="bigwheel" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">BigWheel</TabsTrigger>
+              <TabsTrigger value="tournaments" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[10px] sm:text-xs">Tournaments</TabsTrigger>
+            </TabsList>
 
-                    {/* Total Games */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Total Games</p>
-                      <p className="text-white font-mono text-sm font-bold">{formatNumber(data.blackjack?.total_games_played || 0)}</p>
-                    </div>
-
-                    {/* Total Volume */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Total Volume</p>
-                      <p className="text-white font-mono text-sm font-bold">{formatMorbius(data.blackjack?.total_volume || '0')} MORBIUS</p>
-                    </div>
-
-                    {/* Total Payouts */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Total Payouts</p>
-                      <p className="text-white font-mono text-sm font-bold">{formatMorbius(data.blackjack?.total_payouts || '0')} MORBIUS</p>
-                    </div>
-
-                    {/* House Profit */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">House Profit</p>
-                      <p className={`font-mono text-sm font-bold ${Number(data.blackjack?.house_profit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {formatMorbius(data.blackjack?.house_profit || '0')} MORBIUS
-                      </p>
-                    </div>
-
-                    {/* Games Last Hour */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Games (1h)</p>
-                      <p className="text-white font-mono text-sm font-bold">{formatNumber(data.blackjack?.games_last_hour || 0)}</p>
-                    </div>
-
-                    {/* Games Last 24h */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Games (24h)</p>
-                      <p className="text-white font-mono text-sm font-bold">{formatNumber(data.blackjack?.games_last_24_hours || 0)}</p>
-                    </div>
-
-                    {/* Volume Last 24h */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Volume (24h)</p>
-                      <p className="text-white font-mono text-sm font-bold">{formatMorbius(data.blackjack?.volume_last_24_hours || '0')} MORBIUS</p>
-                    </div>
-
-                    {/* Profit Last 24h */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Profit (24h)</p>
-                      <p className={`font-mono text-sm font-bold ${Number(data.blackjack?.profit_last_24_hours || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {formatMorbius(data.blackjack?.profit_last_24_hours || '0')} MORBIUS
-                      </p>
-                    </div>
-
-                    {/* Average Win Rate */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Avg Win Rate</p>
-                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.average_win_rate || 0).toFixed(2)}%</p>
-                    </div>
-
-                    {/* Average Bet Size */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Avg Bet Size</p>
-                      <p className="text-white font-mono text-sm font-bold">{formatMorbius(String(data.blackjack?.average_bet_size || 0))} MORBIUS</p>
-                    </div>
-
-                    {/* House Edge */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">House Edge</p>
-                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.house_edge || 0).toFixed(2)}%</p>
-                    </div>
-
-                    {/* Active Connections */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Active Connections</p>
-                      <p className="text-emerald-400 font-mono text-sm font-bold">{formatNumber(data.blackjack?.active_connections || 0)}</p>
-                    </div>
-
-                    {/* Blackjack Rate */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Blackjack Rate</p>
-                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.blackjack_rate || 0).toFixed(2)}%</p>
-                    </div>
-
-                    {/* Split Rate */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Split Rate</p>
-                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.split_rate || 0).toFixed(2)}%</p>
-                    </div>
-
-                    {/* Double Down Rate */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Double Down Rate</p>
-                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.double_down_rate || 0).toFixed(2)}%</p>
-                    </div>
-
-                    {/* Surrender Rate */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Surrender Rate</p>
-                      <p className="text-white font-mono text-sm font-bold">{(data.blackjack?.surrender_rate || 0).toFixed(2)}%</p>
-                    </div>
-
-                    {/* Pending Settlements */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Pending Settlements</p>
-                      <p className="text-amber-400 font-mono text-sm font-bold">{formatNumber(data.blackjack?.pending_settlements || 0)}</p>
-                    </div>
-
-                    {/* Failed Settlements */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Failed Settlements</p>
-                      <p className="text-red-400 font-mono text-sm font-bold">{formatNumber(data.blackjack?.failed_settlements || 0)}</p>
-                    </div>
-
-                    {/* Largest Bet */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Largest Bet</p>
-                      <p className="text-yellow-400 font-mono text-sm font-bold">{formatMorbius(data.blackjack?.largest_bet || '0')} MORBIUS</p>
-                    </div>
-
-                    {/* Largest Payout */}
-                    <div 
-                      className="rounded-lg border border-cyan-500/30 p-3"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      <p className="text-cyan-400/80 text-[10px] font-medium uppercase tracking-wider mb-1">Largest Payout</p>
-                      <p className="text-yellow-400 font-mono text-sm font-bold">{formatMorbius(data.blackjack?.largest_payout || '0')} MORBIUS</p>
-                    </div>
-                  </div>
+            <TabsContent value="overview" className="mt-3 space-y-4 focus-visible:outline-none">
+              {globalMetrics && (
+                <div className="rounded-lg border border-cyan-500/30 p-3 grid grid-cols-2 sm:grid-cols-4 gap-4" style={EMBOSSED_PANEL}>
+                  <MetricRow label="Wagered" value={formatMorbius(globalMetrics.totalWagered ?? globalMetrics.breakdown?.blackjack?.wagered ?? '0')} />
+                  <MetricRow label="Won" value={formatMorbius(globalMetrics.totalWon ?? globalMetrics.breakdown?.blackjack?.won ?? '0')} />
+                  <MetricRow label="Deposited" value={formatMorbius(globalMetrics.totalDeposited ?? '0')} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
+                  <MetricRow label="Withdrawn" value={formatMorbius(globalMetrics.totalWithdrawn ?? '0')} valueClassName="text-amber-400 font-mono text-sm font-bold" />
                 </div>
               )}
 
-              {/* Plinko Metrics */}
-              <div>
-                <h3 className="text-xs font-semibold text-slate-300 mb-2">Plinko</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Total Drops</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(plinkoData?.totalDrops ?? 0n)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Balls Sold</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(plinkoData?.totalBallsSold ?? 0n)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Revenue</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(plinkoData?.totalRevenue ?? 0n)} MORBIUS</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Payouts</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(plinkoData?.totalPayouts ?? 0n)} MORBIUS</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Reserve</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(plinkoData?.contractReserve ?? 0n)} MORBIUS</p>
-                  </div>
-                </div>
+          {/* Realtime charts: volume and games over time (theme-styled) */}
+          {data && chartData.length > 0 && (
+            <div
+              className="rounded-lg border border-cyan-500/30 p-3 mb-4"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Activity className="w-4 h-4 text-cyan-400" />
+                <h3 className="text-xs font-semibold text-cyan-400">Realtime charts</h3>
+                {range === '24h' && (
+                  <span className="text-[10px] text-slate-500">(refreshes every 60s)</span>
+                )}
               </div>
-
-              {/* Keno Metrics */}
-              <div>
-                <h3 className="text-xs font-semibold text-slate-300 mb-2">Keno</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Total Wagered</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(kenoData?.totalWagered ?? 0n)} MORBIUS</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Total Won</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(kenoData?.totalWon ?? 0n)} MORBIUS</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Tickets</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(kenoData?.ticketCount ?? 0n)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Active Round</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(kenoData?.activeRoundId ?? 0n)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Lottery Metrics */}
-              <div>
-                <h3 className="text-xs font-semibold text-slate-300 mb-2">Lottery</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Total Tickets</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(lotteryData.totalTicketsEver)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Total Collected</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(lotteryData.totalCollected)} MORBIUS</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Total Claimed</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(lotteryData.totalClaimed)} MORBIUS</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* BigWheel Metrics */}
-              <div>
-                <h3 className="text-xs font-semibold text-slate-300 mb-2">BigWheel</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Spins</p>
-                    <p className="text-slate-200 font-mono">{formatNumber(bigWheelData?.spins ?? 0n)}</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Volume</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(bigWheelData?.volume ?? 0n)} MORBIUS</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Payouts</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(bigWheelData?.payouts ?? 0n)} MORBIUS</p>
-                  </div>
-                  <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                    <p className="text-slate-500 text-[10px]">Balance</p>
-                    <p className="text-slate-200 font-mono">{formatMorbius(bigWheelData?.contractBalance ?? 0n)} MORBIUS</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tournament Metrics */}
-              {data && (
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-300 mb-2">Tournaments</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">Total</p>
-                      <p className="text-slate-200 font-mono">{formatNumber(data.tournaments?.totalTournaments || 0)}</p>
-                    </div>
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">Active</p>
-                      <p className="text-emerald-400 font-mono">{formatNumber(data.tournaments?.activeTournaments || 0)}</p>
-                    </div>
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">Completed</p>
-                      <p className="text-slate-200 font-mono">{formatNumber(data.tournaments?.completedTournaments || 0)}</p>
-                    </div>
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">Total Entries</p>
-                      <p className="text-slate-200 font-mono">{formatNumber(data.tournaments?.totalEntries || 0)}</p>
-                    </div>
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">Prize Pool</p>
-                      <p className="text-yellow-400 font-mono">{formatMorbius(data.tournaments?.totalPrizePool || '0')} MORBIUS</p>
-                    </div>
-                    <div className="rounded border border-slate-700/50 p-2 bg-slate-800/50">
-                      <p className="text-slate-500 text-[10px]">Total Buy-Ins</p>
-                      <p className="text-slate-200 font-mono">{formatMorbius(data.tournaments?.totalBuyIns || '0')} MORBIUS</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Volume Chart (Blackjack only) */}
-              {data && chartData.length > 0 && (
-                <div className="rounded border border-slate-700/50 p-2 bg-slate-800/30 h-40">
-                  <p className="text-slate-500 text-[10px] mb-1">Blackjack Volume over time</p>
-                  <ResponsiveContainer width="100%" height="90%">
-                    <AreaChart data={chartData} margin={{ top: 2, right: 2, left: 0, bottom: 0 }}>
-                      <XAxis dataKey="label" tick={{ fontSize: 9 }} stroke="#64748b" />
-                      <YAxis tick={{ fontSize: 9 }} stroke="#64748b" tickFormatter={(v) => (v >= 1e3 ? `${v / 1e3}k` : String(v))} />
-                      <Area type="monotone" dataKey="volumeNum" stroke="rgba(139, 92, 246, 0.8)" fill="rgba(139, 92, 246, 0.2)" strokeWidth={1} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="min-h-[200px]">
+                  <p className="text-slate-500 text-[10px] mb-1">Volume over time</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={chartData} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="adminVolumeGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="rgba(34, 211, 238, 0.4)" />
+                          <stop offset="100%" stopColor="rgba(34, 211, 238, 0.05)" />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.6)' }} stroke="#64748b" />
+                      <YAxis tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.6)' }} stroke="#64748b" tickFormatter={(v) => (v >= 1e3 ? `${v / 1e3}k` : String(v))} />
+                      <Area type="monotone" dataKey="volumeNum" stroke="rgba(34, 211, 238, 0.9)" fill="url(#adminVolumeGrad)" strokeWidth={1.5} isAnimationActive={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-              )}
+                <div className="min-h-[200px]">
+                  <p className="text-slate-500 text-[10px] mb-1">Games over time</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={chartData} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="adminGamesGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="rgba(139, 92, 246, 0.4)" />
+                          <stop offset="100%" stopColor="rgba(139, 92, 246, 0.05)" />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.6)' }} stroke="#64748b" />
+                      <YAxis tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.6)' }} stroke="#64748b" />
+                      <Area type="monotone" dataKey="games" stroke="rgba(139, 92, 246, 0.9)" fill="url(#adminGamesGrad)" strokeWidth={1.5} isAnimationActive={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </div>
           )}
+              {(data || plinkoData || kenoData || lotteryData || bigWheelData) && (
+                <div className="rounded-lg border border-cyan-500/30 p-3" style={EMBOSSED_PANEL}>
+                  <h3 className="text-xs font-semibold text-cyan-400 mb-3">At a glance</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-[11px]">
+                    {data && (
+                      <div><p className="text-cyan-400/80 text-[10px]">Blackjack</p><p className="text-white font-mono text-sm">{formatMorbius(data.blackjack?.total_volume || '0')} vol · {formatNumber(data.blackjack?.total_games_played || 0)} games</p></div>
+                    )}
+                    {plinkoData && <div><p className="text-cyan-400/80 text-[10px]">Plinko</p><p className="text-white font-mono text-sm">{formatMorbius(plinkoData.totalRevenue)} rev · {formatNumber(plinkoData.totalDrops)} drops</p></div>}
+                    {kenoData && <div><p className="text-cyan-400/80 text-[10px]">Keno</p><p className="text-white font-mono text-sm">{formatMorbius(kenoData.totalWagered)} wagered · {formatNumber(kenoData.ticketCount)} tickets</p></div>}
+                    {lotteryData && <div><p className="text-cyan-400/80 text-[10px]">Lottery</p><p className="text-white font-mono text-sm">{formatNumber(lotteryData.totalTicketsEver)} tickets · {formatMorbius(lotteryData.totalCollected)} collected</p></div>}
+                    {bigWheelData && <div><p className="text-cyan-400/80 text-[10px]">BigWheel</p><p className="text-white font-mono text-sm">{formatNumber(bigWheelData.spins)} spins · {formatMorbius(bigWheelData.volume)} vol</p></div>}
+                    {data?.tournaments && <div><p className="text-cyan-400/80 text-[10px]">Tournaments</p><p className="text-white font-mono text-sm">{formatNumber(data.tournaments.totalTournaments)} total · {formatNumber(data.tournaments.activeTournaments)} active</p></div>}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="blackjack" className="mt-3 space-y-4 focus-visible:outline-none">
+              {data ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <MetricPanel title="Summary">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <MetricRow label="Total Players" value={formatNumber(data.blackjack?.total_players || 0)} />
+                        <MetricRow label="Active Players" value={formatNumber(data.blackjack?.active_players || 0)} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
+                        <MetricRow label="Total Games" value={formatNumber(data.blackjack?.total_games_played || 0)} />
+                        <MetricRow label="Total Volume" value={`${formatMorbius(data.blackjack?.total_volume || '0')} MORBIUS`} />
+                        <MetricRow label="Total Payouts" value={`${formatMorbius(data.blackjack?.total_payouts || '0')} MORBIUS`} />
+                        <MetricRow label="House Profit" value={`${formatMorbius(data.blackjack?.house_profit || '0')} MORBIUS`} valueClassName={`font-mono text-sm font-bold ${Number(data.blackjack?.house_profit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`} />
+                      </div>
+                    </MetricPanel>
+                    <MetricPanel title="Last 24h">
+                      <div className="grid grid-cols-2 gap-3">
+                        <MetricRow label="Games (1h)" value={formatNumber(data.blackjack?.games_last_hour || 0)} />
+                        <MetricRow label="Games (24h)" value={formatNumber(data.blackjack?.games_last_24_hours || 0)} />
+                        <MetricRow label="Volume (24h)" value={`${formatMorbius(data.blackjack?.volume_last_24_hours || '0')} MORBIUS`} />
+                        <MetricRow label="Profit (24h)" value={`${formatMorbius(data.blackjack?.profit_last_24_hours || '0')} MORBIUS`} valueClassName={`font-mono text-sm font-bold ${Number(data.blackjack?.profit_last_24_hours || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`} />
+                      </div>
+                    </MetricPanel>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <MetricPanel title="Rates & activity">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <MetricRow label="Avg Win Rate" value={`${(data.blackjack?.average_win_rate || 0).toFixed(2)}%`} />
+                        <MetricRow label="House Edge" value={`${(data.blackjack?.house_edge || 0).toFixed(2)}%`} />
+                        <MetricRow label="Avg Bet Size" value={`${formatMorbius(String(data.blackjack?.average_bet_size || 0))} MORBIUS`} />
+                        <MetricRow label="Active Connections" value={formatNumber(data.blackjack?.active_connections || 0)} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
+                        <MetricRow label="Blackjack Rate" value={`${(data.blackjack?.blackjack_rate || 0).toFixed(2)}%`} />
+                        <MetricRow label="Split Rate" value={`${(data.blackjack?.split_rate || 0).toFixed(2)}%`} />
+                        <MetricRow label="Double Down Rate" value={`${(data.blackjack?.double_down_rate || 0).toFixed(2)}%`} />
+                        <MetricRow label="Surrender Rate" value={`${(data.blackjack?.surrender_rate || 0).toFixed(2)}%`} />
+                      </div>
+                    </MetricPanel>
+                    <MetricPanel title="Settlements & extremes">
+                      <div className="grid grid-cols-2 gap-3">
+                        <MetricRow label="Pending Settlements" value={formatNumber(data.blackjack?.pending_settlements || 0)} valueClassName="text-amber-400 font-mono text-sm font-bold" />
+                        <MetricRow label="Failed Settlements" value={formatNumber(data.blackjack?.failed_settlements || 0)} valueClassName="text-red-400 font-mono text-sm font-bold" />
+                        <MetricRow label="Largest Bet" value={`${formatMorbius(data.blackjack?.largest_bet || '0')} MORBIUS`} valueClassName="text-yellow-400 font-mono text-sm font-bold" />
+                        <MetricRow label="Largest Payout" value={`${formatMorbius(data.blackjack?.largest_payout || '0')} MORBIUS`} valueClassName="text-yellow-400 font-mono text-sm font-bold" />
+                      </div>
+                    </MetricPanel>
+                  </div>
+                  {chartData.length > 0 && (
+                    <MetricPanel title="Volume over time">
+                      <ResponsiveContainer width="100%" height={160}>
+                        <AreaChart data={chartData} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="adminVolumeBjGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="rgba(34, 211, 238, 0.3)" />
+                              <stop offset="100%" stopColor="rgba(34, 211, 238, 0.05)" />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                          <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.6)' }} stroke="#64748b" />
+                          <YAxis tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.6)' }} stroke="#64748b" tickFormatter={(v) => (v >= 1e3 ? `${v / 1e3}k` : String(v))} />
+                          <Area type="monotone" dataKey="volumeNum" stroke="rgba(34, 211, 238, 0.9)" fill="url(#adminVolumeBjGrad)" strokeWidth={1.5} isAnimationActive={false} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </MetricPanel>
+                  )}
+                </>
+              ) : (
+                <p className="text-slate-500 text-sm">Connect wallet and ensure backend is running to load Blackjack metrics.</p>
+              )}
+            </TabsContent>
+            <TabsContent value="plinko" className="mt-3 focus-visible:outline-none">
+              {plinkoData ? (
+                <MetricPanel>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                    <MetricRow label="Total Drops" value={formatNumber(plinkoData?.totalDrops ?? 0n)} />
+                    <MetricRow label="Balls Sold" value={formatNumber(plinkoData?.totalBallsSold ?? 0n)} />
+                    <MetricRow label="Revenue" value={`${formatMorbius(plinkoData?.totalRevenue ?? 0n)} MORBIUS`} />
+                    <MetricRow label="Payouts" value={`${formatMorbius(plinkoData?.totalPayouts ?? 0n)} MORBIUS`} />
+                    <MetricRow label="Reserve" value={`${formatMorbius(plinkoData?.contractReserve ?? 0n)} MORBIUS`} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
+                  </div>
+                </MetricPanel>
+              ) : (
+                <p className="text-slate-500 text-sm">Loading Plinko contract data…</p>
+              )}
+            </TabsContent>
+            <TabsContent value="keno" className="mt-3 focus-visible:outline-none">
+              {kenoData ? (
+                <MetricPanel>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <MetricRow label="Total Wagered" value={`${formatMorbius(kenoData?.totalWagered ?? 0n)} MORBIUS`} />
+                    <MetricRow label="Total Won" value={`${formatMorbius(kenoData?.totalWon ?? 0n)} MORBIUS`} />
+                    <MetricRow label="Tickets" value={formatNumber(kenoData?.ticketCount ?? 0n)} />
+                    <MetricRow label="Active Round" value={formatNumber(kenoData?.activeRoundId ?? 0n)} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
+                  </div>
+                </MetricPanel>
+              ) : (
+                <p className="text-slate-500 text-sm">Loading Keno contract data…</p>
+              )}
+            </TabsContent>
+            <TabsContent value="lottery" className="mt-3 focus-visible:outline-none">
+              <MetricPanel>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  <MetricRow label="Total Tickets" value={formatNumber(lotteryData.totalTicketsEver)} />
+                  <MetricRow label="Total Collected" value={`${formatMorbius(lotteryData.totalCollected)} MORBIUS`} />
+                  <MetricRow label="Total Claimed" value={`${formatMorbius(lotteryData.totalClaimed)} MORBIUS`} valueClassName="text-amber-400 font-mono text-sm font-bold" />
+                </div>
+              </MetricPanel>
+            </TabsContent>
+            <TabsContent value="bigwheel" className="mt-3 focus-visible:outline-none">
+              {bigWheelData ? (
+                <MetricPanel>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <MetricRow label="Spins" value={formatNumber(bigWheelData?.spins ?? 0n)} />
+                    <MetricRow label="Volume" value={`${formatMorbius(bigWheelData?.volume ?? 0n)} MORBIUS`} />
+                    <MetricRow label="Payouts" value={`${formatMorbius(bigWheelData?.payouts ?? 0n)} MORBIUS`} />
+                    <MetricRow label="Balance" value={`${formatMorbius(bigWheelData?.contractBalance ?? 0n)} MORBIUS`} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
+                  </div>
+                </MetricPanel>
+              ) : (
+                <p className="text-slate-500 text-sm">Loading BigWheel contract data…</p>
+              )}
+            </TabsContent>
+            <TabsContent value="tournaments" className="mt-3 focus-visible:outline-none">
+              {data?.tournaments ? (
+                <MetricPanel>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <MetricRow label="Total" value={formatNumber(data.tournaments.totalTournaments)} />
+                    <MetricRow label="Active" value={formatNumber(data.tournaments.activeTournaments)} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
+                    <MetricRow label="Completed" value={formatNumber(data.tournaments.completedTournaments)} />
+                    <MetricRow label="Total Entries" value={formatNumber(data.tournaments.totalEntries)} />
+                    <MetricRow label="Prize Pool" value={`${formatMorbius(data.tournaments.totalPrizePool ?? '0')} MORBIUS`} valueClassName="text-yellow-400 font-mono text-sm font-bold" />
+                    <MetricRow label="Total Buy-Ins" value={`${formatMorbius(data.tournaments.totalBuyIns ?? '0')} MORBIUS`} />
+                  </div>
+                </MetricPanel>
+              ) : (
+                <p className="text-slate-500 text-sm">Connect wallet and ensure backend is running to load Tournament metrics.</p>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>

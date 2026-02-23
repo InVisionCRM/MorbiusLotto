@@ -1,8 +1,9 @@
-import { createWalletClient, createPublicClient, http } from 'viem';
+import { createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
 import { morbiusTournamentAbi } from '../abi/morbius-tournament';
 import { logger } from './logger';
+import { getPublicClient } from './chain-client';
 
 const MORBIUS_TOURNAMENT_ADDRESS = '0x1F30Aa16B4Da0124308E33b8650C351BBCA70704' as const;
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY) as `0x${string}` | undefined;
@@ -103,10 +104,7 @@ export async function hasJoinedMorbiusTournament(
 ): Promise<boolean> {
   // Address is hardcoded, always available
   try {
-    const publicClient = createPublicClient({
-      chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
-    });
+    const publicClient = getPublicClient();
     const result = await publicClient.readContract({
       address: MORBIUS_TOURNAMENT_ADDRESS,
       abi: morbiusTournamentAbi,
@@ -136,10 +134,7 @@ export async function joinMorbiusTournament(
   // This is a verification-only function.
   const id = BigInt(onChainTournamentId);
   try {
-    const publicClient = createPublicClient({
-      chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
-    });
+    const publicClient = getPublicClient();
     const hasJoined = await publicClient.readContract({
       address: MORBIUS_TOURNAMENT_ADDRESS,
       abi: morbiusTournamentAbi,
@@ -232,10 +227,7 @@ export async function getMorbiusTournamentPrizePool(
   onChainTournamentId: number | bigint
 ): Promise<bigint> {
   try {
-    const publicClient = createPublicClient({
-      chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
-    });
+    const publicClient = getPublicClient();
     const result = await publicClient.readContract({
       address: MORBIUS_TOURNAMENT_ADDRESS,
       abi: morbiusTournamentAbi,

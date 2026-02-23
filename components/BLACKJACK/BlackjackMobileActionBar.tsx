@@ -92,7 +92,10 @@ export function BlackjackMobileActionBar({
             boxShadow: canHit ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <Plus className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
+          <span className="flex flex-col items-center justify-center gap-0.5">
+            <Plus className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
+            <span className="text-white/95 text-[10px] sm:text-xs font-medium drop-shadow-sm leading-tight">Hit</span>
+          </span>
         </button>
 
         {/* STAND */}
@@ -107,7 +110,10 @@ export function BlackjackMobileActionBar({
             boxShadow: canStand ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <Hand className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
+          <span className="flex flex-col items-center justify-center gap-0.5">
+            <Hand className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
+            <span className="text-white/95 text-[10px] sm:text-xs font-medium drop-shadow-sm leading-tight">Stand</span>
+          </span>
         </button>
 
         {/* DOUBLE */}
@@ -127,7 +133,10 @@ export function BlackjackMobileActionBar({
             boxShadow: canDoubleDown ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <Copy className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
+          <span className="flex flex-col items-center justify-center gap-0.5">
+            <Copy className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
+            <span className="text-white/95 text-[10px] sm:text-xs font-medium drop-shadow-sm leading-tight">Double</span>
+          </span>
         </button>
 
         {/* SPLIT */}
@@ -147,7 +156,10 @@ export function BlackjackMobileActionBar({
             boxShadow: canSplit ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <Split className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm" strokeWidth={2.5} aria-hidden />
+          <span className="flex flex-col items-center justify-center gap-0.5">
+            <Split className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
+            <span className="text-white/95 text-[10px] sm:text-xs font-medium drop-shadow-sm leading-tight">Split</span>
+          </span>
         </button>
         </div>
 

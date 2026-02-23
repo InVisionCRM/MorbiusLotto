@@ -256,6 +256,29 @@ class DatabaseService {
       VALUES ($1::NUMERIC, $2, $3::NUMERIC, 'pending')
     `;
         await this.pool.query(query, [nonce.toString(), normalizedAddress, amount.toString()]);
+        await this.addToBlackjackWithdrawnTotal(amount);
+    }
+    /** Get stored Blackjack platform totals (deposit/withdraw). Used by chain-analytics for derived totals. */
+    async getBlackjackPlatformTotals() {
+        const result = await this.pool.query(`SELECT total_deposited, total_withdrawn, last_scanned_block FROM blackjack_platform_totals WHERE id = 1`);
+        if (result.rows.length === 0)
+            return null;
+        const r = result.rows[0];
+        return {
+            totalDeposited: BigInt(r.total_deposited ?? '0'),
+            totalWithdrawn: BigInt(r.total_withdrawn ?? '0'),
+            lastScannedBlock: r.last_scanned_block != null ? BigInt(r.last_scanned_block) : null,
+        };
+    }
+    /** Update Blackjack platform totals (after full or incremental chain scan). */
+    async updateBlackjackPlatformTotals(totalDeposited, totalWithdrawn, lastScannedBlock) {
+        await this.pool.query(`UPDATE blackjack_platform_totals SET total_deposited = $1::NUMERIC, total_withdrawn = $2::NUMERIC, last_scanned_block = $3, updated_at = NOW() WHERE id = 1`, [totalDeposited.toString(), totalWithdrawn.toString(), lastScannedBlock != null ? Number(lastScannedBlock) : null]);
+    }
+    /** Add amount to stored total_withdrawn when a pending withdrawal is created. */
+    async addToBlackjackWithdrawnTotal(amount) {
+        if (amount <= 0n)
+            return;
+        await this.pool.query(`UPDATE blackjack_platform_totals SET total_withdrawn = total_withdrawn + $1::NUMERIC, updated_at = NOW() WHERE id = 1`, [amount.toString()]);
     }
     async expirePendingWithdrawals() {
         // Expire pending withdrawals older than 10 minutes and refund balances (cleanup orphaned)

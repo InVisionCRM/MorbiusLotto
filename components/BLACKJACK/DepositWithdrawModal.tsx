@@ -26,14 +26,14 @@ interface DepositWithdrawModalProps {
   onClose: () => void
   onBalanceSync?: () => Promise<void> // Callback to sync balance after deposit/withdraw (overwrites DB with contract)
   onRefreshBalance?: () => Promise<void> // Callback to refresh display from server only (safe, no overwrite)
+  onWithdrawSuccess?: () => void | Promise<void> // Optional: called after successful withdrawal (e.g. refetch contract reserve)
   contractReserve?: bigint // Contract reserve for withdrawals (still needed for withdraw limits)
   offChainBalance?: bigint // Off-chain balance from server (for display)
 }
 
-export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefreshBalance, contractReserve, offChainBalance }: DepositWithdrawModalProps) {
-  // Display balance: prefer off-chain balance (most up-to-date), fallback to contract reserve
-  // Use offChainBalance if available and > 0, otherwise use contractReserve
-  const displayBalance = (offChainBalance !== undefined && offChainBalance !== null && offChainBalance > BigInt(0))
+export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefreshBalance, onWithdrawSuccess, contractReserve, offChainBalance }: DepositWithdrawModalProps) {
+  // Display balance: prefer off-chain whenever it's defined (including 0 after withdraw), else contract reserve
+  const displayBalance = (offChainBalance !== undefined && offChainBalance !== null)
     ? offChainBalance
     : (contractReserve !== undefined && contractReserve !== null ? contractReserve : BigInt(0));
   const { address } = useAccount()
@@ -373,6 +373,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         } catch (syncErr) {
           console.error('Balance sync failed after withdrawal:', syncErr)
           toast.info('Refresh the page to update your balance', { duration: 4000 })
+        }
+      }
+      if (onWithdrawSuccess) {
+        try {
+          await Promise.resolve(onWithdrawSuccess())
+        } catch (err) {
+          console.error('onWithdrawSuccess failed:', err)
         }
       }
       setWithdrawAmount('')

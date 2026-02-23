@@ -1,3 +1,4 @@
+import type { DatabaseService } from './database.service';
 export interface PlinkoChainStats {
     totalDrops: bigint;
     totalBallsSold: bigint;
@@ -29,13 +30,17 @@ export interface BigWheelChainStats {
     contractReserveBalance: bigint;
 }
 export declare class ChainAnalyticsService {
+    private readonly dbService;
+    constructor(dbService: DatabaseService);
     getPlinkoStats(): Promise<PlinkoChainStats | null>;
     getKenoStats(): Promise<KenoChainStats | null>;
     getLotteryStats(): Promise<LotteryChainStats | null>;
     getBigWheelStats(): Promise<BigWheelChainStats | null>;
     /**
-     * All-time total MORBIUS deposited and withdrawn for Blackjack V2 (from contract events).
-     * Deposit = PLS swaps (morbiusAmount) + direct DepositMORBIUS(amount). Withdrawal = Withdrawal(amount).
+     * All-time total MORBIUS deposited and withdrawn for Blackjack V2.
+     * Derived from our own data: total_withdrawn is updated when we create a pending withdrawal;
+     * total_deposited is updated by incremental chain scan (from last_scanned_block to current).
+     * On first run or if no last_scanned_block, runs a full chain scan and persists to DB.
      */
     getBlackjackDepositWithdrawTotals(): Promise<{
         totalDeposited: bigint;

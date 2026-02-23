@@ -5,7 +5,7 @@ import { useAccount, usePublicClient, useSignTypedData } from 'wagmi';
 import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
-import { BlackjackTopPlayersOverlay } from '@/components/BLACKJACK/BlackjackTopPlayersOverlay';
+import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers';
 import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar';
 import { ChatPanel } from '@/components/chat/ChatPanel';
@@ -2685,6 +2685,7 @@ export default function BlackjackPage() {
                 currentBetAmount={displayBetAmount}
                 onHalfBet={handleHalfBet}
                   onDoubleBet={handleDoubleBet}
+                  playerReserves={offChainBalance}
                 />
               </div>
               <div className="w-1/2 md:w-full flex items-stretch min-w-0">
@@ -2743,9 +2744,8 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Top Players + Chat + Table token: grid 3-col on lg (Tournament card commented out) */}
+        {/* Top Players + Chat + Table token: grid 3-col on lg */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-          <BlackjackTopPlayersOverlay />
           <div className="min-h-[280px] lg:min-h-[340px] flex flex-col min-w-0">
             <ChatPanel
               roomId="blackjack"
@@ -2762,6 +2762,7 @@ export default function BlackjackPage() {
             getThemeInfo={getThemeInfo}
             getTableProfile={getTableProfile}
           />
+          <BlackjackTopPlayers />
           {/* Tournament card - commented out
           <div
             className="min-h-[280px] lg:min-h-[340px] rounded-xl overflow-hidden flex flex-col min-w-0"
@@ -2841,6 +2842,7 @@ export default function BlackjackPage() {
           onClose={() => setShowDepositModal(false)}
           onBalanceSync={syncBalance}
           onRefreshBalance={fetchBalance}
+          onWithdrawSuccess={async () => { await refetchPlayerReserve(); }}
           contractReserve={typeof playerReserve === 'bigint' ? playerReserve : BigInt(0)}
           offChainBalance={offChainBalance}
         />

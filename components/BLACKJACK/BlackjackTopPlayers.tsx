@@ -33,6 +33,7 @@ function shortAddress(addr: string): string {
 export default function BlackjackTopPlayers() {
   const { data: players, isLoading, error } = useBlackjackTopPlayers(TOP_N)
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
+    const isBackendUnreachable = typeof message === 'string' && (message.includes('Cannot reach backend') || message.includes('Check CORS'))
 
   if (error) {
     const message = error instanceof Error ? error.message : 'Failed to load leaderboard.'

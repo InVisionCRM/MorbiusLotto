@@ -81,7 +81,15 @@ export default function BlackjackSidebar({
   }
 
   return (
-    <div className="w-full min-w-0 flex flex-col h-full min-h-0 rounded-xl overflow-hidden" style={Theme.panel.sidebar}>
+    <div
+      className="w-full min-w-0 flex flex-col h-full min-h-0 rounded-xl overflow-hidden"
+      style={{ ...Theme.panel.sidebar, containerType: 'inline-size', containerName: 'sidebar' }}
+    >
+      <style>{`
+        @container sidebar (max-width: 200px) {
+          .sidebar-tab-label { display: none; }
+        }
+      `}</style>
       {/* Layout E — Card grid: each tab as a card with icon + label. 3 cols = 2 rows for 6 tabs, more space per tab */}
       <div
         className={`grid gap-2 p-3 shrink-0 flex-none items-start bg-black/20 ${tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}
@@ -102,7 +110,7 @@ export default function BlackjackSidebar({
               title={label}
             >
               <Icon className="w-5 h-5 shrink-0" />
-              <span className="text-xs font-medium truncate w-full text-center">{shortLabel}</span>
+              <span className="sidebar-tab-label text-xs font-medium truncate w-full text-center">{shortLabel}</span>
             </button>
           )
         })}

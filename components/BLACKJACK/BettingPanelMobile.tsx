@@ -12,6 +12,8 @@ export interface BettingPanelMobileProps {
   currentBetAmount?: string;
   onHalfBet?: () => void;
   onDoubleBet?: () => void;
+  /** Player reserve balance (wei) — shown to the right of "AMOUNT" when provided */
+  playerReserves?: bigint;
 }
 
 /** Betting panel for all screens: amount input, Morbius logo, 1/2 and 2x buttons. Chip stack on table updates as user types. */
@@ -22,6 +24,7 @@ export function BettingPanelMobile({
   currentBetAmount = '0',
   onHalfBet,
   onDoubleBet,
+  playerReserves,
 }: BettingPanelMobileProps) {
   const numValue = Math.floor(parseFloat(currentBetAmount || '0') || 0);
   const displayValue = numValue === 0 ? '0' : String(numValue);
@@ -85,7 +88,17 @@ export function BettingPanelMobile({
   return (
     <section className="w-full max-w-md mx-auto px-2 py-1">
       <div className="flex flex-col gap-1 w-full">
-        <span className="text-xs text-gray-400 uppercase tracking-wider">Amount</span>
+        <div className="flex items-center justify-between gap-2 w-full">
+          <span className="text-xs text-gray-400 uppercase tracking-wider">Amount</span>
+          {playerReserves !== undefined && (
+            <span className="text-xs text-gray-400 font-poppins tabular-nums">
+              Reserve: {(() => {
+                const whole = formatEther(playerReserves).split('.')[0];
+                return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+              })()}
+            </span>
+          )}
+        </div>
         <div className="flex items-stretch w-full rounded-lg border border-white/20 overflow-hidden" style={{ minHeight: '36px' }}>
           {/* Manual entry + logo — ~2/3 width */}
           <div className="flex-1 flex items-center gap-2 pl-2 pr-2 min-w-0">
