@@ -413,7 +413,7 @@ export class DatabaseService {
     const normalizedAddress = this.normalizeAddress(walletAddress);
     const query = `
       SELECT nonce, amount FROM pending_withdrawals
-      WHERE wallet_address = $1 AND status = 'pending'
+      WHERE LOWER(wallet_address) = LOWER($1) AND status = 'pending'
       ORDER BY created_at DESC LIMIT 1
     `;
     const result = await this.pool.query(query, [normalizedAddress]);
@@ -501,13 +501,13 @@ export class DatabaseService {
     return result.rows.length;
   }
 
-  /** Expire all pending withdrawals for a wallet (any age). Used when user requests a new withdrawal. */
+  /** Expire all pending withdrawals for a wallet (any age). Only used by cron — NOT on prepare (would allow double withdrawal). */
   async expirePendingWithdrawalsForWallet(walletAddress: string): Promise<number> {
     const normalizedAddress = this.normalizeAddress(walletAddress);
     const query = `
       UPDATE pending_withdrawals
       SET status = 'expired'
-      WHERE wallet_address = $1 AND status = 'pending'
+      WHERE LOWER(wallet_address) = LOWER($1) AND status = 'pending'
       RETURNING amount
     `;
     const result = await this.pool.query(query, [normalizedAddress]);

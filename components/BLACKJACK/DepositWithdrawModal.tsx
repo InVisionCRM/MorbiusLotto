@@ -359,15 +359,26 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
       await publicClient.waitForTransactionReceipt({ hash: txHash })
 
-      // Tell server to mark this pending withdrawal completed so expiry cron never refunds it
-      try {
-        await fetch(`${getBlackjackServerUrl()}/api/withdraw/confirm`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address, nonce: String(nonce) }),
-        })
-      } catch (confirmErr) {
-        console.error('Withdraw confirm failed (balance may still be correct):', confirmErr)
+      // Mark pending withdrawal completed so expiry cron never refunds (prevents double withdrawal)
+      let confirmOk = false
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await fetch(`${serverUrl}/api/withdraw/confirm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address, nonce: String(nonce) }),
+          })
+          if (res.ok) {
+            confirmOk = true
+            break
+          }
+        } catch (e) {
+          console.error(`Withdraw confirm attempt ${attempt} failed:`, e)
+        }
+        if (attempt < 3) await new Promise((r) => setTimeout(r, 1000))
+      }
+      if (!confirmOk) {
+        console.error('Withdraw confirm failed after 3 attempts — balance may double-credit if you withdraw again. Refresh the page.')
       }
 
       // Show success
