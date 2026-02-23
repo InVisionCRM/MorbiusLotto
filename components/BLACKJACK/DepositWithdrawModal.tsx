@@ -421,17 +421,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
   const maxDepositPLS = plsBalance ? Math.floor(Number(formatEther(plsBalance))) : 0
   const maxDepositMORBIUS = morbiusBalance ? Math.floor(Number(formatEther(morbiusBalance))) : 0
-  // Cap by off-chain balance (source of truth) so user cannot withdraw more than they have
+  // Withdrawable = off-chain balance (server signs up to dbBalance; contract handles liquidity/daily limits)
   const maxWithdraw =
-    contractReserve !== undefined &&
-    contractReserve !== null &&
-    offChainBalance !== undefined &&
-    offChainBalance !== null
-      ? Math.min(
-          Math.floor(Number(formatEther(contractReserve))),
-          Math.floor(Number(formatEther(offChainBalance)))
-        )
-      : contractReserve
+    offChainBalance !== undefined && offChainBalance !== null
+      ? Math.floor(Number(formatEther(offChainBalance)))
+      : contractReserve !== undefined && contractReserve !== null
         ? Math.floor(Number(formatEther(contractReserve)))
         : 0
 

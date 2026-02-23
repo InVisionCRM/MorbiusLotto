@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatEther } from "viem";
+import { ShareButton } from "./ShareButton";
 
 interface BlackjackBetDataPoint {
   gameNumber: number;
@@ -42,6 +43,7 @@ function toFloatMorbius(valueWei: bigint): number {
 const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef, BlackjackRealTimeBetChartProps>(
   ({ sessionStartTime = Date.now() }, ref) => {
     const [history, setHistory] = useState<BlackjackBetDataPoint[]>([]);
+    const chartRef = useRef<HTMLDivElement>(null);
 
     const addGameResult = useCallback(
       (betAmountWei: bigint, payoutWei: bigint, meta?: { gameId?: string; result?: string }) => {
@@ -89,10 +91,10 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
       });
     }, [history]);
 
-    const totalBets = history.reduce((acc, p) => acc + p.betAmount, 0);
+    const totalWagered = history.reduce((acc, p) => acc + p.betAmount, 0);
     const totalWon = history.reduce((acc, p) => acc + p.payout, 0);
-    const netPnL = totalWon - totalBets;
-    const roi = totalBets > 0 ? ((netPnL / totalBets) * 100).toFixed(1) : "0.0";
+    const netPnL = totalWon - totalWagered;
+    const roi = totalWagered > 0 ? ((netPnL / totalWagered) * 100).toFixed(1) : "0.0";
 
     const getYAxisDomain = () => {
       if (pnlData.length === 0) return [-100, 100];
@@ -133,13 +135,28 @@ const BlackjackRealTimeBetChart = React.forwardRef<BlackjackRealTimeBetChartRef,
         </div>
 
         {/* Chart — fills remaining space; same width/height as container */}
-        <div className="flex-1 min-h-[200px] min-w-0 w-full overflow-hidden">
+        <div className="flex-1 min-h-[200px] min-w-0 w-full overflow-hidden relative">
+          {/* Share button overlay — bottom right */}
+          {history.length > 0 && (
+            <div className="absolute right-2 bottom-2 z-10">
+              <ShareButton
+                chartRef={chartRef}
+                stats={{
+                  totalBets: history.length,
+                  totalWagered,
+                  totalWon,
+                  netPnL,
+                  roi,
+                }}
+              />
+            </div>
+          )}
           {history.length === 0 ? (
             <div className="w-full h-full min-h-[160px] flex items-center justify-center">
               <p className="text-xs text-white/60">P&amp;L chart after first game</p>
             </div>
           ) : (
-            <div className="w-full h-full min-h-[200px]">
+            <div ref={chartRef} className="w-full h-full min-h-[200px]">
               <ResponsiveContainer width="100%" height="100%" minHeight={200} minWidth={0}>
                 <AreaChart data={pnlData} margin={{ top: 10, right: 8, left: 0, bottom: 5 }}>
                 <defs>
