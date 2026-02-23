@@ -1416,6 +1416,33 @@ async function initializeServices() {
       }
     });
 
+    app.post('/api/withdraw/confirm', async (req, res) => {
+      try {
+        const { address, nonce } = req.body;
+        if (!address || typeof address !== 'string') {
+          return res.status(400).json({ error: 'Address required' });
+        }
+        if (nonce == null || (typeof nonce !== 'string' && typeof nonce !== 'number')) {
+          return res.status(400).json({ error: 'Nonce required' });
+        }
+        const normalizedAddress = address.toLowerCase().startsWith('0x')
+          ? address.toLowerCase()
+          : `0x${address.toLowerCase()}`;
+        if (normalizedAddress.length !== 42) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+        const nonceBigInt = BigInt(String(nonce));
+        const updated = await dbService.markPendingWithdrawalCompleted(normalizedAddress, nonceBigInt);
+        if (updated) {
+          logger.info('Withdrawal confirmed (on-chain tx completed)', { address: normalizedAddress, nonce: nonceBigInt.toString() });
+        }
+        return res.status(200).json({ ok: true });
+      } catch (error) {
+        logger.error('Error confirming withdrawal:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     logger.info('WebSocket server initialized');
     logger.info('Database connected');
 

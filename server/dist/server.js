@@ -1356,10 +1356,10 @@ async function initializeServices() {
                     functionName: 'getPlayerReserve',
                     args: [normalizedAddress],
                 });
-                // Cap withdrawal to minimum of: requested amount, DB balance, contract reserve
+                // Cap withdrawal to DB balance only. Contract supports off-chain payouts (house bankroll)
+                // and enforces daily limits (1M per user, 10M global); liquidity is operator's responsibility.
                 const requested = requestedAmount != null ? BigInt(String(requestedAmount)) : dbBalance;
-                const cap = dbBalance < contractReserve ? dbBalance : contractReserve;
-                const amount = requested < cap ? requested : cap;
+                const amount = requested < dbBalance ? requested : dbBalance;
                 if (amount < withdraw_sign_1.MIN_WITHDRAWAL_WEI) {
                     return res.status(400).json({
                         error: 'Insufficient withdrawable balance',

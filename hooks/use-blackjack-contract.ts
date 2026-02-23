@@ -4,13 +4,16 @@ import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2
 import { useAccount } from 'wagmi'
 
 const LEGACY_ZERO = '0x0000000000000000000000000000000000000000'
-const isLegacyConfigured =
-  typeof BLACKJACK_LEGACY_ADDRESS === 'string' &&
-  (BLACKJACK_LEGACY_ADDRESS as string) !== '' &&
-  (BLACKJACK_LEGACY_ADDRESS as string) !== LEGACY_ZERO
 
-function isLegacyAddress(addr: string | undefined): addr is `0x${string}` {
-  return typeof addr === 'string' && addr.length > 0 && addr !== LEGACY_ZERO && addr.startsWith('0x')
+/** Valid Ethereum/PulseChain address: 0x + 40 hex chars (42 total). Rejects truncated env values. */
+export function isLegacyAddress(addr: string | undefined): addr is `0x${string}` {
+  return (
+    typeof addr === 'string' &&
+    addr.length === 42 &&
+    addr.startsWith('0x') &&
+    addr !== LEGACY_ZERO &&
+    /^0x[0-9a-fA-F]{40}$/.test(addr)
+  )
 }
 
 // ============ Read Hooks ============

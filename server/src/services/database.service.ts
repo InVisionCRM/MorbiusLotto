@@ -431,6 +431,22 @@ export class DatabaseService {
     await this.addToBlackjackWithdrawnTotal(amount);
   }
 
+  /**
+   * Mark a pending withdrawal as completed after the user has successfully completed the on-chain tx.
+   * Prevents the expiry cron from refunding the amount (double-credit). Idempotent: safe to call if already completed.
+   */
+  async markPendingWithdrawalCompleted(walletAddress: string, nonce: bigint): Promise<boolean> {
+    const normalizedAddress = this.normalizeAddress(walletAddress);
+    const query = `
+      UPDATE pending_withdrawals
+      SET status = 'completed'
+      WHERE LOWER(wallet_address) = LOWER($1) AND nonce = $2::NUMERIC AND status = 'pending'
+      RETURNING id
+    `;
+    const result = await this.pool.query(query, [normalizedAddress, nonce.toString()]);
+    return result.rows.length > 0;
+  }
+
   /** Get stored Blackjack platform totals (deposit/withdraw). Used by chain-analytics for derived totals. */
   async getBlackjackPlatformTotals(): Promise<{
     totalDeposited: bigint;
