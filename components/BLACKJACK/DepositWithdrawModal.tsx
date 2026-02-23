@@ -8,7 +8,7 @@ import { parseEther, formatEther } from 'viem'
 import { useTokenBalance } from '@/hooks/use-token'
 import { useNativeBalance } from '@/hooks/use-native-balance'
 import { usePlsQuote } from '@/hooks/use-pls-quote'
-import { useBlackjackContract, useLegacyPlayerReserveAt, useLegacyEmergencyPausedAt } from '@/hooks/use-blackjack-contract'
+import { useBlackjackContract, useLegacyPlayerReserveAt, useLegacyEmergencyPausedAt, isLegacyAddress } from '@/hooks/use-blackjack-contract'
 import { useTokenApproval } from '@/hooks/use-token-approval'
 import { getBlackjackServerUrl } from '@/lib/api-urls'
 import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, BLACKJACK_LEGACY_ADDRESS_4, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
@@ -72,7 +72,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const legacy4Reserve = useLegacyPlayerReserveAt(BLACKJACK_LEGACY_ADDRESS_4)
   const legacy4Paused = useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS_4)
   const legacyItems: { address: `0x${string}`; reserve: bigint; paused: boolean; refetch: () => void; label: string }[] = []
-  if (BLACKJACK_LEGACY_ADDRESS) {
+  if (isLegacyAddress(BLACKJACK_LEGACY_ADDRESS)) {
     legacyItems.push({
       address: BLACKJACK_LEGACY_ADDRESS,
       reserve: (legacy1Reserve.data ?? BigInt(0)) as bigint,
@@ -81,7 +81,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       label: (BLACKJACK_LEGACY_ADDRESS_2 || BLACKJACK_LEGACY_ADDRESS_3) ? 'Previous contract (1)' : 'Previous contract',
     })
   }
-  if (BLACKJACK_LEGACY_ADDRESS_2) {
+  if (isLegacyAddress(BLACKJACK_LEGACY_ADDRESS_2)) {
     legacyItems.push({
       address: BLACKJACK_LEGACY_ADDRESS_2,
       reserve: (legacy2Reserve.data ?? BigInt(0)) as bigint,
@@ -90,7 +90,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       label: (BLACKJACK_LEGACY_ADDRESS || BLACKJACK_LEGACY_ADDRESS_3) ? 'Previous contract (2)' : 'Previous contract',
     })
   }
-  if (BLACKJACK_LEGACY_ADDRESS_3) {
+  if (isLegacyAddress(BLACKJACK_LEGACY_ADDRESS_3)) {
     legacyItems.push({
       address: BLACKJACK_LEGACY_ADDRESS_3,
       reserve: (legacy3Reserve.data ?? BigInt(0)) as bigint,
@@ -99,7 +99,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       label: 'Previous contract (3)',
     })
   }
-  if (BLACKJACK_LEGACY_ADDRESS_4) {
+  if (isLegacyAddress(BLACKJACK_LEGACY_ADDRESS_4)) {
     legacyItems.push({
       address: BLACKJACK_LEGACY_ADDRESS_4,
       reserve: (legacy4Reserve.data ?? BigInt(0)) as bigint,
@@ -359,6 +359,17 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
       await publicClient.waitForTransactionReceipt({ hash: txHash })
 
+      // Tell server to mark this pending withdrawal completed so expiry cron never refunds it
+      try {
+        await fetch(`${getBlackjackServerUrl()}/api/withdraw/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, nonce: String(nonce) }),
+        })
+      } catch (confirmErr) {
+        console.error('Withdraw confirm failed (balance may still be correct):', confirmErr)
+      }
+
       // Show success
       toast.success('Withdrawal successful', {
         id: toastId,
@@ -493,7 +504,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               className="fixed top-[50px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-3"
             >
               <Card
-                className={`w-[min(92vw,42rem)] max-h-[75vh] flex flex-col overflow-hidden pointer-events-auto rounded-2xl ${Theme.modal.container}`}
+                className={`w-[92vw] max-w-[42rem] sm:max-w-[48rem] lg:max-w-4xl xl:max-w-5xl max-h-[85vh] flex flex-col overflow-hidden pointer-events-auto rounded-2xl ${Theme.modal.container}`}
                 style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
               >
                 <CardHeader className={`flex flex-row items-center justify-between space-y-0 py-2 px-4 shrink-0 rounded-t-2xl ${Theme.modal.header}`}>
