@@ -23,6 +23,17 @@ const GET_PLAYER_RESERVE_ABI = [
   },
 ] as const;
 
+// Minimal ABI for usedNonces - check if a withdrawal nonce was used on-chain
+const USED_NONCES_ABI = [
+  {
+    inputs: [{ name: '', type: 'uint256' }],
+    name: 'usedNonces',
+    outputs: [{ type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
   name: 'MORBlotto Blackjack',
@@ -890,11 +901,51 @@ export class WebSocketService {
     }
   }
 
+  /**
+   * Resolve any pending withdrawals for a player by checking on-chain nonce usage.
+   * If the nonce was used (withdrawal succeeded on-chain), marks it completed (no refund).
+   * If the nonce was NOT used, leaves it pending for the expiry cron to refund.
+   */
+  private async resolvePendingWithdrawals(playerAddress: string): Promise<void> {
+    const pending = await this.dbService.getActivePendingWithdrawal(playerAddress);
+    if (!pending) return;
+
+    try {
+      const nonceUsed = await this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: USED_NONCES_ABI,
+        functionName: 'usedNonces',
+        args: [BigInt(pending.nonce)],
+      }) as boolean;
+
+      if (nonceUsed) {
+        // Withdrawal succeeded on-chain but confirm POST failed — mark completed now
+        await this.dbService.markPendingWithdrawalCompleted(playerAddress, BigInt(pending.nonce));
+        logger.warn('Resolved pending withdrawal as completed (on-chain nonce used)', {
+          playerAddress,
+          nonce: pending.nonce,
+          amount: pending.amount,
+        });
+      }
+    } catch (rpcErr) {
+      logger.warn('Failed to check nonce for pending withdrawal during sync', {
+        playerAddress,
+        nonce: pending.nonce,
+        error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+      });
+    }
+  }
+
   private async handleSyncBalance(ws: WebSocketClient, message: WebSocketMessage) {
     try {
       if (!ws.playerAddress) {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
+
+      // CRITICAL: Before syncing balance, check if there's a pending withdrawal that
+      // actually completed on-chain (nonce used). If so, mark it completed to prevent
+      // the expiry cron from refunding it (which would duplicate funds).
+      await this.resolvePendingWithdrawals(ws.playerAddress);
 
       // Normalize address (checksum) to avoid viem encodeFunctionData issues
       const playerAddress = getAddress(ws.playerAddress) as `0x${string}`;
@@ -945,6 +996,10 @@ export class WebSocketService {
       if (!ws.playerAddress) {
         return this.sendError(ws, 'Player address not authenticated', message.requestId);
       }
+
+      // CRITICAL: Before reading balance, resolve any pending withdrawals that
+      // completed on-chain but weren't confirmed to the server.
+      await this.resolvePendingWithdrawals(ws.playerAddress);
 
       let balance = await this.dbService.getPlayerBalance(ws.playerAddress);
 

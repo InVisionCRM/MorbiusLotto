@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.setMorbiusTournamentCompleted = setMorbiusTournamentCompleted;
 exports.setMorbiusTournamentActive = setMorbiusTournamentActive;
 exports.hasJoinedMorbiusTournament = hasJoinedMorbiusTournament;
-exports.joinMorbiusTournament = joinMorbiusTournament;
+exports.verifyMorbiusTournamentJoin = verifyMorbiusTournamentJoin;
 exports.cancelMorbiusTournament = cancelMorbiusTournament;
 exports.refundMorbiusTournamentPlayer = refundMorbiusTournamentPlayer;
 exports.getMorbiusTournamentPrizePool = getMorbiusTournamentPrizePool;
@@ -115,11 +115,11 @@ async function hasJoinedMorbiusTournament(onChainTournamentId, playerAddress) {
     }
 }
 /**
- * Join a tournament on-chain (for rebuy). Player must approve MORBIUS token first.
- * This is called server-side when processing a rebuy for an on-chain tournament.
- * NOTE: Frontend should handle approval + join, but this provides server-side verification.
+ * Verify that a player has joined a tournament on-chain.
+ * NOTE: The server cannot call joinTournament() — that requires the player's wallet signature.
+ * This is a read-only verification used when processing rebuys.
  */
-async function joinMorbiusTournament(onChainTournamentId, playerAddress, buyInAmount) {
+async function verifyMorbiusTournamentJoin(onChainTournamentId, playerAddress, buyInAmount) {
     // Address is hardcoded, always available
     // Note: This function verifies the join happened, but doesn't actually call joinTournament
     // because that requires the player's wallet signature. The frontend must handle the actual join.

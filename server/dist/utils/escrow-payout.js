@@ -10,7 +10,6 @@ exports.creatorReclaimFromEscrow = creatorReclaimFromEscrow;
 const viem_1 = require("viem");
 const accounts_1 = require("viem/accounts");
 const chains_1 = require("viem/chains");
-const tournament_prize_escrow_1 = require("../abi/tournament-prize-escrow");
 const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
 const tournament_prize_escrow_v3_1 = require("../abi/tournament-prize-escrow-v3");
 const escrow_status_1 = require("./escrow-status");
@@ -54,7 +53,7 @@ async function sendEscrowPayout(tournamentId, winnerAddress, amount) {
                 account: client.account,
                 chain: chains_1.pulsechain,
                 address: ESCROW_V2_ADDRESS,
-                abi: tournament_prize_escrow_1.tournamentPrizeEscrowAbi,
+                abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'payout',
                 args: [idBytes32, winner, amount],
             });
@@ -97,7 +96,7 @@ async function sendEscrowRemainderToReclaimWallet(tournamentId) {
                 account: client.account,
                 chain: chains_1.pulsechain,
                 address: ESCROW_V2_ADDRESS,
-                abi: tournament_prize_escrow_1.tournamentPrizeEscrowAbi,
+                abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'payoutRemainderTo',
                 args: [idBytes32, RECLAIM_WALLET],
             });
@@ -228,7 +227,7 @@ async function cancelEscrowV3Tournament(onChainTournamentId) {
                 account: client.account,
                 chain: chains_1.pulsechain,
                 address: ESCROW_V3_ADDRESS,
-                abi: tournament_prize_escrow_v3_1.tournamentPrizeEscrowV3Abi, // ABI type doesn't include cancelTournament but it exists in contract
+                abi: tournament_prize_escrow_v3_1.tournamentPrizeEscrowV3Abi,
                 functionName: 'cancelTournament',
                 args: [id],
             });

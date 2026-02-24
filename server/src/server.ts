@@ -1448,12 +1448,69 @@ async function initializeServices() {
     const chainId = Number(process.env.BLACKJACK_CHAIN_ID || 369);
     console.log('[Server] Chain ID:', chainId);
 
-    // Periodic cleanup of expired pending withdrawals (refund balances)
+    // Minimal ABI for checking usedNonces on the Blackjack contract
+    const USED_NONCES_ABI = [
+      {
+        inputs: [{ name: '', type: 'uint256' }],
+        name: 'usedNonces',
+        outputs: [{ type: 'bool' }],
+        stateMutability: 'view',
+        type: 'function',
+      },
+    ] as const;
+
+    // Periodic cleanup of expired pending withdrawals.
+    // CRITICAL: Before refunding a pending withdrawal, check on-chain whether the nonce
+    // was actually used (meaning the withdrawal DID succeed on-chain). If it was used,
+    // mark it completed instead of expired — do NOT refund the DB balance.
     setInterval(async () => {
       try {
-        const expired = await dbService.expirePendingWithdrawals();
-        if (expired > 0) {
-          logger.info(`Expired ${expired} pending withdrawal(s) and refunded balances`);
+        const expired = await dbService.getExpiredPendingWithdrawals();
+        if (expired.length === 0) return;
+
+        let refundedCount = 0;
+        let completedCount = 0;
+
+        for (const row of expired) {
+          try {
+            // Check on-chain if this nonce was actually used (withdrawal succeeded)
+            const nonceUsed = await publicClient.readContract({
+              address: blackjackContractAddress,
+              abi: USED_NONCES_ABI,
+              functionName: 'usedNonces',
+              args: [BigInt(row.nonce)],
+            }) as boolean;
+
+            if (nonceUsed) {
+              // Withdrawal DID happen on-chain — mark completed, do NOT refund
+              await dbService.markPendingWithdrawalCompleted(row.wallet_address, BigInt(row.nonce));
+              completedCount++;
+              logger.warn('Expired pending withdrawal was actually completed on-chain — marked completed (no refund)', {
+                address: row.wallet_address,
+                nonce: row.nonce,
+                amount: row.amount,
+              });
+            } else {
+              // Withdrawal did NOT happen on-chain — safe to refund
+              await dbService.expireSinglePendingWithdrawal(row.wallet_address, BigInt(row.nonce), BigInt(row.amount));
+              refundedCount++;
+            }
+          } catch (rpcErr) {
+            // If we can't verify on-chain, do NOT refund — err on the side of caution.
+            // The withdrawal will stay pending and be re-checked next cycle.
+            logger.error('Failed to check nonce on-chain for pending withdrawal — skipping (will retry)', {
+              address: row.wallet_address,
+              nonce: row.nonce,
+              error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+            });
+          }
+        }
+
+        if (refundedCount > 0) {
+          logger.info(`Expired ${refundedCount} pending withdrawal(s) and refunded balances`);
+        }
+        if (completedCount > 0) {
+          logger.info(`Marked ${completedCount} pending withdrawal(s) as completed (on-chain nonce used, no refund)`);
         }
       } catch (err) {
         logger.error('Error expiring pending withdrawals:', err);

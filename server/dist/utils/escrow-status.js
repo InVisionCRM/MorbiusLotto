@@ -27,8 +27,8 @@ async function getEscrowPoolStatus(tournamentId) {
                 functionName: 'getPool',
                 args: [idBytes32],
             });
-            // V2 returns: token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled
-            const [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled] = result;
+            // V2 returns: token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled, active
+            const [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled, active] = result;
             return {
                 token,
                 totalDeposited,
@@ -36,6 +36,7 @@ async function getEscrowPoolStatus(tournamentId) {
                 depositor,
                 depositedAt,
                 cancelled,
+                active,
             };
         }
         catch (v2Error) {

@@ -161,6 +161,7 @@ export async function getPoolDetails(tournamentId: string): Promise<EscrowPoolDe
       bigint,
       bigint,
       bigint,
+      boolean,
       boolean
     ];
     

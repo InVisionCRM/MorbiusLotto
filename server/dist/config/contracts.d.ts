@@ -9,8 +9,7 @@ export declare const BLACKJACK_ADDRESS: `0x${string}`;
 export declare const BLACKJACK_LEGACY_ADDRESS: `0x${string}`;
 export declare const BLACKJACK_LEGACY_ADDRESS_2: `0x${string}`;
 export declare const BLACKJACK_LEGACY_ADDRESS_3: `0x${string}`;
-export declare const BLACKJACK_LEGACY_ADDRESS_4: `0x${string}`;
-/** All Blackjack contracts to show in admin health: current first, then legacy 1–4 (only those set). */
+/** All Blackjack contracts to show in admin health: current first, then legacy 1–3 (only those set). */
 export declare function getAllBlackjackContracts(): Array<{
     address: `0x${string}`;
     label: string;

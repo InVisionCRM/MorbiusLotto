@@ -171,6 +171,20 @@ export declare class DatabaseService {
         amount: string;
     } | null>;
     createPendingWithdrawal(walletAddress: string, nonce: bigint, amount: bigint): Promise<void>;
+    /**
+     * Atomically deduct the player's balance AND create the pending withdrawal record in a single
+     * transaction. If either step fails, both are rolled back — preventing permanent balance loss
+     * from a partial failure between the two operations.
+     *
+     * Returns the remaining balance after deduction.
+     * Throws if the player has insufficient balance (same as deductPlayerBalance).
+     */
+    deductAndCreatePendingWithdrawal(walletAddress: string, nonce: bigint, amount: bigint): Promise<bigint>;
+    /**
+     * Mark a pending withdrawal as completed after the user has successfully completed the on-chain tx.
+     * Prevents the expiry cron from refunding the amount (double-credit). Idempotent: safe to call if already completed.
+     */
+    markPendingWithdrawalCompleted(walletAddress: string, nonce: bigint, txHash?: string): Promise<boolean>;
     /** Get stored Blackjack platform totals (deposit/withdraw). Used by chain-analytics for derived totals. */
     getBlackjackPlatformTotals(): Promise<{
         totalDeposited: bigint;
@@ -182,7 +196,7 @@ export declare class DatabaseService {
     /** Add amount to stored total_withdrawn when a pending withdrawal is created. */
     addToBlackjackWithdrawnTotal(amount: bigint): Promise<void>;
     expirePendingWithdrawals(): Promise<number>;
-    /** Expire all pending withdrawals for a wallet (any age). Used when user requests a new withdrawal. */
+    /** Expire all pending withdrawals for a wallet (any age). Only used by cron — NOT on prepare (would allow double withdrawal). */
     expirePendingWithdrawalsForWallet(walletAddress: string): Promise<number>;
     syncPlayerBalanceWithContract(walletAddress: string, contractBalance: bigint): Promise<void>;
     /**
@@ -248,6 +262,46 @@ export declare class DatabaseService {
     isAddressBlocked(walletAddress: string): Promise<boolean>;
     addBlockedAddress(walletAddress: string): Promise<void>;
     removeBlockedAddress(walletAddress: string): Promise<void>;
+    createReport(data: {
+        walletAddress?: string;
+        category: string;
+        description: string;
+        pageUrl?: string;
+        userAgent?: string;
+        balanceSnapshot?: bigint;
+        recentErrors?: unknown[];
+    }): Promise<string>;
+    getReports(status?: string, limit?: number): Promise<{
+        id: string;
+        wallet_address: string | null;
+        category: string;
+        description: string;
+        page_url: string | null;
+        user_agent: string | null;
+        balance_snapshot: string | null;
+        recent_errors: unknown[] | null;
+        status: string;
+        created_at: Date;
+    }[]>;
+    updateReportStatus(id: string, status: 'read' | 'resolved'): Promise<boolean>;
+    /** How many reports has this wallet submitted in the last N minutes (rate limiting). */
+    getRecentReportCountByWallet(walletAddress: string, windowMinutes: number): Promise<number>;
+    /**
+     * Record a single on-chain deposit for a player.
+     * Uses ON CONFLICT DO NOTHING so re-scanning the same block range is safe.
+     */
+    logDeposit(walletAddress: string, amount: bigint, txHash: string, blockNumber: bigint | null, blockTimestamp?: bigint): Promise<void>;
+    /**
+     * Return a unified transaction history (deposits + withdrawals) for a wallet,
+     * sorted newest-first.
+     */
+    getPlayerTransactionHistory(walletAddress: string, limit?: number, offset?: number): Promise<Array<{
+        type: 'deposit' | 'withdrawal';
+        amount: string;
+        status: string;
+        tx_hash: string | null;
+        created_at: string;
+    }>>;
     withTransaction<T>(callback: (client: any) => Promise<T>): Promise<T>;
     checkExclusionStatus(walletAddress: string): Promise<{
         isExcluded: boolean;

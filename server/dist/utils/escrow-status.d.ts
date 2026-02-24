@@ -5,6 +5,7 @@ export interface EscrowPoolStatus {
     depositor?: `0x${string}`;
     depositedAt?: bigint;
     cancelled?: boolean;
+    active?: boolean;
 }
 /**
  * Read tournament prize pool status from the escrow contract.

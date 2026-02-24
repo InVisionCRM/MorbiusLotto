@@ -821,40 +821,14 @@ class WebSocketService {
                 args: [playerAddress],
             });
             const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
-            let newBalance;
-            if (contractBalance === 0n && currentDbBalance > 0n) {
-                // On-chain is 0 but DB has a balance. This happens after a contract upgrade
-                // when the DB still holds a stale balance from the previous contract.
-                // Only preserve the DB balance if the player has an active (in-progress) game
-                // or a pending withdrawal — otherwise reset to match the contract.
-                const [hasActive, hasPending] = await Promise.all([
-                    this.dbService.hasActiveGames(ws.playerAddress),
-                    this.dbService.getActivePendingWithdrawal(ws.playerAddress),
-                ]);
-                if (hasActive || hasPending) {
-                    newBalance = currentDbBalance;
-                    logger_1.logger.debug('Balance sync: on-chain 0 but active game/withdrawal exists, preserving DB balance', {
-                        playerAddress: ws.playerAddress,
-                        currentDbBalance: currentDbBalance.toString(),
-                        hasActiveGame: hasActive,
-                        hasPendingWithdrawal: !!hasPending,
-                    });
-                }
-                else {
-                    newBalance = 0n;
-                    await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, 0n);
-                    logger_1.logger.info('Balance sync: reset stale DB balance (on-chain 0, no active games/withdrawals)', {
-                        playerAddress: ws.playerAddress,
-                        previousDbBalance: currentDbBalance.toString(),
-                    });
-                }
-            }
-            else {
-                // Normal case: use max(contract, db) to avoid wiping off-chain winnings
-                newBalance = contractBalance > currentDbBalance ? contractBalance : currentDbBalance;
-                if (newBalance !== currentDbBalance) {
-                    await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
-                }
+            // Use max(contract, db). The DB is authoritative for off-chain winnings and is
+            // always >= 0 after legitimate operations. A contractBalance of 0 is normal after
+            // a full on-chain withdrawal — the player may still have off-chain winnings in DB.
+            // Never wipe the DB balance based on contractBalance; only raise it if the contract
+            // shows a higher reserve (e.g. an on-chain deposit not yet credited to DB).
+            const newBalance = contractBalance > currentDbBalance ? contractBalance : currentDbBalance;
+            if (newBalance !== currentDbBalance) {
+                await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
             }
             logger_1.logger.debug('Balance synced', {
                 playerAddress: ws.playerAddress,
@@ -882,38 +856,27 @@ class WebSocketService {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
             let balance = await this.dbService.getPlayerBalance(ws.playerAddress);
-            // Guard against stale DB balances from previous contract deployments:
-            // if DB > 0, verify the player actually has on-chain reserves on the current contract.
-            if (balance > 0n) {
-                try {
-                    const playerAddress = (0, viem_1.getAddress)(ws.playerAddress);
-                    const contractBalance = await this.publicClient.readContract({
-                        address: this.contractAddress,
-                        abi: GET_PLAYER_RESERVE_ABI,
-                        functionName: 'getPlayerReserve',
-                        args: [playerAddress],
-                    });
-                    if (contractBalance === 0n) {
-                        const [hasActive, hasPending] = await Promise.all([
-                            this.dbService.hasActiveGames(ws.playerAddress),
-                            this.dbService.getActivePendingWithdrawal(ws.playerAddress),
-                        ]);
-                        if (!hasActive && !hasPending) {
-                            logger_1.logger.info('getBalance: resetting stale DB balance (on-chain 0, no active games/withdrawals)', {
-                                playerAddress: ws.playerAddress,
-                                previousDbBalance: balance.toString(),
-                            });
-                            await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, 0n);
-                            balance = 0n;
-                        }
-                    }
+            // If the contract shows a higher reserve than DB (e.g. deposit not yet credited),
+            // raise the DB balance to match. Never lower it — a 0 contract reserve is normal
+            // after a full on-chain withdrawal while off-chain winnings still exist in DB.
+            try {
+                const playerAddress = (0, viem_1.getAddress)(ws.playerAddress);
+                const contractBalance = await this.publicClient.readContract({
+                    address: this.contractAddress,
+                    abi: GET_PLAYER_RESERVE_ABI,
+                    functionName: 'getPlayerReserve',
+                    args: [playerAddress],
+                });
+                if (contractBalance > balance) {
+                    await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, contractBalance);
+                    balance = contractBalance;
                 }
-                catch (rpcErr) {
-                    logger_1.logger.warn('getBalance: contract check failed, returning DB balance as-is', {
-                        playerAddress: ws.playerAddress,
-                        error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
-                    });
-                }
+            }
+            catch (rpcErr) {
+                logger_1.logger.warn('getBalance: contract check failed, returning DB balance as-is', {
+                    playerAddress: ws.playerAddress,
+                    error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+                });
             }
             this.sendMessage(ws, {
                 type: 'balance',

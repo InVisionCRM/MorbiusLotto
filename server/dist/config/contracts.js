@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BIGWHEEL_GET_GLOBAL_STATS_ABI = exports.LOTTERY_STATS_ABI = exports.KENO_GET_GLOBAL_STATS_ABI = exports.PLINKO_GET_GLOBAL_STATS_ABI = exports.BLACKJACK_LEGACY_ADDRESS_4 = exports.BLACKJACK_LEGACY_ADDRESS_3 = exports.BLACKJACK_LEGACY_ADDRESS_2 = exports.BLACKJACK_LEGACY_ADDRESS = exports.BLACKJACK_ADDRESS = exports.BIGWHEEL_ADDRESS = exports.LOTTERY_ADDRESS = exports.KENO_ADDRESS = exports.PLINKO_ADDRESS = exports.MORBIUS_TOKEN_ADDRESS = void 0;
+exports.BIGWHEEL_GET_GLOBAL_STATS_ABI = exports.LOTTERY_STATS_ABI = exports.KENO_GET_GLOBAL_STATS_ABI = exports.PLINKO_GET_GLOBAL_STATS_ABI = exports.BLACKJACK_LEGACY_ADDRESS_3 = exports.BLACKJACK_LEGACY_ADDRESS_2 = exports.BLACKJACK_LEGACY_ADDRESS = exports.BLACKJACK_ADDRESS = exports.BIGWHEEL_ADDRESS = exports.LOTTERY_ADDRESS = exports.KENO_ADDRESS = exports.PLINKO_ADDRESS = exports.MORBIUS_TOKEN_ADDRESS = void 0;
 exports.getAllBlackjackContracts = getAllBlackjackContracts;
 /**
  * Contract addresses and ABIs for platform analytics (Plinko, Keno, Lottery, BigWheel, Blackjack).
@@ -26,11 +26,10 @@ exports.BLACKJACK_ADDRESS = (process.env.BLACKJACK_CONTRACT_ADDRESS || process.e
 exports.BLACKJACK_LEGACY_ADDRESS = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS || '');
 exports.BLACKJACK_LEGACY_ADDRESS_2 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || '');
 exports.BLACKJACK_LEGACY_ADDRESS_3 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_3 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_3 || '');
-exports.BLACKJACK_LEGACY_ADDRESS_4 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_4 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_4 || '');
 function isLegacyAddress(v) {
     return typeof v === 'string' && v.trim().length >= 42 && v.trim().toLowerCase().startsWith('0x');
 }
-/** All Blackjack contracts to show in admin health: current first, then legacy 1–4 (only those set). */
+/** All Blackjack contracts to show in admin health: current first, then legacy 1–3 (only those set). */
 function getAllBlackjackContracts() {
     const list = [
         { address: exports.BLACKJACK_ADDRESS, label: 'Current' },
@@ -38,15 +37,12 @@ function getAllBlackjackContracts() {
     const L1 = (exports.BLACKJACK_LEGACY_ADDRESS || '').trim();
     const L2 = (exports.BLACKJACK_LEGACY_ADDRESS_2 || '').trim();
     const L3 = (exports.BLACKJACK_LEGACY_ADDRESS_3 || '').trim();
-    const L4 = (exports.BLACKJACK_LEGACY_ADDRESS_4 || '').trim();
     if (isLegacyAddress(L1))
         list.push({ address: L1, label: 'Legacy 1' });
     if (isLegacyAddress(L2))
         list.push({ address: L2, label: 'Legacy 2' });
     if (isLegacyAddress(L3))
         list.push({ address: L3, label: 'Legacy 3' });
-    if (isLegacyAddress(L4))
-        list.push({ address: L4, label: 'Legacy 4' });
     return list;
 }
 /** Full Plinko ABI from contracts/abi/plinko.json. */

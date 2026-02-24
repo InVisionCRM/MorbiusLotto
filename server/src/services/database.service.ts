@@ -538,8 +538,8 @@ export class DatabaseService {
   }
 
   async expirePendingWithdrawals(): Promise<number> {
-    // Expire pending withdrawals older than 2 minutes and refund balances (cleanup orphaned).
-    // PulseChain confirms in seconds — anything older than ~2 minutes almost certainly failed.
+    // DEPRECATED: Use getExpiredPendingWithdrawals + expireSinglePendingWithdrawal instead.
+    // This blind-refund version is kept only as a fallback.
     const query = `
       UPDATE pending_withdrawals
       SET status = 'expired'
@@ -551,6 +551,42 @@ export class DatabaseService {
       await this.addPlayerBalance(row.wallet_address, BigInt(row.amount));
     }
     return result.rows.length;
+  }
+
+  /**
+   * Get pending withdrawals older than 2 minutes (candidates for expiry).
+   * Does NOT modify them — caller must verify on-chain before deciding to refund or mark completed.
+   */
+  async getExpiredPendingWithdrawals(): Promise<Array<{ wallet_address: string; nonce: string; amount: string }>> {
+    const query = `
+      SELECT wallet_address, nonce, amount
+      FROM pending_withdrawals
+      WHERE status = 'pending' AND created_at < NOW() - INTERVAL '2 minutes'
+    `;
+    const result = await this.pool.query(query);
+    return result.rows;
+  }
+
+  /**
+   * Expire a single pending withdrawal and refund the balance.
+   * Only call this after verifying on-chain that the nonce was NOT used.
+   */
+  async expireSinglePendingWithdrawal(walletAddress: string, nonce: bigint, amount: bigint): Promise<void> {
+    const normalizedAddress = this.normalizeAddress(walletAddress);
+    await this.withTransaction(async (client) => {
+      const result = await client.query(
+        `UPDATE pending_withdrawals SET status = 'expired'
+         WHERE LOWER(wallet_address) = LOWER($1) AND nonce = $2::NUMERIC AND status = 'pending'
+         RETURNING id`,
+        [normalizedAddress, nonce.toString()],
+      );
+      if (result.rows.length > 0) {
+        await client.query(
+          `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+          [normalizedAddress, amount.toString()],
+        );
+      }
+    });
   }
 
   /** Expire all pending withdrawals for a wallet (any age). Only used by cron — NOT on prepare (would allow double withdrawal). */

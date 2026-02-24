@@ -241,7 +241,7 @@ class DatabaseService {
         const normalizedAddress = this.normalizeAddress(walletAddress);
         const query = `
       SELECT nonce, amount FROM pending_withdrawals
-      WHERE wallet_address = $1 AND status = 'pending'
+      WHERE LOWER(wallet_address) = LOWER($1) AND status = 'pending'
       ORDER BY created_at DESC LIMIT 1
     `;
         const result = await this.pool.query(query, [normalizedAddress]);
@@ -257,6 +257,52 @@ class DatabaseService {
     `;
         await this.pool.query(query, [nonce.toString(), normalizedAddress, amount.toString()]);
         await this.addToBlackjackWithdrawnTotal(amount);
+    }
+    /**
+     * Atomically deduct the player's balance AND create the pending withdrawal record in a single
+     * transaction. If either step fails, both are rolled back — preventing permanent balance loss
+     * from a partial failure between the two operations.
+     *
+     * Returns the remaining balance after deduction.
+     * Throws if the player has insufficient balance (same as deductPlayerBalance).
+     */
+    async deductAndCreatePendingWithdrawal(walletAddress, nonce, amount) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        return this.withTransaction(async (client) => {
+            // Deduct balance (fails if insufficient)
+            const deductResult = await client.query(`UPDATE players SET balance = balance - $2::NUMERIC
+         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+         RETURNING balance`, [normalizedAddress, amount.toString()]);
+            if (deductResult.rows.length === 0) {
+                const current = await client.query(`SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`, [normalizedAddress]);
+                const have = current.rows[0]?.balance ?? '0';
+                throw new Error(`Insufficient balance: have ${have}, need ${amount.toString()}`);
+            }
+            const remainingBalance = BigInt(deductResult.rows[0].balance || '0');
+            // Create pending withdrawal record
+            await client.query(`INSERT INTO pending_withdrawals (nonce, wallet_address, amount, status)
+         VALUES ($1::NUMERIC, $2, $3::NUMERIC, 'pending')`, [nonce.toString(), normalizedAddress, amount.toString()]);
+            // Update platform analytics total
+            await client.query(`UPDATE blackjack_platform_totals
+         SET total_withdrawn = total_withdrawn + $1::NUMERIC, updated_at = NOW()
+         WHERE id = 1`, [amount.toString()]);
+            return remainingBalance;
+        });
+    }
+    /**
+     * Mark a pending withdrawal as completed after the user has successfully completed the on-chain tx.
+     * Prevents the expiry cron from refunding the amount (double-credit). Idempotent: safe to call if already completed.
+     */
+    async markPendingWithdrawalCompleted(walletAddress, nonce, txHash) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const query = `
+      UPDATE pending_withdrawals
+      SET status = 'completed', tx_hash = COALESCE($3, tx_hash)
+      WHERE LOWER(wallet_address) = LOWER($1) AND nonce = $2::NUMERIC AND status = 'pending'
+      RETURNING id
+    `;
+        const result = await this.pool.query(query, [normalizedAddress, nonce.toString(), txHash ?? null]);
+        return result.rows.length > 0;
     }
     /** Get stored Blackjack platform totals (deposit/withdraw). Used by chain-analytics for derived totals. */
     async getBlackjackPlatformTotals() {
@@ -281,11 +327,12 @@ class DatabaseService {
         await this.pool.query(`UPDATE blackjack_platform_totals SET total_withdrawn = total_withdrawn + $1::NUMERIC, updated_at = NOW() WHERE id = 1`, [amount.toString()]);
     }
     async expirePendingWithdrawals() {
-        // Expire pending withdrawals older than 10 minutes and refund balances (cleanup orphaned)
+        // Expire pending withdrawals older than 2 minutes and refund balances (cleanup orphaned).
+        // PulseChain confirms in seconds — anything older than ~2 minutes almost certainly failed.
         const query = `
       UPDATE pending_withdrawals
       SET status = 'expired'
-      WHERE status = 'pending' AND created_at < NOW() - INTERVAL '10 minutes'
+      WHERE status = 'pending' AND created_at < NOW() - INTERVAL '2 minutes'
       RETURNING wallet_address, amount
     `;
         const result = await this.pool.query(query);
@@ -294,13 +341,13 @@ class DatabaseService {
         }
         return result.rows.length;
     }
-    /** Expire all pending withdrawals for a wallet (any age). Used when user requests a new withdrawal. */
+    /** Expire all pending withdrawals for a wallet (any age). Only used by cron — NOT on prepare (would allow double withdrawal). */
     async expirePendingWithdrawalsForWallet(walletAddress) {
         const normalizedAddress = this.normalizeAddress(walletAddress);
         const query = `
       UPDATE pending_withdrawals
       SET status = 'expired'
-      WHERE wallet_address = $1 AND status = 'pending'
+      WHERE LOWER(wallet_address) = LOWER($1) AND status = 'pending'
       RETURNING amount
     `;
         const result = await this.pool.query(query, [normalizedAddress]);
@@ -1101,6 +1148,102 @@ class DatabaseService {
     async removeBlockedAddress(walletAddress) {
         const normalized = this.normalizeAddress(walletAddress);
         await this.pool.query(`DELETE FROM chat_blocked_addresses WHERE wallet_address = $1`, [normalized]);
+    }
+    // ============================================
+    // User Reports
+    // ============================================
+    async createReport(data) {
+        const result = await this.pool.query(`INSERT INTO user_reports (wallet_address, category, description, page_url, user_agent, balance_snapshot, recent_errors)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id`, [
+            data.walletAddress ? this.normalizeAddress(data.walletAddress) : null,
+            data.category,
+            data.description,
+            data.pageUrl ?? null,
+            data.userAgent ?? null,
+            data.balanceSnapshot != null ? data.balanceSnapshot.toString() : null,
+            data.recentErrors ? JSON.stringify(data.recentErrors) : null,
+        ]);
+        return result.rows[0].id;
+    }
+    async getReports(status, limit = 200) {
+        const params = [limit];
+        const where = status ? `WHERE status = $2` : '';
+        if (status)
+            params.push(status);
+        const result = await this.pool.query(`SELECT id, wallet_address, category, description, page_url, user_agent,
+              balance_snapshot::TEXT, recent_errors, status, created_at
+       FROM user_reports
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT $1`, params);
+        return result.rows;
+    }
+    async updateReportStatus(id, status) {
+        const result = await this.pool.query(`UPDATE user_reports SET status = $2 WHERE id = $1 RETURNING id`, [id, status]);
+        return result.rows.length > 0;
+    }
+    /** How many reports has this wallet submitted in the last N minutes (rate limiting). */
+    async getRecentReportCountByWallet(walletAddress, windowMinutes) {
+        const normalized = this.normalizeAddress(walletAddress);
+        const result = await this.pool.query(`SELECT COUNT(*) FROM user_reports
+       WHERE wallet_address = $1 AND created_at > NOW() - INTERVAL '1 minute' * $2`, [normalized, windowMinutes]);
+        return parseInt(result.rows[0].count, 10);
+    }
+    // ============================================
+    // Player deposit history (populated by chain-analytics scans)
+    // ============================================
+    /**
+     * Record a single on-chain deposit for a player.
+     * Uses ON CONFLICT DO NOTHING so re-scanning the same block range is safe.
+     */
+    async logDeposit(walletAddress, amount, txHash, blockNumber, blockTimestamp) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const createdAt = blockTimestamp
+            ? new Date(Number(blockTimestamp) * 1000).toISOString()
+            : null;
+        await this.pool.query(`INSERT INTO player_deposits (wallet_address, amount, tx_hash, block_number, created_at)
+       VALUES ($1, $2::NUMERIC, $3, $4, COALESCE($5::TIMESTAMPTZ, NOW()))
+       ON CONFLICT (tx_hash) DO NOTHING`, [normalizedAddress, amount.toString(), txHash, blockNumber !== null ? Number(blockNumber) : null, createdAt]);
+    }
+    /**
+     * Return a unified transaction history (deposits + withdrawals) for a wallet,
+     * sorted newest-first.
+     */
+    async getPlayerTransactionHistory(walletAddress, limit = 50, offset = 0) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const result = await this.pool.query(`SELECT type, amount::TEXT AS amount, status, tx_hash, created_at
+       FROM (
+         SELECT
+           'deposit'    AS type,
+           amount,
+           'completed'  AS status,
+           tx_hash,
+           created_at
+         FROM player_deposits
+         WHERE LOWER(wallet_address) = LOWER($1)
+
+         UNION ALL
+
+         SELECT
+           'withdrawal' AS type,
+           amount,
+           status,
+           tx_hash,
+           created_at
+         FROM pending_withdrawals
+         WHERE LOWER(wallet_address) = LOWER($1)
+           AND status IN ('completed', 'expired')
+       ) t
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`, [normalizedAddress, limit, offset]);
+        return result.rows.map((r) => ({
+            type: r.type,
+            amount: r.amount ?? '0',
+            status: r.status ?? 'completed',
+            tx_hash: r.tx_hash ?? null,
+            created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+        }));
     }
     // Utility methods
     async withTransaction(callback) {

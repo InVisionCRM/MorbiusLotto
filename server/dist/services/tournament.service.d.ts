@@ -293,7 +293,17 @@ export declare class TournamentService {
      */
     private checkAndDistributePrizes;
     /**
-     * Distribute prizes to top players
+     * Distribute prizes to top players.
+     *
+     * Two-phase design:
+     *  Phase 1 (DB transaction) — calculate prize amounts, write prize_won/final_rank to every
+     *    entry, credit off-chain balances, and mark the tournament 'completed'. This commits
+     *    atomically so the DB is always consistent regardless of what happens next.
+     *  Phase 2 (outside DB transaction) — fire on-chain payouts AFTER the commit. Because
+     *    blockchain transactions cannot be rolled back, keeping them inside a DB transaction
+     *    creates a double-pay risk: if the DB rolls back after an on-chain payment lands, the
+     *    next distributePrizes call re-pays the same winners. Phase 2 failures are logged with
+     *    full detail for manual recovery but do not revert the DB state.
      */
     distributePrizes(tournamentId: string): Promise<PrizeDistribution[]>;
     /**

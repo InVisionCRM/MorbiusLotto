@@ -45,6 +45,24 @@ export declare const tournamentPrizeEscrowV3Abi: readonly [{
         readonly name: "tournamentId";
         readonly type: "uint256";
     }];
+    readonly name: "cancelTournament";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "uint256";
+    }];
+    readonly name: "creatorReclaim";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "uint256";
+    }];
     readonly name: "getPool";
     readonly outputs: readonly [{
         readonly name: "token";
