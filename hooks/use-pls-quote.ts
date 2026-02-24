@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useReadContract } from 'wagmi'
 import type { Address } from 'viem'
 import {
   PULSEX_V1_ROUTER_ADDRESS,
   WPLS_TOKEN_ADDRESS,
   MORBIUS_TOKEN_ADDRESS,
+  WPLS_MORBIUS_PAIR,
+  TOKEN_DECIMALS,
 } from '@/lib/contracts'
 
 const ROUTER_ABI = [
@@ -17,6 +19,27 @@ const ROUTER_ABI = [
       { name: 'path', type: 'address[]' },
     ],
     outputs: [{ name: 'amounts', type: 'uint256[]' }],
+  },
+] as const
+
+const PAIR_ABI = [
+  {
+    inputs: [],
+    name: 'getReserves',
+    outputs: [
+      { type: 'uint112' },
+      { type: 'uint112' },
+      { type: 'uint32' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'token0',
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
   },
 ] as const
 
@@ -40,16 +63,14 @@ const TAX_DIVISOR = BigInt(10000)
 const SLIPPAGE_MULTIPLIER = BigInt(12000) // 20% buffer: 1.2x
 const SLIPPAGE_DIVISOR = BigInt(10000)
 
-// Fallback: Approximate WPLS/MORBIUS ratio based on pool reserves
-// Pool: 124M WPLS / 306M MORBIUS = 1 WPLS ≈ 2.47 MORBIUS
-// Inverted: 1 MORBIUS ≈ 0.405 WPLS
-const FALLBACK_WPLS_PER_MORBIUS = BigInt(2)
-
 export function usePlsQuote({
   morbiusCost,
   enabled = true,
 }: UsePlsQuoteParams): UsePlsQuoteReturn {
-  // Query PulseX router for current exchange rate
+  // DexScreener fallback state
+  const [dexScreenerPrice, setDexScreenerPrice] = useState<bigint | null>(null)
+
+  // Primary: PulseX router getAmountsIn (most accurate, accounts for slippage)
   const {
     data: plsBaseQuote,
     error: plsQuoteError,
@@ -69,32 +90,90 @@ export function usePlsQuote({
     },
   })
 
+  // Secondary: LP reserves (works when router call fails)
+  const { data: token0 } = useReadContract({
+    address: WPLS_MORBIUS_PAIR as Address,
+    abi: PAIR_ABI,
+    functionName: 'token0',
+    query: { enabled },
+  })
+
+  const { data: reserves, isLoading: isLoadingReserves } = useReadContract({
+    address: WPLS_MORBIUS_PAIR as Address,
+    abi: PAIR_ABI,
+    functionName: 'getReserves',
+    query: {
+      enabled,
+      refetchInterval: 30000,
+    },
+  })
+
+  // Tertiary: DexScreener API (last resort, only fetched when on-chain sources fail)
+  const hasOnChainQuote = !!(plsBaseQuote && Array.isArray(plsBaseQuote) && plsBaseQuote[0])
+  const hasReserves = !!(reserves && token0)
+
+  useEffect(() => {
+    if (hasOnChainQuote || hasReserves || !enabled) return
+
+    const fetchDexScreener = async () => {
+      try {
+        const res = await fetch(
+          `https://api.dexscreener.com/latest/dex/pairs/pulsechain/${WPLS_MORBIUS_PAIR}`
+        )
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.pairs?.[0]?.priceNative) {
+          const price = parseFloat(data.pairs[0].priceNative)
+          if (price > 0) {
+            setDexScreenerPrice(BigInt(Math.floor(price * 1e18)))
+          }
+        }
+      } catch {
+        // Non-fatal — will return hasQuote: false
+      }
+    }
+
+    fetchDexScreener()
+  }, [hasOnChainQuote, hasReserves, enabled])
+
   const result = useMemo(() => {
     let basePlsCost = BigInt(0)
     let usingFallback = false
+    let source = ''
 
-    // Try to get quote from DEX
+    // Priority 1: Router getAmountsIn (most accurate)
     if (plsBaseQuote && Array.isArray(plsBaseQuote) && plsBaseQuote[0]) {
       basePlsCost = plsBaseQuote[0]
+      source = 'router'
     }
-    // Fallback: Use estimated rate if DEX query fails or returns zero
-    else if (morbiusCost > BigInt(0)) {
-      basePlsCost = morbiusCost / FALLBACK_WPLS_PER_MORBIUS
+    // Priority 2: LP reserves (calculate from pool ratio)
+    else if (reserves && token0 && morbiusCost > BigInt(0)) {
+      const isToken0Wpls = (token0 as string).toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase()
+      const wplsReserve = isToken0Wpls ? reserves[0] : reserves[1]
+      const morbiusReserve = isToken0Wpls ? reserves[1] : reserves[0]
+
+      if (morbiusReserve > BigInt(0)) {
+        // price = wplsReserve / morbiusReserve, applied to morbiusCost
+        basePlsCost = (morbiusCost * BigInt(wplsReserve)) / BigInt(morbiusReserve)
+        source = 'reserves'
+        usingFallback = true
+      }
+    }
+    // Priority 3: DexScreener API
+    else if (dexScreenerPrice && morbiusCost > BigInt(0)) {
+      const decimalFactor = BigInt(10) ** BigInt(TOKEN_DECIMALS)
+      basePlsCost = (morbiusCost * dexScreenerPrice) / decimalFactor
+      source = 'dexscreener'
       usingFallback = true
-
-      console.log('⚠️ Using fallback PLS pricing:', {
-        morbiusCost: morbiusCost.toString(),
-        fallbackQuote: basePlsCost.toString(),
-        error: plsQuoteError?.message,
-      })
     }
 
-    // Return zero if no cost
+    // No price source available — return zero to BLOCK the transaction
+    // This is safer than guessing with a stale hardcoded value
     if (basePlsCost === BigInt(0)) {
       return {
         plsValue: BigInt(0),
         basePlsQuote: BigInt(0),
-        isLoading: isLoadingPlsQuote,
+        isLoading: isLoadingPlsQuote || isLoadingReserves,
         error: plsQuoteError as Error | null,
         hasQuote: false,
         usingFallback: false,
@@ -107,26 +186,23 @@ export function usePlsQuote({
     // Add 20% buffer for slippage and DEX fees
     const totalPlsRequired = (taxedAmount * SLIPPAGE_MULTIPLIER) / SLIPPAGE_DIVISOR
 
-    // FORCE console output - cannot be filtered
-    const debugInfo = {
-      morbiusCost: morbiusCost.toString(),
-      basePlsCost: basePlsCost.toString(),
-      taxedAmount: taxedAmount.toString(),
-      finalPls: totalPlsRequired.toString(),
-      usingFallback,
+    if (usingFallback) {
+      console.warn(`⚠️ PLS quote using fallback (${source}):`, {
+        morbiusCost: morbiusCost.toString(),
+        basePlsCost: basePlsCost.toString(),
+        finalPls: totalPlsRequired.toString(),
+      })
     }
-    console.warn('💰 PLS QUOTE CALCULATION:', debugInfo)
-    console.table(debugInfo)
 
     return {
       plsValue: totalPlsRequired,
       basePlsQuote: basePlsCost,
-      isLoading: isLoadingPlsQuote,
+      isLoading: isLoadingPlsQuote || isLoadingReserves,
       error: plsQuoteError as Error | null,
       hasQuote: true,
       usingFallback,
     }
-  }, [plsBaseQuote, morbiusCost, plsQuoteError, isLoadingPlsQuote])
+  }, [plsBaseQuote, morbiusCost, plsQuoteError, isLoadingPlsQuote, reserves, token0, isLoadingReserves, dexScreenerPrice])
 
   return result
 }

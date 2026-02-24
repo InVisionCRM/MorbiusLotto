@@ -492,8 +492,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         }, 800); // Animation duration
 
         return () => clearTimeout(timer);
+      } else if (gameResult === 'push') {
+        // Push: bet stays on the table (no chip animation), but still signal completion
+        // so parent can reset state (e.g. clear currentGameResult)
+        const timer = setTimeout(() => {
+          onChipAnimationComplete?.();
+        }, 500);
+        return () => clearTimeout(timer);
       }
-      // Push result for wins is handled like original bet stays (no animation needed for push)
     }
     prevGameResult.current = gameResult;
   }, [gameResult, onChipAnimationComplete, chipStack.length]);
@@ -537,6 +543,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   // Store callback in ref to avoid re-triggering useEffect
   const onDealerRevealCompleteRef = useRef(onDealerRevealComplete);
   const hasCalledRevealCompleteRef = useRef(false);
+  // State mirror of hasCalledRevealCompleteRef — triggers re-render so card-clear effect can gate on it
+  const [revealComplete, setRevealComplete] = useState(false);
   useEffect(() => {
     onDealerRevealCompleteRef.current = onDealerRevealComplete;
   }, [onDealerRevealComplete]);
@@ -551,7 +559,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     // Reset "called" flag when leaving COMPLETE so next completion can trigger
     const stateTransitionedAway = prevState === GameState.COMPLETE && gameState !== GameState.COMPLETE;
     if (stateTransitionedAway) {
-      hasCalledRevealCompleteRef.current = false;
+      hasCalledRevealCompleteRef.current = false; setRevealComplete(false);
       lastCompletedGameIdRef.current = undefined;
       if (revealTimeoutRef.current) {
         clearTimeout(revealTimeoutRef.current);
@@ -562,7 +570,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     // New completed game (e.g. back-to-back blackjack): reset so we run reveal completion for this game
     if (gameState === GameState.COMPLETE && completedGameId && completedGameId !== lastCompletedGameIdRef.current) {
       lastCompletedGameIdRef.current = completedGameId;
-      hasCalledRevealCompleteRef.current = false;
+      hasCalledRevealCompleteRef.current = false; setRevealComplete(false);
       if (revealTimeoutRef.current) {
         clearTimeout(revealTimeoutRef.current);
         revealTimeoutRef.current = null;
@@ -586,7 +594,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       // Tournament: longer delay (2.5s) to avoid race where pressing DEAL too soon causes cards to deal but action buttons not to appear.
       const delayMs = inTournament ? 2500 : 1500;
       revealTimeoutRef.current = setTimeout(() => {
-        hasCalledRevealCompleteRef.current = true;
+        hasCalledRevealCompleteRef.current = true; setRevealComplete(true);
         onDealerRevealCompleteRef.current?.();
       }, delayMs);
     }
@@ -616,7 +624,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               const postRevealDelayMs = inTournament ? 2500 : 1500;
               revealTimeoutRef.current = setTimeout(() => {
                 setIsRevealing(false);
-                hasCalledRevealCompleteRef.current = true;
+                hasCalledRevealCompleteRef.current = true; setRevealComplete(true);
                 onDealerRevealCompleteRef.current?.();
               }, postRevealDelayMs);
             }
@@ -632,7 +640,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           setIsRevealing(false);
           const delayMs = inTournament ? 1000 : 500;
           revealTimeoutRef.current = setTimeout(() => {
-            hasCalledRevealCompleteRef.current = true;
+            hasCalledRevealCompleteRef.current = true; setRevealComplete(true);
             onDealerRevealCompleteRef.current?.();
           }, delayMs);
         } else {
@@ -645,7 +653,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             setVisibleDealerCards(2);
             revealTimeoutRef.current = setTimeout(() => {
               setIsRevealing(false);
-              hasCalledRevealCompleteRef.current = true;
+              hasCalledRevealCompleteRef.current = true; setRevealComplete(true);
               onDealerRevealCompleteRef.current?.();
             }, postRevealDelayMs);
           }, 1000);
@@ -713,7 +721,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   // For blackjack (player or dealer): keep cards on table until user clicks DEAL/REBET — never auto-clear
   useEffect(() => {
     const revealDone = gameState === GameState.COMPLETE && !isRevealing &&
-      dealerHand.cards.length > 0 && visibleDealerCards >= dealerHand.cards.length;
+      dealerHand.cards.length > 0 && visibleDealerCards >= dealerHand.cards.length &&
+      revealComplete; // Wait for dealer reveal callback to have fired before starting card clear
     if (!revealDone || !onCardsClearComplete || cardsExiting) return;
 
     // Blackjack: cards stay visible until user clicks DEAL/REBET
@@ -743,7 +752,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         cardsClearCompleteRef.current = null;
       }
     };
-  }, [gameState, isRevealing, dealerHand.cards.length, dealerHand.isBlackjack, visibleDealerCards, onCardsClearComplete, cardsExiting, gameResult]);
+  }, [gameState, isRevealing, dealerHand.cards.length, dealerHand.isBlackjack, visibleDealerCards, onCardsClearComplete, cardsExiting, gameResult, revealComplete]);
 
   // Reset cardsExiting when leaving COMPLETE (new game)
   useEffect(() => {
@@ -949,25 +958,25 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-      {/* Game Result Banner - Shows when game is complete until next deal */}
-      {gameState === GameState.COMPLETE && displayedResult && (
+      {/* Game Result Banner - Shows when game is complete and dealer reveal is done */}
+      {gameState === GameState.COMPLETE && gameResult && !isRevealing && visibleDealerCards >= dealerHand.cards.length && !cardsExiting && (
         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex justify-center pointer-events-none">
           <div
             className={`
               px-4 py-2 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl backdrop-blur-md
               transform transition-all duration-500 ease-out
               animate-result-banner
-              ${displayedResult === 'blackjack' ? 'bg-gradient-to-r from-yellow-500/90 via-amber-400/90 to-yellow-500/90 border-2 border-yellow-300' :
-                displayedResult === 'win' ? 'bg-gradient-to-r from-green-600/90 via-emerald-500/90 to-green-600/90 border-2 border-green-400' :
-                displayedResult === 'loss' ? 'bg-gradient-to-r from-red-600/90 via-red-500/90 to-red-600/90 border-2 border-red-400' :
+              ${gameResult === 'blackjack' ? 'bg-gradient-to-r from-yellow-500/90 via-amber-400/90 to-yellow-500/90 border-2 border-yellow-300' :
+                gameResult === 'win' ? 'bg-gradient-to-r from-green-600/90 via-emerald-500/90 to-green-600/90 border-2 border-green-400' :
+                gameResult === 'loss' ? 'bg-gradient-to-r from-red-600/90 via-red-500/90 to-red-600/90 border-2 border-red-400' :
                 'bg-gradient-to-r from-gray-500/90 via-gray-400/90 to-gray-500/90 border-2 border-gray-300'}
             `}
             style={{
-              boxShadow: displayedResult === 'blackjack'
+              boxShadow: gameResult === 'blackjack'
                 ? '0 0 40px rgba(251, 191, 36, 0.6), 0 0 80px rgba(251, 191, 36, 0.3), inset 0 2px 4px rgba(255,255,255,0.3)'
-                : displayedResult === 'win'
+                : gameResult === 'win'
                 ? '0 0 40px rgba(34, 197, 94, 0.5), 0 0 80px rgba(34, 197, 94, 0.2), inset 0 2px 4px rgba(255,255,255,0.3)'
-                : displayedResult === 'loss'
+                : gameResult === 'loss'
                 ? '0 0 40px rgba(239, 68, 68, 0.5), 0 0 80px rgba(239, 68, 68, 0.2), inset 0 2px 4px rgba(255,255,255,0.2)'
                 : '0 0 30px rgba(156, 163, 175, 0.4), inset 0 2px 4px rgba(255,255,255,0.2)',
             }}
@@ -975,42 +984,42 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             <div className="flex flex-col items-center gap-0.5 sm:gap-1">
               {/* Result Icon */}
               <div className="text-2xl sm:text-4xl mb-0.5 sm:mb-1">
-                {displayedResult === 'blackjack' && '🃏✨'}
-                {displayedResult === 'win' && '🎉'}
-                {displayedResult === 'loss' && '😔'}
-                {displayedResult === 'push' && '🤝'}
+                {gameResult === 'blackjack' && '🃏✨'}
+                {gameResult === 'win' && '🎉'}
+                {gameResult === 'loss' && '😔'}
+                {gameResult === 'push' && '🤝'}
               </div>
 
               {/* Result Text */}
               <h2
                 className={`text-2xl sm:text-4xl font-black uppercase tracking-wider
-                  ${displayedResult === 'blackjack' ? 'text-yellow-900' :
-                    displayedResult === 'win' ? 'text-white' :
-                    displayedResult === 'loss' ? 'text-white' :
+                  ${gameResult === 'blackjack' ? 'text-yellow-900' :
+                    gameResult === 'win' ? 'text-white' :
+                    gameResult === 'loss' ? 'text-white' :
                     'text-gray-800'}
                 `}
                 style={{
-                  textShadow: displayedResult === 'blackjack'
+                  textShadow: gameResult === 'blackjack'
                     ? '2px 2px 0 rgba(255,255,255,0.5)'
                     : '2px 2px 4px rgba(0,0,0,0.3)',
                 }}
               >
-                {displayedResult === 'blackjack' ? 'BLACKJACK!' :
-                 displayedResult === 'win' ? 'YOU WIN!' :
-                 displayedResult === 'loss' ? 'DEALER WINS' :
+                {gameResult === 'blackjack' ? 'BLACKJACK!' :
+                 gameResult === 'win' ? 'YOU WIN!' :
+                 gameResult === 'loss' ? 'DEALER WINS' :
                  'PUSH'}
               </h2>
 
               {/* Subtitle */}
               <p className={`text-sm font-medium mt-1 opacity-80
-                ${displayedResult === 'blackjack' ? 'text-yellow-800' :
-                  displayedResult === 'win' ? 'text-green-100' :
-                  displayedResult === 'loss' ? 'text-red-100' :
+                ${gameResult === 'blackjack' ? 'text-yellow-800' :
+                  gameResult === 'win' ? 'text-green-100' :
+                  gameResult === 'loss' ? 'text-red-100' :
                   'text-gray-600'}
               `}>
-                {displayedResult === 'blackjack' ? 'Natural 21 - 3:2 Payout!' :
-                 displayedResult === 'win' ? 'Congratulations!' :
-                 displayedResult === 'loss' ? 'Better luck next time' :
+                {gameResult === 'blackjack' ? 'Natural 21 - 3:2 Payout!' :
+                 gameResult === 'win' ? 'Congratulations!' :
+                 gameResult === 'loss' ? 'Better luck next time' :
                  'Bet returned'}
               </p>
             </div>
@@ -1861,26 +1870,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-      {/* Result Text Overlay - Center of table */}
-      {displayedResult && gameState === GameState.COMPLETE && (
-        <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-          <div
-            className={`text-6xl font-black animate-pulse ${
-              displayedResult === 'win' || displayedResult === 'blackjack'
-                ? 'text-green-400'
-                : displayedResult === 'loss'
-                ? 'text-red-400'
-                : 'text-yellow-400'
-            }`}
-            style={{
-              textShadow: '0 0 20px rgba(0, 0, 0, 0.9), 0 0 40px currentColor, 0 0 60px currentColor',
-              animation: 'pulse 1s ease-in-out infinite',
-            }}
-          >
-            {displayedResult === 'blackjack' ? 'BLACKJACK' : displayedResult.toUpperCase()}
-          </div>
-        </div>
-      )}
+      {/* Result Text Overlay removed — the Game Result Banner above handles all result display */}
 
       {/* Betting Panel - Overlay at bottom of table (hidden in tournament mode; controls in sidebar tab) */}
       {!hideBettingPanel && (

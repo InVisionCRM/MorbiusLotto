@@ -4,8 +4,9 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { formatEther, decodeEventLog } from 'viem';
-import { MORBIUS_TOURNAMENT_ADDRESS } from '@/lib/contracts';
+import { MORBIUS_TOURNAMENT_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { morbiusTournamentAbi } from '@/abi/morbius-tournament';
+import { ERC20_ABI } from '@/abi/erc20';
 import { pulsechain } from '@/lib/chains';
 import {
   CreateTournamentRequest,
@@ -795,25 +796,27 @@ export function useTournament(options: UseTournamentOptions) {
           console.log('Tournament creation transaction sent:', hash);
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash });
-          const log = receipt.logs.find((l) => {
+          const matchedLog = receipt.logs.find((l) => {
             try {
-              const decoded = decodeEventLog({
+              const logEntry = l as unknown as { data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]] };
+              decodeEventLog({
                 abi: morbiusTournamentAbi,
-                data: l.data,
-                topics: l.topics,
+                data: logEntry.data,
+                topics: logEntry.topics,
               });
-              return decoded.eventName === 'TournamentCreated';
+              return true;
             } catch {
               return false;
             }
           });
-          if (!log) {
+          if (!matchedLog) {
             throw new Error('TournamentCreated event not found in transaction receipt. Tournament may not have been created on-chain.');
           }
+          const typedLog = matchedLog as unknown as { data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]] };
           const decoded = decodeEventLog({
             abi: morbiusTournamentAbi,
-            data: log.data,
-            topics: log.topics,
+            data: typedLog.data,
+            topics: typedLog.topics,
           });
           if (decoded.eventName === 'TournamentCreated' && 'tournamentId' in decoded.args) {
             onChainTournamentId = Number(decoded.args.tournamentId);
@@ -958,8 +961,6 @@ export function useTournament(options: UseTournamentOptions) {
         try {
           // Approve MORBIUS token if buy-in required (Phase 1 of 2-step join flow)
           if (buyInWei > 0n) {
-            const { MORBIUS_TOKEN_ADDRESS } = await import('@/lib/contracts');
-            const { ERC20_ABI } = await import('@/abi/erc20');
             const approveHash = await writeContractAsync({
               address: MORBIUS_TOKEN_ADDRESS,
               abi: ERC20_ABI,

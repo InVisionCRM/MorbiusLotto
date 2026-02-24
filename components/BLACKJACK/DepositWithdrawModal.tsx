@@ -245,7 +245,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       })
 
       // Wait for transaction receipt
-      await publicClient.waitForTransactionReceipt({ hash: txHash })
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+
+      if (receipt.status === 'reverted') {
+        throw new Error('Transaction reverted on-chain. The deposit failed.')
+      }
 
       // Dismiss loading and show success
       toast.success('Deposit successful', {
@@ -305,7 +309,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       })
 
       // Wait for transaction receipt
-      await publicClient.waitForTransactionReceipt({ hash: txHash })
+      const depositReceipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+
+      if (depositReceipt.status === 'reverted') {
+        throw new Error('Transaction reverted on-chain. The deposit failed.')
+      }
 
       // Show success
       toast.success('Deposit successful', {
@@ -434,7 +442,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         description: 'Waiting for blockchain confirmation...',
       })
 
-      await publicClient.waitForTransactionReceipt({ hash: txHash })
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+
+      // Check if the transaction actually succeeded on-chain
+      if (receipt.status === 'reverted') {
+        throw new Error('Transaction reverted on-chain. The withdrawal failed — your balance has not changed.')
+      }
 
       // Mark pending withdrawal completed so expiry cron never refunds (prevents double withdrawal)
       let confirmOk = false
@@ -541,7 +554,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     try {
       const txHash = await withdrawLegacy(legacyAddress, amount)
       toast.loading('Transaction processing...', { id: toastId, description: 'Waiting for confirmation...' })
-      if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash })
+      if (publicClient) {
+        const legacyReceipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+        if (legacyReceipt.status === 'reverted') {
+          throw new Error('Transaction reverted on-chain. The withdrawal failed.')
+        }
+      }
       toast.success('Withdrawal successful', {
         id: toastId,
         description: `Withdrew ${Math.floor(Number(formatEther(amount))).toLocaleString()} MORBIUS from previous contract`,
@@ -590,13 +608,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-[50px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-3"
+              className="fixed top-[200px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-3"
             >
               <Card
-                className={`w-[92vw] max-w-[42rem] sm:max-w-[48rem] lg:max-w-4xl xl:max-w-5xl max-h-[85vh] flex flex-col overflow-hidden pointer-events-auto rounded-2xl ${Theme.modal.container}`}
+                className={`w-[98vw] max-w-[42rem] sm:max-w-[48rem] lg:max-w-4xl xl:max-w-5xl max-h-[85vh] flex flex-col overflow-hidden pointer-events-auto rounded-md ${Theme.modal.container}`}
                 style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
               >
-                <CardHeader className={`flex flex-row items-center justify-between space-y-0 py-2 px-4 shrink-0 rounded-t-2xl ${Theme.modal.header}`}>
+                <CardHeader className={`flex flex-row items-center justify-between space-y-0 py-2 px-2 shrink-0 rounded-t-lg ${Theme.modal.header}`}>
                   <CardTitle className="text-white text-sm font-bold">Reserve Management</CardTitle>
                   <Button
                     variant="ghost"
@@ -608,16 +626,16 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                   </Button>
                 </CardHeader>
 
-                <CardContent className="px-4 pb-4 pt-2 flex flex-col min-h-0 overflow-hidden">
+                <CardContent className="px-1 pb-2 pt-6 flex flex-col min-h-0 overflow-hidden">
                   {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
-                    <div className="flex items-center gap-1.5 py-1 px-2 rounded text-xs text-yellow-400 border border-cyan-500/30 bg-cyan-950/20 shrink-0 mb-2">
+                    <div className="flex items-center gap-0.5 py-1 px-1 rounded text-xs text-yellow-400 border border-cyan-500/30 bg-cyan-950/20 shrink-0 mb-2">
                       <Loader2 className="w-3 h-3 animate-spin shrink-0" />
                       <span>Confirming...</span>
                     </div>
                   )}
 
                   {/* Always 2 cols: left = balances, right = deposit/withdraw — width only, no extra height */}
-                  <div className="grid grid-cols-2 gap-4 min-h-0 flex-1 overflow-hidden">
+                  <div className="grid grid-cols-2 gap-2 min-h-0 flex-1 overflow-hidden">
                     <div className="space-y-2 min-h-0 overflow-y-auto pr-1" style={{ ...getPanelStyles('base'), borderRadius: 8, padding: 10 }}>
                       {legacyItems
                         .filter((item) => item.reserve > BigInt(0))
@@ -729,7 +747,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                         )}
                       </div>
                       <div className="rounded border border-cyan-500/20 bg-slate-900/50 p-2 shrink-0">
-                        <p className="text-[10px] text-cyan-300/70 leading-snug">
+                        <p className="text-[14px] text-white leading-relaxed">
                           Withdrawals are capped at 1,000,000 MORBIUS per user per day. Our contracts and code are battle-tested, but we recommend withdrawing your funds at the end of each play session as a safe practice.
                         </p>
                       </div>
@@ -737,24 +755,24 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
                     <div className="min-h-0 flex flex-col overflow-hidden">
                   <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'deposit' | 'withdraw' | 'history')} className="flex flex-col min-h-0">
-                    <TabsList className="grid w-full grid-cols-3 h-8 bg-slate-800/80 border border-cyan-500/30 rounded-lg p-0.5 shrink-0">
+                    <TabsList className="grid w-full grid-cols-3 h-8 bg-slate-800/80 border border-cyan-500/30 rounded-sm p-0.5 shrink-0">
                       <TabsTrigger
                         value="deposit"
-                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-md"
+                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
                       >
                         <Plus className="w-3 h-3 mr-1" />
                         Deposit
                       </TabsTrigger>
                       <TabsTrigger
                         value="withdraw"
-                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-md"
+                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
                       >
                         <Minus className="w-3 h-3 mr-1" />
                         Withdraw
                       </TabsTrigger>
                       <TabsTrigger
                         value="history"
-                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-md"
+                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
                       >
                         <History className="w-3 h-3 mr-1" />
                         History

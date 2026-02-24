@@ -33,8 +33,10 @@ function shortenGameId(gameId: string | undefined): string {
 
 function getResultType(result: GameResult): 'win' | 'loss' | 'push' | 'blackjack' {
   if (result.isBlackjack) return 'blackjack'
-  if (result.payout > BigInt(0)) return 'win'
-  if (result.payout === BigInt(0) && result.playerHand.total === result.dealerHand.total) return 'push'
+  const bet = getTotalBet(result)
+  const winLoss = getWinLossAmount(result) // payout - bet
+  if (winLoss > BigInt(0)) return 'win'
+  if (winLoss === BigInt(0) && bet > BigInt(0)) return 'push'
   return 'loss'
 }
 

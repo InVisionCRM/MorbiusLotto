@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useAccount } from 'wagmi';
 import { Theme } from '@/lib/theme';
 import { formatEther } from 'viem';
 
@@ -24,6 +25,7 @@ interface EscrowPool {
 }
 
 export function AdminEscrowTab() {
+  const { address } = useAccount();
   const [summary, setSummary] = useState<EscrowSummary | null>(null);
   const [pools, setPools] = useState<EscrowPool[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,11 +34,11 @@ export function AdminEscrowTab() {
   const [depositorFilter, setDepositorFilter] = useState<string>('');
 
   const fetchSummary = async () => {
+    if (!address) return;
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || window.location.origin.replace(/^ws/, 'http');
-      const res = await fetch(`${base}/api/admin/escrow/summary`, {
+      const res = await fetch('/api/admin/escrow/summary', {
         headers: {
-          'x-admin-wallet': window.ethereum?.selectedAddress || '',
+          'x-admin-wallet': address,
         },
       });
       if (!res.ok) throw new Error('Failed to fetch escrow summary');
@@ -48,9 +50,9 @@ export function AdminEscrowTab() {
   };
 
   const fetchPools = async () => {
+    if (!address) return;
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || window.location.origin.replace(/^ws/, 'http');
-      let url = `${base}/api/admin/escrow/pools`;
+      let url = '/api/admin/escrow/pools';
       const params = new URLSearchParams();
       if (depositorFilter) {
         params.append('depositor', depositorFilter);
@@ -60,7 +62,7 @@ export function AdminEscrowTab() {
       }
       const res = await fetch(url, {
         headers: {
-          'x-admin-wallet': window.ethereum?.selectedAddress || '',
+          'x-admin-wallet': address,
         },
       });
       if (!res.ok) throw new Error('Failed to fetch pools');
@@ -72,9 +74,10 @@ export function AdminEscrowTab() {
   };
 
   useEffect(() => {
+    if (!address) return;
     setLoading(true);
     Promise.all([fetchSummary(), fetchPools()]).finally(() => setLoading(false));
-  }, [depositorFilter]);
+  }, [address, depositorFilter]);
 
   const truncAddr = (addr: string | null | undefined) => {
     if (!addr) return '—';

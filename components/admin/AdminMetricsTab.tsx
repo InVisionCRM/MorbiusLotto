@@ -140,6 +140,117 @@ const BIGWHEEL_GET_GLOBAL_STATS_ABI = [
   },
 ] as const;
 
+/** Build chart data from contract metrics: each point is a named metric with its MORBIUS value. */
+function buildMovementData(
+  metrics: { name: string; wei: bigint }[]
+): { name: string; value: number; delta: string; deltaNum: number }[] {
+  return metrics.map((m, i) => {
+    const value = Number(formatEther(m.wei));
+    const prev = i > 0 ? Number(formatEther(metrics[i - 1].wei)) : null;
+    const deltaNum = prev !== null ? value - prev : 0;
+    const delta = prev !== null
+      ? `${deltaNum >= 0 ? '+' : ''}${deltaNum >= 1e6 ? `${(deltaNum / 1e6).toFixed(1)}M` : deltaNum >= 1e3 ? `${(deltaNum / 1e3).toFixed(1)}k` : deltaNum.toFixed(1)}`
+      : '';
+    return { name: m.name, value, delta, deltaNum };
+  });
+}
+
+/** Custom dot that renders the data point with value + delta label. */
+function MovementDot(props: any) {
+  const { cx, cy, payload, index } = props;
+  if (cx == null || cy == null) return null;
+  const valueLabel = payload.value >= 1e6
+    ? `${(payload.value / 1e6).toFixed(1)}M`
+    : payload.value >= 1e3
+      ? `${(payload.value / 1e3).toFixed(1)}k`
+      : payload.value.toFixed(1);
+  return (
+    <g>
+      {/* Glow effect */}
+      <circle cx={cx} cy={cy} r={6} fill="rgba(0, 255, 255, 0.15)" />
+      <circle cx={cx} cy={cy} r={3.5} fill="#000" stroke="#22d3ee" strokeWidth={1.5} />
+      {/* Value label */}
+      <text x={cx} y={cy - 16} textAnchor="middle" fill="#22d3ee" fontSize={10} fontFamily="monospace" fontWeight="bold">
+        {valueLabel}
+      </text>
+      {/* Delta label */}
+      {index > 0 && payload.delta && (
+        <text
+          x={cx}
+          y={cy - 28}
+          textAnchor="middle"
+          fill={payload.deltaNum >= 0 ? '#34d399' : '#f87171'}
+          fontSize={9}
+          fontFamily="monospace"
+          fontWeight="600"
+        >
+          {payload.delta}
+        </text>
+      )}
+    </g>
+  );
+}
+
+/** Reusable MORBIUS movement area chart with pure black bg + cyan gradient. */
+function ContractMovementChart({
+  title,
+  data,
+  gradientId,
+}: {
+  title: string;
+  data: { name: string; value: number; delta: string; deltaNum: number }[];
+  gradientId: string;
+}) {
+  if (!data.length) return null;
+  return (
+    <div
+      className="rounded-lg border border-cyan-500/20 p-3"
+      style={{
+        background: '#000',
+        boxShadow: 'inset 0 2px 8px rgba(0, 255, 255, 0.05), 0 0 20px rgba(0, 0, 0, 0.8)',
+      }}
+    >
+      <p className="text-cyan-400 text-[11px] font-semibold mb-2 tracking-wide">{title}</p>
+      <ResponsiveContainer width="100%" height={180}>
+        <AreaChart data={data} margin={{ top: 35, right: 20, left: 0, bottom: 5 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(0, 255, 255, 0.35)" />
+              <stop offset="50%" stopColor="rgba(0, 255, 255, 0.12)" />
+              <stop offset="100%" stopColor="rgba(0, 255, 255, 0.02)" />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 9, fill: 'rgba(0, 255, 255, 0.6)', fontFamily: 'monospace' }}
+            stroke="rgba(0, 255, 255, 0.15)"
+            axisLine={{ stroke: 'rgba(0, 255, 255, 0.15)' }}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
+            stroke="rgba(0, 255, 255, 0.1)"
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : String(Math.round(v)))}
+          />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="#22d3ee"
+            fill={`url(#${gradientId})`}
+            strokeWidth={2}
+            isAnimationActive={false}
+            dot={<MovementDot />}
+            activeDot={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export default function AdminMetricsTab() {
   const { address } = useAccount();
   const [range, setRange] = useState<Range>('24h');
@@ -451,6 +562,50 @@ export default function AdminMetricsTab() {
                   </div>
                 </div>
               )}
+
+              {/* MORBIUS Contract Movement Charts */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {plinkoData && (
+                  <ContractMovementChart
+                    title="PLINKO — MORBIUS Flow"
+                    gradientId="plinkoMoveGrad"
+                    data={buildMovementData([
+                      { name: 'Revenue', wei: plinkoData.totalRevenue },
+                      { name: 'Payouts', wei: plinkoData.totalPayouts },
+                      { name: 'Reserve', wei: plinkoData.contractReserve },
+                    ])}
+                  />
+                )}
+                {kenoData && (
+                  <ContractMovementChart
+                    title="KENO — MORBIUS Flow"
+                    gradientId="kenoMoveGrad"
+                    data={buildMovementData([
+                      { name: 'Wagered', wei: kenoData.totalWagered },
+                      { name: 'Won', wei: kenoData.totalWon },
+                    ])}
+                  />
+                )}
+                <ContractMovementChart
+                  title="LOTTERY — MORBIUS Flow"
+                  gradientId="lotteryMoveGrad"
+                  data={buildMovementData([
+                    { name: 'Collected', wei: lotteryData.totalCollected },
+                    { name: 'Claimed', wei: lotteryData.totalClaimed },
+                  ])}
+                />
+                {bigWheelData && (
+                  <ContractMovementChart
+                    title="BIG WHEEL — MORBIUS Flow"
+                    gradientId="bigwheelMoveGrad"
+                    data={buildMovementData([
+                      { name: 'Volume', wei: bigWheelData.volume },
+                      { name: 'Payouts', wei: bigWheelData.payouts },
+                      { name: 'Balance', wei: bigWheelData.contractBalance },
+                    ])}
+                  />
+                )}
+              </div>
             </TabsContent>
             <TabsContent value="blackjack" className="mt-3 space-y-4 focus-visible:outline-none">
               {data ? (

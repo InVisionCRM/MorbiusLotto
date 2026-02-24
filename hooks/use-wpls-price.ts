@@ -165,8 +165,8 @@ export function calculateWplsAmount(
   tokenDecimals: number = TOKEN_DECIMALS
 ): bigint {
   if (!wplsPerToken) {
-    // Fallback: use 2x multiplier if no price available
-    return tokenAmount * BigInt(2)
+    // No price available — return 0 to block the transaction rather than guess
+    return BigInt(0)
   }
 
   // Convert token amount (tokenDecimals) to WPLS amount (18 decimals)

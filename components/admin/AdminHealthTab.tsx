@@ -1,17 +1,24 @@
 'use client';
 
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatEther } from 'viem';
 import { Activity, RefreshCw, CheckCircle, XCircle, Copy } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import {
   BLACKJACK_LEGACY_ADDRESS,
   BLACKJACK_LEGACY_ADDRESS_2,
   BLACKJACK_LEGACY_ADDRESS_3,
   BLACKJACK_LEGACY_ADDRESS_4,
+  PLINKO_ADDRESS,
+  KENO_ADDRESS,
+  LOTTERY_ADDRESS,
+  BIGWHEEL_ADDRESS,
 } from '@/lib/contracts';
+import { PLINKO_ABI } from '@/abi/plinko';
+import { KENO_ABI } from '@/lib/keno-abi';
+import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2';
 
 export interface BlackjackContractReserves {
   contractAddress: string;
@@ -68,11 +75,189 @@ function truncateAddress(address: string, start = 6, end = 4): string {
   return `${address.slice(0, start)}...${address.slice(-end)}`;
 }
 
+// BigWheel ABI for getGlobalStats
+const BIGWHEEL_GET_GLOBAL_STATS_ABI = [
+  {
+    inputs: [],
+    name: 'getGlobalStats',
+    outputs: [
+      { internalType: 'uint256', name: 'spins', type: 'uint256' },
+      { internalType: 'uint256', name: 'volume', type: 'uint256' },
+      { internalType: 'uint256', name: 'payouts', type: 'uint256' },
+      { internalType: 'uint256', name: 'contractBalance', type: 'uint256' },
+      { internalType: 'uint256', name: 'contractReserveBalance', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+/** Build chart data from contract metrics: each point is a named metric with its MORBIUS value. */
+function buildMovementData(
+  metrics: { name: string; wei: bigint }[]
+): { name: string; value: number; delta: string; deltaNum: number }[] {
+  return metrics.map((m, i) => {
+    const value = Number(formatEther(m.wei));
+    const prev = i > 0 ? Number(formatEther(metrics[i - 1].wei)) : null;
+    const deltaNum = prev !== null ? value - prev : 0;
+    const delta = prev !== null
+      ? `${deltaNum >= 0 ? '+' : ''}${Math.abs(deltaNum) >= 1e6 ? `${(deltaNum / 1e6).toFixed(1)}M` : Math.abs(deltaNum) >= 1e3 ? `${(deltaNum / 1e3).toFixed(1)}k` : deltaNum.toFixed(1)}`
+      : '';
+    return { name: m.name, value, delta, deltaNum };
+  });
+}
+
+/** Custom dot that renders the data point with value + delta label. */
+function MovementDot(props: any) {
+  const { cx, cy, payload, index } = props;
+  if (cx == null || cy == null) return null;
+  const valueLabel = payload.value >= 1e6
+    ? `${(payload.value / 1e6).toFixed(1)}M`
+    : payload.value >= 1e3
+      ? `${(payload.value / 1e3).toFixed(1)}k`
+      : payload.value.toFixed(1);
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={6} fill="rgba(0, 255, 255, 0.15)" />
+      <circle cx={cx} cy={cy} r={3.5} fill="#000" stroke="#22d3ee" strokeWidth={1.5} />
+      <text x={cx} y={cy - 16} textAnchor="middle" fill="#22d3ee" fontSize={10} fontFamily="monospace" fontWeight="bold">
+        {valueLabel}
+      </text>
+      {index > 0 && payload.delta && (
+        <text
+          x={cx}
+          y={cy - 28}
+          textAnchor="middle"
+          fill={payload.deltaNum >= 0 ? '#34d399' : '#f87171'}
+          fontSize={9}
+          fontFamily="monospace"
+          fontWeight="600"
+        >
+          {payload.delta}
+        </text>
+      )}
+    </g>
+  );
+}
+
+/** Reusable MORBIUS movement area chart with pure black bg + cyan gradient. */
+function ContractMovementChart({
+  title,
+  data,
+  gradientId,
+}: {
+  title: string;
+  data: { name: string; value: number; delta: string; deltaNum: number }[];
+  gradientId: string;
+}) {
+  if (!data.length) return null;
+  return (
+    <div
+      className="rounded-lg border border-cyan-500/20 p-3"
+      style={{
+        background: '#000',
+        boxShadow: 'inset 0 2px 8px rgba(0, 255, 255, 0.05), 0 0 20px rgba(0, 0, 0, 0.8)',
+      }}
+    >
+      <p className="text-cyan-400 text-[11px] font-semibold mb-2 tracking-wide">{title}</p>
+      <ResponsiveContainer width="100%" height={180}>
+        <AreaChart data={data} margin={{ top: 35, right: 20, left: 0, bottom: 5 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(0, 255, 255, 0.35)" />
+              <stop offset="50%" stopColor="rgba(0, 255, 255, 0.12)" />
+              <stop offset="100%" stopColor="rgba(0, 255, 255, 0.02)" />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 9, fill: 'rgba(0, 255, 255, 0.6)', fontFamily: 'monospace' }}
+            stroke="rgba(0, 255, 255, 0.15)"
+            axisLine={{ stroke: 'rgba(0, 255, 255, 0.15)' }}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
+            stroke="rgba(0, 255, 255, 0.1)"
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : String(Math.round(v)))}
+          />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="#22d3ee"
+            fill={`url(#${gradientId})`}
+            strokeWidth={2}
+            isAnimationActive={false}
+            dot={<MovementDot />}
+            activeDot={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export default function AdminHealthTab() {
   const { address } = useAccount();
   const [data, setData] = useState<AdminHealthData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // On-chain contract reads for movement charts
+  const { data: plinkoStats } = useReadContract({
+    address: PLINKO_ADDRESS,
+    abi: PLINKO_ABI,
+    functionName: 'getGlobalStats',
+  }) as { data: [bigint, bigint, bigint, bigint, bigint] | undefined };
+
+  const { data: kenoStats } = useReadContract({
+    address: KENO_ADDRESS,
+    abi: KENO_ABI,
+    functionName: 'getGlobalStats',
+  }) as { data: [bigint, bigint, bigint, bigint] | undefined };
+
+  const { data: lotteryCollected } = useReadContract({
+    address: LOTTERY_ADDRESS,
+    abi: LOTTERY_6OF55_V2_ABI,
+    functionName: 'totalMORBIUSEverCollected',
+  }) as { data: bigint | undefined };
+
+  const { data: lotteryClaimed } = useReadContract({
+    address: LOTTERY_ADDRESS,
+    abi: LOTTERY_6OF55_V2_ABI,
+    functionName: 'totalMORBIUSEverClaimed',
+  }) as { data: bigint | undefined };
+
+  const { data: bigWheelStats } = useReadContract({
+    address: BIGWHEEL_ADDRESS,
+    abi: BIGWHEEL_GET_GLOBAL_STATS_ABI,
+    functionName: 'getGlobalStats',
+  }) as { data: [bigint, bigint, bigint, bigint, bigint] | undefined };
+
+  const plinkoData = plinkoStats ? {
+    totalRevenue: plinkoStats[2],
+    totalPayouts: plinkoStats[3],
+    contractReserve: plinkoStats[4],
+  } : null;
+
+  const kenoData = kenoStats ? {
+    totalWagered: kenoStats[0],
+    totalWon: kenoStats[1],
+  } : null;
+
+  const lotteryData = (lotteryCollected != null || lotteryClaimed != null) ? {
+    totalCollected: lotteryCollected ?? 0n,
+    totalClaimed: lotteryClaimed ?? 0n,
+  } : null;
+
+  const bigWheelData = bigWheelStats ? {
+    volume: bigWheelStats[1],
+    payouts: bigWheelStats[2],
+    contractBalance: bigWheelStats[3],
+  } : null;
 
   const fetchHealth = useCallback(async () => {
     if (!address) return;
@@ -187,6 +372,54 @@ export default function AdminHealthTab() {
                     <span className="font-mono">{formatMorbius(data.morbius[game] ?? '0')} MORBIUS</span>
                   </React.Fragment>
                 ))}
+              </div>
+            </div>
+            {/* MORBIUS Contract Movement Charts */}
+            <div>
+              <p className="text-slate-500 mb-2">MORBIUS contract flow</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {plinkoData && (
+                  <ContractMovementChart
+                    title="PLINKO — MORBIUS Flow"
+                    gradientId="healthPlinkoGrad"
+                    data={buildMovementData([
+                      { name: 'Revenue', wei: plinkoData.totalRevenue },
+                      { name: 'Payouts', wei: plinkoData.totalPayouts },
+                      { name: 'Reserve', wei: plinkoData.contractReserve },
+                    ])}
+                  />
+                )}
+                {kenoData && (
+                  <ContractMovementChart
+                    title="KENO — MORBIUS Flow"
+                    gradientId="healthKenoGrad"
+                    data={buildMovementData([
+                      { name: 'Wagered', wei: kenoData.totalWagered },
+                      { name: 'Won', wei: kenoData.totalWon },
+                    ])}
+                  />
+                )}
+                {lotteryData && (
+                  <ContractMovementChart
+                    title="LOTTERY — MORBIUS Flow"
+                    gradientId="healthLotteryGrad"
+                    data={buildMovementData([
+                      { name: 'Collected', wei: lotteryData.totalCollected },
+                      { name: 'Claimed', wei: lotteryData.totalClaimed },
+                    ])}
+                  />
+                )}
+                {bigWheelData && (
+                  <ContractMovementChart
+                    title="BIG WHEEL — MORBIUS Flow"
+                    gradientId="healthBigwheelGrad"
+                    data={buildMovementData([
+                      { name: 'Volume', wei: bigWheelData.volume },
+                      { name: 'Payouts', wei: bigWheelData.payouts },
+                      { name: 'Balance', wei: bigWheelData.contractBalance },
+                    ])}
+                  />
+                )}
               </div>
             </div>
             {data.contractAddresses && Object.keys(data.contractAddresses).length > 0 && (

@@ -1807,10 +1807,12 @@ export default function BlackjackPage() {
         dealerHandCardsLength: dealerHand.cards.length
       });
 
-      // Detect split/double from currentGame or from gameState
-      const currentGame = gameState.currentGame;
-      const allPlayerHands = currentGame?.playerHands && currentGame.playerHands.length > 0
-        ? currentGame.playerHands
+      // Detect split/double — prefer processedGame (fresh, synchronously returned by updateGameStateFromServer)
+      // over gameState.currentGame which is from a stale React closure and will be the *previous* game
+      // when the user clicks rebet quickly (setGameState is async, closure captures old value).
+      const freshHands = data.processedGame?.playerHands;
+      const allPlayerHands = freshHands && freshHands.length > 0
+        ? freshHands
         : [playerHand];
       const wasSplit = allPlayerHands.length > 1;
       const wasDoubleDown = allPlayerHands.some((h: Hand) =>
@@ -1818,9 +1820,12 @@ export default function BlackjackPage() {
 
       // For tournament: store bet/payout in chips for history display (QuickHistory uses chips, not wei)
       const isTournament = !!data.isTournament;
+      // Use `payout` directly — it already holds processedGame.totalPayout (includes Perfect Pairs).
+      // currentGame?.totalPayout is from a stale React closure and would be the *previous* game's
+      // payout when the user clicks rebet quickly, corrupting the QuickHistory balance column.
       const payoutForHistory = isTournament
         ? BigInt(Math.floor(Number(payout) / 1e18))
-        : (currentGame?.totalPayout ?? payout);
+        : payout;
 
       // Add to history
       const gameResult: GameResult = {
@@ -2159,7 +2164,15 @@ export default function BlackjackPage() {
     }
 
     try {
-      setGameState(prev => ({ ...prev, isPlaying: true, clientSeed }));
+      // Optimistically deduct the stake from displayed balance immediately so the UI
+      // reflects the bet being drawn before the async fetchBalance() round-trip completes.
+      setOffChainBalance(prev => prev >= totalStake ? prev - totalStake : BigInt(0));
+      setGameState(prev => ({
+        ...prev,
+        isPlaying: true,
+        clientSeed,
+        balance: prev.balance >= totalStake ? prev.balance - totalStake : BigInt(0),
+      }));
 
       // Step 1: Get server seed hash and nonce from server
       const { serverSeedHash, nonce } = await wsClient.getServerSeedHash();
@@ -2247,6 +2260,8 @@ export default function BlackjackPage() {
         description: errorMessage
       });
       setGameState(prev => ({ ...prev, isPlaying: false }));
+      // Restore the optimistically-deducted balance — the server never saw this bet.
+      fetchBalance().catch(() => {});
     }
   }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer, applyPhasedBlackjackDeal, handleGameCompletion]);
 
