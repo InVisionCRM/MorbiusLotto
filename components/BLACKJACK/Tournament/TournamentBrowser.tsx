@@ -22,7 +22,7 @@ import { TournamentCancelReclaim } from './TournamentCancelReclaim';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
-import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
+import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 import { useTokenInfo, type TokenInfo } from '@/hooks/use-token-info';
@@ -166,7 +166,7 @@ function FundTournamentEscrowModal({
       const idBytes32 = tournamentIdToBytes32(tournament.id);
       const hash = await writeContractAsync({
         address: escrow as `0x${string}`,
-        abi: tournamentPrizeEscrowAbi,
+        abi: tournamentPrizeEscrowV2Abi,
         functionName: 'depositPrizePool',
         args: [idBytes32, token, amountWei],
         account: address,
@@ -875,7 +875,7 @@ function ExpandedCardContent({
             <TournamentCancelReclaim
               tournamentId={tournament.id}
               tournamentName={tournament.name}
-              status={tournament.status as 'active' | 'completed' | 'cancelled'}
+              status={tournament.status as 'registration' | 'active' | 'completed' | 'cancelled'}
               creatorAddress={tournament.creatorAddress}
               playerAddress={playerAddress}
               prizeTokenAddress={tournament.prizeTokenAddress ?? tournament.escrowToken ?? undefined}

@@ -164,6 +164,14 @@ export function useTournament(options: UseTournamentOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [isJoinLoading, setIsJoinLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Two-phase join: after approval tx is mined, joinApprovalReady signals the UI
+  // to show a "Confirm Join" button so the second writeContractAsync fires in a fresh user gesture.
+  const [joinApprovalReady, setJoinApprovalReady] = useState(false);
+  const [pendingJoinState, setPendingJoinState] = useState<{
+    tournamentId: string;
+    pinCode?: string;
+    onChainTournamentId: number;
+  } | null>(null);
   const [currentGame, setCurrentGame] = useState<TournamentGameState | null>(null);
 
   // Tournament creator state
@@ -948,7 +956,7 @@ export function useTournament(options: UseTournamentOptions) {
         const buyInWei = buyInAmount ? BigInt(buyInAmount) : 0n;
         
         try {
-          // Approve MORBIUS token if buy-in required
+          // Approve MORBIUS token if buy-in required (Phase 1 of 2-step join flow)
           if (buyInWei > 0n) {
             const { MORBIUS_TOKEN_ADDRESS } = await import('@/lib/contracts');
             const { ERC20_ABI } = await import('@/abi/erc20');
@@ -959,10 +967,17 @@ export function useTournament(options: UseTournamentOptions) {
               args: [MORBIUS_TOURNAMENT_ADDRESS, buyInWei],
               chain: pulsechain,
             });
-            await publicClient.waitForTransactionReceipt({ hash: approveHash });
+            // Do NOT await receipt here — that would lose the user-gesture context and
+            // prevent the join wallet popup from appearing. Instead, wait in the background
+            // and signal the UI to show a "Confirm Join" button once approved.
+            setPendingJoinState({ tournamentId, pinCode, onChainTournamentId });
+            publicClient.waitForTransactionReceipt({ hash: approveHash })
+              .then(() => setJoinApprovalReady(true))
+              .catch(() => setJoinApprovalReady(true)); // tx was broadcast; let user proceed
+            return false; // Phase 1 complete — caller must watch joinApprovalReady and call confirmJoin()
           }
 
-          // Join tournament on-chain
+          // No buy-in: join on-chain directly in this gesture (single wallet popup)
           const joinHash = await writeContractAsync({
             address: MORBIUS_TOURNAMENT_ADDRESS,
             abi: morbiusTournamentAbi,
@@ -970,7 +985,7 @@ export function useTournament(options: UseTournamentOptions) {
             args: [BigInt(onChainTournamentId)],
             chain: pulsechain,
           });
-          
+
           // Wait for join transaction to confirm
           await publicClient.waitForTransactionReceipt({ hash: joinHash });
         } catch (error: any) {
@@ -1025,6 +1040,72 @@ export function useTournament(options: UseTournamentOptions) {
       setIsJoinLoading(false);
     }
   }, [wsClient, address, writeContractAsync, publicClient]);
+
+  /**
+   * Phase 2 of the on-chain join flow for buy-in tournaments.
+   * MUST be called from a direct button click so the wallet popup can appear.
+   */
+  const confirmJoin = useCallback(async (): Promise<boolean> => {
+    if (!pendingJoinState || !writeContractAsync || !wsClient || !address) return false;
+
+    setIsJoinLoading(true);
+    setJoinApprovalReady(false);
+    setError(null);
+
+    const { tournamentId, pinCode, onChainTournamentId } = pendingJoinState;
+
+    try {
+      const joinHash = await writeContractAsync({
+        address: MORBIUS_TOURNAMENT_ADDRESS,
+        abi: morbiusTournamentAbi,
+        functionName: 'joinTournament',
+        args: [BigInt(onChainTournamentId)],
+        chain: pulsechain,
+      });
+
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash: joinHash });
+      }
+
+      const response = await wsClient.sendRequest('tournament_join', { tournamentId, pinCode });
+
+      const nextState: TournamentState = {
+        inTournament: true,
+        entryId: response.entryId,
+        tournamentId: response.tournamentId,
+        chips: response.chips,
+        handsPlayed: response.handsPlayed,
+        handsRemaining: response.handsRemaining,
+        highestChips: response.chips,
+        currentRank: 1,
+        status: 'playing',
+        maxHands: response.maxHands,
+        startingChips: response.startingChips,
+        rebuyCount: 0,
+        totalBuyIn: response.buyInAmount || '0',
+        canRebuy: false,
+        maxRebuys: response.rebuyConfig?.maxRebuys || 0,
+        rebuyEnabled: response.rebuyConfig?.enabled || false,
+        biggestBet: 0,
+        biggestWin: 0,
+        tableTheme: response.tableTheme,
+      };
+      setTournamentState(nextState);
+      setDisplayedTournamentState(nextState);
+
+      if (response.prizePool) {
+        setTournamentInfo(prev => prev ? { ...prev, prizePool: response.prizePool } : null);
+      }
+
+      setPendingJoinState(null);
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Failed to confirm tournament join');
+      return false;
+    } finally {
+      setIsJoinLoading(false);
+    }
+  }, [pendingJoinState, writeContractAsync, publicClient, wsClient, address]);
 
   /**
    * Unregister from a tournament during registration phase. MORBIUS platform tournaments only.
@@ -1132,6 +1213,7 @@ export function useTournament(options: UseTournamentOptions) {
     currentGame,
     isLoading,
     isJoinLoading,
+    joinApprovalReady,
     error,
 
     // Last hand summary (for table overlay when a tournament hand completes)
@@ -1162,6 +1244,7 @@ export function useTournament(options: UseTournamentOptions) {
     createFreeroll,
     fetchTournamentList,
     joinTournament,
+    confirmJoin,
     unregisterTournament,
     getTournamentInfo,
     clearCreatedTournament,

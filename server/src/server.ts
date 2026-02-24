@@ -65,6 +65,8 @@ app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
     if (allowedOrigins.includes(origin)) return cb(null, true);
+    // Allow any localhost origin in development
+    if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
     return cb(null, false);
   },
   credentials: true,
@@ -1306,6 +1308,136 @@ async function initializeServices() {
       }
     });
 
+    // ── User Reports ──────────────────────────────────────────────────────────
+
+    // Simple in-memory rate limit for unauthenticated reporters (by IP)
+    const anonReportCounts = new Map<string, { count: number; resetAt: number }>();
+
+    app.post('/api/reports', async (req, res) => {
+      try {
+        const { walletAddress, category, description, pageUrl, userAgent, balanceSnapshot, recentErrors } = req.body;
+
+        const VALID_CATEGORIES = ['Balance Issue', 'Game Bug', 'Transaction Failed', 'Other'];
+        if (!category || !VALID_CATEGORIES.includes(category)) {
+          return res.status(400).json({ error: `category must be one of: ${VALID_CATEGORIES.join(', ')}` });
+        }
+        if (!description || typeof description !== 'string' || description.trim().length < 5) {
+          return res.status(400).json({ error: 'description must be at least 5 characters' });
+        }
+        if (description.length > 2000) {
+          return res.status(400).json({ error: 'description must be 2000 characters or fewer' });
+        }
+
+        // Rate limit: 5 reports per hour per wallet (if connected)
+        if (walletAddress && typeof walletAddress === 'string') {
+          const recent = await dbService.getRecentReportCountByWallet(walletAddress, 60);
+          if (recent >= 5) {
+            return res.status(429).json({ error: 'Too many reports. Please wait before submitting another.' });
+          }
+        } else {
+          // No wallet — rate limit by IP (in-memory, resets per hour)
+          const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+          const now = Date.now();
+          const entry = anonReportCounts.get(ip);
+          if (entry && now < entry.resetAt) {
+            if (entry.count >= 3) {
+              return res.status(429).json({ error: 'Too many reports. Please wait before submitting another.' });
+            }
+            entry.count++;
+          } else {
+            anonReportCounts.set(ip, { count: 1, resetAt: now + 60 * 60 * 1000 });
+          }
+        }
+
+        const id = await dbService.createReport({
+          walletAddress: walletAddress || undefined,
+          category,
+          description: description.trim(),
+          pageUrl: typeof pageUrl === 'string' ? pageUrl.slice(0, 500) : undefined,
+          userAgent: typeof userAgent === 'string' ? userAgent.slice(0, 300) : undefined,
+          balanceSnapshot: balanceSnapshot != null ? BigInt(String(balanceSnapshot)) : undefined,
+          recentErrors: Array.isArray(recentErrors) ? recentErrors.slice(0, 20) : undefined,
+        });
+
+        logger.info('User report submitted', { id, category, walletAddress: walletAddress || null });
+        return res.status(201).json({ ok: true, id });
+      } catch (error) {
+        logger.error('Error creating user report:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.get('/api/admin/reports', async (req, res) => {
+      try {
+        const status = (req.query.status as string) || undefined;
+        const limit = Math.min(Math.max(parseInt(String(req.query.limit || 200), 10) || 200, 1), 500);
+        const reports = await dbService.getReports(status, limit);
+        sendJson(res, reports);
+      } catch (error) {
+        logger.error('Error fetching user reports:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.patch('/api/admin/reports/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
+        if (!status || !['read', 'resolved'].includes(status)) {
+          return res.status(400).json({ error: 'status must be "read" or "resolved"' });
+        }
+        const updated = await dbService.updateReportStatus(id, status as 'read' | 'resolved');
+        if (!updated) return res.status(404).json({ error: 'Report not found' });
+        return res.status(200).json({ ok: true });
+      } catch (error) {
+        logger.error('Error updating report status:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Player transaction history (deposits + withdrawals)
+    app.get('/api/players/:address/transactions', async (req, res) => {
+      try {
+        const { address } = req.params;
+        if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
+          return res.status(400).json({ error: 'Invalid wallet address' });
+        }
+        const limit = Math.min(Math.max(parseInt(String(req.query.limit || 50), 10) || 50, 1), 200);
+        const offset = Math.max(parseInt(String(req.query.offset || 0), 10) || 0, 0);
+        const transactions = await dbService.getPlayerTransactionHistory(address, limit, offset);
+        return res.status(200).json(transactions);
+      } catch (error) {
+        logger.error('Error fetching player transactions:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Deposit notify: frontend calls this immediately after a deposit tx is confirmed so it
+    // appears in history right away (before the next chain-analytics scan picks it up).
+    // Amount and player come from the frontend; tx hash is trusted as display-only data.
+    app.post('/api/deposit/notify', async (req, res) => {
+      try {
+        const { walletAddress, txHash, amount } = req.body;
+        if (!walletAddress || typeof walletAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(walletAddress)) {
+          return res.status(400).json({ error: 'Invalid wallet address' });
+        }
+        if (!txHash || typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+          return res.status(400).json({ error: 'Invalid tx hash' });
+        }
+        if (!amount || typeof amount !== 'string') {
+          return res.status(400).json({ error: 'Amount required' });
+        }
+        let amountBigInt: bigint;
+        try { amountBigInt = BigInt(amount); } catch { return res.status(400).json({ error: 'Invalid amount' }); }
+        if (amountBigInt <= 0n) return res.status(400).json({ error: 'Amount must be positive' });
+        await dbService.logDeposit(walletAddress, amountBigInt, txHash, null);
+        return res.status(200).json({ ok: true });
+      } catch (error) {
+        logger.error('Error in deposit/notify:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Withdraw prepare: server signs withdrawal approval (amount = min(DB balance, contract reserve))
     const publicClient = getPublicClient();
     const blackjackContractAddress = process.env.BLACKJACK_CONTRACT_ADDRESS as `0x${string}` | undefined;
@@ -1348,7 +1480,7 @@ async function initializeServices() {
         const existingPending = await dbService.getActivePendingWithdrawal(normalizedAddress);
         if (existingPending) {
           return res.status(409).json({
-            error: 'You have a pending withdrawal. Wait for it to complete (or 10 minutes for it to expire) before requesting another.',
+            error: 'You have a pending withdrawal. Wait for it to complete (or 2 minutes for it to expire) before requesting another.',
           });
         }
 
@@ -1382,21 +1514,20 @@ async function initializeServices() {
           return res.status(500).json({ error: 'Server configuration error' });
         }
 
-        // Atomically deduct balance BEFORE signing (prevents stockpiling)
+        // Generate unique nonce using timestamp + random
+        const nonce = BigInt(Date.now()) * BigInt(1e6) + BigInt(Math.floor(Math.random() * 1e6));
+
+        // Atomically deduct balance AND create pending withdrawal record in one transaction.
+        // If either step fails (e.g. insufficient balance or DB error), both are rolled back —
+        // preventing permanent balance loss from a partial failure between the two operations.
         try {
-          await dbService.deductPlayerBalance(normalizedAddress, amount);
+          await dbService.deductAndCreatePendingWithdrawal(normalizedAddress, nonce, amount);
         } catch (deductErr) {
           return res.status(400).json({
             error: 'Insufficient balance for withdrawal',
             dbBalance: dbBalance.toString(),
           });
         }
-
-        // Generate unique nonce using timestamp + random
-        const nonce = BigInt(Date.now()) * BigInt(1e6) + BigInt(Math.floor(Math.random() * 1e6));
-
-        // Track pending withdrawal (so we can refund on expiry)
-        await dbService.createPendingWithdrawal(normalizedAddress, nonce, amount);
 
         const payload = await signWithdrawApproval(
           normalizedAddress,
@@ -1437,7 +1568,9 @@ async function initializeServices() {
           return res.status(400).json({ error: 'Invalid address' });
         }
         const nonceBigInt = BigInt(String(nonce));
-        const updated = await dbService.markPendingWithdrawalCompleted(normalizedAddress, nonceBigInt);
+        const { txHash } = req.body;
+        const validTxHash = (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) ? txHash : undefined;
+        const updated = await dbService.markPendingWithdrawalCompleted(normalizedAddress, nonceBigInt, validTxHash);
         if (updated) {
           logger.info('Withdrawal confirmed (on-chain tx completed)', { address: normalizedAddress, nonce: nonceBigInt.toString() });
         }

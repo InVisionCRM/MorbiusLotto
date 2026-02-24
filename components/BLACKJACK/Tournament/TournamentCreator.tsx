@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { formatEther, parseEther } from 'viem';
+import { formatEther, parseEther, parseUnits } from 'viem';
+import { pulsechain } from 'viem/chains';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import {
   Dialog,
@@ -36,7 +37,7 @@ import { TokenWithLogo } from '@/components/Creators/TokenWithLogo';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const isEscrowConfigured = (TOURNAMENT_PRIZE_ESCROW_ADDRESS as string) !== ESCROW_ZERO;
-import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
+import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 
@@ -306,7 +307,11 @@ export function TournamentCreator({
   const prizeAmountWeiForReview = useMemo(() => {
     if (prizeType !== 'custom' || !prizeAmountHuman.trim()) return 0n;
     const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
-    return BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
+    try {
+      return parseUnits(prizeAmountHuman.trim(), dec);
+    } catch {
+      return 0n;
+    }
   }, [prizeType, prizeAmountHuman, prizeTokenDecimals]);
   const prizeUsdValue = useMemo(() => {
     if (prizeAmountWeiForReview === 0n || prizeTokenPriceUsd == null) return null;
@@ -363,7 +368,7 @@ export function TournamentCreator({
           setError('Select a custom token for the prize pool.');
           return;
         }
-        if (!prizeAmountHuman.trim() || BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') <= BigInt(0)) {
+        if (!prizeAmountHuman.trim() || prizeAmountWeiForReview <= 0n) {
           setError('Enter a valid prize amount.');
           return;
         }
@@ -392,10 +397,9 @@ export function TournamentCreator({
       };
       if (prizeType === 'custom' && selectedToken && prizeTokenAddress.trim() && prizeAmountHuman.trim()) {
         const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
-        const prizeAmountWei = BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
-        if (prizeAmountWei > BigInt(0)) {
+        if (prizeAmountWeiForReview > 0n) {
           freerollParams.prizeTokenAddress = prizeTokenAddress.trim();
-          freerollParams.prizeAmount = prizeAmountWei.toString();
+          freerollParams.prizeAmount = prizeAmountWeiForReview.toString();
           freerollParams.prizeTokenDecimals = dec;
         }
       }
@@ -430,10 +434,9 @@ export function TournamentCreator({
     };
     if (prizeType === 'custom' && prizeTokenAddress.trim() && prizeAmountHuman.trim()) {
       const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
-      const prizeAmountWei = BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
-      if (prizeAmountWei > BigInt(0)) {
+      if (prizeAmountWeiForReview > 0n) {
         params.prizeTokenAddress = prizeTokenAddress.trim();
-        params.prizeAmount = prizeAmountWei.toString();
+        params.prizeAmount = prizeAmountWeiForReview.toString();
         params.prizeTokenDecimals = dec;
       }
     }
@@ -449,12 +452,6 @@ export function TournamentCreator({
     setError(null);
     onClose();
   };
-
-  // Funding helpers
-  const fundingAmountWei = useMemo(() => {
-    const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
-    return BigInt(prizeAmountHuman.replace(/\D/g, '') || '0') * BigInt(10 ** dec);
-  }, [prizeAmountHuman, prizeTokenDecimals]);
 
   // Reset wizard when opening
   useEffect(() => {
@@ -474,7 +471,7 @@ export function TournamentCreator({
   if (!isOpen) return null;
 
   const handleApproveToken = async () => {
-    if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
+    if (!createdTournament || !prizeTokenAddress.trim() || prizeAmountWeiForReview <= 0n) return;
     // Custom token always uses V2 (bytes32) escrow
     const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
     if (!isEscrowConfigured || (escrow as string) === ESCROW_ZERO) {
@@ -489,19 +486,13 @@ export function TournamentCreator({
     setFundingStep('approving');
     try {
       const token = prizeTokenAddress.trim() as `0x${string}`;
-      const pulseChain = {
-        id: 369,
-        name: 'PulseChain',
-        nativeCurrency: { name: 'Pulse', symbol: 'PLS', decimals: 18 },
-        rpcUrls: { default: { http: ['https://rpc.pulsechain.com'] } }
-      };
       const hash = await writeContractAsync({
         address: token,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [escrow, fundingAmountWei],
+        args: [escrow, prizeAmountWeiForReview],
         account: address,
-        chain: pulseChain,
+        chain: pulsechain,
       });
       setApprovalTxHash(hash);
       if (publicClient && hash) {
@@ -519,10 +510,14 @@ export function TournamentCreator({
   };
 
   const handleDepositToEscrow = async () => {
-    if (!createdTournament || !prizeTokenAddress.trim() || fundingAmountWei <= BigInt(0)) return;
+    if (!createdTournament || !prizeTokenAddress.trim() || prizeAmountWeiForReview <= 0n) return;
     // Custom token always uses V2 (bytes32) escrow
     const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-    if (!isEscrowConfigured || (escrow as string) === ESCROW_ZERO) return;
+    if (!isEscrowConfigured || (escrow as string) === ESCROW_ZERO) {
+      setFundingError('Prize escrow contract not set. Add NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS to your .env.');
+      setFundingStep('approved');
+      return;
+    }
     setFundingError(null);
     setFundingStep('depositing');
     try {
@@ -534,21 +529,14 @@ export function TournamentCreator({
         return;
       }
 
-      const pulseChain = {
-        id: 369,
-        name: 'PulseChain',
-        nativeCurrency: { name: 'Pulse', symbol: 'PLS', decimals: 18 },
-        rpcUrls: { default: { http: ['https://rpc.pulsechain.com'] } }
-      };
-
       const idBytes32 = tournamentIdToBytes32(createdTournament.id);
       const hash = await writeContractAsync({
         address: escrow as `0x${string}`,
-        abi: tournamentPrizeEscrowAbi,
+        abi: tournamentPrizeEscrowV2Abi,
         functionName: 'depositPrizePool',
-        args: [idBytes32, token, fundingAmountWei],
+        args: [idBytes32, token, prizeAmountWeiForReview],
         account: address,
-        chain: pulseChain,
+        chain: pulsechain,
       });
       if (publicClient && hash) {
         try {
@@ -946,6 +934,9 @@ export function TournamentCreator({
                     aria-labelledby="buy-in-amount-label"
                   />
                   <p className="text-gray-500 text-xs mt-1">0 = freeroll (no buy-in). Your balance: {formatEther(playerBalance)} MORBIUS</p>
+                  {!canAffordBuyIn && buyInAmountWei > 0n && (
+                    <p className="text-yellow-500 text-xs mt-1">Your balance is below the buy-in — you won&apos;t be able to join your own tournament.</p>
+                  )}
                 </div>
               )}
 
@@ -1091,7 +1082,15 @@ export function TournamentCreator({
                         </div>
                       ) : (
                         <div ref={tokenDropdownRef}>
-                          <input type="text" value={tokenQuery} onChange={(e) => handleTokenQueryChange(e.target.value)} placeholder="Search token (e.g. HEX, WPLS) or paste 0x..." className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" />
+                          <input
+                            type="text"
+                            value={tokenQuery}
+                            onChange={(e) => handleTokenQueryChange(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleRawAddressSubmit()}
+                            onBlur={handleRawAddressSubmit}
+                            placeholder="Search token (e.g. HEX, WPLS) or paste 0x..."
+                            className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
+                          />
                           {tokenSearchResults.length > 0 && (
                             <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-gray-600 bg-gray-800">
                               {tokenSearchResults.map((r) => (
@@ -1100,6 +1099,9 @@ export function TournamentCreator({
                                 </button>
                               ))}
                             </div>
+                          )}
+                          {tokenSearchResults.length === 0 && tokenQuery.trim().length >= 2 && !tokenSearching && (
+                            <p className="mt-1 text-gray-500 text-xs px-1">No results — try pasting the token contract address (0x...)</p>
                           )}
                         </div>
                       )}

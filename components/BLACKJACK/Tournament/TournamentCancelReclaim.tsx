@@ -15,7 +15,7 @@ const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 interface TournamentCancelReclaimProps {
   tournamentId: string;
   tournamentName: string;
-  status: 'active' | 'completed' | 'cancelled';
+  status: 'registration' | 'active' | 'completed' | 'cancelled';
   creatorAddress?: string | null;
   playerAddress?: string | null;
   prizeTokenAddress?: string | null;
@@ -50,7 +50,7 @@ export function TournamentCancelReclaim({
 
   const isCreator = creatorAddress && playerAddress && 
     creatorAddress.toLowerCase() === playerAddress.toLowerCase();
-  const canCancel = isCreator && status === 'active' && entryCount === 0;
+  const canCancel = isCreator && status === 'registration' && entryCount === 0;
   const canReclaim = isCreator && status === 'cancelled' && prizeTokenAddress;
 
   const handleCancel = async () => {
@@ -179,7 +179,11 @@ export function TournamentCancelReclaim({
 
       {status === 'cancelled' && !canReclaim && (
         <div className="p-3 rounded-lg border border-gray-500/30 text-gray-400 text-xs" style={Theme.panel.base}>
-          Tournament cancelled. {prizeTokenAddress ? 'Funds may be available for reclaim.' : 'No escrow funds to reclaim.'}
+          {prizeTokenAddress
+            ? 'Tournament cancelled. Funds may be available for reclaim.'
+            : onChainTournamentId != null
+              ? 'Tournament cancelled. If you paid a buy-in, call refund() on the MorbiusTournament contract to recover it.'
+              : 'Tournament cancelled. No escrow funds to reclaim.'}
         </div>
       )}
     </div>

@@ -408,8 +408,8 @@ export class TournamentService {
     if (result.rows.length === 0) {
       // Create a new tournament
       const createQuery = `
-        INSERT INTO tournaments (name, buy_in_amount, starting_chips, max_hands)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO tournaments (name, buy_in_amount, starting_chips, max_hands, status)
+        VALUES ($1, $2, $3, $4, 'active')
         RETURNING *
       `;
       const nextNum = await this.pool.query(`SELECT COUNT(*) FROM tournaments`);
@@ -856,15 +856,32 @@ export class TournamentService {
   }
 
   /**
-   * Distribute prizes to top players
+   * Distribute prizes to top players.
+   *
+   * Two-phase design:
+   *  Phase 1 (DB transaction) — calculate prize amounts, write prize_won/final_rank to every
+   *    entry, credit off-chain balances, and mark the tournament 'completed'. This commits
+   *    atomically so the DB is always consistent regardless of what happens next.
+   *  Phase 2 (outside DB transaction) — fire on-chain payouts AFTER the commit. Because
+   *    blockchain transactions cannot be rolled back, keeping them inside a DB transaction
+   *    creates a double-pay risk: if the DB rolls back after an on-chain payment lands, the
+   *    next distributePrizes call re-pays the same winners. Phase 2 failures are logged with
+   *    full detail for manual recovery but do not revert the DB state.
    */
   async distributePrizes(tournamentId: string): Promise<PrizeDistribution[]> {
     const client = await this.pool.connect();
 
+    // Collected during Phase 1, consumed in Phase 2
+    const pendingOnChainPayouts: Array<{ address: string; amount: bigint }> = [];
+    let onChainTournamentId: number | null = null;
+    let useEscrowV2 = false;
+    let useMorbiusPayout = false;
+    const distributions: PrizeDistribution[] = [];
+
+    // ── Phase 1: DB transaction ───────────────────────────────────────────────
     try {
       await client.query('BEGIN');
 
-      // Get tournament
       const tournamentQuery = `SELECT * FROM tournaments WHERE id = $1 FOR UPDATE`;
       const tournamentResult = await client.query(tournamentQuery, [tournamentId]);
 
@@ -885,7 +902,6 @@ export class TournamentService {
         const contractPrizePool = await getMorbiusTournamentPrizePool(tournament.on_chain_tournament_id);
         if (contractPrizePool > 0n) {
           actualPrizePool = contractPrizePool;
-          // Update database to match contract (for accurate fee calculations)
           await client.query(
             `UPDATE tournaments SET prize_pool = $1::NUMERIC WHERE id = $2`,
             [contractPrizePool.toString(), tournamentId]
@@ -898,72 +914,32 @@ export class TournamentService {
         }
       }
 
-      // Calculate prizes using the database function (now uses synced prize pool)
       const prizesQuery = `SELECT * FROM calculate_tournament_prizes($1)`;
       const prizesResult = await client.query(prizesQuery, [tournamentId]);
 
-      const distributions: PrizeDistribution[] = [];
       const useEscrow = Boolean(tournament.prize_token_address);
       const isOnChain = tournament.on_chain_tournament_id != null;
-      const useMorbiusPayout = isOnChain && !useEscrow;
+      useEscrowV2 = useEscrow;
+      useMorbiusPayout = isOnChain && !useEscrow;
+      onChainTournamentId = tournament.on_chain_tournament_id ?? null;
 
-      // Transition contract to Active before payouts (payout() requires Active or Completed).
-      // We defer setActive() from join-time to here so joinTournament() keeps working on-chain
-      // (the contract requires status==Open for joins).
-      if (isOnChain) {
-        const setActiveResult = await setMorbiusTournamentActive(tournament.on_chain_tournament_id!);
-        if (!setActiveResult.success) {
-          logger.warn('MorbiusTournament setActive failed before distribution', {
-            tournamentId,
-            onChainId: tournament.on_chain_tournament_id,
-            error: setActiveResult.error,
-          });
-        }
-      }
-      // Custom token: always use V2 (bytes32). V3 deprecated for reliability.
-      const useEscrowV2 = useEscrow;
-
-      // Apply prizes
+      // Apply prizes — DB updates only; on-chain calls deferred to Phase 2
       for (const row of prizesResult.rows) {
         const prizeAmount = this.toBigInt(row.prize_amount);
 
         if (prizeAmount > 0n) {
-          // Update entry with prize and final rank
           await client.query(
-            `UPDATE tournament_entries
-             SET prize_won = $1::NUMERIC, final_rank = $2
-             WHERE id = $3`,
+            `UPDATE tournament_entries SET prize_won = $1::NUMERIC, final_rank = $2 WHERE id = $3`,
             [prizeAmount.toString(), row.final_rank, row.entry_id]
           );
 
-          if (useMorbiusPayout) {
-            const result = await sendMorbiusTournamentPayout(tournament.on_chain_tournament_id!, row.player_address, prizeAmount);
-            if (!result.success) {
-              logger.error('MorbiusTournament payout failed; rolling back tournament completion', {
-                tournamentId,
-                winner: row.player_address,
-                amount: prizeAmount.toString(),
-                error: result.error,
-              });
-              throw new Error(`Prize payout failed for ${row.player_address}: ${result.error || 'Unknown error'}`);
-            }
-          } else if (useEscrowV2) {
-            const result = await sendEscrowPayout(tournamentId, row.player_address, prizeAmount);
-            if (!result.success) {
-              logger.error('Escrow payout failed; rolling back tournament completion', {
-                tournamentId,
-                winner: row.player_address,
-                amount: prizeAmount.toString(),
-                error: result.error,
-              });
-              throw new Error(`Escrow payout failed for ${row.player_address}: ${result.error || 'Unknown error'}`);
-            }
+          if (useMorbiusPayout || useEscrowV2) {
+            // Queue for Phase 2 on-chain payout
+            pendingOnChainPayouts.push({ address: row.player_address, amount: prizeAmount });
           } else {
-            // Add prize to player balance (platform MORBIUS, off-chain)
+            // Off-chain balance: safe to update inside the DB transaction
             await client.query(
-              `UPDATE players
-               SET balance = balance + $1::NUMERIC
-               WHERE LOWER(wallet_address) = LOWER($2)`,
+              `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
               [prizeAmount.toString(), row.player_address]
             );
           }
@@ -974,16 +950,7 @@ export class TournamentService {
             final_rank: Number(row.final_rank),
             prize_amount: prizeAmount,
           });
-
-          logger.info('Prize distributed', {
-            tournamentId,
-            playerAddress: row.player_address,
-            rank: row.final_rank,
-            prize: prizeAmount.toString(),
-            viaEscrow: useEscrow,
-          });
         } else {
-          // Just update final rank for non-prize positions
           await client.query(
             `UPDATE tournament_entries SET final_rank = $1 WHERE id = $2`,
             [row.final_rank, row.entry_id]
@@ -991,27 +958,17 @@ export class TournamentService {
         }
       }
 
-      // Distribute fees: hardcoded 3% protocol, 2% creator
+      // Fees — same pattern: queue on-chain, apply off-chain in transaction
       const platformFeePercent = 3;
       const creatorFeePercent = 2;
-      const totalPool = actualPrizePool; // Use synced pool for accurate fee calculations
+      const totalPool = actualPrizePool;
 
-      if (platformFeePercent > 0) {
+      const platformWallet = process.env.PLATFORM_FEE_WALLET;
+      if (platformFeePercent > 0 && platformWallet) {
         const platformFeeAmount = (totalPool * BigInt(platformFeePercent)) / 100n;
-        const platformWallet = process.env.PLATFORM_FEE_WALLET;
-        if (platformFeeAmount > 0n && platformWallet) {
-          if (useMorbiusPayout) {
-            const result = await sendMorbiusTournamentPayout(tournament.on_chain_tournament_id!, platformWallet, platformFeeAmount);
-            if (!result.success) {
-              logger.error('Platform fee MorbiusTournament payout failed; rolling back', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
-              throw new Error(`Platform fee payout failed: ${result.error || 'Unknown error'}`);
-            }
-          } else if (useEscrowV2) {
-            const result = await sendEscrowPayout(tournamentId, platformWallet, platformFeeAmount);
-            if (!result.success) {
-              logger.error('Platform fee escrow payout failed; rolling back tournament completion', { tournamentId, amount: platformFeeAmount.toString(), error: result.error });
-              throw new Error(`Platform fee escrow payout failed: ${result.error || 'Unknown error'}`);
-            }
+        if (platformFeeAmount > 0n) {
+          if (useMorbiusPayout || useEscrowV2) {
+            pendingOnChainPayouts.push({ address: platformWallet, amount: platformFeeAmount });
           } else {
             await client.query(
               `INSERT INTO players (wallet_address, balance) VALUES (LOWER($1), $2::NUMERIC)
@@ -1019,37 +976,24 @@ export class TournamentService {
               [platformWallet.toLowerCase(), platformFeeAmount.toString()]
             );
           }
-          logger.info('Platform fee distributed', { tournamentId, wallet: platformWallet, amount: platformFeeAmount.toString() });
         }
       }
 
       if (creatorFeePercent > 0 && tournament.creator_address) {
         const creatorFeeAmount = (totalPool * BigInt(creatorFeePercent)) / 100n;
         if (creatorFeeAmount > 0n) {
-          if (useMorbiusPayout) {
-            const result = await sendMorbiusTournamentPayout(tournament.on_chain_tournament_id!, tournament.creator_address, creatorFeeAmount);
-            if (!result.success) {
-              logger.error('Creator fee MorbiusTournament payout failed; rolling back', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
-              throw new Error(`Creator fee payout failed: ${result.error || 'Unknown error'}`);
-            }
-          } else if (useEscrowV2) {
-            const result = await sendEscrowPayout(tournamentId, tournament.creator_address, creatorFeeAmount);
-            if (!result.success) {
-              logger.error('Creator fee escrow payout failed; rolling back tournament completion', { tournamentId, amount: creatorFeeAmount.toString(), error: result.error });
-              throw new Error(`Creator fee escrow payout failed: ${result.error || 'Unknown error'}`);
-            }
+          if (useMorbiusPayout || useEscrowV2) {
+            pendingOnChainPayouts.push({ address: tournament.creator_address, amount: creatorFeeAmount });
           } else {
             await client.query(
               `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
               [creatorFeeAmount.toString(), tournament.creator_address]
             );
           }
-          logger.info('Creator fee distributed', { tournamentId, wallet: tournament.creator_address, amount: creatorFeeAmount.toString() });
         }
       }
 
-      // Mark tournament as completed
-      // For freerolls, also update current_phase in the same transaction
+      // Mark completed — inside the transaction so it's atomic with prize records
       const isFreeroll = tournament.tournament_type === 'freeroll';
       if (isFreeroll) {
         await client.query(
@@ -1064,34 +1008,70 @@ export class TournamentService {
       }
 
       await client.query('COMMIT');
-
-      // Update MorbiusTournament contract status when using on-chain tournament
-      if (tournament.on_chain_tournament_id != null) {
-        const setResult = await setMorbiusTournamentCompleted(tournament.on_chain_tournament_id);
-        if (!setResult.success) {
-          logger.warn('MorbiusTournament setCompleted failed (tournament completed in DB)', {
-            tournamentId,
-            onChainId: tournament.on_chain_tournament_id,
-            error: setResult.error,
-          });
-        }
-      }
-
-      logger.info('Tournament completed and prizes distributed', {
-        tournamentId,
-        totalDistributed: distributions.reduce((sum, d) => sum + d.prize_amount, 0n).toString(),
-        winners: distributions.length,
-        platformFeePercent,
-        creatorFeePercent,
-      });
-
-      return distributions;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
     }
+
+    // ── Phase 2: On-chain payouts (outside DB transaction) ────────────────────
+    // The DB is committed. Failures here are logged for manual recovery; they do
+    // NOT roll back the DB because that would re-expose the double-pay risk.
+    if (useMorbiusPayout && onChainTournamentId != null) {
+      // Transition Open→Active so payout() is accepted by the contract.
+      // setActive is deliberately deferred to here (not join-time) so the contract
+      // keeps accepting joinTournament() calls (requires status==Open) until play ends.
+      const setActiveResult = await setMorbiusTournamentActive(onChainTournamentId);
+      if (!setActiveResult.success) {
+        logger.warn('MorbiusTournament setActive failed before payouts', {
+          tournamentId,
+          onChainId: onChainTournamentId,
+          error: setActiveResult.error,
+        });
+      }
+
+      for (const { address, amount } of pendingOnChainPayouts) {
+        const result = await sendMorbiusTournamentPayout(onChainTournamentId, address, amount);
+        if (!result.success) {
+          logger.error('MorbiusTournament payout failed — tournament completed in DB, manual on-chain recovery required', {
+            tournamentId,
+            recipient: address,
+            amount: amount.toString(),
+            error: result.error,
+          });
+        }
+      }
+
+      const setResult = await setMorbiusTournamentCompleted(onChainTournamentId);
+      if (!setResult.success) {
+        logger.warn('MorbiusTournament setCompleted failed (tournament completed in DB)', {
+          tournamentId,
+          onChainId: onChainTournamentId,
+          error: setResult.error,
+        });
+      }
+    } else if (useEscrowV2) {
+      for (const { address, amount } of pendingOnChainPayouts) {
+        const result = await sendEscrowPayout(tournamentId, address, amount);
+        if (!result.success) {
+          logger.error('Escrow payout failed — tournament completed in DB, manual on-chain recovery required', {
+            tournamentId,
+            recipient: address,
+            amount: amount.toString(),
+            error: result.error,
+          });
+        }
+      }
+    }
+
+    logger.info('Tournament completed and prizes distributed', {
+      tournamentId,
+      totalDistributed: distributions.reduce((sum, d) => sum + d.prize_amount, 0n).toString(),
+      winners: distributions.length,
+    });
+
+    return distributions;
   }
 
   /**

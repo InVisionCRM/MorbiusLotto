@@ -33,6 +33,20 @@ export const tournamentPrizeEscrowV3Abi = [
   },
   {
     inputs: [{ name: 'tournamentId', type: 'uint256' }],
+    name: 'cancelTournament',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'tournamentId', type: 'uint256' }],
+    name: 'creatorReclaim',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'tournamentId', type: 'uint256' }],
     name: 'getPool',
     outputs: [
       { name: 'token', type: 'address' },

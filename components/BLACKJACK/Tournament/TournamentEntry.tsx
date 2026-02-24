@@ -47,7 +47,7 @@ export function TournamentEntry({
             Tournament Mode
           </h2>
           <p className="text-cyan-100 text-center text-sm mt-1">
-            50-Hand Sprint Challenge
+            {TOURNAMENT_CONFIG.MAX_HANDS}-Hand Sprint Challenge
           </p>
         </div>
 
@@ -97,23 +97,23 @@ export function TournamentEntry({
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-yellow-500">1st Place:</span>
-                <span className="text-white">40%</span>
+                <span className="text-white">{TOURNAMENT_CONFIG.PRIZE_PERCENTAGES[0]}%</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">2nd Place:</span>
-                <span className="text-white">20%</span>
+                <span className="text-white">{TOURNAMENT_CONFIG.PRIZE_PERCENTAGES[1]}%</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-orange-400">3rd Place:</span>
-                <span className="text-white">10%</span>
+                <span className="text-white">{TOURNAMENT_CONFIG.PRIZE_PERCENTAGES[2]}%</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">4th-10th:</span>
-                <span className="text-white">2% each</span>
+                <span className="text-white">{TOURNAMENT_CONFIG.PRIZE_PERCENTAGES[3]}% each</span>
               </div>
             </div>
             <p className="text-gray-500 text-xs mt-2">
-              * 84% of prize pool distributed to top 10 players
+              * 95% of prize pool paid to top 10 players (5% protocol fee)
             </p>
           </div>
 

@@ -16,6 +16,7 @@ export interface EscrowPoolStatus {
   depositor?: `0x${string}`;
   depositedAt?: bigint;
   cancelled?: boolean;
+  active?: boolean;
 }
 
 /**
@@ -37,16 +38,17 @@ export async function getEscrowPoolStatus(tournamentId: string): Promise<EscrowP
         args: [idBytes32],
       });
       
-      // V2 returns: token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled
-      const [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled] = result as [
+      // V2 returns: token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled, active
+      const [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled, active] = result as [
         `0x${string}`,
         `0x${string}`,
         bigint,
         bigint,
         bigint,
+        boolean,
         boolean
       ];
-      
+
       return {
         token,
         totalDeposited,
@@ -54,6 +56,7 @@ export async function getEscrowPoolStatus(tournamentId: string): Promise<EscrowP
         depositor,
         depositedAt,
         cancelled,
+        active,
       };
     } catch (v2Error) {
       // Fallback to V1 if V2 call fails (backwards compatibility)

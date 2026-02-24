@@ -3000,6 +3000,30 @@ export default function BlackjackPage() {
           playerBalance={offChainBalance}
         />
 
+        {/* Confirm Join overlay (Phase 2 of buy-in tournament join — fires fresh user gesture for wallet popup) */}
+        {tournament.joinApprovalReady && (
+          <div className="fixed bottom-6 right-6 z-[200] rounded-2xl border border-cyan-400/60 shadow-2xl shadow-cyan-500/30 p-5 w-72" style={{ background: 'rgba(10,20,40,0.97)' }}>
+            <p className="text-cyan-300 font-semibold mb-1">Approval confirmed!</p>
+            <p className="text-gray-400 text-sm mb-4">Click below to complete your tournament join.</p>
+            <button
+              onClick={() => {
+                tournament.confirmJoin().then(success => {
+                  if (success) {
+                    setShowTournamentBrowser(false);
+                    setIsTournamentMode(true);
+                    toast.success('Joined tournament!');
+                    fetchBalance().catch(() => {});
+                  }
+                });
+              }}
+              disabled={tournament.isJoinLoading}
+              className="w-full py-2.5 rounded-xl font-semibold bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {tournament.isJoinLoading ? 'Confirming...' : 'Confirm Join'}
+            </button>
+          </div>
+        )}
+
         {/* Tournament PIN Entry Modal */}
         <TournamentPinEntry
           isOpen={showTournamentPinEntry}

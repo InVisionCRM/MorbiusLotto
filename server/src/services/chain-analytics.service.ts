@@ -191,6 +191,22 @@ export class ChainAnalyticsService {
     const client = getPublicClient();
     const stored = await this.dbService.getBlackjackPlatformTotals();
 
+    /** Fire-and-forget: log individual deposit events to player_deposits table. Never throws. */
+    const logDepositEvents = async (logs: Array<{ args: any; transactionHash: string | null; blockNumber: bigint | null; }>, amountField: 'morbiusAmount' | 'amount') => {
+      for (const log of logs) {
+        try {
+          const player: string | undefined = log.args?.player;
+          const amount: bigint | undefined = log.args?.[amountField];
+          const txHash: string | null = log.transactionHash;
+          const blockNumber: bigint | null = log.blockNumber;
+          if (!player || !amount || !txHash || blockNumber == null) continue;
+          await this.dbService.logDeposit(player, amount, txHash, blockNumber);
+        } catch {
+          // Non-fatal — ON CONFLICT handles duplicates; swallow other errors
+        }
+      }
+    };
+
     const runFullScan = async (): Promise<{ totalDeposited: bigint; totalWithdrawn: bigint; toBlock: bigint }> => {
       let totalDeposited = 0n;
       let totalWithdrawn = 0n;
@@ -212,6 +228,9 @@ export class ChainAnalyticsService {
         for (const log of withdrawalLogs) {
           if (log.args && 'amount' in log.args) totalWithdrawn += (log.args as { amount: bigint }).amount;
         }
+        // Log per-wallet deposits (best-effort; errors are swallowed)
+        await logDepositEvents(depositLogs as any, 'morbiusAmount');
+        await logDepositEvents(depositMorbiusLogs as any, 'amount');
         fromBlock = end + 1n;
         if (fromBlock > toBlock) break;
       }
@@ -249,6 +268,9 @@ export class ChainAnalyticsService {
         for (const log of depositMorbiusLogs) {
           if (log.args && 'amount' in log.args) newDeposited += (log.args as { amount: bigint }).amount;
         }
+        // Log per-wallet deposits (best-effort; ON CONFLICT handles duplicates)
+        await logDepositEvents(depositLogs as any, 'morbiusAmount');
+        await logDepositEvents(depositMorbiusLogs as any, 'amount');
         fromBlock = end + 1n;
         if (fromBlock > toBlock) break;
       }

@@ -25,6 +25,9 @@ import ThemeSelectionModal from '@/components/BLACKJACK/ThemeSelectionModal';
 import HowToPlayModal from '@/components/PLINKO/HowToPlayModal';
 import SwapModal from '@/components/PLINKO/SwapModal';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal';
+import { ReportModal } from '@/components/shared/ReportModal';
+// Install console.error interceptor for bug reports (browser only, no-op on server)
+import '@/lib/error-log';
 
 export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'home';
 
@@ -158,6 +161,7 @@ function NavContent(props: {
   onOpenAuthModal?: () => void;
   isAuthenticated?: boolean;
   onSignOut?: () => void;
+  onOpenReport: () => void;
 }) {
   const { open } = useSidebar();
   const {
@@ -196,6 +200,7 @@ function NavContent(props: {
     onOpenAuthModal,
     isAuthenticated,
     onSignOut,
+    onOpenReport,
   } = props;
 
   const navItem = (label: string, icon: string, active?: boolean) =>
@@ -355,6 +360,7 @@ function NavContent(props: {
             <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-xs text-white uppercase tracking-wider">Other</motion.span>
           </div>
           <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <i className="fas fa-gamepad w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           {isAdmin && (
             <SidebarLink link={{ label: 'Admin', href: '/admin', icon: <i className="fas fa-cog w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
@@ -455,6 +461,7 @@ export default function GlobalMainNav({
   const { address, isConnected } = useAccount();
   const { displayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook } = useProfile();
   const [responsibleGamingOpen, setResponsibleGamingOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const effectiveOnOpenResponsibleGaming = onOpenResponsibleGaming ?? (() => setResponsibleGamingOpen(true));
   const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook;
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook;
@@ -526,9 +533,10 @@ export default function GlobalMainNav({
             onOpenAuthModal={onOpenAuthModal}
             isAuthenticated={isAuthenticated}
             onSignOut={onSignOut}
+            onOpenReport={() => setReportOpen(true)}
           />
         </SidebarBody>
-        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0 md:ml-[60px]">{children}</div>
+        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0">{children}</div>
       </div>
 
       {page === 'blackjack' && onThemeChange && (
@@ -555,6 +563,11 @@ export default function GlobalMainNav({
       <SelfExclusionModal
         isOpen={responsibleGamingOpen}
         onClose={() => setResponsibleGamingOpen(false)}
+      />
+      <ReportModal
+        isOpen={reportOpen}
+        onClose={() => setReportOpen(false)}
+        balance={reserveBalance}
       />
     </Sidebar>
   );

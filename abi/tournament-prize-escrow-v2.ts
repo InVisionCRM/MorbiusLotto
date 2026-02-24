@@ -1,9 +1,59 @@
 export const tournamentPrizeEscrowV2Abi = [
   {
+    inputs: [
+      { name: 'tournamentId', type: 'bytes32' },
+      { name: 'token', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    name: 'depositPrizePool',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'tournamentId', type: 'bytes32' },
+      { name: 'winner', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    name: 'payout',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'tournamentId', type: 'bytes32' }, { name: 'to', type: 'address' }],
+    name: 'payoutRemainderTo',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'tournamentId', type: 'bytes32' }, { name: 'to', type: 'address' }],
+    name: 'reclaimUnclaimed',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'tournamentId', type: 'bytes32' }],
+    name: 'cancelTournament',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [{ name: 'tournamentId', type: 'bytes32' }],
     name: 'creatorReclaim',
     outputs: [],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'tournamentId', type: 'bytes32' }],
+    name: 'getRemainingBalance',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {
@@ -16,6 +66,7 @@ export const tournamentPrizeEscrowV2Abi = [
       { name: 'amountPaidOut', type: 'uint256' },
       { name: 'depositedAt', type: 'uint256' },
       { name: 'cancelled', type: 'bool' },
+      { name: 'active', type: 'bool' },
     ],
     stateMutability: 'view',
     type: 'function',

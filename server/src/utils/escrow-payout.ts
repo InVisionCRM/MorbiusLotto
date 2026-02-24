@@ -55,7 +55,7 @@ export async function sendEscrowPayout(
         account: client.account!,
         chain: pulsechain,
         address: ESCROW_V2_ADDRESS,
-        abi: tournamentPrizeEscrowAbi,
+        abi: tournamentPrizeEscrowV2Abi,
         functionName: 'payout',
         args: [idBytes32, winner, amount],
       });
@@ -99,7 +99,7 @@ export async function sendEscrowRemainderToReclaimWallet(tournamentId: string): 
         account: client.account!,
         chain: pulsechain,
         address: ESCROW_V2_ADDRESS,
-        abi: tournamentPrizeEscrowAbi,
+        abi: tournamentPrizeEscrowV2Abi,
         functionName: 'payoutRemainderTo',
         args: [idBytes32, RECLAIM_WALLET],
       });
@@ -235,7 +235,7 @@ export async function cancelEscrowV3Tournament(
         account: client.account!,
         chain: pulsechain,
         address: ESCROW_V3_ADDRESS,
-        abi: tournamentPrizeEscrowV3Abi as any, // ABI type doesn't include cancelTournament but it exists in contract
+        abi: tournamentPrizeEscrowV3Abi,
         functionName: 'cancelTournament',
         args: [id],
       });

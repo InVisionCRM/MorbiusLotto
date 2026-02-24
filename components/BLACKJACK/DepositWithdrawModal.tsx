@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Minus, Loader2 } from 'lucide-react'
+import { X, Plus, Minus, Loader2, ArrowDownCircle, ArrowUpCircle, History, RefreshCw, Copy, Check } from 'lucide-react'
 import { useAccount, usePublicClient } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
 import { useTokenBalance } from '@/hooks/use-token'
@@ -40,12 +40,74 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const publicClient = usePublicClient()
   const [depositAmount, setDepositAmount] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
-  const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit')
+  const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit')
   const [depositMethod, setDepositMethod] = useState<'pls' | 'morbius'>('pls')
   const [showApprovalModal, setShowApprovalModal] = useState(false)
   const [isPreparingWithdraw, setIsPreparingWithdraw] = useState(false)
   /** Amount to withdraw per legacy contract (address -> amount string). Lets users withdraw in chunks under the 1M contract limit. */
   const [legacyWithdrawAmounts, setLegacyWithdrawAmounts] = useState<Record<string, string>>({})
+
+  // Transaction history state
+  interface TxHistoryItem {
+    type: 'deposit' | 'withdrawal'
+    amount: string
+    status: string
+    tx_hash: string | null
+    created_at: string
+  }
+  const [txHistory, setTxHistory] = useState<TxHistoryItem[]>([])
+  const [txLoading, setTxLoading] = useState(false)
+  const [txError, setTxError] = useState<string | null>(null)
+  const [txLoaded, setTxLoaded] = useState(false)
+  const [copiedHash, setCopiedHash] = useState<string | null>(null)
+
+  const copyHash = (hash: string) => {
+    navigator.clipboard.writeText(hash).catch(() => {})
+    setCopiedHash(hash)
+    setTimeout(() => setCopiedHash(null), 2000)
+  }
+
+  const fetchTxHistory = async () => {
+    if (!address) return
+    setTxLoading(true)
+    setTxError(null)
+    try {
+      const serverUrl = getBlackjackServerUrl()
+      const res = await fetch(`${serverUrl}/api/players/${address}/transactions?limit=50`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setTxHistory(data)
+      setTxLoaded(true)
+    } catch (err) {
+      setTxError('Failed to load history')
+    } finally {
+      setTxLoading(false)
+    }
+  }
+
+  // Fetch when switching to the history tab (lazy, once per open)
+  useEffect(() => {
+    if (activeTab === 'history' && !txLoaded && !txLoading) {
+      fetchTxHistory()
+    }
+  }, [activeTab])
+
+  // Notify server of a confirmed deposit so it appears in history immediately
+  const notifyDeposit = async (txHash: string, amountWei: bigint) => {
+    if (!address) return
+    try {
+      const serverUrl = getBlackjackServerUrl()
+      await fetch(`${serverUrl}/api/deposit/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address, txHash, amount: amountWei.toString() }),
+      })
+      // Invalidate cached history so next open refreshes
+      setTxLoaded(false)
+    } catch {
+      // Non-fatal — chain analytics will pick it up on next scan
+    }
+  }
 
   // Legacy contracts cap withdrawal at 1,000,000 MORBIUS per tx (MAX_DAILY_WITHDRAWAL)
   const LEGACY_MAX_WITHDRAW_WEI = BigInt(1_000_000) * BigInt(1e18)
@@ -151,6 +213,15 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     }
   }, [isApprovalSuccess])
 
+  // Reset history state when modal closes so it refetches on next open
+  useEffect(() => {
+    if (!isOpen) {
+      setTxLoaded(false)
+      setTxHistory([])
+      setTxError(null)
+    }
+  }, [isOpen])
+
   // Do NOT auto-sync when modal opens. During play, off-chain balance is the source of truth
   // (bets/losses are deducted there); contract balance stays higher until user withdraws.
   // Syncing on open would overwrite correct off-chain balance with contract and "restore" lost bets.
@@ -185,6 +256,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
       // Wait a brief moment for contract state to update, then sync balance
       await new Promise(resolve => setTimeout(resolve, 1000))
+
+      // Log deposit to history immediately (non-blocking)
+      if (plsEquivalent) notifyDeposit(txHash, plsEquivalent)
 
       // Sync off-chain balance with contract (non-blocking: deposit already succeeded)
       if (onBalanceSync) {
@@ -239,6 +313,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         description: `Deposited ${depositAmount} MORBIUS`,
         duration: 5000,
       })
+
+      // Log deposit to history immediately (non-blocking)
+      notifyDeposit(txHash, parseEther(depositAmount))
 
       // Sync off-chain balance with contract (non-blocking: deposit already succeeded)
       if (onBalanceSync) {
@@ -366,7 +443,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
           const res = await fetch(`${serverUrl}/api/withdraw/confirm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address, nonce: String(nonce) }),
+            body: JSON.stringify({ address, nonce: String(nonce), txHash }),
           })
           if (res.ok) {
             confirmOk = true
@@ -405,6 +482,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         }
       }
       setWithdrawAmount('')
+      setTxLoaded(false) // Invalidate history so it refreshes on next view
     } catch (error: any) {
       setIsPreparingWithdraw(false)
       console.error('Withdrawal failed:', error)
@@ -658,8 +736,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                     </div>
 
                     <div className="min-h-0 flex flex-col overflow-hidden">
-                  <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'deposit' | 'withdraw')} className="flex flex-col min-h-0">
-                    <TabsList className="grid w-full grid-cols-2 h-8 bg-slate-800/80 border border-cyan-500/30 rounded-lg p-0.5 shrink-0">
+                  <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'deposit' | 'withdraw' | 'history')} className="flex flex-col min-h-0">
+                    <TabsList className="grid w-full grid-cols-3 h-8 bg-slate-800/80 border border-cyan-500/30 rounded-lg p-0.5 shrink-0">
                       <TabsTrigger
                         value="deposit"
                         className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-md"
@@ -673,6 +751,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                       >
                         <Minus className="w-3 h-3 mr-1" />
                         Withdraw
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="history"
+                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-md"
+                      >
+                        <History className="w-3 h-3 mr-1" />
+                        History
                       </TabsTrigger>
                     </TabsList>
 
@@ -768,6 +853,94 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           'Withdraw MORBIUS'
                         )}
                       </Button>
+                    </TabsContent>
+
+                    {/* History tab */}
+                    <TabsContent value="history" className="mt-2 min-h-0 flex flex-col overflow-hidden">
+                      <div className="flex items-center justify-between mb-1.5 shrink-0">
+                        <span className="text-[11px] text-cyan-300/70">Last 50 transactions</span>
+                        <button
+                          onClick={() => { setTxLoaded(false); setTxHistory([]); fetchTxHistory() }}
+                          disabled={txLoading}
+                          className="text-cyan-400 hover:text-cyan-200 disabled:opacity-50 transition-colors"
+                          aria-label="Refresh"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${txLoading ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
+
+                      {/* Expired explanation */}
+                      <div className="mb-2 rounded bg-slate-800/50 border border-slate-700/40 px-2.5 py-1.5 text-[10px] text-slate-400 shrink-0">
+                        <span className="text-slate-300 font-medium">Expired</span> = withdrawal was signed but the on-chain transaction was not submitted within 2 minutes. Your balance was automatically refunded.
+                      </div>
+
+                      {txLoading && (
+                        <div className="flex items-center justify-center py-8 text-[11px] text-cyan-300/60">
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading...
+                        </div>
+                      )}
+                      {txError && !txLoading && (
+                        <p className="text-[11px] text-red-400 text-center py-4">{txError}</p>
+                      )}
+                      {!txLoading && !txError && txHistory.length === 0 && (
+                        <p className="text-[11px] text-slate-500 text-center py-8">No transactions yet.</p>
+                      )}
+
+                      <div className="space-y-1 overflow-y-auto min-h-0 flex-1">
+                        {txHistory.map((tx, i) => {
+                          const isDeposit = tx.type === 'deposit'
+                          const morbius = Math.floor(Number(formatEther(BigInt(tx.amount)))).toLocaleString()
+                          const date = new Date(tx.created_at)
+                          const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                          const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                          const isExpired = tx.status === 'expired'
+                          const isCopied = copiedHash === tx.tx_hash
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-start gap-2 px-2.5 py-2 rounded-md bg-slate-800/60 border border-slate-700/40"
+                            >
+                              {isDeposit ? (
+                                <ArrowDownCircle className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
+                              ) : (
+                                <ArrowUpCircle className={`w-4 h-4 shrink-0 mt-0.5 ${isExpired ? 'text-slate-500' : 'text-cyan-400'}`} />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`text-[11px] font-semibold ${isDeposit ? 'text-emerald-300' : isExpired ? 'text-slate-400' : 'text-cyan-300'}`}>
+                                    {isDeposit ? '+' : '−'}{morbius}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500">MORBIUS</span>
+                                  {isExpired && (
+                                    <span className="text-[9px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full border border-slate-600">expired</span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-500 mt-0.5">{dateStr} · {timeStr}</div>
+                                {tx.tx_hash && (
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-[10px] font-mono text-slate-500">
+                                      {tx.tx_hash.slice(0, 10)}…{tx.tx_hash.slice(-6)}
+                                    </span>
+                                    <button
+                                      onClick={() => copyHash(tx.tx_hash!)}
+                                      className="text-slate-500 hover:text-cyan-300 transition-colors"
+                                      aria-label="Copy transaction hash"
+                                    >
+                                      {isCopied
+                                        ? <Check className="w-3 h-3 text-emerald-400" />
+                                        : <Copy className="w-3 h-3" />
+                                      }
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-500 shrink-0 mt-0.5 capitalize">
+                                {isDeposit ? 'Deposit' : 'Withdraw'}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </TabsContent>
                   </Tabs>
                     </div>
