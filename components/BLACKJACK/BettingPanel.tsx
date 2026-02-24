@@ -108,12 +108,12 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
               }`}
               style={{
                 background: `url('${chipImage}') center/contain no-repeat`,
-                border: '1px solid rgba(60, 60, 60, 0.5)',
+                border: '1px solid rgba(36, 30, 30, 0.5)',
               }}
             >
               <div className="absolute inset-0 rounded-full" />
               <span
-                className={`relative z-10 font-bold md:text-sm ${
+                className={`relative z-11 font-bold md:text-sm ${
                   isCyanChip ? 'text-slate-800' : 'text-white'
                 }`}
                 style={{
