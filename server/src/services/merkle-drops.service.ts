@@ -662,7 +662,7 @@ export class MerkleDropsService {
       // Build next page URL from params (PulseChain blockscout pagination)
       if (data.next_page_params && Object.keys(data.next_page_params).length > 0) {
         const params = new URLSearchParams(
-          Object.entries(data.next_page_params).map(([k, v]) => [k, String(v)]),
+          Object.entries(data.next_page_params).map(([k, v]) => [k, String(v)] as [string, string]),
         );
         nextPage = `${PULSECHAIN_API}/tokens/${MORBIUS_TOKEN_ADDRESS}/holders?page_size=${HOLDERS_PAGE_SIZE}&${params}`;
       } else {

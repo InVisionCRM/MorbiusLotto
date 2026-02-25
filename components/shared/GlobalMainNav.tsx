@@ -26,7 +26,6 @@ import HowToPlayModal from '@/components/PLINKO/HowToPlayModal';
 import SwapModal from '@/components/PLINKO/SwapModal';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal';
 import { ReportModal } from '@/components/shared/ReportModal';
-import { ChatSidebar } from '@/components/chat/ChatSidebar';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
 
@@ -538,7 +537,6 @@ export default function GlobalMainNav({
           />
         </SidebarBody>
         <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0">{children}</div>
-        <ChatSidebar />
       </div>
 
       {page === 'blackjack' && onThemeChange && (

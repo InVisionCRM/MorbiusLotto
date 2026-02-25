@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 import { Providers } from "./providers";
 import { Toaster } from "sonner";
 import { BreakReminderWrapper } from "@/components/ResponsibleGaming";
+import { ChatSidebar } from "@/components/chat/ChatSidebar";
 
 // Use system fonts instead of Google Fonts to avoid build issues
 const geistSans = {
@@ -55,6 +56,7 @@ export default function RootLayout({
             {children}
             <Toaster position="top-right" theme="dark" richColors />
             <BreakReminderWrapper />
+            <ChatSidebar />
             <Analytics />
           </Providers>
         </div>
