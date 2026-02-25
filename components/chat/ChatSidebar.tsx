@@ -66,13 +66,13 @@ export function ChatSidebar() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-2 hover:bg-white/5 transition-colors"
+            className="absolute inset-0 flex flex-col items-center justify-start pt-4 gap-2 hover:bg-white/5 transition-colors"
             aria-label={hasUnread ? 'Open chat (unread messages)' : 'Open chat'}
           >
             <MessageCircle className="w-5 h-5 text-cyan-400 shrink-0" />
             {hasUnread && (
               <span
-                className="absolute top-6 right-2.5 w-2 h-2 rounded-full bg-red-500"
+                className="absolute top-3 right-2.5 w-2 h-2 rounded-full bg-red-500"
                 aria-hidden
               />
             )}
