@@ -2,7 +2,9 @@ import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminWallet } from '@/lib/admin';
 
-const sql = neon(process.env.DATABASE_URL!);
+function getSql() {
+  return neon(process.env.DATABASE_URL!);
+}
 
 function requireAdmin(request: NextRequest): string | null {
   const wallet = request.headers.get('x-admin-wallet');
@@ -26,6 +28,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     let memes;
+    const sql = getSql();
     if (status && status !== 'all') {
       memes = await sql`
         SELECT id, image_data, template_name, wallet_address, approval_status, created_at
@@ -79,6 +82,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    const sql = getSql();
     await sql`
       UPDATE memes
       SET approval_status = ${approval_status}
@@ -113,6 +117,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    const sql = getSql();
     await sql`
       DELETE FROM memes WHERE id = ${parseInt(id)}
     `;

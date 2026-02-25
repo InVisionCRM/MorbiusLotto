@@ -1,10 +1,13 @@
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
 
-const sql = neon(process.env.DATABASE_URL!);
+function getSql() {
+  return neon(process.env.DATABASE_URL!);
+}
 
 // Initialize memes table if it doesn't exist
 async function initializeTable() {
+  const sql = getSql();
   await sql`
     CREATE TABLE IF NOT EXISTS memes (
       id SERIAL PRIMARY KEY,
@@ -32,6 +35,7 @@ export async function GET(request: NextRequest) {
     const walletAddress = searchParams.get('wallet');
 
     // Public gallery: only approved memes. With wallet: show user's own memes (all statuses).
+    const sql = getSql();
     let memes;
     if (walletAddress) {
       memes = await sql`
@@ -76,6 +80,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const sql = getSql();
     const result = await sql`
       INSERT INTO memes (image_data, template_name, layers_json, wallet_address, approval_status)
       VALUES (${imageData}, ${templateName || null}, ${layersJson || null}, ${walletAddress || null}, 'pending')
@@ -113,6 +118,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Only allow deletion by the creator
+    const sql = getSql();
     if (walletAddress) {
       await sql`
         DELETE FROM memes
