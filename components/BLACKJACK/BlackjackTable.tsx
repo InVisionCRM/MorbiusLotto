@@ -121,7 +121,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   isMusicPlaying,
   onToggleMusic,
   onNextTrack,
-  musicVolume = 50,
+  musicVolume = 20,
   onMusicVolumeChange,
   onDoubleDownChips,
   onSplitChips,
@@ -969,7 +969,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               ${gameResult === 'blackjack' ? 'bg-gradient-to-r from-yellow-500/90 via-amber-400/90 to-yellow-500/90 border-2 border-yellow-300' :
                 gameResult === 'win' ? 'bg-gradient-to-r from-green-600/90 via-emerald-500/90 to-green-600/90 border-2 border-green-400' :
                 gameResult === 'loss' ? 'bg-gradient-to-r from-red-600/90 via-red-500/90 to-red-600/90 border-2 border-red-400' :
-                'bg-gradient-to-r from-gray-500/90 via-gray-400/90 to-gray-500/90 border-2 border-gray-300'}
+                gameResult === 'push' ? 'bg-gradient-to-r from-blue-600/90 via-blue-500/90 to-blue-600/90 border-2 border-blue-400' :
+                'bg-gradient-to-r from-blue-500/90 via-blue-400/90 to-blue-500/90 border-2 border-blue-400'}
             `}
             style={{
               boxShadow: gameResult === 'blackjack'
@@ -978,7 +979,9 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 ? '0 0 40px rgba(34, 197, 94, 0.5), 0 0 80px rgba(34, 197, 94, 0.2), inset 0 2px 4px rgba(255,255,255,0.3)'
                 : gameResult === 'loss'
                 ? '0 0 40px rgba(239, 68, 68, 0.5), 0 0 80px rgba(239, 68, 68, 0.2), inset 0 2px 4px rgba(255,255,255,0.2)'
-                : '0 0 30px rgba(156, 163, 175, 0.4), inset 0 2px 4px rgba(255,255,255,0.2)',
+                : gameResult === 'push'
+                ? '0 0 30px rgba(4, 92, 170, 0.4), inset 0 2px 4px rgba(32, 32, 157, 0.2).2)'
+                : '0 0 30px rgba(4, 92, 170, 0.4), inset 0 2px 4px rgba(32, 32, 157, 0.2).2)',
             }}
           >
             <div className="flex flex-col items-center gap-0.5 sm:gap-1">
@@ -996,7 +999,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   ${gameResult === 'blackjack' ? 'text-yellow-900' :
                     gameResult === 'win' ? 'text-white' :
                     gameResult === 'loss' ? 'text-white' :
-                    'text-gray-800'}
+                    gameResult === 'push' ? 'text-blue-800' :
+                    'text-blue-800'}
                 `}
                 style={{
                   textShadow: gameResult === 'blackjack'
@@ -1007,19 +1011,22 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 {gameResult === 'blackjack' ? 'BLACKJACK!' :
                  gameResult === 'win' ? 'YOU WIN!' :
                  gameResult === 'loss' ? 'DEALER WINS' :
+                 gameResult === 'push' ? 'PUSH' :
                  'PUSH'}
               </h2>
 
               {/* Subtitle */}
               <p className={`text-sm font-medium mt-1 opacity-80
                 ${gameResult === 'blackjack' ? 'text-yellow-800' :
-                  gameResult === 'win' ? 'text-green-100' :
-                  gameResult === 'loss' ? 'text-red-100' :
-                  'text-gray-600'}
+                  gameResult === 'win' ? 'text-green-500' :
+                  gameResult === 'loss' ? 'text-red-500' :
+                  gameResult === 'push' ? 'text-blue-600' :
+                  'text-blue-600'}
               `}>
                 {gameResult === 'blackjack' ? 'Natural 21 - 3:2 Payout!' :
                  gameResult === 'win' ? 'Congratulations!' :
                  gameResult === 'loss' ? 'Better luck next time' :
+                 gameResult === 'push' ? 'Bet returned' :
                  'Bet returned'}
               </p>
             </div>
@@ -1217,7 +1224,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                                     isNewCard={isNewCard}
                                     size={cardSize}
                                     exiting={cardsExiting}
-                                    exitDelay={0.15}
+                                    exitDelay={0.25}
                                   />
                                 </div>
                               );
@@ -1330,7 +1337,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                           </div>
                           {/* Bet amount for this hand */}
                           <span
-                            className={`text-white font-bold text-sm mt-1 ${
+                            className={`text-white font-bold text-2xl mt-1 ${
                               showHandAnimation ? 'opacity-0' : ''
                             }`}
                             style={{
@@ -1706,7 +1713,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               }}
             >
               <span
-                className="font-black text-sm text-white"
+                className="font-black text-1xl text-cyan-400"
                 style={{
                   textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9)',
                 }}
@@ -1838,15 +1845,15 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 onPerfectPairsBetChange(next);
               }}
               style={{
-                width: '64px',
-                height: '64px',
+                width: '56px',
+                height: '56px',
                 borderRadius: '50%',
                 background: perfectPairsBet > 0
-                  ? 'linear-gradient(145deg, #f59e0b, #d97706)'
-                  : 'linear-gradient(145deg, rgba(50,60,70,0.9), rgba(30,40,50,0.9))',
-                border: perfectPairsBet > 0 ? '2px solid rgba(251,191,36,0.7)' : '2px dashed rgba(100,116,139,0.5)',
+                  ? 'linear-gradient(145deg,rgb(24, 124, 177),rgb(24, 148, 190))'
+                  : 'linear-gradient(145deg, rgba(40, 8, 43, 0.9), rgba(141, 42, 207, 0.9))',
+                border: perfectPairsBet > 0 ? '2px solid rgba(66, 42, 161, 0.7)' : '2px dashed rgba(100,116,139,0.5)',
                 boxShadow: perfectPairsBet > 0
-                  ? '0 0 12px rgba(245,158,11,0.4), inset 0 1px 2px rgba(255,255,255,0.2)'
+                  ? '0 0 12px rgba(11, 46, 245, 0.4), inset 0 1px 2px rgba(255,255,255,0.2)'
                   : 'inset 0 2px 4px rgba(0,0,0,0.5)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
@@ -1856,14 +1863,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 justifyContent: 'center',
               }}
             >
-              <span style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '0.05em', color: perfectPairsBet > 0 ? '#fff' : 'rgba(148,163,184,0.7)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                PAIRS
+              <span style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '0.05em', color: perfectPairsBet > 0 ? '#fff' : 'rgb(255, 255, 255)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                PERFECT
               </span>
-              <span style={{ fontSize: perfectPairsBet >= 10000 ? '11px' : '13px', fontWeight: 900, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.6)', lineHeight: 1 }}>
+              <span style={{ fontSize: perfectPairsBet >= 10000 ? '11px' : '13px', fontWeight: 900, color: '#fff', textShadow: '0 1px 2px rgb(16, 103, 197)', lineHeight: 1 }}>
                 {perfectPairsBet > 0 ? `${(perfectPairsBet / 1000).toFixed(0)}K` : '—'}
               </span>
-              <span style={{ fontSize: '7px', color: perfectPairsBet > 0 ? 'rgba(255,255,255,0.7)' : 'rgba(148,163,184,0.5)', marginTop: '1px' }}>
-                5-12:1
+              <span style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '0.05em', color: perfectPairsBet > 0 ? 'rgb(255, 255, 255)' : 'rgb(255, 255, 255)', marginTop: '1px' }}>
+                PAIRS
               </span>
             </button>
           )}
@@ -1889,17 +1896,17 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-        {/* Reserve - bottom right corner */}
-        <div className="absolute bottom-2 right-2 z-50 pointer-events-auto flex">
+        {/* Reserve - top center of table (desktop and mobile) */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex">
           <button
             type="button"
             onClick={onOpenDepositModal}
             aria-label={`Reserve balance: ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS. Open deposit and withdraw.`}
             className="flex relative items-center justify-start rounded-md py-1 px-2.5 pr-6 gap-1 text-sm flex-shrink min-w-0 hover:brightness-110 transition-all cursor-pointer"
             style={{
-              background: 'linear-gradient(145deg, rgb(30, 40, 50), rgb(20, 30, 40))',
-              boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.4), inset -2px -2px 4px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.3)',
-              border: '1px solid rgba(80, 90, 100, 0.3)',
+              background: 'linear-gradient(145deg, rgb(0, 0, 0), rgb(1, 2, 3))',
+              boxShadow: 'inset 2px 2px 4px rgb(0, 0, 0), inset -2px -2px 4px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.3)',
+              border: '1px solid rgb(16, 137, 217)',
             }}
           >
             <div className="flex items-center gap-1">
@@ -1911,8 +1918,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               <Image
                 src="/morbius/MorbiusLogo (3).png"
                 alt="Morbius Logo"
-                width={12}
-                height={12}
+                width={36}
+                height={36}
                 className="object-contain"
               />
             </div>

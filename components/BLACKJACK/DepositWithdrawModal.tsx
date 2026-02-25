@@ -46,6 +46,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const [isPreparingWithdraw, setIsPreparingWithdraw] = useState(false)
   /** Amount to withdraw per legacy contract (address -> amount string). Lets users withdraw in chunks under the 1M contract limit. */
   const [legacyWithdrawAmounts, setLegacyWithdrawAmounts] = useState<Record<string, string>>({})
+  /** Dismissed legacy cards (reset on modal open) */
+  const [dismissedLegacy, setDismissedLegacy] = useState<Set<string>>(new Set())
 
   // Transaction history state
   interface TxHistoryItem {
@@ -213,12 +215,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     }
   }, [isApprovalSuccess])
 
-  // Reset history state when modal closes so it refetches on next open
+  // Reset history state and dismissed legacy cards when modal closes so they refetch/reappear on next open
   useEffect(() => {
     if (!isOpen) {
       setTxLoaded(false)
       setTxHistory([])
       setTxError(null)
+      setDismissedLegacy(new Set())
     }
   }, [isOpen])
 
@@ -608,14 +611,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-[200px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-3"
+              className="fixed top-[100px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-3"
             >
               <Card
-                className={`w-[98vw] max-w-[42rem] sm:max-w-[48rem] lg:max-w-4xl xl:max-w-5xl max-h-[85vh] flex flex-col overflow-hidden pointer-events-auto rounded-md ${Theme.modal.container}`}
+                className={`w-[98vw] max-w-[42rem] sm:max-w-[48rem] lg:max-w-3xl xl:max-w-3xl max-h-[65vh] flex flex-col overflow-hidden pointer-events-auto rounded-md ${Theme.modal.container}`}
                 style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
               >
-                <CardHeader className={`flex flex-row items-center justify-between space-y-0 py-2 px-2 shrink-0 rounded-t-lg ${Theme.modal.header}`}>
-                  <CardTitle className="text-white text-sm font-bold">Reserve Management</CardTitle>
+                <CardHeader className={`flex flex-row items-center justify-between space-y-0 py-2 px-2 shrink-0 rounded-t-lg ${Theme.modal.header}`} style={{ ...Theme.inset.light }}>
+                  <CardTitle className="text-white text-sm font-poppins">Reserve Management</CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -638,7 +641,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                   <div className="grid grid-cols-2 gap-2 min-h-0 flex-1 overflow-hidden">
                     <div className="space-y-2 min-h-0 overflow-y-auto pr-1" style={{ ...getPanelStyles('base'), borderRadius: 8, padding: 10 }}>
                       {legacyItems
-                        .filter((item) => item.reserve > BigInt(0))
+                        .filter((item) => item.reserve > BigInt(0) && !dismissedLegacy.has(item.address))
                         .map((item) => {
                           const maxAllowedWei = item.reserve > LEGACY_MAX_WITHDRAW_WEI ? LEGACY_MAX_WITHDRAW_WEI : item.reserve
                           const rawInput = legacyWithdrawAmounts[item.address] ?? ''
@@ -651,12 +654,19 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           const validAmount = amountWei > 0n && amountWei <= item.reserve && amountWei <= LEGACY_MAX_WITHDRAW_WEI
                           const setMax = () => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: formatEther(maxAllowedWei) }))
                           return (
-                            <div key={item.address} className="rounded border border-cyan-500/30 bg-slate-900/60 p-2 space-y-1" style={{ ...Theme.inset }}>
-                              <div className="text-xs font-medium text-cyan-200">{item.label}</div>
+                            <div key={item.address} className="rounded border border-cyan-500/30 bg-slate-900/60 p-2 space-y-1 relative" style={{ ...Theme.inset }}>
+                              <button
+                                onClick={() => setDismissedLegacy((prev) => new Set(prev).add(item.address))}
+                                className="absolute top-1 right-1 text-cyan-500/50 hover:text-white transition-colors"
+                                aria-label="Dismiss"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                              <div className="text-xs font-poppins text-cyan-500 pr-4">{item.label}</div>
                               {item.paused ? (
-                                <p className="text-[11px] text-cyan-300/80">Withdrawals paused.</p>
+                                <p className="text-[11px] font-poppins text-cyan-500/80">Withdrawals paused.</p>
                               ) : (
-                                <p className="text-[11px] text-cyan-300/60">Max 1M per withdrawal.</p>
+                                <p className="text-[11px] font-poppins font-bold text-cyan-500/90">Max 1M per withdrawal.</p>
                               )}
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-1">
@@ -666,21 +676,21 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                                     placeholder={formatEther(maxAllowedWei)}
                                     value={rawInput}
                                     onChange={(e) => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: e.target.value }))}
-                                    className="h-7 text-xs bg-slate-800 border-cyan-500/30 text-white max-w-[100px]"
+                                    className="h-7 text-xs font-poppins bg-slate-800 border-cyan-500/30 text-white max-w-[100px]"
                                   />
                                   <Button type="button" variant="outline" size="sm" onClick={setMax} className="h-7 px-1.5 border-cyan-500/30 text-cyan-300 text-[11px] shrink-0">
                                     Max
                                   </Button>
                                 </div>
                                 <div className="flex items-center justify-between gap-1 flex-wrap">
-                                  <span className="text-xs font-semibold text-white">
+                                  <span className="text-xs font-poppins text-white">
                                     {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} MORBIUS
                                   </span>
                                   <Button
                                     size="sm"
                                     onClick={() => validAmount && handleWithdrawLegacy(item.address, amountWei, item.refetch)}
                                     disabled={item.paused || isLegacyWithdrawLoading || !validAmount}
-                                    className={`h-7 text-[11px] shrink-0 disabled:opacity-60 ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
+                                    className={`h-7 text-[11px] font-poppins shrink-0 disabled:opacity-60 ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
                                   >
                                     {isLegacyWithdrawLoading ? (
                                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -696,13 +706,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           )
                         })}
                       <div className="text-center py-2 px-2 rounded border border-cyan-500/30 bg-slate-900/60" style={{ ...Theme.inset }}>
-                        <div className="text-[11px] text-cyan-300/70">Current Balance</div>
-                        <div className="text-base font-bold text-white">
+                        <div className="text-[15px] font-poppins font-bold text-cyan-500/70">Current Balance</div>
+                        <div className="text-[26px] font-poppins font-bold text-white">
                           {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0} MORBIUS
                         </div>
                         {contractReserve && contractReserve !== displayBalance && (
                           <div className="flex items-center justify-center gap-1 mt-1 flex-wrap">
-                            <span className="text-[10px] text-cyan-300/60">
+                            <span className="text-[1px] font-poppins font-bold text-cyan-500/60">
                               On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()}
                             </span>
                             {onBalanceSync && contractReserve > displayBalance && (
@@ -719,7 +729,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                                     toast.error('Sync failed.')
                                   }
                                 }}
-                                className="h-5 px-1 text-[10px] border-cyan-500/30 text-cyan-300"
+                                className="h-5 px-1 text-[10px] font-poppins border-cyan-500/30 text-cyan-300"
                               >
                                 Sync
                               </Button>
@@ -738,7 +748,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                                     toast.error('Refresh failed.')
                                   }
                                 }}
-                                className="h-5 px-1 text-[10px] border-cyan-500/30 text-cyan-300"
+                                className="h-5 px-1 text-[10px] font-poppins border-cyan-500/30 text-cyan-300"
                               >
                                 Refresh
                               </Button>
@@ -746,33 +756,33 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           </div>
                         )}
                       </div>
-                      <div className="rounded border border-cyan-500/20 bg-slate-900/50 p-2 shrink-0">
-                        <p className="text-[14px] text-white leading-relaxed">
-                          Withdrawals are capped at 1,000,000 MORBIUS per user per day. Our contracts and code are battle-tested, but we recommend withdrawing your funds at the end of each play session as a safe practice.
+                      <div className="rounded border border-red-500/70 bg-slate-900/50 p-2 shrink-0">
+                        <p className="text-[14px] font-semibold font-poppins text-white/80 leading-relaxed">
+                          READ ME: Withdrawals are capped at 1,000,000 MORBIUS per user per day. Our contracts and code are battle-tested, but we recommend withdrawing your funds at the end of each play session as a safe practice.
                         </p>
                       </div>
                     </div>
 
                     <div className="min-h-0 flex flex-col overflow-hidden">
                   <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'deposit' | 'withdraw' | 'history')} className="flex flex-col min-h-0">
-                    <TabsList className="grid w-full grid-cols-3 h-8 bg-slate-800/80 border border-cyan-500/30 rounded-sm p-0.5 shrink-0">
+                    <TabsList className="grid w-full grid-cols-3 h-8 bg-slate-500/80 border border-cyan-500/30 rounded-sm p-0.5 shrink-0">
                       <TabsTrigger
                         value="deposit"
-                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
+                        className="text-xs font-poppins data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
                       >
                         <Plus className="w-3 h-3 mr-1" />
                         Deposit
                       </TabsTrigger>
                       <TabsTrigger
                         value="withdraw"
-                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
+                        className="text-xs font-poppins data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
                       >
                         <Minus className="w-3 h-3 mr-1" />
                         Withdraw
                       </TabsTrigger>
                       <TabsTrigger
                         value="history"
-                        className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
+                        className="text-xs font-poppins data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
                       >
                         <History className="w-3 h-3 mr-1" />
                         History
@@ -799,7 +809,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                         </Button>
                       </div>
                       <div className="space-y-0.5">
-                        <Label htmlFor="deposit-amount" className="text-[11px] text-cyan-300/80">
+                        <Label htmlFor="deposit-amount" className="text-[14px] font-poppins text-cyan-500">
                           Amount ({depositMethod === 'pls' ? 'MORBIUS equiv.' : 'MORBIUS'})
                         </Label>
                         <Input
@@ -811,10 +821,10 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           min="0"
                           step="1"
                           max={depositMethod === 'pls' ? maxDepositPLS : maxDepositMORBIUS}
-                          className="h-7 text-sm bg-slate-800 border-cyan-500/30 text-white"
+                          className="h-7 text-sm font-poppins bg-slate-800 border-cyan-500/30 text-white"
                         />
                       </div>
-                      <div className="text-[10px] text-cyan-300/60">
+                      <div className="text-[10px] text-cyan-500/60">
                         {depositMethod === 'pls' ? (
                           <>Avail: {maxDepositPLS} PLS{plsEquivalent && depositAmount && <> · ≈{Math.floor(Number(formatEther(plsEquivalent)))} PLS</>}</>
                         ) : (
@@ -859,7 +869,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           className="h-7 text-sm bg-slate-800 border-cyan-500/30 text-white"
                         />
                       </div>
-                      <div className="text-[10px] text-cyan-300/60">Avail: {maxWithdraw} MORBIUS</div>
+                      <div className="text-[10px] font-poppins text-cyan-500/60">Avail: {maxWithdraw} MORBIUS</div>
                       <Button
                         onClick={handleWithdraw}
                         disabled={!withdrawAmount || isWithdrawLoading}
@@ -876,11 +886,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                     {/* History tab */}
                     <TabsContent value="history" className="mt-2 min-h-0 flex flex-col overflow-hidden">
                       <div className="flex items-center justify-between mb-1.5 shrink-0">
-                        <span className="text-[11px] text-cyan-300/70">Last 50 transactions</span>
+                        <span className="text-[11px] font-poppins text-cyan-500/70">Last 50 transactions</span>
                         <button
                           onClick={() => { setTxLoaded(false); setTxHistory([]); fetchTxHistory() }}
                           disabled={txLoading}
-                          className="text-cyan-400 hover:text-cyan-200 disabled:opacity-50 transition-colors"
+                          className="text-cyan-500 hover:text-cyan-200 disabled:opacity-50 transition-colors"
                           aria-label="Refresh"
                         >
                           <RefreshCw className={`w-3 h-3 ${txLoading ? 'animate-spin' : ''}`} />
@@ -888,20 +898,20 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                       </div>
 
                       {/* Expired explanation */}
-                      <div className="mb-2 rounded bg-slate-800/50 border border-slate-700/40 px-2.5 py-1.5 text-[10px] text-slate-400 shrink-0">
-                        <span className="text-slate-300 font-medium">Expired</span> = withdrawal was signed but the on-chain transaction was not submitted within 2 minutes. Your balance was automatically refunded.
+                      <div className="mb-2 rounded bg-slate-800/50 border border-slate-700/40 px-2.5 py-1.5 text-[10px] font-poppins text-cyan-500/70 shrink-0">
+                          <span className="text-cyan-500/70 font-poppins">Expired</span> = withdrawal was signed but the on-chain transaction was not submitted within 2 minutes. Your balance was automatically refunded.
                       </div>
 
                       {txLoading && (
-                        <div className="flex items-center justify-center py-8 text-[11px] text-cyan-300/60">
+                        <div className="flex items-center justify-center py-8 text-[11px] font-poppins text-cyan-500/60">
                           <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading...
                         </div>
                       )}
                       {txError && !txLoading && (
-                        <p className="text-[11px] text-red-400 text-center py-4">{txError}</p>
+                        <p className="text-[11px] font-poppins text-red-400 text-center py-4">{txError}</p>
                       )}
                       {!txLoading && !txError && txHistory.length === 0 && (
-                        <p className="text-[11px] text-slate-500 text-center py-8">No transactions yet.</p>
+                        <p className="text-[11px] font-poppins text-cyan-500/60 text-center py-8">No transactions yet.</p>
                       )}
 
                       <div className="space-y-1 overflow-y-auto min-h-0 flex-1">
@@ -925,7 +935,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                               )}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className={`text-[11px] font-semibold ${isDeposit ? 'text-emerald-300' : isExpired ? 'text-slate-400' : 'text-cyan-300'}`}>
+                                  <span className={`text-[11px] font-poppins ${isDeposit ? 'text-emerald-300' : isExpired ? 'text-slate-400' : 'text-cyan-300'}`}>
                                     {isDeposit ? '+' : '−'}{morbius}
                                   </span>
                                   <span className="text-[10px] text-slate-500">MORBIUS</span>
@@ -936,7 +946,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                                 <div className="text-[10px] text-slate-500 mt-0.5">{dateStr} · {timeStr}</div>
                                 {tx.tx_hash && (
                                   <div className="flex items-center gap-1 mt-0.5">
-                                    <span className="text-[10px] font-mono text-slate-500">
+                                    <span className="text-[10px] font-poppins text-slate-500">
                                       {tx.tx_hash.slice(0, 10)}…{tx.tx_hash.slice(-6)}
                                     </span>
                                     <button

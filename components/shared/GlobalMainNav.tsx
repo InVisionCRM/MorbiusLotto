@@ -26,6 +26,7 @@ import HowToPlayModal from '@/components/PLINKO/HowToPlayModal';
 import SwapModal from '@/components/PLINKO/SwapModal';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal';
 import { ReportModal } from '@/components/shared/ReportModal';
+import { ChatSidebar } from '@/components/chat/ChatSidebar';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
 
@@ -49,7 +50,7 @@ const OTHER_GAMES = [
 ] as const;
 
 const SIDEBAR_PANEL_STYLE = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+  background: 'linear-gradient(145deg, rgba(16, 26, 35, 0.03), rgba(35, 36, 41, 0.03))',
   boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
   border: '1px inset rgba(60, 60, 60, 0.5)',
 } as const;
@@ -537,6 +538,7 @@ export default function GlobalMainNav({
           />
         </SidebarBody>
         <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0">{children}</div>
+        <ChatSidebar />
       </div>
 
       {page === 'blackjack' && onThemeChange && (

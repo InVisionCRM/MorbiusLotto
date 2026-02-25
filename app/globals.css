@@ -123,6 +123,7 @@ html {
 }
 
 body {
+  font-family: "Poppins", sans-serif;
   overflow-x: hidden;
   max-width: 100vw;
   /* Remove transform from body - moved to wrapper to avoid affecting modals */

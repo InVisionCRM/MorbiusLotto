@@ -88,6 +88,20 @@ export const TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1
 // V2: 0xc87B4F61460b24A0040AdaaB5452d07f38c876C6 (redeployed with fixed EX_BLACKJACK)
 // V3: 0x0416947cd08Fc3cd8923dD857c58472F337aa42B (minHolding 1M MORBIUS; used by BlackjackV2 V3)
 export const MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS = '0x0416947cd08Fc3cd8923dD857c58472F337aa42B' as const
+// MorbiusStaking contract (stake MORBIUS to earn proportional rewards)
+// V1: 0xeD8638Fe2B7633b9B95cB48cC40A62F115589eaB (no tracking, platform fee to wallet)
+// V2: 0xCc54f6d7ff847ab4Ab4f10314ebf84486921368B (+ stakedAt, totalRewardsClaimed, getStakerInfo; fee -> LP staking)
+export const MORBIUS_STAKING_ADDRESS = '0xCc54f6d7ff847ab4Ab4f10314ebf84486921368B' as const
+export const MORBIUS_STAKING_DEPLOY_BLOCK = 25877050 // V2: Deployed Feb 2026
+// MorbiusLPStaking contract (stake Morbius/WPLS LP to earn MORBIUS rewards, 5% unstake burn)
+// V1: 0x45Fe6EDB92a14A574F22C9a0efE48684faa35e42 (no tracking)
+// V2: 0x6Ae7E27CF0eE10516737D7416Ef3178Cb09d89cF (+ totalBurned, stakedAt, totalRewardsClaimed, getStakerInfo)
+export const MORBIUS_LP_STAKING_ADDRESS = '0x6Ae7E27CF0eE10516737D7416Ef3178Cb09d89cF' as const
+export const MORBIUS_LP_STAKING_DEPLOY_BLOCK = 25877035 // V2: Deployed Feb 2026
+
+// MerkleClaimMorbius contract (epoch-based Merkle drop for MORBIUS holders)
+// Update this address after deploying with: cd contracts && npx hardhat run scripts/deploy-merkle-claim.js --network pulsechain
+export const MERKLE_CLAIM_MORBIUS_ADDRESS = '0x611001519cf458D1bF35Ebc2B990bd8226Df3e08' as `0x${string}`
 
 // Contract deployment info
 export const LOTTERY_DEPLOY_BLOCK = 25329129

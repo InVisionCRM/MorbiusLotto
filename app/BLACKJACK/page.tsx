@@ -2776,6 +2776,7 @@ export default function BlackjackPage() {
             themeId={useVideoBackground ? videoSource : imageSource}
             getThemeInfo={getThemeInfo}
             getTableProfile={getTableProfile}
+            onChangeTableClick={() => setThemeModalOpen(true)}
           />
           <BlackjackTopPlayers />
           {/* Tournament card - commented out

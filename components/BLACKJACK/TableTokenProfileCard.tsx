@@ -14,12 +14,14 @@ export interface TableTokenProfileCardProps {
   getThemeInfo: (theme: { kind: 'image' | 'video'; id: string }) => TableThemeInfo;
   /** Get table profile (description, token, logo, ticker) for the current table */
   getTableProfile: (kind: 'image' | 'video', id: string) => TableProfileData | null;
+  /** When provided, "Change Table" opens the theme selector (e.g. setThemeModalOpen(true)) */
+  onChangeTableClick?: () => void;
 }
 
 const PANEL_STYLE = {
-  background: Theme.panel.sidebar.background,
-  boxShadow: Theme.panel.sidebar.boxShadow,
-  border: Theme.panel.sidebar.border,
+  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+  border: '1px inset rgba(60, 60, 60, 0.5)',
 } as const;
 
 /**
@@ -31,9 +33,9 @@ export function TableTokenProfileCard({
   themeId,
   getThemeInfo,
   getTableProfile,
+  onChangeTableClick,
 }: TableTokenProfileCardProps) {
   const profile = getTableProfile(themeKind, themeId);
-  const themeInfo = getThemeInfo({ kind: themeKind, id: themeId });
 
   return (
     <div
@@ -42,11 +44,19 @@ export function TableTokenProfileCard({
     >
       <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between shrink-0">
         <h3 className={`${Theme.cyan.text.primary} font-semibold text-sm`}>
-          Table token
+          About This Table
         </h3>
-        <span className="text-slate-400 text-xs truncate max-w-[140px]" title={themeInfo.label}>
-          {themeInfo.label}
-        </span>
+        {onChangeTableClick ? (
+          <button
+            type="button"
+            onClick={onChangeTableClick}
+            className="text-cyan-300/80 hover:text-cyan-300 text-xs font-medium shrink-0 transition-colors"
+          >
+            Change Table
+          </button>
+        ) : (
+          <span className="text-slate-400 text-xs shrink-0">Change Table</span>
+        )}
       </div>
       <div className="flex-1 min-h-0 overflow-auto p-2">
         <TableProfile

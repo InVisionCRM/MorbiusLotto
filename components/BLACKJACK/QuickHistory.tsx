@@ -117,7 +117,6 @@ export default function QuickHistory({ history, reserveBalance, onVerifyGame }: 
             <TableHead className={headCls}>Result</TableHead>
             <TableHead className={headCls}>Bet</TableHead>
             <TableHead className={headCls}>P/L</TableHead>
-            <TableHead className={`${headCls} whitespace-nowrap min-w-[4rem]`} title="Player vs Dealer card count">P vs D</TableHead>
             {showBalance && <TableHead className={headCls}>Balance</TableHead>}
             <TableHead className={headCls}>Bet ID</TableHead>
           </TableRow>
@@ -150,14 +149,6 @@ export default function QuickHistory({ history, reserveBalance, onVerifyGame }: 
                     {formatAmount(winLoss < BigInt(0) ? -winLoss : winLoss, isTournament)}
                     {isTournament && <span className="text-white/60 text-xs ml-0.5">chips</span>}
                   </span>
-                </TableCell>
-                <TableCell className={`${cellCls} text-white/70 text-xs font-mono whitespace-nowrap`} title="Player vs Dealer card count">
-                  {(() => {
-                    const hands = result.playerHands?.length ? result.playerHands : [result.playerHand]
-                    const pCount = hands.reduce((s, h) => s + (h.cards?.length ?? 0), 0)
-                    const dCount = result.dealerHand?.cards?.length ?? 0
-                    return pCount > 0 || dCount > 0 ? `P-${pCount} vs D-${dCount}` : '—'
-                  })()}
                 </TableCell>
                 {showBalance && (
                   <TableCell className={cellCls}>

@@ -15,6 +15,7 @@ import { TournamentSchedulerService } from './services/tournament-scheduler.serv
 import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
+import { MerkleDropsService } from './services/merkle-drops.service';
 import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
@@ -235,6 +236,12 @@ async function initializeServices() {
 
     // Chain analytics (on-chain games: Plinko, Keno, Lottery, BigWheel)
     const chainAnalytics = new ChainAnalyticsService(dbService);
+
+    // Merkle drops service (MORBIUS holder epoch rewards)
+    merkleDropsService = new MerkleDropsService(dbService.getPool());
+    if (process.env.MERKLE_DROP_CRON_ENABLED === 'true') {
+      merkleDropsService.startCron();
+    }
 
     // API routes
     app.get('/api/player/:address/profile', async (req, res) => {
@@ -1638,6 +1645,207 @@ async function initializeServices() {
       }
     });
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Merkle Drop routes — public
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // List all published epochs
+    app.get('/api/merkle/epochs', async (req, res) => {
+      try {
+        const epochs = await merkleDropsService!.listPublishedEpochs();
+        sendJson(res, epochs);
+      } catch (error) {
+        logger.error('Error listing merkle epochs:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Get claim proof for a wallet in a specific epoch
+    app.get('/api/merkle/claim/:epochNumber/:walletAddress', async (req, res) => {
+      try {
+        const epochNumber = parseInt(req.params.epochNumber, 10);
+        const { walletAddress } = req.params;
+        if (isNaN(epochNumber) || epochNumber < 1) {
+          res.status(400).json({ error: 'Invalid epoch number' });
+          return;
+        }
+        if (!/^0x[0-9a-fA-F]{40}$/.test(walletAddress)) {
+          res.status(400).json({ error: 'Invalid wallet address' });
+          return;
+        }
+        const proof = await merkleDropsService!.getClaimProof(epochNumber, walletAddress);
+        if (!proof) {
+          res.status(404).json({ error: 'No claim found for this wallet in this epoch' });
+          return;
+        }
+        sendJson(res, proof);
+      } catch (error) {
+        logger.error('Error fetching merkle claim proof:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Merkle Drop routes — admin (protected by x-admin-wallet middleware)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // List all epochs
+    app.get('/api/admin/merkle/epochs', async (req, res) => {
+      try {
+        const epochs = await merkleDropsService!.listEpochs();
+        sendJson(res, epochs);
+      } catch (error) {
+        logger.error('Error listing admin merkle epochs:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Create new epoch + auto-snapshot
+    app.post('/api/admin/merkle/epoch/create', async (req, res) => {
+      try {
+        const { minHoldingThreshold, snapshotBlock } = req.body as {
+          minHoldingThreshold?: number;
+          snapshotBlock?: number;
+        };
+        const epoch = await merkleDropsService!.createEpoch({
+          minHoldingThreshold: minHoldingThreshold ?? 1000,
+          snapshotBlock,
+        });
+        sendJson(res, epoch);
+      } catch (error) {
+        logger.error('Error creating merkle epoch:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Get single epoch
+    app.get('/api/admin/merkle/epoch/:epochId', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const epoch = await merkleDropsService!.getEpoch(epochId);
+        if (!epoch) { res.status(404).json({ error: 'Epoch not found' }); return; }
+        sendJson(res, epoch);
+      } catch (error) {
+        logger.error('Error fetching merkle epoch:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Re-run snapshot for an epoch (overwrites existing)
+    app.post('/api/admin/merkle/epoch/:epochId/snapshot', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const { snapshotBlock } = req.body as { snapshotBlock?: number };
+        await merkleDropsService!.takeSnapshot(epochId, snapshotBlock);
+        const epoch = await merkleDropsService!.getEpoch(epochId);
+        sendJson(res, epoch);
+      } catch (error) {
+        logger.error('Error running merkle snapshot:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Calculate rewards
+    app.post('/api/admin/merkle/epoch/:epochId/calculate', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        // Accept newRewardAmount (preferred) or totalRewardAmount (legacy)
+        const body = req.body as { newRewardAmount?: string; totalRewardAmount?: string };
+        const newRewardAmount = body.newRewardAmount || body.totalRewardAmount;
+        if (!newRewardAmount) {
+          res.status(400).json({ error: 'newRewardAmount (wei string) required' });
+          return;
+        }
+        await merkleDropsService!.calculateRewards(epochId, newRewardAmount);
+        const epoch = await merkleDropsService!.getEpoch(epochId);
+        sendJson(res, epoch);
+      } catch (error) {
+        logger.error('Error calculating merkle rewards:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Generate Merkle tree + finalize
+    app.post('/api/admin/merkle/epoch/:epochId/finalize', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const root = await merkleDropsService!.generateMerkleTree(epochId);
+        const epoch = await merkleDropsService!.getEpoch(epochId);
+        sendJson(res, { root, epoch });
+      } catch (error) {
+        logger.error('Error finalizing merkle epoch:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Mark as published (admin has set root on-chain)
+    app.post('/api/admin/merkle/epoch/:epochId/publish', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        await merkleDropsService!.markPublished(epochId);
+        const epoch = await merkleDropsService!.getEpoch(epochId);
+        sendJson(res, epoch);
+      } catch (error) {
+        logger.error('Error publishing merkle epoch:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Paginated snapshot view
+    app.get('/api/admin/merkle/epoch/:epochId/snapshot', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const page = Math.max(1, parseInt(String(req.query.page || 1), 10));
+        const pageSize = Math.min(200, Math.max(1, parseInt(String(req.query.pageSize || 50), 10)));
+        const data = await merkleDropsService!.getSnapshotPage(epochId, page, pageSize);
+        sendJson(res, data);
+      } catch (error) {
+        logger.error('Error fetching snapshot page:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Blocklist CRUD
+    app.get('/api/admin/merkle/blocklist', async (req, res) => {
+      try {
+        const list = await merkleDropsService!.listBlocklist();
+        sendJson(res, list);
+      } catch (error) {
+        logger.error('Error listing blocklist:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.post('/api/admin/merkle/blocklist', async (req, res) => {
+      try {
+        const { address, reason } = req.body as { address?: string; reason?: string };
+        if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
+          res.status(400).json({ error: 'Valid 0x address required' });
+          return;
+        }
+        await merkleDropsService!.addToBlocklist(address, reason ?? '');
+        res.status(200).json({ ok: true });
+      } catch (error) {
+        logger.error('Error adding to blocklist:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.delete('/api/admin/merkle/blocklist/:address', async (req, res) => {
+      try {
+        const { address } = req.params;
+        if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+          res.status(400).json({ error: 'Invalid address' });
+          return;
+        }
+        await merkleDropsService!.removeFromBlocklist(address);
+        res.status(200).json({ ok: true });
+      } catch (error) {
+        logger.error('Error removing from blocklist:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     logger.info('WebSocket server initialized');
     logger.info('Database connected');
 
@@ -1650,6 +1858,7 @@ async function initializeServices() {
 // Graceful shutdown (schedulers ref set in initializeServices)
 let freerollScheduler: FreerollSchedulerService | null = null;
 let tournamentScheduler: TournamentSchedulerService | null = null;
+let merkleDropsService: MerkleDropsService | null = null;
 
 const PG_POOL_DOUBLE_RELEASE_MSG = 'Release called on client which has already been released to the pool';
 
@@ -1681,6 +1890,7 @@ process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
   freerollScheduler?.stop();
   tournamentScheduler?.stop();
+  merkleDropsService?.stopCron();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
@@ -1691,6 +1901,7 @@ process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully');
   freerollScheduler?.stop();
   tournamentScheduler?.stop();
+  merkleDropsService?.stopCron();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
