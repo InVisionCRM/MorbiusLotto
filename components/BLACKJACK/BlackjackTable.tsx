@@ -1938,7 +1938,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             transform: scale(0.5) translateY(-20px);
           }
           50% {
-            transform: scale(1.1) translateY(0);
+            transform: scale(1) translateY(0);
           }
           100% {
             opacity: 1;
