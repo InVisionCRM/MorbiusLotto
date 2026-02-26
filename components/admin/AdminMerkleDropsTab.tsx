@@ -43,9 +43,10 @@ interface BlocklistEntry {
 }
 
 interface MerkleSettings {
-  schedule_type: 'manual' | 'weekly' | 'biweekly' | 'monthly';
+  schedule_type: 'manual' | 'weekly' | 'biweekly' | 'monthly' | 'interval_minutes' | 'interval_hours';
   schedule_day: string;      // 0-6 for weekly/biweekly, 1-28 for monthly
   schedule_hour_utc: string; // 0-23
+  schedule_interval: string; // numeric interval for interval_minutes / interval_hours
   default_reward_wei: string;
   auto_publish_onchain: string; // 'true' | 'false'
 }
@@ -55,9 +56,22 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 /** Compute next UTC fire date from schedule settings. Returns null if manual. */
 function nextEpochDate(settings: MerkleSettings): Date | null {
   if (settings.schedule_type === 'manual') return null;
+
+  const now = new Date();
+
+  if (settings.schedule_type === 'interval_minutes' || settings.schedule_type === 'interval_hours') {
+    const interval = parseInt(settings.schedule_interval, 10) || 1;
+    const intervalMs = settings.schedule_type === 'interval_minutes'
+      ? interval * 60_000
+      : interval * 3_600_000;
+    // Next aligned interval from epoch
+    const nextMs = Math.ceil(now.getTime() / intervalMs) * intervalMs;
+    // If we're exactly on the boundary, go to the next one
+    return new Date(nextMs <= now.getTime() ? nextMs + intervalMs : nextMs);
+  }
+
   const day = parseInt(settings.schedule_day, 10);
   const hour = parseInt(settings.schedule_hour_utc, 10);
-  const now = new Date();
   const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, 0, 0));
 
   if (settings.schedule_type === 'weekly' || settings.schedule_type === 'biweekly') {
@@ -379,8 +393,8 @@ export default function AdminMerkleDropsTab() {
   // ── Settings ────────────────────────────────────────────────────────────────
   const defaultSettings: MerkleSettings = {
     schedule_type: 'manual', schedule_day: '5',
-    schedule_hour_utc: '12', default_reward_wei: '0',
-    auto_publish_onchain: 'false',
+    schedule_hour_utc: '12', schedule_interval: '60',
+    default_reward_wei: '0', auto_publish_onchain: 'false',
   };
   const [settings, setSettings] = useState<MerkleSettings>(defaultSettings);
   const [settingsDraft, setSettingsDraft] = useState<MerkleSettings>(defaultSettings);
@@ -725,12 +739,34 @@ export default function AdminMerkleDropsTab() {
                 className="h-8 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 focus:outline-none focus:border-emerald-500"
               >
                 <option value="manual">Manual only</option>
+                <option value="interval_minutes">Every N minutes</option>
+                <option value="interval_hours">Every N hours</option>
                 <option value="weekly">Weekly</option>
                 <option value="biweekly">Bi-weekly</option>
                 <option value="monthly">Monthly</option>
               </select>
 
-              {settingsDraft.schedule_type !== 'manual' && (
+              {/* Interval input for interval_minutes / interval_hours */}
+              {(settingsDraft.schedule_type === 'interval_minutes' || settingsDraft.schedule_type === 'interval_hours') && (
+                <>
+                  <span className="text-xs text-slate-400">every</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max={settingsDraft.schedule_type === 'interval_minutes' ? '1440' : '168'}
+                    value={settingsDraft.schedule_interval || ''}
+                    onChange={(e) => setSettingsDraft((p) => ({ ...p, schedule_interval: e.target.value }))}
+                    placeholder={settingsDraft.schedule_type === 'interval_minutes' ? 'e.g. 15, 30, 60' : 'e.g. 1, 2, 6'}
+                    className="h-8 w-28 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-xs text-slate-400">
+                    {settingsDraft.schedule_type === 'interval_minutes' ? 'min' : 'hr'}
+                  </span>
+                </>
+              )}
+
+              {/* Day/hour selectors for weekly/biweekly/monthly */}
+              {(settingsDraft.schedule_type === 'weekly' || settingsDraft.schedule_type === 'biweekly' || settingsDraft.schedule_type === 'monthly') && (
                 <>
                   {settingsDraft.schedule_type !== 'monthly' ? (
                     <select
@@ -772,6 +808,11 @@ export default function AdminMerkleDropsTab() {
             )}
             {settingsDraft.schedule_type === 'manual' && (
               <p className="text-[11px] text-slate-500">Auto-schedule is off — epochs are created manually only.</p>
+            )}
+            {(settingsDraft.schedule_type === 'interval_minutes' || settingsDraft.schedule_type === 'interval_hours') && (
+              <p className="text-[11px] text-slate-400">
+                Drops every {settingsDraft.schedule_interval || '?'} {settingsDraft.schedule_type === 'interval_minutes' ? 'minute(s)' : 'hour(s)'} — aligned to clock intervals.
+              </p>
             )}
           </div>
 

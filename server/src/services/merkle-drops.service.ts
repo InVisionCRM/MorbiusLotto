@@ -702,6 +702,7 @@ export class MerkleDropsService {
     logger.info('[MerkleDrops] Cron starting…');
 
     let lastFiredWeek = -1; // for biweekly tracking
+    let lastIntervalFiredAt = 0; // timestamp of last interval fire
 
     this.cronTimer = setInterval(async () => {
       try {
@@ -712,31 +713,56 @@ export class MerkleDropsService {
 
         const scheduleDay = parseInt(settings['schedule_day'] ?? process.env.MERKLE_DROP_WEEKLY_DAY ?? '5', 10);
         const scheduleHour = parseInt(settings['schedule_hour_utc'] ?? process.env.MERKLE_DROP_WEEKLY_HOUR ?? '12', 10);
+        const scheduleInterval = parseInt(settings['schedule_interval'] ?? '60', 10);
         const defaultRewardWei = settings['default_reward_wei'] ?? '0';
 
         const now = new Date();
+        const nowMs = now.getTime();
         const utcDay = now.getUTCDay();       // 0=Sun..6=Sat
         const utcDate = now.getUTCDate();      // 1-31
         const utcHour = now.getUTCHours();
         const utcMinute = now.getUTCMinutes();
 
-        if (utcMinute !== 0) return; // only fire on the hour
-
         let shouldFire = false;
 
-        if (scheduleType === 'weekly') {
-          shouldFire = utcDay === scheduleDay && utcHour === scheduleHour;
-        } else if (scheduleType === 'biweekly') {
-          // Fire on the configured day/hour, but only every other week
-          if (utcDay === scheduleDay && utcHour === scheduleHour) {
-            const weekNum = Math.floor(now.getTime() / (7 * 24 * 3600 * 1000));
-            if (weekNum !== lastFiredWeek && weekNum % 2 === 0) {
+        if (scheduleType === 'interval_minutes') {
+          // Fire every N minutes, aligned to clock
+          const intervalMs = Math.max(scheduleInterval, 1) * 60_000;
+          const currentSlot = Math.floor(nowMs / intervalMs);
+          const lastSlot = Math.floor(lastIntervalFiredAt / intervalMs);
+          if (currentSlot > lastSlot) {
+            shouldFire = true;
+            lastIntervalFiredAt = nowMs;
+          }
+        } else if (scheduleType === 'interval_hours') {
+          // Fire every N hours on the hour
+          if (utcMinute === 0) {
+            const intervalMs = Math.max(scheduleInterval, 1) * 3_600_000;
+            const currentSlot = Math.floor(nowMs / intervalMs);
+            const lastSlot = Math.floor(lastIntervalFiredAt / intervalMs);
+            if (currentSlot > lastSlot) {
               shouldFire = true;
-              lastFiredWeek = weekNum;
+              lastIntervalFiredAt = nowMs;
             }
           }
-        } else if (scheduleType === 'monthly') {
-          shouldFire = utcDate === scheduleDay && utcHour === scheduleHour;
+        } else {
+          // weekly / biweekly / monthly — only fire on the hour
+          if (utcMinute !== 0) return;
+
+          if (scheduleType === 'weekly') {
+            shouldFire = utcDay === scheduleDay && utcHour === scheduleHour;
+          } else if (scheduleType === 'biweekly') {
+            // Fire on the configured day/hour, but only every other week
+            if (utcDay === scheduleDay && utcHour === scheduleHour) {
+              const weekNum = Math.floor(now.getTime() / (7 * 24 * 3600 * 1000));
+              if (weekNum !== lastFiredWeek && weekNum % 2 === 0) {
+                shouldFire = true;
+                lastFiredWeek = weekNum;
+              }
+            }
+          } else if (scheduleType === 'monthly') {
+            shouldFire = utcDate === scheduleDay && utcHour === scheduleHour;
+          }
         }
 
         if (!shouldFire) return;

@@ -1693,24 +1693,35 @@ async function initializeServices() {
         let next_drop_at: string | null = null;
 
         if (type !== 'manual') {
-          const day  = parseInt(s.schedule_day, 10);
-          const hour = parseInt(s.schedule_hour_utc, 10);
           const now  = new Date();
-          const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, 0, 0));
 
-          if (type === 'weekly' || type === 'biweekly') {
-            let daysAhead = day - now.getUTCDay();
-            if (daysAhead < 0 || (daysAhead === 0 && now.getUTCHours() >= hour)) daysAhead += 7;
-            if (type === 'biweekly' && daysAhead < 7) daysAhead += 7;
-            next.setUTCDate(now.getUTCDate() + daysAhead);
-          } else if (type === 'monthly') {
-            next.setUTCDate(day);
-            if (next <= now) {
-              next.setUTCMonth(next.getUTCMonth() + 1);
+          if (type === 'interval_minutes' || type === 'interval_hours') {
+            const interval = parseInt(s.schedule_interval ?? '60', 10) || 1;
+            const intervalMs = type === 'interval_minutes'
+              ? interval * 60_000
+              : interval * 3_600_000;
+            const nextMs = Math.ceil(now.getTime() / intervalMs) * intervalMs;
+            const next = new Date(nextMs <= now.getTime() ? nextMs + intervalMs : nextMs);
+            next_drop_at = next.toISOString();
+          } else {
+            const day  = parseInt(s.schedule_day, 10);
+            const hour = parseInt(s.schedule_hour_utc, 10);
+            const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, 0, 0));
+
+            if (type === 'weekly' || type === 'biweekly') {
+              let daysAhead = day - now.getUTCDay();
+              if (daysAhead < 0 || (daysAhead === 0 && now.getUTCHours() >= hour)) daysAhead += 7;
+              if (type === 'biweekly' && daysAhead < 7) daysAhead += 7;
+              next.setUTCDate(now.getUTCDate() + daysAhead);
+            } else if (type === 'monthly') {
               next.setUTCDate(day);
+              if (next <= now) {
+                next.setUTCMonth(next.getUTCMonth() + 1);
+                next.setUTCDate(day);
+              }
             }
+            next_drop_at = next.toISOString();
           }
-          next_drop_at = next.toISOString();
         }
 
         sendJson(res, { schedule_type: type, next_drop_at });
@@ -1894,7 +1905,7 @@ async function initializeServices() {
 
     app.post('/api/admin/merkle/settings', async (req, res) => {
       try {
-        const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'default_reward_wei', 'auto_publish_onchain']);
+        const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'schedule_interval', 'default_reward_wei', 'auto_publish_onchain']);
         const patch: Record<string, string> = {};
         for (const [k, v] of Object.entries(req.body as Record<string, unknown>)) {
           if (allowed.has(k) && typeof v === 'string') patch[k] = v;
