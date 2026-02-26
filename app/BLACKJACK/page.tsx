@@ -2766,6 +2766,7 @@ export default function BlackjackPage() {
               roomId="blackjack"
               title="Blackjack Chat"
               collapsible={false}
+              defaultOpen={false}
               wsClient={wsClient}
               wsConnected={wsConnected}
               className="h-full min-h-0 flex-1"

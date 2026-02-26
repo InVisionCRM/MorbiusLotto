@@ -66,6 +66,8 @@ export interface ChatPanelProps {
   wsConnected?: boolean;
   /** Collapsible: show as floating panel with toggle. Default true on home, can be false when embedded in game. */
   collapsible?: boolean;
+  /** When false, panel body starts collapsed (hidden) until the user clicks to expand. Default true. */
+  defaultOpen?: boolean;
   /** Optional class for the container (e.g. position/size overrides) */
   className?: string;
   /** When used inside GlobalChat Sheet: true when the sheet is open. Used to report unseen messages. */
@@ -89,10 +91,16 @@ export function ChatPanel({
   onUnreadChange,
   fillHeight = false,
   headerActions,
+  defaultOpen = true,
 }: ChatPanelProps) {
   const { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore, chatPaused } = useChat(roomId, { wsClient, wsConnected });
   const [input, setInput] = useState('');
-  const [open, setOpen] = useState(false);
+  // On mobile (< 768px) always start closed regardless of defaultOpen
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const initialOpen = !isMobile && defaultOpen;
+  const [open, setOpen] = useState(collapsible ? false : initialOpen);
+  // For non-collapsible embedded mode: controls whether the body is visible
+  const [bodyOpen, setBodyOpen] = useState(initialOpen);
   const [showNameInput, setShowNameInput] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
@@ -349,9 +357,23 @@ export function ChatPanel({
     >
       <div className="flex flex-col gap-1 px-3 py-2 border-b border-white/10">
         <div className="flex items-center justify-between">
-          <span className="text-cyan-300 font-semibold text-sm">{title}</span>
+          <button
+            type="button"
+            onClick={() => !collapsible && setBodyOpen((v) => !v)}
+            className={`text-cyan-300 font-semibold text-sm flex items-center gap-1.5 ${!collapsible ? 'hover:text-cyan-200 cursor-pointer' : 'cursor-default'}`}
+          >
+            {title}
+            {!collapsible && (
+              <svg
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${bodyOpen ? 'rotate-0' : '-rotate-90'}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            )}
+          </button>
           <div className="flex items-center gap-2">
-            {walletAddress && connected && !showNameInput && (
+            {walletAddress && connected && !showNameInput && bodyOpen && (
               <button
                 type="button"
                 onClick={() => setShowNameInput(true)}
@@ -391,7 +413,7 @@ export function ChatPanel({
           </div>
         )}
       </div>
-      {panelContent}
+      {bodyOpen && panelContent}
     </div>
   );
 

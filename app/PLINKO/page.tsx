@@ -1547,6 +1547,7 @@ const Home: React.FC = () => {
               roomId="plinko"
               title="Plinko Chat"
               collapsible={false}
+              defaultOpen={false}
               className="h-full"
             />
           </div>
