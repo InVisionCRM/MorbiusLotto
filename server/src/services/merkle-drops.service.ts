@@ -582,35 +582,118 @@ export class MerkleDropsService {
   }
 
   // ──────────────────────────────────────────────────────────
-  // Weekly cron
+  // Settings (schedule + default reward)
+  // ──────────────────────────────────────────────────────────
+
+  /** Read all settings into a plain key→value map. */
+  async getSettings(): Promise<Record<string, string>> {
+    const { rows } = await this.pool.query<{ key: string; value: string }>(
+      'SELECT key, value FROM merkle_settings',
+    );
+    const result: Record<string, string> = {};
+    for (const r of rows) result[r.key] = r.value;
+    return result;
+  }
+
+  /** Upsert one or more settings. Restarts cron if schedule keys changed. */
+  async updateSettings(patch: Record<string, string>): Promise<void> {
+    const scheduleKeys = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc']);
+    const scheduleChanged = Object.keys(patch).some((k) => scheduleKeys.has(k));
+
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const [key, value] of Object.entries(patch)) {
+        await client.query(
+          `INSERT INTO merkle_settings (key, value, updated_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+          [key, value],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    if (scheduleChanged && this.cronTimer) {
+      // Restart cron so new schedule takes effect
+      this.restartCron();
+    }
+    logger.info('[MerkleDrops] Settings updated', patch);
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Cron
   // ──────────────────────────────────────────────────────────
 
   /**
-   * Start the weekly auto-epoch cron.
-   * Uses MERKLE_DROP_CRON_SCHEDULE (cron format) or MERKLE_DROP_WEEKLY_DAY +
-   * MERKLE_DROP_WEEKLY_HOUR (simpler env vars).
-   * Default: every Friday at 12:00 UTC.
+   * Start the auto-epoch cron.
+   * Reads schedule from DB (schedule_type, schedule_day, schedule_hour_utc) first,
+   * falling back to env vars (MERKLE_DROP_WEEKLY_DAY, MERKLE_DROP_WEEKLY_HOUR) for
+   * backward compatibility.
+   *
+   * schedule_type:
+   *   'manual'   — cron does nothing even if running
+   *   'weekly'   — fires once a week on schedule_day at schedule_hour_utc
+   *   'biweekly' — fires every other week (tracks last-fired week)
+   *   'monthly'  — fires on schedule_day (1–28) of each month at schedule_hour_utc
    */
   startCron(): void {
     if (this.cronTimer) return; // already running
 
-    const scheduleStr = process.env.MERKLE_DROP_CRON_SCHEDULE || '';
-    const dayOfWeek = parseInt(process.env.MERKLE_DROP_WEEKLY_DAY ?? '5', 10); // 0=Sun,5=Fri
-    const hourOfDay = parseInt(process.env.MERKLE_DROP_WEEKLY_HOUR ?? '12', 10);
+    logger.info('[MerkleDrops] Cron starting…');
 
-    logger.info(`[MerkleDrops] Cron enabled: day=${dayOfWeek} hour=${hourOfDay}UTC (schedule="${scheduleStr || 'default'}")`);
+    let lastFiredWeek = -1; // for biweekly tracking
 
-    // Poll every minute, fire when day + hour match
     this.cronTimer = setInterval(async () => {
       try {
+        // Read settings fresh each tick so changes take effect without restart
+        const settings = await this.getSettings();
+        const scheduleType = settings['schedule_type'] ?? 'manual';
+        if (scheduleType === 'manual') return;
+
+        const scheduleDay = parseInt(settings['schedule_day'] ?? process.env.MERKLE_DROP_WEEKLY_DAY ?? '5', 10);
+        const scheduleHour = parseInt(settings['schedule_hour_utc'] ?? process.env.MERKLE_DROP_WEEKLY_HOUR ?? '12', 10);
+        const defaultRewardWei = settings['default_reward_wei'] ?? '0';
+
         const now = new Date();
-        const utcDay = now.getUTCDay();
+        const utcDay = now.getUTCDay();       // 0=Sun..6=Sat
+        const utcDate = now.getUTCDate();      // 1-31
         const utcHour = now.getUTCHours();
         const utcMinute = now.getUTCMinutes();
 
-        if (utcDay === dayOfWeek && utcHour === hourOfDay && utcMinute === 0) {
-          logger.info('[MerkleDrops] Cron triggered: creating new epoch automatically');
-          await this.createEpoch({ cronTriggered: true });
+        if (utcMinute !== 0) return; // only fire on the hour
+
+        let shouldFire = false;
+
+        if (scheduleType === 'weekly') {
+          shouldFire = utcDay === scheduleDay && utcHour === scheduleHour;
+        } else if (scheduleType === 'biweekly') {
+          // Fire on the configured day/hour, but only every other week
+          if (utcDay === scheduleDay && utcHour === scheduleHour) {
+            const weekNum = Math.floor(now.getTime() / (7 * 24 * 3600 * 1000));
+            if (weekNum !== lastFiredWeek && weekNum % 2 === 0) {
+              shouldFire = true;
+              lastFiredWeek = weekNum;
+            }
+          }
+        } else if (scheduleType === 'monthly') {
+          shouldFire = utcDate === scheduleDay && utcHour === scheduleHour;
+        }
+
+        if (!shouldFire) return;
+
+        logger.info(`[MerkleDrops] Cron fired (${scheduleType}): creating epoch automatically`);
+        const epoch = await this.createEpoch({ cronTriggered: true });
+
+        // Auto-calculate if default_reward_wei is configured
+        if (defaultRewardWei !== '0' && BigInt(defaultRewardWei) > 0n) {
+          logger.info(`[MerkleDrops] Auto-calculating rewards: ${defaultRewardWei} wei`);
+          await this.calculateRewards(epoch.id, defaultRewardWei);
         }
       } catch (err) {
         logger.error('[MerkleDrops] Cron epoch creation failed', err);
@@ -623,6 +706,12 @@ export class MerkleDropsService {
       clearInterval(this.cronTimer);
       this.cronTimer = null;
     }
+  }
+
+  restartCron(): void {
+    this.stopCron();
+    this.startCron();
+    logger.info('[MerkleDrops] Cron restarted with updated schedule');
   }
 
   // ──────────────────────────────────────────────────────────

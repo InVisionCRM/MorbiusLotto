@@ -2,13 +2,13 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useReadContract } from 'wagmi';
-import { parseEther } from 'viem';
+import { formatEther } from 'viem';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Loader2, RefreshCw, Plus, ChevronDown, ChevronRight,
   CheckCircle2, Gift, TreePine, Globe, ShieldX, Trash2,
-  Wallet, Coins, ArrowRight, ExternalLink,
+  Wallet, Coins, ArrowRight, ExternalLink, Info, Settings, Zap,
 } from 'lucide-react';
 import { merkleClaimMorbiusAbi } from '@/abi/merkle-claim-morbius';
 import { ERC20_ABI } from '@/abi/erc20';
@@ -40,6 +40,40 @@ interface BlocklistEntry {
   address: string;
   reason: string;
   added_at: string;
+}
+
+interface MerkleSettings {
+  schedule_type: 'manual' | 'weekly' | 'biweekly' | 'monthly';
+  schedule_day: string;      // 0-6 for weekly/biweekly, 1-28 for monthly
+  schedule_hour_utc: string; // 0-23
+  default_reward_wei: string;
+}
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Compute next UTC fire date from schedule settings. Returns null if manual. */
+function nextEpochDate(settings: MerkleSettings): Date | null {
+  if (settings.schedule_type === 'manual') return null;
+  const day = parseInt(settings.schedule_day, 10);
+  const hour = parseInt(settings.schedule_hour_utc, 10);
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, 0, 0));
+
+  if (settings.schedule_type === 'weekly' || settings.schedule_type === 'biweekly') {
+    // Find next occurrence of day-of-week >= today
+    let daysAhead = day - now.getUTCDay();
+    if (daysAhead < 0 || (daysAhead === 0 && now.getUTCHours() >= hour)) daysAhead += 7;
+    if (settings.schedule_type === 'biweekly' && daysAhead < 7) daysAhead += 7; // skip one week
+    next.setUTCDate(now.getUTCDate() + daysAhead);
+  } else if (settings.schedule_type === 'monthly') {
+    // Next occurrence of day-of-month
+    next.setUTCDate(day);
+    if (next <= now) {
+      next.setUTCMonth(next.getUTCMonth() + 1);
+      next.setUTCDate(day);
+    }
+  }
+  return next;
 }
 
 // on-chain sub-step within the "finalized" stage
@@ -333,7 +367,18 @@ export default function AdminMerkleDropsTab() {
   const [actionMsg, setActionMsg] = useState<Record<number, string>>({});
 
   const [creating, setCreating] = useState(false);
+  const [quickCreating, setQuickCreating] = useState(false);
   const [minThresholdInput, setMinThresholdInput] = useState('1000');
+
+  // ── Settings ────────────────────────────────────────────────────────────────
+  const defaultSettings: MerkleSettings = {
+    schedule_type: 'manual', schedule_day: '5',
+    schedule_hour_utc: '12', default_reward_wei: '0',
+  };
+  const [settings, setSettings] = useState<MerkleSettings>(defaultSettings);
+  const [settingsDraft, setSettingsDraft] = useState<MerkleSettings>(defaultSettings);
+  const [settingsBusy, setSettingsBusy] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState('');
 
   const [blocklist, setBlocklist] = useState<BlocklistEntry[]>([]);
   const [blocklistLoading, setBlocklistLoading] = useState(false);
@@ -366,6 +411,74 @@ export default function AdminMerkleDropsTab() {
 
   useEffect(() => { fetchEpochs(); }, [fetchEpochs]);
 
+  const fetchSettings = useCallback(async () => {
+    if (!address) return;
+    try {
+      const res = await fetch('/api/admin/merkle/settings', { headers: adminHeaders() });
+      if (res.ok) {
+        const data = await res.json() as MerkleSettings;
+        setSettings(data);
+        setSettingsDraft(data);
+      }
+    } catch { /* non-critical */ }
+  }, [address, adminHeaders]);
+
+  useEffect(() => { fetchSettings(); }, [fetchSettings]);
+
+  const handleSaveSettings = async () => {
+    setSettingsBusy(true);
+    setSettingsMsg('');
+    try {
+      const res = await fetch('/api/admin/merkle/settings', {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify(settingsDraft),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setSettings(data as MerkleSettings);
+      setSettingsDraft(data as MerkleSettings);
+      setSettingsMsg('✓ Settings saved');
+    } catch (e) {
+      setSettingsMsg(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setSettingsBusy(false);
+    }
+  };
+
+  // Quick Create: snapshot + auto-calculate in one click (requires default_reward_wei > 0)
+  const handleQuickCreate = async () => {
+    setQuickCreating(true);
+    setError(null);
+    try {
+      // 1. Create epoch (triggers snapshot)
+      const createRes = await fetch('/api/admin/merkle/epoch/create', {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ minHoldingThreshold: Number(minThresholdInput) || 1000 }),
+      });
+      const epochData = await createRes.json();
+      if (!createRes.ok) throw new Error(epochData.error || `HTTP ${createRes.status}`);
+      const epochId = epochData.id;
+
+      // 2. Auto-calculate with default reward
+      const calcRes = await fetch(`/api/admin/merkle/epoch/${epochId}/calculate`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ newRewardAmount: settings.default_reward_wei }),
+      });
+      const calcData = await calcRes.json();
+      if (!calcRes.ok) throw new Error(calcData.error || `HTTP ${calcRes.status}`);
+
+      await fetchEpochs();
+      setExpandedId(epochId); // auto-expand the new epoch
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Quick create failed');
+    } finally {
+      setQuickCreating(false);
+    }
+  };
+
   const fetchBlocklist = useCallback(async () => {
     if (!address) return;
     setBlocklistLoading(true);
@@ -393,7 +506,13 @@ export default function AdminMerkleDropsTab() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      // Auto-fill default reward if configured
+      if (settings.default_reward_wei !== '0' && BigInt(settings.default_reward_wei || '0') > 0n) {
+        const defaultMorbius = formatEther(BigInt(settings.default_reward_wei));
+        setRewardInputs((p) => ({ ...p, [data.id]: defaultMorbius }));
+      }
       await fetchEpochs();
+      setExpandedId(data.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create epoch');
     } finally {
@@ -496,10 +615,132 @@ export default function AdminMerkleDropsTab() {
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
+  // Compute derived values for settings UI
+  const nextEpoch = nextEpochDate(settingsDraft);
+  const defaultRewardMorbius = settings.default_reward_wei !== '0' && BigInt(settings.default_reward_wei || '0') > 0n
+    ? formatEther(BigInt(settings.default_reward_wei))
+    : null;
+
   return (
     <div className="space-y-4">
 
-      {/* ── How It Works ── */}
+      {/* ── Schedule & Settings Card ── */}
+      <Card className="bg-slate-900/80 border-slate-700/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+            <Settings className="w-4 h-4 text-slate-400" />
+            Drop Settings
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-4">
+
+          {/* Snapshot explainer */}
+          <div className="flex gap-2 rounded border border-slate-700/40 bg-slate-800/30 px-3 py-2.5 text-[11px] text-slate-400">
+            <Info className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+            <span>
+              <span className="text-slate-300 font-medium">How snapshots work: </span>
+              At epoch creation time, every wallet holding ≥ min threshold MORBIUS on PulseChain is captured via the blockchain explorer API. Rewards are split <span className="text-white">proportionally</span> to each wallet's share of total eligible MORBIUS. Burn addresses, LP pairs, and all game/staking contracts are excluded automatically.
+            </span>
+          </div>
+
+          {/* Schedule */}
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Auto-Schedule</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={settingsDraft.schedule_type}
+                onChange={(e) => setSettingsDraft((p) => ({ ...p, schedule_type: e.target.value as MerkleSettings['schedule_type'] }))}
+                className="h-8 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="manual">Manual only</option>
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Bi-weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+
+              {settingsDraft.schedule_type !== 'manual' && (
+                <>
+                  {settingsDraft.schedule_type !== 'monthly' ? (
+                    <select
+                      value={settingsDraft.schedule_day}
+                      onChange={(e) => setSettingsDraft((p) => ({ ...p, schedule_day: e.target.value }))}
+                      className="h-8 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 focus:outline-none focus:border-emerald-500"
+                    >
+                      {DAY_NAMES.map((d, i) => (
+                        <option key={d} value={String(i)}>{d}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="number" min="1" max="28"
+                      value={settingsDraft.schedule_day}
+                      onChange={(e) => setSettingsDraft((p) => ({ ...p, schedule_day: e.target.value }))}
+                      placeholder="Day 1-28"
+                      className="h-8 w-20 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  )}
+                  <select
+                    value={settingsDraft.schedule_hour_utc}
+                    onChange={(e) => setSettingsDraft((p) => ({ ...p, schedule_hour_utc: e.target.value }))}
+                    className="h-8 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 focus:outline-none focus:border-emerald-500"
+                  >
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={String(i)}>{String(i).padStart(2, '0')}:00 UTC</option>
+                    ))}
+                  </select>
+                </>
+              )}
+            </div>
+
+            {/* Next epoch preview */}
+            {nextEpoch && (
+              <p className="text-[11px] text-emerald-400/80">
+                Next auto-epoch: {nextEpoch.toUTCString().replace(' GMT', ' UTC')}
+              </p>
+            )}
+            {settingsDraft.schedule_type === 'manual' && (
+              <p className="text-[11px] text-slate-500">Auto-schedule is off — epochs are created manually only.</p>
+            )}
+          </div>
+
+          {/* Default reward */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Default Reward per Epoch</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="number" min="0" step="1000"
+                placeholder="0 = ask each time"
+                value={settingsDraft.default_reward_wei !== '0' ? Number(formatEther(BigInt(settingsDraft.default_reward_wei || '0'))) : ''}
+                onChange={(e) => {
+                  const n = Number(e.target.value) || 0;
+                  const wei = n > 0 ? (BigInt(Math.round(n * 1e9)) * BigInt(1e9)).toString() : '0';
+                  setSettingsDraft((p) => ({ ...p, default_reward_wei: wei }));
+                }}
+                className="h-8 w-44 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 font-mono focus:outline-none focus:border-emerald-500"
+              />
+              <span className="text-xs text-slate-500">MORBIUS</span>
+              {defaultRewardMorbius && (
+                <span className="text-[11px] text-slate-400">({defaultRewardMorbius} MORBIUS / epoch)</span>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-600">When non-zero, the Calculate step auto-fills with this amount.</p>
+          </div>
+
+          {/* Save button */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button size="sm" onClick={handleSaveSettings} disabled={settingsBusy}
+              className="h-8 bg-slate-700 hover:bg-slate-600 text-white text-xs">
+              {settingsBusy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+              Save Settings
+            </Button>
+            {settingsMsg && (
+              <p className={`text-xs ${settingsMsg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>{settingsMsg}</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── How It Works / Create ── */}
       <Card className="bg-slate-900/80 border-slate-700/50">
         <CardHeader className="pb-2 pt-4 px-4">
           <CardTitle className="text-sm font-semibold text-slate-200 flex items-center justify-between gap-2">
@@ -541,13 +782,23 @@ export default function AdminMerkleDropsTab() {
               className="h-8 w-32 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 font-mono focus:outline-none focus:border-emerald-500"
             />
             <span className="text-xs text-slate-500">min MORBIUS</span>
-            <Button size="sm" onClick={handleCreate} disabled={creating}
+            <Button size="sm" onClick={handleCreate} disabled={creating || quickCreating}
               className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white text-xs">
               {creating
                 ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Creating…</>
                 : <><Plus className="w-3 h-3 mr-1" /> Create Epoch + Snapshot</>
               }
             </Button>
+            {/* Quick Create: snapshot + auto-calculate in one click */}
+            {defaultRewardMorbius && (
+              <Button size="sm" onClick={handleQuickCreate} disabled={creating || quickCreating}
+                className="h-8 bg-violet-600 hover:bg-violet-500 text-white text-xs">
+                {quickCreating
+                  ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Working…</>
+                  : <><Zap className="w-3 h-3 mr-1" /> Quick Create ({fmtMorbius(settings.default_reward_wei)} MORBIUS)</>
+                }
+              </Button>
+            )}
           </div>
 
           {error && (

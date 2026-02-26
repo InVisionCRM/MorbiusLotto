@@ -1846,6 +1846,37 @@ async function initializeServices() {
       }
     });
 
+    // Merkle drop schedule & default reward settings
+    app.get('/api/admin/merkle/settings', async (_req, res) => {
+      try {
+        const settings = await merkleDropsService!.getSettings();
+        sendJson(res, settings);
+      } catch (error) {
+        logger.error('Error fetching merkle settings:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.post('/api/admin/merkle/settings', async (req, res) => {
+      try {
+        const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'default_reward_wei']);
+        const patch: Record<string, string> = {};
+        for (const [k, v] of Object.entries(req.body as Record<string, unknown>)) {
+          if (allowed.has(k) && typeof v === 'string') patch[k] = v;
+        }
+        if (Object.keys(patch).length === 0) {
+          res.status(400).json({ error: 'No valid settings keys provided' });
+          return;
+        }
+        await merkleDropsService!.updateSettings(patch);
+        const updated = await merkleDropsService!.getSettings();
+        sendJson(res, updated);
+      } catch (error) {
+        logger.error('Error updating merkle settings:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
     logger.info('WebSocket server initialized');
     logger.info('Database connected');
 
