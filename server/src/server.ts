@@ -1837,6 +1837,19 @@ async function initializeServices() {
       }
     });
 
+    // Revoke epoch — reset status to finalized after on-chain revokeEpoch()
+    app.post('/api/admin/merkle/epoch/:epochId/revoke', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        await merkleDropsService!.revokeEpoch(epochId);
+        const epoch = await merkleDropsService!.getEpoch(epochId);
+        sendJson(res, epoch);
+      } catch (error) {
+        logger.error('Error revoking merkle epoch:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
     // Paginated snapshot view
     app.get('/api/admin/merkle/epoch/:epochId/snapshot', async (req, res) => {
       try {

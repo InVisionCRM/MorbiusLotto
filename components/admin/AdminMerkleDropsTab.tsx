@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Loader2, RefreshCw, Plus, ChevronDown, ChevronRight,
-  CheckCircle2, Gift, TreePine, Globe, ShieldX, Trash2,
+  CheckCircle2, Gift, TreePine, Globe, ShieldX, Trash2, XCircle,
   Wallet, Coins, ArrowRight, ExternalLink, Info, Settings, Zap,
 } from 'lucide-react';
 import { merkleClaimMorbiusAbi } from '@/abi/merkle-claim-morbius';
@@ -375,6 +375,7 @@ function OnchainActions({
 
 export default function AdminMerkleDropsTab() {
   const { address } = useAccount();
+  const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
 
   const [epochs, setEpochs] = useState<EpochRecord[]>([]);
@@ -699,6 +700,37 @@ export default function AdminMerkleDropsTab() {
     }
   };
 
+  // ── Revoke epoch on-chain ──────────────────────────────────────────────────
+
+  const handleRevokeEpoch = async (epoch: EpochRecord) => {
+    if (!confirm(`Revoke Epoch #${epoch.epoch_number} on-chain?\n\nThis clears the Merkle root so it can be re-set. Only works if nobody has claimed yet.\n\nThe epoch will be reset to "finalized" status in the database so you can re-publish.`)) return;
+    setEpochBusy(epoch.id, true);
+    setEpochMsg(epoch.id, '');
+    try {
+      const hash = await writeContractAsync({
+        address: MERKLE_ADDR,
+        abi: merkleClaimMorbiusAbi,
+        functionName: 'revokeEpoch',
+        args: [BigInt(epoch.epoch_number)],
+      });
+      setEpochMsg(epoch.id, `Revoking on-chain… tx: ${hash.slice(0, 14)}…`);
+      await publicClient!.waitForTransactionReceipt({ hash });
+      // Reset status to finalized in the backend so admin can re-publish
+      try {
+        await fetch(`/api/admin/merkle/epoch/${epoch.id}/revoke`, {
+          method: 'POST',
+          headers: adminHeaders(),
+        });
+      } catch { /* non-critical — manual refresh will pick it up */ }
+      setEpochMsg(epoch.id, `✓ Epoch #${epoch.epoch_number} revoked on-chain — root cleared. You can now re-set the root.`);
+      await fetchEpochs();
+    } catch (e: any) {
+      setEpochMsg(epoch.id, e?.shortMessage || e?.message || 'Revoke failed');
+    } finally {
+      setEpochBusy(epoch.id, false);
+    }
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   // Compute derived values for settings UI
@@ -818,11 +850,11 @@ export default function AdminMerkleDropsTab() {
 
           {/* Default reward */}
           <div className="space-y-1.5">
-            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Default Reward per Epoch</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Reward Amount per Epoch</p>
             <div className="flex items-center gap-2 flex-wrap">
               <input
                 type="number" min="0" step="1000"
-                placeholder="0 = ask each time"
+                placeholder="0 = use contract balance"
                 value={settingsDraft.default_reward_wei !== '0' ? Number(formatEther(BigInt(settingsDraft.default_reward_wei || '0'))) : ''}
                 onChange={(e) => {
                   const n = Number(e.target.value) || 0;
@@ -836,7 +868,10 @@ export default function AdminMerkleDropsTab() {
                 <span className="text-[11px] text-slate-400">({defaultRewardMorbius} MORBIUS / epoch)</span>
               )}
             </div>
-            <p className="text-[10px] text-slate-600">When non-zero, the Calculate step auto-fills with this amount.</p>
+            <p className="text-[10px] text-slate-600">
+              When <span className="text-slate-400">0</span> (default): each epoch automatically distributes whatever MORBIUS has accumulated in the contract from game fees.
+              When non-zero: uses a fixed amount per epoch.
+            </p>
           </div>
 
           {/* Auto-publish on-chain toggle */}
@@ -853,7 +888,7 @@ export default function AdminMerkleDropsTab() {
             </label>
             <p className="text-[10px] text-slate-600">
               Requires <code className="text-slate-400">MERKLE_KEEPER_PRIVATE_KEY</code> env var and the keeper wallet to be added as an operator on the contract.
-              The keeper wallet must hold MORBIUS tokens to deposit and PLS for gas.
+              MORBIUS accumulates in the contract from game fees — the keeper wallet only needs PLS for gas to call <code className="text-slate-400">setEpochRoot</code>.
             </p>
             {settingsDraft.auto_publish_onchain === 'true' && settingsDraft.schedule_type === 'manual' && (
               <p className="text-[10px] text-amber-400">Note: Auto-publish only triggers from scheduled cron epochs. Set a schedule above for fully automated drops.</p>
@@ -1121,6 +1156,18 @@ export default function AdminMerkleDropsTab() {
                                 }
                                 Root already set on-chain? Mark as Published
                               </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleRevokeEpoch(epoch)}
+                                disabled={isEpochBusy}
+                                className="h-7 text-[11px] bg-red-800 hover:bg-red-700 text-red-200"
+                              >
+                                {isEpochBusy
+                                  ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                  : <XCircle className="w-3 h-3 mr-1" />
+                                }
+                                Revoke Epoch On-Chain
+                              </Button>
                             </div>
                           </div>
                         )}
@@ -1161,6 +1208,23 @@ export default function AdminMerkleDropsTab() {
                                 <span>Rolled up: <span className="text-amber-300 font-mono">{fmtMorbius(epoch.rollup_amount)} MORBIUS</span></span>
                               </div>
                             )}
+
+                            {/* Revoke — clears root on-chain so epoch can be re-done (only if no claims yet) */}
+                            <div className="border-t border-emerald-500/10 pt-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleRevokeEpoch(epoch)}
+                                disabled={isEpochBusy}
+                                className="h-7 text-[11px] bg-red-800 hover:bg-red-700 text-red-200"
+                              >
+                                {isEpochBusy
+                                  ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                  : <XCircle className="w-3 h-3 mr-1" />
+                                }
+                                Revoke Epoch On-Chain
+                              </Button>
+                              <p className="text-[10px] text-slate-600 mt-1">Clears the root on-chain. Only works if nobody has claimed yet. Owner only.</p>
+                            </div>
                           </div>
                         )}
                       </div>

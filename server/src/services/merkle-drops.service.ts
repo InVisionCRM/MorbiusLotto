@@ -19,6 +19,7 @@ import { logger } from '../utils/logger';
 import {
   isMerkleKeeperConfigured,
   setEpochRootOnChain,
+  getContractMorbiusBalance,
 } from '../utils/merkle-claim';
 
 const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
@@ -497,6 +498,23 @@ export class MerkleDropsService {
     logger.info(`[MerkleDrops] Epoch #${epoch.epoch_number} marked as published`);
   }
 
+  /**
+   * Revoke an epoch — reset DB status to 'finalized' after the on-chain revokeEpoch() call
+   * clears the Merkle root. This allows re-publishing with a corrected root.
+   */
+  async revokeEpoch(epochId: number): Promise<void> {
+    const epoch = await this.getEpoch(epochId);
+    if (!epoch) throw new Error(`Epoch ${epochId} not found`);
+    if (epoch.status !== 'finalized' && epoch.status !== 'published') {
+      throw new Error(`Epoch must be finalized or published to revoke (current: ${epoch.status})`);
+    }
+    await this.pool.query(
+      "UPDATE merkle_epochs SET status = 'finalized', published_at = NULL WHERE id = $1",
+      [epochId],
+    );
+    logger.info(`[MerkleDrops] Epoch #${epoch.epoch_number} revoked — status reset to finalized`);
+  }
+
   // ──────────────────────────────────────────────────────────
   // Claim proof lookup (public)
   // ──────────────────────────────────────────────────────────
@@ -658,6 +676,30 @@ export class MerkleDropsService {
    * (sent directly by game contracts via distributionRecipient).
    * The keeper wallet only needs PLS for gas.
    */
+
+  /**
+   * Query the on-chain MORBIUS balance of the MerkleClaim contract,
+   * subtract the total already committed to published (unclaimed) epochs,
+   * and return the available amount for a new epoch.
+   */
+  async getAvailableContractBalance(): Promise<bigint> {
+    const contractBalance = await getContractMorbiusBalance();
+
+    // Sum total_reward_amount for all published epochs (these are committed on-chain)
+    const { rows } = await this.pool.query<{ total: string }>(
+      `SELECT COALESCE(SUM(CAST(total_reward_amount AS NUMERIC)), 0) AS total
+       FROM merkle_epochs
+       WHERE status = 'published'`,
+    );
+    const committedWei = BigInt(rows[0]?.total ?? '0');
+
+    const available = contractBalance > committedWei ? contractBalance - committedWei : 0n;
+    logger.info(
+      `[MerkleDrops] Contract balance: ${contractBalance}, committed: ${committedWei}, available: ${available}`,
+    );
+    return available;
+  }
+
   private async autoFinalizeAndPublish(epochId: number): Promise<void> {
     if (!isMerkleKeeperConfigured()) {
       logger.warn('[MerkleDrops] auto_publish_onchain enabled but no keeper key configured — skipping on-chain publish');
@@ -783,17 +825,34 @@ export class MerkleDropsService {
         if (!shouldFire) return;
 
         logger.info(`[MerkleDrops] Cron fired (${scheduleType}): creating epoch automatically`);
+
+        // Determine reward amount:
+        //   - If default_reward_wei is set, use that fixed amount
+        //   - Otherwise, read the available contract balance (fees that have accumulated)
+        let rewardWei = defaultRewardWei;
+        if (rewardWei === '0' || BigInt(rewardWei) === 0n) {
+          try {
+            const available = await this.getAvailableContractBalance();
+            if (available === 0n) {
+              logger.info('[MerkleDrops] No available MORBIUS in contract — skipping epoch');
+              return;
+            }
+            rewardWei = available.toString();
+            logger.info(`[MerkleDrops] Using contract balance as reward: ${rewardWei} wei`);
+          } catch (err) {
+            logger.error('[MerkleDrops] Failed to read contract balance — skipping epoch', err);
+            return;
+          }
+        }
+
         const epoch = await this.createEpoch({ cronTriggered: true });
 
-        // Auto-calculate if default_reward_wei is configured
-        if (defaultRewardWei !== '0' && BigInt(defaultRewardWei) > 0n) {
-          logger.info(`[MerkleDrops] Auto-calculating rewards: ${defaultRewardWei} wei`);
-          await this.calculateRewards(epoch.id, defaultRewardWei);
-        }
+        logger.info(`[MerkleDrops] Auto-calculating rewards: ${rewardWei} wei`);
+        await this.calculateRewards(epoch.id, rewardWei);
 
         // Auto-finalize + auto-publish on-chain if enabled
         const autoPublish = settings['auto_publish_onchain'] === 'true';
-        if (autoPublish && defaultRewardWei !== '0' && BigInt(defaultRewardWei) > 0n) {
+        if (autoPublish) {
           await this.autoFinalizeAndPublish(epoch.id);
         }
       } catch (err) {

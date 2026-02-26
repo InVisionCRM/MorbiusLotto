@@ -47,6 +47,20 @@ export function getMerkleKeeperAddress(): string | null {
   }
 }
 
+/**
+ * Read the MORBIUS token balance held by the MerkleClaim contract on-chain.
+ */
+export async function getContractMorbiusBalance(): Promise<bigint> {
+  const publicClient = getPublicClient();
+  const balance = (await publicClient.readContract({
+    address: MORBIUS_TOKEN_ADDRESS,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [MERKLE_CLAIM_ADDRESS],
+  })) as bigint;
+  return balance;
+}
+
 type TxResult = { success: boolean; txHash?: string; error?: string };
 
 /**
