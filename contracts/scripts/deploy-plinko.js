@@ -40,7 +40,19 @@ async function main() {
 
   const Plinko = await hre.ethers.getContractFactory("Plinko");
   console.log("\nDeploying…");
-  const gasPrice = hre.ethers.parseUnits("400000", "gwei");
+
+  // Use 1.3× current gas price (enough buffer without blowing the PLS budget)
+  const feeData = await hre.ethers.provider.getFeeData();
+  const gasPrice = (feeData.gasPrice ?? hre.ethers.parseUnits("1500000", "gwei")) * 13n / 10n;
+  console.log("Gas price:", hre.ethers.formatUnits(gasPrice, "gwei"), "gwei");
+
+  const overrides = { gasLimit: 6000000, gasPrice };
+  // Optional: pass DEPLOY_NONCE=<n> env var to replace a stuck TX at that nonce
+  if (process.env.DEPLOY_NONCE) {
+    overrides.nonce = parseInt(process.env.DEPLOY_NONCE, 10);
+    console.log("Using nonce override:", overrides.nonce);
+  }
+
   const plinko = await Plinko.deploy(
     MORBIUS_TOKEN,
     WPLS_TOKEN,
@@ -50,10 +62,7 @@ async function main() {
     PLS_TREASURY,
     DISTRIBUTION_RECIPIENT,
     PLATFORM_FEE_RECIPIENT,
-    {
-      gasLimit: 10000000,
-      gasPrice,
-    }
+    overrides
   );
 
   const deploymentTx = plinko.deploymentTransaction();
@@ -63,23 +72,6 @@ async function main() {
   console.log("\n✅ Plinko deployed at:", addr);
   console.log("Tx hash:", deploymentTx?.hash);
   console.log("Block number:", receipt?.blockNumber?.toString?.() ?? "unknown");
-
-  console.log("\n📊 Configuration (V5.1 - DEFLATIONARY TOKENOMICS):");
-  console.log("- Min Wager: 10 MORBIUS per ball");
-  console.log("- Max Wager: 10,000 MORBIUS per ball");
-  console.log("- Burn Fee: 10% (sent to 0x...dEaD)");
-  console.log("- Contract Reserve: 90% (for payouts)");
-  console.log("\n🎲 RISK LEVELS:");
-  console.log("LOW:    [7x, 5.5x, 4x, 2.5x, 1.7x, 1.3x, 1x, 0.5x, 1x, 1.3x, 1.7x, 2.5x, 4x, 5.5x, 7x]");
-  console.log("MEDIUM: [15x, 7x, 5.5x, 2.5x, 1.7x, 1x, 0.8x, 0.2x, 0.8x, 1x, 1.7x, 2.5x, 5.5x, 7x, 15x]");
-  console.log("HIGH:   [35x, 15x, 7x, 2.5x, 1x, 0.5x, 0.2x, 0x, 0.2x, 0.5x, 1x, 2.5x, 7x, 15x, 35x]");
-
-  console.log("\n⚠️  V5.1 CHANGES:");
-  console.log("✅ Variable Wagers: Players choose their own wager amount (10-10,000 MORBIUS per ball)");
-  console.log("✅ Deflationary Tokenomics: 10% of all purchases burned to reduce supply");
-  console.log("✅ Simplified Fee Structure: No deployer fees, 90% to payout reserve");
-  console.log("✅ Only buyBallsAndDrop() and buyBallsWithPLSAndDrop() functions");
-  console.log("✅ No more ball balance - everything in one transaction");
 
   console.log("\n⚠️  IMPORTANT - Fund the Contract:");
   console.log("The contract needs initial liquidity to pay winners. Fund it with:");

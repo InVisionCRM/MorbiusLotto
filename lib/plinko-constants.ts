@@ -89,9 +89,9 @@ const PLINKO_CONSTANTS: PlinkoConstants = {
   // Multipliers for each risk level (matches contract exactly)
   // Contract stores in basis points (100 = 1x), frontend uses decimals
   MULTIPLIERS: {
-    GREEN: [16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1, 0.5, 1, 1.1, 1.2, 1.4, 1.4, 2, 9, 16],
-    YELLOW: [110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110],
-    RED: [1000, 120, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 120, 1000],
+    GREEN: [16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1, 0.4, 1, 1.1, 1.2, 1.4, 1.4, 2, 9, 16],
+    YELLOW: [110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.2, 0.5, 1, 1.5, 3, 5, 10, 41, 110],
+    RED: [200, 120, 25, 10, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 10, 25, 120, 200],
   },
 
   // Risk level mappings

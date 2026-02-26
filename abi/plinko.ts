@@ -1,4 +1,4 @@
-// Auto-generated from Plinko.sol V8 (Burns tokens instead of deployer fee)
+// Auto-generated from Plinko.sol V9 (2.5% distribution + 2.5% platform payout fees)
 export const PLINKO_ABI = [
   {
     "inputs": [
@@ -26,6 +26,21 @@ export const PLINKO_ABI = [
         "internalType": "uint256",
         "name": "_maxWager",
         "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_plsTreasury",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_distributionRecipient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_platformFeeRecipient",
+        "type": "address"
       }
     ],
     "stateMutability": "nonpayable",
@@ -48,22 +63,7 @@ export const PLINKO_ABI = [
   },
   {
     "inputs": [],
-    "name": "InsufficientBalls",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "InsufficientContractBalance",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InsufficientPLS",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InsufficientSwapOutput",
     "type": "error"
   },
   {
@@ -231,6 +231,44 @@ export const PLINKO_ABI = [
       {
         "indexed": false,
         "internalType": "uint256",
+        "name": "oldBps",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "DistributionFeeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "oldRecipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "DistributionRecipientUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
       }
@@ -331,6 +369,81 @@ export const PLINKO_ABI = [
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "address",
+        "name": "player",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "grossPayout",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "distributionFee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "platformFee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "netToPlayer",
+        "type": "uint256"
+      }
+    ],
+    "name": "PayoutFeesCollected",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "oldRecipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "PlatformFeeRecipientUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldBps",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "PlatformFeeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": false,
         "internalType": "address",
         "name": "account",
@@ -343,32 +456,6 @@ export const PLINKO_ABI = [
   {
     "inputs": [],
     "name": "BPS_DENOMINATOR",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "BURN_ADDRESS",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "BURN_FEE_BPS",
     "outputs": [
       {
         "internalType": "uint256",
@@ -516,23 +603,10 @@ export const PLINKO_ABI = [
   },
   {
     "inputs": [],
-    "name": "WPLS_SWAP_BUFFER_PCT",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "WPLS_TOKEN",
     "outputs": [
       {
-        "internalType": "contract IWrappedPulse",
+        "internalType": "address",
         "name": "",
         "type": "address"
       }
@@ -568,11 +642,6 @@ export const PLINKO_ABI = [
       {
         "internalType": "uint256",
         "name": "ballCount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "wagerPerBall",
         "type": "uint256"
       },
       {
@@ -616,6 +685,35 @@ export const PLINKO_ABI = [
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "grossPayout",
+        "type": "uint256"
+      }
+    ],
+    "name": "computePayoutFees",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "netToPlayer",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "feeDistribution",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "feePlatform",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "contractReserve",
     "outputs": [
@@ -623,6 +721,32 @@ export const PLINKO_ABI = [
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "distributionFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "distributionRecipient",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -894,6 +1018,32 @@ export const PLINKO_ABI = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "platformFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "platformFeeRecipient",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -990,6 +1140,19 @@ export const PLINKO_ABI = [
   },
   {
     "inputs": [],
+    "name": "plsTreasury",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "pulseXRouter",
     "outputs": [
       {
@@ -1030,6 +1193,32 @@ export const PLINKO_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "setDistributionFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "setDistributionRecipient",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
         "name": "newMax",
         "type": "uint256"
       }
@@ -1053,8 +1242,60 @@ export const PLINKO_ABI = [
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "setPlatformFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "setPlatformFeeRecipient",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newTreasury",
+        "type": "address"
+      }
+    ],
+    "name": "setPlsTreasury",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "totalBallsSold",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalDistributionFeesCollected",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1081,6 +1322,19 @@ export const PLINKO_ABI = [
   {
     "inputs": [],
     "name": "totalPayouts",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalPlatformFeesCollected",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1128,4 +1382,4 @@ export const PLINKO_ABI = [
     "stateMutability": "payable",
     "type": "receive"
   }
-] as const;
+] as const

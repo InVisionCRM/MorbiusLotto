@@ -21,8 +21,8 @@ export const LOTTERY_ADDRESS = '0xD66b4489fbfF99A8d62f969203899840F2ec69c5' as c
 export const KENO_ADDRESS = '0x734A1460b4131F8cFE4950894Be89d1a852c957A' as const
 
 // Plinko contract (17-bucket casino-style game with RISK LEVELS + VARIABLE WAGERS)
-// V8: New deployment on PulseChain Mainnet
-export const PLINKO_ADDRESS = '0x37B1db8F06870BFFeFed862C06535BEFc4383ff8' as const
+// V9: New deployment on PulseChain Mainnet (2.5% dist + 2.5% platform payout fees)
+export const PLINKO_ADDRESS = '0xa6585d334bb737d64eCE7abCA5acC087dd46E99e' as const
 
 // BigWheel contract (7-segment casino wheel game - proportional sizes)
 export const BIGWHEEL_ADDRESS = '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F' as const
@@ -106,7 +106,7 @@ export const MERKLE_CLAIM_MORBIUS_ADDRESS = '0x611001519cf458D1bF35Ebc2B990bd822
 // Contract deployment info
 export const LOTTERY_DEPLOY_BLOCK = 25329129
 export const KENO_DEPLOY_BLOCK = 25341670 // Deployed Dec 21, 2025
-export const PLINKO_DEPLOY_BLOCK = 25557180 // V8: New deployment block 25,557,180
+export const PLINKO_DEPLOY_BLOCK = 25886635 // V9: Deployed Feb 2026 (payout fees)
 export const BIGWHEEL_DEPLOY_BLOCK = 25575736 // Deployed Jan 20, 2026
 export const BLACKJACK_DEPLOY_BLOCK = 25836210 // V3: Deployed Feb 19, 2026 (2.5% dist + 2.5% platform + 1.5% PLS deposit fee)
 
