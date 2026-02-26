@@ -223,12 +223,27 @@ export class MerkleDropsService {
 
     logger.info(`[MerkleDrops] Snapshot epoch #${epoch.epoch_number}: fetching holders...`);
 
-    const holders = await this.fetchAllHolders();
-    logger.info(`[MerkleDrops] Total holders from API: ${holders.length}`);
+    const rawHolders = await this.fetchAllHolders();
+    logger.info(`[MerkleDrops] Total holders from API: ${rawHolders.length}`);
+
+    // Deduplicate — PulseChain API can return the same address across pages.
+    // Keep the highest balance if duplicated.
+    const holderMap = new Map<string, bigint>();
+    for (const { address, balance } of rawHolders) {
+      const key = address.toLowerCase();
+      const existing = holderMap.get(key);
+      if (existing === undefined || balance > existing) {
+        holderMap.set(key, balance);
+      }
+    }
+    const holders = Array.from(holderMap, ([address, balance]) => ({ address, balance }));
+    if (holders.length !== rawHolders.length) {
+      logger.info(`[MerkleDrops] Deduplicated: ${rawHolders.length} → ${holders.length} unique holders`);
+    }
 
     // Filter
     const eligible = holders.filter(({ address, balance }) => {
-      if (blocklist.has(address.toLowerCase())) return false;
+      if (blocklist.has(address)) return false;
       return balance >= minThreshold;
     });
     logger.info(`[MerkleDrops] Eligible after filtering: ${eligible.length}`);
