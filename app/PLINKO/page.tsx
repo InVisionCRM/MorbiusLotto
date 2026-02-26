@@ -587,7 +587,7 @@ const Home: React.FC = () => {
           address: PLINKO_ADDRESS,
           abi: PLINKO_ABI,
           functionName: 'buyBallsWithPLSAndDrop',
-          args: [BigInt(count), wagerAmount, Number(contractRiskLevel)],
+          args: [BigInt(count), Number(contractRiskLevel)],
           value: plsNeeded, // Send native PLS with transaction
         });
       } else {

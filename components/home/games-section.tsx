@@ -142,26 +142,32 @@ export function GamesSection() {
         </Link>
         </motion.div>
 
-        {/* Poker Card */}
+        {/* Poker Card - Under Construction */}
         <motion.div variants={fadeInUp}>
-          <Link href="/poker" className="group block">
-          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+          <div className="group block relative cursor-not-allowed">
+          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs" style={Theme.panel.base}>
             <div className="relative h-full w-full rounded-2xl overflow-hidden">
               <Image
                 src="/morbius/Poker.png"
                 alt="Texas Hold'em"
                 fill
-                className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+                className="object-cover opacity-30 transition-opacity duration-300"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <PaymentBadges />
-              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-1 sm:mb-2">Texas Hold&apos;em</h3>
-                <p className="text-white/60 text-sm sm:text-base">Multiplayer no-limit Hold&apos;em</p>
+              {/* Construction overlay */}
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
+                <div className="text-center">
+                  <div className="text-3xl sm:text-4xl lg:text-5xl mb-2 sm:mb-3 animate-pulse">🚧</div>
+                  <p className="text-yellow-400 text-sm sm:text-base lg:text-lg font-bold tracking-wide">Under Construction</p>
+                </div>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6 z-20">
+                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white/50 mb-1 sm:mb-2">Texas Hold&apos;em</h3>
+                <p className="text-white/40 text-sm sm:text-base">Multiplayer no-limit Hold&apos;em</p>
               </div>
             </div>
           </div>
-        </Link>
+        </div>
         </motion.div>
 
         {/* Dice Card - Coming Soon */}

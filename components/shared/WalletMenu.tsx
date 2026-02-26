@@ -98,7 +98,7 @@ export function WalletMenu({
             onClick={() => setIsWalletDropdownOpen(!isWalletDropdownOpen)}
             className={
               variant === 'sidebar'
-                ? `flex items-center gap-2 w-full text-left rounded-lg px-2 py-2 text-white text-sm font-medium transition-colors hover:bg-white/5 ${sidebarOpen ? 'justify-start' : 'justify-center'}`
+                ? 'flex items-center gap-2 w-full text-left rounded-lg px-2 py-2 text-white text-sm font-medium transition-colors hover:bg-white/5 justify-start'
                 : 'flex items-center gap-2 px-2 py-1 rounded-sm text-white text-sm font-bold transition-all hover:bg-white/5'
             }
             style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))' } : undefined}
@@ -116,13 +116,15 @@ export function WalletMenu({
             {variant === 'sidebar' ? (
               <>
                 <motion.span
-                  animate={{ display: sidebarOpen ? 'inline-block' : 'none', opacity: sidebarOpen ? 1 : 0 }}
-                  className="text-white truncate min-w-0 text-sm"
+                  animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="text-white truncate min-w-0 text-sm whitespace-nowrap"
                 >
                   {effectiveProfileDisplayName ?? `…${address.slice(-4)}`}
                 </motion.span>
                 <motion.span
-                  animate={{ display: sidebarOpen ? 'inline-block' : 'none', opacity: sidebarOpen ? 1 : 0 }}
+                  animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
                   className="flex-shrink-0"
                 >
                   <i
@@ -236,8 +238,9 @@ export function WalletMenu({
               {variant === 'sidebar' ? (
                 <>
                   <motion.span
-                    animate={{ display: sidebarOpen ? 'inline-block' : 'none', opacity: sidebarOpen ? 1 : 0 }}
-                    className="text-cyan-400"
+                    animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                    className="text-cyan-400 whitespace-nowrap"
                   >
                     Connect
                   </motion.span>

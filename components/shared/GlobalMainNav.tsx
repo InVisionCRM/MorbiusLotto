@@ -49,7 +49,6 @@ const OTHER_GAMES = [
 ] as const;
 
 const SIDEBAR_PANEL_STYLE = {
-  background: 'linear-gradient(145deg, rgba(16, 26, 35, 0.03), rgba(35, 36, 41, 0.03))',
   boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
   border: '1px inset rgba(60, 60, 60, 0.5)',
 } as const;
@@ -226,7 +225,7 @@ function NavContent(props: {
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-sm">
+            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-sm whitespace-nowrap">
               {backArrowLabel || 'Back'}
             </motion.span>
           </Link>
@@ -238,7 +237,7 @@ function NavContent(props: {
           <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
             <Image src="/morbius/MorbiusLogo (3).png" alt="" width={24} height={24} className="object-contain" />
           </span>
-          <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-base font-semibold text-white whitespace-nowrap overflow-hidden">
+          <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-base font-semibold text-white whitespace-nowrap overflow-hidden">
             MORBIUS.IO
           </motion.span>
         </Link>
@@ -246,17 +245,15 @@ function NavContent(props: {
 
       {/* Wallet */}
       <div className="shrink-0 py-2">
-        <div className="px-2">
-          <WalletMenu
-            onOpenDepositModal={onOpenDepositModal}
-            profileDisplayName={profileDisplayName}
-            profileImageUrl={profileImageUrl}
-            onOpenProfileSettings={onOpenProfileSettings}
-            dropdownPlacement="below"
-            variant="sidebar"
-            sidebarOpen={open}
-          />
-        </div>
+        <WalletMenu
+          onOpenDepositModal={onOpenDepositModal}
+          profileDisplayName={profileDisplayName}
+          profileImageUrl={profileImageUrl}
+          onOpenProfileSettings={onOpenProfileSettings}
+          dropdownPlacement="below"
+          variant="sidebar"
+          sidebarOpen={open}
+        />
       </div>
 
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5">
@@ -288,7 +285,7 @@ function NavContent(props: {
         {/* My Stuff - page-specific */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <div className="px-2 py-1 overflow-hidden">
-            <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-xs text-white uppercase tracking-wider">My Stuff</motion.span>
+            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">My Stuff</motion.span>
           </div>
 
           {page === 'blackjack' && (
@@ -333,7 +330,7 @@ function NavContent(props: {
         {/* Other Games - exclude current page */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <div className="px-2 py-1 overflow-hidden">
-            <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-xs text-white uppercase tracking-wider">Other Games</motion.span>
+            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Other Games</motion.span>
           </div>
           {otherGamesFiltered.map((g) => (
             <SidebarLink
@@ -357,7 +354,7 @@ function NavContent(props: {
         {/* Other */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <div className="px-2 py-1 overflow-hidden">
-            <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-xs text-white uppercase tracking-wider">Other</motion.span>
+            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Other</motion.span>
           </div>
           <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
@@ -370,12 +367,12 @@ function NavContent(props: {
         {/* Morbius */}
         <div className="pt-2 mt-2 border-t border-white/10 overflow-hidden">
           <div className="px-2 py-1">
-            <motion.span animate={{ display: open ? 'inline-block' : 'none', opacity: open ? 1 : 0 }} className="text-xs text-white uppercase tracking-wider">Morbius</motion.span>
+            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Morbius</motion.span>
           </div>
-          <motion.div animate={{ display: open ? 'block' : 'none', opacity: open ? 1 : 0 }} className="px-2 py-1">
+          <motion.div animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="px-2 py-1">
             <MorbiusBurnedDisplay variant="inline" className="text-white text-xs" labelClassName="text-white text-xs" />
           </motion.div>
-          <motion.div animate={{ display: open ? 'block' : 'none', opacity: open ? 1 : 0 }} className="px-2 py-1">
+          <motion.div animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="px-2 py-1">
             <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
           </motion.div>
           <SidebarLink link={{ label: 'Claim fees', href: '/claim-fees', icon: <i className="fas fa-wallet w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />

@@ -94,7 +94,7 @@ export const DesktopSidebar = ({
     <>
       <motion.div
         className={cn(
-          "min-h-screen px-3 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 overflow-hidden rounded-r-xl",
+          "min-h-screen px-3 py-4 hidden md:flex md:flex-col w-[300px] bg-black/70 backdrop-blur-sm shrink-0 overflow-hidden rounded-r-xl",
           className
         )}
         animate={{
@@ -122,7 +122,7 @@ export const MobileSidebar = ({
     <>
       <div
         className={cn(
-          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between gap-2 bg-black/10 border-b border-white/10 w-full"
+          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between gap-2 bg-black/70 border-b border-white/10 w-full"
         )}
         {...props}
       >
@@ -192,7 +192,7 @@ export const SidebarLink = ({
     <a
       href={link.href}
       className={cn(
-        "flex items-center justify-start gap-2  group/sidebar py-2",
+        "flex items-center justify-start gap-2 group/sidebar py-2",
         className
       )}
       {...props}
@@ -201,10 +201,10 @@ export const SidebarLink = ({
 
       <motion.span
         animate={{
-          display: animate ? (open ? "inline-block" : "none") : "inline-block",
           opacity: animate ? (open ? 1 : 0) : 1,
         }}
-        className="text-inherit text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
+        transition={{ duration: 0.2, ease: "easeInOut" }}
+        className="text-inherit text-sm group-hover/sidebar:translate-x-1 transition-transform duration-150 whitespace-nowrap inline-block !p-0 !m-0"
       >
         {link.label}
       </motion.span>
@@ -240,10 +240,10 @@ export const SidebarButton = ({
       {icon}
       <motion.span
         animate={{
-          display: animate ? (open ? "inline-block" : "none") : "inline-block",
           opacity: animate ? (open ? 1 : 0) : 1,
         }}
-        className="text-inherit text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
+        transition={{ duration: 0.2, ease: "easeInOut" }}
+        className="text-inherit text-sm group-hover/sidebar:translate-x-1 transition-transform duration-150 whitespace-nowrap inline-block !p-0 !m-0"
       >
         {label}
       </motion.span>
