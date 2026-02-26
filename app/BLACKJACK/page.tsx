@@ -8,7 +8,6 @@ import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers';
 import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar';
-import { ChatPanel } from '@/components/chat/ChatPanel';
 import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
@@ -2759,19 +2758,8 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Top Players + Chat + Table token: grid 3-col on lg */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-          <div className="min-h-[280px] lg:min-h-[340px] flex flex-col min-w-0">
-            <ChatPanel
-              roomId="blackjack"
-              title="Blackjack Chat"
-              collapsible={false}
-              defaultOpen={false}
-              wsClient={wsClient}
-              wsConnected={wsConnected}
-              className="h-full min-h-0 flex-1"
-            />
-          </div>
+        {/* Top Players + Table token: grid 2-col on lg */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
           <TableTokenProfileCard
             themeKind={theme}
             themeId={useVideoBackground ? videoSource : imageSource}

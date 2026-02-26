@@ -7,22 +7,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
-interface IWrappedPulse is IERC20 {
-    function deposit() external payable;
-    function withdraw(uint256 amount) external;
-}
-
 interface IPulseXRouter {
-    function swapExactTokensForTokens(
+    function getAmountsOut(
         uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function getAmountsIn(
-        uint256 amountOut,
         address[] calldata path
     ) external view returns (uint256[] memory amounts);
 }
@@ -30,7 +17,7 @@ interface IPulseXRouter {
 /**
  * @title PLINKO
  * @notice On-chain PLINKO game with 17 buckets, pre-paid balls, and instant payouts
- * @dev Casino-style PLINKO with blockhash randomness and simple 5% deployer fee
+ * @dev Casino-style PLINKO with blockhash randomness. PLS purchases priced via PulseX spot rate.
  */
 contract Plinko is Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
@@ -38,13 +25,8 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     // ============ Constants ============
 
        uint8 public constant TOTAL_BUCKETS = 17;
-    uint256 public constant BPS_DENOMINATOR = 10000;
-    uint256 public constant BURN_FEE_BPS = 1000; // 10% burn
-    uint256 public constant WPLS_SWAP_BUFFER_PCT = 15000; // 50% buffer for PLS purchases
     uint256 public constant MIN_BALL_PRICE = 1 * 10**18; // 1 MORBIUS minimum
-
-    // Burn address for deflationary tokenomics
-    address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
+    uint256 public constant BPS_DENOMINATOR = 10000;
 
     // Risk levels
     uint8 public constant RISK_LOW = 0;
@@ -54,8 +36,22 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     // ============ Immutable State ============
 
     IERC20 public immutable MORBIUS_TOKEN;
-    IWrappedPulse public immutable WPLS_TOKEN;
+    address public immutable WPLS_TOKEN; // Used as path[0] for PulseX price queries
     IPulseXRouter public immutable pulseXRouter;
+
+    // ============ Mutable State ============
+
+    address public plsTreasury; // Receives all PLS from PLS-based purchases
+
+    // Payout fees (mirroring Blackjack withdrawal fee structure)
+    uint256 public distributionFeeBps;   // default 250 (2.5%) — goes to distributionRecipient
+    address public distributionRecipient;
+    uint256 public platformFeeBps;       // default 250 (2.5%) — goes to platformFeeRecipient
+    address public platformFeeRecipient;
+
+    // Fee collection totals
+    uint256 public totalDistributionFeesCollected;
+    uint256 public totalPlatformFeesCollected;
 
     // ============ State Variables ============
 
@@ -116,13 +112,15 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     event MultipliersUpdated(uint256[TOTAL_BUCKETS] newMultipliers);
     event EmergencyWithdraw(uint256 amount);
     event ContractFunded(address indexed funder, uint256 amount);
+    event PayoutFeesCollected(address indexed player, uint256 grossPayout, uint256 distributionFee, uint256 platformFee, uint256 netToPlayer);
+    event DistributionFeeUpdated(uint256 oldBps, uint256 newBps);
+    event PlatformFeeUpdated(uint256 oldBps, uint256 newBps);
+    event DistributionRecipientUpdated(address oldRecipient, address newRecipient);
+    event PlatformFeeRecipientUpdated(address oldRecipient, address newRecipient);
 
     // ============ Errors ============
 
-    error InsufficientBalls();
     error InsufficientContractBalance();
-    error InsufficientPLS();
-    error InsufficientSwapOutput();
     error InvalidWagerAmount();
     error InvalidMultipliers();
     error ExceedsReserve();
@@ -135,15 +133,25 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
         address _wplsToken,
         address _pulseXRouter,
         uint256 _minWager,
-        uint256 _maxWager
+        uint256 _maxWager,
+        address _plsTreasury,
+        address _distributionRecipient,
+        address _platformFeeRecipient
     ) Ownable(msg.sender) {
+        require(_plsTreasury != address(0), "Invalid treasury address");
+        require(_platformFeeRecipient != address(0), "Invalid platform fee recipient");
         MORBIUS_TOKEN = IERC20(_morbiusToken);
-        WPLS_TOKEN = IWrappedPulse(_wplsToken);
+        WPLS_TOKEN = _wplsToken;
         pulseXRouter = IPulseXRouter(_pulseXRouter);
         minWagerPerBall = _minWager;
         maxWagerPerBall = _maxWager;
+        plsTreasury = _plsTreasury;
+        distributionFeeBps = 250;  // 2.5%
+        distributionRecipient = _distributionRecipient;
+        platformFeeBps = 250;      // 2.5%
+        platformFeeRecipient = _platformFeeRecipient;
 
-        // LOW RISK: Small losses possible, max 5.5x (edges high, center low)
+        // LOW RISK: Max 16x, ~97% RTP (3% house edge)
         LOW_RISK_MULTIPLIERS = [
             1600,  // 16x  (edges - best payout)
             900,   // 9x
@@ -153,7 +161,7 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
             120,   // 1.2x
             110,   // 1.1x
             100,   // 1x
-            50,    // 0.5x  (center - small loss)
+            40,    // 0.4x  (center - 3% house edge)
             100,   // 1x
             110,   // 1.1x
             120,   // 1.2x
@@ -164,7 +172,7 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
             1600   // 16x  (edges - best payout)
         ];
 
-        // MEDIUM RISK: Bigger losses, max 15x (edges high, center loses)
+        // MEDIUM RISK: Max 110x, ~97% RTP (3% house edge)
         MEDIUM_RISK_MULTIPLIERS = [
             11000, // 110x   (edges - solid jackpot)
             4100,  // 41x
@@ -174,7 +182,7 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
             150,   // 1.5x
             100,   // 1x
             50,    // 0.5x
-            30,    // 0.3x  (center)
+            20,    // 0.2x  (center - 3% house edge)
             50,    // 0.5x
             100,   // 1x
             150,   // 1.5x
@@ -185,12 +193,12 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
             11000  // 110x   (edges - solid jackpot)
         ];
 
-        // HIGH RISK: Can lose everything, max 35x (edges high, center 0)
+        // HIGH RISK: Max 200x, ~97.4% RTP (2.6% house edge)
         HIGH_RISK_MULTIPLIERS = [
-            100000, // 1000x   (edges - massive jackpot)
+            20000,  // 200x   (edges - max jackpot)
             12000,  // 120x
-            2600,   // 26x
-            900,    // 9x
+            2500,   // 25x
+            1000,   // 10x
             400,    // 4x
             200,    // 2x
             20,     // 0.2x
@@ -200,10 +208,10 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
             20,     // 0.2x
             200,    // 2x
             400,    // 4x
-            900,    // 9x
-            2600,   // 26x
+            1000,   // 10x
+            2500,   // 25x
             12000,  // 120x
-            100000  // 1000x   (edges - massive jackpot)
+            20000   // 200x   (edges - max jackpot)
         ];
     }
 
@@ -225,19 +233,12 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
 
         uint256 gross = count * wagerPerBall;
 
-        // Fee split: 10% burn, 90% to contract reserve
-        uint256 burnFee = (gross * BURN_FEE_BPS) / BPS_DENOMINATOR;
-        uint256 toContract = gross - burnFee;
-
-        // Transfer burn fee to burn address
-        MORBIUS_TOKEN.safeTransferFrom(msg.sender, BURN_ADDRESS, burnFee);
-
-        // Transfer rest to contract (payout reserve)
-        MORBIUS_TOKEN.safeTransferFrom(msg.sender, address(this), toContract);
+        // Full wager goes to contract (no burn)
+        MORBIUS_TOKEN.safeTransferFrom(msg.sender, address(this), gross);
 
         // Update purchase balances and stats
         playerTotalPurchased[msg.sender] += gross;
-        contractReserve += toContract;
+        contractReserve += gross;
         totalBallsSold += count;
         totalRevenue += gross;
 
@@ -260,12 +261,24 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
             emit BallDropped(msg.sender, seed, bucket, multiplier, payout, riskLevel);
         }
 
-        // Pay out total winnings immediately
+        // Pay out total winnings immediately (with payout fees)
         if (totalPayout > 0) {
-            // TESTING: Skip reserve check - just pay from contract balance
-            // if (contractReserve < totalPayout) revert InsufficientContractBalance();
-            // contractReserve -= totalPayout;
-            MORBIUS_TOKEN.safeTransfer(msg.sender, totalPayout);
+            if (contractReserve < totalPayout) revert InsufficientContractBalance();
+            contractReserve -= totalPayout;
+
+            (uint256 netToPlayer, uint256 feeDistribution, uint256 feePlatform) = _computePayoutFees(totalPayout);
+
+            if (feeDistribution > 0) {
+                MORBIUS_TOKEN.safeTransfer(distributionRecipient, feeDistribution);
+                totalDistributionFeesCollected += feeDistribution;
+            }
+            if (feePlatform > 0) {
+                MORBIUS_TOKEN.safeTransfer(platformFeeRecipient, feePlatform);
+                totalPlatformFeesCollected += feePlatform;
+            }
+            MORBIUS_TOKEN.safeTransfer(msg.sender, netToPlayer);
+
+            emit PayoutFeesCollected(msg.sender, totalPayout, feeDistribution, feePlatform, netToPlayer);
         }
 
         // Update player statistics
@@ -282,12 +295,15 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Buy balls with PLS and immediately drop them all with chosen risk level
-     * @param ballCount Number of balls to buy and drop
-     * @param wagerPerBall Wager amount per ball in MORBIUS (must be between min and max)
+     * @notice Buy balls with PLS and immediately drop them all with chosen risk level.
+     * @dev PLS is sent directly to plsTreasury. MORBIUS for payouts is pulled from
+     *      plsTreasury via safeTransferFrom (treasury must approve this contract).
+     *      The MORBIUS wager amount is determined by querying the current PulseX spot
+     *      price — no fallback; reverts if price is unavailable.
+     * @param ballCount Number of balls to drop
      * @param riskLevel 0=LOW, 1=MEDIUM, 2=HIGH
      */
-    function buyBallsWithPLSAndDrop(uint256 ballCount, uint256 wagerPerBall, uint8 riskLevel)
+    function buyBallsWithPLSAndDrop(uint256 ballCount, uint8 riskLevel)
         external
         payable
         whenNotPaused
@@ -295,91 +311,66 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     {
         if (riskLevel > RISK_HIGH) revert InvalidRiskLevel();
         require(ballCount > 0, "Must buy at least 1 ball");
-        if (wagerPerBall < minWagerPerBall || wagerPerBall > maxWagerPerBall) revert InvalidWagerAmount();
+        require(msg.value > 0, "Must send PLS");
 
-        uint256 morbiusNeeded = ballCount * wagerPerBall;
-
-        // Calculate required WPLS with 50% buffer for slippage
+        // --- Price discovery (NO fallback — reverts if PulseX call fails) ---
         address[] memory path = new address[](2);
-        path[0] = address(WPLS_TOKEN);
+        path[0] = WPLS_TOKEN;
         path[1] = address(MORBIUS_TOKEN);
 
-        uint256[] memory amounts = pulseXRouter.getAmountsIn(morbiusNeeded, path);
-        uint256 wplsRequired = amounts[0];
-        uint256 wplsWithBuffer = (wplsRequired * WPLS_SWAP_BUFFER_PCT) / BPS_DENOMINATOR;
+        // getAmountsOut reverts internally on zero liquidity or bad path; we do NOT catch it
+        uint256[] memory amounts = pulseXRouter.getAmountsOut(msg.value, path);
+        uint256 morbiusEquivalent = amounts[1];
 
-        if (msg.value < wplsWithBuffer) revert InsufficientPLS();
+        uint256 wagerPerBall = morbiusEquivalent / ballCount;
+        if (wagerPerBall < minWagerPerBall || wagerPerBall > maxWagerPerBall) revert InvalidWagerAmount();
 
-        // Wrap the PLS to WPLS
-        WPLS_TOKEN.deposit{value: msg.value}();
+        // --- Send PLS to treasury (no wrapping, no swap) ---
+        (bool sent, ) = plsTreasury.call{value: msg.value}("");
+        require(sent, "PLS transfer to treasury failed");
 
-        // Swap WPLS for MORBIUS
-        address[] memory swapPath = new address[](2);
-        swapPath[0] = address(WPLS_TOKEN);
-        swapPath[1] = address(MORBIUS_TOKEN);
-
-        WPLS_TOKEN.approve(address(pulseXRouter), msg.value);
-        uint256[] memory swapResult = pulseXRouter.swapExactTokensForTokens(
-            msg.value,
-            morbiusNeeded, // Minimum output
-            swapPath,
-            address(this),
-            block.timestamp + 3600
-        );
-
-        uint256 morbiusReceived = swapResult[1];
-
-        // Fee split: 10% burn, 90% to contract reserve
-        uint256 burnFee = (morbiusReceived * BURN_FEE_BPS) / BPS_DENOMINATOR;
-        uint256 toContract = morbiusReceived - burnFee;
-
-        // Transfer burn fee to burn address
-        MORBIUS_TOKEN.safeTransfer(BURN_ADDRESS, burnFee);
-
-        // Update purchase balances and stats
-        playerTotalPurchased[msg.sender] += morbiusReceived;
-        contractReserve += toContract;
+        // --- Update stats (MORBIUS equivalent valued at current price) ---
+        playerTotalPurchased[msg.sender] += morbiusEquivalent;
         totalBallsSold += ballCount;
-        totalRevenue += morbiusReceived;
+        totalRevenue += morbiusEquivalent;
 
-        emit BallsPurchased(msg.sender, ballCount, morbiusReceived, true);
+        emit BallsPurchased(msg.sender, ballCount, morbiusEquivalent, true);
 
-        // Refund excess PLS if any
-        uint256 excessWpls = WPLS_TOKEN.balanceOf(address(this));
-        if (excessWpls > 0) {
-            WPLS_TOKEN.withdraw(excessWpls);
-            payable(msg.sender).transfer(excessWpls);
-        }
-
-        // Now drop all the balls immediately
+        // --- Drop all balls; MORBIUS payouts come from contract reserve ---
         uint256 totalPayout = 0;
 
-        // Calculate wager per ball from total MORBIUS received
-        uint256 actualWagerPerBall = morbiusReceived / ballCount;
-
-        // Drop each ball and accumulate payouts
         for (uint256 i = 0; i < ballCount; i++) {
-            // Get random bucket for this drop (pass i as nonce for unique randomness)
             (uint256 seed, uint8 bucket) = _getRandomBucket(i);
 
-            // Get multiplier based on risk level
             uint256 multiplier = _getMultiplier(riskLevel, bucket);
-            uint256 payout = (actualWagerPerBall * multiplier) / 100;
+            uint256 payout = (wagerPerBall * multiplier) / 100;
 
             totalPayout += payout;
 
             emit BallDropped(msg.sender, seed, bucket, multiplier, payout, riskLevel);
         }
 
-        // Pay out total winnings immediately
         if (totalPayout > 0) {
-            // TESTING: Skip reserve check - just pay from contract balance
-            // if (contractReserve < totalPayout) revert InsufficientContractBalance();
-            // contractReserve -= totalPayout;
-            MORBIUS_TOKEN.safeTransfer(msg.sender, totalPayout);
+            // Pull gross payout from treasury into this contract, then distribute with fees
+            // (treasury must have approved this contract for MORBIUS)
+            MORBIUS_TOKEN.safeTransferFrom(plsTreasury, address(this), totalPayout);
+
+            (uint256 netToPlayer, uint256 feeDistribution, uint256 feePlatform) = _computePayoutFees(totalPayout);
+
+            if (feeDistribution > 0) {
+                MORBIUS_TOKEN.safeTransfer(distributionRecipient, feeDistribution);
+                totalDistributionFeesCollected += feeDistribution;
+            }
+            if (feePlatform > 0) {
+                MORBIUS_TOKEN.safeTransfer(platformFeeRecipient, feePlatform);
+                totalPlatformFeesCollected += feePlatform;
+            }
+            MORBIUS_TOKEN.safeTransfer(msg.sender, netToPlayer);
+
+            emit PayoutFeesCollected(msg.sender, totalPayout, feeDistribution, feePlatform, netToPlayer);
         }
 
-        // Update player statistics
+        // --- Update player statistics ---
         playerTotalDrops[msg.sender] += ballCount;
         playerTotalWon[msg.sender] += totalPayout;
 
@@ -387,7 +378,7 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
             playerBiggestWin[msg.sender] = totalPayout;
         }
 
-        // Update global statistics
+        // --- Update global statistics ---
         totalDrops += ballCount;
         totalPayouts += totalPayout;
     }
@@ -459,6 +450,23 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
+     * @notice Compute distribution and platform fees on a gross payout
+     * @param grossPayout The total payout before fees
+     * @return netToPlayer Amount after fees deducted
+     * @return feeDistribution Amount sent to distributionRecipient
+     * @return feePlatform Amount sent to platformFeeRecipient
+     */
+    function _computePayoutFees(uint256 grossPayout)
+        internal
+        view
+        returns (uint256 netToPlayer, uint256 feeDistribution, uint256 feePlatform)
+    {
+        feeDistribution = (grossPayout * distributionFeeBps) / BPS_DENOMINATOR;
+        feePlatform = (grossPayout * platformFeeBps) / BPS_DENOMINATOR;
+        netToPlayer = grossPayout - feeDistribution - feePlatform;
+    }
+
+    /**
      * @notice Get multiplier for a bucket based on risk level
      * @param riskLevel 0=LOW, 1=MEDIUM, 2=HIGH
      * @param bucket Bucket number (0-16, 0-indexed to match frontend physics)
@@ -475,6 +483,55 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     }
 
     // ============ Admin Functions ============
+
+    /**
+     * @notice Set the wallet that receives PLS from PLS-based purchases
+     * @param newTreasury New treasury address (cannot be zero)
+     */
+    function setPlsTreasury(address newTreasury) external onlyOwner {
+        require(newTreasury != address(0), "Invalid treasury address");
+        plsTreasury = newTreasury;
+    }
+
+    /**
+     * @notice Set the distribution fee (charged on all payouts)
+     * @param newBps New fee in basis points (combined with platform fee cannot exceed 50%)
+     */
+    function setDistributionFee(uint256 newBps) external onlyOwner {
+        require(newBps + platformFeeBps <= 5000, "Total fees cannot exceed 50%");
+        emit DistributionFeeUpdated(distributionFeeBps, newBps);
+        distributionFeeBps = newBps;
+    }
+
+    /**
+     * @notice Set the distribution fee recipient
+     * @param newRecipient Address that receives the distribution fee
+     */
+    function setDistributionRecipient(address newRecipient) external onlyOwner {
+        require(newRecipient != address(0), "Invalid recipient");
+        emit DistributionRecipientUpdated(distributionRecipient, newRecipient);
+        distributionRecipient = newRecipient;
+    }
+
+    /**
+     * @notice Set the platform fee (charged on all payouts)
+     * @param newBps New fee in basis points (combined with distribution fee cannot exceed 50%)
+     */
+    function setPlatformFee(uint256 newBps) external onlyOwner {
+        require(newBps + distributionFeeBps <= 5000, "Total fees cannot exceed 50%");
+        emit PlatformFeeUpdated(platformFeeBps, newBps);
+        platformFeeBps = newBps;
+    }
+
+    /**
+     * @notice Set the platform fee recipient
+     * @param newRecipient Address that receives the platform fee
+     */
+    function setPlatformFeeRecipient(address newRecipient) external onlyOwner {
+        require(newRecipient != address(0), "Invalid recipient");
+        emit PlatformFeeRecipientUpdated(platformFeeRecipient, newRecipient);
+        platformFeeRecipient = newRecipient;
+    }
 
     /**
      * @notice Set minimum wager per ball
@@ -564,6 +621,21 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     }
 
     // ============ View Functions - Game Configuration ============
+
+    /**
+     * @notice Preview fee breakdown for a given gross payout
+     * @param grossPayout The gross payout amount before fees
+     * @return netToPlayer Amount player receives after fees
+     * @return feeDistribution Amount going to distributionRecipient
+     * @return feePlatform Amount going to platformFeeRecipient
+     */
+    function computePayoutFees(uint256 grossPayout)
+        external
+        view
+        returns (uint256 netToPlayer, uint256 feeDistribution, uint256 feePlatform)
+    {
+        return _computePayoutFees(grossPayout);
+    }
 
     /**
      * @notice Get wager limits

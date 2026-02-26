@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import { MessageCircle, X } from 'lucide-react';
@@ -40,10 +40,18 @@ const TAG_BG: React.CSSProperties = {
 };
 
 export function ChatSidebar() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const pathname = usePathname();
   const { roomId, title } = getRoomForPath(pathname ?? '/');
+
+  // Open by default only on desktop home page
+  useEffect(() => {
+    const isHome = pathname === '/' || pathname === '';
+    const isDesktop = window.innerWidth >= 768;
+    if (isHome && isDesktop) setOpen(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const closeButton = (
     <button

@@ -11,7 +11,6 @@ import { defaultPokerLayout, getChatRect } from '@/lib/poker-layout';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer';
 import { PokerTable } from '@/components/poker/PokerTable';
-import { ChatPanel } from '@/components/chat/ChatPanel';
 import { toast } from 'sonner';
 
 export default function PokerTablePage() {
@@ -164,25 +163,6 @@ export default function PokerTablePage() {
               )}
               {!state && !error && (
                 <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-slate-300">Loading table...</p>
-              )}
-              {chatRect && (
-                <div
-                  className="absolute z-20 flex flex-col min-h-0"
-                  style={{
-                    left: `${chatRect.x}%`,
-                    top: `${chatRect.y}%`,
-                    width: `${chatRect.width}%`,
-                    height: `${chatRect.height}%`,
-                  }}
-                >
-                  <ChatPanel
-                    roomId={`poker:table:${tableId}`}
-                    title="Table chat"
-                    wsClient={wsClient ?? undefined}
-                    wsConnected={wsConnected}
-                    collapsible
-                  />
-                </div>
               )}
             </div>
           </div>

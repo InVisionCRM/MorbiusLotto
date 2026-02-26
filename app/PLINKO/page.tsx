@@ -32,7 +32,6 @@ import { MULTIPLIERS, RISK_NAMES, RISK_LEVEL, RISK_LEVEL_MAP } from './constants
 import { formatEther, parseEther, decodeEventLog } from 'viem';
 import { toast } from 'sonner';
 import Footer from '@/components/PLINKO/Footer';
-import { ChatPanel } from '@/components/chat/ChatPanel';
 
 // BallDropped event ABI for decoding
 const BALL_DROPPED_EVENT_ABI = {
@@ -1540,15 +1539,6 @@ const Home: React.FC = () => {
               sessionStartTime={chartSessionStartTime.current}
               contractWagerPerBall={wagerPerBall}
               freePlayWager={currentWagerRef.current}
-            />
-          </div>
-          <div className="order-2 min-h-[280px] lg:min-h-[320px] lg:h-80">
-            <ChatPanel
-              roomId="plinko"
-              title="Plinko Chat"
-              collapsible={false}
-              defaultOpen={false}
-              className="h-full"
             />
           </div>
         </div>
