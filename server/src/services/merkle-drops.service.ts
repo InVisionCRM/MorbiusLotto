@@ -18,8 +18,6 @@ import { ethers } from 'ethers';
 import { logger } from '../utils/logger';
 import {
   isMerkleKeeperConfigured,
-  ensureMorbiusAllowance,
-  depositMorbiusRewards,
   setEpochRootOnChain,
 } from '../utils/merkle-claim';
 
@@ -638,8 +636,12 @@ export class MerkleDropsService {
 
   /**
    * Finalize the Merkle tree, then submit on-chain transactions
-   * (approve, deposit, setEpochRoot) and mark the epoch as published.
+   * (setEpochRoot) and mark the epoch as published.
    * Called by the cron when auto_publish_onchain is enabled.
+   *
+   * MORBIUS tokens are expected to already be in the contract
+   * (sent directly by game contracts via distributionRecipient).
+   * The keeper wallet only needs PLS for gas.
    */
   private async autoFinalizeAndPublish(epochId: number): Promise<void> {
     if (!isMerkleKeeperConfigured()) {
@@ -657,29 +659,9 @@ export class MerkleDropsService {
       const epoch = await this.getEpoch(epochId);
       if (!epoch) throw new Error(`Epoch ${epochId} not found after finalize`);
 
-      const depositWei = BigInt(epoch.new_reward_amount || epoch.total_reward_amount || '0');
       const totalWei = BigInt(epoch.total_reward_amount || '0');
 
-      // 2. Ensure MORBIUS allowance (one-time max approval)
-      if (depositWei > 0n) {
-        const approveResult = await ensureMorbiusAllowance(depositWei);
-        if (!approveResult.success) {
-          logger.error(`[MerkleDrops] Auto-publish: approve failed — ${approveResult.error}`);
-          return;
-        }
-
-        // 3. Deposit rewards
-        const depositResult = await depositMorbiusRewards(depositWei);
-        if (!depositResult.success) {
-          logger.error(`[MerkleDrops] Auto-publish: deposit failed — ${depositResult.error}`);
-          return;
-        }
-        logger.info(`[MerkleDrops] Deposited ${depositWei.toString()} wei MORBIUS`);
-      } else {
-        logger.info('[MerkleDrops] No new deposit needed (all rolled up)');
-      }
-
-      // 4. Set epoch root on-chain
+      // 2. Set epoch root on-chain (tokens already in contract via game fees)
       const setRootResult = await setEpochRootOnChain(
         epoch.epoch_number,
         root as `0x${string}`,
@@ -690,7 +672,7 @@ export class MerkleDropsService {
         return;
       }
 
-      // 5. Mark published in DB
+      // 3. Mark published in DB
       await this.markPublished(epochId);
       logger.info(`[MerkleDrops] Auto-published epoch #${epoch.epoch_number} successfully`);
     } catch (err) {
