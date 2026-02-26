@@ -49,6 +49,7 @@ interface MerkleSettings {
   schedule_interval: string; // numeric interval for interval_minutes / interval_hours
   default_reward_wei: string;
   auto_publish_onchain: string; // 'true' | 'false'
+  countdown_duration: string;  // custom countdown in seconds ('0' = use auto-calculated from schedule)
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -396,6 +397,7 @@ export default function AdminMerkleDropsTab() {
     schedule_type: 'manual', schedule_day: '5',
     schedule_hour_utc: '12', schedule_interval: '60',
     default_reward_wei: '0', auto_publish_onchain: 'false',
+    countdown_duration: '0',
   };
   const [settings, setSettings] = useState<MerkleSettings>(defaultSettings);
   const [settingsDraft, setSettingsDraft] = useState<MerkleSettings>(defaultSettings);
@@ -893,6 +895,47 @@ export default function AdminMerkleDropsTab() {
             {settingsDraft.auto_publish_onchain === 'true' && settingsDraft.schedule_type === 'manual' && (
               <p className="text-[10px] text-amber-400">Note: Auto-publish only triggers from scheduled cron epochs. Set a schedule above for fully automated drops.</p>
             )}
+          </div>
+
+          {/* Countdown timer display */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Claim Page Countdown Timer</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {['hh', 'mm', 'ss'].map((unit, i) => {
+                const totalSec = parseInt(settingsDraft.countdown_duration || '0', 10);
+                const vals = [Math.floor(totalSec / 3600), Math.floor((totalSec % 3600) / 60), totalSec % 60];
+                return (
+                  <React.Fragment key={unit}>
+                    {i > 0 && <span className="text-slate-500 font-bold">:</span>}
+                    <input
+                      type="number" min="0" max={unit === 'hh' ? '99' : '59'}
+                      value={String(vals[i]).padStart(2, '0')}
+                      onChange={(e) => {
+                        const newVals = [...vals];
+                        newVals[i] = Math.max(0, parseInt(e.target.value, 10) || 0);
+                        const newTotal = newVals[0] * 3600 + newVals[1] * 60 + newVals[2];
+                        setSettingsDraft((p) => ({ ...p, countdown_duration: String(newTotal) }));
+                      }}
+                      className="h-8 w-14 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 font-mono text-center focus:outline-none focus:border-emerald-500"
+                    />
+                    <span className="text-[10px] text-slate-500 -ml-1">{unit}</span>
+                  </React.Fragment>
+                );
+              })}
+              {parseInt(settingsDraft.countdown_duration || '0', 10) > 0 && (
+                <button
+                  onClick={() => setSettingsDraft((p) => ({ ...p, countdown_duration: '0' }))}
+                  className="text-[10px] text-red-400 hover:text-red-300 underline ml-1"
+                >
+                  Clear (use auto)
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-600">
+              {parseInt(settingsDraft.countdown_duration || '0', 10) > 0
+                ? `Claim page shows a repeating ${(() => { const s = parseInt(settingsDraft.countdown_duration, 10); const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const sec = s%60; return [h && `${h}h`, m && `${m}m`, sec && `${sec}s`].filter(Boolean).join(' '); })()} countdown timer.`
+                : 'Set to 00:00:00 to auto-calculate from schedule, or enter a custom repeating countdown duration.'}
+            </p>
           </div>
 
           {/* Save button */}

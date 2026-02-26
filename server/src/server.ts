@@ -1724,7 +1724,8 @@ async function initializeServices() {
           }
         }
 
-        sendJson(res, { schedule_type: type, next_drop_at });
+        const countdown_duration = parseInt(s.countdown_duration ?? '0', 10) || 0;
+        sendJson(res, { schedule_type: type, next_drop_at, countdown_duration });
       } catch (error) {
         logger.error('Error fetching merkle schedule:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -1918,7 +1919,7 @@ async function initializeServices() {
 
     app.post('/api/admin/merkle/settings', async (req, res) => {
       try {
-        const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'schedule_interval', 'default_reward_wei', 'auto_publish_onchain']);
+        const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'schedule_interval', 'default_reward_wei', 'auto_publish_onchain', 'countdown_duration']);
         const patch: Record<string, string> = {};
         for (const [k, v] of Object.entries(req.body as Record<string, unknown>)) {
           if (allowed.has(k) && typeof v === 'string') patch[k] = v;

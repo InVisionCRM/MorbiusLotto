@@ -33,32 +33,32 @@ function fmtMorbiusWei(wei: bigint): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 })
 }
 
-/** Returns a live "Xd Xh Xm Xs" string counting down to targetDate, updating every second. */
-function useCountdown(targetDate: Date | null): string {
+/** Returns a live hh:mm:ss countdown string. For repeating countdowns, loops automatically. */
+function useCountdown(targetDate: Date | null, repeatSeconds?: number): string {
   const [display, setDisplay] = useState('')
 
   useEffect(() => {
     if (!targetDate) { setDisplay(''); return }
 
     const tick = () => {
-      const diff = targetDate.getTime() - Date.now()
-      if (diff <= 0) { setDisplay('Now'); return }
-      const d = Math.floor(diff / 86_400_000)
-      const h = Math.floor((diff % 86_400_000) / 3_600_000)
+      let diff = targetDate.getTime() - Date.now()
+      // If the countdown expired and we have a repeat interval, compute the next cycle
+      if (diff <= 0 && repeatSeconds && repeatSeconds > 0) {
+        const elapsed = -diff
+        const remainder = repeatSeconds * 1000 - (elapsed % (repeatSeconds * 1000))
+        diff = remainder === repeatSeconds * 1000 ? 0 : remainder
+      }
+      if (diff <= 0) { setDisplay('00:00:00'); return }
+      const h = Math.floor(diff / 3_600_000)
       const m = Math.floor((diff % 3_600_000) / 60_000)
       const s = Math.floor((diff % 60_000) / 1_000)
-      const parts: string[] = []
-      if (d > 0) parts.push(`${d}d`)
-      if (h > 0 || d > 0) parts.push(`${h}h`)
-      parts.push(`${String(m).padStart(2, '0')}m`)
-      parts.push(`${String(s).padStart(2, '0')}s`)
-      setDisplay(parts.join(' '))
+      setDisplay(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
     }
 
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [targetDate])
+  }, [targetDate, repeatSeconds])
 
   return display
 }
@@ -68,7 +68,8 @@ function useCountdown(targetDate: Date | null): string {
 function DropInfoBar() {
   const [nextDrop, setNextDrop] = useState<Date | null>(null)
   const [scheduleType, setScheduleType] = useState<string>('manual')
-  const countdown = useCountdown(nextDrop)
+  const [countdownDuration, setCountdownDuration] = useState(0)
+  const countdown = useCountdown(nextDrop, countdownDuration || undefined)
 
   // Fetch schedule from public endpoint
   useEffect(() => {
@@ -76,7 +77,13 @@ function DropInfoBar() {
       .then((r) => r.json())
       .then((d) => {
         setScheduleType(d.schedule_type ?? 'manual')
-        setNextDrop(d.next_drop_at ? new Date(d.next_drop_at) : null)
+        setCountdownDuration(d.countdown_duration ?? 0)
+        if (d.countdown_duration && d.countdown_duration > 0) {
+          // Custom repeating countdown — start from now + duration
+          setNextDrop(new Date(Date.now() + d.countdown_duration * 1000))
+        } else {
+          setNextDrop(d.next_drop_at ? new Date(d.next_drop_at) : null)
+        }
       })
       .catch(() => {})
   }, [])
