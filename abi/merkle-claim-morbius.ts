@@ -21,6 +21,14 @@ export const merkleClaimMorbiusAbi = [
     anonymous: false,
     inputs: [
       { indexed: true, internalType: 'uint256', name: 'epochId', type: 'uint256' },
+    ],
+    name: 'EpochRevoked',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'uint256', name: 'epochId', type: 'uint256' },
       { indexed: true, internalType: 'address', name: 'claimant', type: 'address' },
       { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
     ],
@@ -42,8 +50,27 @@ export const merkleClaimMorbiusAbi = [
     name: 'TokensRescued',
     type: 'event',
   },
+  {
+    anonymous: false,
+    inputs: [{ indexed: true, internalType: 'address', name: 'operator', type: 'address' }],
+    name: 'OperatorAdded',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [{ indexed: true, internalType: 'address', name: 'operator', type: 'address' }],
+    name: 'OperatorRemoved',
+    type: 'event',
+  },
 
   // ---- Views ----
+  {
+    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    name: 'operators',
+    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
   {
     inputs: [],
     name: 'morbiusToken',
@@ -110,6 +137,27 @@ export const merkleClaimMorbiusAbi = [
   },
 
   // ---- Writes ----
+  {
+    inputs: [{ internalType: 'address', name: 'operator', type: 'address' }],
+    name: 'addOperator',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: 'operator', type: 'address' }],
+    name: 'removeOperator',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'uint256', name: 'epochId', type: 'uint256' }],
+    name: 'revokeEpoch',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
   {
     inputs: [{ internalType: 'uint256', name: 'amount', type: 'uint256' }],
     name: 'depositRewards',

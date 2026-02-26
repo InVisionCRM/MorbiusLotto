@@ -15,8 +15,8 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
  *
  * Admin flow:
  *   1. Backend snapshots MORBIUS holders, calculates shares, builds Merkle tree.
- *   2. Admin calls depositRewards(amount) to fund the epoch.
- *   3. Admin calls setEpochRoot(epochId, merkleRoot, totalAmount) to publish the root.
+ *   2. Owner/operator calls depositRewards(amount) to fund the epoch.
+ *   3. Owner/operator calls setEpochRoot(epochId, merkleRoot, totalAmount) to publish the root.
  *   4. Users call claim(epochId, amount, proof) to receive their tokens.
  *
  * Leaf encoding (double-hash, OZ standard):
@@ -39,14 +39,32 @@ contract MerkleClaimMorbius is Ownable, ReentrancyGuard {
     /// @notice Whether a user has claimed for a given epoch
     mapping(uint256 => mapping(address => bool)) public hasClaimed;
 
+    /// @notice Addresses authorized to deposit rewards and set epoch roots
+    mapping(address => bool) public operators;
+
     // -------------------------------------------------------------------------
     // Events
     // -------------------------------------------------------------------------
 
     event EpochCreated(uint256 indexed epochId, bytes32 root, uint256 totalAmount);
+    event EpochRevoked(uint256 indexed epochId);
     event Claimed(uint256 indexed epochId, address indexed claimant, uint256 amount);
     event RewardsDeposited(uint256 amount);
     event TokensRescued(address indexed token, uint256 amount);
+    event OperatorAdded(address indexed operator);
+    event OperatorRemoved(address indexed operator);
+
+    // -------------------------------------------------------------------------
+    // Modifiers
+    // -------------------------------------------------------------------------
+
+    modifier onlyOwnerOrOperator() {
+        require(
+            msg.sender == owner() || operators[msg.sender],
+            "MerkleClaimMorbius: not owner or operator"
+        );
+        _;
+    }
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -58,6 +76,21 @@ contract MerkleClaimMorbius is Ownable, ReentrancyGuard {
     }
 
     // -------------------------------------------------------------------------
+    // Operator Management (onlyOwner)
+    // -------------------------------------------------------------------------
+
+    function addOperator(address operator) external onlyOwner {
+        require(operator != address(0), "MerkleClaimMorbius: zero address");
+        operators[operator] = true;
+        emit OperatorAdded(operator);
+    }
+
+    function removeOperator(address operator) external onlyOwner {
+        operators[operator] = false;
+        emit OperatorRemoved(operator);
+    }
+
+    // -------------------------------------------------------------------------
     // Admin
     // -------------------------------------------------------------------------
 
@@ -65,7 +98,7 @@ contract MerkleClaimMorbius is Ownable, ReentrancyGuard {
      * @notice Deposit MORBIUS rewards into the contract for distribution.
      * @param amount Amount of MORBIUS to deposit (18 decimals).
      */
-    function depositRewards(uint256 amount) external nonReentrant {
+    function depositRewards(uint256 amount) external onlyOwnerOrOperator nonReentrant {
         require(amount > 0, "MerkleClaimMorbius: zero amount");
         morbiusToken.safeTransferFrom(msg.sender, address(this), amount);
         emit RewardsDeposited(amount);
@@ -81,13 +114,26 @@ contract MerkleClaimMorbius is Ownable, ReentrancyGuard {
         uint256 epochId,
         bytes32 root,
         uint256 totalAmount
-    ) external onlyOwner {
+    ) external onlyOwnerOrOperator {
         require(root != bytes32(0), "MerkleClaimMorbius: empty root");
         require(epochRoots[epochId] == bytes32(0), "MerkleClaimMorbius: epoch already set");
         require(totalAmount > 0, "MerkleClaimMorbius: zero total");
         epochRoots[epochId] = root;
         epochTotalAmount[epochId] = totalAmount;
         emit EpochCreated(epochId, root, totalAmount);
+    }
+
+    /**
+     * @notice Revoke an epoch that has not yet been claimed from.
+     *         Clears the root so the epochId can potentially be reused.
+     * @param epochId Epoch to revoke.
+     */
+    function revokeEpoch(uint256 epochId) external onlyOwner {
+        require(epochRoots[epochId] != bytes32(0), "MerkleClaimMorbius: epoch not set");
+        require(epochClaimedAmount[epochId] == 0, "MerkleClaimMorbius: already has claims");
+        epochRoots[epochId] = bytes32(0);
+        epochTotalAmount[epochId] = 0;
+        emit EpochRevoked(epochId);
     }
 
     /**

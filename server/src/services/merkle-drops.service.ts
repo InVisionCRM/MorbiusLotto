@@ -16,6 +16,12 @@
 import { Pool } from 'pg';
 import { ethers } from 'ethers';
 import { logger } from '../utils/logger';
+import {
+  isMerkleKeeperConfigured,
+  ensureMorbiusAllowance,
+  depositMorbiusRewards,
+  setEpochRootOnChain,
+} from '../utils/merkle-claim';
 
 const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
 const PULSECHAIN_API = 'https://api.scan.pulsechain.com/api/v2';
@@ -627,6 +633,72 @@ export class MerkleDropsService {
   }
 
   // ──────────────────────────────────────────────────────────
+  // Auto-publish (server-side on-chain transactions)
+  // ──────────────────────────────────────────────────────────
+
+  /**
+   * Finalize the Merkle tree, then submit on-chain transactions
+   * (approve, deposit, setEpochRoot) and mark the epoch as published.
+   * Called by the cron when auto_publish_onchain is enabled.
+   */
+  private async autoFinalizeAndPublish(epochId: number): Promise<void> {
+    if (!isMerkleKeeperConfigured()) {
+      logger.warn('[MerkleDrops] auto_publish_onchain enabled but no keeper key configured — skipping on-chain publish');
+      return;
+    }
+
+    try {
+      // 1. Finalize — build Merkle tree
+      logger.info(`[MerkleDrops] Auto-finalizing epoch ${epochId}`);
+      const root = await this.generateMerkleTree(epochId);
+      logger.info(`[MerkleDrops] Merkle root generated: ${root}`);
+
+      // Re-fetch epoch to get amounts
+      const epoch = await this.getEpoch(epochId);
+      if (!epoch) throw new Error(`Epoch ${epochId} not found after finalize`);
+
+      const depositWei = BigInt(epoch.new_reward_amount || epoch.total_reward_amount || '0');
+      const totalWei = BigInt(epoch.total_reward_amount || '0');
+
+      // 2. Ensure MORBIUS allowance (one-time max approval)
+      if (depositWei > 0n) {
+        const approveResult = await ensureMorbiusAllowance(depositWei);
+        if (!approveResult.success) {
+          logger.error(`[MerkleDrops] Auto-publish: approve failed — ${approveResult.error}`);
+          return;
+        }
+
+        // 3. Deposit rewards
+        const depositResult = await depositMorbiusRewards(depositWei);
+        if (!depositResult.success) {
+          logger.error(`[MerkleDrops] Auto-publish: deposit failed — ${depositResult.error}`);
+          return;
+        }
+        logger.info(`[MerkleDrops] Deposited ${depositWei.toString()} wei MORBIUS`);
+      } else {
+        logger.info('[MerkleDrops] No new deposit needed (all rolled up)');
+      }
+
+      // 4. Set epoch root on-chain
+      const setRootResult = await setEpochRootOnChain(
+        epoch.epoch_number,
+        root as `0x${string}`,
+        totalWei,
+      );
+      if (!setRootResult.success) {
+        logger.error(`[MerkleDrops] Auto-publish: setEpochRoot failed — ${setRootResult.error}`);
+        return;
+      }
+
+      // 5. Mark published in DB
+      await this.markPublished(epochId);
+      logger.info(`[MerkleDrops] Auto-published epoch #${epoch.epoch_number} successfully`);
+    } catch (err) {
+      logger.error('[MerkleDrops] Auto-finalize/publish failed', err);
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────
   // Cron
   // ──────────────────────────────────────────────────────────
 
@@ -694,6 +766,12 @@ export class MerkleDropsService {
         if (defaultRewardWei !== '0' && BigInt(defaultRewardWei) > 0n) {
           logger.info(`[MerkleDrops] Auto-calculating rewards: ${defaultRewardWei} wei`);
           await this.calculateRewards(epoch.id, defaultRewardWei);
+        }
+
+        // Auto-finalize + auto-publish on-chain if enabled
+        const autoPublish = settings['auto_publish_onchain'] === 'true';
+        if (autoPublish && defaultRewardWei !== '0' && BigInt(defaultRewardWei) > 0n) {
+          await this.autoFinalizeAndPublish(epoch.id);
         }
       } catch (err) {
         logger.error('[MerkleDrops] Cron epoch creation failed', err);

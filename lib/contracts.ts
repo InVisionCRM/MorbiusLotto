@@ -101,7 +101,7 @@ export const MORBIUS_LP_STAKING_DEPLOY_BLOCK = 25877035 // V2: Deployed Feb 2026
 
 // MerkleClaimMorbius contract (epoch-based Merkle drop for MORBIUS holders)
 // Update this address after deploying with: cd contracts && npx hardhat run scripts/deploy-merkle-claim.js --network pulsechain
-export const MERKLE_CLAIM_MORBIUS_ADDRESS = '0x611001519cf458D1bF35Ebc2B990bd8226Df3e08' as `0x${string}`
+export const MERKLE_CLAIM_MORBIUS_ADDRESS = '0x3807f417617E53d4c5C7D7A825a5ce4D105A75d2' as `0x${string}`
 
 // Contract deployment info
 export const LOTTERY_DEPLOY_BLOCK = 25329129

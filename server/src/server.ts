@@ -1894,7 +1894,7 @@ async function initializeServices() {
 
     app.post('/api/admin/merkle/settings', async (req, res) => {
       try {
-        const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'default_reward_wei']);
+        const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'default_reward_wei', 'auto_publish_onchain']);
         const patch: Record<string, string> = {};
         for (const [k, v] of Object.entries(req.body as Record<string, unknown>)) {
           if (allowed.has(k) && typeof v === 'string') patch[k] = v;

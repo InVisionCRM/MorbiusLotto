@@ -47,6 +47,7 @@ interface MerkleSettings {
   schedule_day: string;      // 0-6 for weekly/biweekly, 1-28 for monthly
   schedule_hour_utc: string; // 0-23
   default_reward_wei: string;
+  auto_publish_onchain: string; // 'true' | 'false'
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -360,6 +361,7 @@ function OnchainActions({
 
 export default function AdminMerkleDropsTab() {
   const { address } = useAccount();
+  const { writeContractAsync } = useWriteContract();
 
   const [epochs, setEpochs] = useState<EpochRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -378,6 +380,7 @@ export default function AdminMerkleDropsTab() {
   const defaultSettings: MerkleSettings = {
     schedule_type: 'manual', schedule_day: '5',
     schedule_hour_utc: '12', default_reward_wei: '0',
+    auto_publish_onchain: 'false',
   };
   const [settings, setSettings] = useState<MerkleSettings>(defaultSettings);
   const [settingsDraft, setSettingsDraft] = useState<MerkleSettings>(defaultSettings);
@@ -389,6 +392,11 @@ export default function AdminMerkleDropsTab() {
   const [newBlockAddr, setNewBlockAddr] = useState('');
   const [newBlockReason, setNewBlockReason] = useState('');
   const [blocklistBusy, setBlocklistBusy] = useState(false);
+
+  // ── Operator management ────────────────────────────────────────────────────
+  const [newOperatorAddr, setNewOperatorAddr] = useState('');
+  const [operatorBusy, setOperatorBusy] = useState(false);
+  const [operatorMsg, setOperatorMsg] = useState('');
 
   const adminHeaders = useCallback(
     () => address ? { 'x-admin-wallet': address, 'Content-Type': 'application/json' } : {},
@@ -634,6 +642,49 @@ export default function AdminMerkleDropsTab() {
     }
   };
 
+  // ── Operator management handlers ─────────────────────────────────────────
+
+  const handleAddOperator = async () => {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(newOperatorAddr.trim())) {
+      setOperatorMsg('Invalid address');
+      return;
+    }
+    setOperatorBusy(true);
+    setOperatorMsg('');
+    try {
+      const hash = await writeContractAsync({
+        address: MERKLE_ADDR,
+        abi: merkleClaimMorbiusAbi,
+        functionName: 'addOperator',
+        args: [newOperatorAddr.trim() as `0x${string}`],
+      });
+      setOperatorMsg(`✓ Operator added — tx: ${hash.slice(0, 14)}…`);
+      setNewOperatorAddr('');
+    } catch (e: any) {
+      setOperatorMsg(e?.shortMessage || e?.message || 'Failed to add operator');
+    } finally {
+      setOperatorBusy(false);
+    }
+  };
+
+  const handleRemoveOperator = async (addr: string) => {
+    setOperatorBusy(true);
+    setOperatorMsg('');
+    try {
+      const hash = await writeContractAsync({
+        address: MERKLE_ADDR,
+        abi: merkleClaimMorbiusAbi,
+        functionName: 'removeOperator',
+        args: [addr as `0x${string}`],
+      });
+      setOperatorMsg(`✓ Operator removed — tx: ${hash.slice(0, 14)}…`);
+    } catch (e: any) {
+      setOperatorMsg(e?.shortMessage || e?.message || 'Failed to remove operator');
+    } finally {
+      setOperatorBusy(false);
+    }
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   // Compute derived values for settings UI
@@ -745,6 +796,27 @@ export default function AdminMerkleDropsTab() {
               )}
             </div>
             <p className="text-[10px] text-slate-600">When non-zero, the Calculate step auto-fills with this amount.</p>
+          </div>
+
+          {/* Auto-publish on-chain toggle */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Auto-Publish On-Chain</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settingsDraft.auto_publish_onchain === 'true'}
+                onChange={(e) => setSettingsDraft((p) => ({ ...p, auto_publish_onchain: e.target.checked ? 'true' : 'false' }))}
+                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
+              />
+              <span className="text-xs text-slate-300">Automatically finalize and publish epochs on-chain via server keeper wallet</span>
+            </label>
+            <p className="text-[10px] text-slate-600">
+              Requires <code className="text-slate-400">MERKLE_KEEPER_PRIVATE_KEY</code> env var and the keeper wallet to be added as an operator on the contract.
+              The keeper wallet must hold MORBIUS tokens to deposit and PLS for gas.
+            </p>
+            {settingsDraft.auto_publish_onchain === 'true' && settingsDraft.schedule_type === 'manual' && (
+              <p className="text-[10px] text-amber-400">Note: Auto-publish only triggers from scheduled cron epochs. Set a schedule above for fully automated drops.</p>
+            )}
           </div>
 
           {/* Save button */}
@@ -1122,6 +1194,74 @@ export default function AdminMerkleDropsTab() {
               {blocklist.length === 0 && <p className="text-center text-slate-500 py-4">No entries</p>}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ── Operator Management ── */}
+      <Card className="bg-slate-900/80 border-slate-700/50">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+            <Settings className="w-4 h-4 text-cyan-400" />
+            Contract Operator Management
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-3">
+          <p className="text-xs text-slate-400">
+            Operators can deposit rewards and set epoch roots on-chain without being the contract owner.
+            Add your server keeper wallet here so the cron can auto-publish.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="text"
+              value={newOperatorAddr}
+              onChange={(e) => setNewOperatorAddr(e.target.value)}
+              placeholder="0x… operator wallet address"
+              className="h-8 flex-1 min-w-52 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 font-mono focus:outline-none focus:border-cyan-500"
+            />
+            <Button
+              size="sm"
+              onClick={handleAddOperator}
+              disabled={operatorBusy || !newOperatorAddr}
+              className="h-8 bg-cyan-700 hover:bg-cyan-600 text-white text-xs"
+            >
+              {operatorBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
+              Add Operator
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="text"
+              id="remove-operator-addr"
+              placeholder="0x… operator to remove"
+              className="h-8 flex-1 min-w-52 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 font-mono focus:outline-none focus:border-red-500"
+            />
+            <Button
+              size="sm"
+              onClick={() => {
+                const el = document.getElementById('remove-operator-addr') as HTMLInputElement;
+                if (el?.value) handleRemoveOperator(el.value.trim());
+              }}
+              disabled={operatorBusy}
+              className="h-8 bg-red-700 hover:bg-red-600 text-white text-xs"
+            >
+              {operatorBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}
+              Remove Operator
+            </Button>
+          </div>
+          {operatorMsg && (
+            <p className={`text-xs px-3 py-2 rounded border ${
+              operatorMsg.startsWith('✓')
+                ? 'text-emerald-400 bg-emerald-950/30 border-emerald-500/20'
+                : 'text-red-400 bg-red-950/30 border-red-500/20'
+            }`}>{operatorMsg}</p>
+          )}
+          <div className="flex gap-2 rounded border border-slate-700/40 bg-slate-800/30 px-3 py-2.5 text-[11px] text-slate-400">
+            <Info className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+            <span>
+              Only the contract <span className="text-white">owner</span> can add/remove operators.
+              Check the operator mapping on-chain via PulseScan to see current operators.
+            </span>
+          </div>
         </CardContent>
       </Card>
     </div>
