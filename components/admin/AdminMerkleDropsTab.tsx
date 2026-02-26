@@ -226,14 +226,15 @@ function OnchainActions({
       });
       await waitForTx(hash, async () => {
         setStep('done');
-        setMsg('✓ Root set on-chain — marking published…');
-        // Auto-mark published in backend
+        setMsg('✓ Root set on-chain! Epoch is now published — users can claim.');
+        // Auto-mark published in backend, then refresh after a short delay so
+        // the success message is visible before OnchainActions unmounts.
         try {
           await fetch(`/api/admin/merkle/epoch/${epoch.id}/publish`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
           });
-          onPublished(epoch.id);
+          setTimeout(() => onPublished(epoch.id), 2500);
         } catch { /* non-critical; admin can click manually */ }
       });
     } catch (e: any) {

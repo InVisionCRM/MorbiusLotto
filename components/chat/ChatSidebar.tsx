@@ -63,8 +63,15 @@ export function ChatSidebar() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed right-0 top-1/2 -translate-y-1/2 z-[500] flex flex-col items-center justify-center gap-1.5 w-8 h-20 rounded-l-xl border border-r-0 border-cyan-500/30 hover:bg-white/10 transition-colors"
-          style={TAG_BG}
+          className="flex flex-col items-center justify-center gap-1.5 w-8 h-20 rounded-l-xl border border-r-0 border-cyan-500/30 hover:bg-white/10 transition-colors"
+          style={{
+            position: 'fixed',
+            right: 0,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 500,
+            ...TAG_BG,
+          }}
           aria-label={hasUnread ? 'Open chat (unread messages)' : 'Open chat'}
         >
           <MessageCircle className="w-4 h-4 text-cyan-400 shrink-0" />

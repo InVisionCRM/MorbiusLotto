@@ -1,10 +1,12 @@
 'use client'
 
-import { useAccount } from 'wagmi'
+import { useAccount, useReadContract } from 'wagmi'
 import { motion } from 'framer-motion'
-import { Gift, CheckCircle2, Loader2, RefreshCw, ExternalLink, AlertCircle } from 'lucide-react'
+import { Gift, CheckCircle2, Loader2, RefreshCw, AlertCircle, Clock } from 'lucide-react'
 import { useMerkleClaims } from '@/hooks/use-merkle-claims'
-import { MERKLE_CLAIM_MORBIUS_ADDRESS } from '@/lib/contracts'
+import { MERKLE_CLAIM_MORBIUS_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { ERC20_ABI } from '@/abi/erc20'
+import { useEffect, useState } from 'react'
 
 const staggerContainer = {
   animate: { transition: { staggerChildren: 0.06 } },
@@ -23,8 +25,108 @@ function fmtMorbius(raw: string): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 })
 }
 
+function fmtMorbiusWei(wei: bigint): string {
+  const n = Number(wei) / 1e18
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`
+  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+  return n.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 })
+}
+
+/** Returns a live "Xd Xh Xm Xs" string counting down to targetDate, updating every second. */
+function useCountdown(targetDate: Date | null): string {
+  const [display, setDisplay] = useState('')
+
+  useEffect(() => {
+    if (!targetDate) { setDisplay(''); return }
+
+    const tick = () => {
+      const diff = targetDate.getTime() - Date.now()
+      if (diff <= 0) { setDisplay('Now'); return }
+      const d = Math.floor(diff / 86_400_000)
+      const h = Math.floor((diff % 86_400_000) / 3_600_000)
+      const m = Math.floor((diff % 3_600_000) / 60_000)
+      const s = Math.floor((diff % 60_000) / 1_000)
+      const parts: string[] = []
+      if (d > 0) parts.push(`${d}d`)
+      if (h > 0 || d > 0) parts.push(`${h}h`)
+      parts.push(`${String(m).padStart(2, '0')}m`)
+      parts.push(`${String(s).padStart(2, '0')}s`)
+      setDisplay(parts.join(' '))
+    }
+
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [targetDate])
+
+  return display
+}
+
+// ── Drop info bar (countdown + contract balance) ─────────────────────────────
+
+function DropInfoBar() {
+  const [nextDrop, setNextDrop] = useState<Date | null>(null)
+  const [scheduleType, setScheduleType] = useState<string>('manual')
+  const countdown = useCountdown(nextDrop)
+
+  // Fetch schedule from public endpoint
+  useEffect(() => {
+    fetch('/api/merkle/schedule')
+      .then((r) => r.json())
+      .then((d) => {
+        setScheduleType(d.schedule_type ?? 'manual')
+        setNextDrop(d.next_drop_at ? new Date(d.next_drop_at) : null)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Read MORBIUS balance held by the contract
+  const { data: contractBalance } = useReadContract({
+    address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [MERKLE_CLAIM_MORBIUS_ADDRESS as `0x${string}`],
+    query: { enabled: Boolean(MERKLE_CLAIM_MORBIUS_ADDRESS) },
+  })
+  const balanceWei = (contractBalance as bigint | undefined) ?? 0n
+
+  if (scheduleType === 'manual' && balanceWei === 0n) return null
+
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap rounded-2xl border border-emerald-500/10 bg-emerald-950/10 px-4 py-3">
+      {/* Contract balance */}
+      {balanceWei > 0n && (
+        <div className="flex items-center gap-2">
+          <Gift className="w-3.5 h-3.5 text-emerald-400/60 shrink-0" />
+          <div>
+            <p className="text-[9px] uppercase tracking-wider text-white/25 font-poppins">Reward Pool</p>
+            <p className="text-sm font-bold text-emerald-400 font-poppins">
+              {fmtMorbiusWei(balanceWei)}
+              <span className="text-[10px] text-white/30 font-normal ml-1">MORBIUS</span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Countdown */}
+      {nextDrop && countdown && (
+        <div className="flex items-center gap-2">
+          <Clock className="w-3.5 h-3.5 text-emerald-400/60 shrink-0" />
+          <div>
+            <p className="text-[9px] uppercase tracking-wider text-white/25 font-poppins">Next Drop In</p>
+            <p className="text-sm font-bold text-white font-poppins tabular-nums">{countdown}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main panel ───────────────────────────────────────────────────────────────
+
 export function MerkleClaimsPanel() {
-  const { address, isConnected } = useAccount()
+  const { isConnected } = useAccount()
   const {
     claimableEpochs,
     totalClaimable,
@@ -45,10 +147,13 @@ export function MerkleClaimsPanel() {
         key="claims-disconnected"
         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.18 }}
-        className="relative rounded-2xl border border-emerald-500/20 bg-[#050f0a]/90 backdrop-blur-sm p-8 text-center space-y-3"
+        className="space-y-3"
       >
-        <Gift className="w-10 h-10 text-emerald-400/60 mx-auto" />
-        <p className="text-white/50 font-poppins text-sm">Connect your wallet to see your holder rewards</p>
+        <DropInfoBar />
+        <div className="relative rounded-2xl border border-emerald-500/20 bg-[#050f0a]/90 backdrop-blur-sm p-8 text-center space-y-3">
+          <Gift className="w-10 h-10 text-emerald-400/60 mx-auto" />
+          <p className="text-white/50 font-poppins text-sm">Connect your wallet to see your holder rewards</p>
+        </div>
       </motion.div>
     )
   }
@@ -63,8 +168,8 @@ export function MerkleClaimsPanel() {
         className="relative rounded-2xl border border-emerald-500/20 bg-[#050f0a]/90 backdrop-blur-sm p-8 text-center space-y-3"
       >
         <AlertCircle className="w-10 h-10 text-yellow-400/60 mx-auto" />
-        <p className="text-white/50 font-poppins text-sm">Holder Rewards contract is not yet deployed.</p>
-        <p className="text-white/30 font-poppins text-xs">Check back soon — the first epoch will be announced.</p>
+        <p className="text-white/50 font-poppins text-sm">Holder Rewards are coming soon.</p>
+        <p className="text-white/30 font-poppins text-xs">The first reward drop will be announced shortly.</p>
       </motion.div>
     )
   }
@@ -98,6 +203,9 @@ export function MerkleClaimsPanel() {
       transition={{ duration: 0.18 }}
       className="space-y-3"
     >
+      {/* ── Drop countdown + pool size ────────────────────────────── */}
+      <DropInfoBar />
+
       {/* ── Summary Card ─────────────────────────────────────────── */}
       <div className="relative rounded-2xl border border-emerald-500/20 bg-[#050f0a]/90 backdrop-blur-sm p-5 overflow-hidden">
         <motion.div
@@ -111,7 +219,7 @@ export function MerkleClaimsPanel() {
               <Gift className="w-4.5 h-4.5 text-emerald-400" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/30 font-poppins">Total Claimable</p>
+              <p className="text-[10px] uppercase tracking-wider text-white/30 font-poppins">Your Rewards</p>
               <p className="text-xl font-bold text-white font-poppins">
                 {fmtMorbius(totalClaimable.toString())}
                 <span className="text-xs text-white/30 font-normal ml-1">MORBIUS</span>
@@ -120,12 +228,17 @@ export function MerkleClaimsPanel() {
           </div>
           <div className="flex items-center gap-3 text-right">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/30 font-poppins">Epochs</p>
-              <p className="text-sm font-semibold font-poppins text-white/60">
-                <span className="text-emerald-400">{unclaimedCount} pending</span>
-                {claimedCount > 0 && <span className="text-white/30"> · {claimedCount} claimed</span>}
-                {supersededCount > 0 && <span className="text-amber-400/60"> · {supersededCount} rolled up</span>}
-              </p>
+              {unclaimedCount > 0 ? (
+                <p className="text-sm font-semibold font-poppins">
+                  <span className="text-emerald-400">{unclaimedCount} ready to claim</span>
+                  {claimedCount > 0 && <span className="text-white/30 text-xs block">{claimedCount} already claimed</span>}
+                </p>
+              ) : claimedCount > 0 ? (
+                <p className="text-sm font-semibold font-poppins text-white/40">{claimedCount} claimed</p>
+              ) : null}
+              {supersededCount > 0 && (
+                <p className="text-[10px] text-amber-400/50 font-poppins">{supersededCount} rolled forward</p>
+              )}
             </div>
             <button
               onClick={refetch}
@@ -138,18 +251,18 @@ export function MerkleClaimsPanel() {
         </div>
       </div>
 
-      {/* ── No epochs message ─────────────────────────────────────── */}
+      {/* ── No rewards message ────────────────────────────────────── */}
       {claimableEpochs.length === 0 && (
         <div className="relative rounded-2xl border border-emerald-500/10 bg-[#050f0a]/60 backdrop-blur-sm p-8 text-center space-y-2">
           <Gift className="w-8 h-8 text-emerald-400/30 mx-auto" />
-          <p className="text-white/40 font-poppins text-sm">No rewards found for your wallet yet.</p>
+          <p className="text-white/40 font-poppins text-sm">No rewards available for your wallet yet.</p>
           <p className="text-white/20 font-poppins text-xs">
-            Hold MORBIUS in your wallet — rewards are distributed each epoch based on your share.
+            Hold MORBIUS — 2.5% of all game withdrawals are distributed to holders automatically.
           </p>
         </div>
       )}
 
-      {/* ── Epoch List ───────────────────────────────────────────── */}
+      {/* ── Reward Drop List ─────────────────────────────────────── */}
       {claimableEpochs.length > 0 && (
         <motion.div variants={staggerContainer} initial="initial" animate="animate" className="space-y-2">
           {claimableEpochs.map(({ epoch, amount, proof, claimed, supersededByEpochNumber }) => {
@@ -168,7 +281,7 @@ export function MerkleClaimsPanel() {
                 }`}
               >
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  {/* Epoch info */}
+                  {/* Drop info */}
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                       isSuperseded ? 'bg-amber-500/10'
@@ -183,12 +296,12 @@ export function MerkleClaimsPanel() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-white font-poppins">
-                        Epoch #{epoch.epoch_number}
+                        Reward Drop #{epoch.epoch_number}
                       </p>
                       <p className="text-[10px] text-white/30 font-poppins">
                         {epoch.published_at
                           ? new Date(epoch.published_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-                          : 'Published'
+                          : 'Distributed'
                         }
                         {epoch.snapshot_block && (
                           <span className="ml-1.5 text-white/20">· Block {Number(epoch.snapshot_block).toLocaleString()}</span>
@@ -208,7 +321,7 @@ export function MerkleClaimsPanel() {
 
                     {isSuperseded ? (
                       <span className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400/70 text-xs font-poppins font-semibold whitespace-nowrap">
-                        → Epoch #{supersededByEpochNumber}
+                        → Drop #{supersededByEpochNumber}
                       </span>
                     ) : claimed ? (
                       <span className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/70 text-xs font-poppins font-semibold">
@@ -228,10 +341,10 @@ export function MerkleClaimsPanel() {
                   </div>
                 </div>
 
-                {/* Superseded info tooltip */}
+                {/* Rolled-forward notice */}
                 {isSuperseded && (
                   <p className="mt-2 text-[10px] text-amber-400/50 font-poppins">
-                    These rewards were rolled into Epoch #{supersededByEpochNumber} — claim from there.
+                    These rewards were carried forward into Drop #{supersededByEpochNumber} — claim from there.
                   </p>
                 )}
               </motion.div>
@@ -244,13 +357,13 @@ export function MerkleClaimsPanel() {
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 space-y-1.5">
         <p className="text-[10px] uppercase tracking-wider text-white/20 font-poppins font-semibold">How it works</p>
         <p className="text-[11px] text-white/35 font-poppins leading-relaxed">
-          Hold MORBIUS in your wallet. Each epoch, a snapshot of all holders is taken and rewards are distributed proportionally. No locking required — just hold and claim.
+          <span className="text-white/50">2.5% of every game withdrawal</span> on MORBlotto is set aside for MORBIUS holders. Rewards are distributed proportionally — the more MORBIUS you hold, the larger your share. No staking or locking required.
         </p>
         <p className="text-[11px] text-white/25 font-poppins">
-          Unclaimed rewards roll forward automatically — if you skip an epoch, your rewards are included in the next Merkle root so you can batch-claim whenever convenient.
+          Unclaimed rewards carry forward automatically — miss a drop and your share rolls into the next one so you never lose out.
         </p>
         <p className="text-[11px] text-white/20 font-poppins">
-          Minimum holding: 1,000 MORBIUS · Snapshots taken weekly or by admin.
+          Minimum holding: 1,000 MORBIUS · Snapshots taken at each reward drop.
         </p>
       </div>
     </motion.div>
