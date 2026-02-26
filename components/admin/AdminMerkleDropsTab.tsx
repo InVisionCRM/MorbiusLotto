@@ -230,12 +230,15 @@ function OnchainActions({
         // Auto-mark published in backend, then refresh after a short delay so
         // the success message is visible before OnchainActions unmounts.
         try {
-          await fetch(`/api/admin/merkle/epoch/${epoch.id}/publish`, {
+          const publishRes = await fetch(`/api/admin/merkle/epoch/${epoch.id}/publish`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-admin-wallet': adminAddr },
           });
+          if (!publishRes.ok) throw new Error(`HTTP ${publishRes.status}`);
           setTimeout(() => onPublished(epoch.id), 2500);
-        } catch { /* non-critical; admin can click manually */ }
+        } catch (publishErr: any) {
+          setMsg(`✓ Root set on-chain! But auto-publish failed (${publishErr?.message ?? 'unknown'}) — click the page refresh button to reload.`);
+        }
       });
     } catch (e: any) {
       setMsg(e?.shortMessage || e?.message || 'setEpochRoot failed');
@@ -584,6 +587,23 @@ export default function AdminMerkleDropsTab() {
     await fetchEpochs();
   }, [fetchEpochs]);
 
+  // Manual publish — for when setEpochRoot succeeded on-chain but auto-publish failed
+  const handleManualPublish = async (epochId: number) => {
+    setEpochBusy(epochId, true); setEpochMsg(epochId, '');
+    try {
+      const res = await fetch(`/api/admin/merkle/epoch/${epochId}/publish`, {
+        method: 'POST', headers: adminHeaders(),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setEpochMsg(epochId, '✓ Epoch marked as published — users can now claim');
+      await fetchEpochs();
+    } catch (e) {
+      setEpochMsg(epochId, e instanceof Error ? e.message : 'Failed to publish');
+    } finally {
+      setEpochBusy(epochId, false);
+    }
+  };
+
   // ── Blocklist ─────────────────────────────────────────────────────────────
 
   const handleAddToBlocklist = async () => {
@@ -841,6 +861,14 @@ export default function AdminMerkleDropsTab() {
                         )}
                       </div>
                       <div className="flex items-center gap-4 text-right text-[11px] text-slate-400 shrink-0">
+                        {/* Date: published > snapshot > created */}
+                        <span className="text-slate-500 hidden sm:block">
+                          {epoch.published_at
+                            ? fmtDate(epoch.published_at)
+                            : epoch.snapshot_at
+                            ? fmtDate(epoch.snapshot_at)
+                            : fmtDate(epoch.created_at)}
+                        </span>
                         <span>{epoch.total_holders.toLocaleString()} holders</span>
                         {Number(epoch.total_reward_amount) > 0 && (
                           <span className="text-emerald-400 font-mono flex items-center gap-1">
@@ -955,22 +983,71 @@ export default function AdminMerkleDropsTab() {
 
                         {/* ── On-chain steps (finalized only) ── */}
                         {epoch.status === 'finalized' && address && (
-                          <div className="rounded-lg border border-cyan-500/20 bg-cyan-950/10 p-3 space-y-2">
-                            <p className="text-[10px] uppercase tracking-wider text-cyan-400/60 font-semibold">
-                              On-Chain — wallet required
-                            </p>
-                            <OnchainActions
-                              epoch={epoch}
-                              adminAddr={address}
-                              onPublished={handlePublished}
-                            />
+                          <div className="space-y-2">
+                            <div className="rounded-lg border border-cyan-500/20 bg-cyan-950/10 p-3 space-y-2">
+                              <p className="text-[10px] uppercase tracking-wider text-cyan-400/60 font-semibold">
+                                On-Chain — wallet required
+                              </p>
+                              <OnchainActions
+                                epoch={epoch}
+                                adminAddr={address}
+                                onPublished={handlePublished}
+                              />
+                            </div>
+                            {/* Manual publish fallback — for when root is already set on-chain */}
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <Button
+                                size="sm"
+                                onClick={() => handleManualPublish(epoch.id)}
+                                disabled={isEpochBusy}
+                                className="h-7 text-[11px] bg-emerald-700 hover:bg-emerald-600"
+                              >
+                                {isEpochBusy
+                                  ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                  : <CheckCircle2 className="w-3 h-3 mr-1" />
+                                }
+                                Root already set on-chain? Mark as Published
+                              </Button>
+                            </div>
                           </div>
                         )}
 
                         {epoch.status === 'published' && (
-                          <div className="flex items-center gap-1.5 text-emerald-400 text-xs">
-                            <CheckCircle2 className="w-4 h-4" />
-                            Published {fmtDate(epoch.published_at)} — users can claim
+                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 space-y-3">
+                            {/* Header */}
+                            <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
+                              Live — users can claim
+                            </div>
+
+                            {/* Stats grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Published</p>
+                                <p className="text-slate-200 font-mono mt-0.5 text-[11px]">{fmtDate(epoch.published_at)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Snapshot Taken</p>
+                                <p className="text-slate-200 font-mono mt-0.5 text-[11px]">{fmtDate(epoch.snapshot_at)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Eligible Holders</p>
+                                <p className="text-white font-semibold mt-0.5">{epoch.total_holders.toLocaleString()}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Distributed</p>
+                                <p className="text-emerald-400 font-semibold font-mono mt-0.5">{fmtMorbius(epoch.total_reward_amount)} MORBIUS</p>
+                              </div>
+                            </div>
+
+                            {/* Reward breakdown if rollup involved */}
+                            {Number(epoch.rollup_amount) > 0 && (
+                              <div className="flex items-center gap-4 text-[11px] text-slate-400 border-t border-emerald-500/10 pt-2">
+                                <span>New rewards: <span className="text-blue-300 font-mono">{fmtMorbius(epoch.new_reward_amount)} MORBIUS</span></span>
+                                <span className="text-slate-600">+</span>
+                                <span>Rolled up: <span className="text-amber-300 font-mono">{fmtMorbius(epoch.rollup_amount)} MORBIUS</span></span>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
