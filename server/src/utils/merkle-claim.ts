@@ -61,6 +61,20 @@ export async function getContractMorbiusBalance(): Promise<bigint> {
   return balance;
 }
 
+/**
+ * Check on-chain whether a wallet has claimed for a given epoch.
+ */
+export async function checkHasClaimed(epochNumber: number, walletAddress: string): Promise<boolean> {
+  const publicClient = getPublicClient();
+  const result = (await publicClient.readContract({
+    address: MERKLE_CLAIM_ADDRESS,
+    abi: merkleClaimMorbiusAbi,
+    functionName: 'hasClaimed',
+    args: [BigInt(epochNumber), walletAddress as `0x${string}`],
+  })) as boolean;
+  return result;
+}
+
 type TxResult = { success: boolean; txHash?: string; error?: string };
 
 /**

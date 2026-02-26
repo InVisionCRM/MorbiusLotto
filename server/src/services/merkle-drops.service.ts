@@ -20,6 +20,7 @@ import {
   isMerkleKeeperConfigured,
   setEpochRootOnChain,
   getContractMorbiusBalance,
+  checkHasClaimed,
 } from '../utils/merkle-claim';
 
 const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
@@ -678,24 +679,81 @@ export class MerkleDropsService {
    */
 
   /**
+   * Sync on-chain claim status into the DB.
+   * Checks hasClaimed() on-chain for all unclaimed snapshots in published epochs
+   * and sets claimed_at where the user has already claimed on-chain.
+   */
+  async syncClaimStatus(): Promise<number> {
+    // Find all unclaimed snapshot rows from published epochs
+    const { rows } = await this.pool.query<{
+      id: number;
+      epoch_number: number;
+      wallet_address: string;
+    }>(
+      `SELECT ms.id, me.epoch_number, ms.wallet_address
+       FROM merkle_snapshots ms
+       JOIN merkle_epochs me ON me.id = ms.epoch_id
+       WHERE me.status = 'published'
+         AND ms.claimed_at IS NULL
+         AND ms.superseded_by_epoch_id IS NULL
+         AND CAST(ms.reward_amount AS NUMERIC) > 0`,
+    );
+
+    if (rows.length === 0) return 0;
+
+    let synced = 0;
+    // Batch check in chunks to avoid overwhelming the RPC
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map((r) => checkHasClaimed(r.epoch_number, r.wallet_address)
+          .then((claimed) => ({ id: r.id, claimed }))
+          .catch(() => ({ id: r.id, claimed: false })),
+        ),
+      );
+
+      const claimedIds = results.filter((r) => r.claimed).map((r) => r.id);
+      if (claimedIds.length > 0) {
+        await this.pool.query(
+          'UPDATE merkle_snapshots SET claimed_at = NOW() WHERE id = ANY($1)',
+          [claimedIds],
+        );
+        synced += claimedIds.length;
+      }
+    }
+
+    if (synced > 0) {
+      logger.info(`[MerkleDrops] Synced ${synced} on-chain claims into DB`);
+    }
+    return synced;
+  }
+
+  /**
    * Query the on-chain MORBIUS balance of the MerkleClaim contract,
-   * subtract the total already committed to published (unclaimed) epochs,
+   * subtract what's still owed to users (unclaimed rewards from published epochs),
    * and return the available amount for a new epoch.
    */
   async getAvailableContractBalance(): Promise<bigint> {
     const contractBalance = await getContractMorbiusBalance();
 
-    // Sum total_reward_amount for all published epochs (these are committed on-chain)
+    // Sum only the UNCLAIMED reward amounts from published epochs.
+    // Claimed rewards already left the contract, so we don't subtract those.
+    // Superseded snapshots have been rolled into a newer epoch, so exclude those too.
     const { rows } = await this.pool.query<{ total: string }>(
-      `SELECT COALESCE(SUM(CAST(total_reward_amount AS NUMERIC)), 0) AS total
-       FROM merkle_epochs
-       WHERE status = 'published'`,
+      `SELECT COALESCE(SUM(CAST(ms.reward_amount AS NUMERIC)), 0) AS total
+       FROM merkle_snapshots ms
+       JOIN merkle_epochs me ON me.id = ms.epoch_id
+       WHERE me.status = 'published'
+         AND ms.claimed_at IS NULL
+         AND ms.superseded_by_epoch_id IS NULL
+         AND CAST(ms.reward_amount AS NUMERIC) > 0`,
     );
-    const committedWei = BigInt(rows[0]?.total ?? '0');
+    const owedWei = BigInt(rows[0]?.total ?? '0');
 
-    const available = contractBalance > committedWei ? contractBalance - committedWei : 0n;
+    const available = contractBalance > owedWei ? contractBalance - owedWei : 0n;
     logger.info(
-      `[MerkleDrops] Contract balance: ${contractBalance}, committed: ${committedWei}, available: ${available}`,
+      `[MerkleDrops] Contract balance: ${contractBalance}, owed (unclaimed): ${owedWei}, available: ${available}`,
     );
     return available;
   }
@@ -825,6 +883,13 @@ export class MerkleDropsService {
         if (!shouldFire) return;
 
         logger.info(`[MerkleDrops] Cron fired (${scheduleType}): creating epoch automatically`);
+
+        // Sync on-chain claim status before calculating rollups
+        try {
+          await this.syncClaimStatus();
+        } catch (err) {
+          logger.error('[MerkleDrops] Failed to sync claim status — continuing anyway', err);
+        }
 
         // Determine reward amount:
         //   - If default_reward_wei is set, use that fixed amount
