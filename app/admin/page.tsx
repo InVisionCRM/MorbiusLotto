@@ -31,7 +31,7 @@ export default function AdminPage() {
   if (!isAdmin) {
     return (
       <GlobalMainNav page="home" showBackArrow backArrowHref="/" backArrowLabel="Back to Home">
-        <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 pt-4 md:pt-2">
+        <div className="min-h-screen bg-slate-800 text-white flex flex-col items-center justify-center p-4 pt-4 md:pt-2">
           <ShieldX className="w-12 h-12 text-red-400/80 mb-3" />
           <h1 className="text-lg font-semibold text-slate-200">Access denied</h1>
           <p className="text-xs text-slate-500 mt-1">Admin wallet required.</p>
@@ -76,7 +76,7 @@ export default function AdminPage() {
               <ImageIcon className="w-3 h-3 mr-1 hidden sm:inline" /> Memes
             </TabsTrigger>
             <TabsTrigger value="staking" className="rounded data-[state=active]:bg-teal-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Coins className="w-3 h-3 mr-1 hidden sm:inline" /> Staking
+              <Coins className="w-4 h-4 mr-1 hidden sm:inline" /> Staking
             </TabsTrigger>
             <TabsTrigger value="reports" className="rounded data-[state=active]:bg-red-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <Flag className="w-3 h-3 mr-1 hidden sm:inline" /> Reports
