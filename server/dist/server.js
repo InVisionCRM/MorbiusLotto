@@ -2033,11 +2033,13 @@ async function initializeServices() {
                         error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
                     });
                 }
+                const signerAddress = (0, accounts_1.privateKeyToAccount)(privateKey).address;
                 logger_1.logger.info('Withdrawal signing (EIP-712)', {
                     verifyingContract: blackjackContractAddress,
                     chainId,
                     player: normalizedAddress,
                     useContractDomain: !!domainSeparatorHex,
+                    signerAddress,
                 });
                 const payload = await (0, withdraw_sign_1.signWithdrawApproval)(normalizedAddress, amount, nonce, expiryTimestamp, blackjackContractAddress, chainId, privateKey, domainSeparatorHex);
                 logger_1.logger.info('Withdrawal prepared (balance deducted)', {

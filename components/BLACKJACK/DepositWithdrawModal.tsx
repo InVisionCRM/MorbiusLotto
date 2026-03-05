@@ -463,6 +463,15 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         return
       }
 
+      // Server already deducted balance; refresh so current balance and playable amount drop immediately (player cannot bet the pending amount)
+      if (onRefreshBalance) {
+        try {
+          await onRefreshBalance()
+        } catch (_) {
+          /* non-fatal */
+        }
+      }
+
       // Update toast for wallet confirmation
       toast.loading('Confirm in wallet...', {
         id: toastId,

@@ -2050,11 +2050,13 @@ async function initializeServices() {
           });
         }
 
+        const signerAddress = privateKeyToAccount(privateKey).address;
         logger.info('Withdrawal signing (EIP-712)', {
           verifyingContract: blackjackContractAddress,
           chainId,
           player: normalizedAddress,
           useContractDomain: !!domainSeparatorHex,
+          signerAddress,
         });
         const payload = await signWithdrawApproval(
           normalizedAddress,

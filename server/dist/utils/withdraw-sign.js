@@ -53,6 +53,8 @@ async function signWithdrawApproval(player, amount, nonce, expiryTimestamp, cont
     let digest;
     if (domainSeparatorHex) {
         // Build digest exactly as contract: digest = keccak256("\x19\x01" || domainSeparator || structHash)
+        // Ensure 32-byte domain separator (RPC may return shortened hex)
+        const domainSep32 = (0, viem_1.padHex)(domainSeparatorHex, { size: 32, dir: 'left' });
         const typeHash = (0, viem_1.keccak256)((0, viem_1.stringToHex)(WITHDRAW_APPROVAL_TYPE_STRING));
         const encodedStruct = (0, viem_1.encodeAbiParameters)([
             { type: 'bytes32' },
@@ -63,7 +65,7 @@ async function signWithdrawApproval(player, amount, nonce, expiryTimestamp, cont
         ], [typeHash, playerNorm, amount, nonce, expiryBig]);
         const structHash = (0, viem_1.keccak256)(encodedStruct);
         const prefix = '0x1901';
-        digest = (0, viem_1.keccak256)((0, viem_1.concat)([prefix, domainSeparatorHex, structHash]));
+        digest = (0, viem_1.keccak256)((0, viem_1.concat)([prefix, domainSep32, structHash]));
     }
     else {
         // Fallback: use signTypedData (may differ from contract if viem encoding differs)
@@ -95,7 +97,10 @@ async function signWithdrawApproval(player, amount, nonce, expiryTimestamp, cont
     });
     const r = signature.r;
     const s = signature.s;
-    const v = Number(signature.v);
+    // ecrecover expects v = 27 or 28; some signers return recovery id 0/1
+    let v = Number(signature.v);
+    if (v < 27)
+        v += 27;
     return {
         amount: amount.toString(),
         nonce: nonce.toString(),

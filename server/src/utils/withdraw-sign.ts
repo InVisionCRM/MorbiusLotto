@@ -1,5 +1,5 @@
 import { privateKeyToAccount, sign } from 'viem/accounts';
-import { keccak256, concat, encodeAbiParameters, stringToHex } from 'viem';
+import { keccak256, concat, encodeAbiParameters, stringToHex, padHex } from 'viem';
 
 export const MIN_WITHDRAWAL_WEI = BigInt('1000000000000000000'); // 1 MORBIUS
 
@@ -42,6 +42,8 @@ export async function signWithdrawApproval(
 
   if (domainSeparatorHex) {
     // Build digest exactly as contract: digest = keccak256("\x19\x01" || domainSeparator || structHash)
+    // Ensure 32-byte domain separator (RPC may return shortened hex)
+    const domainSep32 = padHex(domainSeparatorHex, { size: 32, dir: 'left' });
     const typeHash = keccak256(stringToHex(WITHDRAW_APPROVAL_TYPE_STRING));
     const encodedStruct = encodeAbiParameters(
       [
@@ -55,7 +57,7 @@ export async function signWithdrawApproval(
     );
     const structHash = keccak256(encodedStruct);
     const prefix = '0x1901' as const;
-    digest = keccak256(concat([prefix, domainSeparatorHex, structHash]));
+    digest = keccak256(concat([prefix, domainSep32, structHash]));
   } else {
     // Fallback: use signTypedData (may differ from contract if viem encoding differs)
     const domain = {
@@ -88,7 +90,9 @@ export async function signWithdrawApproval(
 
   const r = signature.r;
   const s = signature.s;
-  const v = Number(signature.v);
+  // ecrecover expects v = 27 or 28; some signers return recovery id 0/1
+  let v = Number(signature.v);
+  if (v < 27) v += 27;
 
   return {
     amount: amount.toString(),
