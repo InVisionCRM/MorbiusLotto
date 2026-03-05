@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import Image from 'next/image'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { StickyBanner } from '@/components/ui/sticky-banner'
 import { useAuth } from '@/hooks/use-auth'
@@ -31,10 +32,14 @@ const TOUR_CARDS = [
 function SectionWithBg({ children, bgImage }: { children: React.ReactNode; bgImage: string }) {
   return (
     <div className="relative w-full">
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none"
-        style={{ backgroundImage: `url(${bgImage})` }}
+      <Image
+        src={bgImage}
+        alt=""
+        fill
+        className="object-cover opacity-5 pointer-events-none select-none"
+        sizes="100vw"
+        loading="lazy"
+        quality={60}
       />
       <div className="relative z-10">{children}</div>
     </div>

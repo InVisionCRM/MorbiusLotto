@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { Wallet } from 'lucide-react'
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay'
 import { AnimatedBeam } from '@/components/ui/animated-beam'
-import { BackgroundBeams } from '@/components/ui/background-beams'
 import { NumberTicker } from '@/components/ui/number-ticker'
 import { getApiUrlOptional } from '@/lib/api-urls'
 import { formatEther } from 'viem'
@@ -91,7 +90,6 @@ export function TokenomicsSection() {
 
   return (
     <section className="relative w-full min-h-screen py-16 md:py-20 px-4 overflow-hidden">
-      <BackgroundBeams className="absolute inset-0 z-0 pointer-events-none" />
       <div className="container mx-auto max-w-5xl relative z-10">
         <motion.div
           className="text-center mb-12 md:mb-16"
