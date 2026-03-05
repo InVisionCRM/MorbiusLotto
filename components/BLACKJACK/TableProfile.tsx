@@ -83,7 +83,8 @@ export function TableProfile({
     (p) => p.baseToken?.address?.toLowerCase() === normalizedAddress
   )
   const logoUrl = logoUrlProp ?? tokenPairs[0]?.info?.imageUrl
-  const name = tokenPairs[0]?.baseToken?.name ?? tokenSymbol ?? tickerProp ?? 'Token'
+  // Prefer table-specific ticker/name over DexScreener so Token Profile updates when user changes table
+  const name = tickerProp ?? tokenSymbol ?? tokenPairs[0]?.baseToken?.name ?? 'Token'
   const symbol = tickerProp ?? tokenPairs[0]?.baseToken?.symbol ?? tokenSymbol ?? '—'
   const socials = tokenPairs[0]?.info?.socials ?? []
   const websites = tokenPairs[0]?.info?.websites ?? []

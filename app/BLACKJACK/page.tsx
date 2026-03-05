@@ -2755,6 +2755,7 @@ export default function BlackjackPage() {
         {/* Top Players + Table token: grid 2-col on lg */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
           <TableTokenProfileCard
+            key={`${theme}-${useVideoBackground ? videoSource : imageSource}`}
             themeKind={theme}
             themeId={useVideoBackground ? videoSource : imageSource}
             getThemeInfo={getThemeInfo}
