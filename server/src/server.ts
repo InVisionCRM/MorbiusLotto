@@ -57,10 +57,12 @@ if (trustProxyValue === 0) {
 }
 
 // CORS: allow frontend origin(s). Set FRONTEND_URL on Railway to your app URL (comma-separated for multiple).
-const allowedOrigins = (process.env.FRONTEND_URL || 'https://win.morbius.io')
+const DEFAULT_ORIGINS = ['https://morbius.io'];
+const envOrigins = (process.env.FRONTEND_URL || '')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
+const allowedOrigins = [...new Set([...DEFAULT_ORIGINS, ...envOrigins])];
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   crossOriginOpenerPolicy: false,
