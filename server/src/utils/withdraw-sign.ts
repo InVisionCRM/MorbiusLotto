@@ -30,11 +30,13 @@ export async function signWithdrawApproval(
 ): Promise<WithdrawSignaturePayload> {
   const account = privateKeyToAccount(privateKey);
 
+  // Use lowercase verifyingContract so EIP-712 domain separator matches regardless of env casing
+  const verifyingContract = (contractAddress.slice(0, 2) + contractAddress.slice(2).toLowerCase()) as `0x${string}`;
   const domain = {
     name: DOMAIN_NAME,
     version: DOMAIN_VERSION,
     chainId,
-    verifyingContract: contractAddress,
+    verifyingContract,
   } as const;
 
   const types = {

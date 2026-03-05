@@ -115,7 +115,7 @@ export function BlackjackTopPlayersCarousel() {
     return null
   }
 
-  const carouselItems: CarouselItem[] = playerCards
+   const carouselItems: CarouselItem[] = playerCards
     .map((result) => ({
       categoryLabel: CATEGORY_LABELS[result.category] ?? result.label.replace(/_/g, ' '),
       playerShort: formatAddress(result.wallet_address),

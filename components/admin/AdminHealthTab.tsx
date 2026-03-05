@@ -462,16 +462,7 @@ export default function AdminHealthTab() {
         reserveWei: BigInt(data?.morbius?.lottery ?? '0'),
       });
     }
-    if (bigWheelData) {
-      games.push({
-        key: 'bigwheel',
-        label: 'Big Wheel',
-        revenueWei: bigWheelData.volume - bigWheelData.payouts,
-        wagersWei: bigWheelData.volume,
-        payoutsWei: bigWheelData.payouts,
-        reserveWei: bigWheelData.contractBalance,
-      });
-    }
+    // Big Wheel excluded from charts per product request
     if (bjTotalPayouts != null && bjBurnFees != null && bjDistFees != null && bjLpFees != null && bjPlatformFees != null) {
       const bjRevenue = bjBurnFees + bjDistFees + bjLpFees + bjPlatformFees;
       games.push({
@@ -484,7 +475,7 @@ export default function AdminHealthTab() {
       });
     }
     return { days, games };
-  }, [plinkoData, kenoData, kenoReserve, lotteryData, bigWheelData, data?.morbius?.lottery, bjTotalPayouts, bjBurnFees, bjDistFees, bjLpFees, bjPlatformFees, bjTotalReserves]);
+  }, [plinkoData, kenoData, kenoReserve, lotteryData, data?.morbius?.lottery, bjTotalPayouts, bjBurnFees, bjDistFees, bjLpFees, bjPlatformFees, bjTotalReserves]);
 
   const fetchHealth = useCallback(async () => {
     if (!address) return;
@@ -979,7 +970,40 @@ export default function AdminHealthTab() {
                 })}
               </div>
             </div>
-            {/* MORBIUS contract flow: 3 columns (Revenue | Payouts vs Wagers | Reserve), one chart per game per column, daily x-axis */}
+            {/* Game overview: each game side-by-side with total wagered vs total won (no Big Wheel) */}
+            <div>
+              <p className="text-slate-500 mb-2">Game overview — total wagered vs total won</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                {contractFlowSeries.games.map((game) => (
+                  <div
+                    key={game.key}
+                    className="rounded-lg border border-cyan-500/20 p-2.5"
+                    style={{
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    }}
+                  >
+                    <p className="text-cyan-400 text-[10px] font-semibold uppercase tracking-wider mb-2 truncate">{game.label}</p>
+                    <div className="space-y-1 text-[11px]">
+                      <div className="flex justify-between gap-1">
+                        <span className="text-slate-500">Wagered</span>
+                        <span className="font-mono text-slate-200 tabular-nums">
+                          {formatMorbius(String(game.wagersWei))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-1">
+                        <span className="text-slate-500">Won</span>
+                        <span className="font-mono text-emerald-400/90 tabular-nums">
+                          {formatMorbius(String(game.payoutsWei))}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* MORBIUS contract flow: 3 columns (Revenue | Payouts vs Wagers | Reserve), one chart per game per column, daily x-axis — Big Wheel excluded */}
             <div>
               <p className="text-slate-500 mb-2">MORBIUS contract flow (daily)</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

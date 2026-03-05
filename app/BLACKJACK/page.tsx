@@ -2784,7 +2784,7 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Top Players + Table token: grid 2-col on lg */}
+        {/* Recent Games + Table token: grid 2-col on lg */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
           <TableTokenProfileCard
             key={`${theme}-${useVideoBackground ? videoSource : imageSource}`}
@@ -2794,13 +2794,13 @@ export default function BlackjackPage() {
             getTableProfile={getTableProfile}
             onChangeTableClick={() => setThemeModalOpen(true)}
           />
-          <BlackjackTopPlayers />
+          <BlackjackRecentGames limit={20} compact title="Recent Games" />
         </div>
 
-        {/* Recent Games + Recent Play (same as Plinko/Keno/Lottery) */}
+        {/* Leaderboard + Recent Play (same as Plinko/Keno/Lottery) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-4 px-0">
           <div className="min-w-0">
-            <BlackjackRecentGames limit={20} compact title="Recent Games" />
+            <BlackjackTopPlayers />
           </div>
           <div className="min-w-0">
             <BlackjackRecentPlays limit={20} compact title="Recent Play" />

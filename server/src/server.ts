@@ -1969,6 +1969,11 @@ async function initializeServices() {
           });
         }
 
+        logger.info('Withdrawal signing (EIP-712)', {
+          verifyingContract: blackjackContractAddress,
+          chainId,
+          player: normalizedAddress,
+        });
         const payload = await signWithdrawApproval(
           normalizedAddress,
           amount,

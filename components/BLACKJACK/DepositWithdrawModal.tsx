@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Plus, Minus, Loader2, ArrowDownCircle, ArrowUpCircle, History, RefreshCw, Copy, Check } from 'lucide-react'
 import { useAccount, usePublicClient } from 'wagmi'
@@ -39,6 +39,10 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     : (contractReserve !== undefined && contractReserve !== null ? contractReserve : BigInt(0));
   const { address } = useAccount()
   const publicClient = usePublicClient()
+  const latestAddressRef = useRef<string | undefined>(address)
+  useEffect(() => {
+    latestAddressRef.current = address
+  }, [address])
   const [depositAmount, setDepositAmount] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit')
@@ -393,6 +397,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const handleWithdraw = async () => {
     if (!withdrawAmount || !publicClient || !address) return
 
+    const signedForAddress = address
     const amountWei = parseEther(withdrawAmount)
 
     // Validate amount is positive
@@ -447,6 +452,16 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
       // Server authorization complete, wallet tx state will take over
       setIsPreparingWithdraw(false)
+
+      // Signature is valid only for the wallet that requested it; submitting from another wallet causes "Invalid signature"
+      const currentAddress = latestAddressRef.current
+      if (!currentAddress || currentAddress.toLowerCase() !== signedForAddress.toLowerCase()) {
+        toast.error('Wallet changed', {
+          id: toastId,
+          description: 'Please use the same wallet that requested this withdrawal. Request a new withdrawal from the currently connected wallet.',
+        })
+        return
+      }
 
       // Update toast for wallet confirmation
       toast.loading('Confirm in wallet...', {
