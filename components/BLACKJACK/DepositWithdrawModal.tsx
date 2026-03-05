@@ -755,25 +755,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                             <span className="text-[1px] font-poppins font-bold text-cyan-500/60">
                               On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()}
                             </span>
-                            {onBalanceSync && contractReserve > displayBalance && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={async () => {
-                                  toast.info('Syncing...')
-                                  try {
-                                    await onBalanceSync()
-                                    toast.success('Synced!', { duration: 3000 })
-                                  } catch (error) {
-                                    console.error('Sync failed:', error)
-                                    toast.error('Sync failed.')
-                                  }
-                                }}
-                                className="h-5 px-1 text-[10px] font-poppins border-cyan-500/30 text-cyan-300"
-                              >
-                                Sync
-                              </Button>
-                            )}
                             {onRefreshBalance && contractReserve <= displayBalance && (
                               <Button
                                 variant="outline"

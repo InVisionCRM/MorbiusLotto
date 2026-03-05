@@ -523,6 +523,11 @@ export default function BlackjackPage() {
     return () => setGameLocked(false);
   }, [gameState.isPlaying, setGameLocked]);
 
+  // Close deposit/withdraw modal when a hand starts (modal is disabled during play)
+  useEffect(() => {
+    if (gameState.isPlaying) setShowDepositModal(false);
+  }, [gameState.isPlaying]);
+
   // Ref to track current game for callbacks that can't access gameState directly
   const currentGameRef = useRef<Game | null>(null);
   // When createGame is in progress, game_created handler skips (handleStartGame handles it)
@@ -1972,10 +1977,14 @@ export default function BlackjackPage() {
     setShowIntro(false);
   }, []);
 
-  // Handle deposit/withdraw modal
+  // Handle deposit/withdraw modal (disabled while a hand is in play)
   const handleOpenDepositModal = useCallback(() => {
+    if (gameState.isPlaying) {
+      toast.error('Finish your hand to deposit or withdraw');
+      return;
+    }
     setShowDepositModal(true);
-  }, []);
+  }, [gameState.isPlaying]);
 
   // Handle starting a tournament game
   const handleStartTournamentGame = useCallback(async (betAmount: number) => {
