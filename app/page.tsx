@@ -104,7 +104,7 @@ export default function HomePage() {
         <GamesSection />
       </section>
 
-      <div className="w-full flex flex-col items-center gap-y-16 py-8 px-4">
+      <div className="w-full flex flex-col items-center gap-y-0 py-8 px-4">
         {/* Blackjack Promo + Tournaments */}
         <SectionWithBg bgImage={TOUR_CARDS[1]}>
           <BlackjackSection />
