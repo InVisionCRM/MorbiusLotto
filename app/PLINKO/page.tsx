@@ -75,10 +75,11 @@ function IntroScreen({ onComplete }: IntroScreenProps) {
       }}
       suppressHydrationWarning
     >
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[300px]">
-        <AdSpace slot="loading" width={300} height={100} showCta={false} />
-      </div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-6">
+        <div className="w-[300px] shrink-0">
+          <AdSpace slot="loading" width={300} height={100} showCta={true} />
+        </div>
+        <div className="flex flex-col items-center gap-[30px]">
         {/* Animated ball */}
         <div className="relative w-20 h-20 shrink-0">
           <div
@@ -98,6 +99,7 @@ function IntroScreen({ onComplete }: IntroScreenProps) {
           <div className="text-gray-400 text-sm">
             Preparing Plinko
           </div>
+        </div>
         </div>
       </div>
       <style jsx>{`

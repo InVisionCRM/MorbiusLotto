@@ -1,7 +1,5 @@
-import { privateKeyToAccount } from 'viem/accounts';
-
-const DOMAIN_NAME = 'Blackjack';
-const DOMAIN_VERSION = '1';
+import { privateKeyToAccount, sign } from 'viem/accounts';
+import { keccak256, concat, encodeAbiParameters, stringToHex } from 'viem';
 
 export const MIN_WITHDRAWAL_WEI = BigInt('1000000000000000000'); // 1 MORBIUS
 
@@ -14,10 +12,14 @@ export interface WithdrawSignaturePayload {
   s: `0x${string}`;
 }
 
+// Must match contract: keccak256("WithdrawApproval(address player,uint256 amount,uint256 nonce,uint256 expiryTimestamp)")
+const WITHDRAW_APPROVAL_TYPE_STRING =
+  'WithdrawApproval(address player,uint256 amount,uint256 nonce,uint256 expiryTimestamp)';
+
 /**
- * Sign a withdrawal approval (EIP-712) for the Blackjack contract.
- * expiryTimestamp: Unix seconds; contract will revert if block.timestamp > expiryTimestamp.
- * Returns amount, nonce, expiryTimestamp, and signature components (v, r, s).
+ * Build EIP-712 digest exactly as BlackjackV2 contract does, then sign it.
+ * When domainSeparatorHex is provided (read from contract), the signature is guaranteed
+ * to verify on-chain. Use this when signTypedData produces a different encoding.
  */
 export async function signWithdrawApproval(
   player: string,
@@ -26,45 +28,67 @@ export async function signWithdrawApproval(
   expiryTimestamp: number,
   contractAddress: `0x${string}`,
   chainId: number,
-  privateKey: `0x${string}`
+  privateKey: `0x${string}`,
+  domainSeparatorHex?: `0x${string}`
 ): Promise<WithdrawSignaturePayload> {
   const account = privateKeyToAccount(privateKey);
+  const expiryBig = BigInt(expiryTimestamp);
 
-  // Use lowercase verifyingContract so EIP-712 domain separator matches regardless of env casing
-  const verifyingContract = (contractAddress.slice(0, 2) + contractAddress.slice(2).toLowerCase()) as `0x${string}`;
-  const domain = {
-    name: DOMAIN_NAME,
-    version: DOMAIN_VERSION,
-    chainId,
-    verifyingContract,
-  } as const;
+  // Normalize player to lowercase 0x + 40 hex (contract uses msg.sender, same 20 bytes)
+  const playerNorm =
+    player.toLowerCase().startsWith('0x') ? player.toLowerCase() : `0x${player.toLowerCase()}`;
 
-  const types = {
-    WithdrawApproval: [
-      { name: 'player', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'expiryTimestamp', type: 'uint256' },
-    ],
-  } as const;
+  let digest: `0x${string}`;
 
-  const message = {
-    player: player as `0x${string}`,
-    amount,
-    nonce,
-    expiryTimestamp: BigInt(expiryTimestamp),
-  };
+  if (domainSeparatorHex) {
+    // Build digest exactly as contract: digest = keccak256("\x19\x01" || domainSeparator || structHash)
+    const typeHash = keccak256(stringToHex(WITHDRAW_APPROVAL_TYPE_STRING));
+    const encodedStruct = encodeAbiParameters(
+      [
+        { type: 'bytes32' },
+        { type: 'address' },
+        { type: 'uint256' },
+        { type: 'uint256' },
+        { type: 'uint256' },
+      ],
+      [typeHash, playerNorm as `0x${string}`, amount, nonce, expiryBig]
+    );
+    const structHash = keccak256(encodedStruct);
+    const prefix = '0x1901' as const;
+    digest = keccak256(concat([prefix, domainSeparatorHex, structHash]));
+  } else {
+    // Fallback: use signTypedData (may differ from contract if viem encoding differs)
+    const domain = {
+      name: 'Blackjack',
+      version: '1',
+      chainId,
+      verifyingContract: (contractAddress.slice(0, 2) + contractAddress.slice(2).toLowerCase()) as `0x${string}`,
+    };
+    const types = {
+      WithdrawApproval: [
+        { name: 'player', type: 'address' },
+        { name: 'amount', type: 'uint256' },
+        { name: 'nonce', type: 'uint256' },
+        { name: 'expiryTimestamp', type: 'uint256' },
+      ],
+    };
+    const message = { player: playerNorm as `0x${string}`, amount, nonce, expiryTimestamp: expiryBig };
+    digest = (await import('viem')).hashTypedData({
+      domain,
+      types,
+      primaryType: 'WithdrawApproval',
+      message,
+    });
+  }
 
-  const signature = await account.signTypedData({
-    domain,
-    types,
-    primaryType: 'WithdrawApproval',
-    message,
+  const signature = await sign({
+    hash: digest,
+    privateKey,
+    to: 'hex',
   });
 
-  // Signature is 0x + r (32 bytes) + s (32 bytes) + v (1 byte) = 130 hex chars + 0x
-  const r = `0x${signature.slice(2, 66)}` as `0x${string}`;
-  const s = `0x${signature.slice(66, 130)}` as `0x${string}`;
+  const r = (`0x${signature.slice(2, 66)}`) as `0x${string}`;
+  const s = (`0x${signature.slice(66, 130)}`) as `0x${string}`;
   const v = parseInt(signature.slice(130, 132), 16);
 
   return {

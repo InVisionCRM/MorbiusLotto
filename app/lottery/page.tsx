@@ -46,10 +46,11 @@ function LotteryIntroScreen({ onComplete }: { onComplete: () => void }) {
       }}
       suppressHydrationWarning
     >
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[300px]">
-        <AdSpace slot="loading" width={300} height={100} showCta={false} />
-      </div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-6">
+        <div className="w-[300px] shrink-0">
+          <AdSpace slot="loading" width={300} height={100} showCta={true} />
+        </div>
+        <div className="flex flex-col items-center gap-[30px]">
         <div className="relative w-16 h-16 shrink-0">
           <div
             className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500 to-purple-700 flex items-center justify-center shadow-lg"
@@ -68,6 +69,7 @@ function LotteryIntroScreen({ onComplete }: { onComplete: () => void }) {
           <div className="text-gray-400 text-sm">
             Preparing Lotto
           </div>
+        </div>
         </div>
       </div>
       <style jsx>{`

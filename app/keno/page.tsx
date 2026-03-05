@@ -117,10 +117,11 @@ function KenoIntroScreen({ onComplete }: { onComplete: () => void }) {
       }}
       suppressHydrationWarning
     >
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[300px]">
-        <AdSpace slot="loading" width={300} height={100} showCta={false} />
-      </div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-6">
+        <div className="w-[300px] shrink-0">
+          <AdSpace slot="loading" width={300} height={100} showCta={true} />
+        </div>
+        <div className="flex flex-col items-center gap-[30px]">
         <div className="grid grid-cols-5 gap-1 shrink-0">
           {[...Array(10)].map((_, i) => (
             <div
@@ -142,6 +143,7 @@ function KenoIntroScreen({ onComplete }: { onComplete: () => void }) {
           <div className="text-gray-400 text-sm">
             Preparing Keno
           </div>
+        </div>
         </div>
       </div>
       <style jsx>{`

@@ -72,11 +72,13 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
       }}
       suppressHydrationWarning
     >
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[300px]">
-        <AdSpace slot="loading" width={300} height={100} showCta={false} />
-      </div>
-      {/* Wrapper: cards 30px above text, stacked vertically so they never overlap */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
+      {/* Ad just above loading content; single centered column */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-6">
+        <div className="w-[300px] shrink-0">
+          <AdSpace slot="loading" width={300} height={100} showCta={true} />
+        </div>
+        {/* Cards then text */}
+        <div className="flex flex-col items-center gap-[30px]">
         {/* Animated card dealing effect */}
         <div className="relative w-24 h-32 shrink-0 overflow-visible">
           {[...Array(6)].map((_, i) => (
@@ -104,6 +106,7 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
           <div className="text-gray-400 text-sm">
             Preparing provably fair blackjack
           </div>
+        </div>
         </div>
       </div>
 

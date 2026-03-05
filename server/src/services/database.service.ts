@@ -772,6 +772,22 @@ export class DatabaseService {
   }
 
   /**
+   * Get one expired pending withdrawal for a wallet (oldest first).
+   * Used by admin to manually trigger refund when cron couldn't verify (e.g. RPC issues).
+   */
+  async getExpiredPendingForWallet(walletAddress: string): Promise<{ nonce: string; amount: string } | null> {
+    const normalizedAddress = this.normalizeAddress(walletAddress);
+    const query = `
+      SELECT nonce, amount FROM pending_withdrawals
+      WHERE LOWER(wallet_address) = LOWER($1) AND status = 'pending' AND expires_at IS NOT NULL AND NOW() > expires_at
+      ORDER BY expires_at ASC LIMIT 1
+    `;
+    const result = await this.pool.query(query, [normalizedAddress]);
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  }
+
+  /**
    * Expire a single pending withdrawal and refund the balance.
    * Only call this after verifying on-chain that the nonce was NOT used.
    */

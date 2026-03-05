@@ -1174,6 +1174,65 @@ async function initializeServices() {
       }
     });
 
+    // Admin: manually refund an expired pending withdrawal (when cron couldn't verify due to RPC, etc.)
+    app.post('/api/admin/withdrawals/refund-expired', async (req, res) => {
+      try {
+        const address = (req.body?.address ?? req.query?.address) as string | undefined;
+        const force = (req.body?.force ?? req.query?.force) === true || (req.body?.force ?? req.query?.force) === 'true';
+        if (!address || typeof address !== 'string') {
+          return res.status(400).json({ error: 'address required (body or query)' });
+        }
+        const normalizedAddress = address.toLowerCase().startsWith('0x')
+          ? address.toLowerCase()
+          : `0x${address.toLowerCase()}`;
+        if (normalizedAddress.length !== 42) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+
+        const pending = await dbService.getExpiredPendingForWallet(normalizedAddress);
+        if (!pending) {
+          return res.status(404).json({
+            error: 'No expired pending withdrawal found for this address. Wait until the signature has expired (~15 min) or the balance was already refunded.',
+          });
+        }
+
+        if (!force) {
+          try {
+            const nonceUsed = await publicClient.readContract({
+              address: blackjackContractAddress,
+              abi: USED_NONCES_ABI,
+              functionName: 'usedNonces',
+              args: [BigInt(pending.nonce)],
+            }) as boolean;
+            if (nonceUsed) {
+              await dbService.markPendingWithdrawalCompleted(normalizedAddress, BigInt(pending.nonce));
+              return res.status(400).json({
+                error: 'This withdrawal was already completed on-chain (nonce used). Balance was not refunded; it was marked completed.',
+              });
+            }
+          } catch (rpcErr) {
+            return res.status(503).json({
+              error: 'Could not verify on-chain whether the withdrawal was used. If you have verified no tx exists, retry with ?force=1 (use with caution).',
+              detail: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+            });
+          }
+        } else {
+          logger.warn('Admin force-refund expired pending (on-chain check skipped)', {
+            address: normalizedAddress,
+            nonce: pending.nonce,
+            amount: pending.amount,
+          });
+        }
+
+        await dbService.expireSinglePendingWithdrawal(normalizedAddress, BigInt(pending.nonce), BigInt(pending.amount));
+        logger.info('Admin refunded expired pending withdrawal', { address: normalizedAddress, nonce: pending.nonce, amount: pending.amount });
+        sendJson(res, { ok: true, refunded: pending.amount, address: normalizedAddress });
+      } catch (error) {
+        logger.error('Error refunding expired withdrawal:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Admin: game config (key-value; min/max bet, fee %, feature flags)
     app.get('/api/admin/config', async (req, res) => {
       try {
@@ -1912,6 +1971,12 @@ async function initializeServices() {
           return res.status(503).json({ error: 'Cannot verify contract liquidity. Try again shortly.' });
         }
 
+        logger.info('withdraw/prepare: contract MORBIUS balance read', {
+          blackjackContract: blackjackContractAddress,
+          contractTokenBalance: contractTokenBalance.toString(),
+          balanceMorbius: Number(contractTokenBalance) / 1e18,
+        });
+
         // Cap withdrawal to DB balance only. Contract supports off-chain payouts (house bankroll)
         // and enforces daily limits (1M per user, 10M global); liquidity is operator's responsibility.
         const requested = requestedAmount != null ? BigInt(String(requestedAmount)) : dbBalance;
@@ -1932,11 +1997,14 @@ async function initializeServices() {
             address: normalizedAddress,
             requestedAmount: amount.toString(),
             contractTokenBalance: contractTokenBalance.toString(),
+            blackjackContract: blackjackContractAddress,
           });
           return res.status(400).json({
             error: `Contract liquidity is too low. The contract holds ${(Number(contractTokenBalance) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 0 })} MORBIUS but you requested ${(Number(amount) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 0 })}. Try a smaller amount or contact support.`,
             contractTokenBalance: contractTokenBalance.toString(),
             requestedAmount: amount.toString(),
+            blackjackContractAddress: blackjackContractAddress,
+            hint: 'Verify the contract MORBIUS balance on the block explorer. If the balance is higher there, the server may be using a different contract address (check BLACKJACK_ADDRESS in server .env) or an RPC returned stale data.',
           });
         }
 
@@ -1969,10 +2037,24 @@ async function initializeServices() {
           });
         }
 
+        let domainSeparatorHex: `0x${string}` | undefined;
+        try {
+          domainSeparatorHex = await publicClient.readContract({
+            address: blackjackContractAddress,
+            abi: blackjackAbi,
+            functionName: 'DOMAIN_SEPARATOR',
+          }) as `0x${string}`;
+        } catch (rpcErr) {
+          logger.warn('Withdrawal signing: could not read DOMAIN_SEPARATOR from contract, using signTypedData', {
+            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+          });
+        }
+
         logger.info('Withdrawal signing (EIP-712)', {
           verifyingContract: blackjackContractAddress,
           chainId,
           player: normalizedAddress,
+          useContractDomain: !!domainSeparatorHex,
         });
         const payload = await signWithdrawApproval(
           normalizedAddress,
@@ -1982,6 +2064,7 @@ async function initializeServices() {
           blackjackContractAddress,
           chainId,
           privateKey,
+          domainSeparatorHex,
         );
 
         logger.info('Withdrawal prepared (balance deducted)', {
