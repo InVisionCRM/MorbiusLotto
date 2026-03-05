@@ -338,6 +338,21 @@ export default function BlackjackPage() {
   // Off-chain balance state (like Stake.com)
   const [offChainBalance, setOffChainBalance] = useState<bigint>(BigInt(0));
 
+  // Authoritative balance via HTTP — survives refresh; server resolves pending withdrawals and syncs from chain.
+  const fetchBalanceFromApi = useCallback(async () => {
+    const apiUrl = getApiUrlOptional();
+    if (!apiUrl || !address) return;
+    try {
+      const res = await fetch(`${apiUrl}/api/player/${address}/balance`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const balance = BigInt(data?.balance ?? 0);
+      setOffChainBalance(balance);
+    } catch (err) {
+      console.error('[Balance] HTTP balance fetch failed:', err);
+    }
+  }, [address]);
+
   // Chip stack for individual bet tracking
   const [chipStack, setChipStack] = useState<number[]>([]);
 
@@ -964,6 +979,12 @@ export default function BlackjackPage() {
 
   // Track if we've done initial sync check per connection to avoid re-running
   const hasCheckedInitialSync = useRef<string | null>(null);
+
+  // Fetch authoritative balance via HTTP on load / address change (survives refresh; no WebSocket required).
+  useEffect(() => {
+    if (!address || !getApiUrlOptional()) return;
+    fetchBalanceFromApi().catch(() => {});
+  }, [address, fetchBalanceFromApi]);
 
   // Fetch balance when WebSocket connects, and auto-sync if on-chain > DB (only on initial connection, not during active play)
   useEffect(() => {
@@ -2862,8 +2883,14 @@ export default function BlackjackPage() {
         <DepositWithdrawModal
           isOpen={showDepositModal}
           onClose={() => setShowDepositModal(false)}
-          onBalanceSync={syncBalance}
-          onRefreshBalance={fetchBalance}
+          onBalanceSync={async () => {
+            await fetchBalanceFromApi();
+            await syncBalance().catch(() => {});
+          }}
+          onRefreshBalance={async () => {
+            await fetchBalanceFromApi();
+            await fetchBalance().catch(() => {});
+          }}
           onWithdrawSuccess={async () => { await refetchPlayerReserve(); }}
           contractReserve={typeof playerReserve === 'bigint' ? playerReserve : BigInt(0)}
           offChainBalance={offChainBalance}

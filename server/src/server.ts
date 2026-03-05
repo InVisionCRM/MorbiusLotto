@@ -1746,6 +1746,75 @@ async function initializeServices() {
       }
     }, 60_000); // every minute
 
+    // Authoritative balance over HTTP (survives refresh; no WebSocket required).
+    // Resolves pending withdrawals (mark completed if nonce used on-chain), then returns
+    // DB balance, syncing from contract when no active games and contract > DB (catches missed deposits).
+    app.get('/api/player/:address/balance', async (req, res) => {
+      try {
+        const rawAddress = req.params.address;
+        if (!rawAddress || typeof rawAddress !== 'string') {
+          return res.status(400).json({ error: 'Address required' });
+        }
+        const normalizedAddress = rawAddress.toLowerCase().startsWith('0x')
+          ? rawAddress.toLowerCase()
+          : `0x${rawAddress.toLowerCase()}`;
+        if (normalizedAddress.length !== 42) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+
+        const pending = await dbService.getActivePendingWithdrawal(normalizedAddress);
+        if (pending) {
+          try {
+            const nonceUsed = await publicClient.readContract({
+              address: blackjackContractAddress,
+              abi: USED_NONCES_ABI,
+              functionName: 'usedNonces',
+              args: [BigInt(pending.nonce)],
+            }) as boolean;
+            if (nonceUsed) {
+              await dbService.markPendingWithdrawalCompleted(normalizedAddress, BigInt(pending.nonce));
+              logger.info('Balance endpoint: resolved pending withdrawal as completed', {
+                address: normalizedAddress,
+                nonce: pending.nonce,
+              });
+            }
+          } catch (rpcErr) {
+            logger.warn('Balance endpoint: could not check pending withdrawal nonce', {
+              address: normalizedAddress,
+              error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+            });
+          }
+        }
+
+        let balance = await dbService.getPlayerBalance(normalizedAddress);
+        const hasActive = await dbService.hasActiveGames(normalizedAddress);
+        if (!hasActive) {
+          try {
+            const contractBalance = await publicClient.readContract({
+              address: blackjackContractAddress,
+              abi: blackjackAbi,
+              functionName: 'getPlayerReserve',
+              args: [normalizedAddress as `0x${string}`],
+            }) as bigint;
+            if (contractBalance > balance) {
+              await dbService.syncPlayerBalanceWithContract(normalizedAddress, contractBalance);
+              balance = contractBalance;
+            }
+          } catch (rpcErr) {
+            logger.warn('Balance endpoint: contract read failed', {
+              address: normalizedAddress,
+              error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+            });
+          }
+        }
+
+        return res.status(200).json({ balance: balance.toString() });
+      } catch (error) {
+        logger.error('Error fetching player balance:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     app.post('/api/withdraw/prepare', async (req, res) => {
       try {
         const { address, requestedAmount } = req.body;

@@ -433,8 +433,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       if (response.status === 409) {
         setIsPreparingWithdraw(false)
         const data = await response.json().catch(() => ({}))
-        const msg = data?.error || 'Withdrawal conflict.'
-        toast.error('Withdrawal failed', { id: toastId, description: msg })
+        const msg = data?.error || 'You already have a withdrawal in progress.'
+        toast.error('Withdrawal already in progress', {
+          id: toastId,
+          description: msg,
+          duration: 8000,
+        })
         return
       }
 
@@ -588,6 +592,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const isDepositLoading = depositTx.isPending || depositMORBIISTx.isPending
   const isWithdrawLoading = isPreparingWithdraw || withdrawWithSignatureTx.isPending
   const isLegacyWithdrawLoading = withdrawTx.isPending
+  /** Disable all deposit/withdraw controls when any tx is pending to avoid double-submits */
+  const controlsDisabled = isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading
 
   const handleWithdrawLegacy = async (legacyAddress: `0x${string}`, amount: bigint, refetch: () => void) => {
     if (amount <= 0n) return
@@ -671,9 +677,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
                 <CardContent className="px-1 pb-2 pt-6 flex flex-col min-h-0 overflow-hidden">
                   {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
-                    <div className="flex items-center gap-0.5 py-1 px-1 rounded text-xs text-yellow-400 border border-cyan-500/30 bg-cyan-950/20 shrink-0 mb-2">
-                      <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-                      <span>Confirming...</span>
+                    <div className="rounded border border-amber-500/50 bg-amber-950/40 shrink-0 mb-2 p-2.5">
+                      <div className="flex items-center gap-2 text-amber-300 text-sm font-medium">
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                        <span>Transaction in progress — confirm in your wallet.</span>
+                      </div>
+                      <p className="mt-1.5 text-xs text-amber-200/90 font-poppins">
+                        Do not refresh, close this window, or navigate away until you see the success message. Your balance will not update correctly and support may not be able to recover funds if you leave now.
+                      </p>
                     </div>
                   )}
 
@@ -716,9 +727,10 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                                     placeholder={formatEther(maxAllowedWei)}
                                     value={rawInput}
                                     onChange={(e) => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: e.target.value }))}
+                                    disabled={controlsDisabled}
                                     className="h-7 text-xs font-poppins bg-slate-800 border-cyan-500/30 text-white max-w-[100px]"
                                   />
-                                  <Button type="button" variant="outline" size="sm" onClick={setMax} className="h-7 px-1.5 border-cyan-500/30 text-cyan-300 text-[11px] shrink-0">
+                                  <Button type="button" variant="outline" size="sm" onClick={setMax} disabled={controlsDisabled} className="h-7 px-1.5 border-cyan-500/30 text-cyan-300 text-[11px] shrink-0">
                                     Max
                                   </Button>
                                 </div>
@@ -729,7 +741,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                                   <Button
                                     size="sm"
                                     onClick={() => validAmount && handleWithdrawLegacy(item.address, amountWei, item.refetch)}
-                                    disabled={item.paused || isLegacyWithdrawLoading || !validAmount}
+                                    disabled={item.paused || controlsDisabled || !validAmount}
                                     className={`h-7 text-[11px] font-poppins shrink-0 disabled:opacity-60 ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
                                   >
                                     {isLegacyWithdrawLoading ? (
@@ -816,6 +828,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           variant={depositMethod === 'pls' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setDepositMethod('pls')}
+                          disabled={controlsDisabled}
                           className={`flex-1 h-7 text-xs ${depositMethod === 'pls' ? Theme.cyan.gradient.button : 'border-cyan-500/30 text-cyan-300'}`}
                         >
                           PLS
@@ -824,6 +837,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           variant={depositMethod === 'morbius' ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setDepositMethod('morbius')}
+                          disabled={controlsDisabled}
                           className={`flex-1 h-7 text-xs ${depositMethod === 'morbius' ? Theme.cyan.gradient.button : 'border-cyan-500/30 text-cyan-300'}`}
                         >
                           MORBIUS
@@ -842,6 +856,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           min="0"
                           step="1"
                           max={depositMethod === 'pls' ? maxDepositPLS : maxDepositMORBIUS}
+                          disabled={controlsDisabled}
                           className="h-7 text-sm font-poppins bg-slate-800 border-cyan-500/30 text-white"
                         />
                       </div>
@@ -855,8 +870,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                       <Button
                         onClick={depositMethod === 'pls' ? handleDepositPLS : handleDepositMORBIUS}
                         disabled={
+                          controlsDisabled ||
                           !depositAmount ||
-                          isDepositLoading ||
                           plsQuoteLoading ||
                           (depositMethod === 'morbius' && isLoadingAllowance) ||
                           (depositMethod === 'morbius' && isApproving)
@@ -887,13 +902,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           min="0"
                           step="1"
                           max={maxWithdraw}
+                          disabled={controlsDisabled}
                           className="h-7 text-sm bg-slate-800 border-cyan-500/30 text-white"
                         />
                       </div>
                       <div className="text-[10px] font-poppins text-cyan-500/60">Avail: {maxWithdraw} MORBIUS</div>
                       <Button
                         onClick={handleWithdraw}
-                        disabled={!withdrawAmount || isWithdrawLoading}
+                        disabled={controlsDisabled || !withdrawAmount}
                         className={`w-full h-7 text-xs ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
                       >
                         {isWithdrawLoading ? (
