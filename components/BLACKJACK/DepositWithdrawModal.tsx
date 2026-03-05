@@ -433,12 +433,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       if (response.status === 409) {
         setIsPreparingWithdraw(false)
         const data = await response.json().catch(() => ({}))
-        const msg = data?.error || 'You already have a withdrawal in progress.'
-        toast.error('Withdrawal already in progress', {
-          id: toastId,
-          description: msg,
-          duration: 8000,
-        })
+        const msg = data?.error || 'Withdrawal conflict.'
+        toast.error('Withdrawal failed', { id: toastId, description: msg })
         return
       }
 
@@ -447,7 +443,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         throw new Error(errorData.error || `Server error: ${response.status}`)
       }
 
-      const { amount, nonce, v, r, s } = await response.json()
+      const { amount, nonce, expiryTimestamp, v, r, s } = await response.json()
 
       // Server authorization complete, wallet tx state will take over
       setIsPreparingWithdraw(false)
@@ -462,6 +458,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       const txHash = await withdrawWithSignature(
         BigInt(amount),
         BigInt(nonce),
+        BigInt(expiryTimestamp),
         v,
         r as `0x${string}`,
         s as `0x${string}`
@@ -478,7 +475,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       // Check if the transaction actually succeeded on-chain
       if (receipt.status === 'reverted') {
         throw new Error(
-          'Transaction reverted on-chain. Common causes: contract may not have enough MORBIUS to cover the withdrawal, or daily withdrawal limit exceeded. Your balance will be refunded automatically within 2 minutes.'
+          'Transaction reverted on-chain. Common causes: contract may not have enough MORBIUS to cover the withdrawal, or daily withdrawal limit exceeded. Your balance will be refunded automatically once the signed withdrawal expires (about 15 minutes).'
         )
       }
 
@@ -677,14 +674,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
                 <CardContent className="px-1 pb-2 pt-6 flex flex-col min-h-0 overflow-hidden">
                   {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
-                    <div className="rounded border border-amber-500/50 bg-amber-950/40 shrink-0 mb-2 p-2.5">
-                      <div className="flex items-center gap-2 text-amber-300 text-sm font-medium">
-                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                        <span>Transaction in progress — confirm in your wallet.</span>
-                      </div>
-                      <p className="mt-1.5 text-xs text-amber-200/90 font-poppins">
-                        Do not refresh, close this window, or navigate away until you see the success message. Your balance will not update correctly and support may not be able to recover funds if you leave now.
-                      </p>
+                    <div className="flex items-center gap-0.5 py-1 px-1 rounded text-xs text-yellow-400 border border-cyan-500/30 bg-cyan-950/20 shrink-0 mb-2">
+                      <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                      <span>Confirming...</span>
                     </div>
                   )}
 

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { formatEther, parseEther } from 'viem';
-import { Activity, RefreshCw, CheckCircle, XCircle, Copy, Loader2 } from 'lucide-react';
+import { Activity, RefreshCw, CheckCircle, XCircle, Copy, Loader2, Gift, X } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import {
   BLACKJACK_ADDRESS,
@@ -301,6 +301,13 @@ export default function AdminHealthTab() {
   const [fundingGame, setFundingGame] = useState<FundableGameKey | null>(null);
   const [actionGame, setActionGame] = useState<FundableGameKey | null>(null);
   const [actionType, setActionType] = useState<'pause' | 'unpause' | 'withdraw' | null>(null);
+  const [rewardsClaimsOpen, setRewardsClaimsOpen] = useState(false);
+  const [rewardsClaimsLoading, setRewardsClaimsLoading] = useState(false);
+  const [rewardsClaimsData, setRewardsClaimsData] = useState<{
+    holderClaims: Array<{ walletAddress: string; rewardAmount: string; claimedAt: string; epochNumber: number }>;
+    lpClaims: Array<{ walletAddress: string; rewardAmount: string; claimedAt: string; epochNumber: number }>;
+  } | null>(null);
+  const [rewardsClaimsError, setRewardsClaimsError] = useState<string | null>(null);
   const { writeContractAsync } = useWriteContract();
 
   // On-chain contract reads for movement charts
@@ -501,6 +508,29 @@ export default function AdminHealthTab() {
   useEffect(() => {
     fetchHealth();
   }, [fetchHealth]);
+
+  const fetchRewardsClaims = useCallback(async () => {
+    if (!address) return;
+    setRewardsClaimsLoading(true);
+    setRewardsClaimsError(null);
+    try {
+      const res = await fetch('/api/admin/rewards/claims?limit=50', {
+        headers: { 'x-admin-wallet': address },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setRewardsClaimsData(json);
+    } catch (e) {
+      setRewardsClaimsError(e instanceof Error ? e.message : 'Failed to load claims');
+      setRewardsClaimsData(null);
+    } finally {
+      setRewardsClaimsLoading(false);
+    }
+  }, [address]);
+
+  useEffect(() => {
+    if (rewardsClaimsOpen && address) fetchRewardsClaims();
+  }, [rewardsClaimsOpen, address, fetchRewardsClaims]);
 
   const handleApprove = useCallback(
     async (gameKey: FundableGameKey) => {
@@ -817,15 +847,26 @@ export default function AdminHealthTab() {
             <Activity className="w-3.5 h-3.5 text-cyan-400" />
             Game health
           </CardTitle>
-          <button
-            type="button"
-            onClick={() => fetchHealth()}
-            disabled={loading}
-            className="p-1.5 rounded border border-slate-600 text-slate-400 hover:text-white hover:border-slate-500 disabled:opacity-50"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setRewardsClaimsOpen(true)}
+              className="p-1.5 rounded border border-slate-600 text-slate-400 hover:text-white hover:border-slate-500 flex items-center gap-1"
+              aria-label="Reward claims"
+            >
+              <Gift className="w-3.5 h-3.5" />
+              <span className="text-[10px]">Reward claims</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => fetchHealth()}
+              disabled={loading}
+              className="p-1.5 rounded border border-slate-600 text-slate-400 hover:text-white hover:border-slate-500 disabled:opacity-50"
+              aria-label="Refresh"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="py-2 px-3">
           {error && <p className="text-[11px] text-red-400 mb-2">{error}</p>}
@@ -1146,6 +1187,155 @@ export default function AdminHealthTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Reward claims modal */}
+      {rewardsClaimsOpen && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setRewardsClaimsOpen(false)}
+        >
+          <div
+            className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/30 bg-gradient-to-r from-cyan-600/20 to-blue-600/20">
+              <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <Gift className="w-4 h-4 text-cyan-400" />
+                Holder & LP reward claims
+              </h2>
+              <button
+                type="button"
+                onClick={() => setRewardsClaimsOpen(false)}
+                className="p-1.5 rounded border border-slate-600 text-slate-400 hover:text-white hover:border-slate-500"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              {rewardsClaimsLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+                </div>
+              )}
+              {rewardsClaimsError && (
+                <p className="text-sm text-red-400">{rewardsClaimsError}</p>
+              )}
+              {!rewardsClaimsLoading && rewardsClaimsData && (
+                <>
+                  <div
+                    className="rounded-lg border border-slate-600 overflow-hidden"
+                    style={{
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    }}
+                  >
+                    <p className="text-cyan-400/90 text-[10px] font-semibold uppercase tracking-wider px-3 py-2 border-b border-slate-600">
+                      Holder rewards (Merkle claim)
+                    </p>
+                    <div className="max-h-48 overflow-y-auto">
+                      {rewardsClaimsData.holderClaims.length === 0 ? (
+                        <p className="text-slate-500 text-[11px] px-3 py-4">No holder claims yet.</p>
+                      ) : (
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr className="text-slate-500 border-b border-slate-700">
+                              <th className="text-left py-2 px-3">Wallet</th>
+                              <th className="text-right py-2 px-3">Amount</th>
+                              <th className="text-center py-2 px-3">Epoch</th>
+                              <th className="text-left py-2 px-3">Claimed at</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rewardsClaimsData.holderClaims.map((c, i) => (
+                              <tr key={`h-${i}-${c.walletAddress}-${c.claimedAt}`} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                                <td className="py-1.5 px-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(c.walletAddress)}
+                                    className="font-mono text-cyan-300/90 hover:text-cyan-200 flex items-center gap-1"
+                                    title="Copy"
+                                  >
+                                    <Copy className="w-3 h-3 shrink-0" />
+                                    {truncateAddress(c.walletAddress, 8, 6)}
+                                  </button>
+                                </td>
+                                <td className="py-1.5 px-3 text-right font-mono text-slate-300">
+                                  {formatMorbius(c.rewardAmount)} MORBIUS
+                                </td>
+                                <td className="py-1.5 px-3 text-center text-slate-400">{c.epochNumber}</td>
+                                <td className="py-1.5 px-3 text-slate-400">
+                                  {new Date(c.claimedAt).toLocaleString()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                  <div
+                    className="rounded-lg border border-slate-600 overflow-hidden"
+                    style={{
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    }}
+                  >
+                    <p className="text-cyan-400/90 text-[10px] font-semibold uppercase tracking-wider px-3 py-2 border-b border-slate-600">
+                      LP rewards (Merkle LP claim)
+                    </p>
+                    <div className="max-h-48 overflow-y-auto">
+                      {rewardsClaimsData.lpClaims.length === 0 ? (
+                        <p className="text-slate-500 text-[11px] px-3 py-4">No LP claims yet.</p>
+                      ) : (
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr className="text-slate-500 border-b border-slate-700">
+                              <th className="text-left py-2 px-3">Wallet</th>
+                              <th className="text-right py-2 px-3">Amount</th>
+                              <th className="text-center py-2 px-3">Epoch</th>
+                              <th className="text-left py-2 px-3">Claimed at</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rewardsClaimsData.lpClaims.map((c, i) => (
+                              <tr key={`lp-${i}-${c.walletAddress}-${c.claimedAt}`} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                                <td className="py-1.5 px-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(c.walletAddress)}
+                                    className="font-mono text-cyan-300/90 hover:text-cyan-200 flex items-center gap-1"
+                                    title="Copy"
+                                  >
+                                    <Copy className="w-3 h-3 shrink-0" />
+                                    {truncateAddress(c.walletAddress, 8, 6)}
+                                  </button>
+                                </td>
+                                <td className="py-1.5 px-3 text-right font-mono text-slate-300">
+                                  {formatMorbius(c.rewardAmount)} MORBIUS
+                                </td>
+                                <td className="py-1.5 px-3 text-center text-slate-400">{c.epochNumber}</td>
+                                <td className="py-1.5 px-3 text-slate-400">
+                                  {new Date(c.claimedAt).toLocaleString()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

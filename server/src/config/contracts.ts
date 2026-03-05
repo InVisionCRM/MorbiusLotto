@@ -21,7 +21,7 @@ export const KENO_ADDRESS = (process.env.KENO_ADDRESS || '0x496fCE9733E2102102f4
 export const LOTTERY_INSTANT_ADDRESS = (process.env.LOTTERY_INSTANT_ADDRESS || process.env.NEXT_PUBLIC_LOTTERY_INSTANT_ADDRESS || '0x6CCecFd3165f4d911BA8D196eb5202cc80fEF8a8') as `0x${string}`;
 export const BIGWHEEL_ADDRESS = (process.env.BIGWHEEL_ADDRESS || '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F') as `0x${string}`;
 /** Blackjack V2. Set BLACKJACK_ADDRESS in .env (BLACKJACK_CONTRACT_ADDRESS also accepted). */
-export const BLACKJACK_ADDRESS = (process.env.BLACKJACK_ADDRESS || process.env.BLACKJACK_CONTRACT_ADDRESS || '0x62cb20cd01F5af1f951B0Ec6bBD499143afF906c') as `0x${string}`;
+export const BLACKJACK_ADDRESS = (process.env.BLACKJACK_ADDRESS || process.env.BLACKJACK_CONTRACT_ADDRESS || '0xc2Ae080dE01108b5C9C0f2C5C86051CFd3D18C00') as `0x${string}`;
 
 /** Legacy Blackjack contracts (for admin health). Accept BLACKJACK_LEGACY_CONTRACT_ADDRESS* or NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS*. */
 export const BLACKJACK_LEGACY_ADDRESS = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS || '') as `0x${string}`;
@@ -30,6 +30,7 @@ export const BLACKJACK_LEGACY_ADDRESS_3 = (process.env.BLACKJACK_LEGACY_CONTRACT
 export const BLACKJACK_LEGACY_ADDRESS_4 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_4 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_4 || '') as `0x${string}`;
 export const BLACKJACK_LEGACY_ADDRESS_5 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_5 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_5 || '') as `0x${string}`;
 export const BLACKJACK_LEGACY_ADDRESS_6 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_6 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_6 || '') as `0x${string}`;
+export const BLACKJACK_LEGACY_ADDRESS_7 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_7 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_7 || '0x62cb20cd01F5af1f951B0Ec6bBD499143afF906c') as `0x${string}`;
 
 function isLegacyAddress(v: string): v is `0x${string}` {
   return typeof v === 'string' && v.trim().length >= 42 && v.trim().toLowerCase().startsWith('0x');
@@ -47,6 +48,7 @@ export function getAllBlackjackContracts(): Array<{ address: `0x${string}`; labe
     [BLACKJACK_LEGACY_ADDRESS_4, 'Legacy 4'],
     [BLACKJACK_LEGACY_ADDRESS_5, 'Legacy 5'],
     [BLACKJACK_LEGACY_ADDRESS_6, 'Legacy 6'],
+    [BLACKJACK_LEGACY_ADDRESS_7, 'Legacy 7'],
   ];
   for (const [addr, label] of legacies) {
     const v = (addr || '').trim();

@@ -447,6 +447,7 @@ export class DatabaseService {
    * Atomically deduct the player's balance AND create the pending withdrawal record in a single
    * transaction. If either step fails, both are rolled back — preventing permanent balance loss
    * from a partial failure between the two operations.
+   * expiresAt: on-chain signature deadline; cron only refunds when NOW() > expiresAt.
    *
    * Returns the remaining balance after deduction.
    * Throws if the player has insufficient balance (same as deductPlayerBalance).
@@ -455,6 +456,7 @@ export class DatabaseService {
     walletAddress: string,
     nonce: bigint,
     amount: bigint,
+    expiresAt: Date,
   ): Promise<bigint> {
     const normalizedAddress = this.normalizeAddress(walletAddress);
     return this.withTransaction(async (client) => {
@@ -475,11 +477,11 @@ export class DatabaseService {
       }
       const remainingBalance = BigInt(deductResult.rows[0].balance || '0');
 
-      // Create pending withdrawal record
+      // Create pending withdrawal record (expires_at = on-chain signature deadline)
       await client.query(
-        `INSERT INTO pending_withdrawals (nonce, wallet_address, amount, status)
-         VALUES ($1::NUMERIC, $2, $3::NUMERIC, 'pending')`,
-        [nonce.toString(), normalizedAddress, amount.toString()],
+        `INSERT INTO pending_withdrawals (nonce, wallet_address, amount, status, expires_at)
+         VALUES ($1::NUMERIC, $2, $3::NUMERIC, 'pending', $4::timestamptz)`,
+        [nonce.toString(), normalizedAddress, amount.toString(), expiresAt],
       );
 
       // Update platform analytics total
@@ -756,14 +758,14 @@ export class DatabaseService {
   }
 
   /**
-   * Get pending withdrawals older than 2 minutes (candidates for expiry).
+   * Get pending withdrawals past their on-chain deadline (expires_at).
    * Does NOT modify them — caller must verify on-chain before deciding to refund or mark completed.
    */
   async getExpiredPendingWithdrawals(): Promise<Array<{ wallet_address: string; nonce: string; amount: string }>> {
     const query = `
       SELECT wallet_address, nonce, amount
       FROM pending_withdrawals
-      WHERE status = 'pending' AND created_at < NOW() - INTERVAL '2 minutes'
+      WHERE status = 'pending' AND expires_at IS NOT NULL AND NOW() > expires_at
     `;
     const result = await this.pool.query(query);
     return result.rows;

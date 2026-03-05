@@ -28,8 +28,9 @@ export const BIGWHEEL_ADDRESS = '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F' as 
 // V3: 0x1b38626A12085547C35bD80455d054950AD72Cde (emergency paused Mar 2026; set as BLACKJACK_LEGACY_ADDRESS_5)
 // V4: 0xe9b03E16f5c7D38b37B4F79ca250B714aFB6755C — set as BLACKJACK_LEGACY_ADDRESS_6
 // V5: 0x73c35B2e4A640FDb253c04eC86aEdA49bb50C72b — security fixes (superseded by V6)
-// V6: 0x62cb20cd01F5af1f951B0Ec6bBD499143afF906c — treasury pattern for PLS deposits + all V5 security fixes
-export const BLACKJACK_ADDRESS = '0x62cb20cd01F5af1f951B0Ec6bBD499143afF906c' as const
+// V6: 0x62cb20cd01F5af1f951B0Ec6bBD499143afF906c — treasury pattern; on-chain withdrawal deadline → set as BLACKJACK_LEGACY_ADDRESS_7
+// V7: 0xc2Ae080dE01108b5C9C0f2C5C86051CFd3D18C00 — on-chain withdrawal deadline (expiryTimestamp in signed withdraw)
+export const BLACKJACK_ADDRESS = '0xc2Ae080dE01108b5C9C0f2C5C86051CFd3D18C00' as const
 
 // Previous Blackjack contracts (if upgraded: players with balance here can withdraw from them)
 export const BLACKJACK_LEGACY_ADDRESS = (
@@ -68,6 +69,13 @@ export const BLACKJACK_LEGACY_ADDRESS_6 = (
     : ''
 ) as `0x${string}`
 
+/** V6 (previous current); default so users can withdraw from old contract without env. */
+export const BLACKJACK_LEGACY_ADDRESS_7 = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_7
+    ? process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_7
+    : '0x62cb20cd01F5af1f951B0Ec6bBD499143afF906c'
+) as `0x${string}`
+
 /** All Blackjack contract addresses: current + legacy (for reserve/withdraw UI and scripts) */
 export const ALL_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   BLACKJACK_ADDRESS,
@@ -77,6 +85,7 @@ export const ALL_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   ...(BLACKJACK_LEGACY_ADDRESS_4 ? [BLACKJACK_LEGACY_ADDRESS_4] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_5 ? [BLACKJACK_LEGACY_ADDRESS_5] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_6 ? [BLACKJACK_LEGACY_ADDRESS_6] : []),
+  ...(BLACKJACK_LEGACY_ADDRESS_7 ? [BLACKJACK_LEGACY_ADDRESS_7] : []),
 ]
 
 /** Legacy-only (previous contracts from which players can withdraw reserves) */
@@ -87,6 +96,7 @@ export const LEGACY_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   ...(BLACKJACK_LEGACY_ADDRESS_4 ? [BLACKJACK_LEGACY_ADDRESS_4] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_5 ? [BLACKJACK_LEGACY_ADDRESS_5] : []),
   ...(BLACKJACK_LEGACY_ADDRESS_6 ? [BLACKJACK_LEGACY_ADDRESS_6] : []),
+  ...(BLACKJACK_LEGACY_ADDRESS_7 ? [BLACKJACK_LEGACY_ADDRESS_7] : []),
 ]
 
 // Tournament Prize Escrow V2 (custom token prize pools) - hardcoded for reliability
@@ -137,7 +147,7 @@ export const LOTTERY_DEPLOY_BLOCK = 25329129
 export const KENO_DEPLOY_BLOCK = 25933639 // V2: Deployed Mar 2026 (fees on wager)
 export const PLINKO_DEPLOY_BLOCK = 25914766 // V11: Deployed Mar 2026 (1.25% dist + 0.5% burn + 1.75% platform + 1.5% LP dist)
 export const BIGWHEEL_DEPLOY_BLOCK = 25575736 // Deployed Jan 20, 2026
-export const BLACKJACK_DEPLOY_BLOCK = 25914785 // V4: Deployed Mar 2026 (no house edge; 1.25% dist + 0.5% burn + 1.75% platform + 1.5% LP dist fees)
+export const BLACKJACK_DEPLOY_BLOCK = 25949514 // V7: Deployed Mar 2026 (on-chain withdrawal deadline; 1.25% dist + 0.5% burn + 1.75% platform + 1.5% LP dist fees)
 
 // Lottery constants
 export const TICKET_PRICE = BigInt("100000000000000000000") // 100 tokens (18 decimals)

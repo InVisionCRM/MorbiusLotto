@@ -372,6 +372,7 @@ export function useBlackjackContract() {
   const withdrawWithSignature = async (
     amount: bigint,
     nonce: bigint,
+    expiryTimestamp: bigint,
     v: number,
     r: `0x${string}`,
     s: `0x${string}`
@@ -382,7 +383,7 @@ export function useBlackjackContract() {
       address: BLACKJACK_ADDRESS,
       abi: blackjackAbi,
       functionName: 'withdrawWithSignature',
-      args: [amount, nonce, v, r, s],
+      args: [amount, nonce, expiryTimestamp, v, r, s],
       gas: 500_000n, // Manual gas limit — avoids estimation failures that block the tx entirely
       maxPriorityFeePerGas: 40_000n, // PulseChain tip
     } as any)

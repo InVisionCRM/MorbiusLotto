@@ -8,6 +8,7 @@ export const MIN_WITHDRAWAL_WEI = BigInt('1000000000000000000'); // 1 MORBIUS
 export interface WithdrawSignaturePayload {
   amount: string;
   nonce: string;
+  expiryTimestamp: string;
   v: number;
   r: `0x${string}`;
   s: `0x${string}`;
@@ -15,12 +16,14 @@ export interface WithdrawSignaturePayload {
 
 /**
  * Sign a withdrawal approval (EIP-712) for the Blackjack contract.
- * Returns amount, nonce, and signature components (v, r, s).
+ * expiryTimestamp: Unix seconds; contract will revert if block.timestamp > expiryTimestamp.
+ * Returns amount, nonce, expiryTimestamp, and signature components (v, r, s).
  */
 export async function signWithdrawApproval(
   player: string,
   amount: bigint,
   nonce: bigint,
+  expiryTimestamp: number,
   contractAddress: `0x${string}`,
   chainId: number,
   privateKey: `0x${string}`
@@ -39,6 +42,7 @@ export async function signWithdrawApproval(
       { name: 'player', type: 'address' },
       { name: 'amount', type: 'uint256' },
       { name: 'nonce', type: 'uint256' },
+      { name: 'expiryTimestamp', type: 'uint256' },
     ],
   } as const;
 
@@ -46,6 +50,7 @@ export async function signWithdrawApproval(
     player: player as `0x${string}`,
     amount,
     nonce,
+    expiryTimestamp: BigInt(expiryTimestamp),
   };
 
   const signature = await account.signTypedData({
@@ -63,6 +68,7 @@ export async function signWithdrawApproval(
   return {
     amount: amount.toString(),
     nonce: nonce.toString(),
+    expiryTimestamp: String(expiryTimestamp),
     v,
     r,
     s,

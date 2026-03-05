@@ -1131,6 +1131,49 @@ async function initializeServices() {
       }
     });
 
+    // Admin: recent holder and LP reward claims (when users claim holder/LP rewards)
+    app.get('/api/admin/rewards/claims', async (req, res) => {
+      try {
+        const limit = Math.min(parseInt(String(req.query.limit), 10) || 50, 200);
+        const pool = dbService.getPool();
+        const holderRows = await pool.query<{ wallet_address: string; reward_amount: string; claimed_at: Date; epoch_number: number }>(
+          `SELECT ms.wallet_address, ms.reward_amount::text AS reward_amount, ms.claimed_at, me.epoch_number
+           FROM merkle_snapshots ms
+           JOIN merkle_epochs me ON me.id = ms.epoch_id
+           WHERE ms.claimed_at IS NOT NULL
+           ORDER BY ms.claimed_at DESC
+           LIMIT $1`,
+          [limit]
+        );
+        const lpRows = await pool.query<{ wallet_address: string; reward_amount: string; claimed_at: Date; epoch_number: number }>(
+          `SELECT ms.wallet_address, ms.reward_amount::text AS reward_amount, ms.claimed_at, me.epoch_number
+           FROM merkle_lp_snapshots ms
+           JOIN merkle_lp_epochs me ON me.id = ms.epoch_id
+           WHERE ms.claimed_at IS NOT NULL
+           ORDER BY ms.claimed_at DESC
+           LIMIT $1`,
+          [limit]
+        );
+        sendJson(res, {
+          holderClaims: holderRows.rows.map((r) => ({
+            walletAddress: r.wallet_address,
+            rewardAmount: r.reward_amount,
+            claimedAt: r.claimed_at.toISOString(),
+            epochNumber: r.epoch_number,
+          })),
+          lpClaims: lpRows.rows.map((r) => ({
+            walletAddress: r.wallet_address,
+            rewardAmount: r.reward_amount,
+            claimedAt: r.claimed_at.toISOString(),
+            epochNumber: r.epoch_number,
+          })),
+        });
+      } catch (error) {
+        logger.error('Error fetching reward claims:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Admin: game config (key-value; min/max bet, fee %, feature flags)
     app.get('/api/admin/config', async (req, res) => {
       try {
@@ -1835,7 +1878,7 @@ async function initializeServices() {
         const existingPending = await dbService.getActivePendingWithdrawal(normalizedAddress);
         if (existingPending) {
           return res.status(409).json({
-            error: 'You have a pending withdrawal. Wait for it to complete (or 2 minutes for it to expire) before requesting another.',
+            error: 'You have a pending withdrawal. Wait for it to complete or wait until the signed withdrawal expires (about 15 minutes) before requesting another.',
           });
         }
 
@@ -1853,7 +1896,7 @@ async function initializeServices() {
         // Check the contract's actual MORBIUS token balance — if the contract doesn't hold
         // enough tokens, the on-chain tx will revert with "Insufficient contract balance".
         // Catch this early so we don't deduct the DB balance and leave the user waiting
-        // 2 minutes for the expiry cron to refund it.
+        // until the signed withdrawal expires (~15 min) for the cron to refund.
         let contractTokenBalance: bigint;
         try {
           contractTokenBalance = await publicClient.readContract({
@@ -1906,11 +1949,19 @@ async function initializeServices() {
         // Generate unique nonce using timestamp + random
         const nonce = BigInt(Date.now()) * BigInt(1e6) + BigInt(Math.floor(Math.random() * 1e6));
 
+        const withdrawExpirySeconds = Number(process.env.WITHDRAW_SIGNATURE_EXPIRY_SECONDS ?? '900'); // default 15 min
+        const expiryTimestamp = Math.floor(Date.now() / 1000) + withdrawExpirySeconds;
+
         // Atomically deduct balance AND create pending withdrawal record in one transaction.
         // If either step fails (e.g. insufficient balance or DB error), both are rolled back —
         // preventing permanent balance loss from a partial failure between the two operations.
         try {
-          await dbService.deductAndCreatePendingWithdrawal(normalizedAddress, nonce, amount);
+          await dbService.deductAndCreatePendingWithdrawal(
+            normalizedAddress,
+            nonce,
+            amount,
+            new Date(expiryTimestamp * 1000),
+          );
         } catch (deductErr) {
           return res.status(400).json({
             error: 'Insufficient balance for withdrawal',
@@ -1922,9 +1973,10 @@ async function initializeServices() {
           normalizedAddress,
           amount,
           nonce,
+          expiryTimestamp,
           blackjackContractAddress,
           chainId,
-          privateKey
+          privateKey,
         );
 
         logger.info('Withdrawal prepared (balance deducted)', {

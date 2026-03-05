@@ -129,7 +129,7 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
 
     // EIP-712 TypeHash for WithdrawApproval
     bytes32 public constant WITHDRAW_APPROVAL_TYPEHASH = keccak256(
-        "WithdrawApproval(address player,uint256 amount,uint256 nonce)"
+        "WithdrawApproval(address player,uint256 amount,uint256 nonce,uint256 expiryTimestamp)"
     );
 
     // ============ Structs ============
@@ -309,17 +309,19 @@ contract BlackjackV2 is Ownable, ReentrancyGuard, Pausable {
     function withdrawWithSignature(
         uint256 amount,
         uint256 nonce,
+        uint256 expiryTimestamp,
         uint8 v,
         bytes32 r,
         bytes32 s
     ) external nonReentrant whenNotPaused {
         require(amount >= MIN_WITHDRAWAL, "Withdrawal too small");
         require(!emergencyPaused, "Emergency pause active");
+        require(block.timestamp <= expiryTimestamp, "Signature expired");
         require(!usedNonces[nonce], "Nonce already used");
 
         // Verify signature from authorized server
         bytes32 structHash = keccak256(
-            abi.encode(WITHDRAW_APPROVAL_TYPEHASH, msg.sender, amount, nonce)
+            abi.encode(WITHDRAW_APPROVAL_TYPEHASH, msg.sender, amount, nonce, expiryTimestamp)
         );
         bytes32 digest = keccak256(
             abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)
