@@ -55825,3 +55825,17 @@
 {"level":"error","message":"TournamentScheduler: failed to complete time-expired tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-05T00:13:47.354Z"}
 {"createdAt":"2026-02-03T22:59:48.724Z","level":"info","message":"TournamentScheduler: stuck tournament detected, force completing","name":"test","service":"blackjack-server","timestamp":"2026-03-05T00:13:47.388Z","tournamentId":"333cca47-ceca-4e5b-a502-83945f845e9a"}
 {"level":"error","message":"TournamentScheduler: failed to complete stuck tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-05T00:13:47.810Z"}
+{"level":"info","message":"Blackjack server running on port 8080","service":"blackjack-server","timestamp":"2026-03-05T17:49:20.427Z"}
+{"level":"info","message":"Database connected successfully","service":"blackjack-server","timestamp":"2026-03-05T17:49:20.872Z"}
+{"level":"info","message":"WebSocket service initialized","service":"blackjack-server","timestamp":"2026-03-05T17:49:20.913Z"}
+{"level":"info","message":"FreerollSchedulerService started (poll every %d ms)","service":"blackjack-server","timestamp":"2026-03-05T17:49:20.913Z"}
+{"level":"info","message":"TournamentSchedulerService started (poll every %d ms)","service":"blackjack-server","timestamp":"2026-03-05T17:49:20.914Z"}
+{"level":"info","message":"[MerkleDrops] Cron starting…","service":"blackjack-server","timestamp":"2026-03-05T17:49:20.914Z"}
+{"level":"info","message":"[MerkleLP] Cron starting…","service":"blackjack-server","timestamp":"2026-03-05T17:49:20.915Z"}
+{"endsAt":"2026-02-04T02:59:48.688Z","level":"info","message":"TournamentScheduler: time limit reached, completing tournament","name":"test","service":"blackjack-server","timestamp":"2026-03-05T17:49:21.398Z","tournamentId":"333cca47-ceca-4e5b-a502-83945f845e9a"}
+{"level":"info","message":"Withdrawal signer verified: matches contract authorizedServer","service":"blackjack-server","signerAddress":"0x2775dD8242C4f589536113475B7C80F42ab4A70A","timestamp":"2026-03-05T17:49:21.600Z"}
+{"level":"info","message":"WebSocket server initialized","service":"blackjack-server","timestamp":"2026-03-05T17:49:21.664Z"}
+{"level":"info","message":"Database connected","service":"blackjack-server","timestamp":"2026-03-05T17:49:21.664Z"}
+{"level":"error","message":"TournamentScheduler: failed to complete time-expired tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-05T17:49:21.830Z"}
+{"createdAt":"2026-02-03T22:59:48.724Z","level":"info","message":"TournamentScheduler: stuck tournament detected, force completing","name":"test","service":"blackjack-server","timestamp":"2026-03-05T17:49:21.896Z","tournamentId":"333cca47-ceca-4e5b-a502-83945f845e9a"}
+{"level":"error","message":"TournamentScheduler: failed to complete stuck tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-05T17:49:22.431Z"}
