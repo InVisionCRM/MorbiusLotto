@@ -11,7 +11,7 @@ import CustomAmountModal from '@/components/PLINKO/CustomAmountModal';
 import { PlinkoHistoryModal } from '@/components/PLINKO/PlinkoHistoryModal';
 import { CustomApprovalModal } from '@/components/PLINKO/CustomApprovalModal';
 import SlotMachine from '@/components/PLINKO/SlotMachine';
-import RealTimeBetChart, { RealTimeBetChartRef } from '@/components/PLINKO/RealTimeBetChart';
+import RealTimeBetChart, { type BetDataPoint } from '@/components/PLINKO/RealTimeBetChart';
 import { usePlinkoHistory } from '@/hooks/use-plinko-history';
 import { usePlayerInfo, useWagerLimits, usePlinkoWrite, useWatchBallDropped } from '@/hooks/use-plinko-contract';
 import { PLINKO_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -32,6 +32,12 @@ import { MULTIPLIERS, RISK_NAMES, RISK_LEVEL, RISK_LEVEL_MAP } from './constants
 import { formatEther, parseEther, decodeEventLog } from 'viem';
 import { toast } from 'sonner';
 import Footer from '@/components/PLINKO/Footer';
+import { GameFAQ } from '@/components/shared/GameFAQ';
+import PlinkoTopPlayers from '@/components/PLINKO/PlinkoTopPlayers';
+import { PlinkoRecentPlays } from '@/components/PLINKO/PlinkoRecentPlays';
+import { PlinkoRecentGames } from '@/components/PLINKO/PlinkoRecentGames';
+import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
+import { AdSpace } from '@/components/shared/AdSpace';
 
 // BallDropped event ABI for decoding
 const BALL_DROPPED_EVENT_ABI = {
@@ -69,6 +75,9 @@ function IntroScreen({ onComplete }: IntroScreenProps) {
       }}
       suppressHydrationWarning
     >
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[300px]">
+        <AdSpace slot="loading" width={300} height={100} showCta={false} />
+      </div>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
         {/* Animated ball */}
         <div className="relative w-20 h-20 shrink-0">
@@ -163,6 +172,8 @@ const Home: React.FC = () => {
   const [showExtendedHistory, setShowExtendedHistory] = useState(false);
   const [showCustomAmountModal, setShowCustomAmountModal] = useState(false);
   const [showPlinkoHistory, setShowPlinkoHistory] = useState(false);
+  const [playerProfileOpen, setPlayerProfileOpen] = useState(false);
+  const [playerProfileGame, setPlayerProfileGame] = useState<'plinko' | 'keno'>('plinko');
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [autoPlaySettings, setAutoPlaySettings] = useState<AutoPlaySettings | null>(null);
   const [remainingBalls, setRemainingBalls] = useState(0);
@@ -194,7 +205,7 @@ const Home: React.FC = () => {
   const playerInfo = usePlayerInfo(address);
   const wagerLimitsData = useWagerLimits();
   const { writeContractAsync } = usePlinkoWrite();
-  const { wplsPerMORBIUS, isLoading: isLoadingPrice, error: priceError } = useWplsPrice(); // Get PLS/MORBIUS price for native PLS purchases
+  const { wplsPerMORBIUS, morbiusPerPLS, isLoading: isLoadingPrice, error: priceError, source: priceSource, lastUpdated: priceLastUpdated } = useWplsPrice(); // Get PLS/MORBIUS price for native PLS purchases
   const [showBuyBallsModal, setShowBuyBallsModal] = useState(false);
   const [buyBallsCount, setBuyBallsCount] = useState(10);
   const [wagerPerBall, setWagerPerBall] = useState(10); // Default 10 MORBIUS per ball (V5)
@@ -209,6 +220,9 @@ const Home: React.FC = () => {
     useNativePLS: boolean;
   } | null>(null);
   const [isConfirmingTransaction, setIsConfirmingTransaction] = useState(false); // Track transaction confirmation
+  const [expectedBallCount, setExpectedBallCount] = useState(0); // Total balls expected to land
+  const [scoredBallCount, setScoredBallCount] = useState(0); // Balls that have physically landed
+  const [ballsLaunched, setBallsLaunched] = useState(0); // Balls physically dropped into physics engine
   const [confirmationStage, setConfirmationStage] = useState<'broadcast' | 'mempool' | 'mined' | null>(null); // Track confirmation stage for slot machine
 
   // Multiplier table modal state
@@ -256,8 +270,39 @@ const Home: React.FC = () => {
     defaultToUnlimited: true, // Default to unlimited approval for best UX
   });
 
-  // Computed value: Controls should be disabled during auto-drop or transaction processing
-  const shouldDisableControls = isAutoDrop || isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance;
+  // Computed value: Game is running until every ball has physically landed in a bucket
+  // Also stays active while animation queue is being processed
+  const ballsStillInFlight = expectedBallCount > 0 && scoredBallCount < expectedBallCount;
+  const ballsInPhysics = ballsLaunched > 0 && scoredBallCount < ballsLaunched; // Balls dropped but not yet in bucket
+  const isGameRunning = ballsStillInFlight || ballsInPhysics || animationQueue.length > 0 || isAnimating;
+  const shouldDisableControls = isAutoDrop || isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance || isGameRunning;
+
+  // Reset ball counters when all balls have landed
+  useEffect(() => {
+    const allExpectedScored = expectedBallCount > 0 && scoredBallCount >= expectedBallCount;
+    const allLaunchedScored = ballsLaunched > 0 && scoredBallCount >= ballsLaunched;
+    if ((allExpectedScored || allLaunchedScored) && animationQueue.length === 0 && !isAnimating) {
+      // Delay to let the last ball's bucket animation visually register (bucket anim = 600ms)
+      const timer = setTimeout(() => {
+        setExpectedBallCount(0);
+        setScoredBallCount(0);
+        setBallsLaunched(0);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [expectedBallCount, scoredBallCount, ballsLaunched, animationQueue.length, isAnimating]);
+
+  // Safety timeout: if game runs longer than 2 minutes, force reset
+  useEffect(() => {
+    if (!isGameRunning) return;
+    const safety = setTimeout(() => {
+      console.warn('Safety timeout: forcing game state reset');
+      setExpectedBallCount(0);
+      setScoredBallCount(0);
+      setBallsLaunched(0);
+    }, 120_000);
+    return () => clearTimeout(safety);
+  }, [isGameRunning]);
 
   // Custom approval handler
   const handleCustomApproval = (amount: bigint) => {
@@ -329,8 +374,11 @@ const Home: React.FC = () => {
   const currentWagerRef = useRef(1.00); // Track current wager for auto-play calculations
   const isAutoDropRef = useRef(false); // Track auto-drop status synchronously
   const autoPlaySettingsRef = useRef<AutoPlaySettings | null>(null); // Track settings synchronously
-  const chartRef = useRef<RealTimeBetChartRef>(null); // Ref for the real-time chart
   const chartSessionStartTime = useRef(Date.now()); // Fixed session start time
+
+  // Shared chart state - lifted from RealTimeBetChart so both instances show same data
+  const [sharedBetHistory, setSharedBetHistory] = useState<BetDataPoint[]>([]);
+  const [sharedChartStats, setSharedChartStats] = useState({ totalBets: 0, totalWagered: 0, totalWon: 0 });
 
   // Keep currentWagerRef in sync with wager state
   useEffect(() => {
@@ -351,15 +399,35 @@ const Home: React.FC = () => {
       plinkoHistory.recordDrop(actualWager, actualMultiplier, actualRisk, bucketIndex);
     }
 
-    // 2. Update local UI state (Win/Loss Badge)
+    // 2. Track ball landing for game-running state
+    if (contractData) {
+      setScoredBallCount(prev => prev + 1);
+    }
+
+    // 3. Update local UI state (Win/Loss Badge)
     const winAmount = actualWager * actualMultiplier;
     const badgeProfit = winAmount - actualWager;
     setWinLossBadge({ amount: badgeProfit, key: Date.now() });
 
-    // 3. Update real-time performance chart
-    if (chartRef.current) {
-      chartRef.current.addDataPoint(actualMultiplier, bucketIndex, contractData);
-    }
+    // 4. Update shared chart state (both overlay and bottom chart share this)
+    const riskLevel = contractData?.risk || lastRiskRef.current || 'UNKNOWN';
+    setSharedBetHistory(prev => {
+      const newDataPoint: BetDataPoint = {
+        dropNumber: prev.length + 1,
+        betAmount: actualWager,
+        multiplier: actualMultiplier,
+        bucketIndex,
+        timestamp: Date.now(),
+        profit: winAmount - actualWager,
+        riskLevel,
+      };
+      return [...prev, newDataPoint];
+    });
+    setSharedChartStats(prev => ({
+      totalBets: prev.totalBets + 1,
+      totalWagered: prev.totalWagered + actualWager,
+      totalWon: prev.totalWon + winAmount,
+    }));
 
     // ... rest of your balance update logic ...
     console.log('=== SCORE EVENT ===');
@@ -579,17 +647,24 @@ const Home: React.FC = () => {
           wagerPerBall: wagerPerBallMORBIUS,
           totalMorbiusCost: formatEther(totalCost),
           nativePLS: formatEther(plsNeeded),
+          plsNeededRaw: plsNeeded.toString(),
           risk: buyRiskLevel,
           contractRiskLevel,
+          priceSource: wplsPerMORBIUS ? 'available' : 'NULL',
+          wplsPerMORBIUS: wplsPerMORBIUS?.toString(),
         });
 
+        console.log('>>> Calling writeContractAsync for buyBallsWithPLSAndDrop...');
         txHash = await writeContractAsync({
           address: PLINKO_ADDRESS,
           abi: PLINKO_ABI,
           functionName: 'buyBallsWithPLSAndDrop',
           args: [BigInt(count), Number(contractRiskLevel)],
           value: plsNeeded, // Send native PLS with transaction
+          gas: 2n * (BigInt(500_000) + BigInt(count) * BigInt(150_000)), // 2x: base + per-ball gas (PulseX router + transfers)
+          maxPriorityFeePerGas: 40_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
         });
+        console.log('>>> writeContractAsync returned txHash:', txHash);
       } else {
         // Buy with MORBIUS and drop in ONE transaction
         const totalCost = wagerAmount * BigInt(count);
@@ -606,11 +681,13 @@ const Home: React.FC = () => {
           abi: PLINKO_ABI,
           functionName: 'buyBallsAndDrop',
           args: [BigInt(count), wagerAmount, Number(contractRiskLevel)],
+          gas: 2n * (BigInt(400_000) + BigInt(count) * BigInt(150_000)), // 2x: base + per-ball gas (transfers + loop)
+          maxPriorityFeePerGas: 40_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
         });
       }
 
       // Wait for the transaction to be confirmed with polling
-      console.log('Waiting for buy-and-drop transaction confirmation...', txHash);
+      console.log('>>> Waiting for confirmation. txHash:', txHash, 'publicClient:', publicClient ? 'available' : 'NULL');
       setIsConfirmingTransaction(true);
       setConfirmationStage('broadcast');
       const receipt = await pollForReceipt(txHash, {
@@ -710,6 +787,9 @@ const Home: React.FC = () => {
       // 3. Update the state once at the end (MUCH more reliable)
       if (newAnimations.length > 0) {
         console.log(`✅ Successfully decoded ${newAnimations.length} balls. Adding to queue.`);
+        setScoredBallCount(0);
+        setBallsLaunched(0);
+        setExpectedBallCount(newAnimations.length);
         setAnimationQueue(prev => [...prev, ...newAnimations]);
 
         // Record each contract drop in history with transaction hash
@@ -805,6 +885,7 @@ const Home: React.FC = () => {
         abi: PLINKO_ABI,
         functionName: 'dropMultipleBalls',
         args: [BigInt(ballsToUpdate), Number(contractRiskLevel)],
+        maxPriorityFeePerGas: 40_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
       });
 
       // Wait for transaction confirmation with polling
@@ -919,6 +1000,9 @@ const Home: React.FC = () => {
     const wagerAmount = nextAnimation.multiplier > 0 ? nextAnimation.payout / nextAnimation.multiplier : 0;
     const profit = nextAnimation.payout - wagerAmount;
 
+    // Track that a ball has been physically launched into the physics engine
+    setBallsLaunched(prev => prev + 1);
+
     // Trigger the drop animation with predetermined bucket result
     setLastDrop({
       id: Date.now(),
@@ -934,16 +1018,12 @@ const Home: React.FC = () => {
     // The ball will drop with physics guidance and trigger scoring on collision
     // Win/loss badge will be set by handleScore when ball actually hits bucket
 
-    // Remove this item from queue and allow next animation after delay
+    // Remove this item from queue and allow next ball to launch after delay
+    // NOTE: This does NOT mean the ball has landed — ballsInPhysics keeps the panel open
     setTimeout(() => {
       const newQueue = animationQueue.slice(1);
       setAnimationQueue(newQueue);
       setIsAnimating(false);
-
-      // History recording now happens when ball hits bucket (via handleScore) - no longer here
-
-      // If this was the last ball and we have summary data, the toast will appear automatically
-      // No need to manually trigger modal - toast shows when dropSummaryData exists
     }, dropSpeed === 'burst' ? 100 : dropSpeed === 'fast' ? 500 : 1000); // Speed based on drop mode
 
   }, [animationQueue, isAnimating, freePlayEnabled, handleScore, dropSummaryData]);
@@ -1069,8 +1149,10 @@ const Home: React.FC = () => {
 
       <GlobalMainNav
         onShowPlinkoHistory={() => setShowPlinkoHistory(true)}
+        onOpenPlayerProfile={address ? (game) => { setPlayerProfileGame(game); setPlayerProfileOpen(true); } : undefined}
         onPlinkoSoundToggle={() => setSoundEnabled(!soundEnabled)}
         plinkoSoundEnabled={soundEnabled}
+        sidebarDisabled={isGameRunning}
       >
       {/* Free Play Badge */}
       {freePlayEnabled && (
@@ -1110,11 +1192,94 @@ const Home: React.FC = () => {
                 border: '1px inset rgba(60, 60, 60, 0.5)',
               }}
             >
+              {/* Game Running Overlay - Chart (top) + History (bottom) */}
+              {isGameRunning && (
+                <div className="absolute inset-0 z-30 flex flex-col rounded-2xl overflow-hidden"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(16, 20, 24, 0.97), rgba(24, 28, 32, 0.97))',
+                  }}
+                >
+                  {/* Top Half - Live P&L Chart */}
+                  <div className="flex-1 min-h-0 p-2">
+                    <RealTimeBetChart
+                      sessionStartTime={chartSessionStartTime.current}
+                      contractWagerPerBall={wagerPerBall}
+                      freePlayWager={currentWagerRef.current}
+                      betHistory={sharedBetHistory}
+                      chartStats={sharedChartStats}
+                      drops={plinkoHistory.drops}
+                      stats={plinkoHistory.stats}
+                      isConnected={plinkoHistory.isConnected}
+                      playerKey={plinkoHistory.playerKey}
+                      onExport={plinkoHistory.exportHistory}
+                      onClear={async () => {
+                        if (confirm('Are you sure you want to clear all history? This cannot be undone.')) {
+                          await plinkoHistory.clearHistory();
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {/* Bottom Half - Live Drop History */}
+                  <div className="flex-1 min-h-0 p-2 flex flex-col">
+                    <div className="text-cyan-300 text-xs font-bold uppercase tracking-wider text-center mb-1">
+                      Live Results ({history.length})
+                    </div>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+                      <div className="grid grid-cols-4 gap-1.5 px-1">
+                        {history.length > 0 ? history.slice(0, 100).map((item) => (
+                          <div
+                            key={item.id}
+                            className="rounded-sm px-1 py-1.5 text-center font-black text-sm text-white/60"
+                            style={{
+                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                              boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 -2px 4px rgba(255, 255, 255, 0.05)',
+                            }}
+                          >
+                            {item.multiplier}x
+                          </div>
+                        )) : (
+                          <div className="col-span-4 text-center text-cyan-300/40 py-4 text-xs italic">
+                            Waiting for drops...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Drop Speed Controls - Always accessible during game */}
+                    <div className="mt-2 pt-2 border-t border-white/10">
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { speed: 'normal' as DropSpeed, label: 'Normal' },
+                          { speed: 'fast' as DropSpeed, label: 'Fast' },
+                          { speed: 'burst' as DropSpeed, label: 'Burst' }
+                        ].map(({ speed, label }) => (
+                          <button
+                            key={speed}
+                            onClick={() => setDropSpeed(speed)}
+                            className={`py-1.5 rounded-lg text-xs font-bold transition-all touch-manipulation ${
+                              dropSpeed === speed
+                                ? 'text-cyan-300'
+                                : 'text-gray-500 hover:text-gray-400'
+                            }`}
+                            style={{
+                              boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.03)',
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="relative z-10 p-3 lg:p-3 xl:p-4 2xl:p-5 flex-1 flex flex-col justify-center">
                 {/* Multiplier Table Button - Top Right */}
                 <button
                   onClick={() => setShowMultiplierTable(true)}
-                  className="absolute top-2 right-3 text-white/50 hover:text-cyan-300 text-xs underline font-medium transition-colors"
+                  className="absolute top-2 right-3 text-white/50 hover:text-cyan-300 text-xs font-medium transition-colors"
                 >
                   Risk Tables
                 </button>
@@ -1127,7 +1292,7 @@ const Home: React.FC = () => {
                     <label className="block text-cyan-300 text-center text-sm uppercase font-bold mb-1">Risk Level</label>
                     <RadioGroup
                       value={buyRiskLevel}
-                      onValueChange={(value) => setBuyRiskLevel(value as RiskLevel)}
+                      onValueChange={(value) => { if (!shouldDisableControls) setBuyRiskLevel(value as RiskLevel); }}
                       className="flex flex-row gap-2"
                     >
                       {(['GREEN', 'YELLOW', 'RED'] as RiskLevel[]).map((risk, index) => {
@@ -1136,8 +1301,10 @@ const Home: React.FC = () => {
                         return (
                           <label
                             key={risk}
-                            htmlFor={`buy-${risk}`}
-                            className={`flex-1 cursor-pointer rounded-lg p-2 text-center transition ${
+                            htmlFor={shouldDisableControls ? undefined : `buy-${risk}`}
+                            className={`flex-1 rounded-lg p-2 text-center transition ${
+                              shouldDisableControls ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                            } ${
                               isSelected
                                 ? 'bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 text-cyan-300 shadow-lg'
                                 : 'text-white/40 hover:text-white/60'
@@ -1148,7 +1315,7 @@ const Home: React.FC = () => {
                                 : 'inset 2px 2px 4px rgba(0, 0, 0, 0.2), inset -2px -2px 4px rgba(255, 255, 255, 0.02)'
                             }}
                           >
-                            <RadioGroupItem value={risk} id={`buy-${risk}`} className="hidden" />
+                            <RadioGroupItem value={risk} id={`buy-${risk}`} className="hidden" disabled={shouldDisableControls} />
                             <div className="text-xs font-bold">{labels[index]}</div>
                           </label>
                         );
@@ -1168,8 +1335,8 @@ const Home: React.FC = () => {
                         const value = parseInt(e.target.value) || minWager;
                         setWagerPerBall(Math.max(minWager, Math.min(maxWager, value)));
                       }}
-                      disabled={isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance}
-                      className={`w-full h-9 lg:h-10 xl:h-11 rounded-lg px-2 text-cyan-300 text-center text-base lg:text-base xl:text-lg font-bold focus:outline-none bg-transparent border-none ${(isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={shouldDisableControls}
+                      className={`w-full h-9 lg:h-10 xl:h-11 rounded-lg px-2 text-cyan-300 text-center text-base lg:text-base xl:text-lg font-bold focus:outline-none bg-transparent border-none ${shouldDisableControls ? 'opacity-50 cursor-not-allowed' : ''}`}
                       style={{
                         boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.03)',
                       }}
@@ -1185,8 +1352,8 @@ const Home: React.FC = () => {
                       max="100"
                       value={buyBallsCount}
                       onChange={(e) => setBuyBallsCount(parseInt(e.target.value) || 1)}
-                      disabled={isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance}
-                      className={`w-full h-9 lg:h-10 xl:h-11 rounded-lg px-2 text-cyan-300 text-center text-base lg:text-base xl:text-lg font-bold focus:outline-none bg-transparent border-none ${(isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={shouldDisableControls}
+                      className={`w-full h-9 lg:h-10 xl:h-11 rounded-lg px-2 text-cyan-300 text-center text-base lg:text-base xl:text-lg font-bold focus:outline-none bg-transparent border-none ${shouldDisableControls ? 'opacity-50 cursor-not-allowed' : ''}`}
                       style={{
                         boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.03)',
                       }}
@@ -1199,13 +1366,13 @@ const Home: React.FC = () => {
                       <button
                         key={amount}
                         onClick={() => setWagerPerBall(Math.max(minWager, Math.min(maxWager, amount)))}
-                        disabled={isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance}
+                        disabled={shouldDisableControls}
                         className={`py-2 text-center text-xs font-bold transition-all touch-manipulation ${
                           wagerPerBall === amount
                             ? 'text-cyan-300'
                             : 'text-gray-500 hover:text-gray-400'
                         } ${
-                          (isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance) ? 'opacity-50 cursor-not-allowed' : ''
+                          shouldDisableControls ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                         style={{
                           boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
@@ -1222,13 +1389,13 @@ const Home: React.FC = () => {
                       <button
                         key={count}
                         onClick={() => setBuyBallsCount(count)}
-                        disabled={isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance}
+                        disabled={shouldDisableControls}
                         className={`py-2 text-center text-xs font-bold transition-all touch-manipulation ${
                           buyBallsCount === count
                             ? 'text-cyan-300'
                             : 'text-gray-500 hover:text-gray-400'
                         } ${
-                          (isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance) ? 'opacity-50 cursor-not-allowed' : ''
+                          shouldDisableControls ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                         style={{
                           boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.03)',
@@ -1245,12 +1412,12 @@ const Home: React.FC = () => {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => setUsePLS(false)}
-                        disabled={isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance}
+                        disabled={shouldDisableControls}
                         className={`py-2 rounded-lg text-xs lg:text-sm font-bold transition-all touch-manipulation flex items-center justify-center gap-1.5 ${
                           !usePLS
                             ? 'text-cyan-300 shadow-lg'
                             : 'text-white/40 hover:text-white/60 active:text-white'
-                        } ${(isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        } ${shouldDisableControls ? 'opacity-50 cursor-not-allowed' : ''}`}
                         style={{
                           boxShadow: !usePLS
                             ? 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.03)'
@@ -1269,12 +1436,12 @@ const Home: React.FC = () => {
                       </button>
                       <button
                         onClick={() => setUsePLS(true)}
-                        disabled={isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance || priceError || isLoadingPrice}
+                        disabled={shouldDisableControls || priceError || isLoadingPrice}
                         className={`py-2 rounded-lg text-xs lg:text-sm font-bold transition-all touch-manipulation flex items-center justify-center gap-1.5 ${
                           usePLS
                             ? 'text-purple-300 shadow-lg'
                             : 'text-white/40 hover:text-white/60 active:text-white'
-                        } ${(isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance || priceError || isLoadingPrice) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        } ${(shouldDisableControls || priceError || isLoadingPrice) ? 'opacity-50 cursor-not-allowed' : ''}`}
                         style={{
                           boxShadow: usePLS
                             ? 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.03)'
@@ -1294,6 +1461,19 @@ const Home: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* PLS Price Info */}
+                {usePLS && !priceError && morbiusPerPLS && (
+                  <div className="text-center mb-2 -mt-1">
+                    <span className="text-white/40 text-[10px]">
+                      1 PLS = {morbiusPerPLS >= 1 ? morbiusPerPLS.toFixed(2) : morbiusPerPLS.toFixed(6)} MORBIUS
+                      {' '}
+                      <span className="text-white/25">
+                        (via {priceSource === 'pulsex' ? 'PulseX' : 'DexScreener'})
+                      </span>
+                    </span>
+                  </div>
+                )}
 
                 {/* Error Messages */}
                 {priceError && usePLS && (
@@ -1346,7 +1526,7 @@ const Home: React.FC = () => {
                   {/* Buy Button */}
                   <button
                   onClick={() => buyBalls(buyBallsCount, wagerPerBall, usePLS)}
-                  disabled={!isConnected || isLoadingAllowance || isApproving || !!pendingPurchase || isConfirmingTransaction}
+                  disabled={!isConnected || shouldDisableControls}
                   className={`w-full font-bold py-2 lg:py-3 rounded-lg text-sm transition disabled:opacity-50 disabled:cursor-not-allowed ${
                     usePLS ? 'text-purple-300' : 'text-cyan-300'
                   }`}
@@ -1363,6 +1543,8 @@ const Home: React.FC = () => {
                     ? 'Confirming Transaction...'
                     : isApproving || !!pendingPurchase
                     ? 'Approving...'
+                    : isGameRunning
+                    ? `Dropping ${animationQueue.length + (isAnimating ? 1 : 0)} Ball${animationQueue.length + (isAnimating ? 1 : 0) !== 1 ? 's' : ''}...`
                     : `Buy & Drop ${buyBallsCount} Ball${buyBallsCount !== 1 ? 's' : ''}`}
                 </button>
                 </div>
@@ -1381,14 +1563,14 @@ const Home: React.FC = () => {
                       <button
                         key={speed}
                         onClick={() => setDropSpeed(speed)}
-                        disabled={isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance}
+                        disabled={false}
                         className={`h-15 w-full rounded-lg text-xs font-bold transition-all touch-manipulation ${
                           dropSpeed === speed
                             ? usePLS
                               ? 'text-cyan-300'
                               : 'text-cyan-300'
                             : 'text-gray-500 hover:text-gray-400'
-                        } ${(isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        }`}
                         style={{
                           boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.3), inset -4px -4px 8px rgba(255, 255, 255, 0.03)',
                         }}
@@ -1419,38 +1601,6 @@ const Home: React.FC = () => {
                 border: '1px inset rgba(60, 60, 60, 0.5)',
               }}
             >
-              {/* History Display */}
-              <div className="absolute top-4 left-4 right-4 flex items-center gap-2 z-50">
-                <button
-                  onClick={() => setShowExtendedHistory(true)}
-                  className="w-7 h-7 rounded-full text-white flex items-center justify-center flex-shrink-0 transition-all duration-75 active:scale-95"
-                  style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px inset rgba(60, 60, 60, 0.5)',
-                  }}
-                  title="View extended history"
-                >
-                  <i className="fas fa-history text-[10px]"></i>
-                </button>
-                <div className="flex gap-1 overflow-x-auto scrollbar-thin scrollbar-thumb-cyan-400/30 scrollbar-track-transparent hover:scrollbar-thumb-cyan-400/50 scroll-smooth flex-1">
-                  {history.length > 0 ? history.slice(0, historyCardCount).map((item, index) => (
-                    <div
-                      key={item.id}
-                      className={`${index === 0 ? 'history-item-enter' : ''} px-2 py-2 text-[10px] md:text-xs lg:text-sm font-black min-w-fit text-white/60 transition-all duration-300 rounded`}
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                        border: '1px inset rgba(60, 60, 60, 0.5)',
-                      }}
-                    >
-                      {item.multiplier}x
-                    </div>
-                  )) : (
-                    <div className="text-[12px] md:text-[10px] lg:text-smxsw text-cyan-300/60 font-bold uppercase tracking-wide px-1 italic">Waiting...</div>
-                  )}
-                </div>
-              </div>
             </div>
             </div>
 
@@ -1466,7 +1616,7 @@ const Home: React.FC = () => {
             )}
             <button
               onClick={() => setDropSpeed(dropSpeed === 'burst' ? 'normal' : 'burst')}
-              disabled={shouldDisableControls || isAutoDrop}
+              disabled={false}
               className={`w-16 h-16 md:w-20 md:h-20 rounded-full font-russo-one font-normal text-sm md:text-md transition-all duration-200 flex items-center justify-center ${
                 dropSpeed === 'burst'
                   ? 'bg-red-600/30 hover:bg-red-700/30 text-white shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.1)] transform translate-y-0.5 animate-[pulse_0.5s_ease-in-out_infinite] border border-red-400/50'
@@ -1530,19 +1680,45 @@ const Home: React.FC = () => {
         </div>
       </div>
 
-      {/* Chart + Chat: 2-col on desktop, stacked on mobile (chart first, then chat) */}
+      {/* Chart + Recent Play: 2-col grid */}
       <div className="px-3 mt-4 mb-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="h-64 md:h-72 lg:h-80 order-1">
+          <div className="h-64 md:h-72 lg:h-80 min-w-0 order-1">
             <RealTimeBetChart
-              ref={chartRef}
               sessionStartTime={chartSessionStartTime.current}
               contractWagerPerBall={wagerPerBall}
               freePlayWager={currentWagerRef.current}
+              betHistory={sharedBetHistory}
+              chartStats={sharedChartStats}
+              drops={plinkoHistory.drops}
+              stats={plinkoHistory.stats}
+              isConnected={plinkoHistory.isConnected}
+              playerKey={plinkoHistory.playerKey}
+              onExport={plinkoHistory.exportHistory}
+              onClear={async () => {
+                if (confirm('Are you sure you want to clear all history? This cannot be undone.')) {
+                  await plinkoHistory.clearHistory();
+                }
+              }}
             />
+          </div>
+          <div className="min-w-0 order-2">
+            <PlinkoRecentGames limit={20} compact title="Recent Games" />
           </div>
         </div>
       </div>
+
+      {/* Top Players + Recent Play (global) */}
+      <section className="px-3 mt-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+          <div className="min-w-0">
+            <PlinkoTopPlayers />
+          </div>
+          <div className="min-w-0">
+            <PlinkoRecentPlays limit={20} compact title="Recent Play" />
+          </div>
+        </div>
+      </section>
 
       {/* CONTROLS - Below buy section */}
       <div className="fixed bottom-[20px] left-0 right-0 z-20 pointer-events-none">
@@ -1656,12 +1832,12 @@ const Home: React.FC = () => {
                     setShowAutoPlayModal(true);
                   }
                 }}
-                disabled={isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance}
+                disabled={shouldDisableControls}
                 className={`w-12 h-12 rounded-full shadow-xl border-b-4 active:scale-95 transition-all duration-75 flex items-center justify-center ${
                   isAutoDrop
                     ? 'bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-700 text-black shadow-black/60 border-yellow-800 hover:from-yellow-300 hover:via-yellow-400 hover:to-yellow-600 hover:shadow-yellow-900/90 hover:border-yellow-700 active:shadow-inner active:shadow-yellow-900/60 active:border-yellow-900'
                     : 'bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-700 text-black shadow-black/60 border-yellow-800 hover:from-yellow-300 hover:via-yellow-400 hover:to-yellow-600 hover:shadow-black/80 hover:border-yellow-700 active:shadow-inner active:shadow-black/60 active:border-yellow-900'
-                } ${(isConfirmingTransaction || !!pendingPurchase || isApproving || isLoadingAllowance) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                } ${shouldDisableControls ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {isAutoDrop ? (
                   <span className="font-bold text-sm">{remainingBalls}</span>
@@ -1831,9 +2007,13 @@ const Home: React.FC = () => {
             await plinkoHistory.clearHistory();
           }
         }}
-        onFilterChange={(filter) => {
-          plinkoHistory.updateFilter(filter);
-        }}
+      />
+
+      <PlayerProfileModal
+        isOpen={playerProfileOpen}
+        onClose={() => setPlayerProfileOpen(false)}
+        address={address ?? null}
+        game={playerProfileGame}
       />
 
       {/* Custom Approval Modal */}
@@ -2087,23 +2267,15 @@ const Home: React.FC = () => {
         </div>
       )}
 
-      {/* Plinko contract address — click to copy */}
-      <div className="w-full flex justify-center py-3">
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(PLINKO_ADDRESS);
-              toast.success('Plinko contract address copied');
-            } catch {
-              toast.error('Failed to copy');
-            }
-          }}
-          className="text-white font-bold font-poppins text-sm cursor-pointer hover:opacity-90 transition-opacity select-all"
-          title="Click to copy Plinko contract address"
-        >
-          {PLINKO_ADDRESS}
-        </button>
+      {/* FAQ (includes contract addresses) */}
+      <div className="w-full flex justify-center py-4">
+        <GameFAQ
+          game="plinko"
+          addresses={[
+            { label: 'Plinko Contract', address: PLINKO_ADDRESS },
+            { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+          ]}
+        />
       </div>
 
       {/* Footer */}

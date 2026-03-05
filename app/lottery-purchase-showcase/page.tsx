@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAccount, usePublicClient, useReadContracts } from 'wagmi'
+import { useAccount, usePublicClient, useWatchContractEvent } from 'wagmi'
 import { formatUnits, parseAbiItem } from 'viem'
 import Link from 'next/link'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
@@ -10,21 +10,18 @@ import { PlayerPurchaseHistory, PurchaseEntry, PurchaseSummary, RoundDetail } fr
 import {
   KENO_ADDRESS,
   KENO_DEPLOY_BLOCK,
-  LOTTERY_DEPLOY_BLOCK,
-  LOTTERY_ADDRESS,
-  TICKET_PRICE,
   TOKEN_DECIMALS,
+  LOTTERY_INSTANT_ADDRESS,
 } from '@/lib/contracts'
 import { KENO_ABI } from '@/lib/keno-abi'
-import { usePlayerLifetime, usePlayerRoundHistory, useWatchTicketsPurchased } from '@/hooks/use-lottery-6of55'
+import { usePlayerInstantLotteryStats } from '@/hooks/use-instant-lottery'
 import { usePlinkoHistory } from '@/hooks/use-plinko-history'
 import Footer from '@/components/PLINKO/Footer'
 import { PlinkoHistoryModal } from '@/components/PLINKO/PlinkoHistoryModal'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
-import { usePublicClient as useLotteryPublicClient } from 'wagmi'
-import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 import { batchAnalyzeTransactions } from '@/lib/transaction-analyzer'
 import { formatMORBIUS, formatPLS } from '@/lib/format-utils'
+import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55'
 
 const pulseUrl = (tx: string) => `https://scan.pulsechain.box/tx/${tx}`
 
@@ -37,12 +34,10 @@ const formatTime = (iso: string | number | null | undefined) => {
 export default function LotteryPurchaseShowcase() {
   const { address } = useAccount()
   const publicClient = usePublicClient()
-  const lotteryClient = useLotteryPublicClient()
   const router = useRouter()
 
-  // Lottery data hooks
-  const { data: lifetimeData } = usePlayerLifetime(address)
-  const { data: roundHistoryData } = usePlayerRoundHistory(address, 0, 25)
+  // Instant Lottery: player stats (plays, wagered, won)
+  const { totalPlays, totalWagered, totalWon, isLoading: instantStatsLoading } = usePlayerInstantLotteryStats(address ?? undefined)
 
   // Plinko data hooks
   const {
@@ -56,393 +51,146 @@ export default function LotteryPurchaseShowcase() {
     playerKey: plinkoPlayerKey
   } = usePlinkoHistory()
 
-  // Debug logging for data comparison
-  console.log('🔍 Showcase Page Debug:', {
-    address: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'not connected',
-    lifetimeData,
-    roundHistoryData: roundHistoryData ? {
-      length: Array.isArray(roundHistoryData) ? roundHistoryData.length : 'not array',
-      sample: Array.isArray(roundHistoryData) && roundHistoryData.length > 0 ? roundHistoryData[0] : 'empty'
-    } : 'null'
-  })
-
-  // Calculate won rounds from round history
-  const roundsStats = useMemo(() => {
-    if (!roundHistoryData || !Array.isArray(roundHistoryData) || roundHistoryData.length < 3) {
-      return { totalWonRounds: 0, claimableRounds: 0 }
-    }
-
-    const [ids, tickets, wins] = roundHistoryData as [bigint[], bigint[], bigint[]]
-    let totalWonRounds = 0
-    let claimableRounds = 0
-
-    for (let i = 0; i < ids.length; i++) {
-      const roundId = Number(ids[i])
-      const amount = wins[i] || BigInt(0)
-
-      if (amount > 0 && roundId > 0) {
-        totalWonRounds++ // All rounds ever won
-        // Note: claimableRounds would require claim status checking like in MultiClaimModal
-        // For now, we'll show total won rounds
-      }
-    }
-
-    return { totalWonRounds, claimableRounds }
-  }, [roundHistoryData])
-
-  console.log('🏆 Won rounds calculation:', {
-    totalWonRounds: roundsStats.totalWonRounds,
-    claimableRounds: roundsStats.claimableRounds,
-    roundHistoryDataLength: Array.isArray(roundHistoryData) ? roundHistoryData.length : 'not array'
-  })
-
+  // Instant Lottery summary from contract stats (plays, wagered, won)
   const lotterySummary: PurchaseSummary = useMemo(() => {
-    if (!lifetimeData || !Array.isArray(lifetimeData) || lifetimeData.length < 4) return {}
-    const [tickets, spent, claimed, claimable] = lifetimeData as [bigint, bigint, bigint, bigint]
+    if (instantStatsLoading || totalPlays === undefined) return {}
+    const spent = totalWagered ?? 0n
+    const claimed = totalWon ?? 0n
     const pl = claimed - spent
-    const potentialPl = claimed + claimable - spent
-    const roi = spent > 0 ? ((Number(pl) / Number(spent)) * 100).toFixed(1) : '0.0'
-    const potentialRoi = spent > 0 ? ((Number(potentialPl) / Number(spent)) * 100).toFixed(1) : '0.0'
+    const roi = spent > 0n ? ((Number(pl) / Number(spent)) * 100).toFixed(1) : '0.0'
     const fmt = (v: bigint) => parseFloat(formatUnits(v, TOKEN_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 3 })
     return {
-      tickets: Number(tickets),
+      tickets: Number(totalPlays ?? 0n),
       spent: fmt(spent),
       claimed: fmt(claimed),
-      pending: fmt(claimable),
+      pending: '0',
       pl: parseFloat(formatUnits(pl, TOKEN_DECIMALS)).toFixed(3),
-      potentialPl: parseFloat(formatUnits(potentialPl, TOKEN_DECIMALS)).toFixed(3),
+      potentialPl: parseFloat(formatUnits(pl, TOKEN_DECIMALS)).toFixed(3),
       roi,
-      potentialRoi,
-      wonRounds: roundsStats.totalWonRounds, // Add won rounds count
+      potentialRoi: roi,
+      wonRounds: 0,
     }
-  }, [lifetimeData, roundsStats])
+  }, [totalPlays, totalWagered, totalWon, instantStatsLoading])
 
   const [lotteryEntries, setLotteryEntries] = useState<PurchaseEntry[]>([])
   const [allLotteryEntries, setAllLotteryEntries] = useState<PurchaseEntry[]>([])
   const [lotteryDisplayCount, setLotteryDisplayCount] = useState(25)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
-  // Enrich lottery entries with PLS payment data, win amounts, and status
+  // Enrich instant lottery entries: PLS payment detection and format labels
   const enrichLotteryEntries = useCallback(async (entriesToEnrich: PurchaseEntry[], allEntries: PurchaseEntry[]) => {
-    console.log('🔄 enrichLotteryEntries called:', {
-      entriesToEnrichCount: entriesToEnrich.length,
-      allEntriesCount: allEntries.length,
-      hasClient: !!lotteryClient,
-      hasAddress: !!address
-    })
-
-    if (!lotteryClient || !address || entriesToEnrich.length === 0) {
-      console.log('⚠️ Skipping lottery enrichment - missing requirements')
+    if (!publicClient || !address || entriesToEnrich.length === 0) {
       setLotteryEntries(allEntries.slice(0, lotteryDisplayCount))
       return
     }
-
     try {
-      console.log('✅ Starting lottery enrichment...')
-      // 1. Batch analyze transactions for PLS detection
       const txHashes = entriesToEnrich.map(e => e.tx).filter(Boolean) as string[]
-      const txAnalysisMap = await batchAnalyzeTransactions(txHashes, lotteryClient, 'Lottery')
-
-      // 2. Extract round IDs from entries
-      const roundIds: bigint[] = []
-      const roundIdToEntry = new Map<string, PurchaseEntry>()
-
-      entriesToEnrich.forEach(entry => {
-        // Extract round ID from roundLabel (e.g., "Round #123" or "Rounds 120→125")
-        const match = entry.roundLabel.match(/Round #?(\d+)/)
-        if (match) {
-          const roundId = BigInt(match[1])
-          roundIds.push(roundId)
-          roundIdToEntry.set(roundId.toString(), entry)
-        }
-      })
-
-      // 3. Batch fetch round data and claimable winnings
-      const roundDataPromises = roundIds.map(roundId =>
-        lotteryClient.readContract({
-          address: LOTTERY_ADDRESS as `0x${string}`,
-          abi: LOTTERY_6OF55_V2_ABI,
-          functionName: 'getRound',
-          args: [roundId],
-        }).catch(() => null)
-      )
-
-      const winningsPromises = roundIds.map(roundId =>
-        lotteryClient.readContract({
-          address: LOTTERY_ADDRESS as `0x${string}`,
-          abi: LOTTERY_6OF55_V2_ABI,
-          functionName: 'getClaimableWinnings',
-          args: [roundId, address],
-        }).catch(() => BigInt(0))
-      )
-
-      const [roundDataResults, winningsResults] = await Promise.all([
-        Promise.all(roundDataPromises),
-        Promise.all(winningsPromises)
-      ])
-
-      const roundDataMap = new Map<string, any>()
-      const winningsMap = new Map<string, bigint>()
-
-      roundIds.forEach((roundId, index) => {
-        if (roundDataResults[index]) {
-          roundDataMap.set(roundId.toString(), roundDataResults[index])
-        }
-        winningsMap.set(roundId.toString(), winningsResults[index] as bigint)
-      })
-
-      // 4. Enrich entries
+      const txAnalysisMap = await batchAnalyzeTransactions(txHashes, publicClient, 'Lottery')
       const enriched = entriesToEnrich.map(entry => {
         const txAnalysis = entry.tx ? txAnalysisMap.get(entry.tx) : null
-        const roundMatch = entry.roundLabel.match(/Round #?(\d+)/)
-        const roundId = roundMatch ? roundMatch[1] : null
-        const winAmount = roundId ? winningsMap.get(roundId) || BigInt(0) : BigInt(0)
-        const hasWon = winAmount > BigInt(0)
-        const roundData = roundId ? roundDataMap.get(roundId) : null
-
-        // Determine status based on round state
-        let ticketStatus: 'in-play' | 'expired' | 'claimable' | 'claimed' = 'in-play'
-
-        if (roundData) {
-          try {
-            const roundState = Number(roundData.state || 0) // 0 = OPEN, 1 = FINALIZED
-            const isFinalized = roundState === 1
-
-            // Debug log
-            console.log(`🎰 Lottery Round #${roundId} status:`, {
-              roundState,
-              isFinalized,
-              hasWon,
-              winAmount: winAmount.toString(),
-              rawRoundData: roundData
-            })
-
-            if (isFinalized) {
-              if (hasWon) {
-                ticketStatus = 'claimable'
-                console.log(`✅ Round #${roundId} marked as CLAIMABLE (finalized + has winnings)`)
-              } else {
-                ticketStatus = 'expired'
-                console.log(`✅ Round #${roundId} marked as EXPIRED (finalized + no winnings)`)
-              }
-            } else {
-              ticketStatus = 'in-play'
-              console.log(`⏳ Round #${roundId} marked as IN-PLAY (not finalized)`)
-            }
-          } catch (error) {
-            console.error(`❌ Error processing Lottery Round #${roundId}:`, error)
-          }
-        } else if (hasWon) {
-          // Fallback if we don't have round data but have winnings
-          ticketStatus = 'claimable'
-          console.log(`✅ Round #${roundId} marked as CLAIMABLE (fallback - has winnings but no round data)`)
-        } else {
-          console.warn(`⚠️ No round data found for Round #${roundId}`)
-        }
-
-        // Format amounts
         let costLabel = entry.costLabel
         let originalAmount: string | undefined
-
         if (txAnalysis?.paymentType === 'PLS' && txAnalysis.plsAmount) {
           originalAmount = formatPLS(txAnalysis.plsAmount)
           const morbiusAmount = txAnalysis.morbiusReceived || BigInt(0)
-          if (morbiusAmount > 0) {
-            costLabel = `${formatMORBIUS(morbiusAmount)} MORBIUS`
-          }
+          if (morbiusAmount > 0n) costLabel = `${formatMORBIUS(morbiusAmount)} MORBIUS`
         } else {
-          // Parse existing MORBIUS amount and reformat as whole number
           const match = entry.costLabel.match(/([\d.]+)\s*MORBIUS/)
-          if (match) {
-            const amount = parseFloat(match[1])
-            costLabel = `${Math.floor(amount).toLocaleString()} MORBIUS`
-          }
+          if (match) costLabel = `${Math.floor(parseFloat(match[1])).toLocaleString()} MORBIUS`
         }
-
         return {
           ...entry,
-          paymentType: txAnalysis?.paymentType || 'MORBIUS',
+          paymentType: txAnalysis?.paymentType ?? 'MORBIUS',
           originalAmount,
           costLabel,
-          ticketStatus,
-          winAmount,
-          hasWon,
+          ticketStatus: 'claimed' as const,
+          winAmount: entry.winAmount ?? BigInt(0),
+          hasWon: (entry.winAmount ?? BigInt(0)) > BigInt(0),
         }
       })
-
-      // Merge enriched entries with the rest
-      const finalEntries = [
-        ...enriched,
-        ...allEntries.slice(entriesToEnrich.length)
-      ]
-
-      console.log('✅ Lottery enrichment complete. Setting entries:', {
-        enrichedCount: enriched.length,
-        totalCount: finalEntries.length,
-        displayCount: lotteryDisplayCount,
-        sampleEnrichedEntry: enriched[0]
-      })
-
+      const finalEntries = [...enriched, ...allEntries.slice(entriesToEnrich.length)]
       setLotteryEntries(finalEntries.slice(0, lotteryDisplayCount))
-    } catch (error) {
-      console.error('❌ Error enriching lottery entries:', error)
+    } catch {
       setLotteryEntries(allEntries.slice(0, lotteryDisplayCount))
     }
-  }, [lotteryClient, address, lotteryDisplayCount])
+  }, [publicClient, address, lotteryDisplayCount])
 
   const loadLotteryPurchases = useCallback(async () => {
-    if (!lotteryClient || !address) {
+    if (!publicClient || !address) {
       setLotteryEntries([])
+      setAllLotteryEntries([])
+      return
+    }
+    const zero = (LOTTERY_INSTANT_ADDRESS as string) === '0x0000000000000000000000000000000000000000'
+    if (zero) {
+      setLotteryEntries([])
+      setAllLotteryEntries([])
       return
     }
     try {
+      const toBlock = await publicClient.getBlockNumber()
+      const fromBlock = 0n
+      const logs = await publicClient.getContractEvents({
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
+        abi: INSTANT_LOTTERY_6OF55_ABI,
+        eventName: 'InstantLotteryResult',
+        args: { player: address },
+        fromBlock,
+        toBlock,
+      })
       const entries: PurchaseEntry[] = []
-
-      // Fetch single-round purchases (TicketsPurchased events)
-      const singleRoundEvent = parseAbiItem(
-        'event TicketsPurchased(address indexed player,uint256 indexed roundId,uint256 ticketCount,uint256 freeTicketsUsed,uint256 MORBIUSSpent)'
-      )
-      const singleRoundLogs = await lotteryClient.getLogs({
-        address: LOTTERY_ADDRESS as `0x${string}`,
-        event: singleRoundEvent,
-        args: { player: address },
-        fromBlock: BigInt(LOTTERY_DEPLOY_BLOCK),
-        toBlock: 'latest',
-      })
-
-      // Fetch multi-round purchases (TicketsPurchasedForRounds events)
-      const multiRoundEvent = parseAbiItem(
-        'event TicketsPurchasedForRounds(address indexed player,uint256[] roundIds,uint256[] ticketCounts,uint256 MORBIUSSpent)'
-      )
-      const multiRoundLogs = await lotteryClient.getLogs({
-        address: LOTTERY_ADDRESS as `0x${string}`,
-        event: multiRoundEvent,
-        args: { player: address },
-        fromBlock: BigInt(LOTTERY_DEPLOY_BLOCK),
-        toBlock: 'latest',
-      })
-
-      // Combine and sort all logs by block number and log index
-      const allLogs = [...singleRoundLogs, ...multiRoundLogs].sort((a, b) => {
-        const bnA = typeof a.blockNumber === 'bigint' ? a.blockNumber : BigInt(a.blockNumber || 0)
-        const bnB = typeof b.blockNumber === 'bigint' ? b.blockNumber : BigInt(b.blockNumber || 0)
-        if (bnA !== bnB) return bnA > bnB ? 1 : -1
-        const liA = typeof a.logIndex === 'bigint' ? a.logIndex : BigInt(a.logIndex || 0)
-        const liB = typeof b.logIndex === 'bigint' ? b.logIndex : BigInt(b.logIndex || 0)
-        return liA > liB ? 1 : liA < liB ? -1 : 0
-      })
-
-      // Group logs by transaction hash to combine multi-round purchases
-      const txGroups = new Map<string, typeof allLogs>()
-
-      for (const log of allLogs) {
-        const txHash = log.transactionHash
-        if (!txGroups.has(txHash)) {
-          txGroups.set(txHash, [])
+      for (const log of logs) {
+        const args = log.args as {
+          player?: string
+          playerNumbers?: readonly number[] | readonly bigint[]
+          winningNumbers?: readonly number[] | readonly bigint[]
+          matchCount?: number | bigint
+          wager?: bigint
+          grossPayout?: bigint
+          netPayout?: bigint
         }
-        txGroups.get(txHash)!.push(log)
-      }
-
-      // Process each transaction group
-      for (const [txHash, logs] of txGroups) {
-        // Sort logs within transaction by log index
-        logs.sort((a, b) => {
-          const liA = typeof a.logIndex === 'bigint' ? a.logIndex : BigInt(a.logIndex || 0)
-          const liB = typeof b.logIndex === 'bigint' ? b.logIndex : BigInt(b.logIndex || 0)
-          return liA > liB ? 1 : liA < liB ? -1 : 0
-        })
-
-        const block =
-          logs[0].blockNumber !== undefined
-            ? await lotteryClient.getBlock({ blockNumber: logs[0].blockNumber as any })
-            : null
+        const wager = BigInt(args.wager ?? 0)
+        const netPayout = BigInt(args.netPayout ?? 0)
+        const playerNumbers = Array.isArray(args.playerNumbers) ? args.playerNumbers.map(n => Number(n)) : []
+        const winningNumbers = Array.isArray(args.winningNumbers) ? args.winningNumbers.map(n => Number(n)) : []
+        const matchCount = Number(args.matchCount ?? 0)
+        const block = log.blockNumber != null ? await publicClient.getBlock({ blockNumber: log.blockNumber }).catch(() => null) : null
         const ts = block?.timestamp ? Number(block.timestamp) * 1000 : null
-
-        // Check if this transaction contains multi-round purchases
-        const multiRoundLog = logs.find(log => log.args && 'roundIds' in log.args && Array.isArray(log.args.roundIds))
-
-        if (multiRoundLog && multiRoundLog.args) {
-          // Multi-round purchase
-          const roundIds = (multiRoundLog.args as any).roundIds as readonly bigint[]
-          const ticketCounts = (multiRoundLog.args as any).ticketCounts as readonly bigint[]
-          const MORBIUSSpent = BigInt((multiRoundLog.args as any).MORBIUSSpent ?? 0)
-
-          // Calculate round range and total tickets
-          const sortedRounds = roundIds.map(id => Number(id)).sort((a, b) => a - b)
-          const firstRound = sortedRounds[0]
-          const lastRound = sortedRounds[sortedRounds.length - 1]
-          const totalTickets = ticketCounts.reduce((sum, count) => sum + Number(count), 0)
-
-          const roundLabel = sortedRounds.length > 1
-            ? `Rounds ${firstRound}→${lastRound}`
-            : `Round #${firstRound}`
-
-          entries.push({
-            id: `${txHash}-multi`,
-            game: 'Lottery',
-            roundLabel,
-            ticketsLabel: `${totalTickets} tickets`,
-            freeTickets: 0, // Multi-round doesn't track free tickets
-            addons: [],
-            costLabel: `${parseFloat(formatUnits(MORBIUSSpent, TOKEN_DECIMALS)).toFixed(3)} MORBIUS`,
-            tx: txHash,
-            timeLabel: formatTime(ts),
-            status: 'Confirmed',
-          })
-        } else {
-          // Single-round purchases (could be multiple single-round logs in one tx)
-          for (const log of logs) {
-            const args = log.args
-            if (args && 'roundId' in args) {
-              const roundId = Number(args.roundId ?? 0)
-              const ticketCount = Number(args.ticketCount ?? 0)
-              const freeUsed = Number(args.freeTicketsUsed ?? 0)
-              const MORBIUSSpent = BigInt(args.MORBIUSSpent ?? 0)
-
-              entries.push({
-                id: `${roundId}-${txHash}-${log.logIndex?.toString?.() ?? ''}`,
-                game: 'Lottery',
-                roundLabel: `Round #${roundId}`,
-                ticketsLabel: `${ticketCount} tickets`,
-                freeTickets: freeUsed,
-                addons: [],
-                costLabel: `${parseFloat(formatUnits(MORBIUSSpent, TOKEN_DECIMALS)).toFixed(3)} MORBIUS`,
-                tx: txHash,
-                timeLabel: formatTime(ts),
-                status: 'Confirmed',
-              })
-            }
-          }
-        }
+        entries.push({
+          id: `${log.transactionHash}-${log.logIndex?.toString() ?? ''}`,
+          game: 'Lottery',
+          roundLabel: 'Instant play',
+          ticketsLabel: '1 play',
+          costLabel: `${parseFloat(formatUnits(wager, TOKEN_DECIMALS)).toFixed(3)} MORBIUS`,
+          tx: log.transactionHash,
+          timeLabel: formatTime(ts),
+          status: 'Confirmed',
+          winAmount: netPayout,
+          hasWon: netPayout > 0n,
+          instantPlay: { playerNumbers, winningNumbers, matchCount, netPayout },
+        })
       }
-
       const reversedEntries = entries.reverse()
       setAllLotteryEntries(reversedEntries)
-
-      // Enrich only the visible entries (first lotteryDisplayCount)
       const entriesToEnrich = reversedEntries.slice(0, lotteryDisplayCount)
       await enrichLotteryEntries(entriesToEnrich, reversedEntries)
     } catch (err) {
-      console.error('load lottery purchases failed', err)
       setLotteryEntries([])
       setAllLotteryEntries([])
     }
-  }, [lotteryClient, address, lotteryDisplayCount])
+  }, [publicClient, address, lotteryDisplayCount, enrichLotteryEntries])
 
   const refetchPurchases = useCallback(() => {
     setRefreshTrigger(prev => prev + 1)
   }, [])
 
-  // Watch for new ticket purchases and trigger refresh
-  useWatchTicketsPurchased(address, (roundId, ticketCount) => {
-    console.log('🎫 New lottery purchase detected:', {
-      roundId: roundId.toString(),
-      ticketCount: ticketCount.toString(),
-      address: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'unknown'
-    })
-    refetchPurchases()
+  useWatchContractEvent({
+    address: (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000' ? LOTTERY_INSTANT_ADDRESS : undefined,
+    abi: INSTANT_LOTTERY_6OF55_ABI,
+    eventName: 'InstantLotteryResult',
+    args: address ? { player: address } : undefined,
+    onLogs: () => refetchPurchases(),
   })
-
   useEffect(() => {
     loadLotteryPurchases()
   }, [loadLotteryPurchases, refreshTrigger])
@@ -455,21 +203,12 @@ export default function LotteryPurchaseShowcase() {
 
   // Enrich Keno entries with PLS payment data, status, and winnings
   const enrichKenoEntries = useCallback(async (entriesToEnrich: PurchaseEntry[], allEntries: PurchaseEntry[]) => {
-    console.log('🔄 enrichKenoEntries called:', {
-      entriesToEnrichCount: entriesToEnrich.length,
-      allEntriesCount: allEntries.length,
-      hasClient: !!publicClient,
-      hasAddress: !!address
-    })
-
     if (!publicClient || !address || entriesToEnrich.length === 0) {
-      console.log('⚠️ Skipping Keno enrichment - missing requirements')
       setKenoEntries(allEntries.slice(0, kenoDisplayCount))
       return
     }
 
     try {
-      console.log('✅ Starting Keno enrichment...')
       // Batch analyze transactions for PLS detection
       const txHashes = entriesToEnrich.map(e => e.tx).filter(Boolean) as string[]
       const txAnalysisMap = await batchAnalyzeTransactions(txHashes, publicClient, 'Keno')
@@ -532,27 +271,11 @@ export default function LotteryPurchaseShowcase() {
             const totalDraws = Number(ticketData.draws || 0)
             const firstRoundId = Number(ticketData.firstRoundId || 0)
 
-            // Debug log
-            console.log(`🎫 Keno Ticket #${ticketId} status:`, {
-              drawsRemaining,
-              totalDraws,
-              firstRoundId,
-              rawTicketData: ticketData
-            })
-
-            // Determine status based on draws remaining
-            if (drawsRemaining === 0) {
-              ticketStatus = 'expired'
-              console.log(`✅ Ticket #${ticketId} marked as EXPIRED (0 draws remaining)`)
-            } else {
-              ticketStatus = 'in-play'
-              console.log(`⏳ Ticket #${ticketId} marked as IN-PLAY (${drawsRemaining} draws remaining)`)
-            }
-          } catch (error) {
-            console.error(`❌ Error processing Keno Ticket #${ticketId}:`, error)
+            if (drawsRemaining === 0) ticketStatus = 'expired'
+            else ticketStatus = 'in-play'
+          } catch {
+            // keep default ticketStatus
           }
-        } else {
-          console.warn(`⚠️ No ticket data found for Ticket #${ticketId}`)
         }
 
         return {
@@ -572,16 +295,8 @@ export default function LotteryPurchaseShowcase() {
         ...allEntries.slice(entriesToEnrich.length)
       ]
 
-      console.log('✅ Keno enrichment complete. Setting entries:', {
-        enrichedCount: enriched.length,
-        totalCount: finalEntries.length,
-        displayCount: kenoDisplayCount,
-        sampleEnrichedEntry: enriched[0]
-      })
-
       setKenoEntries(finalEntries.slice(0, kenoDisplayCount))
-    } catch (error) {
-      console.error('❌ Error enriching Keno entries:', error)
+    } catch {
       setKenoEntries(allEntries.slice(0, kenoDisplayCount))
     }
   }, [publicClient, address, kenoDisplayCount])
@@ -692,139 +407,53 @@ export default function LotteryPurchaseShowcase() {
     }
   }, [kenoDisplayCount, allKenoEntries, enrichKenoEntries])
 
-  // Fetch individual round details for Lottery (expandable entries)
+  // Instant Lottery: expand shows one play (numbers, result, payout) from entry.instantPlay
   const fetchLotteryRoundDetails = useCallback(async (entry: PurchaseEntry): Promise<RoundDetail[]> => {
-    if (!lotteryClient || !address) {
-      return []
+    const play = entry.instantPlay
+    if (!play) return []
+    return [{
+      roundId: 0,
+      numbers: play.playerNumbers.length > 0 ? play.playerNumbers : undefined,
+      winningNumbers: play.winningNumbers.length > 0 ? play.winningNumbers : undefined,
+      matches: play.matchCount,
+      prize: play.netPayout > 0n ? play.netPayout : undefined,
+      status: play.netPayout > 0n ? 'won' : 'lost',
+    }]
+  }, [])
+
+  // Decode Keno numbersBitmap (bit i set = number i+1 picked) to number[]
+  const decodeKenoBitmap = (bitmap: bigint): number[] => {
+    const out: number[] = []
+    for (let i = 0; i < 80; i++) {
+      if ((bitmap & (1n << BigInt(i))) !== 0n) out.push(i + 1)
     }
+    return out
+  }
 
-    try {
-      // Extract round IDs from the entry
-      let roundIds: number[] = []
-
-      // Check if it's a multi-round entry (e.g., "Rounds 120→125")
-      const multiRoundMatch = entry.roundLabel.match(/Rounds (\d+)→(\d+)/)
-      if (multiRoundMatch) {
-        const startRound = parseInt(multiRoundMatch[1])
-        const endRound = parseInt(multiRoundMatch[2])
-        roundIds = Array.from({ length: endRound - startRound + 1 }, (_, i) => startRound + i)
-      } else {
-        // Single round entry (e.g., "Round #123")
-        const singleRoundMatch = entry.roundLabel.match(/Round #?(\d+)/)
-        if (singleRoundMatch) {
-          roundIds = [parseInt(singleRoundMatch[1])]
-        }
-      }
-
-      if (roundIds.length === 0) {
-        return []
-      }
-
-      // Fetch data for all rounds in parallel
-      const roundDetailsPromises = roundIds.map(async (roundId) => {
-        try {
-          // Fetch round data to get winning numbers and state
-          const roundData = await lotteryClient.readContract({
-            address: LOTTERY_ADDRESS as `0x${string}`,
-            abi: LOTTERY_6OF55_V2_ABI,
-            functionName: 'getRound',
-            args: [BigInt(roundId)],
-          })
-
-          // Fetch player's tickets for this round
-          const playerTickets = await lotteryClient.readContract({
-            address: LOTTERY_ADDRESS as `0x${string}`,
-            abi: LOTTERY_6OF55_V2_ABI,
-            functionName: 'getPlayerTickets',
-            args: [BigInt(roundId), address],
-          }) as number[][]
-
-          // Fetch claimable winnings
-          const winnings = await lotteryClient.readContract({
-            address: LOTTERY_ADDRESS as `0x${string}`,
-            abi: LOTTERY_6OF55_V2_ABI,
-            functionName: 'getClaimableWinnings',
-            args: [BigInt(roundId), address],
-          }) as bigint
-
-          const roundState = Number(roundData.state || 0) // 0 = OPEN, 1 = FINALIZED
-          const isFinalized = roundState === 1
-          const winningNumbers = roundData.winningNumbers ? (roundData.winningNumbers as bigint[]).map(n => Number(n)) : []
-
-          // Calculate matches if we have tickets and winning numbers
-          let matches = 0
-          let playerNumbers: number[] = []
-
-          if (playerTickets && playerTickets.length > 0 && winningNumbers.length > 0) {
-            // Use the first ticket for now (could be enhanced to show all tickets)
-            playerNumbers = playerTickets[0].map(n => Number(n))
-            matches = playerNumbers.filter(num => winningNumbers.includes(num)).length
-          }
-
-          // Determine status
-          let status: 'pending' | 'won' | 'lost' = 'pending'
-          if (isFinalized) {
-            status = winnings > BigInt(0) ? 'won' : 'lost'
-          }
-
-          const roundDetail: RoundDetail = {
-            roundId,
-            numbers: playerNumbers.length > 0 ? playerNumbers : undefined,
-            winningNumbers: winningNumbers.length > 0 ? winningNumbers : undefined,
-            matches: isFinalized ? matches : undefined,
-            prize: winnings > BigInt(0) ? winnings : undefined,
-            status,
-          }
-
-          return roundDetail
-        } catch (error) {
-          console.error(`Error fetching lottery round ${roundId}:`, error)
-          return {
-            roundId,
-            status: 'pending' as const,
-          }
-        }
-      })
-
-      const details = await Promise.all(roundDetailsPromises)
-      return details
-    } catch (error) {
-      console.error('Error fetching lottery round details:', error)
-      return []
-    }
-  }, [lotteryClient, address])
-
-  // Fetch individual round details for Keno (expandable entries)
+  // Fetch individual round details for Keno (expandable entries) using KENO_ABI getTicket
   const fetchKenoRoundDetails = useCallback(async (entry: PurchaseEntry): Promise<RoundDetail[]> => {
     if (!publicClient || !address) {
       return []
     }
 
     try {
-      // Extract ticket ID from the entry
       const ticketMatch = entry.ticketsLabel.match(/Ticket #(\d+)/)
-      if (!ticketMatch) {
-        return []
-      }
+      if (!ticketMatch) return []
 
       const ticketId = BigInt(ticketMatch[1])
-
-      // Fetch ticket data to get picked numbers and round range
       const ticketData = await publicClient.readContract({
         address: KENO_ADDRESS as `0x${string}`,
         abi: KENO_ABI,
         functionName: 'getTicket',
         args: [ticketId],
-      }) as any
+      }) as { firstRoundId?: bigint; draws?: number; drawsRemaining?: number; numbersBitmap?: bigint } | null
 
-      if (!ticketData) {
-        return []
-      }
+      if (!ticketData) return []
 
-      const firstRoundId = Number(ticketData.firstRoundId || 0)
-      const draws = Number(ticketData.draws || 0)
-      const drawsRemaining = Number(ticketData.drawsRemaining || 0)
-      const pickedNumbers = ticketData.pickedNumbers ? (ticketData.pickedNumbers as bigint[]).map(n => Number(n)) : []
+      const firstRoundId = Number(ticketData.firstRoundId ?? 0)
+      const draws = Number(ticketData.draws ?? 0)
+      const drawsRemaining = Number(ticketData.drawsRemaining ?? 0)
+      const pickedNumbers = ticketData.numbersBitmap != null ? decodeKenoBitmap(ticketData.numbersBitmap) : []
 
       // Calculate which rounds this ticket covers
       const completedDraws = draws - drawsRemaining
@@ -869,8 +498,7 @@ export default function LotteryPurchaseShowcase() {
           }
 
           return roundDetail
-        } catch (error) {
-          console.error(`Error fetching keno round ${roundId}:`, error)
+        } catch {
           return {
             roundId,
             numbers: pickedNumbers,
@@ -894,7 +522,6 @@ export default function LotteryPurchaseShowcase() {
 
       return details
     } catch (error) {
-      console.error('Error fetching keno round details:', error)
       return []
     }
   }, [publicClient, address])

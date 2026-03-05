@@ -41,6 +41,7 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
   // Use Refs for animation state to avoid re-renders breaking the physics loop
   const drawingStateRef = useRef<'idle' | 'selecting' | 'sucking'>('idle')
   const selectedBallRef = useRef<BallData | null>(null)
+  const selectedWinningNumberRef = useRef<number | null>(null)
   const suctionFramesRef = useRef<number>(0)
   const mixingTimeRef = useRef<number>(0) // Track mixing time for varied forces
   const shouldRestartRef = useRef<boolean>(false) // Flag to restart animation
@@ -130,9 +131,6 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
     ctx.arc(centerX, centerY, containerRadius, 0, Math.PI * 2)
     ctx.fillStyle = 'rgba(15, 23, 42, 0.4)'
     ctx.fill()
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'
-    ctx.lineWidth = 6
-    ctx.stroke()
 
     // Draw Tube (lifted up 5px)
     const tubeWidth = BALL_RADIUS * 2 + 10
@@ -165,10 +163,11 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
               drawingStateRef.current = 'idle'
               settleFramesRef.current = Math.max(settleFramesRef.current, 240)
               shouldRestartRef.current = true
-              // Pass both ball ID and the winning number (from label)
-              const winningNumber = parseInt(b.label, 10)
+              // Use the winning number we stored at selection time (the intended draw from parent)
+              const winningNumber = selectedWinningNumberRef.current ?? parseInt(b.label, 10)
               onBallSelected(b.id, winningNumber)
               selectedBallRef.current = null
+              selectedWinningNumberRef.current = null
               suctionFramesRef.current = 0
             }
           }
@@ -181,10 +180,12 @@ const PhysicsMachine: React.FC<PhysicsMachineProps> = ({
           if (available.length > 0) {
             const candidate = available[Math.floor(Math.random() * available.length)]
 
-            // If targetWinningNumber is provided, update the ball's label to show that number
-            if (targetWinningNumber !== null && targetWinningNumber !== undefined) {
-              candidate.label = targetWinningNumber.toString()
-            }
+            // Use the parent's winning number: show it on the ball and pass it to callback when drawn
+            const winningNum = targetWinningNumber !== null && targetWinningNumber !== undefined
+              ? Number(targetWinningNumber)
+              : parseInt(candidate.label, 10)
+            candidate.label = String(winningNum)
+            selectedWinningNumberRef.current = winningNum
 
             selectedBallRef.current = candidate
             drawingStateRef.current = 'sucking'

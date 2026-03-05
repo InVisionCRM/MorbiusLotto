@@ -285,7 +285,7 @@ export function PlinkoHistoryModal({
                           href={`https://scan.pulsechain.com/tx/${drop.transactionHash}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="hover:text-cyan-300 underline transition-colors"
+                          className="hover:text-cyan-300 transition-colors"
                           title="View on PulseChain Explorer"
                         >
                           {drop.transactionHash.slice(0, 6)}...{drop.transactionHash.slice(-4)}

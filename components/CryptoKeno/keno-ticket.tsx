@@ -43,18 +43,18 @@ interface KenoTicketProps {
   bullsEyeNumber?: number
 }
 
-// Keno payout tables
+// Must match CryptoKeno.sol _initDefaultPaytables (max wager 100k, top prize 25x @ 10/10 = 2.5M cap)
 const PAYTABLE: Record<number, Record<number, number>> = {
   1: { 1: 2 },
-  2: { 2: 11 },
-  3: { 2: 2, 3: 27 },
-  4: { 2: 1, 3: 5, 4: 72 },
-  5: { 3: 2, 4: 18, 5: 410 },
-  6: { 3: 1, 4: 7, 5: 57, 6: 1100 },
-  7: { 3: 1, 4: 5, 5: 11, 6: 100, 7: 2000 },
-  8: { 4: 2, 5: 15, 6: 50, 7: 300, 8: 10000 },
-  9: { 4: 2, 5: 5, 6: 20, 7: 100, 8: 2000, 9: 25000 },
-  10: { 0: 5, 5: 2, 6: 10, 7: 50, 8: 500, 9: 5000, 10: 100000 },
+  2: { 2: 3 },
+  3: { 2: 2, 3: 4 },
+  4: { 2: 1, 3: 3, 4: 7 },
+  5: { 3: 2, 4: 7, 5: 10 },
+  6: { 3: 1, 4: 5, 5: 10, 6: 12 },
+  7: { 3: 1, 4: 5, 5: 9, 6: 12, 7: 15 },
+  8: { 4: 2, 5: 5, 6: 7, 7: 12, 8: 17 },
+  9: { 4: 2, 5: 4, 6: 7, 7: 10, 8: 15, 9: 20 },
+  10: { 0: 3, 5: 2, 6: 5, 7: 12, 8: 15, 9: 20, 10: 25 },
 }
 
 export function KenoTicket({
@@ -315,7 +315,7 @@ export function KenoTicket({
                 href={`https://scan.pulsechain.box/tx/${transactionHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[9px] font-bold text-white/70 hover:text-purple-400 underline"
+                className="inline-flex items-center gap-1 text-[9px] font-bold text-white/70 hover:text-purple-400 "
                 onClick={(e) => e.stopPropagation()}
               >
                 <span>TX: {transactionHash.slice(0, 6)}...{transactionHash.slice(-4)}</span>

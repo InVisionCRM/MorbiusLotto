@@ -7,17 +7,14 @@ import {
   IconTicket,
   IconChartBar,
   IconHistory,
-  IconCoin,
   IconTrophy,
   IconClock,
-  IconUsers,
   IconQuestionMark,
 } from "@tabler/icons-react";
 import { motion } from "motion/react";
 import { formatEther } from "viem";
 import { GlowingStarsBackgroundCard } from "../../components/ui/glowing-stars";
 import { Meteors } from "../../components/ui/meteors";
-import { DottedGlowBackground } from "../../components/ui/dotted-glow-background";
 import Footer from '@/components/PLINKO/Footer';
 import { PixelImage } from "../../components/ui/pixel-image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
@@ -27,9 +24,6 @@ import { useMorbiusBurned } from "@/hooks/use-morbius-burned";
 
 interface KenoBentoGridProps {
   onPlayNow?: () => void;
-  onShowHistory?: () => void;
-  onShowTickets?: () => void;
-  onShowClaim?: () => void;
   onShowPaytable?: () => void;
   totalTickets?: number;
   timeRemaining?: number;
@@ -76,9 +70,6 @@ export default function KenoDashboardPage() {
 
         <KenoBentoGrid
           onPlayNow={() => window.location.href = '/keno'}
-          onShowHistory={() => window.location.href = '/keno-transaction-history'}
-          onShowTickets={() => window.location.href = '/keno'}
-          onShowClaim={() => window.location.href = '/keno'}
           onShowPaytable={() => window.location.href = '/keno'}
           burnedAmount={burnedAmount}
           isLoadingBurned={isLoadingBurned}
@@ -99,9 +90,6 @@ export default function KenoDashboardPage() {
 
 function KenoBentoGrid({
   onPlayNow,
-  onShowHistory,
-  onShowTickets,
-  onShowClaim,
   onShowPaytable,
   totalTickets = 0,
   timeRemaining = 0,
@@ -131,9 +119,6 @@ function KenoBentoGrid({
             icon={item.icon}
             onClick={item.onClick ? () => item.onClick({
               onPlayNow,
-              onShowHistory,
-              onShowTickets,
-              onShowClaim,
               onShowPaytable,
               totalTickets,
               timeRemaining,
@@ -208,7 +193,7 @@ function HowToPlayModal({ isOpen, onOpenChange }: { isOpen: boolean; onOpenChang
                   Your ticket is recorded on the blockchain and contains all of your selections including numbers, wager amount, draw count, and any add-ons you selected.
                 </p>
                 <p>
-                  You can view your tickets anytime in "My Tickets" section and track their progress through multiple draws.
+                  You can view your tickets and history on the Play page and in Transaction History.
                 </p>
                 <p>
                   Winning tickets can be claimed automatically once the draw results are available.
@@ -542,135 +527,6 @@ const SkeletonPerformance = () => {
   );
 };
 
-const SkeletonMyTickets = () => {
-  return (
-    <div className="relative w-full h-full min-h-[6rem] overflow-hidden">
-      <DottedGlowBackground
-        className="absolute inset-0"
-        gap={18}
-        radius={3}
-        color="rgb(0, 255, 42)"
-        glowColor="rgb(0, 255, 26)"
-        opacity={1}
-        speedMin={0.1}
-        speedMax={0.9}
-        speedScale={0.5}
-      />
-      {/* Text content will be overlaid by BentoGridItem */}
-    </div>
-  );
-};
-
-const SkeletonHistory = () => {
-  const first = {
-    initial: {
-      x: 20,
-      rotate: -5,
-    },
-    hover: {
-      x: 0,
-      rotate: 0,
-    },
-  };
-
-  const second = {
-    initial: {
-      x: -20,
-      rotate: 5,
-    },
-    hover: {
-      x: 0,
-      rotate: 0,
-    },
-  };
-
-  return (
-    <div className="min-h-[12rem] text-white bg-white/20">
-      <motion.div
-        initial="initial"
-        animate="animate"
-        whileHover="hover"
-        className="flex flex-1 w-full h-full min-h-[6rem] flex-row space-x-2"
-      >
-      <motion.div
-        variants={first}
-        className="h-full w-1/3 rounded-2xl bg-white/20 p-4 border border-white/20 flex flex-col items-center justify-center"
-      >
-        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-lime-700 to-lime-500 shrink-0 mb-2" />
-        <div className="w-full bg-green-500/20 h-2 rounded-full mb-2" />
-        <div className="w-3/4 bg-green-500/20 h-2 rounded-full" />
-      </motion.div>
-      <motion.div className="h-full relative z-20 w-2/3 rounded-2xl bg-white/20 p-4 border border-neutral-200 flex flex-col items-center justify-center">
-        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-lime-700 to-lime-500 shrink-0 mb-2" />
-        <div className="w-full bg-green-500/20 h-2 rounded-full mb-2" />
-        <div className="w-3/4 bg-green-500/20 h-2 rounded-full" />
-      </motion.div>
-      <motion.div
-        variants={second}
-        className="h-full w-1/3 rounded-2xl bg-white/20 p-4 border border-white/50 flex flex-col items-center justify-center"
-      >
-        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-lime-700 to-lime-500 shrink-0 mb-2" />
-        <div className="w-full bg-green-500/20 h-2 rounded-full mb-2" />
-        <div className="w-3/4 bg-green-500/20 h-2 rounded-full" />
-      </motion.div>
-    </motion.div>
-    </div>
-  );
-};
-
-const SkeletonClaim = () => {
-  const variants = {
-    initial: {
-      x: 0,
-    },
-    animate: {
-      x: 10,
-      rotate: 5,
-      transition: {
-        duration: 0.2,
-      },
-    },
-  };
-
-  const variantsSecond = {
-    initial: {
-      x: 0,
-    },
-    animate: {
-      x: -10,
-      rotate: -5,
-      transition: {
-        duration: 0.2,
-      },
-    },
-  };
-
-  return (
-    <motion.div
-      initial="initial"
-      whileHover="animate"
-      className="flex flex-1 w-full h-full min-h-[6rem] bg-dot-black/[0.2] flex-col space-y-2"
-    >
-      <motion.div
-        variants={variants}
-        className="flex flex-row rounded-2xl border border-white/50 p-2 items-start space-x-2 bg-white/20"
-      >
-        <div className="h-6 w-6 rounded-full bg-gradient-to-r from-lime-700 to-lime-500 shrink-0" />
-        <div className="text-xs text-white">
-          Claim your Keno winnings instantly...
-        </div>
-      </motion.div>
-      <motion.div
-        variants={variantsSecond}
-        className="flex flex-row rounded-full border border-white/50 p-2 items-center justify-end space-x-2 w-3/4 ml-auto bg-white/20"
-      >
-        <div className="text-xs text-white">Claim All Now!</div>
-        <div className="h-6 w-6 rounded-full bg-gradient-to-r from-lime-700 to-lime-500 shrink-0" />
-      </motion.div>
-    </motion.div>
-  );
-};
-
 const SkeletonHowToPlay = () => {
   const variants = {
     initial: {
@@ -941,7 +797,7 @@ const items = [
     title: "Paytable",
     description: (
       <span className="text-sm">
-        View Keno payout tables and prize calculations for all spot sizes
+        1–10 spots: match 0 to all for multipliers. Standard & Bullseye paytables on Play page.
       </span>
     ),
     header: <SkeletonTimer />,
@@ -982,51 +838,14 @@ const items = [
     title: "Transaction History",
     description: (
       <span className="text-sm">
-        View your complete Keno transaction history and payouts
+        View your Keno tickets, draws, and payouts
       </span>
     ),
     header: <SkeletonPlayNow />,
     className: "md:col-span-1",
     icon: <IconHistory className="h-4 w-4 text-neutral-500" />,
     onClick: () => {
-      // Navigate to Keno transaction history page
       window.location.href = '/keno-transaction-history'
     },
-  },
-  {
-    title: "Round History",
-    description: (
-      <span className="text-sm">
-        Browse past Keno results, winning numbers and jackpots
-      </span>
-    ),
-    header: <SkeletonHistory />,
-    className: "md:col-span-1",
-    icon: <IconHistory className="h-4 w-4 text-green-500" />,
-    onClick: ({ onShowHistory }: any) => onShowHistory?.(),
-  },
-  {
-    title: "Claim Winnings",
-    description: (
-      <span className="text-sm">
-        Claim your Keno winnings instantly
-      </span>
-    ),
-    header: <SkeletonClaim />,
-    className: "md:col-span-1",
-    icon: <IconCoin className="h-4 w-4 text-neutral-500" />,
-    onClick: ({ onShowClaim }: any) => onShowClaim?.(),
-  },
-  {
-    title: "My Tickets",
-    description: (
-      <span className="text-sm">
-        View all your Keno tickets and track their performance
-      </span>
-    ),
-    header: <SkeletonMyTickets />,
-    className: "md:col-span-1",
-    icon: <IconTicket className="h-4 w-4 text-neutral-500" />,
-    onClick: ({ onShowTickets }: any) => onShowTickets?.(),
   },
 ];

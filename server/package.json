@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node -r dotenv/config dist/server.js",
     "dev": "ts-node -r dotenv/config src/server.ts",
     "watch": "nodemon --exec 'ts-node -r dotenv/config src/server.ts'",
     "simulate:blackjack": "ts-node src/scripts/simulate-blackjack-house-edge.ts",

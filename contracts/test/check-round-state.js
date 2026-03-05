@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const RPC_URL = 'https://rpc.pulsechain.com';
-const LOTTERY_ADDRESS = '0xD66b4489fbfF99A8d62f969203899840F2ec69c5';
+const LOTTERY_INSTANT_ADDRESS = '0xD66b4489fbfF99A8d62f969203899840F2ec69c5';
 
 async function main() {
   console.log('🔍 Checking Round State...\n');
@@ -17,7 +17,7 @@ async function main() {
   const artifact = JSON.parse(fs.readFileSync(abiPath, 'utf8'));
   const ABI = Array.isArray(artifact) ? artifact : artifact.abi;
 
-  const lottery = new ethers.Contract(LOTTERY_ADDRESS, ABI, provider);
+  const lottery = new ethers.Contract(LOTTERY_INSTANT_ADDRESS, ABI, provider);
 
   const info = await lottery.getCurrentRoundInfo();
   const roundId = info[0];

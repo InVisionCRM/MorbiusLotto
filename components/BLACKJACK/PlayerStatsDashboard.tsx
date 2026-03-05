@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { usePlayerProfileGames } from '@/hooks/use-player-profile'
+import { usePlayerProfileGames, useProfileForAddress } from '@/hooks/use-player-profile'
 import {
   TrendingUp,
   TrendingDown,
@@ -14,8 +14,11 @@ import {
   PieChart,
   Calendar,
   Clock,
-  Crown
+  Crown,
+  Copy,
+  Check
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { formatEther } from 'viem'
 import {
   Area,
@@ -62,6 +65,9 @@ interface PlayerStatsDashboardProps {
 
 export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient }: PlayerStatsDashboardProps) {
   const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'creator'>('stats')
+  const [addressCopied, setAddressCopied] = useState(false)
+  const { displayName, profileImageUrl } = useProfileForAddress(playerAddress ?? null)
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -268,8 +274,45 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
     ...(wsClient && playerAddress ? [{ id: 'creator' as const, label: 'Creator', icon: Crown }] : []),
   ]
 
+  const handleCopyAddress = () => {
+    if (!playerAddress) return
+    navigator.clipboard.writeText(playerAddress).then(() => {
+      setAddressCopied(true)
+      toast.success('Address copied')
+      setTimeout(() => setAddressCopied(false), 2000)
+    }).catch(() => toast.error('Failed to copy'))
+  }
+
   return (
     <div className="space-y-6">
+      {/* Address: avatar if present, full address, copy — no box */}
+      {playerAddress && (
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+          {profileImageUrl && (
+            <img
+              src={profileImageUrl}
+              alt=""
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0"
+            />
+          )}
+          {displayName && (
+            <span className="text-sm font-medium text-white shrink-0">{displayName}</span>
+          )}
+          <span className="font-mono text-xs sm:text-sm text-cyan-300/90 break-all min-w-0" title={playerAddress}>
+            {playerAddress}
+          </span>
+          <button
+            type="button"
+            onClick={handleCopyAddress}
+            className="shrink-0 p-1.5 rounded text-white/60 hover:text-white transition-colors"
+            title="Copy address"
+            aria-label="Copy address"
+          >
+            {addressCopied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+          </button>
+        </div>
+      )}
+
       {/* Tabs */}
       {availableTabs.length > 1 && (
         <div className="flex gap-2 border-b border-white/10 mb-6">

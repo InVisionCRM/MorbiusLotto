@@ -230,10 +230,6 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
         border: '1px inset rgba(60, 60, 60, 0.5)',
       } : {}}
     >
-      {/* Radial gradient overlay matching ticket-purchase-builder */}
-      {!isBackground && (
-      )}
-
       {/* Round Number - Top Center */}
       {!isBackground && roundId !== undefined && (
         <div className="absolute inset-x-0 z-20 top-3 z-30 text-center pointer-events-none">
@@ -467,8 +463,6 @@ const BallDrawSimulator: React.FC<BallDrawSimulatorProps> = ({
                 targetWinningNumber={currentTarget}
                 isBackground={isBackground}
               />
-              {/* Reflection Overlay */}
-              <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none sphere-overlay z-10"></div>
 
               {/* MegaMORBIUS Orbital Particles */}
               {isMegaMORBIUS && (

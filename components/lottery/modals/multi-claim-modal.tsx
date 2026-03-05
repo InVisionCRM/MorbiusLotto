@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { formatUnits, type ReadContractParameters } from 'viem'
-import { TOKEN_DECIMALS, LOTTERY_ADDRESS } from '@/lib/contracts'
+import { TOKEN_DECIMALS, LOTTERY_INSTANT_ADDRESS } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 import { usePlayerRoundHistory, useRound, usePlayerTickets } from '@/hooks/use-lottery-6of55'
 import { toast } from 'sonner'
@@ -106,7 +106,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
           if (roundId > 0 && amount > 0) {
             batchPromises.push(
               publicClient.readContract({
-                address: LOTTERY_ADDRESS as `0x${string}`,
+                address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
                 abi: LOTTERY_6OF55_V2_ABI,
                 functionName: 'hasClaimed',
                 args: [BigInt(roundId), address as `0x${string}`],
@@ -321,14 +321,14 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
           }
 
           const { request } = await publicClient.simulateContract({
-            address: LOTTERY_ADDRESS as `0x${string}`,
+            address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
             abi: LOTTERY_6OF55_V2_ABI,
             functionName: 'claimWinningsMultiple',
             args: [batch],
             account: address,
           })
 
-          const hash = await walletClient.writeContract(request)
+          const hash = await walletClient.writeContract({ ...request, maxPriorityFeePerGas: 200_000n })
 
           // Calculate amount for this batch
           const batchAmount = claimableRounds
@@ -389,7 +389,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                   href={`https://scan.pulsechain.com/tx/${allHashes[0]}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline hover:no-underline"
+                  className=" hover:no-"
                 >
                   {allHashes[0]}
                 </a>
@@ -402,7 +402,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                     href={`https://scan.pulsechain.com/tx/${hash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline hover:no-underline mr-2"
+                    className=" hover:no- mr-2"
                   >
                     {idx + 1}
                   </a>
@@ -464,7 +464,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
 
       // Check if already claimed
       const hasClaimed = await publicClient.readContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'hasClaimed',
         args: [parsedRoundId, address as `0x${string}`],
@@ -479,7 +479,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
 
       // Get the claimable amount first
       const claimableAmount = await publicClient.readContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'getClaimableWinnings',
         args: [parsedRoundId, address as `0x${string}`],
@@ -493,14 +493,14 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
       }
 
       const { request } = await publicClient.simulateContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'claimWinnings',
         args: [parsedRoundId],
         account: address,
       })
 
-      const hash = await walletClient.writeContract(request)
+      const hash = await walletClient.writeContract({ ...request, maxPriorityFeePerGas: 200_000n })
 
       toast.success(`Transaction sent! Claiming ${fmt(claimableAmount)} MORBIUS from Round #${singleRoundId}...`)
       triggerSuccessConfetti()
@@ -522,7 +522,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                 href={`https://scan.pulsechain.com/tx/${hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline hover:no-underline"
+                className=" hover:no-"
               >
                 {hash}
               </a>
@@ -553,7 +553,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                 href={`https://scan.pulsechain.com/tx/${hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline hover:no-underline"
+                className=" hover:no-"
               >
                 {hash}
               </a>
@@ -1032,7 +1032,7 @@ export function MultiClaimModal({ open, onOpenChange }: MultiClaimModalProps = {
                                     href={`https://scan.pulsechain.com/tx/${round.transactionHash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="underline hover:no-underline"
+                                    className=" hover:no-"
                                   >
                                     {round.transactionHash.slice(0, 10)}...{round.transactionHash.slice(-8)}
                                   </a>

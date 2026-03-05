@@ -1,8 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { History, BookOpen, Award, TrendingUp, Zap, ChevronLeft } from 'lucide-react'
+import Image from 'next/image'
+import { History, BookOpen, Award, TrendingUp, Zap, ChevronLeft, LayoutGrid } from 'lucide-react'
+import { motion, useScroll, useTransform, useSpring, useMotionValue } from 'motion/react'
 import { Theme } from '@/lib/theme'
 import {
   GameHistoryLayoutA,
@@ -22,6 +24,322 @@ import {
 import { BlackjackMobileActionBar } from '@/components/BLACKJACK/BlackjackMobileActionBar'
 import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile'
 import { Action } from '@/app/BLACKJACK/types'
+
+const CHIP_SRC = '/PokerChips/blackpokerchip000.png'
+const CHIP_SIZE = 120
+
+// ─── Parallax Example 1: Sticky scroll-in-place (layers move at different rates) ───
+function Parallax1StickyLayers() {
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  const spring = useSpring(scrollYProgress, { stiffness: 100, damping: 30 })
+  const y1 = useTransform(spring, [0, 1], ['0%', '15%'])
+  const y2 = useTransform(spring, [0, 1], ['0%', '35%'])
+  const y3 = useTransform(spring, [0, 1], ['0%', '55%'])
+  return (
+    <section ref={ref} className="relative h-screen w-full overflow-hidden bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center">
+      <div className="absolute inset-0">
+        {[y1, y2, y3].map((y, i) => (
+          <motion.div key={i} style={{ y }} className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {[0, 1, 2, 3, 4].map((j) => (
+              <motion.div
+                key={j}
+                className="absolute"
+                style={{
+                  left: `${20 + j * 18}%`,
+                  top: `${30 + (i * 20) + (j % 3) * 5}%`,
+                  width: CHIP_SIZE - i * 25,
+                  height: CHIP_SIZE - i * 25,
+                }}
+              >
+                <Image src={CHIP_SRC} alt="" width={CHIP_SIZE} height={CHIP_SIZE} className="w-full h-full object-contain drop-shadow-2xl" />
+              </motion.div>
+            ))}
+          </motion.div>
+        ))}
+      </div>
+      <div className="relative z-10 text-center">
+        <h2 className="text-2xl font-bold text-white/90 drop-shadow-lg">1. Sticky scroll-in-place</h2>
+        <p className="text-white/60 text-sm mt-1">Layers move at different speeds</p>
+      </div>
+    </section>
+  )
+}
+
+// ─── Parallax Example 2: Vertical multi-layer depth ───
+function Parallax2Layer({
+  scrollYProgress,
+  speed,
+  index,
+}: {
+  scrollYProgress: ReturnType<typeof useScroll>['scrollYProgress']
+  speed: number
+  index: number
+}) {
+  const y = useTransform(scrollYProgress, [0, 1], [0, (1 - speed) * -400])
+  const size = 80 + index * 12
+  return (
+    <motion.div style={{ y, top: `${index * 18}%` }} className="absolute flex flex-wrap justify-center gap-8">
+      {Array.from({ length: 8 }).map((_, j) => (
+        <motion.div key={j} style={{ width: size, height: size }}>
+          <Image src={CHIP_SRC} alt="" width={CHIP_SIZE} height={CHIP_SIZE} className="w-full h-full object-contain opacity-80" />
+        </motion.div>
+      ))}
+    </motion.div>
+  )
+}
+function Parallax2VerticalDepth() {
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  const speeds = [0.2, 0.4, 0.6, 0.8, 1]
+  return (
+    <section ref={ref} className="relative h-screen w-full overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950 flex items-center justify-center">
+      {speeds.map((speed, i) => (
+        <Parallax2Layer key={i} scrollYProgress={scrollYProgress} speed={speed} index={i} />
+      ))}
+      <div className="relative z-10 text-center">
+        <h2 className="text-2xl font-bold text-white/90">2. Vertical multi-layer depth</h2>
+        <p className="text-white/60 text-sm mt-1">Different scroll speeds</p>
+      </div>
+    </section>
+  )
+}
+
+// ─── Parallax Example 3: Horizontal translation on scroll ───
+function Parallax3HorizontalScroll() {
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  const x1 = useTransform(scrollYProgress, [0, 0.5, 1], [-400, 0, 400])
+  const x2 = useTransform(scrollYProgress, [0, 0.5, 1], [400, 0, -400])
+  return (
+    <section ref={ref} className="relative h-screen w-full overflow-hidden bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col justify-center">
+      <motion.div style={{ x: x1 }} className="flex gap-6 justify-center mb-8">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <Image key={i} src={CHIP_SRC} alt="" width={72} height={72} className="object-contain opacity-90" />
+        ))}
+      </motion.div>
+      <motion.div style={{ x: x2 }} className="flex gap-6 justify-center">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <Image key={i} src={CHIP_SRC} alt="" width={56} height={56} className="object-contain opacity-70" />
+        ))}
+      </motion.div>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-white/90">3. Horizontal translation</h2>
+          <p className="text-white/60 text-sm mt-1">Scroll drives horizontal movement</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Parallax Example 4: Scale on scroll ───
+function Parallax4ScaleScroll() {
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  const scale = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.3, 1.2, 1.2, 0.4])
+  const opacity = useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [0.3, 1, 1, 0.3])
+  return (
+    <section ref={ref} className="relative h-screen w-full overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950 flex items-center justify-center">
+      <motion.div style={{ scale, opacity }} className="flex flex-wrap justify-center gap-12 max-w-4xl">
+        {Array.from({ length: 15 }).map((_, i) => (
+          <Image key={i} src={CHIP_SRC} alt="" width={CHIP_SIZE} height={CHIP_SIZE} className="object-contain" />
+        ))}
+      </motion.div>
+      <div className="absolute inset-0 flex items-end justify-center pb-16 pointer-events-none">
+        <h2 className="text-2xl font-bold text-white/90">4. Scale on scroll</h2>
+      </div>
+    </section>
+  )
+}
+
+// ─── Parallax Example 5: 3D hero style (rotate + translate) ───
+function Parallax53DHero() {
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  const rotateX = useSpring(useTransform(scrollYProgress, [0, 0.5], [18, 0]), { stiffness: 100, damping: 30 })
+  const rotateZ = useSpring(useTransform(scrollYProgress, [0, 0.5], [12, 0]), { stiffness: 100, damping: 30 })
+  const y = useSpring(useTransform(scrollYProgress, [0, 0.6], [-200, 300]), { stiffness: 100, damping: 30 })
+  const opacity = useTransform(scrollYProgress, [0, 0.25], [0.4, 1])
+  return (
+    <section ref={ref} className="relative h-screen w-full overflow-hidden bg-slate-950 flex items-center justify-center [perspective:800px]">
+      <motion.div style={{ rotateX, rotateZ, y, opacity }} className="flex flex-wrap justify-center gap-8 [transform-style:preserve-3d]">
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          <motion.div key={i} className="[transform-style:preserve-3d]" style={{ width: 88, height: 88 }}>
+            <Image src={CHIP_SRC} alt="" width={CHIP_SIZE} height={CHIP_SIZE} className="w-full h-full object-contain" />
+          </motion.div>
+        ))}
+      </motion.div>
+      <div className="absolute bottom-12 left-0 right-0 text-center">
+        <h2 className="text-2xl font-bold text-white/90">5. 3D hero (rotate + translate)</h2>
+      </div>
+    </section>
+  )
+}
+
+// ─── Parallax Example 6: Mouse parallax ───
+function Parallax6MouseLayer({ moveX, moveY, mult, top, count }: { moveX: ReturnType<typeof useTransform>; moveY: ReturnType<typeof useTransform>; mult: number; top: number; count: number }) {
+  const x = useTransform(moveX, (v: number) => v * mult)
+  const y = useTransform(moveY, (v: number) => v * mult)
+  const size = 70 + (top / 25) * 20
+  return (
+    <motion.div style={{ x, y, top: `${top}%` }} className="absolute flex flex-wrap justify-center gap-6">
+      {Array.from({ length: count }).map((_, i) => (
+        <Image key={i} src={CHIP_SRC} alt="" width={size} height={size} className="object-contain opacity-90" />
+      ))}
+    </motion.div>
+  )
+}
+function Parallax6Mouse() {
+  const ref = useRef<HTMLDivElement>(null)
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const moveX = useTransform(x, [-0.5, 0.5], [-40, 40])
+  const moveY = useTransform(y, [-0.5, 0.5], [-40, 40])
+  const onMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = ref.current?.getBoundingClientRect()
+      if (!rect) return
+      const cx = (e.clientX - rect.left) / rect.width - 0.5
+      const cy = (e.clientY - rect.top) / rect.height - 0.5
+      x.set(cx)
+      y.set(cy)
+    },
+    [x, y]
+  )
+  return (
+    <section ref={ref} onMouseMove={onMove} onMouseLeave={() => { x.set(0); y.set(0) }} className="relative h-screen w-full overflow-hidden bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center cursor-none">
+      <Parallax6MouseLayer moveX={moveX} moveY={moveY} mult={0.3} top={25} count={6} />
+      <Parallax6MouseLayer moveX={moveX} moveY={moveY} mult={0.6} top={50} count={5} />
+      <Parallax6MouseLayer moveX={moveX} moveY={moveY} mult={1} top={75} count={4} />
+      <div className="relative z-10 text-center">
+        <h2 className="text-2xl font-bold text-white/90">6. Mouse parallax</h2>
+        <p className="text-white/60 text-sm mt-1">Move cursor to shift layers</p>
+      </div>
+    </section>
+  )
+}
+
+// ─── Parallax Example 7: Reveal on scroll ───
+function Parallax7Reveal() {
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'start center'] })
+  const opacity = useTransform(scrollYProgress, [0, 0.4], [0, 1])
+  const y = useTransform(scrollYProgress, [0, 0.4], [80, 0])
+  return (
+    <section ref={ref} className="relative h-screen w-full overflow-hidden bg-slate-950 flex items-center justify-center">
+      <motion.div style={{ opacity, y }} className="flex flex-wrap justify-center gap-10">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <motion.div key={i} style={{ opacity: 1 }} transition={{ delay: i * 0.03 }}>
+            <Image src={CHIP_SRC} alt="" width={64} height={64} className="object-contain" />
+          </motion.div>
+        ))}
+      </motion.div>
+      <div className="absolute bottom-12 left-0 right-0 text-center">
+        <h2 className="text-2xl font-bold text-white/90">7. Reveal on scroll</h2>
+      </div>
+    </section>
+  )
+}
+
+// ─── Parallax Example 8: Layered depth (classic) ───
+function Parallax8Layer({ scrollYProgress, rate, count, size, bottom, opacity }: { scrollYProgress: ReturnType<typeof useScroll>['scrollYProgress']; rate: number; count: number; size: number; bottom: number; opacity: number }) {
+  const y = useTransform(scrollYProgress, [0, 1], [0, (1 - rate) * -500])
+  return (
+    <motion.div style={{ y, bottom: `${bottom}%` }} className="absolute flex justify-center gap-4">
+      {Array.from({ length: count }).map((_, j) => (
+        <Image key={j} src={CHIP_SRC} alt="" width={size} height={size} className="object-contain opacity-90" style={{ opacity }} />
+      ))}
+    </motion.div>
+  )
+}
+function Parallax8LayeredDepth() {
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  const layers = [
+    { rate: 0.15, count: 10, size: 48 },
+    { rate: 0.4, count: 8, size: 64 },
+    { rate: 0.7, count: 6, size: 88 },
+    { rate: 1, count: 4, size: 110 },
+  ]
+  return (
+    <section ref={ref} className="relative h-screen w-full overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950 flex items-center justify-center">
+      {layers.map((layer, i) => (
+        <Parallax8Layer key={i} scrollYProgress={scrollYProgress} rate={layer.rate} count={layer.count} size={layer.size} bottom={15 + i * 18} opacity={0.7 + i * 0.08} />
+      ))}
+      <div className="relative z-10 text-center">
+        <h2 className="text-2xl font-bold text-white/90">8. Layered depth</h2>
+        <p className="text-white/60 text-sm mt-1">Classic parallax layers</p>
+      </div>
+    </section>
+  )
+}
+
+// ─── Parallax Example 9: Infinite marquee ───
+function Parallax9Marquee() {
+  const row1 = Array.from({ length: 20 }).map((_, i) => <Image key={i} src={CHIP_SRC} alt="" width={80} height={80} className="object-contain flex-shrink-0 opacity-80" />)
+  const row2 = Array.from({ length: 20 }).map((_, i) => <Image key={i} src={CHIP_SRC} alt="" width={60} height={60} className="object-contain flex-shrink-0 opacity-60" />)
+  return (
+    <section className="relative h-screen w-full overflow-hidden bg-slate-950 flex flex-col justify-center">
+      <motion.div
+        className="flex gap-8 absolute left-0 w-max"
+        animate={{ x: ['0%', '-50%'] }}
+        transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
+      >
+        {row1}
+        {row1}
+      </motion.div>
+      <motion.div
+        className="flex gap-8 absolute left-0 mt-32 w-max"
+        animate={{ x: ['-50%', '0%'] }}
+        transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
+      >
+        {row2}
+        {row2}
+      </motion.div>
+      <div className="relative z-10 text-center mt-48">
+        <h2 className="text-2xl font-bold text-white/90">9. Infinite marquee</h2>
+        <p className="text-white/60 text-sm mt-1">Continuous horizontal motion</p>
+      </div>
+    </section>
+  )
+}
+
+// ─── Parallax Example 10: Tilt on scroll ───
+function Parallax10Tilt() {
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  const rotateX = useTransform(scrollYProgress, [0, 0.5, 1], [12, -5, 12])
+  const rotateY = useTransform(scrollYProgress, [0, 0.5, 1], [-8, 8, -8])
+  return (
+    <section ref={ref} className="relative h-screen w-full overflow-hidden bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center [perspective:1200px]">
+      <motion.div style={{ rotateX, rotateY }} className="flex flex-wrap justify-center gap-6 [transform-style:preserve-3d]">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <motion.div key={i} style={{ width: 76, height: 76 }} className="[transform-style:preserve-3d]">
+            <Image src={CHIP_SRC} alt="" width={CHIP_SIZE} height={CHIP_SIZE} className="w-full h-full object-contain" />
+          </motion.div>
+        ))}
+      </motion.div>
+      <div className="absolute bottom-12 left-0 right-0 text-center">
+        <h2 className="text-2xl font-bold text-white/90">10. Tilt on scroll</h2>
+        <p className="text-white/60 text-sm mt-1">Perspective tilt driven by scroll</p>
+      </div>
+    </section>
+  )
+}
+
+const PARALLAX_EXAMPLES = [
+  Parallax1StickyLayers,
+  Parallax2VerticalDepth,
+  Parallax3HorizontalScroll,
+  Parallax4ScaleScroll,
+  Parallax53DHero,
+  Parallax6Mouse,
+  Parallax7Reveal,
+  Parallax8LayeredDepth,
+  Parallax9Marquee,
+  Parallax10Tilt,
+]
 
 const TABS = [
   { id: 'recent', label: 'Recent', icon: History },
@@ -93,6 +411,65 @@ const PANEL_STYLE = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
   boxShadow: 'inset 0 -3px 6px rgba(0, 0, 0, 0.8), inset 0 3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
   border: '1px inset rgba(60, 60, 60, 0.5)',
+}
+
+// ─── Ad size templates with real placement (see components/marketing/AdvertisingSection.tsx) ───
+const MAX_AD_DISPLAY = 280
+
+interface AdTemplate {
+  id: string
+  name: string
+  width: number
+  height: number
+  placement: string
+  placementDetail: string
+}
+
+const AD_TEMPLATES: AdTemplate[] = [
+  { id: 'leaderboard', name: 'Leaderboard', width: 728, height: 90, placement: 'Home Page Hero', placementDetail: 'Prime banner at top of the Morbius home page. First thing every visitor sees.' },
+  { id: 'medium-rect', name: 'Medium Rectangle', width: 300, height: 250, placement: 'All Game Pages', placementDetail: 'Sidebar or in-content on Blackjack, Plinko, Keno, and Lotto game pages.' },
+  { id: 'mobile-banner', name: 'Mobile Banner', width: 320, height: 50, placement: 'Home Page Hero', placementDetail: 'Mobile hero strip; same prime position, responsive size.' },
+  { id: 'large-rect', name: 'Large Rectangle', width: 336, height: 280, placement: 'All Game Pages', placementDetail: 'In-content block on game pages. High visibility next to gameplay.' },
+  { id: 'half-page', name: 'Half Page', width: 300, height: 600, placement: 'Blackjack / Plinko / Keno / Lotto Loading Screen', placementDetail: 'Full-screen loading: your creative fills one side or center; captive audience.' },
+  { id: 'wide-skyscraper', name: 'Wide Skyscraper', width: 160, height: 600, placement: 'All Game Pages', placementDetail: 'Side rail on desktop game layouts. Sticky optional.' },
+  { id: 'large-leaderboard', name: 'Large Leaderboard', width: 970, height: 90, placement: 'Home Page Hero', placementDetail: 'Premium hero strip on desktop. Maximum width above the fold.' },
+  { id: 'billboard', name: 'Billboard', width: 970, height: 250, placement: 'Home Page Hero', placementDetail: 'Below-the-fold hero or secondary hero block on home page.' },
+  { id: 'mobile-leaderboard', name: 'Mobile Leaderboard', width: 320, height: 100, placement: 'All Game Pages', placementDetail: 'Mobile game pages: above or below main content.' },
+  { id: 'button', name: 'Button', width: 120, height: 60, placement: 'All Game Pages', placementDetail: 'Footer or compact slot on game pages; multiple units per page possible.' },
+]
+
+function AdTemplateCard({ t }: { t: AdTemplate }) {
+  const scale = Math.min(1, MAX_AD_DISPLAY / Math.max(t.width, t.height))
+  const w = Math.round(t.width * scale)
+  const h = Math.round(t.height * scale)
+  return (
+    <div
+      className="rounded-xl overflow-hidden flex flex-col"
+      style={{
+        background: 'linear-gradient(160deg, rgba(15,20,40,0.95), rgba(10,14,30,0.95))',
+        border: '1px solid rgba(34, 211, 238, 0.25)',
+        boxShadow: '0 0 20px rgba(34, 211, 238, 0.08)',
+      }}
+    >
+      <div className="px-3 py-2 border-b border-cyan-500/20 flex items-center gap-2">
+        <LayoutGrid className="w-4 h-4 text-cyan-400 shrink-0" />
+        <span className="text-cyan-300 font-semibold text-sm">{t.name}</span>
+        <span className="text-slate-500 text-xs ml-auto">{t.width} × {t.height}</span>
+      </div>
+      <div className="p-3 flex flex-col items-center gap-2">
+        <div
+          className="flex items-center justify-center bg-slate-900/80 border border-dashed border-cyan-500/30 rounded-lg text-slate-500 text-xs font-mono"
+          style={{ width: w, height: h, minHeight: 40 }}
+        >
+          Ad {t.width}×{t.height}
+        </div>
+        <div className="w-full text-left space-y-1">
+          <p className="text-cyan-400/90 text-xs font-medium">Placement: {t.placement}</p>
+          <p className="text-slate-500 text-[11px] leading-snug">{t.placementDetail}</p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Layout 1: Vertical icon rail (icons on left, content on right)
@@ -277,6 +654,13 @@ export default function LayoutPage() {
         background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(10, 15, 20))',
       }}
     >
+      {/* 10 full-screen poker chip parallax examples */}
+      <div className="relative">
+        {PARALLAX_EXAMPLES.map((Example, i) => (
+          <Example key={i} />
+        ))}
+      </div>
+
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex items-center gap-4 mb-8">
           <Link
@@ -664,6 +1048,20 @@ export default function LayoutPage() {
                 </div>
               </div>
             </section>
+          </div>
+        </div>
+
+        {/* Ad size templates with real placement (matches components/marketing/AdvertisingSection.tsx) */}
+        <div className="pt-16 mt-16 border-t border-white/20">
+          <h1 className="text-2xl font-bold text-white mb-2">Advertisement Size Templates &amp; Real Placement</h1>
+          <p className="text-white/60 text-sm mb-8">
+            Ten standard ad sizes mapped to real placements on Morbius. Placement names and descriptions align with{' '}
+            <code className="text-cyan-400/80 px-1 rounded">components/marketing/AdvertisingSection.tsx</code>.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            {AD_TEMPLATES.map((t) => (
+              <AdTemplateCard key={t.id} t={t} />
+            ))}
           </div>
         </div>
       </div>

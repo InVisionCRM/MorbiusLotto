@@ -166,7 +166,7 @@ export default function QuickHistory({ history, reserveBalance, onVerifyGame }: 
                   {result.gameId ? (
                     <Link
                       href={`/BLACKJACK/verify?gameId=${encodeURIComponent(result.gameId)}`}
-                      className="text-cyan-300/90 hover:text-cyan-200 transition-colors underline underline-offset-2"
+                      className="text-cyan-300/90 hover:text-cyan-200 transition-colors"
                       aria-label={`Verify game ${result.gameId}`}
                     >
                       {shortenGameId(result.gameId)}

@@ -12,8 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, HelpCircle, CheckCircle, XCircle } from 'lucide-react'
-import { LOTTERY_ADDRESS, TOKEN_DECIMALS, MORBIUS_TOKEN_ADDRESS, WPLS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, LOTTERY_INSTANT_ADDRESS, TOKEN_DECIMALS, MORBIUS_TOKEN_ADDRESS, WPLS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
+import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55'
 import { ERC20_ABI } from '@/abi/erc20'
 import { toast } from 'sonner'
 
@@ -24,9 +25,11 @@ interface LotteryContractInterfaceProps {
 export function LotteryContractInterface({ address }: LotteryContractInterfaceProps) {
   const [activeSection, setActiveSection] = useState('user-actions')
 
+  const showInstant = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+
   return (
     <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-6">
-      <TabsList className="grid w-full grid-cols-3 bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10">
+      <TabsList className={`grid w-full ${showInstant ? 'grid-cols-4' : 'grid-cols-3'} bg-gradient-to-br from-slate-950 to-slate-900/40 border border-white/10`}>
         <TabsTrigger value="user-actions" className="data-[state=active]:bg-purple-600">
           User Actions
         </TabsTrigger>
@@ -36,6 +39,11 @@ export function LotteryContractInterface({ address }: LotteryContractInterfacePr
         <TabsTrigger value="stats" className="data-[state=active]:bg-purple-600">
           Statistics
         </TabsTrigger>
+        {showInstant && (
+          <TabsTrigger value="instant" className="data-[state=active]:bg-cyan-600">
+            Instant
+          </TabsTrigger>
+        )}
       </TabsList>
 
       <TabsContent value="user-actions" className="space-y-6">
@@ -56,6 +64,13 @@ export function LotteryContractInterface({ address }: LotteryContractInterfacePr
         <GlobalStats />
         <BracketConfig />
       </TabsContent>
+
+      {showInstant && (
+        <TabsContent value="instant" className="space-y-6">
+          <InstantLotteryStatsSection />
+          <InstantLotteryFundSection address={address} />
+        </TabsContent>
+      )}
     </Tabs>
   )
 }
@@ -84,9 +99,10 @@ function BuyTicketsSection({ address }: { address?: `0x${string}` }) {
         address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [LOTTERY_ADDRESS, amount],
+        args: [LOTTERY_INSTANT_ADDRESS, amount],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to approve')
@@ -109,12 +125,13 @@ function BuyTicketsSection({ address }: { address?: `0x${string}` }) {
       }
 
       writeContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'buyTickets',
         args: [parsedTickets],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to buy tickets')
@@ -256,12 +273,13 @@ function BuyTicketsMultiRoundSection({ address }: { address?: `0x${string}` }) {
       }
 
       writeContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'buyTicketsForRounds',
         args: [parsedGroups, parsedOffsets],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to buy tickets')
@@ -376,7 +394,9 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
         address: WPLS_TOKEN_ADDRESS as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [LOTTERY_ADDRESS, amount],
+        args: [LOTTERY_INSTANT_ADDRESS, amount],
+        account: address,
+        chain: pulsechain,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to approve')
@@ -396,22 +416,24 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
       if (bufferBps > 0) {
         // Use buffered version
         writeContract({
-          address: LOTTERY_ADDRESS as `0x${string}`,
+          address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
           abi: LOTTERY_6OF55_V2_ABI,
           functionName: 'buyTicketsWithWPLSAndBuffer',
           args: [parsedTickets, BigInt(bufferBps)],
-          account: address,
-          chain: pulsechain,
+        account: address,
+        chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
         })
       } else {
         // Use standard version
         writeContract({
-          address: LOTTERY_ADDRESS as `0x${string}`,
+          address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
           abi: LOTTERY_6OF55_V2_ABI,
           functionName: 'buyTicketsWithWPLS',
           args: [parsedTickets],
-          account: address,
-          chain: pulsechain,
+        account: address,
+        chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
         })
       }
     } catch (error: any) {
@@ -554,12 +576,13 @@ function ClaimWinningsSection({ address }: { address?: `0x${string}` }) {
     try {
       const parsedRoundId = BigInt(roundId)
       writeContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'claimWinnings',
         args: [parsedRoundId],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to claim winnings')
@@ -648,11 +671,12 @@ function FinalizeRoundSection({ address }: { address?: `0x${string}` }) {
     }
 
     writeContract({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'finalizeRound',
       account: address,
       chain: pulsechain,
+      maxPriorityFeePerGas: 40_000n,
     })
   }
 
@@ -731,12 +755,13 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
     try {
       const duration = BigInt(roundDuration)
       writeContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'updateRoundDuration',
         args: [duration],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -752,12 +777,13 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
     try {
       const interval = BigInt(megaInterval)
       writeContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'updateMegaMillionsInterval',
         args: [interval],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -773,12 +799,13 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
     try {
       const delay = BigInt(blockDelay)
       writeContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'updateBlockDelay',
         args: [delay],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -884,11 +911,122 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
   )
 }
 
+// Instant Lottery (house bankroll) — shown when LOTTERY_INSTANT_ADDRESS is set
+
+function InstantLotteryStatsSection() {
+  const { data: reserve, isLoading: reserveLoading } = useReadContract({
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
+    abi: INSTANT_LOTTERY_6OF55_ABI,
+    functionName: 'contractReserve',
+  })
+  const { data: totalPlays, isLoading: playsLoading } = useReadContract({
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
+    abi: INSTANT_LOTTERY_6OF55_ABI,
+    functionName: 'totalPlays',
+  })
+  const { data: totalWagered, isLoading: wageredLoading } = useReadContract({
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
+    abi: INSTANT_LOTTERY_6OF55_ABI,
+    functionName: 'totalWagered',
+  })
+  const { data: totalPayouts, isLoading: payoutsLoading } = useReadContract({
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
+    abi: INSTANT_LOTTERY_6OF55_ABI,
+    functionName: 'totalPayouts',
+  })
+  const isLoading = reserveLoading || playsLoading || wageredLoading || payoutsLoading
+
+  return (
+    <Card className="bg-gradient-to-br from-slate-950 to-slate-900/40 border-cyan-500/20">
+      <CardHeader>
+        <CardTitle className="text-cyan-300">Instant Lottery 6-of-55</CardTitle>
+        <CardDescription className="text-white/60">House bankroll contract stats</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
+        ) : (
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-white/50">Reserve</p>
+              <p className="font-mono font-bold text-white">{formatUnits((reserve as bigint) ?? 0n, TOKEN_DECIMALS)}</p>
+            </div>
+            <div>
+              <p className="text-white/50">Total plays</p>
+              <p className="font-mono font-bold text-white">{String((totalPlays as bigint) ?? 0n)}</p>
+            </div>
+            <div>
+              <p className="text-white/50">Total wagered</p>
+              <p className="font-mono font-bold text-white">{formatUnits((totalWagered as bigint) ?? 0n, TOKEN_DECIMALS)}</p>
+            </div>
+            <div>
+              <p className="text-white/50">Total payouts</p>
+              <p className="font-mono font-bold text-white">{formatUnits((totalPayouts as bigint) ?? 0n, TOKEN_DECIMALS)}</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function InstantLotteryFundSection({ address }: { address?: `0x${string}` }) {
+  const [amount, setAmount] = useState('')
+  const { writeContract, data: hash, isPending } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
+
+  const handleFund = () => {
+    if (!address || !amount) {
+      toast.error('Connect wallet and enter amount')
+      return
+    }
+    try {
+      const wei = parseUnits(amount, TOKEN_DECIMALS)
+      writeContract({
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
+        abi: INSTANT_LOTTERY_6OF55_ABI,
+        functionName: 'fundContract',
+        args: [wei],
+        account: address,
+        chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
+      })
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Fund failed')
+    }
+  }
+
+  return (
+    <Card className="bg-gradient-to-br from-slate-950 to-slate-900/40 border-cyan-500/20">
+      <CardHeader>
+        <CardTitle className="text-cyan-300">Fund reserve</CardTitle>
+        <CardDescription className="text-white/60">Owner or anyone can add MORBIUS to contract reserve (approve first)</CardDescription>
+      </CardHeader>
+      <CardContent className="flex gap-2 items-end">
+        <div className="flex-1">
+          <Label className="text-white/70">Amount (MORBIUS)</Label>
+          <Input
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0"
+            className="bg-white/5 border-cyan-500/30 text-white mt-1"
+          />
+        </div>
+        <Button onClick={handleFund} disabled={!address || !amount || isPending || isConfirming}>
+          {(isPending || isConfirming) ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Fund
+        </Button>
+        {isSuccess && <CheckCircle className="h-5 w-5 text-green-500" />}
+      </CardContent>
+    </Card>
+  )
+}
+
 // Statistics Components
 
 function CurrentRoundStats() {
   const { data, isLoading, refetch } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getCurrentRoundInfo',
   })
@@ -974,7 +1112,7 @@ function CurrentRoundStats() {
 
 function PlayerStats({ address }: { address?: `0x${string}` }) {
   const { data, isLoading, refetch } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getPlayerLifetime',
     args: address ? [address] : undefined,
@@ -1047,31 +1185,31 @@ function PlayerStats({ address }: { address?: `0x${string}` }) {
 
 function GlobalStats() {
   const { data: totalTickets, isLoading: loadingTickets, refetch: refetchTickets } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getTotalTicketsEver',
   })
 
   const { data: totalCollected, isLoading: loadingCollected, refetch: refetchCollected } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getTotalMORBIUSEverCollected',
   })
 
   const { data: totalClaimed, isLoading: loadingClaimed, refetch: refetchClaimed } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getTotalMORBIUSEverClaimed',
   })
 
   const { data: totalClaimable, isLoading: loadingClaimable, refetch: refetchClaimable } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getTotalMORBIUSClaimableAll',
   })
 
   const { data: megaBank, isLoading: loadingMega, refetch: refetchMega } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getMegaMillionsBank',
   })
@@ -1155,7 +1293,7 @@ function GlobalStats() {
 
 function BracketConfig() {
   const { data, isLoading, refetch } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getBracketConfig',
   })

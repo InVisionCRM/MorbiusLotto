@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { MORBIUS_TOKEN_ADDRESS, LOTTERY_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
+import { MORBIUS_TOKEN_ADDRESS, LOTTERY_INSTANT_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
 import { ERC20_ABI } from '@/abi/erc20'
 import { formatEther, parseEther, formatUnits } from 'viem'
 import { maxUint256 } from 'viem'
@@ -82,7 +82,7 @@ export function useTokenAllowance(owner?: `0x${string}`) {
     address: MORBIUS_TOKEN_ADDRESS,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: owner ? [owner, LOTTERY_ADDRESS] : undefined,
+    args: owner ? [owner, LOTTERY_INSTANT_ADDRESS] : undefined,
     query: {
       enabled: !!owner,
       refetchInterval: 10000,
@@ -106,7 +106,8 @@ export function useApproveToken() {
       address: MORBIUS_TOKEN_ADDRESS,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [LOTTERY_ADDRESS, amount || maxUint256], // Approve infinite by default
+      args: [LOTTERY_INSTANT_ADDRESS, amount || maxUint256], // Approve infinite by default
+      maxPriorityFeePerGas: 40_000n, // PulseChain tip
     } as unknown as Parameters<typeof writeContract>[0])
   }
 

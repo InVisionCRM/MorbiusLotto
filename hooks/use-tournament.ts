@@ -791,6 +791,7 @@ export function useTournament(options: UseTournamentOptions) {
             functionName: 'createTournament',
             args: [buyInAmount, BigInt(maxPlayers), prizeToken, prizeAmount],
             chain: pulsechain,
+            maxPriorityFeePerGas: 40_000n, // PulseChain tip
           });
 
           console.log('Tournament creation transaction sent:', hash);
@@ -967,6 +968,7 @@ export function useTournament(options: UseTournamentOptions) {
               functionName: 'approve',
               args: [MORBIUS_TOURNAMENT_ADDRESS, buyInWei],
               chain: pulsechain,
+              maxPriorityFeePerGas: 40_000n, // PulseChain tip
             });
             // Do NOT await receipt here — that would lose the user-gesture context and
             // prevent the join wallet popup from appearing. Instead, wait in the background
@@ -985,6 +987,7 @@ export function useTournament(options: UseTournamentOptions) {
             functionName: 'joinTournament',
             args: [BigInt(onChainTournamentId)],
             chain: pulsechain,
+            maxPriorityFeePerGas: 40_000n, // PulseChain tip
           });
 
           // Wait for join transaction to confirm
@@ -1062,6 +1065,7 @@ export function useTournament(options: UseTournamentOptions) {
         functionName: 'joinTournament',
         args: [BigInt(onChainTournamentId)],
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
 
       if (publicClient) {

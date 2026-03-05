@@ -3,82 +3,70 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { DottedGlowBackground } from '@/components/ui/dotted-glow-background'
 import { Theme } from '@/lib/theme'
 
 export function HeroSection() {
 
   return (
-    <section className="relative w-full min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-6 pt-16 pb-24" style={{ background: Theme.greyGradient.background }}>
-      {/* Background Image with top-to-bottom fade */}
+    <section
+      className="relative w-full min-h-[100dvh] min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 pt-0 pb-14"
+      style={{ background: Theme.greyGradient.background }}
+    >
+      {/* Background: chip rotates inside a fixed gradient mask so the fade stays in place */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: 'url(/BlackJack/TableBackground3.png)',
-          maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 60%)',
-        }}
-      />
-
-      {/* Dotted Glow Background */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 2, ease: "easeOut" }}
         className="absolute inset-0"
+        style={{
+          maskImage: 'linear-gradient(to bottom, black 30%, transparent 50%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, black 30%, transparent 50%)',
+        }}
       >
-        <DottedGlowBackground
-          className="pointer-events-none z-0"
-          gap={20}
-          radius={2}
-          color="rgba(6, 182, 212, 0.6)"
-          glowColor="rgba(6, 182, 212, 1.0)"
-          opacity={0.5}
-          backgroundOpacity={0}
-          edgeFadeOpacity={0.9}
-          speedMin={0.3}
-          speedMax={1.0}
-          speedScale={0.7}
-        />
-      </motion.div>
-
-      {/* Hero Content */}
-      <div className="relative z-10 text-center w-full max-w-4xl mx-auto">
-        {/* Logo */}
         <motion.div
-          className="mb-4"
-          initial={{ y: -40, opacity: 0 }}
+          className="absolute flex inset-0 bg-contain bg-center bg-no-repeat opacity-20 z-10"
+          style={{
+            backgroundImage: 'url(/PokerChips/bluepokerchip010.png)',
+          }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
+        />
+      </div>
+
+      {/* Hero Content - centered with responsive offset (no fixed px) */}
+      <div className="flex flex-col gap-y-2 items-center justify-center z-10 text-center w-full max-w-4xl mx-auto -mt-[8vh] sm:-mt-[6vh]">
+        {/* Logo - responsive size, backdrop + shadow so it stands out against the chip */}
+        <motion.div
+          className="mb-2 sm:mb-4 relative"
+          initial={{ y: -89, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
+          transition={{ duration: 0.9, delay: 0.3, ease: "easeOut" }}
         >
           <Image
             src="/morbius/MorbiusLogo (3).png"
             alt="Morbius"
             width={160}
             height={160}
-            className="mx-auto w-80 h-80 object-contain"
+            className="relative z-10 mx-2 sm:mx-5 w-48 h-48 sm:w-64 sm:h-64 md:w-72 md:h-72 lg:w-80 lg:h-80 object-contain drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)] drop-shadow-[0_0_40px_rgba(34,211,238,0.15)]"
             priority
           />
         </motion.div>
 
         {/* Main Headline */}
         <motion.h1
-          className="font-russo-one mb-4"
+          className="font-russo-one mb-3 sm:mb-4"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
         >
-          <span className="block text-5xl sm:text-5xl md:text-5xl lg:text-6xl font-black text-white tracking-tight">
+          <span className="block text-4xl sm:text-5xl md:text-5xl lg:text-6xl font-black text-white tracking-tight">
             DEFI GAMING
           </span>
-          <span className="block text-5xl sm:text-5xl md:text-5xl lg:text-6xl font-black text-purple-500 tracking-tight">
+          <span className="block text-4xl sm:text-5xl md:text-5xl lg:text-6xl font-black text-purple-500 tracking-tight">
             DONE RIGHT
           </span>
         </motion.h1>
 
         {/* Buttons */}
         <motion.div
-          className="flex flex-row gap-4 justify-center"
+          className="flex flex-row gap-3 sm:gap-4 justify-center flex-wrap"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 1.4, ease: "easeOut" }}
@@ -88,6 +76,13 @@ export function HeroSection() {
             className="px-6 py-3 bg-gradient-to-b from-cyan-600 to-cyan-800 text-white font-semibold text-sm sm:text-base rounded-full hover:from-purple-500 hover:to-purple-700 transition-all duration-300 hover:scale-105 shadow-lg shadow-cyan-500/20"
           >
             Get Morbius
+          </Link>
+
+          <Link
+            href="#what-is-morbius"
+            className="px-6 py-3 bg-white/10 border border-white/20 text-white font-semibold text-sm sm:text-base rounded-full hover:bg-white/20 hover:border-cyan-500/50 transition-all duration-300 hover:scale-105"
+          >
+            What is Morbius?
           </Link>
 
           <button
@@ -102,9 +97,9 @@ export function HeroSection() {
         </motion.div>
       </div>
 
-      {/* Scroll Indicator */}
+      {/* Scroll Indicator - fixed to bottom of section so it's consistent everywhere */}
       <motion.div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10"
+        className="absolute bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 z-10 flex justify-center"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1, delay: 2, ease: "easeOut" }}

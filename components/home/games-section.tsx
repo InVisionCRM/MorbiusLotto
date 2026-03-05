@@ -9,7 +9,7 @@ const fadeInUp = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.6, ease: 'easeOut' }
+    transition: { duration: 0.6, ease: 'easeOut' as const }
   }
 }
 
@@ -23,7 +23,7 @@ const staggerContainer = {
 
 export function GamesSection() {
   return (
-    <main className="w-full px-1 py-1 relative z-10">
+    <main className="w-full px-4 py-6 md:py-8 relative z-10" id="games">
       {/* Section header — matches other home sections */}
       <motion.div
         className="text-center mb-8"
@@ -37,158 +37,103 @@ export function GamesSection() {
         </h2>
       </motion.div>
 
-      {/* Games Grid */}
+      {/* Games Grid — 2 cols min, 4 max; tight gaps; scroll animation */}
       <motion.div
-        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-8 max-w-6xl mx-auto relative"
+        className="grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-2 max-w-6xl mx-auto relative"
         initial="hidden"
         whileInView="visible"
-        viewport={{ once: true }}
+        viewport={{ once: true, margin: '-40px' }}
         variants={staggerContainer}
       >
 
         {/* Lottery Card */}
         <motion.div variants={fadeInUp}>
           <Link href="/lottery" className="group block">
-          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
-            <div className="relative h-full w-full rounded-2xl overflow-hidden">
-              <Image
-                src="/morbius/Lottoscreenshot.png"
-                alt="Mega Morbius Lotto"
-                fill
-                className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <PaymentBadges />
-              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-1 sm:mb-2">Mega Morbius Lotto</h3>
-                <p className="text-white/60 text-sm sm:text-base">Pick 6 numbers and win big prizes</p>
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+              <div className="relative h-full w-full rounded-xl overflow-hidden">
+                <Image
+                  src="/morbius/Lottoscreenshot.png"
+                  alt="Mega Morbius Lotto"
+                  fill
+                  className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <PaymentBadges />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg">Lotto</h3>
+                </div>
               </div>
             </div>
-          </div>
-        </Link>
+          </Link>
         </motion.div>
 
         {/* Keno Card */}
         <motion.div variants={fadeInUp}>
           <Link href="/keno" className="group block">
-          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
-            <div className="relative h-full w-full rounded-2xl overflow-hidden">
-              <Image
-                src="/morbius/KENOscreenshot.png"
-                alt="Crypto Keno"
-                fill
-                className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <PaymentBadges />
-              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-1 sm:mb-2">Crypto Keno</h3>
-                <p className="text-white/60 text-sm sm:text-base">Choose your spots and hit the jackpot</p>
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+              <div className="relative h-full w-full rounded-xl overflow-hidden">
+                <Image
+                  src="/morbius/KENOscreenshot.png"
+                  alt="Crypto Keno"
+                  fill
+                  className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <PaymentBadges />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg">Crypto Keno</h3>
+                </div>
               </div>
             </div>
-          </div>
-        </Link>
+          </Link>
         </motion.div>
 
         {/* Plinko Card */}
         <motion.div variants={fadeInUp}>
           <Link href="/PLINKO" className="group block">
-          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
-            {/* NEW! Badge */}
-            <div className="absolute top-2 right-2 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg border border-cyan-300/50">
-              NEW!
-            </div>
-            <div className="relative h-full w-full rounded-2xl overflow-hidden">
-              <Image
-                src="/morbius/plinkoscreenshot.png"
-                alt="Plinko"
-                fill
-                className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <PaymentBadges />
-              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-1 sm:mb-2">Plinko</h3>
-                <p className="text-white/60 text-sm sm:text-base">Drop the ball and watch it bounce to victory</p>
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+              <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
+                NEW!
+              </div>
+              <div className="relative h-full w-full rounded-xl overflow-hidden">
+                <Image
+                  src="/morbius/plinkoscreenshot.png"
+                  alt="Plinko"
+                  fill
+                  className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <PaymentBadges />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg">Plinko</h3>
+                </div>
               </div>
             </div>
-          </div>
-        </Link>
+          </Link>
         </motion.div>
 
         {/* BlackJack Card */}
         <motion.div variants={fadeInUp}>
           <Link href="/BLACKJACK" className="group block">
-          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
-            {/* New badge */}
-            <div className="absolute top-2 right-2 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg border border-cyan-300/50">
-              NEW!
-            </div>
-            <div className="relative h-full w-full rounded-2xl overflow-hidden">
-              <Image
-                src="/BlackJack/TableBackground1.png"
-                alt="BlackJack"
-                fill
-                className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <PaymentBadges />
-              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-1 sm:mb-2">BlackJack</h3>
-                <p className="text-white/60 text-sm sm:text-base">Get 21 or beat the dealer</p>
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+              <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
+                NEW!
               </div>
-            </div>
-          </div>
-        </Link>
-        </motion.div>
-
-        {/* Poker Card - Under Construction */}
-        <motion.div variants={fadeInUp}>
-          <div className="group block relative cursor-not-allowed">
-          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs" style={Theme.panel.base}>
-            <div className="relative h-full w-full rounded-2xl overflow-hidden">
-              <Image
-                src="/morbius/Poker.png"
-                alt="Texas Hold'em"
-                fill
-                className="object-cover opacity-30 transition-opacity duration-300"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              {/* Construction overlay */}
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-                <div className="text-center">
-                  <div className="text-3xl sm:text-4xl lg:text-5xl mb-2 sm:mb-3 animate-pulse">🚧</div>
-                  <p className="text-yellow-400 text-sm sm:text-base lg:text-lg font-bold tracking-wide">Under Construction</p>
+              <div className="relative h-full w-full rounded-xl overflow-hidden">
+                <Image
+                  src="/BlackJack/TableBackground1.png"
+                  alt="BlackJack"
+                  fill
+                  className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <PaymentBadges />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg">BlackJack</h3>
                 </div>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6 z-20">
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white/50 mb-1 sm:mb-2">Texas Hold&apos;em</h3>
-                <p className="text-white/40 text-sm sm:text-base">Multiplayer no-limit Hold&apos;em</p>
-              </div>
             </div>
-          </div>
-        </div>
-        </motion.div>
-
-        {/* Dice Card - Coming Soon */}
-        <motion.div variants={fadeInUp}>
-          <div className="group block relative">
-          <div className="relative overflow-hidden rounded-2xl w-full aspect-square max-w-xs" style={Theme.panel.base}>
-            <div className="relative h-full w-full rounded-2xl overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-4xl sm:text-5xl lg:text-6xl mb-2 sm:mb-4 opacity-20">🎲</div>
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white/40 mb-1 sm:mb-2">Dice</h3>
-                  <p className="text-white/60 text-base sm:text-lg font-semibold">Coming Soon</p>
-                </div>
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 lg:p-6">
-                <p className="text-white/40 text-center text-sm sm:text-base">Roll for high scores and big wins</p>
-              </div>
-            </div>
-          </div>
-        </div>
+          </Link>
         </motion.div>
 
       </motion.div>

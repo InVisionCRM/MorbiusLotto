@@ -75,7 +75,7 @@ function TopPlayersTableA({ entries }: { entries: TopPlayerEntry[] }) {
                   </td>
                   <td className="py-2 px-3">
                     <button onClick={() => setSel(e.wallet_address)} className="text-cyan-400 hover:text-cyan-300 font-mono">
-                      ...{shortAddress(e.wallet_address)}
+                      {shortAddress(e.wallet_address)}
                     </button>
                   </td>
                   <td className="py-2 px-3 text-right tabular-nums text-white/90">{e.total_games}</td>
@@ -118,7 +118,7 @@ function TopPlayersTableB({ entries }: { entries: TopPlayerEntry[] }) {
                 {e.rank}
               </span>
               <button onClick={() => setSel(e.wallet_address)} className="flex-1 text-left font-mono text-cyan-400 hover:text-cyan-300 truncate">
-                ...{shortAddress(e.wallet_address)}
+                {shortAddress(e.wallet_address)}
               </button>
               <span className="tabular-nums text-white/80 text-sm">{e.total_games}</span>
               <span className={`tabular-nums text-sm w-20 text-right ${e.profit_loss >= 0n ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -153,7 +153,7 @@ function TopPlayersTableC({ entries }: { entries: TopPlayerEntry[] }) {
             <span className={e.rank <= 3 ? 'text-amber-300 font-bold' : 'text-white/60'}>{e.rank}</span>
             <span className="col-span-2">
               <button onClick={() => setSel(e.wallet_address)} className="text-cyan-400 hover:text-cyan-300 font-mono text-sm">
-                ...{shortAddress(e.wallet_address)}
+                {shortAddress(e.wallet_address)}
               </button>
             </span>
             <span className="text-right tabular-nums text-white/90">{e.total_games}</span>
@@ -190,7 +190,7 @@ function TopPlayersTableD({ entries }: { entries: TopPlayerEntry[] }) {
             </div>
             <div className="flex-1 min-w-0">
               <button onClick={() => setSel(e.wallet_address)} className="font-mono text-cyan-400 hover:text-cyan-300 truncate block">
-                ...{shortAddress(e.wallet_address)}
+                {shortAddress(e.wallet_address)}
               </button>
               <div className="flex gap-3 mt-0.5 text-xs text-white/60">
                 <span>{e.total_games} games</span>
@@ -232,7 +232,7 @@ function TopPlayersTableE({ entries }: { entries: TopPlayerEntry[] }) {
                 {e.rank}
               </span>
               <button onClick={() => setSel(e.wallet_address)} className="flex-1 text-left font-mono text-sm text-cyan-400 hover:text-cyan-300">
-                ...{shortAddress(e.wallet_address)}
+                {shortAddress(e.wallet_address)}
               </button>
               <div className="flex items-center gap-4 text-sm">
                 <span className="tabular-nums text-white/70 w-12">{e.total_games}</span>
@@ -402,7 +402,7 @@ function OverlayLayoutA({ entries, transparent }: { entries: TopPlayerEntry[]; t
             <span className={`w-7 h-7 rounded flex items-center justify-center text-xs font-bold shrink-0 ${e.rank <= 3 ? 'bg-amber-500/30 text-amber-300' : 'bg-white/10 text-white/70'}`}>
               #{e.rank}
             </span>
-            <span className="text-sm font-mono text-white">...{shortAddress(e.wallet_address)}</span>
+            <span className="text-sm font-mono text-white">{shortAddress(e.wallet_address)}</span>
             <span className="text-xs text-white/60 tabular-nums ml-auto">{e.total_games} games played</span>
           </Link>
         )}
@@ -421,7 +421,7 @@ function OverlayLayoutB({ entries, transparent }: { entries: TopPlayerEntry[]; t
               {e.profit_loss >= 0n ? '+' : ''}{formatMorbius(e.profit_loss)}
             </span>
             <span className="text-xs text-white/60">MORB profit</span>
-            <span className="text-sm font-mono text-cyan-300 ml-auto">...{shortAddress(e.wallet_address)}</span>
+            <span className="text-sm font-mono text-cyan-300 ml-auto">{shortAddress(e.wallet_address)}</span>
             <span className="text-[10px] text-white/50">Rank #{e.rank}</span>
           </Link>
         )}
@@ -458,7 +458,7 @@ function OverlayLayoutD({ entries, transparent }: { entries: TopPlayerEntry[]; t
           <Link href={`/player/${e.wallet_address}`} className={`flex items-center gap-3 px-4 rounded-lg border-l-4 border-l-cyan-500 bg-slate-800/60 hover:bg-slate-700/60 ${CARD_HEIGHT} min-w-[200px]`}>
             <Medal className={`w-5 h-5 shrink-0 ${e.rank <= 3 ? 'text-amber-400' : 'text-white/40'}`} />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-mono text-white truncate">...{shortAddress(e.wallet_address)}</div>
+              <div className="text-sm font-mono text-white truncate">{shortAddress(e.wallet_address)}</div>
               <div className="text-[10px] text-white/60">Rank {e.rank} · {e.total_games} games · {e.win_rate.toFixed(0)}% wins</div>
             </div>
           </Link>
@@ -476,7 +476,7 @@ function OverlayLayoutE({ entries, transparent }: { entries: TopPlayerEntry[]; t
           <Link href={`/player/${e.wallet_address}`} className={`flex items-center gap-3 px-4 rounded-xl bg-white/5 border border-white/10 hover:border-cyan-500/40 ${CARD_HEIGHT} min-w-[240px]`}>
             <Award className={`w-5 h-5 shrink-0 ${e.rank <= 3 ? 'text-amber-400/90' : 'text-white/40'}`} />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-mono text-white truncate">...{shortAddress(e.wallet_address)}</div>
+              <div className="text-sm font-mono text-white truncate">{shortAddress(e.wallet_address)}</div>
               <div className="text-[10px] text-white/60">#{e.rank} · {e.total_games} games · {e.win_rate.toFixed(1)}% win rate</div>
             </div>
             <span className={`text-sm font-semibold tabular-nums shrink-0 ${e.profit_loss >= 0n ? 'text-emerald-400' : 'text-red-400'}`}>

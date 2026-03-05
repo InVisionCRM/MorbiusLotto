@@ -82,7 +82,7 @@ export default function BlackjackSidebar({
 
   return (
     <div
-      className="w-full min-w-0 flex flex-col h-full min-h-0 rounded-xl overflow-hidden"
+      className="w-full h-full flex flex-col overflow-hidden rounded-xl"
       style={{ ...Theme.panel.sidebar, containerType: 'inline-size', containerName: 'sidebar' }}
     >
       <style>{`
@@ -90,9 +90,9 @@ export default function BlackjackSidebar({
           .sidebar-tab-label { display: none; }
         }
       `}</style>
-      {/* Layout E — Card grid: each tab as a card with icon + label. 3 cols = 2 rows for 6 tabs, more space per tab */}
+      {/* Tab buttons — fixed at top */}
       <div
-        className={`grid gap-2 p-3 shrink-0 flex-none items-start bg-black/20 ${tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}
+        className={`grid gap-2 p-3 shrink-0 items-start bg-black/20 ${tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}
       >
         {tabs.map((tab) => {
           const { id, label, icon: Icon } = tab
@@ -116,9 +116,9 @@ export default function BlackjackSidebar({
         })}
       </div>
 
-      {/* Content — padding only for howto/tournaments/chart/tournament-play; Recent/Top have their own */}
+      {/* Scrollable content — min-h-0 required so this flex child can shrink and show scrollbar */}
       <div
-        className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar relative flex flex-col border-t border-white/10 ${
+        className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar border-t border-white/10 ${
           activeTab === 'howto' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'tournament-play' ? 'p-4' : ''
         }`}
       >
@@ -130,13 +130,13 @@ export default function BlackjackSidebar({
           />
         )}
         {activeTab === 'wins' && (
-          <GlobalWinsFeed wsClient={wsClient} wsConnected={wsConnected ?? false} className="min-h-0" />
+          <GlobalWinsFeed wsClient={wsClient} wsConnected={wsConnected ?? false} />
         )}
         {/* Chart is always mounted when chartRef is set so addGameResult() works from page (ref stays attached).
             Hidden when tab is not active so data accumulates across tab switches. */}
         {chartRef != null && (
           <div
-            className={`min-w-0 w-full ${activeTab === 'chart' ? 'flex-1 flex flex-col min-h-[260px]' : 'hidden'}`}
+            className={`min-w-0 w-full ${activeTab === 'chart' ? 'h-[260px] shrink-0' : 'hidden'}`}
             aria-hidden={activeTab !== 'chart'}
           >
             <BlackjackRealTimeBetChart
@@ -164,7 +164,7 @@ export default function BlackjackSidebar({
           </div>
         )}
         {activeTab === 'tournament-play' && inTournament && tournamentTabContent != null && (
-          <div className="flex flex-col gap-4 h-full min-h-0">
+          <div className="flex flex-col gap-4">
             {tournamentTabContent}
           </div>
         )}

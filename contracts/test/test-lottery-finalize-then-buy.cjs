@@ -1,12 +1,12 @@
 const { ethers } = require('hardhat');
 
 async function main() {
-  const LOTTERY_ADDRESS = '0xD66b4489fbfF99A8d62f969203899840F2ec69c5';
+  const LOTTERY_INSTANT_ADDRESS = '0xD66b4489fbfF99A8d62f969203899840F2ec69c5';
   const WPLS_ADDRESS = '0xA1077a294dDE1B09bB078844df40758a5D0f9a27';
   const MORBIUS_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
 
   const lotteryABI = require('../../abi/lottery6of55-v2.json');
-  const lottery = await ethers.getContractAt(lotteryABI, LOTTERY_ADDRESS);
+  const lottery = await ethers.getContractAt(lotteryABI, LOTTERY_INSTANT_ADDRESS);
 
   console.log('\n📊 Testing finalize + buy sequence...\n');
 

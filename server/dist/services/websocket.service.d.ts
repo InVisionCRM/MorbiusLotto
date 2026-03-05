@@ -38,6 +38,12 @@ export declare class WebSocketService {
     private handleGetServerSeedHash;
     private handleCreateGame;
     private handlePlayerAction;
+    /**
+     * Resolve any pending withdrawals for a player by checking on-chain nonce usage.
+     * If the nonce was used (withdrawal succeeded on-chain), marks it completed (no refund).
+     * If the nonce was NOT used, leaves it pending for the expiry cron to refund.
+     */
+    private resolvePendingWithdrawals;
     private handleSyncBalance;
     private handleGetBalance;
     private handleGetGameState;

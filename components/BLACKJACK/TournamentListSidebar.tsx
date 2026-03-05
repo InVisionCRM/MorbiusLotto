@@ -213,7 +213,7 @@ export function TournamentListSidebar({
                           onClick={(e) => {
                             e.stopPropagation();
                           }}
-                          className="hover:text-cyan-400 hover:underline transition-colors"
+                          className="hover:text-cyan-400 hover: transition-colors"
                           title={`View ${truncAddr(t.creatorAddress)} profile and stats`}
                         >
                           {truncAddr(t.creatorAddress)}
@@ -317,7 +317,7 @@ export function TournamentListSidebar({
                         onClick={(e) => {
                           e.stopPropagation();
                         }}
-                        className="font-mono hover:text-cyan-400 hover:underline transition-colors"
+                        className="font-mono hover:text-cyan-400 hover: transition-colors"
                         title={`View ${truncAddr(active.creatorAddress)} profile and stats`}
                       >
                         {truncAddr(active.creatorAddress)}

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { usePublicClient, useAccount } from 'wagmi'
 import { parseAbiItem } from 'viem'
-import { LOTTERY_ADDRESS, LOTTERY_DEPLOY_BLOCK } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, LOTTERY_DEPLOY_BLOCK } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 
 export type LotteryTicketWithRound = {
@@ -42,7 +42,7 @@ export function useAllPlayerTickets() {
           'event TicketsPurchased(address indexed player, uint256 indexed roundId, uint256 ticketCount, uint256 freeTicketsUsed, uint256 MORBIUSSpent)'
         )
         const singleRoundLogs = await publicClient.getLogs({
-          address: LOTTERY_ADDRESS as `0x${string}`,
+          address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
           event: singleRoundEvent,
           args: { player: address },
           fromBlock,
@@ -54,7 +54,7 @@ export function useAllPlayerTickets() {
           'event TicketsPurchasedForRounds(address indexed player, uint256[] roundIds, uint256[] ticketCounts, uint256 MORBIUSSpent)'
         )
         const multiRoundLogs = await publicClient.getLogs({
-          address: LOTTERY_ADDRESS as `0x${string}`,
+          address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
           event: multiRoundEvent,
           args: { player: address },
           fromBlock,
@@ -118,7 +118,7 @@ export function useAllPlayerTickets() {
 
         // Fetch current round info to determine which rounds are active
         const currentRoundData = await publicClient.readContract({
-          address: LOTTERY_ADDRESS as `0x${string}`,
+          address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
           abi: LOTTERY_6OF55_V2_ABI,
           functionName: 'getCurrentRoundInfo',
         }) as any
@@ -130,7 +130,7 @@ export function useAllPlayerTickets() {
           try {
             // Get tickets for this round
             const roundTickets = await publicClient.readContract({
-              address: LOTTERY_ADDRESS as `0x${string}`,
+              address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
               abi: LOTTERY_6OF55_V2_ABI,
               functionName: 'getPlayerTickets',
               args: [BigInt(roundId), address],
@@ -140,7 +140,7 @@ export function useAllPlayerTickets() {
 
             // Fetch round state to check if active
             const roundData = await publicClient.readContract({
-              address: LOTTERY_ADDRESS as `0x${string}`,
+              address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
               abi: LOTTERY_6OF55_V2_ABI,
               functionName: 'getRound',
               args: [BigInt(roundId)],
@@ -155,7 +155,7 @@ export function useAllPlayerTickets() {
               'event TicketsPurchased(address indexed player, uint256 indexed roundId, uint256 ticketCount, uint256 freeTicketsUsed, uint256 MORBIUSSpent)'
             )
             const purchaseLogs = await publicClient.getLogs({
-              address: LOTTERY_ADDRESS as `0x${string}`,
+              address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
               event: singleRoundEvent,
               args: { player: address, roundId: BigInt(roundId) },
               fromBlock,

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useReadContract } from 'wagmi';
-import { formatEther } from 'viem';
+import { formatEther, parseAbiItem } from 'viem';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,7 +12,112 @@ import {
 } from 'lucide-react';
 import { merkleClaimMorbiusAbi } from '@/abi/merkle-claim-morbius';
 import { ERC20_ABI } from '@/abi/erc20';
-import { MERKLE_CLAIM_MORBIUS_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
+import {
+  MERKLE_CLAIM_MORBIUS_ADDRESS,
+  MORBIUS_TOKEN_ADDRESS,
+  PLINKO_ADDRESS,
+  KENO_ADDRESS,
+  BIGWHEEL_ADDRESS,
+  LOTTERY_INSTANT_ADDRESS,
+  BLACKJACK_ADDRESS,
+  MORBIUS_STAKING_ADDRESS,
+  MORBIUS_LP_STAKING_ADDRESS,
+  MERKLE_CLAIM_LP_ADDRESS,
+  MORBIUS_WPLS_V1_PAIR,
+  TOURNAMENT_PRIZE_ESCROW_ADDRESS,
+  MORBIUS_TOURNAMENT_ADDRESS,
+  MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS,
+} from '@/lib/contracts';
+import { getApiUrlOptional } from '@/lib/api-urls';
+
+// ─── Snapshot exclusion: all contract addresses from ALL_DEPLOYMENTS.MD + current contracts + LP pairs (fetched) ───
+const SNAPSHOT_EXCLUSION_CONTRACTS = [
+  // Deployer 1 (ALL_DEPLOYMENTS.MD)
+  '0x1f38de556ad6f039d710211025ee941ce3c546f1',
+  '0xec29f41ba9380e34b71d0aeb53bd637ba5258a93',
+  '0xfe8d58174d26cc2c60103120cbceb8f75dfdcadac',
+  '0x3807f417617e53d4c5c7d7a825a5ce4d105a75d2',
+  '0xa6585d334bb737d64ece7abca5acc087dd46e99e',
+  '0x611001519cf458d1bf35ebc2b990bd8226df3e08',
+  '0xcc54f6d7ff847ab4ab4f10314ebf84486921368b',
+  '0x32e97be3a82623faa3d65717455a874c914ba35c',
+  '0x6ae7e27cf0ee10516737d7416ef3178cb09d89cf',
+  '0xedc0d8ac8f43f079affcdc8d7bf5d58fba69a481',
+  '0x45fe6edb92a14a574f22c9a0efe48684faa35e42',
+  '0x7df812383b0e8fb6eb05b8ba852c3741d2df3a73',
+  '0xed8638fe2b7633b9b95cb48cc40a62f115589eab',
+  '0x7cecfc80a57cd8e217e1ace6715c68fa4bad4fad',
+  '0xe9b03e16f5c7d38b37b4f79ca250b714afb6755c',
+  '0x1b38626a12085547c35bd80455d054950ad72cde',
+  '0xa114a8974d4478b09fe9d2e2bf1bdcf28de5bd25',
+  '0x1f30aa16b4da0124308e33b8650c351bbca70704',
+  '0xed9716ca67a2e478eccefd2c2bfd0c08fdbdca59',
+  '0xc87b4f61460b24a0040adaab5452d07f38c876c6',
+  '0xfce49ab8b53366c397a0205c4c0cf42ae2b658a8',
+  '0xd31130104abb435ce87100e307c8c6ca89268032',
+  '0x011ee5f4658c5183fb9f8cd72e264ca5dbd404ab',
+  '0x52cbf18a8ae0fd4324b045e13532d35cf05af3e1',
+  '0x1051caa460e6dc739583dc2b611c8e3ab37fc543',
+  '0x69771ce8c2ec5a78cf87b0a21ad801e74a3eed09',
+  '0x59dec9419b32aa9ccc2c46a6fd8aeb68de069c26',
+  '0x32435e633eb691f7039eb73107fd15ef13125703',
+  '0x9a6a0f1dccf7cc4d98e2d690588e52bb8f0a86ed',
+  '0xf3da16ac9d973e5b330f16594855139366c9e06f',
+  '0x89ebe687dfe265f584954e8df72934f856ee1b59',
+  '0xde2c7a18de8a9d889e18874ea90a42f84fbaa080',
+  '0xb0c386da052951a94a8cd8fb5dad3ce5a72a93ed',
+  '0x53331b63ef24904ea470cf07b924c7c13a699d8f',
+  '0xc56606bf62611749ad6bb2a32e2755994c46d7c7',
+  '0x328f7afefb8f561b5a832954257c01b3723054fb',
+  '0xfdcf2430e23e56a2c844284a617a95a5b0665153',
+  '0x489db27a4c1b822455fafbf59dda495d5e87b28d',
+  '0x212cb1ea69f59e1f48e9c344053696c4adebb845',
+  '0x9037be0f7d97214f836198eb18d58f5a9b033d31',
+  '0x4625ca726d3a22b1aaf712935fdaeb258a0611d9',
+  '0x8748eafe150803fd61cb347589ed20340e30c847',
+  '0xdaebc91ae2f7df86fbc96806f048adbbbd4b44d0',
+  '0x95585d5bff78fbe90840e21c33c2192fe94babd0',
+  '0x8b99b6169a9051cd79ad6552a2ec952500e17d6d',
+  '0x3dad16d14987d7bf95e160783a6a375f00f8ae27',
+  // Deployer 2
+  '0xbf48d5376cb30ff760afe3728aff3a308b019c5e',
+  '0x25056d6159f6c7a7812d1b65aca2ca14e3e0f4c3',
+  '0x636f246b6d484a0448d082f13a71627c2b40b870',
+  '0x7553b64c51ebc342de89de834d6e8c0bc3492c96',
+  '0x4ad0c435f8556821f21427dc3d17ef22a99f35f7',
+  '0x122ee26b2ea3145c86f805f6d1afb4aa15b326c1',
+  '0xf976eb6a6cd1139d2550eb20af1542d640bcb06c',
+  '0x5992ae42b6b3c55e1e54e4e8cae851f45ff5b1ad',
+  '0x9fcd05776c20df2bfd46ed389908e447c66ed6f7',
+  '0x99c646326f50d944fc9029467742be4e8f677552',
+  '0x6a63cf27ece3ce050932780f6357bfa856060b7e',
+  // Deployer 3 (Keno-related)
+  '0x540d0f140e7d292681f03aa48cc37db09154a9df',
+  '0xbd5862ee636122aff32bee07e6e525bbae01738e',
+  '0xbeaf87368efd09bb0e13896444fb4f0e68a67f6a',
+  '0xb4707724b86a49333288eca9261ac5557e3875a1',
+  '0xad038b0a28f3f5308b891b86085673679a0acd9d',
+  // Currently active (Other) — may not be in tables above
+  '0x734a1460b4131f8cfe4950894be89d1a852c957a',
+  '0xd66b4489fbff99a8d62f969203899840f2ec69c5',
+  // Current contracts from lib/contracts (in case newer than ALL_DEPLOYMENTS)
+  PLINKO_ADDRESS.toLowerCase(),
+  KENO_ADDRESS.toLowerCase(),
+  BIGWHEEL_ADDRESS.toLowerCase(),
+  LOTTERY_INSTANT_ADDRESS.toLowerCase(),
+  BLACKJACK_ADDRESS.toLowerCase(),
+  MORBIUS_STAKING_ADDRESS.toLowerCase(),
+  MORBIUS_LP_STAKING_ADDRESS.toLowerCase(),
+  MERKLE_CLAIM_MORBIUS_ADDRESS.toLowerCase(),
+  MERKLE_CLAIM_LP_ADDRESS.toLowerCase(),
+  (MORBIUS_WPLS_V1_PAIR || '').toLowerCase(),
+  TOURNAMENT_PRIZE_ESCROW_ADDRESS.toLowerCase(),
+  MORBIUS_TOURNAMENT_ADDRESS.toLowerCase(),
+  MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS.toLowerCase(),
+].filter(Boolean);
+
+// Dedupe
+const SNAPSHOT_EXCLUSION_SET = new Set(SNAPSHOT_EXCLUSION_CONTRACTS);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -196,6 +301,9 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [MERKLE_ADDR, MAX_UINT256],
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        chain: PULSECHAIN,
+        account: address,
       });
       await waitForTx(hash, () => {
         refetchAllowance();
@@ -218,6 +326,7 @@ function OnchainActions({
         abi: merkleClaimMorbiusAbi,
         functionName: 'depositRewards',
         args: [depositWei],
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       await waitForTx(hash, () => {
         setStep('setroot');
@@ -239,6 +348,7 @@ function OnchainActions({
         abi: merkleClaimMorbiusAbi,
         functionName: 'setEpochRoot',
         args: [BigInt(epoch.epoch_number), epoch.merkle_root as `0x${string}`, totalWei],
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       await waitForTx(hash, async () => {
         setStep('done');
@@ -406,14 +516,19 @@ export default function AdminMerkleDropsTab() {
 
   const [blocklist, setBlocklist] = useState<BlocklistEntry[]>([]);
   const [blocklistLoading, setBlocklistLoading] = useState(false);
+  const [blocklistVisibleCount, setBlocklistVisibleCount] = useState(25);
   const [newBlockAddr, setNewBlockAddr] = useState('');
   const [newBlockReason, setNewBlockReason] = useState('');
   const [blocklistBusy, setBlocklistBusy] = useState(false);
+  const [lpPairAddresses, setLpPairAddresses] = useState<string[]>([]);
+  const [seedBlocklistBusy, setSeedBlocklistBusy] = useState(false);
 
   // ── Operator management ────────────────────────────────────────────────────
   const [newOperatorAddr, setNewOperatorAddr] = useState('');
   const [operatorBusy, setOperatorBusy] = useState(false);
   const [operatorMsg, setOperatorMsg] = useState('');
+  const [currentOperators, setCurrentOperators] = useState<string[]>([]);
+  const [operatorsLoading, setOperatorsLoading] = useState(false);
 
   const adminHeaders = useCallback(
     () => address ? { 'x-admin-wallet': address, 'Content-Type': 'application/json' } : {},
@@ -520,7 +635,57 @@ export default function AdminMerkleDropsTab() {
     }
   }, [address, adminHeaders]);
 
+  const apiBase = getApiUrlOptional() ?? '';
+  const fetchLpPairs = useCallback(async () => {
+    if (!address) return;
+    try {
+      const res = await fetch(`${apiBase}/api/admin/merkle-lp/pairs`, { headers: adminHeaders() });
+      const data = await res.json();
+      const pairs = Array.isArray(data) ? data : [];
+      setLpPairAddresses(pairs.map((p: { pair_address: string }) => p.pair_address?.toLowerCase()).filter(Boolean));
+    } catch {
+      setLpPairAddresses([]);
+    }
+  }, [address, adminHeaders, apiBase]);
+
   useEffect(() => { fetchBlocklist(); }, [fetchBlocklist]);
+  useEffect(() => { fetchLpPairs(); }, [fetchLpPairs]);
+
+  const handleSeedBlocklist = useCallback(async () => {
+    if (!address) return;
+    setSeedBlocklistBusy(true);
+    setError(null);
+    try {
+      const existingSet = new Set(blocklist.map((e) => e.address.toLowerCase()));
+      const toAdd: string[] = [];
+      SNAPSHOT_EXCLUSION_SET.forEach((addr) => {
+        if (!existingSet.has(addr)) toAdd.push(addr);
+      });
+      lpPairAddresses.forEach((addr) => {
+        if (addr && !existingSet.has(addr)) {
+          toAdd.push(addr);
+          existingSet.add(addr);
+        }
+      });
+      for (let i = 0; i < toAdd.length; i++) {
+        const addr = toAdd[i];
+        const res = await fetch('/api/admin/merkle/blocklist', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            address: addr.startsWith('0x') ? addr : `0x${addr}`,
+            reason: SNAPSHOT_EXCLUSION_SET.has(addr) ? 'Contract (ALL_DEPLOYMENTS / lib/contracts)' : 'LP pair (merkle-lp)',
+          }),
+        });
+        if (!res.ok) throw new Error(`Failed to add ${addr}`);
+      }
+      await fetchBlocklist();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to seed blocklist');
+    } finally {
+      setSeedBlocklistBusy(false);
+    }
+  }, [address, adminHeaders, blocklist, lpPairAddresses, fetchBlocklist]);
 
   // ── Create epoch ─────────────────────────────────────────────────────────
 
@@ -661,6 +826,36 @@ export default function AdminMerkleDropsTab() {
 
   // ── Operator management handlers ─────────────────────────────────────────
 
+  const fetchCurrentOperators = useCallback(async () => {
+    if (!publicClient) return;
+    setOperatorsLoading(true);
+    try {
+      const [addedLogs, removedLogs] = await Promise.all([
+        publicClient.getLogs({
+          address: MERKLE_ADDR,
+          event: parseAbiItem('event OperatorAdded(address indexed operator)'),
+          fromBlock: 0n,
+          toBlock: 'latest',
+        }),
+        publicClient.getLogs({
+          address: MERKLE_ADDR,
+          event: parseAbiItem('event OperatorRemoved(address indexed operator)'),
+          fromBlock: 0n,
+          toBlock: 'latest',
+        }),
+      ]);
+      const added = new Set(addedLogs.map((l) => (l.args.operator as string)?.toLowerCase()).filter(Boolean));
+      const removed = new Set(removedLogs.map((l) => (l.args.operator as string)?.toLowerCase()).filter(Boolean));
+      setCurrentOperators([...added].filter((a) => !removed.has(a)));
+    } catch {
+      setCurrentOperators([]);
+    } finally {
+      setOperatorsLoading(false);
+    }
+  }, [publicClient]);
+
+  useEffect(() => { fetchCurrentOperators(); }, [fetchCurrentOperators]);
+
   const handleAddOperator = async () => {
     if (!/^0x[0-9a-fA-F]{40}$/.test(newOperatorAddr.trim())) {
       setOperatorMsg('Invalid address');
@@ -674,9 +869,11 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'addOperator',
         args: [newOperatorAddr.trim() as `0x${string}`],
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       setOperatorMsg(`✓ Operator added — tx: ${hash.slice(0, 14)}…`);
       setNewOperatorAddr('');
+      setTimeout(fetchCurrentOperators, 3000);
     } catch (e: any) {
       setOperatorMsg(e?.shortMessage || e?.message || 'Failed to add operator');
     } finally {
@@ -693,8 +890,10 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'removeOperator',
         args: [addr as `0x${string}`],
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       setOperatorMsg(`✓ Operator removed — tx: ${hash.slice(0, 14)}…`);
+      setTimeout(fetchCurrentOperators, 3000);
     } catch (e: any) {
       setOperatorMsg(e?.shortMessage || e?.message || 'Failed to remove operator');
     } finally {
@@ -714,6 +913,7 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'revokeEpoch',
         args: [BigInt(epoch.epoch_number)],
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       setEpochMsg(epoch.id, `Revoking on-chain… tx: ${hash.slice(0, 14)}…`);
       await publicClient!.waitForTransactionReceipt({ hash });
@@ -925,7 +1125,7 @@ export default function AdminMerkleDropsTab() {
               {parseInt(settingsDraft.countdown_duration || '0', 10) > 0 && (
                 <button
                   onClick={() => setSettingsDraft((p) => ({ ...p, countdown_duration: '0' }))}
-                  className="text-[10px] text-red-400 hover:text-red-300 underline ml-1"
+                  className="text-[10px] text-red-400 hover:text-red-300  ml-1"
                 >
                   Clear (use auto)
                 </button>
@@ -1293,6 +1493,20 @@ export default function AdminMerkleDropsTab() {
             Excluded from all snapshots. Burn addresses, LP pairs, game/staking contracts are pre-populated.
           </p>
           <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              onClick={handleSeedBlocklist}
+              disabled={seedBlocklistBusy || blocklistLoading}
+              className="h-8 bg-slate-700 hover:bg-slate-600 text-white text-xs"
+            >
+              {seedBlocklistBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <ShieldX className="w-3 h-3 mr-1" />}
+              Add all contracts &amp; LPs to blocklist
+            </Button>
+            <span className="text-[10px] text-slate-500">
+              ({SNAPSHOT_EXCLUSION_SET.size} contracts + {lpPairAddresses.length} LP pair{lpPairAddresses.length !== 1 ? 's' : ''})
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
             <input type="text" value={newBlockAddr} onChange={(e) => setNewBlockAddr(e.target.value)}
               placeholder="0x… address"
               className="h-8 flex-1 min-w-40 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 font-mono focus:outline-none focus:border-red-500" />
@@ -1308,39 +1522,53 @@ export default function AdminMerkleDropsTab() {
           {blocklistLoading ? (
             <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-slate-500" /></div>
           ) : (
-            <div className="overflow-x-auto max-h-64 overflow-y-auto">
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="border-b border-slate-700/50">
-                    <th className="text-left text-slate-500 font-medium pb-2 pr-4">Address</th>
-                    <th className="text-left text-slate-500 font-medium pb-2 pr-4">Reason</th>
-                    <th className="text-left text-slate-500 font-medium pb-2">Added</th>
-                    <th className="w-8" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {blocklist.map((entry) => (
-                    <tr key={entry.address} className="border-b border-slate-800/50 hover:bg-slate-800/20">
-                      <td className="py-1.5 pr-4">
-                        <a href={`https://scan.pulsechain.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer"
-                          className="text-slate-300 font-mono hover:text-white transition-colors">
-                          {entry.address.slice(0, 8)}…{entry.address.slice(-6)}
-                        </a>
-                      </td>
-                      <td className="py-1.5 pr-4 text-slate-400">{entry.reason || '—'}</td>
-                      <td className="py-1.5 text-slate-500 whitespace-nowrap">{new Date(entry.added_at).toLocaleDateString()}</td>
-                      <td className="py-1.5">
-                        <button onClick={() => handleRemoveFromBlocklist(entry.address)}
-                          className="p-1 text-slate-500 hover:text-red-400 transition-colors" title="Remove">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </td>
+            <>
+              <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 280 }}>
+                <table className="w-full text-[11px]">
+                  <thead className="sticky top-0 bg-slate-900 z-10">
+                    <tr className="border-b border-slate-700/50">
+                      <th className="text-left text-slate-500 font-medium pb-2 pr-4">Address</th>
+                      <th className="text-left text-slate-500 font-medium pb-2 pr-4">Reason</th>
+                      <th className="text-left text-slate-500 font-medium pb-2">Added</th>
+                      <th className="w-8" />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              {blocklist.length === 0 && <p className="text-center text-slate-500 py-4">No entries</p>}
-            </div>
+                  </thead>
+                  <tbody>
+                    {blocklist.slice(0, blocklistVisibleCount).map((entry) => (
+                      <tr key={entry.address} className="border-b border-slate-800/50 hover:bg-slate-800/20">
+                        <td className="py-1.5 pr-4">
+                          <a href={`https://scan.pulsechain.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer"
+                            className="text-slate-300 font-mono hover:text-white transition-colors">
+                            {entry.address.slice(0, 8)}…{entry.address.slice(-6)}
+                          </a>
+                        </td>
+                        <td className="py-1.5 pr-4 text-slate-400">{entry.reason || '—'}</td>
+                        <td className="py-1.5 text-slate-500 whitespace-nowrap">{new Date(entry.added_at).toLocaleDateString()}</td>
+                        <td className="py-1.5">
+                          <button onClick={() => handleRemoveFromBlocklist(entry.address)}
+                            className="p-1 text-slate-500 hover:text-red-400 transition-colors" title="Remove">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {blocklist.length === 0 && <p className="text-center text-slate-500 py-4">No entries</p>}
+              </div>
+              {blocklist.length > blocklistVisibleCount && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setBlocklistVisibleCount((c) => c + 25)}
+                    className="h-7 text-[11px] border-slate-600 text-slate-400 hover:bg-slate-800"
+                  >
+                    Load More ({blocklist.length - blocklistVisibleCount} remaining)
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -1348,9 +1576,14 @@ export default function AdminMerkleDropsTab() {
       {/* ── Operator Management ── */}
       <Card className="bg-slate-900/80 border-slate-700/50">
         <CardHeader className="pb-3 pt-4 px-4">
-          <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-            <Settings className="w-4 h-4 text-cyan-400" />
-            Contract Operator Management
+          <CardTitle className="text-sm font-semibold text-slate-200 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Settings className="w-4 h-4 text-cyan-400" />
+              Contract Operator Management
+            </span>
+            <button onClick={fetchCurrentOperators} className="p-1.5 rounded border border-slate-600 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Refresh operators">
+              {operatorsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            </button>
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-4 space-y-3">
@@ -1358,6 +1591,35 @@ export default function AdminMerkleDropsTab() {
             Operators can deposit rewards and set epoch roots on-chain without being the contract owner.
             Add your server keeper wallet here so the cron can auto-publish.
           </p>
+
+          {/* Current operators list */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Current Operators ({currentOperators.length})</p>
+            {operatorsLoading ? (
+              <div className="flex items-center gap-2 text-xs text-slate-500 py-1"><Loader2 className="w-3 h-3 animate-spin" /> Loading…</div>
+            ) : currentOperators.length === 0 ? (
+              <p className="text-xs text-amber-400 bg-amber-950/20 border border-amber-500/20 rounded px-3 py-2">
+                No operators — the cron cannot auto-publish until you add the keeper wallet as an operator.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {currentOperators.map((op) => (
+                  <div key={op} className="flex items-center justify-between gap-2 bg-slate-800/50 rounded px-3 py-1.5 border border-slate-700/40">
+                    <span className="text-[11px] font-mono text-cyan-300">{op}</span>
+                    <button
+                      onClick={() => handleRemoveOperator(op)}
+                      disabled={operatorBusy}
+                      className="text-slate-500 hover:text-red-400 transition-colors shrink-0"
+                      title="Remove operator"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2 flex-wrap">
             <input
               type="text"
@@ -1376,26 +1638,6 @@ export default function AdminMerkleDropsTab() {
               Add Operator
             </Button>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              type="text"
-              id="remove-operator-addr"
-              placeholder="0x… operator to remove"
-              className="h-8 flex-1 min-w-52 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 font-mono focus:outline-none focus:border-red-500"
-            />
-            <Button
-              size="sm"
-              onClick={() => {
-                const el = document.getElementById('remove-operator-addr') as HTMLInputElement;
-                if (el?.value) handleRemoveOperator(el.value.trim());
-              }}
-              disabled={operatorBusy}
-              className="h-8 bg-red-700 hover:bg-red-600 text-white text-xs"
-            >
-              {operatorBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}
-              Remove Operator
-            </Button>
-          </div>
           {operatorMsg && (
             <p className={`text-xs px-3 py-2 rounded border ${
               operatorMsg.startsWith('✓')
@@ -1407,7 +1649,6 @@ export default function AdminMerkleDropsTab() {
             <Info className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
             <span>
               Only the contract <span className="text-white">owner</span> can add/remove operators.
-              Check the operator mapping on-chain via PulseScan to see current operators.
             </span>
           </div>
         </CardContent>

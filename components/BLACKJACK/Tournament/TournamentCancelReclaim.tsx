@@ -106,6 +106,7 @@ export function TournamentCancelReclaim({
         args: [idBytes32],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       setSuccess(`Funds reclaimed successfully! Transaction: ${hash.slice(0, 10)}...`);
       onReclaim?.();

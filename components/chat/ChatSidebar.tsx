@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
-import { MessageCircle, X } from 'lucide-react';
+import { MessageCircle, X, Home } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';
 
 const PATH_TO_ROOM: Record<string, { roomId: string; title: string }> = {
@@ -37,13 +37,29 @@ const PANEL_BG: React.CSSProperties = {
 const TAG_BG: React.CSSProperties = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
   boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6), -2px 0 6px rgba(0,0,0,0.4)',
+  borderWidth: '3px 0 3px 3px',
+  borderStyle: 'solid',
+  borderColor: 'rgb(6 182 212)', /* cyan-500 */
 };
 
 export function ChatSidebar() {
   const [open, setOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const [activeTab, setActiveTab] = useState<'page' | 'lobby'>('page');
   const pathname = usePathname();
-  const { roomId, title } = getRoomForPath(pathname ?? '/');
+  const { roomId: pageRoomId, title: pageTitle } = getRoomForPath(pathname ?? '/');
+
+  // Whether the current page has its own non-lobby chat
+  const hasGameChat = pageRoomId !== 'main';
+
+  // Reset to page tab when navigating to a new page
+  useEffect(() => {
+    setActiveTab('page');
+  }, [pathname]);
+
+  // Resolve which room to show
+  const roomId = hasGameChat && activeTab === 'lobby' ? 'main' : pageRoomId;
+  const title = hasGameChat && activeTab === 'lobby' ? 'Lobby Chat' : pageTitle;
 
   // Open by default only on desktop home page
   useEffect(() => {
@@ -71,7 +87,7 @@ export function ChatSidebar() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex flex-col items-center justify-center gap-1.5 w-8 h-20 rounded-l-xl border border-r-0 border-cyan-500/30 hover:bg-white/10 transition-colors"
+          className="flex flex-col items-center justify-center gap-1.5 w-12 h-40 rounded-l-xl hover:bg-white/10 transition-colors"
           style={{
             position: 'fixed',
             right: 0,
@@ -82,7 +98,7 @@ export function ChatSidebar() {
           }}
           aria-label={hasUnread ? 'Open chat (unread messages)' : 'Open chat'}
         >
-          <MessageCircle className="w-4 h-4 text-cyan-400 shrink-0" />
+          <MessageCircle className="w-6 h-6 text-cyan-400 shrink-0" />
           {hasUnread && (
             <span
               className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500"
@@ -90,7 +106,7 @@ export function ChatSidebar() {
             />
           )}
           <span
-            className="text-[9px] text-white/40 tracking-widest uppercase"
+            className="text-[18px] text-white/70 tracking-widest uppercase"
             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
           >
             Chat
@@ -102,14 +118,42 @@ export function ChatSidebar() {
       <AnimatePresence>
         {open && (
           <motion.div
-            className="fixed right-0 top-0 bottom-0 z-[500] flex flex-col border-l border-cyan-500/20 overflow-hidden"
+            className="fixed right-0 top-0 bottom-0 z-[500] flex flex-col border-2 border-cyan-500/50 overflow-hidden"
             style={{ ...PANEL_BG, width: 300 }}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
           >
+            {hasGameChat && (
+              <div className="hidden md:flex shrink-0 border-b border-cyan-500/20">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('page')}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                    activeTab === 'page'
+                      ? 'text-cyan-400 border-b-2 border-cyan-400 bg-white/5'
+                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                  }`}
+                >
+                  {pageTitle}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('lobby')}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                    activeTab === 'lobby'
+                      ? 'text-cyan-400 border-b-2 border-cyan-400 bg-white/5'
+                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                  }`}
+                >
+                  <Home className="w-3 h-3" />
+                  Lobby
+                </button>
+              </div>
+            )}
             <ChatPanel
+              key={roomId}
               roomId={roomId}
               title={title}
               collapsible={false}
@@ -137,7 +181,35 @@ export function ChatSidebar() {
           >
             {/* Spacer below mobile top bar */}
             <div className="shrink-0 h-14" />
+            {hasGameChat && (
+              <div className="flex shrink-0 border-b border-cyan-500/20">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('page')}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                    activeTab === 'page'
+                      ? 'text-cyan-400 border-b-2 border-cyan-400 bg-white/5'
+                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                  }`}
+                >
+                  {pageTitle}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('lobby')}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                    activeTab === 'lobby'
+                      ? 'text-cyan-400 border-b-2 border-cyan-400 bg-white/5'
+                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                  }`}
+                >
+                  <Home className="w-3 h-3" />
+                  Lobby
+                </button>
+              </div>
+            )}
             <ChatPanel
+              key={roomId}
               roomId={roomId}
               title={title}
               collapsible={false}

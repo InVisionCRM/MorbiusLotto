@@ -6,7 +6,7 @@
  * 
  * Requirements:
  * - PRIVATE_KEY in .env (any funded key; function is permissionless) 
- * - LOTTERY_ADDRESS in .env (defaults to mainnet address)
+ * - LOTTERY_INSTANT_ADDRESS in .env (defaults to mainnet address)
  * - Optional: PULSECHAIN_RPC, KEEPER_GAS_LIMIT
  * 
  * Usage: node scripts/lottery-keeper.js
@@ -24,8 +24,8 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY
 // ⚠️ IMPORTANT: Set your deployed lottery contract address here or in .env
 // Latest deployment: 0x25056D6159F6C7a7812d1B65aca2Ca14E3E0F4c3 (Block 25278796)
 // Get from: lib/contracts.ts or your deployment logs
-const LOTTERY_ADDRESS =
-  process.env.LOTTERY_ADDRESS || '0xD66b4489fbfF99A8d62f969203899840F2ec69c5'
+const LOTTERY_INSTANT_ADDRESS =
+  process.env.LOTTERY_INSTANT_ADDRESS || '0xD66b4489fbfF99A8d62f969203899840F2ec69c5'
 
 const GAS_LIMIT = parseInt(process.env.KEEPER_GAS_LIMIT || '2000000', 10)
 
@@ -59,7 +59,7 @@ function generateRandomTicketNumbers() {
 async function main() {
   const provider = new ethers.JsonRpcProvider(RPC_URL)
   const wallet = new ethers.Wallet(PRIVATE_KEY, provider)
-  const lottery = new ethers.Contract(LOTTERY_ADDRESS, ABI, wallet)
+  const lottery = new ethers.Contract(LOTTERY_INSTANT_ADDRESS, ABI, wallet)
 
   const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1'
   const ERC20_ABI = [
@@ -78,7 +78,7 @@ async function main() {
     console.log('🤖 Lottery Keeper Started')
     console.log('━'.repeat(50))
     console.log(`Keeper Address: ${wallet.address}`)
-    console.log(`Contract: ${LOTTERY_ADDRESS}`)
+    console.log(`Contract: ${LOTTERY_INSTANT_ADDRESS}`)
     console.log(`RPC: ${RPC_URL}`)
     console.log('💰 Initial Balances:')
     console.log(`   PLS: ${ethers.formatEther(plsBalance)} PLS`)
@@ -115,12 +115,12 @@ async function main() {
         console.log(`🛡️ Purchasing keeper ticket...`)
 
         // Check if lottery contract is approved to spend keeper's MORBIUS
-        const currentAllowance = await MORBIUSToken.allowance(wallet.address, LOTTERY_ADDRESS)
+        const currentAllowance = await MORBIUSToken.allowance(wallet.address, LOTTERY_INSTANT_ADDRESS)
         console.log(`🔓 Current Allowance: ${ethers.formatUnits(currentAllowance, 18)} MORBIUS`)
 
         if (currentAllowance < ticketPrice) {
           console.log(`📝 Approving lottery contract to spend MORBIUS...`)
-          const approveTx = await MORBIUSToken.connect(wallet).approve(LOTTERY_ADDRESS, ethers.MaxUint256)
+          const approveTx = await MORBIUSToken.connect(wallet).approve(LOTTERY_INSTANT_ADDRESS, ethers.MaxUint256)
           console.log(`📝 Approval Transaction: ${approveTx.hash}`)
           await approveTx.wait()
           console.log(`✅ Approval confirmed`)

@@ -279,7 +279,7 @@ export default function AdminTablesTab() {
                             href={`https://dexscreener.com/pulsechain/${row.token_contract_address}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-cyan-400 hover:underline"
+                            className="text-cyan-400 hover:"
                             title="DexScreener"
                           >
                             <ExternalLink className="w-2.5 h-2.5" />

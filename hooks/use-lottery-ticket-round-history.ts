@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useReadContracts } from 'wagmi'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
-import { LOTTERY_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
 import { formatUnits } from 'viem'
 
 interface RoundHistoryEntry {
@@ -42,7 +42,7 @@ export function useLotteryTicketRoundHistory(ticket: LotteryTicket | null) {
   const roundQueries = useMemo(() => {
     if (roundIds.length === 0) return []
     return roundIds.map(roundId => ({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'getRound',
       args: [BigInt(roundId)],

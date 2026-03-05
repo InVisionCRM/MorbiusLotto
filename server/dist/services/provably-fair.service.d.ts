@@ -81,6 +81,14 @@ export declare class ProvablyFairService {
      */
     bytesToFloat(bytes: Buffer | Uint8Array): number;
     /**
+     * Generate 6 distinct numbers in [1, 55] for Instant Lottery 6-of-55 (provably fair).
+     * Uses Fisher-Yates over a pool of 55 slots (values 1–55) with HMAC-SHA256 byte stream.
+     * Same message format as Blackjack: message = `${clientSeed}:${nonce}:${roundIndex}`.
+     * Returns sorted [n1, n2, n3, n4, n5, n6] so contract and verifier get identical result.
+     * Verification: given serverSeed, clientSeed, nonce — recompute with this algorithm and compare.
+     */
+    generate6of55WinningNumbers(serverSeed: string, clientSeed: string, nonce: number): [number, number, number, number, number, number];
+    /**
      * Fisher-Yates shuffle of a 52-card deck using cursor-based HMAC byte stream.
      * One nonce per game. Returns array of card indices 0-51.
      * Consumes 51 * 4 = 204 bytes (~7 HMAC rounds).

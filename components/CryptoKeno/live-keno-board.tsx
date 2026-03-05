@@ -8,10 +8,9 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 // import { KenoTicket } from '@/components/CryptoKeno/keno-ticket'
 import { BentoGrid, BentoGridItem } from '@/components/ui/bento-grid'
-import { ChevronLeft, ChevronRight, DollarSign, Trophy, TrendingUp, TrendingDown, Target } from 'lucide-react'
-import { useKenoStats } from '@/hooks/use-keno-stats'
+import { DottedGlowBackground } from '@/components/ui/dotted-glow-background'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAccount } from 'wagmi'
-import { formatEther } from 'viem'
 
 type Stage = 'idle' | 'multiplier' | 'plus3' | 'drawing' | 'complete'
 const MULTIPLIERS = [1, 2, 3, 5, 10]
@@ -25,6 +24,8 @@ interface LiveKenoBoardProps {
   active?: boolean
   onClose?: () => void
   nextDrawTime?: number
+  onDrawComplete?: () => void
+  onDrawProgress?: (drawn: number, total: number) => void
   tickets?: {
     ticketId: bigint
     numbers: number[]
@@ -60,6 +61,8 @@ export function LiveKenoBoard({
   active = false,
   onClose,
   nextDrawTime,
+  onDrawComplete,
+  onDrawProgress,
   tickets = [],
   insertAfterYourNumbers,
 }: LiveKenoBoardProps) {
@@ -76,21 +79,30 @@ export function LiveKenoBoard({
   const [ticketIndex, setTicketIndex] = useState(0)
   const [showExpiredTickets, setShowExpiredTickets] = useState(false)
 
-  // Player stats
   const { address } = useAccount()
-  const { playerStats, unclaimedWinnings, isLoading: isLoadingStats } = useKenoStats()
 
   const orderedWinning = useMemo(() => winningNumbers.filter((n) => n > 0), [winningNumbers])
   const orderedPlus3 = useMemo(() => plus3Numbers.filter((n) => n > 0), [plus3Numbers])
 
-  // Filter tickets based on expired toggle
+  // Filter tickets based on expired toggle. While a draw is active, always show all tickets so
+  // "Your Numbers" stays visible during the entire animation regardless of drawsRemaining value.
   const filteredTickets = useMemo(() => {
-    if (showExpiredTickets) return tickets
+    if (active || showExpiredTickets) return tickets
     return tickets.filter(t => t.drawsRemaining > 0)
-  }, [tickets, showExpiredTickets])
+  }, [tickets, showExpiredTickets, active])
 
   const ticketIdsSignature = useMemo(() => filteredTickets.map((t) => t.ticketId.toString()).join('|'), [filteredTickets])
   const currentTicket = filteredTickets[ticketIndex] ?? null
+
+  // Auto-dismiss post-draw overlay after 5 seconds so layout stays stable
+  useEffect(() => {
+    if (stage !== 'complete') return
+    const t = window.setTimeout(() => {
+      setStage('idle')
+      onClose?.()
+    }, 5000)
+    return () => window.clearTimeout(t)
+  }, [stage, onClose])
   const displayNumbers = useMemo(
     () => (drawnNumbers.length ? drawnNumbers : orderedWinning).slice(0, 20),
     [drawnNumbers, orderedWinning]
@@ -166,7 +178,12 @@ export function LiveKenoBoard({
       const startAt = delay + idx * 2500 // ~1 minute total
       schedule(() => launchBall(num, false), startAt)
       schedule(
-        () => setDrawnNumbers((prev) => (prev.includes(num) ? prev : [...prev, num])),
+        () => setDrawnNumbers((prev) => {
+          if (prev.includes(num)) return prev
+          const next = [...prev, num]
+          onDrawProgress?.(next.length, orderedWinning.length)
+          return next
+        }),
         startAt + 1200
       )
     })
@@ -188,6 +205,7 @@ export function LiveKenoBoard({
 
     schedule(() => {
       setStage('complete')
+      onDrawComplete?.()
     }, delay)
   }
 
@@ -226,17 +244,14 @@ export function LiveKenoBoard({
       <div className="relative z-10 px-4 py-3">
         <BentoGrid className="max-w-none">
           <BentoGridItem
-            title="Live Draw Board"
+            title={
+              <span className="font-russo-one text-2xl md:text-3xl tracking-wide text-white drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]">
+                KENO
+              </span>
+            }
             className="md:row-start-1 md:col-span-2"
             header={
               <>
-                {stage !== 'complete' && (
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20">
-                    <div className="rounded-md bg-cyan-500/90 px-3 py-1 text-[11px] font-semibold text-white shadow">
-                      Round {roundId ?? '-'}
-                    </div>
-                  </div>
-                )}
                 {/* Flying ball overlay */}
                 <AnimatePresence>
                   {flyingBall && (
@@ -279,31 +294,33 @@ export function LiveKenoBoard({
                 const isHit = drawnNumbers.includes(n)
                 const isPlus3Hit = drawnPlus3.includes(n)
                 const isBullsEye = bullsEyeNumber === n
+                const drawIndex = drawnNumbers.indexOf(n)
                 return (
                   <motion.div
                     key={n}
                     ref={(el) => { cellRefs.current[n] = el }}
                     layout
                     className={cn(
-                      'relative flex h-9 items-center justify-center border text-xs font-semibold transition',
+                      'relative flex h-9 items-center justify-center border text-xs font-semibold transition overflow-hidden',
                       isHit
-                        ? 'border-cyan-500 bg-cyan-500/20 text-cyan-100 shadow-[0_0_0_1px_rgba(6,182,212,0.5)]'
+                        ? 'border-cyan-500/80 text-cyan-100 shadow-[0_0_0_1px_rgba(6,182,212,0.5)]'
                         : isPlus3Hit
                           ? 'border-yellow-300 bg-yellow-500/20 text-yellow-100'
                           : 'border-white/10 bg-white/5 text-gray-200'
                     )}
                   >
-                    {n.toString().padStart(2, '0')}
-                    {isBullsEye && (
-                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.4)]" />
-                    )}
                     {isHit && (
                       <motion.div
                         layoutId={`hit-${n}`}
-                        className="absolute inset-0 rounded-md bg-cyan-500/10"
+                        className="absolute inset-0 rounded-md bg-cyan-500/30"
                         initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.2 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.4, delay: drawIndex * 0.04 }}
                       />
+                    )}
+                    <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{n.toString().padStart(2, '0')}</span>
+                    {isBullsEye && (
+                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.4)] z-10" />
                     )}
                   </motion.div>
                 )
@@ -328,12 +345,6 @@ export function LiveKenoBoard({
                     >
                       {/* Radial gradient overlay */}
                       <div className="relative">
-                      <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-white">
-                        <span />
-                        <span>Drawing: <span className="text-white">{roundId ?? '-'}</span></span>
-                        <span />
-                      </div>
-
                       <div className="grid grid-cols-5 gap-2 justify-items-center mb-3">
                         {displayNumbers.map((n, idx) => (
                           <motion.div
@@ -342,9 +353,14 @@ export function LiveKenoBoard({
                             animate={{ scale: 1, opacity: 1, rotateX: 0, y: 0 }}
                             exit={{ scale: 0.85, opacity: 0, rotateX: 25, y: -6 }}
                             transition={{ duration: 0.45, delay: idx * 0.06, ease: [0.16, 1, 0.3, 1] }}
-                            className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-white via-white/50 to-white/40 border border-slate-900/80 text-[15px] font-bold text-slate-950 shadow-lg backdrop-blur-md"
+                            className="relative flex h-14 w-14 items-center justify-center rounded-full text-[15px] font-bold text-white backdrop-blur-xl"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.06) 100%)',
+                              boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.15)',
+                              border: '1px solid rgba(255, 255, 255, 0.22)',
+                            }}
                           >
-                            {n.toString().padStart(2, '0')}
+                            <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{n.toString().padStart(2, '0')}</span>
                           </motion.div>
                         ))}
                       </div>
@@ -381,7 +397,6 @@ export function LiveKenoBoard({
                       )}
 
                       <div className="mt-2 border-t border-slate-200 pt-2 text-center space-y-1">
-                        <div className="text-sm font-semibold text-white/70">Awaiting Next Draw</div>
                         <div className="text-4xl font-semibold text-cyan-500">Next in {timeLabel}</div>
                       </div>
                       </div>
@@ -394,9 +409,23 @@ export function LiveKenoBoard({
 
           <BentoGridItem
             title="Your Numbers"
-            className="md:row-start-2 md:col-span-2"
+            className="md:row-start-2 md:col-span-2 relative overflow-hidden"
             description={`${currentTicket?.drawsRemaining ?? 0} draws remaining`}
           >
+            <DottedGlowBackground
+              className="rounded-lg"
+              gap={10}
+              radius={5}
+              color="rgba(117, 42, 188, 0.63)"
+              glowColor="rgba(241, 248, 255, 0.23)"
+              opacity={0.6}
+              backgroundOpacity={0.7}
+              edgeFadeOpacity={1}
+              speedScale={0.3}
+              speedMin={0.05}
+              speedMax={1}
+            />
+            <div className="relative z-10">
             {filteredTickets && filteredTickets.length > 0 ? (
               <div className="flex items-center gap-3">
                 <Button
@@ -419,10 +448,10 @@ export function LiveKenoBoard({
                         key={n}
                         layout
                         className={cn(
-                          'relative flex h-12 w-12 items-center justify-center rounded-full border text-[16px] font-bold transition-all',
+                          'relative flex h-14 w-14 items-center justify-center rounded-full border-2 text-xl font-bold transition-all duration-700 ease-out',
                           isHit
-                            ? 'border-cyan-500 text-cyan-100 shadow-[0_0_8px_rgba(6,182,212,0.6)]'
-                            : 'border-purple-400 text-purple-100 shadow-[0_0_4px_rgba(168,85,247,0.4)]'
+                            ? 'border-purple-400 text-purple-100 shadow-[0_0_4px_rgba(168,85,247,0.7)] bg-purple-500/20'
+                            : 'border-cyan-400 text-cyan-100 shadow-[0_0_4px_rgba(34,211,238,0.8)] bg-slate-900/90'
                         )}
                       >
                         {n.toString().padStart(2, '0')}
@@ -431,10 +460,10 @@ export function LiveKenoBoard({
                         )}
                         {isHit && (
                           <motion.div
-                            className="absolute inset-0 rounded-full bg-cyan-500/25"
+                            className="absolute inset-0 rounded-full bg-purple-500/30"
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
-                            transition={{ duration: 0.25 }}
+                            transition={{ duration: 0.6, ease: 'easeOut' }}
                           />
                         )}
                       </motion.div>
@@ -455,6 +484,7 @@ export function LiveKenoBoard({
             ) : (
               <div className="text-center text-white/60">No active tickets</div>
             )}
+            </div>
           </BentoGridItem>
 
           {/* Insert content after "Your Numbers" (e.g., ticket builder on mobile) */}
@@ -463,141 +493,6 @@ export function LiveKenoBoard({
               {insertAfterYourNumbers}
             </div>
           )}
-
-          {/* Player Statistics */}
-          <BentoGridItem
-            className="relative md:row-start-3 md:col-span-2 rounded-0 !p-0 flex-1 min-h-0 flex flex-col border-0"
-          >
-            {!address ? (
-              <div className="text-center text-white/60 py-8">Connect your wallet to view statistics</div>
-            ) : isLoadingStats ? (
-              <div className="flex items-center justify-center gap-2 py-8">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-                <p className="text-white/60">Loading statistics...</p>
-              </div>
-            ) : !playerStats ? (
-              <div className="text-center text-white/60 py-8">No statistics available</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-0 rounded-0 w-full h-full min-h-0 flex-1">
-                {/* Total Wagered */}
-                <Card
-                  className="relative overflow-hidden border-0 p-4"
-                  style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  {/* Radial gradient overlay */}
-                  <div className="absolute top-0 right-0 opacity-10">
-                    <DollarSign className="h-16 w-16 text-purple-400" />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-1">
-                      <DollarSign className="h-4 w-4 text-purple-400" />
-                      <p className="text-xs text-purple-200">Total Wagered</p>
-                    </div>
-                    <p className="text-2xl font-bold text-white">
-                      {Number(formatEther(playerStats.totalWagered)).toFixed(0)}
-                    </p>
-                    <p className="text-xs text-purple-300 mt-0.5">Morbius</p>
-                  </div>
-                </Card>
-
-                {/* Claimed */}
-                <Card
-                  className="relative overflow-hidden border-0 p-4"
-                  style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  <div className="absolute top-0 right-0 opacity-10">
-                    <Trophy className="h-16 w-16 text-cyan-500" />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Trophy className="h-4 w-4 text-cyan-500" />
-                      <p className="text-xs text-cyan-200">Claimed</p>
-                    </div>
-                    <p className="text-2xl font-bold text-white">
-                      {Number(formatEther(playerStats.totalWon)).toFixed(0)}
-                    </p>
-                    <p className="text-xs text-cyan-300 mt-0.5">Morbius</p>
-                  </div>
-                </Card>
-
-                {/* Net P/L */}
-                <Card
-                  className="relative overflow-hidden border-0 p-4"
-                  style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  {/* Radial gradient overlay */}
-                  <div className="absolute top-0 right-0 opacity-10">
-                    {playerStats.isProfit ? (
-                      <TrendingUp className="h-16 w-16 text-cyan-500" />
-                    ) : (
-                      <TrendingDown className="h-16 w-16 text-red-400" />
-                    )}
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-1">
-                      {playerStats.isProfit ? (
-                        <TrendingUp className="h-4 w-4 text-cyan-500" />
-                      ) : (
-                        <TrendingDown className="h-4 w-4 text-red-400" />
-                      )}
-                      <p
-                        className={cn(
-                          'text-xs',
-                          playerStats.isProfit ? 'text-cyan-200' : 'text-red-200'
-                        )}
-                      >
-                        Net P/L
-                      </p>
-                    </div>
-                    <p className="text-2xl font-bold text-white">
-                      {playerStats.isProfit ? '+' : ''}
-                      {playerStats.netProfitLoss.toFixed(0)}
-                    </p>
-                    <p
-                      className={cn(
-                        'text-xs mt-0.5',
-                        playerStats.isProfit ? 'text-cyan-300' : 'text-red-300'
-                      )}
-                    >
-                      Morbius
-                    </p>
-                  </div>
-                </Card>
-
-                {/* Unclaimed */}
-                <Card
-                  className="relative overflow-hidden border-0 p-4"
-                  style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  <div className="absolute top-0 right-0 opacity-10">
-                    <Target className="h-16 w-16 text-blue-300" />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Target className="h-4 w-4 text-blue-300" />
-                      <p className="text-xs text-blue-200">Unclaimed</p>
-                    </div>
-                    <p className="text-2xl font-bold text-white">
-                      {Number(formatEther(typeof unclaimedWinnings === 'bigint' ? unclaimedWinnings : BigInt(0))).toFixed(0)}
-                    </p>
-                    <p className="text-xs text-blue-200 mt-0.5">Morbius</p>
-                  </div>
-                </Card>
-              </div>
-            )}
-          </BentoGridItem>
         </BentoGrid>
 
       </div>

@@ -3,8 +3,6 @@
 import React, { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Accordion,
   AccordionContent,
@@ -20,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { PlinkoDrop, PlinkoPlayerStats } from '@/lib/plinko-types'
-import { RiskLevel } from '@/app/PLINKO/types'
+
 
 interface PlinkoHistoryModalProps {
   open: boolean
@@ -31,16 +29,6 @@ interface PlinkoHistoryModalProps {
   playerKey: string
   onExport: () => void
   onClear: () => void
-  onFilterChange: (filter: {
-    dateFrom?: string;
-    dateTo?: string;
-    minBet?: number;
-    maxBet?: number;
-    minWin?: number;
-    maxWin?: number;
-    minMultiplier?: number;
-    maxMultiplier?: number;
-  }) => void
 }
 
 export function PlinkoHistoryModal({
@@ -52,36 +40,33 @@ export function PlinkoHistoryModal({
   playerKey,
   onExport,
   onClear,
-  onFilterChange,
 }: PlinkoHistoryModalProps) {
-  const [filters, setFilters] = useState({
-    dateFrom: '',
-    dateTo: '',
-    minBet: '',
-    maxBet: '',
-    minWin: '',
-    maxWin: '',
-    minMultiplier: '',
-    maxMultiplier: '',
-  })
   const [copiedTxHash, setCopiedTxHash] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<'timestamp' | 'multiplier' | 'wager' | 'winAmount'>('timestamp')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  const handleFilterChange = (key: string, value: string) => {
-    const newFilters = { ...filters, [key]: value }
-    setFilters(newFilters)
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('desc')
+    }
+  }
 
-    // Convert string values to numbers where appropriate
-    const filterData: any = {}
-    if (newFilters.dateFrom) filterData.dateFrom = newFilters.dateFrom
-    if (newFilters.dateTo) filterData.dateTo = newFilters.dateTo
-    if (newFilters.minBet) filterData.minBet = parseFloat(newFilters.minBet)
-    if (newFilters.maxBet) filterData.maxBet = parseFloat(newFilters.maxBet)
-    if (newFilters.minWin) filterData.minWin = parseFloat(newFilters.minWin)
-    if (newFilters.maxWin) filterData.maxWin = parseFloat(newFilters.maxWin)
-    if (newFilters.minMultiplier) filterData.minMultiplier = parseFloat(newFilters.minMultiplier)
-    if (newFilters.maxMultiplier) filterData.maxMultiplier = parseFloat(newFilters.maxMultiplier)
+  const sortDrops = (dropsToSort: PlinkoDrop[]) => {
+    return [...dropsToSort].sort((a, b) => {
+      const aVal = a[sortField]
+      const bVal = b[sortField]
+      return sortDir === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1)
+    })
+  }
 
-    onFilterChange(filterData)
+  const SortIcon = ({ field }: { field: typeof sortField }) => {
+    if (sortField !== field) return <i className="fas fa-sort text-white/20 ml-1 text-[10px]"></i>
+    return sortDir === 'asc'
+      ? <i className="fas fa-sort-up text-cyan-400 ml-1 text-[10px]"></i>
+      : <i className="fas fa-sort-down text-cyan-400 ml-1 text-[10px]"></i>
   }
 
   const formatDate = (timestamp: number) => {
@@ -158,143 +143,6 @@ export function PlinkoHistoryModal({
           </div>
         )}
 
-        {/* Filters */}
-        <div className="border-t border-b border-white/10 py-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
-            {/* Date Range */}
-            <div className="space-y-2">
-              <Label className="text-sm text-white/80">Date From</Label>
-              <Input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-                className="text-white placeholder:text-white/40"
-                style={{
-                  background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm text-white/80">Date To</Label>
-              <Input
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-                className="text-white placeholder:text-white/40"
-                style={{
-                  background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              />
-            </div>
-
-            {/* Bet Amount */}
-            <div className="space-y-2">
-              <Label className="text-sm text-white/80">Min Bet ($)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={filters.minBet}
-                onChange={(e) => handleFilterChange('minBet', e.target.value)}
-                className="text-white placeholder:text-white/40"
-                style={{
-                  background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm text-white/80">Max Bet ($)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={filters.maxBet}
-                onChange={(e) => handleFilterChange('maxBet', e.target.value)}
-                className="text-white placeholder:text-white/40"
-                style={{
-                  background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              />
-            </div>
-
-            {/* Win Amount */}
-            <div className="space-y-2">
-              <Label className="text-sm text-white/80">Min Win ($)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={filters.minWin}
-                onChange={(e) => handleFilterChange('minWin', e.target.value)}
-                className="text-white placeholder:text-white/40"
-                style={{
-                  background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm text-white/80">Max Win ($)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={filters.maxWin}
-                onChange={(e) => handleFilterChange('maxWin', e.target.value)}
-                className="text-white placeholder:text-white/40"
-                style={{
-                  background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              />
-            </div>
-
-            {/* Multiplier */}
-            <div className="space-y-2">
-              <Label className="text-sm text-white/80">Min Multiplier</Label>
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="0.0"
-                value={filters.minMultiplier}
-                onChange={(e) => handleFilterChange('minMultiplier', e.target.value)}
-                className="text-white placeholder:text-white/40"
-                style={{
-                  background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm text-white/80">Max Multiplier</Label>
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="0.0"
-                value={filters.maxMultiplier}
-                onChange={(e) => handleFilterChange('maxMultiplier', e.target.value)}
-                className="text-white placeholder:text-white/40"
-                style={{
-                  background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
         {/* History Table */}
         <div className="overflow-x-auto rounded-md border border-white/10">
           {drops.length === 0 ? (
@@ -326,14 +174,14 @@ export function PlinkoHistoryModal({
                   <AccordionItem
                     key={txHash}
                     value={txHash}
-                    className="border-b border-white/10 last:border-b-0"
+                    className="border-b border-white/10 hover:bg-white/5 last:border-b-0"
                   >
                     <AccordionTrigger className="px-4 py-4 transition-colors" style={{
                       background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
                       boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
                       border: '1px inset rgba(60, 60, 60, 0.5)',
                     }}>
-                      <div className="grid grid-cols-12 gap-4 items-center w-full text-md">
+                      <div className="grid grid-cols-12 gap-4 items-center w-full text-md hover:bg-white/5">
                         {/* Date */}
                         <div className="col-span-2 text-white/80">
                           {formatDate(txHash === 'no-tx' ? firstDrop.timestamp : firstDrop.timestamp)}
@@ -367,7 +215,7 @@ export function PlinkoHistoryModal({
                                 href={`https://scan.pulsechain.com/tx/${txHash}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-cyan-400 hover:text-cyan-300 underline transition-colors text-md"
+                                className="text-cyan-400/70 hover:text-cyan-300 transition-colors text-md"
                                 title="View on PulseChain Explorer"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -402,15 +250,23 @@ export function PlinkoHistoryModal({
                         <Table className="w-full">
                           <TableHeader>
                             <TableRow className="flex justify-between w-full border-b border-white/10">
-                              <TableHead className="text-white flex-1 text-center text-sm">Time</TableHead>
-                              <TableHead className="text-white flex-1 text-center text-sm">Wager</TableHead>
-                              <TableHead className="text-white flex-1 text-center text-sm">Multi</TableHead>
-                              <TableHead className="text-white flex-1 text-center text-sm">Win Amount</TableHead>
+                              <TableHead className="text-white flex-1 text-center text-sm cursor-pointer select-none hover:text-cyan-300 transition-colors" onClick={() => handleSort('timestamp')}>
+                                Time <SortIcon field="timestamp" />
+                              </TableHead>
+                              <TableHead className="text-white flex-1 text-center text-sm cursor-pointer select-none hover:text-cyan-300 transition-colors" onClick={() => handleSort('wager')}>
+                                Wager <SortIcon field="wager" />
+                              </TableHead>
+                              <TableHead className="text-white flex-1 text-center text-sm cursor-pointer select-none hover:text-cyan-300 transition-colors" onClick={() => handleSort('multiplier')}>
+                                Multi <SortIcon field="multiplier" />
+                              </TableHead>
+                              <TableHead className="text-white flex-1 text-center text-sm cursor-pointer select-none hover:text-cyan-300 transition-colors" onClick={() => handleSort('winAmount')}>
+                                Win Amount <SortIcon field="winAmount" />
+                              </TableHead>
                               <TableHead className="text-white flex-1 text-center text-sm">Risk</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {txDrops.map((drop) => (
+                            {sortDrops(txDrops).map((drop) => (
                               <TableRow
                                 key={drop.id}
                                 className="flex justify-between w-full hover:bg-white/5 transition-colors"

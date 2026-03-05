@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatEther } from 'viem';
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { BarChart3, RefreshCw, Activity } from 'lucide-react';
-import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BIGWHEEL_ADDRESS } from '@/lib/contracts';
+import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BIGWHEEL_ADDRESS } from '@/lib/contracts';
 import { PLINKO_ABI } from '@/abi/plinko';
 import { KENO_ABI } from '@/lib/keno-abi';
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2';
@@ -273,34 +273,34 @@ export default function AdminMetricsTab() {
     functionName: 'getWagerLimits',
   }) as { data: { min: bigint; max: bigint } | undefined };
 
-  // Keno stats
+  // Keno stats (Quick Play — no rounds)
   const { data: kenoStats } = useReadContract({
     address: KENO_ADDRESS,
     abi: KENO_ABI,
     functionName: 'getGlobalStats',
-  }) as { data: [bigint, bigint, bigint, bigint] | undefined };
+  }) as { data: [bigint, bigint, bigint] | undefined };
 
-  const { data: kenoCurrentRoundId } = useReadContract({
+  const { data: kenoReserve } = useReadContract({
     address: KENO_ADDRESS,
     abi: KENO_ABI,
-    functionName: 'currentRoundId',
+    functionName: 'getContractReserve',
   }) as { data: bigint | undefined };
 
   // Lottery stats
   const { data: lotteryTickets } = useReadContract({
-    address: LOTTERY_ADDRESS,
+    address: LOTTERY_INSTANT_ADDRESS,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'totalTicketsEver',
   }) as { data: bigint | undefined };
 
   const { data: lotteryCollected } = useReadContract({
-    address: LOTTERY_ADDRESS,
+    address: LOTTERY_INSTANT_ADDRESS,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'totalMORBIUSEverCollected',
   }) as { data: bigint | undefined };
 
   const { data: lotteryClaimed } = useReadContract({
-    address: LOTTERY_ADDRESS,
+    address: LOTTERY_INSTANT_ADDRESS,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'totalMORBIUSEverClaimed',
   }) as { data: bigint | undefined };
@@ -421,7 +421,7 @@ export default function AdminMetricsTab() {
     totalWagered: kenoStats[0],
     totalWon: kenoStats[1],
     ticketCount: kenoStats[2],
-    activeRoundId: kenoStats[3],
+    reserve: kenoReserve ?? 0n,
   } : null;
 
   const lotteryData = {
@@ -697,7 +697,7 @@ export default function AdminMetricsTab() {
                     <MetricRow label="Total Wagered" value={`${formatMorbius(kenoData?.totalWagered ?? 0n)} MORBIUS`} />
                     <MetricRow label="Total Won" value={`${formatMorbius(kenoData?.totalWon ?? 0n)} MORBIUS`} />
                     <MetricRow label="Tickets" value={formatNumber(kenoData?.ticketCount ?? 0n)} />
-                    <MetricRow label="Active Round" value={formatNumber(kenoData?.activeRoundId ?? 0n)} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
+                    <MetricRow label="Contract Reserve" value={`${formatMorbius(kenoData?.reserve ?? 0n)} MORBIUS`} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
                   </div>
                 </MetricPanel>
               ) : (

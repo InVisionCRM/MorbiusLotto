@@ -12,26 +12,6 @@ export const KENO_ABI = [
         "type": "uint8"
       },
       {
-        "internalType": "uint256",
-        "name": "roundDuration_",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "feeBps_",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "feeRecipient_",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
         "internalType": "address",
         "name": "wrappedPulse_",
         "type": "address"
@@ -40,20 +20,35 @@ export const KENO_ABI = [
         "internalType": "address",
         "name": "pulseXRouter_",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "plsTreasury_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "distributionRecipient_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "burnAddress_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "platformFeeRecipient_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "lpDistributionRecipient_",
+        "type": "address"
       }
     ],
     "stateMutability": "nonpayable",
     "type": "constructor"
-  },
-  {
-    "inputs": [],
-    "name": "AlreadyClaimed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "ClaimExpired",
-    "type": "error"
   },
   {
     "inputs": [],
@@ -62,7 +57,17 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
+    "name": "ExceedsReserve",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "ExpectedPause",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InsufficientContractBalance",
     "type": "error"
   },
   {
@@ -99,32 +104,7 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
-    "name": "RandomnessNotReady",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "ReentrancyGuardReentrantCall",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "RoundAlreadyFinalized",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "RoundNotFinalized",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "RoundNotOpen",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "RoundStillActive",
     "type": "error"
   },
   {
@@ -136,11 +116,6 @@ export const KENO_ABI = [
       }
     ],
     "name": "SafeERC20FailedOperation",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "TooManyDraws",
     "type": "error"
   },
   {
@@ -157,19 +132,19 @@ export const KENO_ABI = [
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "bps",
+        "type": "uint256"
       },
       {
         "indexed": false,
-        "internalType": "bool",
-        "name": "enabled",
-        "type": "bool"
+        "internalType": "address",
+        "name": "burnAddr",
+        "type": "address"
       }
     ],
-    "name": "AutoClaimEnabled",
+    "name": "BurnFeeUpdated",
     "type": "event"
   },
   {
@@ -177,30 +152,37 @@ export const KENO_ABI = [
     "inputs": [
       {
         "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "ticketId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
         "internalType": "address",
-        "name": "player",
+        "name": "funder",
         "type": "address"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "prize",
+        "name": "amount",
         "type": "uint256"
       }
     ],
-    "name": "AutoClaimProcessed",
+    "name": "ContractFunded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "bps",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      }
+    ],
+    "name": "DistributionFeeUpdated",
     "type": "event"
   },
   {
@@ -213,26 +195,62 @@ export const KENO_ABI = [
         "type": "uint256"
       }
     ],
-    "name": "BurnExecuted",
+    "name": "EmergencyWithdraw",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "address",
+        "name": "player",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "ticketId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "spotSize",
+        "type": "uint8"
+      },
+      {
         "indexed": false,
         "internalType": "uint256",
-        "name": "oldThreshold",
+        "name": "wager",
         "type": "uint256"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "newThreshold",
+        "name": "hits",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "grossPayout",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "netPayout",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "paidWithPLS",
+        "type": "bool"
       }
     ],
-    "name": "BurnThresholdUpdated",
+    "name": "KenoPlayed",
     "type": "event"
   },
   {
@@ -241,7 +259,7 @@ export const KENO_ABI = [
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "feeBps",
+        "name": "bps",
         "type": "uint256"
       },
       {
@@ -251,7 +269,7 @@ export const KENO_ABI = [
         "type": "address"
       }
     ],
-    "name": "FeeUpdated",
+    "name": "LpDistributionFeeUpdated",
     "type": "event"
   },
   {
@@ -328,87 +346,19 @@ export const KENO_ABI = [
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
+        "indexed": false,
         "internalType": "uint256",
-        "name": "roundId",
+        "name": "bps",
         "type": "uint256"
       },
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "ticketId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
+        "indexed": false,
         "internalType": "address",
-        "name": "player",
+        "name": "recipient",
         "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "prize",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "paidPrize",
-        "type": "uint256"
       }
     ],
-    "name": "PrizeClaimed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "ticketId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "owed",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "paid",
-        "type": "uint256"
-      }
-    ],
-    "name": "PrizeShortfall",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "commitment",
-        "type": "bytes32"
-      }
-    ],
-    "name": "RandomnessCommitted",
+    "name": "PlatformFeeUpdated",
     "type": "event"
   },
   {
@@ -417,168 +367,11 @@ export const KENO_ABI = [
       {
         "indexed": false,
         "internalType": "address",
-        "name": "provider",
+        "name": "newTreasury",
         "type": "address"
       }
     ],
-    "name": "RandomnessProviderUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "seed",
-        "type": "bytes32"
-      }
-    ],
-    "name": "RandomnessRevealed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      }
-    ],
-    "name": "RoundClosed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newDuration",
-        "type": "uint256"
-      }
-    ],
-    "name": "RoundDurationUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8[20]",
-        "name": "winningNumbers",
-        "type": "uint8[20]"
-      }
-    ],
-    "name": "RoundFinalized",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "requestId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "RoundRandomnessRequested",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "startTime",
-        "type": "uint64"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "endTime",
-        "type": "uint64"
-      }
-    ],
-    "name": "RoundStarted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "ticketId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "firstRoundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "draws",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "spotSize",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "wagerPerDraw",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "grossCost",
-        "type": "uint256"
-      }
-    ],
-    "name": "TicketPurchased",
+    "name": "PlsTreasuryUpdated",
     "type": "event"
   },
   {
@@ -609,33 +402,7 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
-    "name": "CLAIM_DEADLINE",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "DRAWN",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "MAX_DRAWS",
     "outputs": [
       {
         "internalType": "uint8",
@@ -674,6 +441,19 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
+    "name": "MAX_PAYOUT",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "NUMBERS",
     "outputs": [
       {
@@ -686,239 +466,8 @@ export const KENO_ABI = [
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "ticketId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      }
-    ],
-    "name": "_safeProcessClaim",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "autoClaimEnabled",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
-    "name": "burnThreshold",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint8[]",
-        "name": "numbers",
-        "type": "uint8[]"
-      },
-      {
-        "internalType": "uint8",
-        "name": "spotSize",
-        "type": "uint8"
-      },
-      {
-        "internalType": "uint8",
-        "name": "draws",
-        "type": "uint8"
-      },
-      {
-        "internalType": "uint256",
-        "name": "wagerPerDraw",
-        "type": "uint256"
-      }
-    ],
-    "name": "buyTicket",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint8[]",
-        "name": "numbers",
-        "type": "uint8[]"
-      },
-      {
-        "internalType": "uint8",
-        "name": "spotSize",
-        "type": "uint8"
-      },
-      {
-        "internalType": "uint8",
-        "name": "draws",
-        "type": "uint8"
-      },
-      {
-        "internalType": "uint256",
-        "name": "wagerPerDraw",
-        "type": "uint256"
-      }
-    ],
-    "name": "buyTicketWithPLS",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "ticketId",
-        "type": "uint256"
-      }
-    ],
-    "name": "claim",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256[]",
-        "name": "roundIds",
-        "type": "uint256[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "ticketIds",
-        "type": "uint256[]"
-      }
-    ],
-    "name": "claimMultiple",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "claimed",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "commitment",
-        "type": "bytes32"
-      }
-    ],
-    "name": "commitRandom",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "committedHash",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "currentRoundId",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "deployerRecipient",
+    "name": "burnAddress",
     "outputs": [
       {
         "internalType": "address",
@@ -931,7 +480,7 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
-    "name": "feeBps",
+    "name": "burnFeeBps",
     "outputs": [
       {
         "internalType": "uint256",
@@ -944,7 +493,33 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
-    "name": "feeRecipient",
+    "name": "contractReserve",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "distributionFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "distributionRecipient",
     "outputs": [
       {
         "internalType": "address",
@@ -959,18 +534,11 @@ export const KENO_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "roundId",
+        "name": "amount",
         "type": "uint256"
       }
     ],
-    "name": "finalizeRound",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "flushBurn",
+    "name": "emergencyWithdraw",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -979,16 +547,11 @@ export const KENO_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "roundId",
+        "name": "amount",
         "type": "uint256"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "randomSeed",
-        "type": "bytes32"
       }
     ],
-    "name": "fulfillRandomness",
+    "name": "fundContract",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1014,6 +577,47 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
+    "name": "getContractReserve",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getFeeStats",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "distributionTotal",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "burnTotal",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "platformTotal",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "lpDistributionTotal",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "getGlobalStats",
     "outputs": [
       {
@@ -1030,11 +634,25 @@ export const KENO_ABI = [
         "internalType": "uint256",
         "name": "ticketCount",
         "type": "uint256"
-      },
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
-        "internalType": "uint256",
-        "name": "activeRoundId",
-        "type": "uint256"
+        "internalType": "uint8",
+        "name": "spotSize",
+        "type": "uint8"
+      }
+    ],
+    "name": "getPaytable",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "multipliers",
+        "type": "uint256[]"
       }
     ],
     "stateMutability": "view",
@@ -1079,6 +697,11 @@ export const KENO_ABI = [
         "internalType": "int256",
         "name": "netPnL",
         "type": "int256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "biggestWin",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -1116,157 +739,6 @@ export const KENO_ABI = [
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      }
-    ],
-    "name": "getPlayerUnclaimedWinnings",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "totalUnclaimed",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getRound",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "id",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint64",
-            "name": "startTime",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint64",
-            "name": "endTime",
-            "type": "uint64"
-          },
-          {
-            "internalType": "enum CryptoKeno.RoundState",
-            "name": "state",
-            "type": "uint8"
-          },
-          {
-            "internalType": "bytes32",
-            "name": "requestId",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "bytes32",
-            "name": "randomSeed",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "uint8[20]",
-            "name": "winningNumbers",
-            "type": "uint8[20]"
-          },
-          {
-            "internalType": "uint256",
-            "name": "totalBaseWager",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "poolBalance",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct CryptoKeno.Round",
-        "name": "",
-        "type": "tuple"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256[]",
-        "name": "roundIds",
-        "type": "uint256[]"
-      }
-    ],
-    "name": "getRounds",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "id",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint64",
-            "name": "startTime",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint64",
-            "name": "endTime",
-            "type": "uint64"
-          },
-          {
-            "internalType": "enum CryptoKeno.RoundState",
-            "name": "state",
-            "type": "uint8"
-          },
-          {
-            "internalType": "bytes32",
-            "name": "requestId",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "bytes32",
-            "name": "randomSeed",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "uint8[20]",
-            "name": "winningNumbers",
-            "type": "uint8[20]"
-          },
-          {
-            "internalType": "uint256",
-            "name": "totalBaseWager",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "poolBalance",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct CryptoKeno.Round[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "uint256",
         "name": "ticketId",
         "type": "uint256"
@@ -1282,34 +754,49 @@ export const KENO_ABI = [
             "type": "address"
           },
           {
-            "internalType": "uint64",
-            "name": "firstRoundId",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint8",
-            "name": "draws",
-            "type": "uint8"
-          },
-          {
             "internalType": "uint8",
             "name": "spotSize",
             "type": "uint8"
           },
           {
-            "internalType": "uint8",
-            "name": "drawsRemaining",
-            "type": "uint8"
-          },
-          {
             "internalType": "uint256",
-            "name": "wagerPerDraw",
+            "name": "wager",
             "type": "uint256"
           },
           {
             "internalType": "uint256",
             "name": "numbersBitmap",
             "type": "uint256"
+          },
+          {
+            "internalType": "uint8[20]",
+            "name": "winningNumbers",
+            "type": "uint8[20]"
+          },
+          {
+            "internalType": "uint256",
+            "name": "hits",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "grossPayout",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "netPayout",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint64",
+            "name": "timestamp",
+            "type": "uint64"
+          },
+          {
+            "internalType": "bool",
+            "name": "paidWithPLS",
+            "type": "bool"
           }
         ],
         "internalType": "struct CryptoKeno.Ticket",
@@ -1338,34 +825,49 @@ export const KENO_ABI = [
             "type": "address"
           },
           {
-            "internalType": "uint64",
-            "name": "firstRoundId",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint8",
-            "name": "draws",
-            "type": "uint8"
-          },
-          {
             "internalType": "uint8",
             "name": "spotSize",
             "type": "uint8"
           },
           {
-            "internalType": "uint8",
-            "name": "drawsRemaining",
-            "type": "uint8"
-          },
-          {
             "internalType": "uint256",
-            "name": "wagerPerDraw",
+            "name": "wager",
             "type": "uint256"
           },
           {
             "internalType": "uint256",
             "name": "numbersBitmap",
             "type": "uint256"
+          },
+          {
+            "internalType": "uint8[20]",
+            "name": "winningNumbers",
+            "type": "uint8[20]"
+          },
+          {
+            "internalType": "uint256",
+            "name": "hits",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "grossPayout",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "netPayout",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint64",
+            "name": "timestamp",
+            "type": "uint64"
+          },
+          {
+            "internalType": "bool",
+            "name": "paidWithPLS",
+            "type": "bool"
           }
         ],
         "internalType": "struct CryptoKeno.Ticket[]",
@@ -1416,29 +918,26 @@ export const KENO_ABI = [
     "type": "function"
   },
   {
-    "inputs": [
+    "inputs": [],
+    "name": "lpDistributionFeeBps",
+    "outputs": [
       {
         "internalType": "uint256",
-        "name": "ticketId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "roundId",
+        "name": "",
         "type": "uint256"
       }
     ],
-    "name": "isWinningTicket",
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lpDistributionRecipient",
     "outputs": [
       {
-        "internalType": "bool",
-        "name": "isWinner",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "prize",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1542,7 +1041,80 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
-    "name": "pendingBurnToken",
+    "name": "platformFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "platformFeeRecipient",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8[]",
+        "name": "numbers",
+        "type": "uint8[]"
+      },
+      {
+        "internalType": "uint8",
+        "name": "spotSize",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "wager",
+        "type": "uint256"
+      }
+    ],
+    "name": "playKeno",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8[]",
+        "name": "numbers",
+        "type": "uint8[]"
+      },
+      {
+        "internalType": "uint8",
+        "name": "spotSize",
+        "type": "uint8"
+      }
+    ],
+    "name": "playKenoWithPLS",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "playerBiggestWin",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1655,6 +1227,19 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
+    "name": "plsTreasury",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "pulseXRouter",
     "outputs": [
       {
@@ -1668,32 +1253,6 @@ export const KENO_ABI = [
   },
   {
     "inputs": [],
-    "name": "randomnessProvider",
-    "outputs": [
-      {
-        "internalType": "contract IRandomProvider",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      }
-    ],
-    "name": "reclaimExpiredPrizes",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "renounceOwnership",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1703,16 +1262,16 @@ export const KENO_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "roundId",
+        "name": "bps",
         "type": "uint256"
       },
       {
-        "internalType": "bytes32",
-        "name": "seed",
-        "type": "bytes32"
+        "internalType": "address",
+        "name": "burnAddr",
+        "type": "address"
       }
     ],
-    "name": "revealRandom",
+    "name": "setBurnFee",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1721,106 +1280,7 @@ export const KENO_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "revealedSeed",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "roundDuration",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "rounds",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint64",
-        "name": "startTime",
-        "type": "uint64"
-      },
-      {
-        "internalType": "uint64",
-        "name": "endTime",
-        "type": "uint64"
-      },
-      {
-        "internalType": "enum CryptoKeno.RoundState",
-        "name": "state",
-        "type": "uint8"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "requestId",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "randomSeed",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "uint256",
-        "name": "totalBaseWager",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "poolBalance",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bool",
-        "name": "enabled",
-        "type": "bool"
-      }
-    ],
-    "name": "setAutoClaim",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "feeBps_",
+        "name": "bps",
         "type": "uint256"
       },
       {
@@ -1829,7 +1289,25 @@ export const KENO_ABI = [
         "type": "address"
       }
     ],
-    "name": "setFee",
+    "name": "setDistributionFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "bps",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      }
+    ],
+    "name": "setLpDistributionFee",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1873,12 +1351,17 @@ export const KENO_ABI = [
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "bps",
+        "type": "uint256"
+      },
+      {
         "internalType": "address",
-        "name": "provider",
+        "name": "recipient",
         "type": "address"
       }
     ],
-    "name": "setRandomnessProvider",
+    "name": "setPlatformFee",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1886,19 +1369,12 @@ export const KENO_ABI = [
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "newDuration",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "newTreasury",
+        "type": "address"
       }
     ],
-    "name": "setRoundDuration",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "startNextRound",
+    "name": "setPlsTreasury",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1919,58 +1395,44 @@ export const KENO_ABI = [
         "type": "address"
       },
       {
-        "internalType": "uint64",
-        "name": "firstRoundId",
-        "type": "uint64"
-      },
-      {
-        "internalType": "uint8",
-        "name": "draws",
-        "type": "uint8"
-      },
-      {
         "internalType": "uint8",
         "name": "spotSize",
         "type": "uint8"
       },
       {
-        "internalType": "uint8",
-        "name": "drawsRemaining",
-        "type": "uint8"
-      },
-      {
         "internalType": "uint256",
-        "name": "wagerPerDraw",
+        "name": "wager",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
         "name": "numbersBitmap",
         "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
+      },
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "hits",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "grossPayout",
         "type": "uint256"
-      }
-    ],
-    "name": "ticketsByRound",
-    "outputs": [
+      },
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "netPayout",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint64",
+        "name": "timestamp",
+        "type": "uint64"
+      },
+      {
+        "internalType": "bool",
+        "name": "paidWithPLS",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -1984,6 +1446,58 @@ export const KENO_ABI = [
         "internalType": "contract IERC20",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalBurnFeesCollected",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalDistributionFeesCollected",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalLpDistributionFeesCollected",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalPlatformFeesCollected",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -2010,47 +1524,22 @@ export const KENO_ABI = [
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "newThreshold",
-        "type": "uint256"
-      }
-    ],
-    "name": "updateBurnThreshold",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      }
-    ],
-    "name": "withdrawBankroll",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "wrappedPulse",
     "outputs": [
       {
-        "internalType": "contract IWrappedPulse",
+        "internalType": "address",
         "name": "",
         "type": "address"
       }
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "stateMutability": "payable",
+    "type": "receive"
   }
 ] as const;
+
+export { KENO_ABI as kenoAbi };

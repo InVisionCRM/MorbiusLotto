@@ -208,6 +208,29 @@ class ProvablyFairService {
             bytes[3] / (256 * 256 * 256 * 256));
     }
     /**
+     * Generate 6 distinct numbers in [1, 55] for Instant Lottery 6-of-55 (provably fair).
+     * Uses Fisher-Yates over a pool of 55 slots (values 1–55) with HMAC-SHA256 byte stream.
+     * Same message format as Blackjack: message = `${clientSeed}:${nonce}:${roundIndex}`.
+     * Returns sorted [n1, n2, n3, n4, n5, n6] so contract and verifier get identical result.
+     * Verification: given serverSeed, clientSeed, nonce — recompute with this algorithm and compare.
+     */
+    generate6of55WinningNumbers(serverSeed, clientSeed, nonce) {
+        const MIN = 1;
+        const MAX = 55;
+        const COUNT = 6;
+        const pool = Array.from({ length: MAX }, (_, i) => i + MIN);
+        let cursor = 0;
+        for (let i = pool.length - 1; i >= 1; i--) {
+            const bytes = this.hmacByteStream(serverSeed, clientSeed, nonce, cursor);
+            cursor += 4;
+            const float = this.bytesToFloat(bytes);
+            const j = Math.floor(float * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        const drawn = pool.slice(0, COUNT).sort((a, b) => a - b);
+        return [drawn[0], drawn[1], drawn[2], drawn[3], drawn[4], drawn[5]];
+    }
+    /**
      * Fisher-Yates shuffle of a 52-card deck using cursor-based HMAC byte stream.
      * One nonce per game. Returns array of card indices 0-51.
      * Consumes 51 * 4 = 204 bytes (~7 HMAC rounds).

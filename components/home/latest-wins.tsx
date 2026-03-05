@@ -39,7 +39,7 @@ function WinNotification({ address, amount, game, timestamp, onAddressClick }: {
       <span className="text-white text-sm">
         <button
           onClick={() => onAddressClick(address)}
-          className="text-cyan-400 hover:text-cyan-300 underline font-mono transition-colors"
+          className="text-cyan-400 hover:text-cyan-300 font-mono transition-colors"
         >
           {label}
         </button>

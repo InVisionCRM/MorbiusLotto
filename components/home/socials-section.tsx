@@ -1,5 +1,3 @@
-import { Theme } from '@/lib/theme'
-
 export function SocialsSection() {
   return (
     <section className="py-4 px-4">

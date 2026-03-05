@@ -1,7 +1,7 @@
 const { createPublicClient, http } = require('viem');
 const { pulsechain } = require('viem/chains');
 
-const LOTTERY_ADDRESS = '0xD66b4489fbfF99A8d62f969203899840F2ec69c5';
+const LOTTERY_INSTANT_ADDRESS = '0xD66b4489fbfF99A8d62f969203899840F2ec69c5';
 const KENO_ADDRESS = '0x5E9d1e962b006B3BAbF31fCc61C05dD9aD6045b3';
 
 const client = createPublicClient({
@@ -19,7 +19,7 @@ async function testLotteryStatus() {
     const lotteryABI = require('../../abi/lottery6of55-v2.json').abi;
 
     const roundData = await client.readContract({
-      address: LOTTERY_ADDRESS,
+      address: LOTTERY_INSTANT_ADDRESS,
       abi: lotteryABI,
       functionName: 'getRound',
       args: [BigInt(roundId)],
@@ -41,7 +41,7 @@ async function testLotteryStatus() {
 
     // Check current round to compare
     const currentRoundId = await client.readContract({
-      address: LOTTERY_ADDRESS,
+      address: LOTTERY_INSTANT_ADDRESS,
       abi: lotteryABI,
       functionName: 'currentRoundId',
       args: [],

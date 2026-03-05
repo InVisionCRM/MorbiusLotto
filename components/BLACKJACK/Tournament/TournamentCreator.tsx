@@ -493,6 +493,7 @@ export function TournamentCreator({
         args: [escrow, prizeAmountWeiForReview],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       setApprovalTxHash(hash);
       if (publicClient && hash) {
@@ -537,6 +538,7 @@ export function TournamentCreator({
         args: [idBytes32, token, prizeAmountWeiForReview],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       if (publicClient && hash) {
         try {
@@ -634,7 +636,7 @@ export function TournamentCreator({
                             <button
                               type="button"
                               onClick={() => setFundingStep('approved')}
-                              className="text-xs text-cyan-400/80 hover:text-cyan-300 hover:underline"
+                              className="text-xs text-cyan-400/80 hover:text-cyan-300 hover:"
                             >
                               Already approved? Proceed to deposit
                             </button>

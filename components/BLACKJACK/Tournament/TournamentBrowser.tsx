@@ -142,6 +142,7 @@ function FundTournamentEscrowModal({
         args: [escrow, amountWei],
         account: address,
         chain: PULSECHAIN,
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       if (publicClient && hash) {
         try {
@@ -171,6 +172,7 @@ function FundTournamentEscrowModal({
         args: [idBytes32, token, amountWei],
         account: address,
         chain: PULSECHAIN,
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       });
       if (publicClient && hash) {
         try {
@@ -224,7 +226,7 @@ function FundTournamentEscrowModal({
                       <button
                         type="button"
                         onClick={() => setStep('approved')}
-                        className="text-xs text-cyan-400/80 hover:text-cyan-300 hover:underline"
+                        className="text-xs text-cyan-400/80 hover:text-cyan-300 hover:"
                       >
                         Already approved? Proceed to deposit
                       </button>

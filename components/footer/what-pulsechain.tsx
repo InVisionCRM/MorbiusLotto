@@ -20,7 +20,7 @@ export function WhatPulseChainModal({ open, onOpenChange }: WhatPulseChainModalP
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-4 mb-4">
               <Image
-                src="/Pulse Branding/Logo/ball1.png"
+                src="/Pulse Branding/Logo/ball.png"
                 alt="PulseChain"
                 width={48}
                 height={48}

@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text'
 import {
-  LOTTERY_ADDRESS,
+  LOTTERY_INSTANT_ADDRESS,
   TICKET_PRICE,
   MORBIUS_TOKEN_ADDRESS,
   TOKEN_DECIMALS,
@@ -241,7 +241,7 @@ export function TicketPurchaseBuilder({
   const maxRounds = workingRounds
 
   const { data: ticketPriceMORBIUSData } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'ticketPriceMORBIUS',
   })
@@ -259,7 +259,7 @@ export function TicketPurchaseBuilder({
     approvalError,
   } = useTokenApproval({
     tokenAddress: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
-    spenderAddress: LOTTERY_ADDRESS as `0x${string}`,
+    spenderAddress: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     requiredAmount: MORBIUSCost,
     userAddress: address,
     enabled: paymentMethod === 'MORBIUS',
@@ -675,7 +675,7 @@ export function TicketPurchaseBuilder({
                 onClick={() => setPaymentMethod('PLS')}
               >
                 <Image
-                  src="/Pulse Branding/Logo/ball1.png"
+                  src="/Pulse Branding/Logo/ball.png"
                   alt="PulseChain"
                   width={16}
                   height={16}

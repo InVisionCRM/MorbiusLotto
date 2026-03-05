@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { LOTTERY_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { formatUnits } from 'viem'
 
 interface TokenBalance {
@@ -30,7 +30,7 @@ export function useContractBalance() {
 
         // Fetch token balances from scan.pulsechain.box
         const response = await fetch(
-          `https://scan.pulsechain.box/api/v2/addresses/${LOTTERY_ADDRESS}/token-balances`
+          `https://scan.pulsechain.box/api/v2/addresses/${LOTTERY_INSTANT_ADDRESS}/token-balances`
         )
 
         if (!response.ok) {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePublicClient } from 'wagmi'
 import { ExternalLink, Loader2 } from 'lucide-react'
-import { LOTTERY_ADDRESS, LOTTERY_DEPLOY_BLOCK } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, LOTTERY_DEPLOY_BLOCK } from '@/lib/contracts'
 import { LOTTERY_6OF55_ABI } from '@/abi/lottery6of55'
 import { formatUnits, decodeEventLog } from 'viem'
 
@@ -25,7 +25,7 @@ export function RoundFinalizedTransactions() {
 
   useEffect(() => {
     async function fetchTransactions() {
-      if (!publicClient || (LOTTERY_ADDRESS as string).toLowerCase() === '0x0000000000000000000000000000000000000000') {
+      if (!publicClient || (LOTTERY_INSTANT_ADDRESS as string).toLowerCase() === '0x0000000000000000000000000000000000000000') {
         setIsLoading(false)
         return
       }
@@ -50,7 +50,7 @@ export function RoundFinalizedTransactions() {
         if (lockedEventAbi) {
           try {
             const lockedLogs = await publicClient.getLogs({
-              address: LOTTERY_ADDRESS as `0x${string}`,
+              address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
               event: lockedEventAbi as any,
               fromBlock: LOTTERY_DEPLOY_BLOCK ? BigInt(LOTTERY_DEPLOY_BLOCK) : 'earliest',
               toBlock: 'latest',
@@ -89,7 +89,7 @@ export function RoundFinalizedTransactions() {
         if (finalizedEventAbi) {
           try {
             const finalizedLogs = await publicClient.getLogs({
-              address: LOTTERY_ADDRESS as `0x${string}`,
+              address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
               event: finalizedEventAbi as any,
               fromBlock: LOTTERY_DEPLOY_BLOCK ? BigInt(LOTTERY_DEPLOY_BLOCK) : 'earliest',
               toBlock: 'latest',

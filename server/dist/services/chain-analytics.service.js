@@ -7,6 +7,7 @@ const contracts_1 = require("../config/contracts");
 const DEPOSIT_EVENT = (0, viem_1.parseAbiItem)('event Deposit(address indexed player, uint256 morbiusAmount, uint256 plsAmount)');
 const DEPOSIT_MORBIUS_EVENT = (0, viem_1.parseAbiItem)('event DepositMORBIUS(address indexed player, uint256 amount)');
 const WITHDRAWAL_EVENT = (0, viem_1.parseAbiItem)('event Withdrawal(address indexed player, uint256 amount)');
+const INSTANT_LOTTERY_RESULT_EVENT = (0, viem_1.parseAbiItem)('event InstantLotteryResult(address indexed player, uint8[6] playerNumbers, uint8[6] winningNumbers, uint8 matchCount, uint256 wager, uint256 grossPayout, uint256 netPayout)');
 const CHUNK_SIZE = 50000;
 class ChainAnalyticsService {
     dbService;
@@ -101,9 +102,24 @@ class ChainAnalyticsService {
     }
     async getLotteryStats() {
         const client = (0, chain_client_1.getPublicClient)();
+        const useInstant = contracts_1.LOTTERY_INSTANT_ADDRESS && contracts_1.LOTTERY_INSTANT_ADDRESS !== '0x0000000000000000000000000000000000000000';
+        if (useInstant) {
+            try {
+                const [totalPlays, totalWagered, totalPayouts] = await Promise.all([
+                    client.readContract({ address: contracts_1.LOTTERY_INSTANT_ADDRESS, abi: contracts_1.INSTANT_LOTTERY_STATS_ABI, functionName: 'totalPlays' }),
+                    client.readContract({ address: contracts_1.LOTTERY_INSTANT_ADDRESS, abi: contracts_1.INSTANT_LOTTERY_STATS_ABI, functionName: 'totalWagered' }),
+                    client.readContract({ address: contracts_1.LOTTERY_INSTANT_ADDRESS, abi: contracts_1.INSTANT_LOTTERY_STATS_ABI, functionName: 'totalPayouts' }),
+                ]);
+                return { totalTicketsEver: totalPlays, totalCollected: totalWagered, totalClaimed: totalPayouts };
+            }
+            catch (err) {
+                console.error('ChainAnalyticsService getLotteryStats (instant):', err);
+                return null;
+            }
+        }
         const read = async (fn) => {
             try {
-                const result = await client.readContract({ address: contracts_1.LOTTERY_ADDRESS, abi: contracts_1.LOTTERY_STATS_ABI, functionName: fn });
+                const result = await client.readContract({ address: contracts_1.LOTTERY_INSTANT_ADDRESS, abi: contracts_1.LOTTERY_STATS_ABI, functionName: fn });
                 return result;
             }
             catch {
@@ -246,6 +262,62 @@ class ChainAnalyticsService {
             }
             return { totalDeposited: 0n, totalWithdrawn: 0n };
         }
+    }
+    /**
+     * Index InstantLotteryResult events into instant_lottery_plays for leaderboard and player stats.
+     * Incremental from last_scanned_block; full scan if none. Skips when LOTTERY_INSTANT_ADDRESS is not set.
+     */
+    async indexInstantLotteryResults() {
+        const address = contracts_1.LOTTERY_INSTANT_ADDRESS?.trim();
+        if (!address || address === '0x0000000000000000000000000000000000000000') {
+            return { indexed: 0, lastBlock: null };
+        }
+        const client = (0, chain_client_1.getPublicClient)();
+        const stored = await this.dbService.getInstantLotteryScanState();
+        const toBlock = await client.getBlockNumber();
+        let fromBlock;
+        if (!stored || stored.lastScannedBlock == null) {
+            fromBlock = toBlock > BigInt(CHUNK_SIZE) ? toBlock - BigInt(CHUNK_SIZE) : 0n;
+        }
+        else {
+            if (toBlock <= stored.lastScannedBlock)
+                return { indexed: 0, lastBlock: stored.lastScannedBlock };
+            fromBlock = stored.lastScannedBlock + 1n;
+        }
+        let indexed = 0;
+        while (fromBlock <= toBlock) {
+            const end = fromBlock + BigInt(CHUNK_SIZE) > toBlock ? toBlock : fromBlock + BigInt(CHUNK_SIZE);
+            const logs = await client.getLogs({
+                address: address,
+                event: INSTANT_LOTTERY_RESULT_EVENT,
+                fromBlock,
+                toBlock: end,
+            });
+            for (const log of logs) {
+                try {
+                    const args = log.args;
+                    const player = args?.player;
+                    const wager = args?.wager ?? 0n;
+                    const grossPayout = args?.grossPayout ?? 0n;
+                    const netPayout = args?.netPayout ?? 0n;
+                    const txHash = log.transactionHash ?? '';
+                    const blockNumber = log.blockNumber ?? null;
+                    if (!player || !txHash)
+                        continue;
+                    await this.dbService.logInstantLotteryPlay(player, wager, grossPayout, netPayout, blockNumber, txHash);
+                    indexed += 1;
+                }
+                catch {
+                    // non-fatal
+                }
+            }
+            fromBlock = end + 1n;
+            if (fromBlock > toBlock)
+                break;
+        }
+        const lastBlock = fromBlock > 0n ? fromBlock - 1n : toBlock;
+        await this.dbService.updateInstantLotteryScanState(lastBlock);
+        return { indexed, lastBlock };
     }
     /** Fetch all on-chain game stats in parallel. */
     async getAllChainStats() {

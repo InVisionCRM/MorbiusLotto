@@ -64,7 +64,7 @@ export function WalletDebug() {
           {isOnPulseChain ? (
             <span className="inline-flex items-center gap-1">
               <Image
-                src="/Pulse Branding/Logo/ball1.png"
+                src="/Pulse Branding/Logo/ball.png"
                 alt="PulseChain"
                 width={14}
                 height={14}
@@ -111,7 +111,7 @@ export function WalletDebug() {
             <span className="inline-flex items-center gap-1">
               🔄 Switch to
               <Image
-                src="/Pulse Branding/Logo/ball1.png"
+                src="/Pulse Branding/Logo/ball.png"
                 alt="PulseChain"
                 width={12}
                 height={12}

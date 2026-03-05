@@ -6,7 +6,10 @@ import { erc20Abi } from '../abi/erc20';
 import { logger } from './logger';
 import { getPublicClient } from './chain-client';
 
-const MERKLE_CLAIM_ADDRESS = '0x3807f417617E53d4c5C7D7A825a5ce4D105A75d2' as const;
+// Must match lib/contracts.ts MERKLE_CLAIM_MORBIUS_ADDRESS; override via server .env
+const MERKLE_CLAIM_ADDRESS = (
+  process.env.MERKLE_CLAIM_MORBIUS_ADDRESS || '0x3807f417617E53d4c5C7D7A825a5ce4D105A75d2'
+) as `0x${string}`;
 const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1' as const;
 const MAX_UINT256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 

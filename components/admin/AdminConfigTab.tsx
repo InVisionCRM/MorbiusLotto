@@ -10,20 +10,28 @@ import { Label } from '@/components/ui/label';
 import { Settings, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  LOTTERY_ADDRESS,
+  LOTTERY_INSTANT_ADDRESS,
   KENO_ADDRESS,
   PLINKO_ADDRESS,
   BLACKJACK_ADDRESS,
   TOURNAMENT_PRIZE_ESCROW_ADDRESS,
   MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS,
+  MERKLE_CLAIM_MORBIUS_ADDRESS,
+  MERKLE_CLAIM_LP_ADDRESS,
 } from '@/lib/contracts';
-import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2';
+import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55';
 import { KENO_ABI } from '@/lib/keno-abi';
 import { PLINKO_ABI } from '@/abi/plinko';
 import { blackjackAbi } from '@/abi/blackjack';
 import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
 import { morbiusHolderDistributorAbi } from '@/abi/morbius-holder-distributor';
 import { keccak256, toHex } from 'viem';
+import { pulsechain } from 'viem/chains';
+import {
+  BLACKJACK_IMAGE_BACKGROUNDS,
+  BLACKJACK_VIDEO_BACKGROUNDS,
+  DEFAULT_BLACKJACK_IMAGE_ID,
+} from '@/app/BLACKJACK/constants';
 
 const CONFIG_KEYS = [
   { key: 'blackjack_min_bet', label: 'Blackjack min bet (wei)', placeholder: '1000000000000000000' },
@@ -82,11 +90,29 @@ function WriteRow({
 }
 
 function LotteryAdminSection() {
-  const [roundDuration, setRoundDuration] = useState('');
-  const [morbiusPrice, setMorbiusPrice] = useState('');
-  const [plsPrice, setPlsPrice] = useState('');
+  const { address } = useAccount();
+  const [minWager, setMinWager] = useState('');
+  const [maxWager, setMaxWager] = useState('');
+  const [fundAmount, setFundAmount] = useState('');
+  const [emergencyAmount, setEmergencyAmount] = useState('');
+  const [plsTreasury, setPlsTreasury] = useState('');
+  const [mult0, setMult0] = useState('');
+  const [mult1, setMult1] = useState('');
+  const [mult2, setMult2] = useState('');
+  const [mult3, setMult3] = useState('');
+  const [mult4, setMult4] = useState('');
+  const [mult5, setMult5] = useState('');
+  const [mult6, setMult6] = useState('');
   const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
+  const addr = LOTTERY_INSTANT_ADDRESS as `0x${string}`;
+  const write = (opts: Omit<Parameters<typeof writeContract>[0], 'chain' | 'account'>) => {
+    if (!address) {
+      toast.error('Connect wallet');
+      return;
+    }
+    writeContract({ ...opts, chain: pulsechain, account: address } as Parameters<typeof writeContract>[0]);
+  };
 
   useEffect(() => {
     if (isSuccess) toast.success('Transaction confirmed');
@@ -108,62 +134,102 @@ function LotteryAdminSection() {
   );
 
   return (
-    <ContractSection title="Lottery (6-of-55 V2)">
-      <WriteRow
-        label="finalizeRound()"
-        onExecute={() => run(() => writeContract({ address: LOTTERY_ADDRESS as `0x${string}`, abi: LOTTERY_6OF55_V2_ABI, functionName: 'finalizeRound' }))}
-        loading={isPending || isConfirming}
-      >
-        <span className="text-[10px] text-slate-500">No args. Finalizes current round when duration elapsed.</span>
+    <ContractSection title="Instant Lottery (6-of-55)">
+      <WriteRow label="pause()" onExecute={() => run(() => write({ address: addr, abi: INSTANT_LOTTERY_6OF55_ABI, functionName: 'pause' }))} loading={isPending || isConfirming}>
+        <span className="text-[10px] text-slate-500">No args.</span>
+      </WriteRow>
+      <WriteRow label="unpause()" onExecute={() => run(() => write({ address: addr, abi: INSTANT_LOTTERY_6OF55_ABI, functionName: 'unpause' }))} loading={isPending || isConfirming}>
+        <span className="text-[10px] text-slate-500">No args.</span>
       </WriteRow>
       <WriteRow
-        label="updateRoundDuration(uint256)"
+        label="setMinWager(uint256)"
         onExecute={() => {
-          if (!roundDuration.trim()) {
-            toast.error('Enter round duration (seconds)');
+          if (!minWager.trim()) {
+            toast.error('Enter min wager (wei)');
             return;
           }
-          run(() => {
-            const d = BigInt(roundDuration.trim());
-            writeContract({ address: LOTTERY_ADDRESS as `0x${string}`, abi: LOTTERY_6OF55_V2_ABI, functionName: 'updateRoundDuration', args: [d] });
-          });
+          run(() => write({ address: addr, abi: INSTANT_LOTTERY_6OF55_ABI, functionName: 'setMinWager', args: [BigInt(minWager.trim())] }));
         }}
         loading={isPending || isConfirming}
       >
-        <Input
-          value={roundDuration}
-          onChange={(e) => setRoundDuration(e.target.value)}
-          placeholder="300"
-          className="h-7 text-xs w-32 bg-slate-800 border-slate-600 font-mono"
-        />
+        <Input value={minWager} onChange={(e) => setMinWager(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="updateTicketPrices(uint256 newMORBIUSPrice, uint256 newPlsPrice)"
+        label="setMaxWager(uint256)"
         onExecute={() => {
-          if (!morbiusPrice.trim() || !plsPrice.trim()) {
-            toast.error('Enter both MORBIUS and PLS price (wei)');
+          if (!maxWager.trim()) {
+            toast.error('Enter max wager (wei)');
             return;
           }
-          run(() => {
-            const m = BigInt(morbiusPrice.trim());
-            const p = BigInt(plsPrice.trim());
-            writeContract({ address: LOTTERY_ADDRESS as `0x${string}`, abi: LOTTERY_6OF55_V2_ABI, functionName: 'updateTicketPrices', args: [m, p] });
-          });
+          run(() => write({ address: addr, abi: INSTANT_LOTTERY_6OF55_ABI, functionName: 'setMaxWager', args: [BigInt(maxWager.trim())] }));
         }}
         loading={isPending || isConfirming}
       >
-        <Input
-          value={morbiusPrice}
-          onChange={(e) => setMorbiusPrice(e.target.value)}
-          placeholder="MORBIUS wei"
-          className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono"
-        />
-        <Input
-          value={plsPrice}
-          onChange={(e) => setPlsPrice(e.target.value)}
-          placeholder="PLS wei"
-          className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono"
-        />
+        <Input value={maxWager} onChange={(e) => setMaxWager(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="setMultipliers(uint256[7])"
+        onExecute={() => {
+          const vals = [mult0, mult1, mult2, mult3, mult4, mult5, mult6].map(s => s.trim());
+          if (vals.some(v => !v)) {
+            toast.error('Enter all 7 multiplier values (0–6 matches, bps or wei)');
+            return;
+          }
+          run(() =>
+            write({
+              address: addr,
+              abi: INSTANT_LOTTERY_6OF55_ABI,
+              functionName: 'setMultipliers',
+              args: [vals.map(v => BigInt(v)) as [bigint, bigint, bigint, bigint, bigint, bigint, bigint]],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <div className="flex flex-wrap gap-1">
+          {([mult0, mult1, mult2, mult3, mult4, mult5, mult6] as const).map((val, i) => (
+            <Input key={i} value={val} onChange={(e) => [setMult0, setMult1, setMult2, setMult3, setMult4, setMult5, setMult6][i](e.target.value)} placeholder={`#${i}`} className="h-7 text-xs w-14 bg-slate-800 border-slate-600 font-mono" />
+          ))}
+        </div>
+      </WriteRow>
+      <WriteRow
+        label="setPlsTreasury(address)"
+        onExecute={() => {
+          if (!plsTreasury.trim() || !plsTreasury.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
+          run(() => write({ address: addr, abi: INSTANT_LOTTERY_6OF55_ABI, functionName: 'setPlsTreasury', args: [plsTreasury as `0x${string}`] }));
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={plsTreasury} onChange={(e) => setPlsTreasury(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="fundContract(uint256)"
+        onExecute={() => {
+          if (!fundAmount.trim()) {
+            toast.error('Enter amount (wei)');
+            return;
+          }
+          run(() => write({ address: addr, abi: INSTANT_LOTTERY_6OF55_ABI, functionName: 'fundContract', args: [BigInt(fundAmount.trim())] }));
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} placeholder="MORBIUS wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="emergencyWithdraw(uint256)"
+        onExecute={() => {
+          if (!emergencyAmount.trim()) {
+            toast.error('Enter amount (wei)');
+            return;
+          }
+          run(() => write({ address: addr, abi: INSTANT_LOTTERY_6OF55_ABI, functionName: 'emergencyWithdraw', args: [BigInt(emergencyAmount.trim())] }));
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={emergencyAmount} onChange={(e) => setEmergencyAmount(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
     </ContractSection>
   );
@@ -173,19 +239,18 @@ function KenoAdminSection() {
   const [spotSize, setSpotSize] = useState('');
   const [hits, setHits] = useState('');
   const [multiplier, setMultiplier] = useState('');
-  const [feeBps, setFeeBps] = useState('');
-  const [feeRecipient, setFeeRecipient] = useState('');
-  const [randomnessProvider, setRandomnessProvider] = useState('');
-  const [roundDuration, setRoundDuration] = useState('');
   const [maxWager, setMaxWager] = useState('');
+  const [fundAmount, setFundAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawTo, setWithdrawTo] = useState('');
-  const [reclaimRoundId, setReclaimRoundId] = useState('');
-  const [commitRoundId, setCommitRoundId] = useState('');
-  const [commitment, setCommitment] = useState('');
-  const [revealRoundId, setRevealRoundId] = useState('');
-  const [seed, setSeed] = useState('');
-  const [burnThreshold, setBurnThreshold] = useState('');
+  const [treasuryAddr, setTreasuryAddr] = useState('');
+  const [distBps, setDistBps] = useState('');
+  const [distRecipient, setDistRecipient] = useState('');
+  const [burnBps, setBurnBps] = useState('');
+  const [burnAddr, setBurnAddr] = useState('');
+  const [platformBps, setPlatformBps] = useState('');
+  const [platformRecipient, setPlatformRecipient] = useState('');
+  const [lpBps, setLpBps] = useState('');
+  const [lpRecipient, setLpRecipient] = useState('');
   const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
 
@@ -211,7 +276,7 @@ function KenoAdminSection() {
   const addr = KENO_ADDRESS as `0x${string}`;
 
   return (
-    <ContractSection title="CryptoKeno">
+    <ContractSection title="CryptoKeno (Quick Play)">
       <WriteRow
         label="setPaytable(uint8 spotSize, uint8 hits, uint256 multiplier)"
         onExecute={() => {
@@ -235,67 +300,6 @@ function KenoAdminSection() {
         <Input value={multiplier} onChange={(e) => setMultiplier(e.target.value)} placeholder="multiplier" className="h-7 text-xs w-28 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="setFee(uint256 feeBps, address recipient)"
-        onExecute={() => {
-          if (!feeBps.trim() || !feeRecipient.trim() || !feeRecipient.startsWith('0x')) {
-            toast.error('Enter fee (bps) and valid 0x recipient address');
-            return;
-          }
-          run(() =>
-            writeContract({
-              address: addr,
-              abi: KENO_ABI,
-              functionName: 'setFee',
-              args: [BigInt(feeBps), feeRecipient as `0x${string}`],
-            })
-          );
-        }}
-        loading={isPending || isConfirming}
-      >
-        <Input value={feeBps} onChange={(e) => setFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
-        <Input value={feeRecipient} onChange={(e) => setFeeRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
-      </WriteRow>
-      <WriteRow
-        label="setRandomnessProvider(address)"
-        onExecute={() => {
-          if (!randomnessProvider.trim() || !randomnessProvider.startsWith('0x')) {
-            toast.error('Enter valid 0x address');
-            return;
-          }
-          run(() =>
-            writeContract({
-              address: addr,
-              abi: KENO_ABI,
-              functionName: 'setRandomnessProvider',
-              args: [randomnessProvider as `0x${string}`],
-            })
-          );
-        }}
-        loading={isPending || isConfirming}
-      >
-        <Input value={randomnessProvider} onChange={(e) => setRandomnessProvider(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
-      </WriteRow>
-      <WriteRow
-        label="setRoundDuration(uint256)"
-        onExecute={() => {
-          if (!roundDuration.trim()) {
-            toast.error('Enter round duration (seconds)');
-            return;
-          }
-          run(() =>
-            writeContract({
-              address: addr,
-              abi: KENO_ABI,
-              functionName: 'setRoundDuration',
-              args: [BigInt(roundDuration)],
-            })
-          );
-        }}
-        loading={isPending || isConfirming}
-      >
-        <Input value={roundDuration} onChange={(e) => setRoundDuration(e.target.value)} placeholder="seconds" className="h-7 text-xs w-28 bg-slate-800 border-slate-600 font-mono" />
-      </WriteRow>
-      <WriteRow
         label="setMaxWagerPerDraw(uint256)"
         onExecute={() => {
           if (!maxWager.trim()) {
@@ -316,116 +320,150 @@ function KenoAdminSection() {
         <Input value={maxWager} onChange={(e) => setMaxWager(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="startNextRound()"
-        onExecute={() => run(() => writeContract({ address: addr, abi: KENO_ABI, functionName: 'startNextRound' }))}
+        label="fundContract(uint256 amount)"
+        onExecute={() => {
+          if (!fundAmount.trim()) {
+            toast.error('Enter amount (wei)');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: KENO_ABI,
+              functionName: 'fundContract',
+              args: [BigInt(fundAmount)],
+            })
+          );
+        }}
         loading={isPending || isConfirming}
       >
-        <span className="text-[10px] text-slate-500">No args.</span>
+        <Input value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} placeholder="amount (wei)" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="emergencyWithdraw(uint256 amount)"
+        onExecute={() => {
+          if (!withdrawAmount.trim()) {
+            toast.error('Enter amount (wei)');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: KENO_ABI,
+              functionName: 'emergencyWithdraw',
+              args: [BigInt(withdrawAmount)],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="amount (wei)" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow label="pause()" onExecute={() => run(() => writeContract({ address: addr, abi: KENO_ABI, functionName: 'pause' }))} loading={isPending || isConfirming} />
       <WriteRow label="unpause()" onExecute={() => run(() => writeContract({ address: addr, abi: KENO_ABI, functionName: 'unpause' }))} loading={isPending || isConfirming} />
       <WriteRow
-        label="withdrawBankroll(uint256 amount, address to)"
+        label="setPlsTreasury(address)"
         onExecute={() => {
-          if (!withdrawAmount.trim() || !withdrawTo.trim() || !withdrawTo.startsWith('0x')) {
-            toast.error('Enter amount and valid 0x recipient');
+          if (!treasuryAddr.trim() || !treasuryAddr.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
             return;
           }
           run(() =>
             writeContract({
               address: addr,
               abi: KENO_ABI,
-              functionName: 'withdrawBankroll',
-              args: [BigInt(withdrawAmount), withdrawTo as `0x${string}`],
+              functionName: 'setPlsTreasury',
+              args: [treasuryAddr as `0x${string}`],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="amount" className="h-7 text-xs w-32 bg-slate-800 border-slate-600 font-mono" />
-        <Input value={withdrawTo} onChange={(e) => setWithdrawTo(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={treasuryAddr} onChange={(e) => setTreasuryAddr(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="reclaimExpiredPrizes(uint256 roundId)"
+        label="setDistributionFee(uint256 bps, address)"
         onExecute={() => {
-          if (!reclaimRoundId.trim()) {
-            toast.error('Enter round ID');
+          if (!distBps.trim() || !distRecipient.trim() || !distRecipient.startsWith('0x')) {
+            toast.error('Enter bps and valid 0x address');
             return;
           }
           run(() =>
             writeContract({
               address: addr,
               abi: KENO_ABI,
-              functionName: 'reclaimExpiredPrizes',
-              args: [BigInt(reclaimRoundId)],
+              functionName: 'setDistributionFee',
+              args: [BigInt(distBps), distRecipient as `0x${string}`],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={reclaimRoundId} onChange={(e) => setReclaimRoundId(e.target.value)} placeholder="roundId" className="h-7 text-xs w-28 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={distBps} onChange={(e) => setDistBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={distRecipient} onChange={(e) => setDistRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="commitRandom(uint256 roundId, bytes32 commitment)"
+        label="setBurnFee(uint256 bps, address)"
         onExecute={() => {
-          if (!commitRoundId.trim() || !commitment.trim() || !commitment.startsWith('0x')) {
-            toast.error('Enter round ID and 0x commitment (32 bytes)');
+          if (!burnBps.trim() || !burnAddr.trim() || !burnAddr.startsWith('0x')) {
+            toast.error('Enter bps and valid 0x address');
             return;
           }
           run(() =>
             writeContract({
               address: addr,
               abi: KENO_ABI,
-              functionName: 'commitRandom',
-              args: [BigInt(commitRoundId), commitment as `0x${string}`],
+              functionName: 'setBurnFee',
+              args: [BigInt(burnBps), burnAddr as `0x${string}`],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={commitRoundId} onChange={(e) => setCommitRoundId(e.target.value)} placeholder="roundId" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
-        <Input value={commitment} onChange={(e) => setCommitment(e.target.value)} placeholder="0x… 32 bytes" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={burnBps} onChange={(e) => setBurnBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={burnAddr} onChange={(e) => setBurnAddr(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="revealRandom(uint256 roundId, bytes32 seed)"
+        label="setPlatformFee(uint256 bps, address)"
         onExecute={() => {
-          if (!revealRoundId.trim() || !seed.trim() || !seed.startsWith('0x')) {
-            toast.error('Enter round ID and 0x seed');
+          if (!platformBps.trim() || !platformRecipient.trim() || !platformRecipient.startsWith('0x')) {
+            toast.error('Enter bps and valid 0x address');
             return;
           }
           run(() =>
             writeContract({
               address: addr,
               abi: KENO_ABI,
-              functionName: 'revealRandom',
-              args: [BigInt(revealRoundId), seed as `0x${string}`],
+              functionName: 'setPlatformFee',
+              args: [BigInt(platformBps), platformRecipient as `0x${string}`],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={revealRoundId} onChange={(e) => setRevealRoundId(e.target.value)} placeholder="roundId" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
-        <Input value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="0x… seed" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={platformBps} onChange={(e) => setPlatformBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={platformRecipient} onChange={(e) => setPlatformRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="updateBurnThreshold(uint256)"
+        label="setLpDistributionFee(uint256 bps, address)"
         onExecute={() => {
-          if (!burnThreshold.trim()) {
-            toast.error('Enter burn threshold (wei)');
+          if (!lpBps.trim() || !lpRecipient.trim() || !lpRecipient.startsWith('0x')) {
+            toast.error('Enter bps and valid 0x address');
             return;
           }
           run(() =>
             writeContract({
               address: addr,
               abi: KENO_ABI,
-              functionName: 'updateBurnThreshold',
-              args: [BigInt(burnThreshold)],
+              functionName: 'setLpDistributionFee',
+              args: [BigInt(lpBps), lpRecipient as `0x${string}`],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={burnThreshold} onChange={(e) => setBurnThreshold(e.target.value)} placeholder="wei" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={lpBps} onChange={(e) => setLpBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-20 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={lpRecipient} onChange={(e) => setLpRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
     </ContractSection>
   );
@@ -436,6 +474,8 @@ function PlinkoAdminSection() {
   const [maxWager, setMaxWager] = useState('');
   const [emergencyAmount, setEmergencyAmount] = useState('');
   const [fundAmount, setFundAmount] = useState('');
+  const [distRecipient, setDistRecipient] = useState(MERKLE_CLAIM_MORBIUS_ADDRESS);
+  const [lpDistRecipient, setLpDistRecipient] = useState(MERKLE_CLAIM_LP_ADDRESS);
   const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
 
@@ -544,6 +584,46 @@ function PlinkoAdminSection() {
       >
         <Input value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} placeholder="wei (approve first)" className="h-7 text-xs w-40 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
+      <WriteRow
+        label="setDistributionRecipient(address) — MORBIUS holder merkle"
+        onExecute={() => {
+          if (!distRecipient.trim() || !distRecipient.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: PLINKO_ABI,
+              functionName: 'setDistributionRecipient',
+              args: [distRecipient as `0x${string}`],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={distRecipient} onChange={(e) => setDistRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="setLpDistributionRecipient(address) — LP staker merkle"
+        onExecute={() => {
+          if (!lpDistRecipient.trim() || !lpDistRecipient.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: PLINKO_ABI,
+              functionName: 'setLpDistributionRecipient',
+              args: [lpDistRecipient as `0x${string}`],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={lpDistRecipient} onChange={(e) => setLpDistRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
     </ContractSection>
   );
 }
@@ -552,11 +632,12 @@ function BlackjackAdminSection() {
   const [authorizedServer, setAuthorizedServer] = useState('');
   const [emergencyAdmin, setEmergencyAdmin] = useState('');
   const [distributionFeeBps, setDistributionFeeBps] = useState('');
-  const [distributionRecipient, setDistributionRecipient] = useState('');
+  const [distributionRecipient, setDistributionRecipient] = useState(MERKLE_CLAIM_MORBIUS_ADDRESS);
+  const [lpDistributionRecipient, setLpDistributionRecipient] = useState(MERKLE_CLAIM_LP_ADDRESS);
   const [platformFeeBps, setPlatformFeeBps] = useState('');
   const [platformFeeRecipient, setPlatformFeeRecipient] = useState('');
-  const [plsDepositFeeBps, setPlsDepositFeeBps] = useState('');
-  const [plsDepositFeeRecipient, setPlsDepositFeeRecipient] = useState('');
+  const [burnFeeBps, setBurnFeeBps] = useState('');
+  const [lpDistributionFeeBps, setLpDistributionFeeBps] = useState('');
   const [emergencyPause, setEmergencyPause] = useState('true');
   const [emergencyAmount, setEmergencyAmount] = useState('');
   const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
@@ -646,7 +727,7 @@ function BlackjackAdminSection() {
         <Input value={distributionFeeBps} onChange={(e) => setDistributionFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="setDistributionRecipient(address)"
+        label="setDistributionRecipient(address) — MORBIUS holder merkle"
         onExecute={() => {
           if (!distributionRecipient.trim() || !distributionRecipient.startsWith('0x')) {
             toast.error('Enter valid 0x address');
@@ -664,6 +745,26 @@ function BlackjackAdminSection() {
         loading={isPending || isConfirming}
       >
         <Input value={distributionRecipient} onChange={(e) => setDistributionRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+      </WriteRow>
+      <WriteRow
+        label="setLpDistributionRecipient(address) — LP staker merkle"
+        onExecute={() => {
+          if (!lpDistributionRecipient.trim() || !lpDistributionRecipient.startsWith('0x')) {
+            toast.error('Enter valid 0x address');
+            return;
+          }
+          run(() =>
+            writeContract({
+              address: addr,
+              abi: blackjackAbi,
+              functionName: 'setLpDistributionRecipient',
+              args: [lpDistributionRecipient as `0x${string}`],
+            })
+          );
+        }}
+        loading={isPending || isConfirming}
+      >
+        <Input value={lpDistributionRecipient} onChange={(e) => setLpDistributionRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setPlatformFee(uint256 bps) — max 2000 (20%)"
@@ -706,9 +807,9 @@ function BlackjackAdminSection() {
         <Input value={platformFeeRecipient} onChange={(e) => setPlatformFeeRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="setPlsDepositFee(uint256 bps) — max 2000 (20%)"
+        label="setBurnFee(uint256 bps) — max 2000 (20%)"
         onExecute={() => {
-          if (!plsDepositFeeBps.trim()) {
+          if (!burnFeeBps.trim()) {
             toast.error('Enter basis points (0–2000)');
             return;
           }
@@ -716,34 +817,34 @@ function BlackjackAdminSection() {
             writeContract({
               address: addr,
               abi: blackjackAbi,
-              functionName: 'setPlsDepositFee',
-              args: [BigInt(plsDepositFeeBps)],
+              functionName: 'setBurnFee',
+              args: [BigInt(burnFeeBps)],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={plsDepositFeeBps} onChange={(e) => setPlsDepositFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={burnFeeBps} onChange={(e) => setBurnFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
-        label="setPlsDepositFeeRecipient(address)"
+        label="setLpDistributionFee(uint256 bps) — max 2000 (20%)"
         onExecute={() => {
-          if (!plsDepositFeeRecipient.trim() || !plsDepositFeeRecipient.startsWith('0x')) {
-            toast.error('Enter valid 0x address');
+          if (!lpDistributionFeeBps.trim()) {
+            toast.error('Enter basis points (0–2000)');
             return;
           }
           run(() =>
             writeContract({
               address: addr,
               abi: blackjackAbi,
-              functionName: 'setPlsDepositFeeRecipient',
-              args: [plsDepositFeeRecipient as `0x${string}`],
+              functionName: 'setLpDistributionFee',
+              args: [BigInt(lpDistributionFeeBps)],
             })
           );
         }}
         loading={isPending || isConfirming}
       >
-        <Input value={plsDepositFeeRecipient} onChange={(e) => setPlsDepositFeeRecipient(e.target.value)} placeholder="0x…" className="h-7 text-xs w-52 bg-slate-800 border-slate-600 font-mono" />
+        <Input value={lpDistributionFeeBps} onChange={(e) => setLpDistributionFeeBps(e.target.value)} placeholder="bps" className="h-7 text-xs w-24 bg-slate-800 border-slate-600 font-mono" />
       </WriteRow>
       <WriteRow
         label="setEmergencyPause(bool) — emergency admin only"
@@ -1157,6 +1258,38 @@ export default function AdminConfigTab() {
                 />
               </div>
             ))}
+            <div className="pt-2 border-t border-slate-700/50 mt-2">
+              <Label className="text-[11px] text-slate-400">Blackjack default table (for new users / no saved preference)</Label>
+              <div className="mt-1 flex flex-wrap gap-2 items-center">
+                <select
+                  value={config.blackjack_default_theme_kind ?? 'image'}
+                  onChange={(e) => {
+                    const kind = e.target.value as 'image' | 'video';
+                    const tableList = kind === 'video' ? BLACKJACK_VIDEO_BACKGROUNDS : BLACKJACK_IMAGE_BACKGROUNDS;
+                    const currentId = config.blackjack_default_table_id ?? DEFAULT_BLACKJACK_IMAGE_ID;
+                    const validId = tableList.some((t) => t.id === currentId) ? currentId : tableList[0].id;
+                    setConfig((c) => ({ ...c, blackjack_default_theme_kind: kind, blackjack_default_table_id: validId }));
+                  }}
+                  className="h-8 text-xs bg-slate-800 border border-slate-600 rounded text-slate-200 px-2"
+                >
+                  <option value="image">Image</option>
+                  <option value="video">Video</option>
+                </select>
+                <select
+                  value={config.blackjack_default_table_id ?? DEFAULT_BLACKJACK_IMAGE_ID}
+                  onChange={(e) => setConfig((c) => ({ ...c, blackjack_default_table_id: e.target.value }))}
+                  className="h-8 text-xs bg-slate-800 border border-slate-600 rounded text-slate-200 px-2 min-w-[140px]"
+                >
+                  {(config.blackjack_default_theme_kind ?? 'image') === 'video'
+                    ? BLACKJACK_VIDEO_BACKGROUNDS.map((v) => (
+                        <option key={v.id} value={v.id}>{v.label}</option>
+                      ))
+                    : BLACKJACK_IMAGE_BACKGROUNDS.map((b) => (
+                        <option key={b.id} value={b.id}>{b.label}</option>
+                      ))}
+                </select>
+              </div>
+            </div>
             <div className="pt-2">
               <Button type="submit" size="sm" className="text-xs h-7" disabled={saving}>
                 {saving ? 'Saving…' : 'Save config'}

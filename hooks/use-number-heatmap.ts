@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useReadContracts } from 'wagmi'
-import { LOTTERY_ADDRESS } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS } from '@/lib/contracts'
 import { LOTTERY_6OF55_ABI } from '@/abi/lottery6of55'
 
 interface NumberFrequency {
@@ -24,7 +24,7 @@ export function useNumberHeatmap(currentRoundId: number, roundsToAnalyze: number
 
   // Fetch multiple rounds using useReadContracts
   const contracts = roundsToFetch.map(roundId => ({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_ABI,
     functionName: 'getRound' as const,
     args: [BigInt(roundId)],
@@ -33,7 +33,7 @@ export function useNumberHeatmap(currentRoundId: number, roundsToAnalyze: number
   const { data: roundsData, isLoading: isLoadingRounds } = useReadContracts({
     contracts: contracts.length > 0 ? contracts : [],
     query: {
-      enabled: contracts.length > 0 && (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000',
+      enabled: contracts.length > 0 && (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000',
     },
   })
 

@@ -5,19 +5,15 @@ import React, { useState, useEffect } from "react";
 import { BentoGrid, BentoGridItem } from "../ui/bento-grid";
 import {
   IconTicket,
-  IconChartBar,
   IconHistory,
-  IconCoin,
   IconTrophy,
   IconClock,
-  IconUsers,
   IconQuestionMark,
 } from "@tabler/icons-react";
 import { motion } from "motion/react";
 import { formatEther } from "viem";
 import { GlowingStarsBackgroundCard } from "../ui/glowing-stars";
 import { Meteors } from "../ui/meteors";
-import { DottedGlowBackground } from "../ui/dotted-glow-background";
 import { PixelImage } from "../ui/pixel-image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -25,9 +21,6 @@ import { ScrollArea } from "../ui/scroll-area";
 
 interface LotteryBentoGridProps {
   onPlayNow?: () => void;
-  onShowHistory?: () => void;
-  onShowTickets?: () => void;
-  onShowClaim?: () => void;
   onShowPayouts?: () => void;
   totalTickets?: number;
   timeRemaining?: number;
@@ -38,9 +31,6 @@ interface LotteryBentoGridProps {
 
 export function LotteryBentoGrid({
   onPlayNow,
-  onShowHistory,
-  onShowTickets,
-  onShowClaim,
   onShowPayouts,
   totalTickets = 0,
   timeRemaining = 0,
@@ -78,9 +68,6 @@ export function LotteryBentoGrid({
             icon={item.icon}
             onClick={item.onClick ? () => item.onClick({
               onPlayNow,
-              onShowHistory,
-              onShowTickets,
-              onShowClaim,
               onShowPayouts,
               totalTickets,
               timeRemaining,
@@ -227,7 +214,7 @@ const SkeletonHowToPlay = () => {
       rotate: 2,
       transition: {
         duration: 0.3,
-        ease: "easeOut",
+        ease: "easeOut" as const,
       },
     },
   };
@@ -244,7 +231,7 @@ const SkeletonHowToPlay = () => {
       rotate: -5,
       transition: {
         duration: 0.4,
-        ease: "easeOut",
+        ease: "easeOut" as const,
       },
     },
   };
@@ -261,7 +248,7 @@ const SkeletonHowToPlay = () => {
       rotate: 8,
       transition: {
         duration: 0.35,
-        ease: "easeOut",
+        ease: "easeOut" as const,
         delay: 0.05,
       },
     },
@@ -279,7 +266,7 @@ const SkeletonHowToPlay = () => {
       rotate: -3,
       transition: {
         duration: 0.45,
-        ease: "easeOut",
+        ease: "easeOut" as const,
         delay: 0.1,
       },
     },
@@ -606,133 +593,6 @@ const SkeletonJackpot = ({ jackpotAmount }: { jackpotAmount?: bigint }) => {
   );
 };
 
-const SkeletonMyTickets = () => {
-  return (
-    <div className="relative w-full h-full min-h-[6rem] overflow-hidden">
-      <DottedGlowBackground
-        className="absolute inset-0"
-        gap={10}
-        radius={1.5}
-        color="rgb(168, 7, 255)"
-        glowColor="rgb(242, 0, 255)"
-        opacity={1}
-        speedMin={0.2}
-        speedMax={0.8}
-        speedScale={0.5}
-      />
-      {/* Text content will be overlaid by BentoGridItem */}
-    </div>
-  );
-};
-
-const SkeletonHistory = () => {
-  const first = {
-    initial: {
-      x: 20,
-      rotate: -5,
-    },
-    hover: {
-      x: 0,
-      rotate: 0,
-    },
-  };
-
-  const second = {
-    initial: {
-      x: -20,
-      rotate: 5,
-    },
-    hover: {
-      x: 0,
-      rotate: 0,
-    },
-  };
-
-  return (
-    <motion.div
-      initial="initial"
-      animate="animate"
-      whileHover="hover"
-      className="flex flex-1 w-full h-full min-h-[6rem] dark:bg-dot-white/[0.2] bg-dot-black/[0.2] flex-row space-x-2"
-    >
-      <motion.div
-        variants={first}
-        className="h-full w-1/3 rounded-2xl bg-white p-4 dark:bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900/80 dark:border-white/[0.1] border border-neutral-200 flex flex-col items-center justify-center"
-      >
-        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 shrink-0 mb-2" />
-        <div className="w-full bg-gray-100 h-2 rounded-full dark:bg-neutral-900 mb-2" />
-        <div className="w-3/4 bg-gray-100 h-2 rounded-full dark:bg-neutral-900" />
-      </motion.div>
-      <motion.div className="h-full relative z-20 w-1/3 rounded-2xl bg-white p-4 dark:bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900/80 dark:border-white/[0.1] border border-neutral-200 flex flex-col items-center justify-center">
-        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 shrink-0 mb-2" />
-        <div className="w-full bg-gray-100 h-2 rounded-full dark:bg-neutral-900 mb-2" />
-        <div className="w-3/4 bg-gray-100 h-2 rounded-full dark:bg-neutral-900" />
-      </motion.div>
-      <motion.div
-        variants={second}
-        className="h-full w-1/3 rounded-2xl bg-white p-4 dark:bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900/80 dark:border-white/[0.1] border border-neutral-200 flex flex-col items-center justify-center"
-      >
-        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 shrink-0 mb-2" />
-        <div className="w-full bg-gray-100 h-2 rounded-full dark:bg-neutral-900 mb-2" />
-        <div className="w-3/4 bg-gray-100 h-2 rounded-full dark:bg-neutral-900" />
-      </motion.div>
-    </motion.div>
-  );
-};
-
-const SkeletonClaim = () => {
-  const variants = {
-    initial: {
-      x: 0,
-    },
-    animate: {
-      x: 10,
-      rotate: 5,
-      transition: {
-        duration: 0.2,
-      },
-    },
-  };
-
-  const variantsSecond = {
-    initial: {
-      x: 0,
-    },
-    animate: {
-      x: -10,
-      rotate: -5,
-      transition: {
-        duration: 0.2,
-      },
-    },
-  };
-
-  return (
-    <motion.div
-      initial="initial"
-      whileHover="animate"
-      className="flex flex-1 w-full h-full min-h-[6rem] dark:bg-dot-white/[0.2] bg-dot-black/[0.2] flex-col space-y-2"
-    >
-      <motion.div
-        variants={variants}
-        className="flex flex-row rounded-2xl border border-neutral-100 dark:border-white/[0.2] p-2 items-start space-x-2 bg-white dark:bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900/80"
-      >
-        <div className="h-6 w-6 rounded-full bg-gradient-to-r from-pink-500 to-blue-500 shrink-0" />
-        <div className="text-xs text-neutral-500">
-          Claim your lottery winnings instantly...
-        </div>
-      </motion.div>
-      <motion.div
-        variants={variantsSecond}
-        className="flex flex-row rounded-full border border-neutral-100 dark:border-white/[0.2] p-2 items-center justify-end space-x-2 w-3/4 ml-auto bg-white dark:bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900/80"
-      >
-        <div className="text-xs text-neutral-500">Claim All Now!</div>
-        <div className="h-6 w-6 rounded-full bg-gradient-to-r from-pink-500 to-blue-500 shrink-0" />
-      </motion.div>
-    </motion.div>
-  );
-};
-
 const formatTime = (seconds: number) => {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -768,7 +628,7 @@ const items = [
     title: "Payout Breakdown",
     description: (
       <span className="text-sm">
-        View prize distribution and payout calculations
+        Instant game: match 0–6 of 6 → 0×, 0.5×, 1.5×, 5×, 25×, 500×, 10,000× (before fees). Payouts are instant.
       </span>
     ),
     header: <SkeletonTimer />,
@@ -820,51 +680,14 @@ const items = [
     title: "Transaction History",
     description: (
       <span className="text-sm">
-        View your complete lottery transaction history
+        View your instant play history, past results and payouts
       </span>
     ),
     header: <SkeletonPlayNow />,
     className: "md:col-span-1",
     icon: <IconHistory className="h-4 w-4 text-neutral-500" />,
     onClick: () => {
-      // Navigate to transaction history page
       window.location.href = '/lottery-purchase-showcase'
     },
-  },
-  {
-    title: "Round History",
-    description: (
-      <span className="text-sm">
-        Browse past lottery results and winning numbers
-      </span>
-    ),
-    header: <SkeletonHistory />,
-    className: "md:col-span-1",
-    icon: <IconHistory className="h-4 w-4 text-neutral-500" />,
-    onClick: ({ onShowHistory }: any) => onShowHistory?.(),
-  },
-  {
-    title: "Claim Winnings",
-    description: (
-      <span className="text-sm">
-        Claim All Now!
-      </span>
-    ),
-    header: <SkeletonClaim />,
-    className: "md:col-span-1",
-    icon: <IconCoin className="h-4 w-4 text-neutral-500" />,
-    onClick: ({ onShowClaim }: any) => onShowClaim?.(),
-  },
-  {
-    title: "My Tickets",
-    description: (
-      <span className="text-sm">
-        View all your lottery tickets and track their performance
-      </span>
-    ),
-    header: <SkeletonMyTickets />,
-    className: "md:col-span-1",
-    icon: <IconTicket className="h-4 w-4 text-neutral-500" />,
-    onClick: ({ onShowTickets }: any) => onShowTickets?.(),
   },
 ];

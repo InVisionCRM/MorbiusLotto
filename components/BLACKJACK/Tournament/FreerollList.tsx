@@ -89,7 +89,7 @@ export function FreerollList({
           <button
             type="button"
             onClick={clearError}
-            className="text-red-400 hover:text-red-300 text-sm underline"
+            className="text-red-400 hover:text-red-300 text-sm "
           >
             Dismiss
           </button>

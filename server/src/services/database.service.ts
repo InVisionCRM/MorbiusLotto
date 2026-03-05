@@ -100,6 +100,18 @@ export interface TopPlayerEntry {
   win_rate: number;
 }
 
+/** Instant lottery leaderboard entry (same shape as TopPlayerEntry for API consistency). */
+export type LotteryTopPlayerEntry = TopPlayerEntry;
+
+/** Instant lottery per-player stats (from indexed plays). */
+export interface LotteryPlayerStats {
+  total_games: number;
+  total_bet: bigint;
+  total_win: bigint;
+  profit_loss: bigint;
+  win_rate: number;
+}
+
 export interface GlobalAnalytics {
   total_players: number;
   active_players: number;
@@ -535,6 +547,196 @@ export class DatabaseService {
       `UPDATE blackjack_platform_totals SET total_withdrawn = total_withdrawn + $1::NUMERIC, updated_at = NOW() WHERE id = 1`,
       [amount.toString()]
     );
+  }
+
+  // ============================================
+  // Instant Lottery (indexed plays for leaderboard + player stats)
+  // ============================================
+
+  async getInstantLotteryScanState(): Promise<{ lastScannedBlock: bigint | null } | null> {
+    const result = await this.pool.query(
+      `SELECT last_scanned_block FROM instant_lottery_scan WHERE id = 1`
+    );
+    if (result.rows.length === 0) return null;
+    const r = result.rows[0];
+    return {
+      lastScannedBlock: r.last_scanned_block != null ? BigInt(r.last_scanned_block) : null,
+    };
+  }
+
+  async updateInstantLotteryScanState(lastScannedBlock: bigint | null): Promise<void> {
+    await this.pool.query(
+      `UPDATE instant_lottery_scan SET last_scanned_block = $1, updated_at = NOW() WHERE id = 1`,
+      [lastScannedBlock != null ? Number(lastScannedBlock) : null]
+    );
+  }
+
+  /** Insert one play (from chain event). ON CONFLICT DO NOTHING so re-scans are safe. */
+  async logInstantLotteryPlay(
+    walletAddress: string,
+    wager: bigint,
+    grossPayout: bigint,
+    netPayout: bigint,
+    blockNumber: bigint | null,
+    txHash: string
+  ): Promise<void> {
+    const normalized = this.normalizeAddress(walletAddress);
+    await this.pool.query(
+      `INSERT INTO instant_lottery_plays (wallet_address, wager, gross_payout, net_payout, block_number, tx_hash)
+       VALUES ($1, $2::NUMERIC, $3::NUMERIC, $4::NUMERIC, $5, $6)
+       ON CONFLICT (tx_hash) DO NOTHING`,
+      [
+        normalized,
+        wager.toString(),
+        grossPayout.toString(),
+        netPayout.toString(),
+        blockNumber != null ? Number(blockNumber) : null,
+        txHash,
+      ]
+    );
+  }
+
+  /** Top players by total wagered (all-time from indexed plays). */
+  async getLotteryTopPlayers(limit: number = 25): Promise<LotteryTopPlayerEntry[]> {
+    const query = `
+      WITH agg AS (
+        SELECT
+          LOWER(wallet_address) AS wallet_address,
+          COUNT(*)::INTEGER AS total_games,
+          COALESCE(SUM(wager), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(gross_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(gross_payout), 0) - COALESCE(SUM(wager), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE net_payout > 0)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate
+        FROM instant_lottery_plays
+        GROUP BY LOWER(wallet_address)
+      )
+      SELECT ROW_NUMBER() OVER (ORDER BY total_bet DESC)::INTEGER AS rank, *
+      FROM agg
+      ORDER BY total_bet DESC
+      LIMIT $1
+    `;
+    const result = await this.pool.query(query, [limit]);
+    return result.rows.map((r: any) => this.normalizeTopPlayerEntry(r));
+  }
+
+  /** Per-player stats from indexed instant lottery plays. */
+  async getLotteryPlayerStats(walletAddress: string): Promise<LotteryPlayerStats | null> {
+    const normalized = this.normalizeAddress(walletAddress);
+    const query = `
+      SELECT
+        COUNT(*)::INTEGER AS total_games,
+        COALESCE(SUM(wager), 0)::NUMERIC(78, 0) AS total_bet,
+        COALESCE(SUM(gross_payout), 0)::NUMERIC(78, 0) AS total_win,
+        (COALESCE(SUM(gross_payout), 0) - COALESCE(SUM(wager), 0))::NUMERIC(78, 0) AS profit_loss,
+        CASE WHEN COUNT(*) > 0 THEN
+          ROUND((COUNT(*) FILTER (WHERE net_payout > 0)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+        ELSE 0 END AS win_rate
+      FROM instant_lottery_plays
+      WHERE LOWER(wallet_address) = LOWER($1)
+    `;
+    const result = await this.pool.query(query, [normalized]);
+    if (result.rows.length === 0) return null;
+    const r = result.rows[0];
+    return {
+      total_games: Number(r.total_games ?? 0),
+      total_bet: this.toBigInt(r.total_bet),
+      total_win: this.toBigInt(r.total_win),
+      profit_loss: this.toBigInt(r.profit_loss),
+      win_rate: Number(r.win_rate ?? 0),
+    };
+  }
+
+  /** Insert a provably-fair instant lottery play (before resolvePlay tx). */
+  async insertInstantLotteryPlayPF(params: {
+    walletAddress: string;
+    wager: bigint;
+    playerNumbers: number[];
+    winningNumbers: number[];
+    matchCount: number;
+    grossPayout: bigint;
+    netPayout: bigint;
+    serverSeedHash: string;
+    clientSeed: string;
+    nonce: bigint;
+  }): Promise<number> {
+    const normalized = this.normalizeAddress(params.walletAddress);
+    const result = await this.pool.query(
+      `INSERT INTO instant_lottery_plays_pf (
+        wallet_address, wager, player_numbers, winning_numbers, match_count,
+        gross_payout, net_payout, server_seed_hash, client_seed, nonce
+      ) VALUES ($1, $2::NUMERIC, $3, $4, $5, $6::NUMERIC, $7::NUMERIC, $8, $9, $10)
+      RETURNING id`,
+      [
+        normalized,
+        params.wager.toString(),
+        params.playerNumbers,
+        params.winningNumbers,
+        params.matchCount,
+        params.grossPayout.toString(),
+        params.netPayout.toString(),
+        params.serverSeedHash,
+        params.clientSeed,
+        params.nonce.toString(),
+      ]
+    );
+    return Number(result.rows[0]?.id ?? 0);
+  }
+
+  /** Set tx_hash after resolvePlay succeeds (for verification lookup). Stored lowercase for consistent lookup. */
+  async updateInstantLotteryPlayPFTxHash(id: number, txHash: string): Promise<void> {
+    const normalized = (txHash || '').trim().toLowerCase();
+    await this.pool.query(
+      `UPDATE instant_lottery_plays_pf SET tx_hash = $1 WHERE id = $2`,
+      [normalized, id]
+    );
+  }
+
+  /** Reveal server seed for verification (call after play is settled). */
+  async updateInstantLotteryPlayPFReveal(id: number, serverSeed: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE instant_lottery_plays_pf SET server_seed = $1 WHERE id = $2`,
+      [serverSeed, id]
+    );
+  }
+
+  /** Get PF play by tx_hash for verification endpoint. Lookup is case-insensitive (EVM hashes). */
+  async getInstantLotteryPlayPFByTxHash(txHash: string): Promise<{
+    wallet_address: string;
+    wager: bigint;
+    player_numbers: number[];
+    winning_numbers: number[];
+    match_count: number;
+    gross_payout: bigint;
+    net_payout: bigint;
+    server_seed_hash: string;
+    server_seed: string | null;
+    client_seed: string;
+    nonce: string;
+  } | null> {
+    const normalized = txHash.trim().toLowerCase();
+    const result = await this.pool.query(
+      `SELECT wallet_address, wager, player_numbers, winning_numbers, match_count,
+              gross_payout, net_payout, server_seed_hash, server_seed, client_seed, nonce
+       FROM instant_lottery_plays_pf WHERE LOWER(tx_hash) = $1`,
+      [normalized]
+    );
+    if (result.rows.length === 0) return null;
+    const r = result.rows[0];
+    return {
+      wallet_address: r.wallet_address ?? '',
+      wager: this.toBigInt(r.wager),
+      player_numbers: Array.isArray(r.player_numbers) ? r.player_numbers : [],
+      winning_numbers: Array.isArray(r.winning_numbers) ? r.winning_numbers : [],
+      match_count: Number(r.match_count ?? 0),
+      gross_payout: this.toBigInt(r.gross_payout),
+      net_payout: this.toBigInt(r.net_payout),
+      server_seed_hash: r.server_seed_hash ?? '',
+      server_seed: r.server_seed ?? null,
+      client_seed: r.client_seed ?? 'default',
+      nonce: String(r.nonce ?? '0'),
+    };
   }
 
   async expirePendingWithdrawals(): Promise<number> {

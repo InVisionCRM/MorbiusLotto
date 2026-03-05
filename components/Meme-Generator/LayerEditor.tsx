@@ -33,7 +33,7 @@ export const LayerEditor: React.FC<LayerEditorProps> = ({ layer, onChange, onDel
             e.stopPropagation();
             onDelete(layer.id);
           }}
-          className="text-red-400 hover:text-red-300 text-xs hover:underline"
+          className="text-red-400 hover:text-red-300 text-xs hover:"
         >
           Remove
         </button>

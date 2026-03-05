@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { ChevronLeft, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react'
-import { LOTTERY_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -41,7 +41,7 @@ function BracketWinnersModal({ roundId, bracket, payoutPerWinner }: BracketWinne
   // Fetch all winning ticket details
   const { data: ticketData } = useReadContracts({
     contracts: winningTicketIds.map((ticketId: bigint) => ({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'roundTickets',
       args: [BigInt(roundId), ticketId],
@@ -169,12 +169,12 @@ export function RoundHistory({ currentRoundId, maxRounds = 10 }: RoundHistoryPro
 
   // Fetch current round data
   const { data: roundData, isLoading } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getRound',
     args: currentRoundIdToFetch > 0 ? [BigInt(currentRoundIdToFetch)] : undefined,
     query: {
-      enabled: currentRoundIdToFetch > 0 && (LOTTERY_ADDRESS as string).toLowerCase() !== '0x0000000000000000000000000000000000000000',
+      enabled: currentRoundIdToFetch > 0 && (LOTTERY_INSTANT_ADDRESS as string).toLowerCase() !== '0x0000000000000000000000000000000000000000',
     },
   })
 
@@ -194,22 +194,22 @@ export function RoundHistory({ currentRoundId, maxRounds = 10 }: RoundHistoryPro
   const nextRoundId = roundIds[currentIndex + 1] || 0
 
   const { data: prevRoundData } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getRound',
     args: prevRoundId > 0 ? [BigInt(prevRoundId)] : undefined,
     query: {
-      enabled: prevRoundId > 0 && (LOTTERY_ADDRESS as string).toLowerCase() !== '0x0000000000000000000000000000000000000000',
+      enabled: prevRoundId > 0 && (LOTTERY_INSTANT_ADDRESS as string).toLowerCase() !== '0x0000000000000000000000000000000000000000',
     },
   })
 
   const { data: nextRoundData } = useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getRound',
     args: nextRoundId > 0 ? [BigInt(nextRoundId)] : undefined,
     query: {
-      enabled: nextRoundId > 0 && (LOTTERY_ADDRESS as string).toLowerCase() !== '0x0000000000000000000000000000000000000000',
+      enabled: nextRoundId > 0 && (LOTTERY_INSTANT_ADDRESS as string).toLowerCase() !== '0x0000000000000000000000000000000000000000',
     },
   })
 
@@ -313,7 +313,7 @@ export function RoundHistory({ currentRoundId, maxRounds = 10 }: RoundHistoryPro
         <Accordion type="multiple" defaultValue={["overview"]} className="w-full space-y-2">
           {/* Quick Overview */}
           <AccordionItem value="overview" className="border-neutral-200 dark:border-neutral-700">
-            <AccordionTrigger className="text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:text-neutral-800 dark:hover:text-neutral-200 px-3 py-2 hover:no-underline [&[data-state=open]>svg]:rotate-180 font-sans">
+            <AccordionTrigger className="text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:text-neutral-800 dark:hover:text-neutral-200 px-3 py-2 hover:no- [&[data-state=open]>svg]:rotate-180 font-sans">
               Quick Overview
             </AccordionTrigger>
             <AccordionContent className="px-3 pb-3">
@@ -362,7 +362,7 @@ export function RoundHistory({ currentRoundId, maxRounds = 10 }: RoundHistoryPro
 
           {/* Winners by Bracket */}
           <AccordionItem value="winners" className="border-neutral-200 dark:border-neutral-700">
-            <AccordionTrigger className="text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:text-neutral-800 dark:hover:text-neutral-200 px-3 py-2 hover:no-underline [&[data-state=open]>svg]:rotate-180 font-sans">
+            <AccordionTrigger className="text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:text-neutral-800 dark:hover:text-neutral-200 px-3 py-2 hover:no- [&[data-state=open]>svg]:rotate-180 font-sans">
               Winners by Bracket
             </AccordionTrigger>
             <AccordionContent className="px-3 pb-3">
@@ -396,7 +396,7 @@ export function RoundHistory({ currentRoundId, maxRounds = 10 }: RoundHistoryPro
 
           {/* Pool Distribution */}
           <AccordionItem value="distribution" className="border-neutral-200 dark:border-neutral-700">
-            <AccordionTrigger className="text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:text-neutral-800 dark:hover:text-neutral-200 px-3 py-2 hover:no-underline [&[data-state=open]>svg]:rotate-180 font-sans">
+            <AccordionTrigger className="text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:text-neutral-800 dark:hover:text-neutral-200 px-3 py-2 hover:no- [&[data-state=open]>svg]:rotate-180 font-sans">
               Pool Distribution
             </AccordionTrigger>
             <AccordionContent className="px-3 pb-3">

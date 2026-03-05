@@ -50,19 +50,18 @@ msg.value: This global variable holds the raw amount of PLS (in beats/wei) sent 
 payable functions: Mark functions with payable to accept PLS, just like ETH. Without it, incoming value reverts (EVM opcode REVERT if msg.value > 0). Example: function deposit() external payable { balances[msg.sender] += msg.value; } credits the sender's balance in raw PLS.
 msg.sender: Always the caller's address (EOA or contract), unchanged by the chain. It propagates correctly in nested calls (e.g., via CALL, DELEGATECALL). No cross-chain weirdness—it's pure EVM.
 
-DITRIBUTION OF ALL PURCHASES Wether through MORBIUS, PLS or WPLS goes as follows
+fee collection: The fee collection system is designed to handle fees for all wagers and withdraws on games. It's structured as follows:
 
-5% KEEPER WALLET
-5% DEPLOYER WALLET
-10% BURN ADDRESS
-10% MegaBorbius Bank
-70% PLAYER POOL
+5% total fee
+1	Distribution	125	1.25%	distributionRecipient
+2	Burn	50	0.5%	burnAddress
+3	Platform	175	1.75%	platformFeeRecipient
+4	LP distribution	150	1.5%	lpDistributionRecipient
+Total	500 BPs
 
 ----
 
-ROLLOVER MACHANIC
-
-100% of remaining bracket should be rolled over to next round.
+When doing anything with .env, always check if theres one already that will work for that coding task. This is the same with types and the cursor rules. If there's already one, use it. If not, create one. Always check the cursor rules for the correct path and file name. Always check the cursor rules for the correct path and file name. Always check the cursor rules for the correct path and file name. Always check the cursor rules for the correct path and file name. Always check the cursor  rules for the correct path and file name. Always check the cursor rules for the correct path and file name. Always
 
 ----
 
@@ -71,3 +70,7 @@ Migrations (server): Run a single migration with server/run-migration.js. Path i
 Example:
   node server/run-migration.js migrations/037_get_player_stats_enhanced_single_row.sql
 Loads .env from the server directory; uses DATABASE_URL. Run migrations in order by number when applying multiple.
+
+----
+
+always keep clean code and make sure to never cut corners. be efficent with token usage. 

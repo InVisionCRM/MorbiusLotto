@@ -27,6 +27,7 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
        uint8 public constant TOTAL_BUCKETS = 17;
     uint256 public constant MIN_BALL_PRICE = 1 * 10**18; // 1 MORBIUS minimum
     uint256 public constant BPS_DENOMINATOR = 10000;
+    uint256 public constant MAX_BALLS_PER_DROP = 100;
 
     // Risk levels
     uint8 public constant RISK_LOW = 0;
@@ -43,15 +44,21 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
 
     address public plsTreasury; // Receives all PLS from PLS-based purchases
 
-    // Payout fees (mirroring Blackjack withdrawal fee structure)
-    uint256 public distributionFeeBps;   // default 250 (2.5%) — goes to distributionRecipient
+    // Payout fees
+    uint256 public distributionFeeBps;   // default 125 (1.25%) — goes to distributionRecipient (MORBIUS holders)
     address public distributionRecipient;
-    uint256 public platformFeeBps;       // default 250 (2.5%) — goes to platformFeeRecipient
+    uint256 public burnFeeBps;           // default 50 (0.5%) — burned
+    address public burnAddress;
+    uint256 public platformFeeBps;       // default 175 (1.75%) — goes to platformFeeRecipient (house)
     address public platformFeeRecipient;
+    uint256 public lpDistributionFeeBps; // default 150 (1.5%) — goes to lpDistributionRecipient (LP holders)
+    address public lpDistributionRecipient;
 
     // Fee collection totals
     uint256 public totalDistributionFeesCollected;
+    uint256 public totalBurnFeesCollected;
     uint256 public totalPlatformFeesCollected;
+    uint256 public totalLpDistributionFeesCollected;
 
     // ============ State Variables ============
 
@@ -112,11 +119,16 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     event MultipliersUpdated(uint256[TOTAL_BUCKETS] newMultipliers);
     event EmergencyWithdraw(uint256 amount);
     event ContractFunded(address indexed funder, uint256 amount);
-    event PayoutFeesCollected(address indexed player, uint256 grossPayout, uint256 distributionFee, uint256 platformFee, uint256 netToPlayer);
+    event PayoutFeesCollected(address indexed player, uint256 grossPayout, uint256 distributionFee, uint256 burnFee, uint256 platformFee, uint256 lpDistributionFee, uint256 netToPlayer);
     event DistributionFeeUpdated(uint256 oldBps, uint256 newBps);
+    event BurnFeeUpdated(uint256 oldBps, uint256 newBps);
     event PlatformFeeUpdated(uint256 oldBps, uint256 newBps);
+    event LpDistributionFeeUpdated(uint256 oldBps, uint256 newBps);
     event DistributionRecipientUpdated(address oldRecipient, address newRecipient);
+    event BurnAddressUpdated(address oldAddress, address newAddress);
     event PlatformFeeRecipientUpdated(address oldRecipient, address newRecipient);
+    event LpDistributionRecipientUpdated(address oldRecipient, address newRecipient);
+    event BucketThresholdsUpdated(uint32[17] newThresholds);
 
     // ============ Errors ============
 
@@ -136,20 +148,29 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
         uint256 _maxWager,
         address _plsTreasury,
         address _distributionRecipient,
-        address _platformFeeRecipient
+        address _burnAddress,
+        address _platformFeeRecipient,
+        address _lpDistributionRecipient
     ) Ownable(msg.sender) {
         require(_plsTreasury != address(0), "Invalid treasury address");
+        require(_distributionRecipient != address(0), "Invalid distribution recipient");
+        require(_burnAddress != address(0), "Invalid burn address");
         require(_platformFeeRecipient != address(0), "Invalid platform fee recipient");
+        require(_lpDistributionRecipient != address(0), "Invalid LP distribution recipient");
         MORBIUS_TOKEN = IERC20(_morbiusToken);
         WPLS_TOKEN = _wplsToken;
         pulseXRouter = IPulseXRouter(_pulseXRouter);
         minWagerPerBall = _minWager;
         maxWagerPerBall = _maxWager;
         plsTreasury = _plsTreasury;
-        distributionFeeBps = 250;  // 2.5%
+        distributionFeeBps = 125;  // 1.25% to MORBIUS holders
         distributionRecipient = _distributionRecipient;
-        platformFeeBps = 250;      // 2.5%
+        burnFeeBps = 50;           // 0.5% burned
+        burnAddress = _burnAddress;
+        platformFeeBps = 175;      // 1.75% to house
         platformFeeRecipient = _platformFeeRecipient;
+        lpDistributionFeeBps = 150; // 1.5% to LP holders
+        lpDistributionRecipient = _lpDistributionRecipient;
 
         // LOW RISK: Max 16x, ~97% RTP (3% house edge)
         LOW_RISK_MULTIPLIERS = [
@@ -228,7 +249,7 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
      */
     function buyBallsAndDrop(uint256 count, uint256 wagerPerBall, uint8 riskLevel) external whenNotPaused nonReentrant {
         if (riskLevel > RISK_HIGH) revert InvalidRiskLevel();
-        require(count > 0, "Must buy at least 1 ball");
+        require(count > 0 && count <= MAX_BALLS_PER_DROP, "Invalid ball count");
         if (wagerPerBall < minWagerPerBall || wagerPerBall > maxWagerPerBall) revert InvalidWagerAmount();
 
         uint256 gross = count * wagerPerBall;
@@ -266,32 +287,39 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
             if (contractReserve < totalPayout) revert InsufficientContractBalance();
             contractReserve -= totalPayout;
 
-            (uint256 netToPlayer, uint256 feeDistribution, uint256 feePlatform) = _computePayoutFees(totalPayout);
+            (uint256 netToPlayer, uint256 feeDistribution, uint256 feeBurn, uint256 feePlatform, uint256 feeLpDistribution) = _computePayoutFees(totalPayout);
 
             if (feeDistribution > 0) {
                 MORBIUS_TOKEN.safeTransfer(distributionRecipient, feeDistribution);
                 totalDistributionFeesCollected += feeDistribution;
             }
+            if (feeBurn > 0) {
+                MORBIUS_TOKEN.safeTransfer(burnAddress, feeBurn);
+                totalBurnFeesCollected += feeBurn;
+            }
             if (feePlatform > 0) {
                 MORBIUS_TOKEN.safeTransfer(platformFeeRecipient, feePlatform);
                 totalPlatformFeesCollected += feePlatform;
             }
+            if (feeLpDistribution > 0) {
+                MORBIUS_TOKEN.safeTransfer(lpDistributionRecipient, feeLpDistribution);
+                totalLpDistributionFeesCollected += feeLpDistribution;
+            }
             MORBIUS_TOKEN.safeTransfer(msg.sender, netToPlayer);
 
-            emit PayoutFeesCollected(msg.sender, totalPayout, feeDistribution, feePlatform, netToPlayer);
+            emit PayoutFeesCollected(msg.sender, totalPayout, feeDistribution, feeBurn, feePlatform, feeLpDistribution, netToPlayer);
+
+            // Update player win statistics (net of fees)
+            playerTotalWon[msg.sender] += netToPlayer;
+            if (netToPlayer > playerBiggestWin[msg.sender]) {
+                playerBiggestWin[msg.sender] = netToPlayer;
+            }
+            totalPayouts += netToPlayer;
         }
 
-        // Update player statistics
+        // Update player drop statistics (always, even if no payout)
         playerTotalDrops[msg.sender] += count;
-        playerTotalWon[msg.sender] += totalPayout;
-
-        if (totalPayout > playerBiggestWin[msg.sender]) {
-            playerBiggestWin[msg.sender] = totalPayout;
-        }
-
-        // Update global statistics
         totalDrops += count;
-        totalPayouts += totalPayout;
     }
 
     /**
@@ -310,7 +338,7 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
         nonReentrant
     {
         if (riskLevel > RISK_HIGH) revert InvalidRiskLevel();
-        require(ballCount > 0, "Must buy at least 1 ball");
+        require(ballCount > 0 && ballCount <= MAX_BALLS_PER_DROP, "Invalid ball count");
         require(msg.value > 0, "Must send PLS");
 
         // --- Price discovery (NO fallback — reverts if PulseX call fails) ---
@@ -355,32 +383,39 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
             // (treasury must have approved this contract for MORBIUS)
             MORBIUS_TOKEN.safeTransferFrom(plsTreasury, address(this), totalPayout);
 
-            (uint256 netToPlayer, uint256 feeDistribution, uint256 feePlatform) = _computePayoutFees(totalPayout);
+            (uint256 netToPlayer, uint256 feeDistribution, uint256 feeBurn, uint256 feePlatform, uint256 feeLpDistribution) = _computePayoutFees(totalPayout);
 
             if (feeDistribution > 0) {
                 MORBIUS_TOKEN.safeTransfer(distributionRecipient, feeDistribution);
                 totalDistributionFeesCollected += feeDistribution;
             }
+            if (feeBurn > 0) {
+                MORBIUS_TOKEN.safeTransfer(burnAddress, feeBurn);
+                totalBurnFeesCollected += feeBurn;
+            }
             if (feePlatform > 0) {
                 MORBIUS_TOKEN.safeTransfer(platformFeeRecipient, feePlatform);
                 totalPlatformFeesCollected += feePlatform;
             }
+            if (feeLpDistribution > 0) {
+                MORBIUS_TOKEN.safeTransfer(lpDistributionRecipient, feeLpDistribution);
+                totalLpDistributionFeesCollected += feeLpDistribution;
+            }
             MORBIUS_TOKEN.safeTransfer(msg.sender, netToPlayer);
 
-            emit PayoutFeesCollected(msg.sender, totalPayout, feeDistribution, feePlatform, netToPlayer);
+            emit PayoutFeesCollected(msg.sender, totalPayout, feeDistribution, feeBurn, feePlatform, feeLpDistribution, netToPlayer);
+
+            // Update player win statistics (net of fees)
+            playerTotalWon[msg.sender] += netToPlayer;
+            if (netToPlayer > playerBiggestWin[msg.sender]) {
+                playerBiggestWin[msg.sender] = netToPlayer;
+            }
+            totalPayouts += netToPlayer;
         }
 
-        // --- Update player statistics ---
+        // --- Update player drop statistics (always, even if no payout) ---
         playerTotalDrops[msg.sender] += ballCount;
-        playerTotalWon[msg.sender] += totalPayout;
-
-        if (totalPayout > playerBiggestWin[msg.sender]) {
-            playerBiggestWin[msg.sender] = totalPayout;
-        }
-
-        // --- Update global statistics ---
         totalDrops += ballCount;
-        totalPayouts += totalPayout;
     }
 
     // NOTE: dropBall() and dropMultipleBalls() removed in V5.
@@ -450,20 +485,23 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Compute distribution and platform fees on a gross payout
+     * @notice Compute distribution, burn, and platform fees on a gross payout
      * @param grossPayout The total payout before fees
      * @return netToPlayer Amount after fees deducted
-     * @return feeDistribution Amount sent to distributionRecipient
-     * @return feePlatform Amount sent to platformFeeRecipient
+     * @return feeDistribution Amount sent to distributionRecipient (holders)
+     * @return feeBurn Amount sent to burn address
+     * @return feePlatform Amount sent to platformFeeRecipient (house)
      */
     function _computePayoutFees(uint256 grossPayout)
         internal
         view
-        returns (uint256 netToPlayer, uint256 feeDistribution, uint256 feePlatform)
+        returns (uint256 netToPlayer, uint256 feeDistribution, uint256 feeBurn, uint256 feePlatform, uint256 feeLpDistribution)
     {
         feeDistribution = (grossPayout * distributionFeeBps) / BPS_DENOMINATOR;
+        feeBurn = (grossPayout * burnFeeBps) / BPS_DENOMINATOR;
         feePlatform = (grossPayout * platformFeeBps) / BPS_DENOMINATOR;
-        netToPlayer = grossPayout - feeDistribution - feePlatform;
+        feeLpDistribution = (grossPayout * lpDistributionFeeBps) / BPS_DENOMINATOR;
+        netToPlayer = grossPayout - feeDistribution - feeBurn - feePlatform - feeLpDistribution;
     }
 
     /**
@@ -495,10 +533,10 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
 
     /**
      * @notice Set the distribution fee (charged on all payouts)
-     * @param newBps New fee in basis points (combined with platform fee cannot exceed 50%)
+     * @param newBps New fee in basis points (combined fees cannot exceed 50%)
      */
     function setDistributionFee(uint256 newBps) external onlyOwner {
-        require(newBps + platformFeeBps <= 5000, "Total fees cannot exceed 50%");
+        require(newBps + burnFeeBps + platformFeeBps + lpDistributionFeeBps <= 5000, "Total fees cannot exceed 50%");
         emit DistributionFeeUpdated(distributionFeeBps, newBps);
         distributionFeeBps = newBps;
     }
@@ -514,11 +552,31 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
+     * @notice Set the burn fee (charged on all payouts)
+     * @param newBps New fee in basis points (combined fees cannot exceed 50%)
+     */
+    function setBurnFee(uint256 newBps) external onlyOwner {
+        require(distributionFeeBps + newBps + platformFeeBps + lpDistributionFeeBps <= 5000, "Total fees cannot exceed 50%");
+        emit BurnFeeUpdated(burnFeeBps, newBps);
+        burnFeeBps = newBps;
+    }
+
+    /**
+     * @notice Set the burn address
+     * @param newAddress Address that receives burned tokens
+     */
+    function setBurnAddress(address newAddress) external onlyOwner {
+        require(newAddress != address(0), "Invalid burn address");
+        emit BurnAddressUpdated(burnAddress, newAddress);
+        burnAddress = newAddress;
+    }
+
+    /**
      * @notice Set the platform fee (charged on all payouts)
-     * @param newBps New fee in basis points (combined with distribution fee cannot exceed 50%)
+     * @param newBps New fee in basis points (combined fees cannot exceed 50%)
      */
     function setPlatformFee(uint256 newBps) external onlyOwner {
-        require(newBps + distributionFeeBps <= 5000, "Total fees cannot exceed 50%");
+        require(distributionFeeBps + burnFeeBps + newBps + lpDistributionFeeBps <= 5000, "Total fees cannot exceed 50%");
         emit PlatformFeeUpdated(platformFeeBps, newBps);
         platformFeeBps = newBps;
     }
@@ -531,6 +589,26 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
         require(newRecipient != address(0), "Invalid recipient");
         emit PlatformFeeRecipientUpdated(platformFeeRecipient, newRecipient);
         platformFeeRecipient = newRecipient;
+    }
+
+    /**
+     * @notice Set the LP distribution fee (charged on all payouts)
+     * @param newBps New fee in basis points (combined fees cannot exceed 50%)
+     */
+    function setLpDistributionFee(uint256 newBps) external onlyOwner {
+        require(distributionFeeBps + burnFeeBps + platformFeeBps + newBps <= 5000, "Total fees cannot exceed 50%");
+        emit LpDistributionFeeUpdated(lpDistributionFeeBps, newBps);
+        lpDistributionFeeBps = newBps;
+    }
+
+    /**
+     * @notice Set the LP distribution fee recipient
+     * @param newRecipient Address that receives the LP distribution fee
+     */
+    function setLpDistributionRecipient(address newRecipient) external onlyOwner {
+        require(newRecipient != address(0), "Invalid recipient");
+        emit LpDistributionRecipientUpdated(lpDistributionRecipient, newRecipient);
+        lpDistributionRecipient = newRecipient;
     }
 
     /**
@@ -581,6 +659,26 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
         emit MultipliersUpdated(newMultipliers);
     }
 
+    /**
+     * @notice Update bucket probability thresholds (cumulative distribution)
+     * @dev Array must be strictly ascending and end at 65536. Each entry is the
+     *      cumulative threshold for bucket i. The probability of bucket i is
+     *      (thresholds[i] - thresholds[i-1]) / 65536.
+     * @param newThresholds Array of 17 cumulative thresholds (last must be 65536)
+     */
+    function setBucketThresholds(uint32[17] calldata newThresholds) external onlyOwner {
+        // Last threshold must equal 65536 (total probability space)
+        require(newThresholds[16] == 65536, "Last threshold must be 65536");
+
+        // Thresholds must be strictly ascending
+        for (uint8 i = 1; i < TOTAL_BUCKETS; i++) {
+            require(newThresholds[i] > newThresholds[i - 1], "Thresholds must be strictly ascending");
+        }
+        require(newThresholds[0] > 0, "First threshold must be > 0");
+
+        BUCKET_THRESHOLDS = newThresholds;
+        emit BucketThresholdsUpdated(newThresholds);
+    }
 
     /**
      * @notice Pause the contract (emergency)
@@ -623,16 +721,25 @@ contract Plinko is Ownable, ReentrancyGuard, Pausable {
     // ============ View Functions - Game Configuration ============
 
     /**
+     * @notice Get current bucket probability thresholds
+     * @return thresholds Array of 17 cumulative thresholds (out of 65536)
+     */
+    function getBucketThresholds() external view returns (uint32[17] memory) {
+        return BUCKET_THRESHOLDS;
+    }
+
+    /**
      * @notice Preview fee breakdown for a given gross payout
      * @param grossPayout The gross payout amount before fees
      * @return netToPlayer Amount player receives after fees
-     * @return feeDistribution Amount going to distributionRecipient
-     * @return feePlatform Amount going to platformFeeRecipient
+     * @return feeDistribution Amount going to distributionRecipient (holders)
+     * @return feeBurn Amount going to burn address
+     * @return feePlatform Amount going to platformFeeRecipient (house)
      */
     function computePayoutFees(uint256 grossPayout)
         external
         view
-        returns (uint256 netToPlayer, uint256 feeDistribution, uint256 feePlatform)
+        returns (uint256 netToPlayer, uint256 feeDistribution, uint256 feeBurn, uint256 feePlatform, uint256 feeLpDistribution)
     {
         return _computePayoutFees(grossPayout);
     }

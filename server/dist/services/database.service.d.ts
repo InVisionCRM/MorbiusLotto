@@ -91,6 +91,16 @@ export interface TopPlayerEntry {
     profit_loss: bigint;
     win_rate: number;
 }
+/** Instant lottery leaderboard entry (same shape as TopPlayerEntry for API consistency). */
+export type LotteryTopPlayerEntry = TopPlayerEntry;
+/** Instant lottery per-player stats (from indexed plays). */
+export interface LotteryPlayerStats {
+    total_games: number;
+    total_bet: bigint;
+    total_win: bigint;
+    profit_loss: bigint;
+    win_rate: number;
+}
 export interface GlobalAnalytics {
     total_players: number;
     active_players: number;
@@ -195,7 +205,62 @@ export declare class DatabaseService {
     updateBlackjackPlatformTotals(totalDeposited: bigint, totalWithdrawn: bigint, lastScannedBlock: bigint | null): Promise<void>;
     /** Add amount to stored total_withdrawn when a pending withdrawal is created. */
     addToBlackjackWithdrawnTotal(amount: bigint): Promise<void>;
+    getInstantLotteryScanState(): Promise<{
+        lastScannedBlock: bigint | null;
+    } | null>;
+    updateInstantLotteryScanState(lastScannedBlock: bigint | null): Promise<void>;
+    /** Insert one play (from chain event). ON CONFLICT DO NOTHING so re-scans are safe. */
+    logInstantLotteryPlay(walletAddress: string, wager: bigint, grossPayout: bigint, netPayout: bigint, blockNumber: bigint | null, txHash: string): Promise<void>;
+    /** Top players by total wagered (all-time from indexed plays). */
+    getLotteryTopPlayers(limit?: number): Promise<LotteryTopPlayerEntry[]>;
+    /** Per-player stats from indexed instant lottery plays. */
+    getLotteryPlayerStats(walletAddress: string): Promise<LotteryPlayerStats | null>;
+    /** Insert a provably-fair instant lottery play (before resolvePlay tx). */
+    insertInstantLotteryPlayPF(params: {
+        walletAddress: string;
+        wager: bigint;
+        playerNumbers: number[];
+        winningNumbers: number[];
+        matchCount: number;
+        grossPayout: bigint;
+        netPayout: bigint;
+        serverSeedHash: string;
+        clientSeed: string;
+        nonce: bigint;
+    }): Promise<number>;
+    /** Set tx_hash after resolvePlay succeeds (for verification lookup). Stored lowercase for consistent lookup. */
+    updateInstantLotteryPlayPFTxHash(id: number, txHash: string): Promise<void>;
+    /** Reveal server seed for verification (call after play is settled). */
+    updateInstantLotteryPlayPFReveal(id: number, serverSeed: string): Promise<void>;
+    /** Get PF play by tx_hash for verification endpoint. Lookup is case-insensitive (EVM hashes). */
+    getInstantLotteryPlayPFByTxHash(txHash: string): Promise<{
+        wallet_address: string;
+        wager: bigint;
+        player_numbers: number[];
+        winning_numbers: number[];
+        match_count: number;
+        gross_payout: bigint;
+        net_payout: bigint;
+        server_seed_hash: string;
+        server_seed: string | null;
+        client_seed: string;
+        nonce: string;
+    } | null>;
     expirePendingWithdrawals(): Promise<number>;
+    /**
+     * Get pending withdrawals older than 2 minutes (candidates for expiry).
+     * Does NOT modify them — caller must verify on-chain before deciding to refund or mark completed.
+     */
+    getExpiredPendingWithdrawals(): Promise<Array<{
+        wallet_address: string;
+        nonce: string;
+        amount: string;
+    }>>;
+    /**
+     * Expire a single pending withdrawal and refund the balance.
+     * Only call this after verifying on-chain that the nonce was NOT used.
+     */
+    expireSinglePendingWithdrawal(walletAddress: string, nonce: bigint, amount: bigint): Promise<void>;
     /** Expire all pending withdrawals for a wallet (any age). Only used by cron — NOT on prepare (would allow double withdrawal). */
     expirePendingWithdrawalsForWallet(walletAddress: string): Promise<number>;
     syncPlayerBalanceWithContract(walletAddress: string, contractBalance: bigint): Promise<void>;

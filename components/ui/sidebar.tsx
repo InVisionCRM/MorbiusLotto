@@ -16,6 +16,7 @@ interface SidebarContextProps {
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   animate: boolean;
   mobileBarContent?: React.ReactNode;
+  disabled?: boolean;
 }
 
 const SidebarContext = createContext<SidebarContextProps | undefined>(
@@ -36,20 +37,28 @@ export const SidebarProvider = ({
   setOpen: setOpenProp,
   animate = true,
   mobileBarContent,
+  disabled = false,
 }: {
   children: React.ReactNode;
   open?: boolean;
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
   mobileBarContent?: React.ReactNode;
+  disabled?: boolean;
 }) => {
   const [openState, setOpenState] = useState(false);
 
   const open = openProp !== undefined ? openProp : openState;
   const setOpen = setOpenProp !== undefined ? setOpenProp : setOpenState;
 
+  // When disabled, force sidebar closed
+  const effectiveOpen = disabled ? false : open;
+  const effectiveSetOpen: React.Dispatch<React.SetStateAction<boolean>> = disabled
+    ? () => {} // no-op when disabled
+    : setOpen;
+
   return (
-    <SidebarContext.Provider value={{ open, setOpen, animate: animate, mobileBarContent }}>
+    <SidebarContext.Provider value={{ open: effectiveOpen, setOpen: effectiveSetOpen, animate: animate, mobileBarContent, disabled }}>
       {children}
     </SidebarContext.Provider>
   );
@@ -61,15 +70,17 @@ export const Sidebar = ({
   setOpen,
   animate,
   mobileBarContent,
+  disabled,
 }: {
   children: React.ReactNode;
   open?: boolean;
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
   mobileBarContent?: React.ReactNode;
+  disabled?: boolean;
 }) => {
   return (
-    <SidebarProvider open={open} setOpen={setOpen} animate={animate} mobileBarContent={mobileBarContent}>
+    <SidebarProvider open={open} setOpen={setOpen} animate={animate} mobileBarContent={mobileBarContent} disabled={disabled}>
       {children}
     </SidebarProvider>
   );
@@ -79,7 +90,7 @@ export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
   return (
     <>
       <DesktopSidebar {...props} />
-      <MobileSidebar {...(props as React.ComponentProps<"div">)} />
+      <MobileSidebar {...(props as unknown as React.ComponentProps<"div">)} />
     </>
   );
 };
@@ -94,7 +105,7 @@ export const DesktopSidebar = ({
     <>
       <motion.div
         className={cn(
-          "min-h-screen px-3 py-4 hidden md:flex md:flex-col w-[300px] bg-black/70 backdrop-blur-sm shrink-0 overflow-hidden rounded-r-xl",
+          "min-h-screen px-3 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 overflow-hidden rounded-r-xl",
           className
         )}
         animate={{
@@ -117,12 +128,12 @@ export const MobileSidebar = ({
   children,
   ...props
 }: React.ComponentProps<"div">) => {
-  const { open, setOpen, mobileBarContent } = useSidebar();
+  const { open, setOpen, mobileBarContent, disabled } = useSidebar();
   return (
     <>
       <div
         className={cn(
-          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between gap-2 bg-black/70 border-b border-white/10 w-full"
+          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between gap-2 bg-slate-950/40 border-b border-white/10 w-full"
         )}
         {...props}
       >
@@ -132,8 +143,8 @@ export const MobileSidebar = ({
         </div>
         <div className="flex justify-end z-20 shrink-0">
           <IconMenu2
-            className="text-white/80 hover:text-white cursor-pointer"
-            onClick={() => setOpen(!open)}
+            className={cn("cursor-pointer", disabled ? "text-white/30 pointer-events-none" : "text-white/80 hover:text-white")}
+            onClick={() => !disabled && setOpen(!open)}
           />
         </div>
         <AnimatePresence>
@@ -179,14 +190,16 @@ export const MobileSidebar = ({
   );
 };
 
+export type SidebarLinkProps = {
+  link: Links;
+  className?: string;
+} & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'className'>;
+
 export const SidebarLink = ({
   link,
   className,
   ...props
-}: {
-  link: Links;
-  className?: string;
-}) => {
+}: SidebarLinkProps) => {
   const { open, animate } = useSidebar();
   return (
     <a

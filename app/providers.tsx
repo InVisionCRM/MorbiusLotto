@@ -6,6 +6,7 @@ import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { config } from '@/lib/wagmi-config'
 import { useState } from 'react'
+import { GameLockProvider } from '@/contexts/game-lock-context'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient once per provider instance to prevent cache resets
@@ -29,23 +30,25 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }))
 
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider
-          theme={darkTheme({
-            accentColor: '#8B5CF6', // Purple accent to match your theme
-            accentColorForeground: 'white',
-            borderRadius: 'medium',
-            fontStack: 'system',
-            overlayBlur: 'small',
-          })}
-          modalSize="compact"
-          coolMode={true}
-          showRecentTransactions={true}
-        >
-          {children}
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <GameLockProvider>
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
+          <RainbowKitProvider
+            theme={darkTheme({
+              accentColor: '#8B5CF6', // Purple accent to match your theme
+              accentColorForeground: 'white',
+              borderRadius: 'medium',
+              fontStack: 'system',
+              overlayBlur: 'small',
+            })}
+            modalSize="compact"
+            coolMode={true}
+            showRecentTransactions={true}
+          >
+            {children}
+          </RainbowKitProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
+    </GameLockProvider>
   )
 }

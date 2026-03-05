@@ -19,6 +19,8 @@ interface UseTokenApprovalReturn {
   isLoadingAllowance: boolean
   approve: (customAmount?: bigint) => void
   isApproving: boolean
+  /** Tx hash once submitted; use with isApproving to show "Confirm in wallet" vs "Confirming…" */
+  approveHash: `0x${string}` | undefined
   isApprovalSuccess: boolean
   approvalError: Error | null
   refetchAllowance: () => void
@@ -69,13 +71,18 @@ export function useTokenApproval({
     hash: approveHash,
   })
 
-  // Clear optimistic allowance and refetch on success
+  // On approval success: refetch so chain state is correct. Clear optimistic only once
+  // contract allowance is sufficient, so the UI doesn't flicker back to "Approve" while refetch is in flight.
   useEffect(() => {
-    if (isApprovalSuccess) {
-      setOptimisticAllowance(null)
-      refetchAllowance()
-    }
+    if (!isApprovalSuccess) return
+    refetchAllowance()
   }, [isApprovalSuccess, refetchAllowance])
+
+  useEffect(() => {
+    if (contractAllowance !== undefined && contractAllowance >= requiredAmount && requiredAmount > BigInt(0)) {
+      setOptimisticAllowance(null)
+    }
+  }, [contractAllowance, requiredAmount])
 
   // Calculate effective allowance (optimistic or contract value)
   const allowance = optimisticAllowance ?? contractAllowance ?? BigInt(0)
@@ -104,6 +111,7 @@ export function useTokenApproval({
         functionName: 'approve',
         args: [spenderAddress, amountToApprove],
         chainId: pulsechain.id,
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       })
     } catch (error) {
       console.error('Approval error:', error)
@@ -118,6 +126,7 @@ export function useTokenApproval({
     isLoadingAllowance,
     approve,
     isApproving,
+    approveHash: approveHash ?? undefined,
     isApprovalSuccess,
     approvalError: approveError as Error | null,
     refetchAllowance,

@@ -4,18 +4,11 @@ import { useAccount, useReadContract } from 'wagmi'
 import { motion } from 'framer-motion'
 import { Gift, CheckCircle2, Loader2, RefreshCw, AlertCircle, Clock } from 'lucide-react'
 import { useMerkleClaims } from '@/hooks/use-merkle-claims'
+import type { ClaimableEpoch } from '@/hooks/use-merkle-claims'
 import { MERKLE_CLAIM_MORBIUS_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { ERC20_ABI } from '@/abi/erc20'
 import { useEffect, useState } from 'react'
-
-const staggerContainer = {
-  animate: { transition: { staggerChildren: 0.06 } },
-}
-
-const staggerChild = {
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.2 } },
-}
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 function fmtMorbius(raw: string): string {
   const n = Number(raw) / 1e18
@@ -141,7 +134,7 @@ export function MerkleClaimsPanel() {
     error,
     claim,
     isClaiming,
-    claimingEpochId,
+    claimConfirmed,
     refetch,
   } = useMerkleClaims()
 
@@ -199,9 +192,9 @@ export function MerkleClaimsPanel() {
     )
   }
 
-  const unclaimedCount = claimableEpochs.filter((e) => !e.claimed && e.supersededByEpochNumber === null).length
-  const claimedCount = claimableEpochs.filter((e) => e.claimed).length
-  const supersededCount = claimableEpochs.filter((e) => e.supersededByEpochNumber !== null).length
+  // Find the latest claimable (non-superseded, non-claimed) epoch for the claim action
+  const latestClaimable = claimableEpochs.find((e) => !e.claimed && e.supersededByEpochNumber === null)
+  const allClaimed = claimConfirmed || (claimableEpochs.length > 0 && !latestClaimable)
 
   return (
     <motion.div
@@ -213,152 +206,60 @@ export function MerkleClaimsPanel() {
       {/* ── Drop countdown + pool size ────────────────────────────── */}
       <DropInfoBar />
 
-      {/* ── Summary Card ─────────────────────────────────────────── */}
-      <div className="relative rounded-2xl border border-emerald-500/20 bg-[#050f0a]/90 backdrop-blur-sm p-5 overflow-hidden">
+      {/* ── Rewards Card ─────────────────────────────────────────── */}
+      <div className="relative rounded-2xl border border-emerald-500/20 bg-[#050f0a]/90 backdrop-blur-sm p-6 overflow-hidden">
         <motion.div
           className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/5 to-transparent pointer-events-none"
           animate={{ x: ['-100%', '200%'] }}
           transition={{ repeat: Infinity, duration: 5, ease: 'linear' }}
         />
-        <div className="relative flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <Gift className="w-4.5 h-4.5 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-white/30 font-poppins">Your Rewards</p>
-              <p className="text-xl font-bold text-white font-poppins">
-                {fmtMorbius(totalClaimable.toString())}
-                <span className="text-xs text-white/30 font-normal ml-1">MORBIUS</span>
+        <div className="relative flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+            <Gift className="w-6 h-6 text-emerald-400" />
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] uppercase tracking-wider text-white/30 font-poppins mb-1">Your Rewards</p>
+            <p className="text-3xl font-bold text-white font-poppins">
+              {fmtMorbius(totalClaimable.toString())}
+              <span className="text-sm text-white/30 font-normal ml-1.5">MORBIUS</span>
+            </p>
+          </div>
+
+          {/* Claim / Claimed / No rewards */}
+          {claimableEpochs.length === 0 ? (
+            <div className="text-center space-y-1 mt-1">
+              <p className="text-white/40 font-poppins text-sm">No rewards available yet.</p>
+              <p className="text-white/20 font-poppins text-xs">
+                Hold MORBIUS — 2.5% of all game withdrawals are distributed to holders.
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-3 text-right">
-            <div>
-              {unclaimedCount > 0 ? (
-                <p className="text-sm font-semibold font-poppins">
-                  <span className="text-emerald-400">{unclaimedCount} ready to claim</span>
-                  {claimedCount > 0 && <span className="text-white/30 text-xs block">{claimedCount} already claimed</span>}
-                </p>
-              ) : claimedCount > 0 ? (
-                <p className="text-sm font-semibold font-poppins text-white/40">{claimedCount} claimed</p>
-              ) : null}
-              {supersededCount > 0 && (
-                <p className="text-[10px] text-amber-400/50 font-poppins">{supersededCount} rolled forward</p>
-              )}
+          ) : allClaimed ? (
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400/70" />
+              <span className="text-emerald-400/70 text-sm font-poppins font-semibold">All rewards claimed</span>
             </div>
+          ) : latestClaimable ? (
             <button
-              onClick={refetch}
-              className="p-2 rounded-lg border border-emerald-500/20 text-emerald-400/60 hover:text-emerald-300 hover:bg-emerald-950/30 transition-colors"
-              title="Refresh"
+              onClick={() => claim(latestClaimable.epoch.epoch_number, latestClaimable.amount, latestClaimable.proof)}
+              disabled={isClaiming}
+              className="px-8 py-3 rounded-xl font-semibold text-white text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/30 font-poppins flex items-center gap-2"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              {isClaiming ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Claiming…</>
+              ) : 'Claim Rewards'}
             </button>
-          </div>
+          ) : null}
+
+          {/* Refresh */}
+          <button
+            onClick={refetch}
+            className="p-2 rounded-lg border border-emerald-500/10 text-emerald-400/40 hover:text-emerald-300 hover:bg-emerald-950/30 transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
-
-      {/* ── No rewards message ────────────────────────────────────── */}
-      {claimableEpochs.length === 0 && (
-        <div className="relative rounded-2xl border border-emerald-500/10 bg-[#050f0a]/60 backdrop-blur-sm p-8 text-center space-y-2">
-          <Gift className="w-8 h-8 text-emerald-400/30 mx-auto" />
-          <p className="text-white/40 font-poppins text-sm">No rewards available for your wallet yet.</p>
-          <p className="text-white/20 font-poppins text-xs">
-            Hold MORBIUS — 2.5% of all game withdrawals are distributed to holders automatically.
-          </p>
-        </div>
-      )}
-
-      {/* ── Reward Drop List ─────────────────────────────────────── */}
-      {claimableEpochs.length > 0 && (
-        <motion.div variants={staggerContainer} initial="initial" animate="animate" className="space-y-2">
-          {claimableEpochs.map(({ epoch, amount, proof, claimed, supersededByEpochNumber }) => {
-            const isSuperseded = supersededByEpochNumber !== null
-
-            return (
-              <motion.div
-                key={epoch.id}
-                variants={staggerChild}
-                className={`relative rounded-2xl border backdrop-blur-sm p-4 transition-all ${
-                  isSuperseded
-                    ? 'border-amber-500/10 bg-amber-950/5 opacity-50'
-                    : claimed
-                    ? 'border-emerald-500/10 bg-emerald-950/5 opacity-60'
-                    : 'border-emerald-500/20 bg-[#050f0a]/90 hover:border-emerald-400/30'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  {/* Drop info */}
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      isSuperseded ? 'bg-amber-500/10'
-                      : claimed ? 'bg-emerald-500/10' : 'bg-emerald-500/15 border border-emerald-500/25'
-                    }`}>
-                      {isSuperseded
-                        ? <Gift className="w-4 h-4 text-amber-400/50" />
-                        : claimed
-                        ? <CheckCircle2 className="w-4 h-4 text-emerald-400/70" />
-                        : <Gift className="w-4 h-4 text-emerald-400" />
-                      }
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white font-poppins">
-                        Reward Drop #{epoch.epoch_number}
-                      </p>
-                      <p className="text-[10px] text-white/30 font-poppins">
-                        {epoch.published_at
-                          ? new Date(epoch.published_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-                          : 'Distributed'
-                        }
-                        {epoch.snapshot_block && (
-                          <span className="ml-1.5 text-white/20">· Block {Number(epoch.snapshot_block).toLocaleString()}</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Amount + action */}
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="text-right">
-                      <p className={`text-sm font-bold font-poppins ${isSuperseded ? 'text-white/30' : 'text-white'}`}>
-                        {fmtMorbius(amount)}
-                        <span className="text-[10px] text-white/30 font-normal ml-1">MORBIUS</span>
-                      </p>
-                    </div>
-
-                    {isSuperseded ? (
-                      <span className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400/70 text-xs font-poppins font-semibold whitespace-nowrap">
-                        → Drop #{supersededByEpochNumber}
-                      </span>
-                    ) : claimed ? (
-                      <span className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/70 text-xs font-poppins font-semibold">
-                        Claimed ✓
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => claim(epoch.epoch_number, amount, proof)}
-                        disabled={isClaiming}
-                        className="px-4 py-2 rounded-xl font-semibold text-white text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/30 font-poppins flex items-center gap-1.5"
-                      >
-                        {claimingEpochId === epoch.epoch_number ? (
-                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Claiming…</>
-                        ) : 'Claim'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Rolled-forward notice */}
-                {isSuperseded && (
-                  <p className="mt-2 text-[10px] text-amber-400/50 font-poppins">
-                    These rewards were carried forward into Drop #{supersededByEpochNumber} — claim from there.
-                  </p>
-                )}
-              </motion.div>
-            )
-          })}
-        </motion.div>
-      )}
 
       {/* ── How it works footer ───────────────────────────────────── */}
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 space-y-1.5">
@@ -373,6 +274,67 @@ export function MerkleClaimsPanel() {
           Minimum holding: 1,000 MORBIUS · Snapshots taken at each reward drop.
         </p>
       </div>
+
+      {/* ── Reward history table ───────────────────────────────────── */}
+      {claimableEpochs.length > 0 && (() => {
+        const PENDING_DAYS = 7
+        const pendingCutoff = Date.now() - PENDING_DAYS * 24 * 60 * 60 * 1000
+        return (
+          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 space-y-3">
+            <p className="text-[10px] uppercase tracking-wider text-white/20 font-poppins font-semibold">Reward history</p>
+            <Table>
+              <TableHeader>
+                <TableRow className="border-white/10 hover:bg-transparent">
+                  <TableHead className="text-white/40 font-poppins text-xs">Date & time</TableHead>
+                  <TableHead className="text-white/40 font-poppins text-xs">Epoch</TableHead>
+                  <TableHead className="text-white/40 font-poppins text-xs text-right">Added</TableHead>
+                  <TableHead className="text-white/40 font-poppins text-xs">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...claimableEpochs]
+                  .sort((a, b) => b.epoch.epoch_number - a.epoch.epoch_number)
+                  .map((row: ClaimableEpoch) => {
+                    const droppedAt = row.epoch.published_at ? new Date(row.epoch.published_at).getTime() : 0
+                    const isOldPending = !row.claimed && row.supersededByEpochNumber === null && droppedAt > 0 && droppedAt < pendingCutoff
+                    return (
+                      <TableRow key={row.epoch.id} className="border-white/10 text-white/70">
+                        <TableCell className="font-poppins text-xs">
+                          {row.epoch.published_at
+                            ? new Date(row.epoch.published_at).toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="font-poppins text-xs text-white/60">{row.epoch.epoch_number}</TableCell>
+                        <TableCell className="font-poppins text-xs text-right text-white/80">
+                          + {fmtMorbius(row.amount)} MORBIUS
+                        </TableCell>
+                        <TableCell className="font-poppins text-xs">
+                          {row.claimed ? (
+                            <span className="text-emerald-400/90 inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Claimed
+                            </span>
+                          ) : row.supersededByEpochNumber !== null ? (
+                            <span className="text-white/40">Rolled into later drop</span>
+                          ) : isOldPending ? (
+                            <span className="text-white/50">Unclaimed</span>
+                          ) : (
+                            <span className="text-amber-400/80">Pending</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+              </TableBody>
+            </Table>
+          </div>
+        )
+      })()}
     </motion.div>
   )
 }

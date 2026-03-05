@@ -93,6 +93,7 @@ function AdvancedAdminSection({ address }: { address?: `0x${string}` }) {
         args: [BigInt(feeBps), feeRecipient as `0x${string}`],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -114,6 +115,7 @@ function AdvancedAdminSection({ address }: { address?: `0x${string}` }) {
         args: [withdrawAmount, toAddress as `0x${string}`],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to withdraw')
@@ -132,6 +134,7 @@ function AdvancedAdminSection({ address }: { address?: `0x${string}` }) {
       functionName: 'pause',
       account: address,
       chain: pulsechain,
+      maxPriorityFeePerGas: 40_000n,
     })
   }
 
@@ -147,6 +150,7 @@ function AdvancedAdminSection({ address }: { address?: `0x${string}` }) {
       functionName: 'unpause',
       account: address,
       chain: pulsechain,
+      maxPriorityFeePerGas: 40_000n,
     })
   }
 
@@ -276,6 +280,7 @@ function RandomnessManagement({ address }: { address?: `0x${string}` }) {
         args: [BigInt(roundId), commitment as `0x${string}`],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to commit')
@@ -296,6 +301,7 @@ function RandomnessManagement({ address }: { address?: `0x${string}` }) {
         args: [BigInt(roundId), seed as `0x${string}`],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to reveal')
@@ -312,10 +318,11 @@ function RandomnessManagement({ address }: { address?: `0x${string}` }) {
       writeContract({
         address: KENO_ADDRESS as `0x${string}`,
         abi: KENO_ABI,
-        functionName: 'setRandomnessProvider',
+        functionName: 'setRandomnessProvider' as (typeof KENO_ABI)[number] extends { name: infer N } ? N : never,
         args: [provider as `0x${string}`],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to set provider')
@@ -446,6 +453,7 @@ function OwnershipManagement({ address }: { address?: `0x${string}` }) {
         args: [newOwner as `0x${string}`],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to transfer')
@@ -469,6 +477,7 @@ function OwnershipManagement({ address }: { address?: `0x${string}` }) {
         functionName: 'renounceOwnership',
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to renounce')
@@ -948,6 +957,7 @@ function BuyTicketSection({ address }: { address?: `0x${string}` }) {
         args: [KENO_ADDRESS, amount],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to approve')
@@ -975,6 +985,7 @@ function BuyTicketSection({ address }: { address?: `0x${string}` }) {
         args: [parsedRoundId, parsedNumbers, parsedSpotSize, parsedDraws, wager],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to buy ticket')
@@ -1166,6 +1177,7 @@ function ClaimPrizeSection({ address }: { address?: `0x${string}` }) {
         args: [parsedRoundId, parsedTicketId],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to claim')
@@ -1278,6 +1290,7 @@ function AutoClaimSection({ address }: { address?: `0x${string}` }) {
       args: [!currentStatus],
       account: address,
       chain: pulsechain,
+      maxPriorityFeePerGas: 40_000n,
     })
   }
 
@@ -1362,6 +1375,7 @@ function RoundManagementSection({ address }: { address?: `0x${string}` }) {
       functionName: 'startNextRound',
       account: address,
       chain: pulsechain,
+      maxPriorityFeePerGas: 40_000n,
     })
   }
 
@@ -1441,6 +1455,7 @@ function PaytableConfigSection({ address }: { address?: `0x${string}` }) {
         args: [parseInt(spotSize), parseInt(hits), BigInt(multiplier)],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update paytable')
@@ -1563,6 +1578,7 @@ function ContractConfigSection({ address }: { address?: `0x${string}` }) {
         args: [BigInt(roundDuration)],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -1584,6 +1600,7 @@ function ContractConfigSection({ address }: { address?: `0x${string}` }) {
         args: [wager],
         account: address,
         chain: pulsechain,
+        maxPriorityFeePerGas: 40_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')

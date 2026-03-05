@@ -246,7 +246,7 @@ export function LotteryTicket({
                 href={`https://scan.pulsechain.box/tx/${transactionHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline hover:text-purple-700"
+                className=" hover:text-purple-700"
                 onClick={(e) => e.stopPropagation()}
               >
                 TX: {transactionHash.slice(0, 6)}...{transactionHash.slice(-4)}

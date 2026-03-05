@@ -11,6 +11,7 @@ import { createPublicClient, http, verifyTypedData, getAddress } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { blackjackAbi } from '../abi/blackjack';
 import { getPublicClient } from '../utils/chain-client';
+import { BLACKJACK_ADDRESS } from '../config/contracts';
 
 // Minimal ABI for getPlayerReserve - avoids full ABI parse issues in readContract
 const GET_PLAYER_RESERVE_ABI = [
@@ -135,12 +136,8 @@ export class WebSocketService {
     // Initialize public client for reading contract state
     this.publicClient = getPublicClient();
     
-    const envAddr = process.env.BLACKJACK_CONTRACT_ADDRESS;
-    if (!envAddr) {
-      throw new Error('BLACKJACK_CONTRACT_ADDRESS env var is required');
-    }
-    this.contractAddress = envAddr as `0x${string}`;
-    console.log('[WebSocketService] Using BLACKJACK_CONTRACT_ADDRESS:', this.contractAddress);
+    this.contractAddress = BLACKJACK_ADDRESS;
+    console.log('[WebSocketService] Using BLACKJACK_ADDRESS:', this.contractAddress);
     console.log('[WebSocketService] REQUIRE_WS_AUTH:', REQUIRE_WS_AUTH);
 
     this.wss.on('connection', this.handleConnection.bind(this));
@@ -950,22 +947,34 @@ export class WebSocketService {
       // Normalize address (checksum) to avoid viem encodeFunctionData issues
       const playerAddress = getAddress(ws.playerAddress) as `0x${string}`;
 
-      // Get contract reserve balance (use minimal ABI to avoid full-ABI parse errors)
-      const contractBalance = await this.publicClient.readContract({
+      const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
+      const hasActive = await this.dbService.hasActiveGames(ws.playerAddress);
+
+      // Read contract reserve, retrying once if the RPC returns a stale value (i.e. same as DB,
+      // which may happen right after a deposit if the node hasn't caught up yet).
+      let contractBalance = await this.publicClient.readContract({
         address: this.contractAddress,
         abi: GET_PLAYER_RESERVE_ABI,
         functionName: 'getPlayerReserve',
         args: [playerAddress],
       }) as bigint;
 
-      const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
+      if (!hasActive && contractBalance <= currentDbBalance) {
+        // Possibly stale — wait 1s and retry once
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        contractBalance = await this.publicClient.readContract({
+          address: this.contractAddress,
+          abi: GET_PLAYER_RESERVE_ABI,
+          functionName: 'getPlayerReserve',
+          args: [playerAddress],
+        }) as bigint;
+      }
 
-      // Use max(contract, db). The DB is authoritative for off-chain winnings and is
-      // always >= 0 after legitimate operations. A contractBalance of 0 is normal after
-      // a full on-chain withdrawal — the player may still have off-chain winnings in DB.
-      // Never wipe the DB balance based on contractBalance; only raise it if the contract
-      // shows a higher reserve (e.g. an on-chain deposit not yet credited to DB).
-      const newBalance: bigint = contractBalance > currentDbBalance ? contractBalance : currentDbBalance;
+      // Only raise DB balance to match contract if player has NO active games.
+      // During gameplay, bets are deducted off-chain in DB while the on-chain reserve
+      // stays unchanged. Using max(contract, db) here would overwrite the bet deduction
+      // and restore the pre-bet balance (the "bounce-back" bug).
+      const newBalance: bigint = (!hasActive && contractBalance > currentDbBalance) ? contractBalance : currentDbBalance;
       if (newBalance !== currentDbBalance) {
         await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
       }
@@ -975,6 +984,7 @@ export class WebSocketService {
         contractBalance: contractBalance.toString(),
         previousDbBalance: currentDbBalance.toString(),
         newBalance: newBalance.toString(),
+        hasActiveGames: hasActive,
       });
 
       this.sendMessage(ws, {
@@ -1003,27 +1013,33 @@ export class WebSocketService {
 
       let balance = await this.dbService.getPlayerBalance(ws.playerAddress);
 
-      // If the contract shows a higher reserve than DB (e.g. deposit not yet credited),
-      // raise the DB balance to match. Never lower it — a 0 contract reserve is normal
-      // after a full on-chain withdrawal while off-chain winnings still exist in DB.
-      try {
-        const playerAddress = getAddress(ws.playerAddress) as `0x${string}`;
-        const contractBalance = await this.publicClient.readContract({
-          address: this.contractAddress,
-          abi: GET_PLAYER_RESERVE_ABI,
-          functionName: 'getPlayerReserve',
-          args: [playerAddress],
-        }) as bigint;
+      // Only compare with on-chain reserve if the player has NO active games.
+      // During gameplay, bets are deducted off-chain in DB. The on-chain reserve
+      // never changes during play, so comparing would overwrite legitimate bet
+      // deductions and restore the pre-bet balance (the "bounce-back" bug).
+      // Deposits already trigger an explicit sync_balance call, so skipping the
+      // contract check here does not miss new deposits.
+      const hasActive = await this.dbService.hasActiveGames(ws.playerAddress);
+      if (!hasActive) {
+        try {
+          const playerAddress = getAddress(ws.playerAddress) as `0x${string}`;
+          const contractBalance = await this.publicClient.readContract({
+            address: this.contractAddress,
+            abi: GET_PLAYER_RESERVE_ABI,
+            functionName: 'getPlayerReserve',
+            args: [playerAddress],
+          }) as bigint;
 
-        if (contractBalance > balance) {
-          await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, contractBalance);
-          balance = contractBalance;
+          if (contractBalance > balance) {
+            await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, contractBalance);
+            balance = contractBalance;
+          }
+        } catch (rpcErr) {
+          logger.warn('getBalance: contract check failed, returning DB balance as-is', {
+            playerAddress: ws.playerAddress,
+            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+          });
         }
-      } catch (rpcErr) {
-        logger.warn('getBalance: contract check failed, returning DB balance as-is', {
-          playerAddress: ws.playerAddress,
-          error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
-        });
       }
 
       this.sendMessage(ws, {

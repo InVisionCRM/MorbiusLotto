@@ -9,6 +9,7 @@ import { Providers } from "./providers";
 import { Toaster } from "sonner";
 import { BreakReminderWrapper } from "@/components/ResponsibleGaming";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import { GameLockOverlay } from "@/components/shared/GameLockOverlay";
 
 // Use system fonts instead of Google Fonts to avoid build issues
 const geistSans = {
@@ -54,6 +55,7 @@ export default function RootLayout({
         <div id="app-wrapper" className="app-content-wrapper">
           <Providers>
             {children}
+            <GameLockOverlay />
             <Toaster position="top-right" theme="dark" richColors />
             <BreakReminderWrapper />
             <ChatSidebar />

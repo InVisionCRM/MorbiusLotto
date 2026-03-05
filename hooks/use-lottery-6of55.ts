@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useAccount, useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
-import { HEX_TOKEN_ADDRESS, LOTTERY_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { HEX_TOKEN_ADDRESS, LOTTERY_INSTANT_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { pulsechain } from '@/lib/chains'
 
 // Read current round information
 export function useCurrentRound() {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getCurrentRoundInfo',
     query: {
@@ -21,7 +21,7 @@ export function useCurrentRound() {
 // Read player's tickets for a specific round
 export function usePlayerTickets(roundId: number, playerAddress?: `0x${string}`) {
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getPlayerTickets',
     args: playerAddress ? [BigInt(roundId), playerAddress] : undefined,
@@ -33,9 +33,9 @@ export function usePlayerTickets(roundId: number, playerAddress?: `0x${string}`)
 
 // Read player's round history
 export function usePlayerRoundHistory(playerAddress?: `0x${string}`, start = 0, count = 10) {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getPlayerRoundHistory',
     args: playerAddress ? [playerAddress, BigInt(start), BigInt(count)] : undefined,
@@ -47,9 +47,9 @@ export function usePlayerRoundHistory(playerAddress?: `0x${string}`, start = 0, 
 
 // Read player's lifetime stats
 export function usePlayerLifetime(playerAddress?: `0x${string}`) {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getPlayerLifetime',
     args: playerAddress ? [playerAddress] : undefined,
@@ -62,12 +62,12 @@ export function usePlayerLifetime(playerAddress?: `0x${string}`) {
 
 // Read house (contract's) ticket for a specific round
 export function useHouseTicket(roundId: number) {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getPlayerTickets',
-    args: [BigInt(roundId), LOTTERY_ADDRESS as `0x${string}`],
+    args: [BigInt(roundId), LOTTERY_INSTANT_ADDRESS as `0x${string}`],
     query: {
       enabled: isValidAddress && roundId > 0,
       refetchInterval: 5000, // Refetch every 5 seconds
@@ -77,9 +77,9 @@ export function useHouseTicket(roundId: number) {
 
 // Read round players array
 export function useRoundPlayers(roundId: number) {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'roundPlayers',
     args: [BigInt(roundId)],
@@ -91,9 +91,9 @@ export function useRoundPlayers(roundId: number) {
 
 // Read round history
 export function useRound(roundId: number) {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getRound',
     args: [BigInt(roundId)],
@@ -106,9 +106,9 @@ export function useRound(roundId: number) {
 
 // Read MegaMORBIUS bank balance (progressive jackpot)
 export function useMegaMillionsBank() {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getMegaMORBIUSBank',
     query: {
@@ -127,11 +127,11 @@ export function useHexJackpot() {
   useEffect(() => {
     let mounted = true
     const fetchHex = async () => {
-      if ((LOTTERY_ADDRESS as string) === '0x0000000000000000000000000000000000000000') return
+      if ((LOTTERY_INSTANT_ADDRESS as string) === '0x0000000000000000000000000000000000000000') return
       setIsLoading(true)
       try {
         const res = await fetch(
-          `https://scan.pulsechain.box/api/v2/addresses/${LOTTERY_ADDRESS}/token-balances`
+          `https://scan.pulsechain.box/api/v2/addresses/${LOTTERY_INSTANT_ADDRESS}/token-balances`
         )
         if (!res.ok) throw new Error(`API error: ${res.status}`)
         const json = await res.json()
@@ -169,7 +169,7 @@ export function useHexJackpot() {
 // Read player's claimable winnings for a round
 export function useClaimableWinnings(roundId: number, playerAddress?: `0x${string}`) {
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getClaimableWinnings',
     args: playerAddress ? [BigInt(roundId), playerAddress] : undefined,
@@ -181,9 +181,9 @@ export function useClaimableWinnings(roundId: number, playerAddress?: `0x${strin
 
 // Read current round totals (roundId, totalMORBIUS, totalTickets, uniquePlayers, rolloverReserve, megaMORBIUSBank, currentRoundState)
 export function useCurrentRoundTotals() {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getCurrentRoundTotals',
     query: {
@@ -195,9 +195,9 @@ export function useCurrentRoundTotals() {
 
 // Read pending MORBIUS and tickets for a future round
 export function usePendingForRound(roundId: number) {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getPendingForRound',
     args: [BigInt(roundId)],
@@ -209,9 +209,9 @@ export function usePendingForRound(roundId: number) {
 
 // Read rollover reserve and mega MORBIUS bank balances
 export function useRolloverState() {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getRolloverState',
     query: {
@@ -223,9 +223,9 @@ export function useRolloverState() {
 
 // Read bracket configuration (percentages and distribution)
 export function useBracketConfig() {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getBracketConfig',
     query: {
@@ -236,9 +236,9 @@ export function useBracketConfig() {
 
 // Read unclaimed winnings breakdown for a round
 export function useUnclaimedForRound(roundId: number) {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getUnclaimedForRound',
     args: [BigInt(roundId)],
@@ -250,9 +250,9 @@ export function useUnclaimedForRound(roundId: number) {
 
 // Read total tickets ever sold across all rounds
 export function useTotalTicketsEver() {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getTotalTicketsEver',
     query: {
@@ -264,9 +264,9 @@ export function useTotalTicketsEver() {
 
 // Read total MORBIUS ever collected across all rounds
 export function useTotalMORBIUSEverCollected() {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getTotalMORBIUSEverCollected',
     query: {
@@ -278,9 +278,9 @@ export function useTotalMORBIUSEverCollected() {
 
 // Read total MORBIUS ever claimed by winners
 export function useTotalMORBIUSEverClaimed() {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getTotalMORBIUSEverClaimed',
     query: {
@@ -292,9 +292,9 @@ export function useTotalMORBIUSEverClaimed() {
 
 // Read total outstanding claimable MORBIUS across all rounds
 export function useTotalMORBIUSClaimableAll() {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getTotalMORBIUSClaimableAll',
     query: {
@@ -306,9 +306,9 @@ export function useTotalMORBIUSClaimableAll() {
 
 // Read historical totals for a specific round
 export function useRoundHistoryTotals(roundId: number) {
-  const isValidAddress = (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const isValidAddress = (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
   return useReadContract({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     functionName: 'getRoundHistoryTotals',
     args: [BigInt(roundId)],
@@ -341,12 +341,13 @@ export function useBuyTickets() {
     // Convert to the exact format expected by the contract: uint8[6][]
     // wagmi/viem should handle the conversion from number[][] to uint8[6][]
     writeContract({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTickets',
       args: [tickets as any], // Type assertion needed for wagmi
       chain: pulsechain,
       account: address!,
+      maxPriorityFeePerGas: 40_000n, // PulseChain tip
     })
   }
 
@@ -369,12 +370,13 @@ export function useBuyTicketsForRounds() {
     const totalTickets = ticketGroups.reduce((sum, group) => sum + group.length, 0)
 
     writeContract({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTicketsForRounds',
       args: [formattedGroups as any, formattedOffsets as any],
       chain: pulsechain,
       account: address!,
+      maxPriorityFeePerGas: 40_000n, // PulseChain tip
     })
   }
 
@@ -394,12 +396,13 @@ export function useBuyTicketsWithWPLS(defaultExtraBufferBp: number = 2500) {
     ) as unknown as readonly [number, number, number, number, number, number][]
 
     writeContract({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTicketsWithWPLSAndBuffer',
       args: [formattedTickets as any, BigInt(bufferBp)],
       chain: pulsechain,
       account: address!,
+      maxPriorityFeePerGas: 40_000n, // PulseChain tip
     })
   }
 
@@ -415,13 +418,14 @@ export function useBuyTicketsWithPLS() {
     const formattedTickets = tickets.map(ticket => ticket.map(n => n as number)) as unknown as readonly [number, number, number, number, number, number][]
 
     writeContract({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTicketsWithPLS',
       args: [formattedTickets as any],
       chain: pulsechain,
       account: address!,
       value: valueWei,
+      maxPriorityFeePerGas: 40_000n, // PulseChain tip
     })
   }
 
@@ -441,13 +445,14 @@ export function useBuyTicketsWithPLSForRounds() {
     const formattedOffsets = offsets.map(o => BigInt(o))
 
     writeContract({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'buyTicketsWithPLSForRounds',
       args: [formattedGroups as any, formattedOffsets as any],
       chain: pulsechain,
       account: address!,
       value: valueWei,
+      maxPriorityFeePerGas: 40_000n, // PulseChain tip
     })
   }
 
@@ -461,11 +466,12 @@ export function useFinalizeRound() {
 
   const finalizeRound = () => {
     writeContract({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'finalizeRound',
       chain: pulsechain,
       account: address!,
+      maxPriorityFeePerGas: 40_000n, // PulseChain tip
     })
   }
 
@@ -479,12 +485,13 @@ export function useClaimWinnings() {
 
   const claimWinnings = (roundId: number) => {
     writeContract({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       abi: LOTTERY_6OF55_V2_ABI,
       functionName: 'claimWinnings',
       args: [BigInt(roundId)],
       chain: pulsechain,
       account: address!,
+      maxPriorityFeePerGas: 40_000n, // PulseChain tip
     })
   }
 
@@ -496,7 +503,7 @@ export function useWatchRoundFinalized(
   onRoundFinalized: (roundId: bigint, winningNumbers: number[], totalMORBIUS: bigint) => void
 ) {
   useWatchContractEvent({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     eventName: 'RoundFinalized',
     onLogs(logs) {
@@ -519,7 +526,7 @@ export function useWatchTicketsPurchased(
   onTicketsPurchased: (roundId: bigint, ticketCount: bigint) => void
 ) {
   useWatchContractEvent({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     eventName: 'TicketsPurchased',
     args: playerAddress ? { player: playerAddress } : undefined,
@@ -538,7 +545,7 @@ export function useWatchMegaMillions(
   onMegaMillions: (roundId: bigint, bankAmount: bigint) => void
 ) {
   useWatchContractEvent({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     eventName: 'MegaMillionsTriggered',
     onLogs(logs) {
@@ -556,7 +563,7 @@ export function useWatchHexOverlay(
   onHexOverlay: (roundId: bigint, hexAmount: bigint) => void
 ) {
   useWatchContractEvent({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     eventName: 'HexOverlayTriggered',
     onLogs(logs) {
@@ -575,7 +582,7 @@ export function useWatchFreeTickets(
   onFreeTickets: (credits: bigint) => void
 ) {
   useWatchContractEvent({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     eventName: 'FreeTicketsCredited',
     args: playerAddress ? { player: playerAddress } : undefined,
@@ -595,7 +602,7 @@ export function useWatchMultiRoundPurchases(
   onMultiRoundPurchase: (roundIds: readonly bigint[], ticketCounts: readonly bigint[], transactionHash: string) => void
 ) {
   useWatchContractEvent({
-    address: LOTTERY_ADDRESS as `0x${string}`,
+    address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
     abi: LOTTERY_6OF55_V2_ABI,
     eventName: 'TicketsPurchasedForRounds',
     args: playerAddress ? { player: playerAddress } : undefined,

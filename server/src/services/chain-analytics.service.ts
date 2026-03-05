@@ -4,18 +4,22 @@ import type { DatabaseService } from './database.service';
 import {
   PLINKO_ADDRESS,
   KENO_ADDRESS,
-  LOTTERY_ADDRESS,
+  LOTTERY_INSTANT_ADDRESS,
   BIGWHEEL_ADDRESS,
   BLACKJACK_ADDRESS,
   PLINKO_GET_GLOBAL_STATS_ABI,
   KENO_GET_GLOBAL_STATS_ABI,
   LOTTERY_STATS_ABI,
+  INSTANT_LOTTERY_STATS_ABI,
   BIGWHEEL_GET_GLOBAL_STATS_ABI,
 } from '../config/contracts';
 
 const DEPOSIT_EVENT = parseAbiItem('event Deposit(address indexed player, uint256 morbiusAmount, uint256 plsAmount)');
 const DEPOSIT_MORBIUS_EVENT = parseAbiItem('event DepositMORBIUS(address indexed player, uint256 amount)');
 const WITHDRAWAL_EVENT = parseAbiItem('event Withdrawal(address indexed player, uint256 amount)');
+const INSTANT_LOTTERY_RESULT_EVENT = parseAbiItem(
+  'event InstantLotteryResult(address indexed player, uint8[6] playerNumbers, uint8[6] winningNumbers, uint8 matchCount, uint256 wager, uint256 grossPayout, uint256 netPayout)'
+);
 const CHUNK_SIZE = 50000;
 
 export interface PlinkoChainStats {
@@ -144,9 +148,23 @@ export class ChainAnalyticsService {
 
   async getLotteryStats(): Promise<LotteryChainStats | null> {
     const client = getPublicClient();
+    const useInstant = LOTTERY_INSTANT_ADDRESS && LOTTERY_INSTANT_ADDRESS !== '0x0000000000000000000000000000000000000000';
+    if (useInstant) {
+      try {
+        const [totalPlays, totalWagered, totalPayouts] = await Promise.all([
+          client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: INSTANT_LOTTERY_STATS_ABI, functionName: 'totalPlays' }) as Promise<bigint>,
+          client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: INSTANT_LOTTERY_STATS_ABI, functionName: 'totalWagered' }) as Promise<bigint>,
+          client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: INSTANT_LOTTERY_STATS_ABI, functionName: 'totalPayouts' }) as Promise<bigint>,
+        ]);
+        return { totalTicketsEver: totalPlays, totalCollected: totalWagered, totalClaimed: totalPayouts };
+      } catch (err) {
+        console.error('ChainAnalyticsService getLotteryStats (instant):', err);
+        return null;
+      }
+    }
     const read = async (fn: 'totalTicketsEver' | 'totalMORBIUSEverCollected' | 'totalMORBIUSEverClaimed'): Promise<bigint> => {
       try {
-        const result = await client.readContract({ address: LOTTERY_ADDRESS, abi: LOTTERY_STATS_ABI, functionName: fn });
+        const result = await client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: LOTTERY_STATS_ABI, functionName: fn });
         return result as bigint;
       } catch {
         return 0n;
@@ -286,6 +304,58 @@ export class ChainAnalyticsService {
       }
       return { totalDeposited: 0n, totalWithdrawn: 0n };
     }
+  }
+
+  /**
+   * Index InstantLotteryResult events into instant_lottery_plays for leaderboard and player stats.
+   * Incremental from last_scanned_block; full scan if none. Skips when LOTTERY_INSTANT_ADDRESS is not set.
+   */
+  async indexInstantLotteryResults(): Promise<{ indexed: number; lastBlock: bigint | null }> {
+    const address = LOTTERY_INSTANT_ADDRESS?.trim();
+    if (!address || address === '0x0000000000000000000000000000000000000000') {
+      return { indexed: 0, lastBlock: null };
+    }
+    const client = getPublicClient();
+    const stored = await this.dbService.getInstantLotteryScanState();
+    const toBlock = await client.getBlockNumber();
+    let fromBlock: bigint;
+    if (!stored || stored.lastScannedBlock == null) {
+      fromBlock = toBlock > BigInt(CHUNK_SIZE) ? toBlock - BigInt(CHUNK_SIZE) : 0n;
+    } else {
+      if (toBlock <= stored.lastScannedBlock) return { indexed: 0, lastBlock: stored.lastScannedBlock };
+      fromBlock = stored.lastScannedBlock + 1n;
+    }
+    let indexed = 0;
+    while (fromBlock <= toBlock) {
+      const end = fromBlock + BigInt(CHUNK_SIZE) > toBlock ? toBlock : fromBlock + BigInt(CHUNK_SIZE);
+      const logs = await client.getLogs({
+        address: address as `0x${string}`,
+        event: INSTANT_LOTTERY_RESULT_EVENT,
+        fromBlock,
+        toBlock: end,
+      });
+      for (const log of logs) {
+        try {
+          const args = log.args as { player?: string; wager?: bigint; grossPayout?: bigint; netPayout?: bigint };
+          const player = args?.player;
+          const wager = args?.wager ?? 0n;
+          const grossPayout = args?.grossPayout ?? 0n;
+          const netPayout = args?.netPayout ?? 0n;
+          const txHash = log.transactionHash ?? '';
+          const blockNumber = log.blockNumber ?? null;
+          if (!player || !txHash) continue;
+          await this.dbService.logInstantLotteryPlay(player, wager, grossPayout, netPayout, blockNumber, txHash);
+          indexed += 1;
+        } catch {
+          // non-fatal
+        }
+      }
+      fromBlock = end + 1n;
+      if (fromBlock > toBlock) break;
+    }
+    const lastBlock = fromBlock > 0n ? fromBlock - 1n : toBlock;
+    await this.dbService.updateInstantLotteryScanState(lastBlock);
+    return { indexed, lastBlock };
   }
 
   /** Fetch all on-chain game stats in parallel. */

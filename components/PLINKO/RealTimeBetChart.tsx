@@ -24,11 +24,20 @@ interface BetDataPoint {
   riskLevel: string;
 }
 
+interface ChartStats {
+  totalBets: number;
+  totalWagered: number;
+  totalWon: number;
+}
+
 interface RealTimeBetChartProps {
   sessionStartTime?: number;
   contractWagerPerBall?: number;
   freePlayWager?: number;
   onNewDataPoint?: (dataPoint: BetDataPoint) => void;
+  // Externally managed bet history (lifted state)
+  betHistory?: BetDataPoint[];
+  chartStats?: ChartStats;
   // Optional props for history modal
   drops?: PlinkoDrop[];
   stats?: PlinkoPlayerStats | null;
@@ -36,7 +45,6 @@ interface RealTimeBetChartProps {
   playerKey?: string;
   onExport?: () => void;
   onClear?: () => void;
-  onFilterChange?: (filter: any) => void;
 }
 
 export interface RealTimeBetChartRef {
@@ -48,20 +56,26 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
   contractWagerPerBall = 0,
   freePlayWager = 0,
   onNewDataPoint,
+  betHistory: externalBetHistory,
+  chartStats: externalChartStats,
   drops = [],
   stats = null,
   isConnected = false,
   playerKey = '',
   onExport = () => {},
   onClear = () => {},
-  onFilterChange = () => {}
 }, ref) => {
-  const [betHistory, setBetHistory] = useState<BetDataPoint[]>([]);
-  const [currentStats, setCurrentStats] = useState({
+  // Use external state if provided, otherwise fall back to internal state
+  const [internalBetHistory, setInternalBetHistory] = useState<BetDataPoint[]>([]);
+  const [internalStats, setInternalStats] = useState<ChartStats>({
     totalBets: 0,
     totalWagered: 0,
     totalWon: 0
   });
+
+  const betHistory = externalBetHistory ?? internalBetHistory;
+  const currentStats = externalChartStats ?? internalStats;
+
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
 
@@ -83,32 +97,36 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
       riskLevel
     };
 
-    setBetHistory(prev => [...prev, newDataPoint]);
-
-    setCurrentStats(prev => ({
-      totalBets: prev.totalBets + 1,
-      totalWagered: prev.totalWagered + betAmount,
-      totalWon: prev.totalWon + winAmount
-    }));
+    // Only update internal state if not externally managed
+    if (!externalBetHistory) {
+      setInternalBetHistory(prev => [...prev, newDataPoint]);
+      setInternalStats(prev => ({
+        totalBets: prev.totalBets + 1,
+        totalWagered: prev.totalWagered + betAmount,
+        totalWon: prev.totalWon + winAmount
+      }));
+    }
 
     if (onNewDataPoint) {
       onNewDataPoint(newDataPoint);
     }
-  }, [betHistory.length, contractWagerPerBall, freePlayWager, onNewDataPoint]);
+  }, [betHistory.length, contractWagerPerBall, freePlayWager, onNewDataPoint, externalBetHistory]);
 
   useImperativeHandle(ref, () => ({
     addDataPoint
   }), [addDataPoint]);
 
-  // Clear history when session starts
+  // Clear internal history when session starts (only if self-managed)
   useEffect(() => {
-    setBetHistory([]);
-    setCurrentStats({
-      totalBets: 0,
-      totalWagered: 0,
-      totalWon: 0
-    });
-  }, [sessionStartTime]);
+    if (!externalBetHistory) {
+      setInternalBetHistory([]);
+      setInternalStats({
+        totalBets: 0,
+        totalWagered: 0,
+        totalWon: 0
+      });
+    }
+  }, [sessionStartTime, externalBetHistory]);
 
   // Calculate cumulative P&L data
   const pnlData = useMemo(() => {
@@ -308,7 +326,6 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
         playerKey={playerKey}
         onExport={onExport}
         onClear={onClear}
-        onFilterChange={onFilterChange}
       />
 
     </div>

@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 import fs from 'fs';
 
 const RPC_URL = 'https://rpc.pulsechain.com';
-const LOTTERY_ADDRESS = '0xD66b4489fbfF99A8d62f969203899840F2ec69c5';
+const LOTTERY_INSTANT_ADDRESS = '0xD66b4489fbfF99A8d62f969203899840F2ec69c5';
 
 async function main() {
   console.log('🔍 Testing direct contract call to lottery...\n');
@@ -14,7 +14,7 @@ async function main() {
   const artifact = JSON.parse(fs.readFileSync(abiPath, 'utf8'));
   const ABI = Array.isArray(artifact) ? artifact : artifact.abi;
 
-  const lottery = new ethers.Contract(LOTTERY_ADDRESS, ABI, provider);
+  const lottery = new ethers.Contract(LOTTERY_INSTANT_ADDRESS, ABI, provider);
 
   try {
     console.log('Calling getCurrentRoundInfo()...');

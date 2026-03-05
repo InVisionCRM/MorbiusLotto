@@ -81,12 +81,13 @@ export declare class BlackjackGameService {
     private pfService;
     private static readonly GAME_NONCE_MULTIPLIER;
     private tournamentService?;
+    private readonly gameLocks;
+    private readonly createGameLocks;
     constructor(dbService: DatabaseService, pfService: ProvablyFairService);
     /**
      * Set the tournament service (optional, for tournament mode support)
      */
     setTournamentService(tournamentService: TournamentService): void;
-    private getGameBaseNonce;
     /** Resolve Blackjack fee % and fee wallet from admin config + env. Fee applies to profit only. */
     private getBlackjackFeeConfig;
     /** Apply fee on profit (if configured); credit player (payout - fee) and fee wallet (fee). Returns fee amount applied. */
@@ -102,14 +103,6 @@ export declare class BlackjackGameService {
      */
     private getSplitValue;
     /**
-     * Check if hand can be split (same blackjack value: 10/J/Q/K interchangeable)
-     */
-    private canSplit;
-    /**
-     * Classify Perfect Pairs: exact match only (same rank AND same suit).
-     */
-    private classifyPerfectPair;
-    /**
      * Check if hand can be split — v2 card indices (0-51): same blackjack value (10/J/Q/K interchangeable)
      */
     private canSplitV2;
@@ -121,24 +114,14 @@ export declare class BlackjackGameService {
      */
     private classifyPerfectPairV2;
     private getPerfectPairsPayout;
-    /** Draw one encoded card (value*10+suit), consumes 2 nonces. */
-    private drawEncodedCard;
     /**
-     * Handle player action
+     * Handle player action (locked wrapper — prevents concurrent actions on same game)
      */
     handlePlayerAction(request: PlayerActionRequest): Promise<GameState>;
     /**
-     * Handle splitting a hand
+     * Handle player action (inner, unlocked — called by locked wrappers)
      */
-    private handleSplit;
-    /**
-     * Handle action on a specific hand
-     */
-    private handleHandAction;
-    /**
-     * Play dealer turn and complete the game
-     */
-    private playDealerAndComplete;
+    private _handlePlayerActionUnlocked;
     /**
      * Handle splitting a hand — v2 deck-based
      */

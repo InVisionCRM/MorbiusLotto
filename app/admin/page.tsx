@@ -8,8 +8,9 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon, Flag, Coins, Gift } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon, Flag, Coins, Gift, Droplets, Megaphone } from 'lucide-react';
 import AdminTablesTab from '@/components/admin/AdminTablesTab';
+import AdminAdvertisingTab from '@/components/admin/AdminAdvertisingTab';
 import AdminHealthTab from '@/components/admin/AdminHealthTab';
 import AdminMetricsTab from '@/components/admin/AdminMetricsTab';
 import AdminConfigTab from '@/components/admin/AdminConfigTab';
@@ -19,6 +20,7 @@ import AdminChatTab from '@/components/admin/AdminChatTab';
 import AdminMemesTab from '@/components/admin/AdminMemesTab';
 import AdminReportsTab from '@/components/admin/AdminReportsTab';
 import AdminStakingTab from '@/components/admin/AdminStakingTab';
+import AdminLPStakingTab from '@/components/admin/AdminLPStakingTab';
 import AdminMerkleDropsTab from '@/components/admin/AdminMerkleDropsTab';
 
 export default function AdminPage() {
@@ -48,7 +50,7 @@ export default function AdminPage() {
       <div className="min-h-screen bg-slate-950 text-white pt-4 md:pt-2">
         <main className="container mx-auto px-3 py-3 max-w-6xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="h-8 w-full grid grid-cols-8 sm:grid-cols-11 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
+          <TabsList className="h-8 w-full grid grid-cols-8 sm:grid-cols-12 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
             <TabsTrigger value="tables" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <LayoutGrid className="w-3 h-3 mr-1 hidden sm:inline" /> Tables
             </TabsTrigger>
@@ -81,6 +83,12 @@ export default function AdminPage() {
             </TabsTrigger>
             <TabsTrigger value="drops" className="rounded data-[state=active]:bg-emerald-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <Gift className="w-3 h-3 mr-1 hidden sm:inline" /> Drops
+            </TabsTrigger>
+            <TabsTrigger value="lp-staking" className="rounded data-[state=active]:bg-blue-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
+              <Droplets className="w-3 h-3 mr-1 hidden sm:inline" /> LP
+            </TabsTrigger>
+            <TabsTrigger value="advertising" className="rounded data-[state=active]:bg-amber-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
+              <Megaphone className="w-3 h-3 mr-1 hidden sm:inline" /> Ads
             </TabsTrigger>
           </TabsList>
 
@@ -126,6 +134,14 @@ export default function AdminPage() {
 
           <TabsContent value="drops" className="mt-3 focus-visible:outline-none">
             <AdminMerkleDropsTab />
+          </TabsContent>
+
+          <TabsContent value="lp-staking" className="mt-3 focus-visible:outline-none">
+            <AdminLPStakingTab />
+          </TabsContent>
+
+          <TabsContent value="advertising" className="mt-3 focus-visible:outline-none">
+            <AdminAdvertisingTab />
           </TabsContent>
         </Tabs>
         </main>

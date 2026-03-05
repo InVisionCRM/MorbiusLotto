@@ -43,14 +43,14 @@ export default function HowToPlayModal({ open, onOpenChange }: HowToPlayModalPro
                 Experience the thrill of traditional Plinko with blockchain technology! 🎯
               </p>
               <p>
-                Play with real cryptocurrency on <span className="inline-flex items-center gap-1"><Image src="/Pulse Branding/Logo/ball1.png" alt="PulseChain" width={12} height={12} className="flex-shrink-0" /> PulseChain</span>. Win MORBIUS tokens when your ball lands in winning buckets.
+                Play with real cryptocurrency on <span className="inline-flex items-center gap-1"><Image src="/Pulse Branding/Logo/ball.png" alt="PulseChain" width={12} height={12} className="flex-shrink-0" /> PulseChain</span>. Win MORBIUS tokens when your ball lands in winning buckets.
                 All transactions are secured by smart contracts and verified on-chain.
               </p>
               <div className="bg-black/40 rounded p-2 mt-3">
                 <p className="text-xs text-gray-400">
                   <span className="text-[#1BE7FF] font-semibold inline-flex items-center gap-1">
                     <Image
-                      src="/Pulse Branding/Logo/ball1.png"
+                      src="/Pulse Branding/Logo/ball.png"
                       alt="PulseChain"
                       width={12}
                       height={12}
@@ -74,7 +74,7 @@ export default function HowToPlayModal({ open, onOpenChange }: HowToPlayModalPro
                 <span className="text-white font-bold bg-[#1BE7FF] rounded-full w-6 h-6 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>
                 <div>
                   <p className="font-semibold text-white">Connect Your Wallet</p>
-                  <p className="text-xs text-gray-400">Link your <span className="inline-flex items-center gap-1"><Image src="/Pulse Branding/Logo/ball1.png" alt="PulseChain" width={10} height={10} className="flex-shrink-0" /> PulseChain</span>-compatible wallet (MetaMask, etc.)</p>
+                  <p className="text-xs text-gray-400">Link your <span className="inline-flex items-center gap-1"><Image src="/Pulse Branding/Logo/ball.png" alt="PulseChain" width={10} height={10} className="flex-shrink-0" /> PulseChain</span>-compatible wallet (MetaMask, etc.)</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -277,7 +277,7 @@ export default function HowToPlayModal({ open, onOpenChange }: HowToPlayModalPro
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-[#1BE7FF] mt-0.5">🔗</span>
-                <span><strong>Blockchain speed</strong> - <span className="inline-flex items-center gap-1"><Image src="/Pulse Branding/Logo/ball1.png" alt="PulseChain" width={10} height={10} className="flex-shrink-0" /> PulseChain</span> offers fast, low-fee transactions</span>
+                <span><strong>Blockchain speed</strong> - <span className="inline-flex items-center gap-1"><Image src="/Pulse Branding/Logo/ball.png" alt="PulseChain" width={10} height={10} className="flex-shrink-0" /> PulseChain</span> offers fast, low-fee transactions</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-[#1BE7FF] mt-0.5">📊</span>

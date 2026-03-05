@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useReadContract } from 'wagmi'
 import { WPLS_MORBIUS_PAIR, WPLS_TOKEN_ADDRESS, MORBIUS_TOKEN_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
 
@@ -72,12 +72,12 @@ export function useWplsPrice() {
   })
 
   // Fetch reserves from the pair
-  const { data: reserves, isLoading: isLoadingReserves, error: reservesError } = useReadContract({
+  const { data: reserves, isLoading: isLoadingReserves, error: reservesError, dataUpdatedAt } = useReadContract({
     address: WPLS_MORBIUS_PAIR as `0x${string}`,
     abi: PAIR_ABI,
     functionName: 'getReserves',
     query: {
-      refetchInterval: 30000, // Refetch every 30 seconds
+      refetchInterval: 10000, // Refetch every 10 seconds for fresher prices
     },
   })
 
@@ -146,11 +146,18 @@ export function useWplsPrice() {
     source = 'dexscreener'
   }
 
+  // Human-readable rate: how many MORBIUS you get per 1 PLS
+  const morbiusPerPLS = wplsPerMORBIUS && wplsPerMORBIUS > BigInt(0)
+    ? Number(BigInt(10) ** BigInt(36) / wplsPerMORBIUS) / 1e18
+    : null
+
   return {
     wplsPerMORBIUS, // Amount of WPLS (in wei) needed to get 1 MORBIUS (in base units)
+    morbiusPerPLS,  // Human-readable: how many MORBIUS per 1 PLS
     isLoading: isLoadingReserves || isLoadingDex,
     error: reservesError || dexError,
     source,
+    lastUpdated: dataUpdatedAt || 0,
   }
 }
 

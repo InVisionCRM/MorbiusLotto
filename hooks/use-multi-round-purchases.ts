@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { usePublicClient } from 'wagmi'
 import { decodeEventLog } from 'viem'
-import { LOTTERY_ADDRESS, LOTTERY_DEPLOY_BLOCK } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, LOTTERY_DEPLOY_BLOCK } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 
 export type MultiRoundPurchase = {
@@ -34,7 +34,7 @@ export function useMultiRoundPurchases(playerAddress?: `0x${string}`) {
         // Fetch TicketsPurchasedForRounds events for this player
         const fromBlock = LOTTERY_DEPLOY_BLOCK ? BigInt(LOTTERY_DEPLOY_BLOCK) : BigInt(0)
         const logs = await publicClient.getLogs({
-          address: LOTTERY_ADDRESS as `0x${string}`,
+          address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
           event: {
             type: 'event',
             name: 'TicketsPurchasedForRounds',

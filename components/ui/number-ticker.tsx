@@ -13,6 +13,8 @@ interface NumberTickerProps extends ComponentPropsWithoutRef<"span"> {
   decimalPlaces?: number
   /** If true, animate on every value change (not just initial view) */
   animateOnChange?: boolean
+  /** Override spring physics (default: damping 60, stiffness 100) */
+  springConfig?: { damping?: number; stiffness?: number }
 }
 
 export function NumberTicker({
@@ -23,14 +25,15 @@ export function NumberTicker({
   className,
   decimalPlaces = 0,
   animateOnChange = false,
+  springConfig,
   ...props
 }: NumberTickerProps) {
   const ref = useRef<HTMLSpanElement>(null)
   const prevValueRef = useRef<number>(value)
   const motionValue = useMotionValue(direction === "down" ? value : startValue)
   const springValue = useSpring(motionValue, {
-    damping: 60,
-    stiffness: 100,
+    damping: springConfig?.damping ?? 60,
+    stiffness: springConfig?.stiffness ?? 100,
   })
   const isInView = useInView(ref, { once: !animateOnChange, margin: "0px" })
 

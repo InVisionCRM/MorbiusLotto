@@ -1,67 +1,52 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
-import { Progress } from '@/components/ui/progress'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { toast } from 'sonner'
 import { cn, triggerSuccessConfetti } from '@/lib/utils'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, usePublicClient, useReadContract, useReadContracts } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { formatEther, parseAbiItem, parseEther } from 'viem'
+import { formatEther, parseEther, decodeEventLog } from 'viem'
 import {
   KENO_ADDRESS,
-  KENO_DEPLOY_BLOCK,
   WPLS_TOKEN_ADDRESS,
   MORBIUS_TOKEN_ADDRESS,
   PULSEX_V1_ROUTER_ADDRESS,
-  WPLS_TO_MORBIUS_BUFFER_BPS,
 } from '@/lib/contracts'
 import { KENO_ABI } from '@/lib/keno-abi'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Trophy, Info, LayoutGrid } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-// import { KenoTicket } from '@/components/CryptoKeno/keno-ticket'
 import { LiveKenoBoard } from '@/components/CryptoKeno/live-keno-board'
 import { KenoPrizePoolModal } from '@/components/CryptoKeno/keno-prize-pool-modal'
-// import { useKenoTicketRoundHistory } from '@/hooks/use-keno-ticket-round-history'
-import { ContractAddress } from '@/components/ui/contract-address'
+import KenoTopPlayers from '@/components/CryptoKeno/KenoTopPlayers'
+import { KenoRecentPlays } from '@/components/CryptoKeno/KenoRecentPlays'
+import { GlobalKenoHistoryTable } from '@/components/CryptoKeno/GlobalKenoHistoryTable'
 import Footer from '@/components/PLINKO/Footer'
+import { GameFAQ } from '@/components/shared/GameFAQ'
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text'
+import { NumberTicker } from '@/components/ui/number-ticker'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
+import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
+import { useKenoPlayerStats } from '@/hooks/use-keno-results'
+import { AdSpace } from '@/components/shared/AdSpace'
 
 const ALL_NUMBERS = Array.from({ length: 80 }, (_, i) => i + 1)
 
+// Must match CryptoKeno.sol _initDefaultPaytables (max wager 100k, top prize 25x @ 10/10 = 2.5M cap)
 const PAYTABLE: Record<number, Record<number, number>> = {
   1: { 1: 2 },
-  2: { 2: 11 },
-  3: { 2: 2, 3: 27 },
-  4: { 2: 1, 3: 5, 4: 72 },
-  5: { 3: 2, 4: 18, 5: 410 },
-  6: { 3: 1, 4: 7, 5: 57, 6: 1100 },
-  7: { 3: 1, 4: 5, 5: 11, 6: 100, 7: 2000 },
-  8: { 4: 2, 5: 15, 6: 50, 7: 300, 8: 10000 },
-  9: { 4: 2, 5: 5, 6: 20, 7: 100, 8: 2000, 9: 25000 },
-  10: { 0: 5, 5: 2, 6: 10, 7: 50, 8: 500, 9: 5000, 10: 100000 },
-}
-
-const BULLSEYE_PAYTABLE: Record<number, Record<number, number>> = {
-  1: { 1: 6 },
-  2: { 2: 33 },
-  3: { 2: 6, 3: 81 },
-  4: { 2: 3, 3: 15, 4: 216 },
-  5: { 3: 6, 4: 54, 5: 1230 },
-  6: { 3: 3, 4: 21, 5: 171, 6: 3300 },
-  7: { 3: 3, 4: 15, 5: 33, 6: 300, 7: 6000 },
-  8: { 4: 6, 5: 45, 6: 150, 7: 900, 8: 30000 },
-  9: { 4: 6, 5: 15, 6: 60, 7: 300, 8: 6000, 9: 75000 },
-  10: { 0: 15, 5: 6, 6: 30, 7: 150, 8: 1500, 9: 15000, 10: 300000 },
+  2: { 2: 3 },
+  3: { 2: 2, 3: 4 },
+  4: { 2: 1, 3: 3, 4: 7 },
+  5: { 3: 2, 4: 7, 5: 10 },
+  6: { 3: 1, 4: 5, 5: 10, 6: 12 },
+  7: { 3: 1, 4: 5, 5: 9, 6: 12, 7: 15 },
+  8: { 4: 2, 5: 5, 6: 7, 7: 12, 8: 17 },
+  9: { 4: 2, 5: 4, 6: 7, 7: 10, 8: 15, 9: 20 },
+  10: { 0: 3, 5: 2, 6: 5, 7: 12, 8: 15, 9: 20, 10: 25 },
 }
 
 const ERC20_ABI = [
@@ -80,110 +65,39 @@ const ROUTER_ABI = [
     ],
     outputs: [{ name: 'amounts', type: 'uint256[]' }],
   },
-  {
-    name: 'swapExactTokensForTokens',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'amountIn', type: 'uint256' },
-      { name: 'amountOutMin', type: 'uint256' },
-      { name: 'path', type: 'address[]' },
-      { name: 'to', type: 'address' },
-      { name: 'deadline', type: 'uint256' },
-    ],
-    outputs: [{ name: 'amounts', type: 'uint256[]' }],
-  },
 ] as const
 
-type MyTicket = {
+type KenoTicket = {
   ticketId: bigint
-  firstRoundId: bigint
-  draws: number
   spotSize: number
-  wagerPerDraw: string
-  numbers: number[]
-  drawsRemaining: number
-  roundTo: number
-  currentWin: string
-  purchaseTimestamp?: number
-  transactionHash?: string
-  addons?: number[] // Add missing addons property
+  wager: bigint
+  playerNumbers: number[]
+  winningNumbers: number[]
+  hits: number
+  grossPayout: bigint
+  netPayout: bigint
+  timestamp: number
+  paidWithPLS: boolean
 }
 
-// KenoTicket / KenoTicketBarcode commented out from page UI
-// Wrapper component that fetches round history for a keno ticket
-// function KenoTicketWithHistory({
-//   ticket,
-//   index,
-// }: {
-//   ticket: MyTicket
-//   index: number
-// }) {
-//   const ticketForHook = {
-//     numbers: ticket.numbers,
-//     spotSize: ticket.spotSize,
-//     wagerPerDraw: ticket.wagerPerDraw,
-//     firstRoundId: ticket.firstRoundId,
-//     roundTo: ticket.roundTo,
-//     addons: (ticket.addons || []) as any,
-//   }
-//   const { roundHistory } = useKenoTicketRoundHistory(ticketForHook as any)
-//   const isActive = ticket.drawsRemaining > 0
-//   return (
-//     <KenoTicket
-//       key={ticket.ticketId.toString()}
-//       ticketId={ticket.ticketId}
-//       numbers={ticket.numbers}
-//       spotSize={ticket.spotSize}
-//       wager={ticket.wagerPerDraw}
-//       draws={ticket.draws}
-//       drawsRemaining={ticket.drawsRemaining}
-//       firstRoundId={ticket.firstRoundId}
-//       roundTo={ticket.roundTo}
-//       addons={{ multiplier: false, bullsEye: false, plus3: false }}
-//       isActive={isActive}
-//       currentWin={ticket.currentWin}
-//       purchaseTimestamp={ticket.purchaseTimestamp}
-//       transactionHash={ticket.transactionHash}
-//       roundHistory={roundHistory}
-//       index={index}
-//     />
-//   )
-// }
-
-// Memoized function that enriches tickets with round history for LiveKenoBoard
-// Since we can't call hooks in loops, we'll use a simpler approach for now
-function useTicketsWithHistoryMemo(tickets: MyTicket[]) {
-  return useMemo(() => {
-    return tickets.map(t => ({
-      ticketId: t.ticketId,
-      numbers: t.numbers,
-      spotSize: t.spotSize,
-      wager: t.wagerPerDraw,
-      draws: t.draws,
-      drawsRemaining: t.drawsRemaining,
-      firstRoundId: t.firstRoundId,
-      roundTo: t.roundTo,
-      addons: {
-        multiplier: false,
-        bullsEye: false,
-        plus3: false,
-      },
-      isActive: t.drawsRemaining > 0,
-      currentWin: t.currentWin,
-      purchaseTimestamp: t.purchaseTimestamp,
-      roundHistory: [], // For now, LiveKenoBoard won't show round history to avoid hook order issues
-    }))
-  }, [tickets])
+type LastResult = {
+  ticketId: bigint
+  spotSize: number
+  wager: bigint
+  playerNumbers: number[]
+  winningNumbers: number[]
+  hits: number
+  grossPayout: bigint
+  netPayout: bigint
 }
 
-function formatCountdown(target: number | null) {
-  if (!target || target <= 0) return '--:--'
-  const diff = Math.max(0, target - Date.now())
-  const totalSeconds = Math.floor(diff / 1000)
-  const m = Math.floor(totalSeconds / 60)
-  const s = totalSeconds % 60
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+const decodeNumbers = (bitmap: bigint): number[] => {
+  const arr: number[] = []
+  for (let i = 1; i <= 80; i++) {
+    const bit = BigInt(1) << BigInt(i - 1)
+    if ((bitmap & bit) !== BigInt(0)) arr.push(i)
+  }
+  return arr
 }
 
 function KenoIntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -203,6 +117,9 @@ function KenoIntroScreen({ onComplete }: { onComplete: () => void }) {
       }}
       suppressHydrationWarning
     >
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[300px]">
+        <AdSpace slot="loading" width={300} height={100} showCta={false} />
+      </div>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
         <div className="grid grid-cols-5 gap-1 shrink-0">
           {[...Array(10)].map((_, i) => (
@@ -250,167 +167,69 @@ export default function KenoPage() {
   const [showIntro, setShowIntro] = useState(true)
   const handleIntroComplete = useCallback(() => setShowIntro(false), [])
 
+  // Game state
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([])
   const [spotSize, setSpotSize] = useState(8)
-  const [wager, setWager] = useState(1000) // Wager amount in MORBIUS (contract expects MORBIUS amounts)
-  const [draws, setDraws] = useState(1)
+  const [wager, setWager] = useState(1000)
   const [paymentMethod, setPaymentMethod] = useState<'MORBIUS' | 'PLS'>('MORBIUS')
-  const [nextDrawTime, setNextDrawTime] = useState<number | null>(null)
-  const [progress, setProgress] = useState(0)
-  const [currentTime, setCurrentTime] = useState<number>(Date.now())
-  const [activeRoundId, setActiveRoundId] = useState<number>(1)
   const [showPrizePool, setShowPrizePool] = useState(false)
-  const [myTickets, setMyTickets] = useState<MyTicket[]>([])
-  const [loadingMyTickets, setLoadingMyTickets] = useState(false)
-  const [hasLoadedTicketsOnce, setHasLoadedTicketsOnce] = useState(false)
-  const [ticketIds, setTicketIds] = useState<bigint[]>([])
-  const [ticketPurchaseTimestamps, setTicketPurchaseTimestamps] = useState<Map<string, number>>(new Map())
-  const [ticketTransactionHashes, setTicketTransactionHashes] = useState<Map<string, string>>(new Map())
-  const ticketBuilderRef = useRef<HTMLDivElement | null>(null)
-  const [pendingBuy, setPendingBuy] = useState<{
-    roundIdArg: bigint
-    numbersArg: number[]
-    spotArg: number
-    drawsArg: number
-    wagerArg: bigint
-    totalCostWei: bigint
-  } | null>(null)
-  const prevWinningHash = useRef<string>('')
-  const hasShownNoTicketsDialog = useRef(false)
-  const [lastDraw, setLastDraw] = useState<{
-    roundId: number
-    winningNumbers: number[]
-    plus3Numbers: number[]
-    multiplier: number
-    bullsEyeNumber: number
-  } | null>(null)
-  const [showLiveBoard, setShowLiveBoard] = useState(false)
+  const [playerProfileOpen, setPlayerProfileOpen] = useState(false)
+  const [playerProfileGame, setPlayerProfileGame] = useState<'plinko' | 'keno'>('keno')
   const [isNumberPickerCollapsed, setIsNumberPickerCollapsed] = useState(true)
-  const [showNoTicketsDialog, setShowNoTicketsDialog] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
 
+  // Result from last play
+  const [lastResult, setLastResult] = useState<LastResult | null>(null)
+  // True once the LiveKenoBoard draw animation finishes — only then reveal win/loss
+  const [drawComplete, setDrawComplete] = useState(false)
+  // How many balls have been drawn so far during animation
+  const [drawnCount, setDrawnCount] = useState(0)
 
+  const kenoStats = useKenoPlayerStats(address ?? undefined)
 
+  // Recent tickets
+  const [recentTickets, setRecentTickets] = useState<KenoTicket[]>([])
+  const [loadingTickets, setLoadingTickets] = useState(false)
+
+  // Pending approval state for two-step MORBIUS flow
+  const [pendingApproval, setPendingApproval] = useState<{ wagerWei: bigint } | null>(null)
+
+  // Allowance reads
   const { data: allowanceResult } = useReadContracts({
     contracts: address
       ? [
           { address: MORBIUS_TOKEN_ADDRESS, abi: ERC20_ABI, functionName: 'allowance', args: [address, KENO_ADDRESS] },
-          { address: WPLS_TOKEN_ADDRESS, abi: ERC20_ABI, functionName: 'allowance', args: [address, PULSEX_V1_ROUTER_ADDRESS] },
         ]
       : [],
   })
 
-  const { data: currentRoundIdData } = useReadContract({
+  // Contract reserve
+  const { data: contractReserve } = useReadContract({
     address: KENO_ADDRESS,
     abi: KENO_ABI,
-    functionName: 'currentRoundId',
-    query: { refetchInterval: 5000 },
+    functionName: 'getContractReserve',
+    query: { refetchInterval: 15000 },
   })
 
-  const { data: roundData } = useReadContract({
+  // Max wager
+  const { data: maxWagerData } = useReadContract({
     address: KENO_ADDRESS,
     abi: KENO_ABI,
-    functionName: 'getRound',
-    args: [BigInt(activeRoundId)],
-    query: { enabled: activeRoundId > 0, refetchInterval: 5000 },
+    functionName: 'maxWagerPerDraw',
   })
 
-
-  const roundDataAny = (roundData as any) || {}
-  const roundState = Number(roundDataAny.state ?? 0)
-
-  useEffect(() => {
-    if (currentRoundIdData) setActiveRoundId(Number(currentRoundIdData))
-  }, [currentRoundIdData])
-
-  useEffect(() => {
-    const endMs = Number(roundDataAny.endTime ?? 0) * 1000
-    if (endMs > 0) setNextDrawTime(endMs)
-  }, [roundDataAny.endTime])
-
-  useEffect(() => {
-    if (!nextDrawTime) return
-    const timer = setInterval(() => {
-      const now = Date.now()
-      setCurrentTime(now)
-      const total = nextDrawTime - (roundDataAny.startTime ? Number(roundDataAny.startTime) * 1000 : 0)
-      const remaining = Math.max(0, nextDrawTime - now)
-      setProgress(100 - Math.min(100, total > 0 ? (remaining / total) * 100 : 0))
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [nextDrawTime, roundDataAny.startTime])
-
-  const winningNumbers = useMemo(
-    () => Array.from(roundDataAny.winningNumbers || []).map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0),
-    [roundDataAny.winningNumbers]
-  )
-  const plus3Numbers = useMemo(() => {
-    const raw = roundDataAny?.plus3Numbers ?? roundDataAny?.plus3WinningNumbers ?? []
-    return Array.from(raw)
-      .map((n: unknown) => (typeof n === 'bigint' ? Number(n) : typeof n === 'number' ? n : NaN))
-      .filter((n: number) => Number.isFinite(n) && n > 0)
-  }, [roundDataAny])
-  const drawnMultiplier = useMemo(() => Number(roundDataAny.drawnMultiplier ?? 1), [roundDataAny.drawnMultiplier])
-
-  // Capture finalized round for live board
-  useEffect(() => {
-    if (!roundDataAny) return
-
-    // Debug: Log round state to diagnose LiveKenoBoard display issues
-    console.log('🎲 Keno Round State Check:', {
-      roundId: roundDataAny.id?.toString?.(),
-      state: roundState,
-      stateType: typeof roundState,
-      stateNumber: roundState,
-      isFinalized: roundState === 2,
-      winningNumbersLength: winningNumbers.length,
-      winningNumbers: winningNumbers.slice(0, 10),
-      shouldShowBoard: roundState === 2 && winningNumbers.length > 0,
-    })
-
-    if (roundState === 2 && winningNumbers.length) {
-      const sig = `${roundDataAny.id?.toString?.() || ''}|${winningNumbers.join(',')}`
-      if (prevWinningHash.current === sig) {
-        console.log('   ℹ️  Skipping duplicate round draw')
-        return
-      }
-      prevWinningHash.current = sig
-      console.log('   ✅ Setting lastDraw and showing LiveKenoBoard!')
-      setLastDraw({
-        roundId: Number(roundDataAny.id ?? activeRoundId),
-        winningNumbers,
-        plus3Numbers,
-        multiplier: drawnMultiplier,
-        bullsEyeNumber: Number(roundDataAny.bullsEyeNumber ?? 0),
-      })
-      setShowLiveBoard(true)
-    } else {
-      console.log('   ⏳ Round not ready for LiveKenoBoard display')
-    }
-  }, [roundDataAny, roundState, winningNumbers, plus3Numbers, drawnMultiplier, activeRoundId])
-
-
-  const { MORBIUSAllowanceWei, wplsAllowanceWei } = useMemo(() => {
+  const MORBIUSAllowanceWei = useMemo(() => {
     type ReadValue = { result?: bigint } | bigint | undefined
     const res = allowanceResult as ReadValue[] | undefined
-    const extract = (v: ReadValue) => {
-      if (typeof v === 'bigint') return v
-      if (v && typeof v === 'object' && 'result' in v && typeof v.result === 'bigint') return v.result
-      return BigInt(0)
-    }
-    return {
-      MORBIUSAllowanceWei: extract(res && res[0]),
-      wplsAllowanceWei: extract(res && res[1]),
-    }
+    const v = res && res[0]
+    if (typeof v === 'bigint') return v
+    if (v && typeof v === 'object' && 'result' in v && typeof v.result === 'bigint') return v.result
+    return BigInt(0)
   }, [allowanceResult])
 
-  // Calculate total cost
-  const totalCostWei = useMemo(() => {
-    const baseCost = parseEther(wager.toString()) * BigInt(draws)
-    return baseCost
-  }, [wager, draws])
+  const totalCostWei = useMemo(() => parseEther(wager.toString()), [wager])
 
-  const totalCost = useMemo(() => Number(formatEther(totalCostWei)), [totalCostWei])
-
+  // PLS quote
   const { data: wplsQuote } = useReadContract({
     address: PULSEX_V1_ROUTER_ADDRESS,
     abi: ROUTER_ABI,
@@ -429,17 +248,17 @@ export default function KenoPage() {
     const quote = Array.isArray(wplsQuote) ? (wplsQuote as bigint[])[0] ?? BigInt(0) : BigInt(0)
     if (quote === BigInt(0)) return BigInt(0)
     // Apply 50% tax + 20% buffer (matches contract logic)
-    const taxed = (quote * BigInt(15000)) / BigInt(10000)  // 50% tax
-    return (taxed * BigInt(12000)) / BigInt(10000)  // 20% buffer for slippage
+    const taxed = (quote * BigInt(15000)) / BigInt(10000)
+    return (taxed * BigInt(12000)) / BigInt(10000)
   }, [wplsQuote])
 
-  const { writeContract: writeApprove, writeContractAsync: writeApproveAsync, data: approveHash, isPending: isApprovePending, error: approveError } = useWriteContract()
-  const { writeContract: writeBuy, writeContractAsync: writeBuyAsync, data: buyHash, isPending: isBuyPending, error: buyError } = useWriteContract()
-  const { writeContractAsync: writeSwapAsync } = useWriteContract()
+  // Write hooks
+  const { writeContract: writeApprove, data: approveHash, isPending: isApprovePending, error: approveError } = useWriteContract()
+  const { writeContractAsync: writePlayAsync, isPending: isPlayPending, error: playError } = useWriteContract()
 
   const { isLoading: isApproveConfirming, isSuccess: isApproveConfirmed, error: approveConfirmError } = useWaitForTransactionReceipt({ hash: approveHash })
-  const { isLoading: isBuyConfirming, isSuccess: isBuyConfirmed, error: buyConfirmError } = useWaitForTransactionReceipt({ hash: buyHash })
 
+  // Number toggle
   const handleToggleNumber = (n: number) => {
     setSelectedNumbers((prev) => {
       if (prev.includes(n)) return prev.filter((x) => x !== n)
@@ -458,21 +277,68 @@ export default function KenoPage() {
     setSelectedNumbers(picks)
   }
 
-  const handleBuy = async () => {
+  // Parse KenoPlayed event from tx receipt
+  const parseKenoResult = useCallback((receipt: any, playerNums: number[]): LastResult | null => {
+    for (const log of receipt.logs) {
+      try {
+        const decoded = decodeEventLog({
+          abi: KENO_ABI,
+          data: log.data,
+          topics: log.topics,
+        })
+        if (decoded.eventName === 'KenoPlayed') {
+          const args = decoded.args as any
+          return {
+            ticketId: args.ticketId,
+            spotSize: Number(args.spotSize),
+            wager: args.wager,
+            playerNumbers: playerNums,
+            winningNumbers: [], // will be filled from ticket data
+            hits: Number(args.hits),
+            grossPayout: args.grossPayout,
+            netPayout: args.netPayout,
+          }
+        }
+      } catch {
+        // not our event, skip
+      }
+    }
+    return null
+  }, [])
+
+  // Fetch winning numbers from ticket after getting result
+  const enrichResultWithWinningNumbers = useCallback(async (result: LastResult): Promise<LastResult> => {
+    if (!publicClient) return result
+    try {
+      const ticketData = await publicClient.readContract({
+        address: KENO_ADDRESS,
+        abi: KENO_ABI,
+        functionName: 'getTicket',
+        args: [result.ticketId],
+      }) as any
+      const winningNumbers = (ticketData.winningNumbers as number[])
+        .map((n: any) => Number(n))
+        .filter((n: number) => n > 0)
+      return { ...result, winningNumbers }
+    } catch (err) {
+      console.error('Failed to fetch ticket winning numbers', err)
+      return result
+    }
+  }, [publicClient])
+
+  // Main play handler
+  const handlePlay = async () => {
     if (!isConnected || !address) {
-      toast.error('Connect wallet to buy.')
+      toast.error('Connect wallet to play.')
       return
     }
     if (selectedNumbers.length !== spotSize) {
-      toast.error(`Pick ${spotSize} numbers before buying.`)
+      toast.error(`Pick ${spotSize} numbers before playing.`)
       return
     }
-    // Contract automatically handles round creation and transitions
-    // No frontend validation needed - let the contract decide the appropriate round
-    const roundIdArg = BigInt(Math.max(1, activeRoundId))
-    const numbersArg = selectedNumbers.map((n) => Number(n))
-    const wagerArg = parseEther(wager.toString())
-    const purchase = { roundIdArg, numbersArg, spotArg: spotSize, drawsArg: draws, wagerArg, totalCostWei }
+
+    const numbersArg = [...selectedNumbers].sort((a, b) => a - b).map((n) => Number(n))
+    const wagerWei = parseEther(wager.toString())
 
     if (paymentMethod === 'PLS') {
       try {
@@ -480,722 +346,658 @@ export default function KenoPage() {
           toast.error('Unable to quote PLS required. Please try again.')
           return
         }
-        const buyHashTx = await writeBuyAsync({
+        setIsPlaying(true)
+        setDrawComplete(false)
+        setDrawnCount(0)
+        const hash = await writePlayAsync({
           address: KENO_ADDRESS,
           abi: KENO_ABI,
-          functionName: 'buyTicketWithPLS',
-          args: [roundIdArg, numbersArg, spotSize, draws, wagerArg],
+          functionName: 'playKenoWithPLS',
+          args: [numbersArg, spotSize],
           value: wplsRequiredWei,
         } as any)
-        await publicClient?.waitForTransactionReceipt({ hash: buyHashTx })
-        toast.success('Tickets purchased with PLS')
-        triggerSuccessConfetti()
-        setPendingBuy(null)
-      } catch (err) {
+        const receipt = await publicClient?.waitForTransactionReceipt({ hash })
+        if (receipt) {
+          let result = parseKenoResult(receipt, numbersArg)
+          if (result) {
+            result = await enrichResultWithWinningNumbers(result)
+            setLastResult(result)
+            if (result.netPayout > BigInt(0)) triggerSuccessConfetti()
+            loadRecentTickets()
+          }
+        }
+        toast.success('Keno played!')
+      } catch (err: any) {
         console.error(err)
-        const message = err instanceof Error ? err.message : 'Purchase failed'
-        toast.error(message)
-      }
-      return
-    }
-
-    if (MORBIUSAllowanceWei < totalCostWei) {
-      setPendingBuy(purchase)
-      writeApprove({ 
-        address: MORBIUS_TOKEN_ADDRESS, 
-        abi: ERC20_ABI, 
-        functionName: 'approve', 
-        args: [KENO_ADDRESS, totalCostWei],
-      } as any)
-    } else {
-      writeBuy({
-        address: KENO_ADDRESS,
-        abi: KENO_ABI,
-        functionName: 'buyTicket',
-        args: [roundIdArg, numbersArg, spotSize, draws, wagerArg],
-      } as any)
-    }
-  }
-
-  const handleStartTicketBuild = () => {
-    setShowNoTicketsDialog(false)
-    ticketBuilderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  useEffect(() => {
-    if (isApproveConfirmed && pendingBuy) {
-      writeBuy({
-        address: KENO_ADDRESS,
-        abi: KENO_ABI,
-        functionName: 'buyTicket',
-        args: [
-          pendingBuy.roundIdArg,
-          pendingBuy.numbersArg,
-          pendingBuy.spotArg,
-          pendingBuy.drawsArg,
-          pendingBuy.wagerArg,
-        ],
-      } as any)
-      setPendingBuy(null)
-    }
-  }, [isApproveConfirmed, pendingBuy, writeBuy])
-
-  useEffect(() => {
-    if (isBuyConfirmed && publicClient && address) {
-      setTimeout(async () => {
-        try {
-          const fromBlock = KENO_DEPLOY_BLOCK ? BigInt(KENO_DEPLOY_BLOCK) : BigInt(0)
-          const event = parseAbiItem('event TicketPurchased(address indexed player,uint256 indexed ticketId,uint256 indexed firstRoundId,uint8 draws,uint8 spotSize,uint256 wagerPerDraw,uint256 grossCost)')
-          const logs = await publicClient.getLogs({ address: KENO_ADDRESS, event, args: { player: address }, fromBlock, toBlock: 'latest' })
-          const ids = logs.map((l) => l.args.ticketId).filter((id): id is bigint => id !== undefined)
-          setTicketIds(ids)
-          
-          // Fetch timestamps and transaction hashes for each ticket
-          const timestampMap = new Map<string, number>()
-          const txHashMap = new Map<string, string>()
-          for (const log of logs) {
-            if (log.args.ticketId !== undefined) {
-              try {
-                const block = await publicClient.getBlock({ blockNumber: log.blockNumber })
-                timestampMap.set(log.args.ticketId.toString(), Number(block.timestamp) * 1000)
-                txHashMap.set(log.args.ticketId.toString(), log.transactionHash)
-              } catch (err) {
-                console.error('Failed to fetch block timestamp', err)
-              }
-            }
-          }
-          setTicketPurchaseTimestamps(timestampMap)
-          setTicketTransactionHashes(txHashMap)
-          setHasLoadedTicketsOnce(true)
-        } catch (err) {
-          console.error('ticket reload failed', err)
+        if (!err?.message?.includes('User rejected') && !err?.message?.includes('user rejected')) {
+          toast.error(err?.shortMessage || err?.message || 'Play failed')
         }
-      }, 2000)
-    }
-  }, [isBuyConfirmed, publicClient, address])
-
-  useEffect(() => {
-    if (!publicClient || !address) return
-    const loadTickets = async () => {
-      setLoadingMyTickets(true)
-      try {
-        const fromBlock = KENO_DEPLOY_BLOCK ? BigInt(KENO_DEPLOY_BLOCK) : BigInt(0)
-        const event = parseAbiItem('event TicketPurchased(address indexed player,uint256 indexed ticketId,uint256 indexed firstRoundId,uint8 draws,uint8 spotSize,uint256 wagerPerDraw,uint256 grossCost)')
-        const logs = await publicClient.getLogs({ address: KENO_ADDRESS, event, args: { player: address }, fromBlock, toBlock: 'latest' })
-        const ids = logs.map((l) => l.args.ticketId).filter((id): id is bigint => id !== undefined)
-        setTicketIds(ids)
-        
-        // Fetch timestamps and transaction hashes for each ticket
-        const timestampMap = new Map<string, number>()
-        const txHashMap = new Map<string, string>()
-        for (const log of logs) {
-          if (log.args.ticketId !== undefined) {
-            try {
-              const block = await publicClient.getBlock({ blockNumber: log.blockNumber })
-              timestampMap.set(log.args.ticketId.toString(), Number(block.timestamp) * 1000)
-              txHashMap.set(log.args.ticketId.toString(), log.transactionHash)
-            } catch (err) {
-              console.error('Failed to fetch block timestamp', err)
-            }
-          }
-        }
-        setTicketPurchaseTimestamps(timestampMap)
-        setTicketTransactionHashes(txHashMap)
-      } catch (err) {
-        console.error('my tickets query failed', err)
       } finally {
-        setLoadingMyTickets(false)
-        setHasLoadedTicketsOnce(true)
+        setIsPlaying(false)
       }
+      return
     }
-    loadTickets()
-  }, [address, publicClient])
 
-  const { data: ticketDetails } = useReadContracts({
-    contracts: ticketIds.map((id) => ({ address: KENO_ADDRESS, abi: KENO_ABI, functionName: 'getTicket', args: [id] } as const)),
-    query: { enabled: ticketIds.length > 0, refetchInterval: 10000 },
-  }) as { data: any[] | undefined }
-
-  const decodeNumbers = (bitmap: bigint): number[] => {
-    const arr: number[] = []
-    for (let i = 1; i <= 80; i++) {
-      const bit = BigInt(1) << BigInt(i - 1)
-      if ((bitmap & bit) !== BigInt(0)) arr.push(i)
+    // MORBIUS path
+    if (MORBIUSAllowanceWei < wagerWei) {
+      // Need approval first — use two-step flow to preserve user-gesture context
+      setPendingApproval({ wagerWei })
+      writeApprove({
+        address: MORBIUS_TOKEN_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [KENO_ADDRESS, wagerWei],
+      } as any)
+      return
     }
-    return arr
+
+    // Sufficient allowance — play directly
+    try {
+      setIsPlaying(true)
+      setDrawComplete(false)
+      setDrawnCount(0)
+      const hash = await writePlayAsync({
+        address: KENO_ADDRESS,
+        abi: KENO_ABI,
+        functionName: 'playKeno',
+        args: [numbersArg, spotSize, wagerWei],
+      } as any)
+      const receipt = await publicClient?.waitForTransactionReceipt({ hash })
+      if (receipt) {
+        let result = parseKenoResult(receipt, numbersArg)
+        if (result) {
+          result = await enrichResultWithWinningNumbers(result)
+          setLastResult(result)
+          if (result.netPayout > BigInt(0)) triggerSuccessConfetti()
+          loadRecentTickets()
+        }
+      }
+      toast.success('Keno played!')
+    } catch (err: any) {
+      console.error(err)
+      if (!err?.message?.includes('User rejected') && !err?.message?.includes('user rejected')) {
+        toast.error(err?.shortMessage || err?.message || 'Play failed')
+      }
+    } finally {
+      setIsPlaying(false)
+    }
   }
 
-  const calculateRoundWin = useCallback((ticketNumbers: number[], roundWinningNumbers: number[], spotSize: number, wagerPerDraw: bigint) => {
-    let hits = 0
-    for (const n of roundWinningNumbers) {
-      if (ticketNumbers.includes(n)) {
-        hits++
-      }
-    }
-    const baseMult = PAYTABLE[spotSize]?.[hits] ?? 0
-    const total = baseMult * Number(formatEther(wagerPerDraw))
-    return total
-  }, [])
-
-  const myTicketsEnriched: MyTicket[] = useMemo(() => {
-    if (!ticketDetails || ticketDetails.length === 0) return []
-    const enriched: MyTicket[] = []
-    ticketDetails.forEach((td, idx) => {
-      const data: any = (td as any)?.result ?? td
-      if (!data || !ticketIds[idx]) return
-      const from = Number(data.firstRoundId || 0)
-      const draws = Number(data.draws || 0)
-      const spotSize = Number(data.spotSize || 0)
-      const wagerPerDraw = data.wagerPerDraw ? Number(formatEther(data.wagerPerDraw)).toFixed(0) : '0'
-      const numbers = decodeNumbers(data.numbersBitmap || BigInt(0))
-      const lastRound = from + draws - 1
-      const drawsRemaining = activeRoundId < from ? draws : activeRoundId > lastRound ? 0 : lastRound - activeRoundId + 1
-      const currentWin =
-        roundState === 2 && activeRoundId >= from && activeRoundId <= lastRound
-          ? calculateRoundWin(
-              numbers,
-              Array.from(roundDataAny.winningNumbers || []).map((n: any) => Number(n)),
-              spotSize,
-              data.wagerPerDraw
-            ).toFixed(0)
-          : '0'
-      const purchaseTimestamp = ticketPurchaseTimestamps.get(ticketIds[idx].toString())
-      const transactionHash = ticketTransactionHashes.get(ticketIds[idx].toString())
-      enriched.push({
-        ticketId: ticketIds[idx],
-        firstRoundId: BigInt(from),
-        draws,
-        spotSize,
-        wagerPerDraw,
-        numbers,
-        drawsRemaining,
-        roundTo: lastRound,
-        currentWin,
-        purchaseTimestamp,
-        transactionHash,
-      })
-    })
-    return enriched.sort((a, b) => Number(b.ticketId - a.ticketId))
-  }, [ticketDetails, ticketIds, activeRoundId, roundData, calculateRoundWin, ticketPurchaseTimestamps, ticketTransactionHashes] as const)
-
-  // Enrich tickets with round history for LiveKenoBoard
-  const ticketsWithHistory = useTicketsWithHistoryMemo(myTicketsEnriched)
-
+  // After approval confirmed, user needs to click Play again (two-step per wagmi pattern)
   useEffect(() => {
-    if (!isConnected) {
-      setShowNoTicketsDialog(false)
-      hasShownNoTicketsDialog.current = false
-      setHasLoadedTicketsOnce(false)
-      return
+    if (isApproveConfirmed && pendingApproval) {
+      toast.success('Approved! Click Play Now to continue.')
+      setPendingApproval(null)
     }
-    if (!hasLoadedTicketsOnce || loadingMyTickets) return
-    if (myTicketsEnriched.length > 0) {
-      setShowNoTicketsDialog(false)
-      hasShownNoTicketsDialog.current = false
-      return
-    }
-    if (!loadingMyTickets && myTicketsEnriched.length === 0 && !hasShownNoTicketsDialog.current) {
-      setShowNoTicketsDialog(true)
-      hasShownNoTicketsDialog.current = true
-    }
-  }, [hasLoadedTicketsOnce, isConnected, loadingMyTickets, myTicketsEnriched.length])
+  }, [isApproveConfirmed, pendingApproval])
 
-  const roundStats = useMemo(() => {
-    if (!roundDataAny) return null
-    return {
-      poolBalance: roundDataAny.poolBalance ?? BigInt(0),
-      totalBaseWager: roundDataAny.totalBaseWager ?? BigInt(0),
+  // Load recent tickets
+  const loadRecentTickets = useCallback(async () => {
+    if (!publicClient || !address) return
+    setLoadingTickets(true)
+    try {
+      const ticketIds = await publicClient.readContract({
+        address: KENO_ADDRESS,
+        abi: KENO_ABI,
+        functionName: 'getAllPlayerTickets',
+        args: [address],
+      }) as bigint[]
+
+      if (ticketIds.length === 0) {
+        setRecentTickets([])
+        setLoadingTickets(false)
+        return
+      }
+
+      // Get last 20 tickets (most recent)
+      const recentIds = ticketIds.slice(-20)
+
+      const ticketDataArr = await publicClient.readContract({
+        address: KENO_ADDRESS,
+        abi: KENO_ABI,
+        functionName: 'getTickets',
+        args: [recentIds],
+      }) as any[]
+
+      const tickets: KenoTicket[] = ticketDataArr.map((td: any, idx: number) => ({
+        ticketId: recentIds[idx],
+        spotSize: Number(td.spotSize),
+        wager: td.wager,
+        playerNumbers: decodeNumbers(td.numbersBitmap),
+        winningNumbers: (td.winningNumbers as number[]).map((n: any) => Number(n)).filter((n: number) => n > 0),
+        hits: Number(td.hits),
+        grossPayout: td.grossPayout,
+        netPayout: td.netPayout,
+        timestamp: Number(td.timestamp),
+        paidWithPLS: td.paidWithPLS,
+      }))
+
+      setRecentTickets(tickets.reverse())
+    } catch (err) {
+      console.error('Failed to load tickets', err)
+    } finally {
+      setLoadingTickets(false)
     }
-  }, [roundDataAny])
+  }, [publicClient, address])
 
-  const poolDisplay = useMemo(() => (roundStats ? Number(formatEther(roundStats.poolBalance)).toFixed(0) : '0'), [roundStats])
+  // Load tickets on connect
+  useEffect(() => {
+    if (address && publicClient) loadRecentTickets()
+  }, [address, publicClient, loadRecentTickets])
 
+  // Error toasts
   useEffect(() => {
     if (approveError) toast.error(approveError.message || 'Approval failed.')
   }, [approveError])
   useEffect(() => {
-    if (buyError) toast.error(buyError.message || 'Buy failed.')
-  }, [buyError])
+    if (playError) {
+      const msg = (playError as any)?.shortMessage || playError.message || 'Play failed.'
+      if (!msg.includes('User rejected') && !msg.includes('user rejected')) {
+        toast.error(msg)
+      }
+    }
+  }, [playError])
   useEffect(() => {
     if (approveConfirmError) toast.error(approveConfirmError.message || 'Approval failed.')
   }, [approveConfirmError])
-  useEffect(() => {
-    if (buyConfirmError) toast.error(buyConfirmError.message || 'Transaction failed.')
-  }, [buyConfirmError])
+
+  const handlePlayAgain = () => {
+    setLastResult(null)
+    setDrawComplete(false)
+    setDrawnCount(0)
+  }
+
+  const busy = isApprovePending || isApproveConfirming || isPlayPending || isPlaying
 
   if (showIntro) {
     return <KenoIntroScreen onComplete={handleIntroComplete} />
   }
 
+  // Shared ticket builder JSX (used for both mobile and desktop)
+  const ticketBuilder = (
+    <div className="space-y-4 min-w-0 w-full overflow-x-hidden">
+      <h2 className="text-xl font-bold text-white text-center">PLAY KENO</h2>
+
+      {/* Spot Selection & Payout Table - 2 Column */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Spot Size Selection */}
+        <div
+          className="space-y-1 p-3 rounded-lg relative"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            border: '1px inset rgba(60, 60, 60, 0.5)',
+          }}
+        >
+          <div className="relative z-10 space-y-1">
+          <label className="text-white/70 text-sm">How many spots? (1-10)</label>
+          <div className="grid grid-cols-4 gap-1">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+              <button
+                key={num}
+                onClick={() => setSpotSize(num)}
+                className={cn(
+                  "w-full h-8 rounded-lg font-semibold text-sm transition-all hover:opacity-80",
+                  spotSize === num ? "text-cyan-500" : "text-gray-300"
+                )}
+                style={
+                  spotSize === num
+                    ? {
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 12px rgba(34, 197, 94, 0.3)',
+                        border: '1px inset rgba(60, 60, 60, 0.5)',
+                      }
+                    : {
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                        border: '1px inset rgba(60, 60, 60, 0.5)',
+                      }
+                }
+              >
+                {num}
+              </button>
+            ))}
+          </div>
+          </div>
+        </div>
+
+        {/* Payout Table for Selected Spot Size */}
+        <div
+          className="rounded-lg p-3 relative"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            border: '1px inset rgba(60, 60, 60, 0.5)',
+          }}
+        >
+          <div className="relative">
+          <h3 className="text-sm font-bold text-cyan-500 mb-2 text-center">{spotSize}-Spot Payouts</h3>
+          <div className="space-y-1">
+            {Object.entries(PAYTABLE[spotSize] || {}).map(([matches, payout]) => (
+              <div key={matches} className="flex justify-between items-center text-xs">
+                <span className="text-white/70">
+                  {matches === '0' ? 'No Match' : `Match ${matches}${spotSize > 1 ? ` of ${spotSize}` : ''}`}
+                </span>
+                <span className="text-cyan-500 font-semibold">
+                  {payout}x
+                </span>
+              </div>
+            ))}
+          </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Wager */}
+      <div className="space-y-2 mb-4">
+        <label className="block text-sm font-medium text-gray-300">Wager</label>
+        <div className="grid grid-cols-4 gap-1.5">
+          {[2500, 10000, 25000].map((preset) => (
+            <button
+              key={preset}
+              onClick={() => setWager(preset)}
+              className={cn(
+                "w-full py-2.5 text-sm rounded-none transition-all hover:opacity-80",
+                wager === preset ? "text-cyan-500" : "text-white/70"
+              )}
+              style={
+                wager === preset
+                  ? {
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(6, 182, 212, 0.2)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    }
+                  : {
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                      border: '1px inset rgba(60, 60, 60, 0.5)',
+                    }
+              }
+            >
+              {preset.toLocaleString()}
+            </button>
+          ))}
+          <Input
+            type="number"
+            step="1000"
+            min="1000"
+            max="100000"
+            value={wager}
+            onChange={(e) => setWager(parseFloat(e.target.value) || 0)}
+            placeholder="Custom"
+            className="text-white relative col-span-1"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="space-y-3">
+        <h3 className="text-lg font-semibold text-white text-center">PICK YOUR NUMBERS</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={quickPick}
+            className="h-12 font-semibold rounded-xl transition-all relative backdrop-blur-xl hover:bg-white/[0.12]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%)',
+              boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -1px 1px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.18)',
+            }}
+          >
+            <span className="relative z-10 text-cyan-400/70 hover:text-cyan-400/90">Quick Pick</span>
+          </button>
+          <button
+            onClick={() => setSelectedNumbers([])}
+            className="h-12 font-semibold rounded-xl transition-all relative backdrop-blur-xl hover:bg-white/[0.12]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%)',
+              boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -1px 1px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.18)',
+            }}
+          >
+            <span className="relative z-10 text-red-400/70 hover:text-red-400/90">Clear</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Number Selection Section - Collapsible */}
+      <div className="space-y-2">
+        {isNumberPickerCollapsed ? (
+          <button
+            onClick={() => setIsNumberPickerCollapsed(false)}
+            className="w-full h-12 font-semibold rounded-xl transition-all relative backdrop-blur-xl hover:bg-white/[0.12]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%)',
+              boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -1px 1px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.18)',
+            }}
+          >
+            <span className="text-blue-400/70 hover:text-blue-400/90">PICK YOUR OWN NUMBERS</span>
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-white/70">Select {spotSize} number{spotSize !== 1 ? 's' : ''} from 1-80</h4>
+              <button
+                onClick={() => setIsNumberPickerCollapsed(true)}
+                className="text-white/70 hover:text-white text-sm font-medium"
+              >
+                Collapse
+              </button>
+            </div>
+          <div className="w-full overflow-x-hidden">
+            <div className="grid grid-cols-4 gap-1.5 mb-3 w-full">
+          {ALL_NUMBERS.map((n) => {
+            const active = selectedNumbers.includes(n)
+            return (
+              <button
+                key={n}
+                onClick={() => handleToggleNumber(n)}
+                disabled={!active && selectedNumbers.length >= spotSize}
+                className={cn(
+                  'h-8 rounded text-xs font-semibold transition-all cursor-pointer',
+                  active
+                    ? 'bg-white text-black border-white text-md scale-115'
+                    : 'text-white hover:opacity-80'
+                )}
+                style={
+                  !active
+                    ? {
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                        border: '1px inset rgba(60, 60, 60, 0.5)',
+                      }
+                    : undefined
+                }
+              >
+                {n}
+              </button>
+            )
+          })}
+            </div>
+          </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  // Shared confirm panel JSX
+  const confirmPanel = (
+    <div
+      className="rounded-lg p-4 flex flex-col min-w-0 w-full overflow-x-hidden relative"
+      style={{
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        border: '1px inset rgba(60, 60, 60, 0.5)',
+      }}
+    >
+      <div className="relative z-10">
+
+      <div className="mb-4">
+        <h2 className="text-lg font-bold text-white text-center mb-3">PLAY WITH</h2>
+      </div>
+
+      {/* Payment Method Selection */}
+      <div
+        className="mb-4 w-full rounded-lg relative min-h-[88px] grid grid-cols-2 gap-0 overflow-hidden"
+        style={{
+          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+          border: '1px inset rgba(60, 60, 60, 0.5)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setPaymentMethod('MORBIUS')}
+          className={cn(
+            'w-full h-full min-h-[88px] flex items-center justify-center transition-all duration-300 text-2xl font-semibold',
+            paymentMethod === 'MORBIUS'
+              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+              : 'text-white/70 hover:text-white hover:bg-white/5'
+          )}
+        >
+          MORBIUS
+        </button>
+        <button
+          type="button"
+          onClick={() => setPaymentMethod('PLS')}
+          className={cn(
+            'w-full h-full min-h-[88px] flex items-center justify-center transition-all duration-300 text-2xl font-semibold',
+            paymentMethod === 'PLS'
+              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+              : 'text-white/70 hover:text-white hover:bg-white/5'
+          )}
+        >
+          PLS
+        </button>
+      </div>
+
+      {/* Summary */}
+      <div
+        className="space-y-2 border-t border-white/10 pt-3 mb-4 relative"
+        style={{
+          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+          border: '1px inset rgba(60, 60, 60, 0.5)',
+          borderRadius: '0.5rem',
+          padding: '0.75rem',
+        }}
+      >
+        <div className="relative">
+        <div className="flex justify-between text-xs">
+          <span className="text-white/70">Spot Size</span>
+          <span className="text-white font-semibold">{spotSize}</span>
+        </div>
+        <div className="flex justify-between text-xs">
+          <span className="text-white/70">Wager</span>
+          <span className="text-white font-semibold">{wager.toLocaleString()} MORBIUS</span>
+        </div>
+        <div className="flex justify-between text-xs pt-2 border-t border-white/10">
+          <span className="text-white/70">Total Cost</span>
+          <span className="text-white font-semibold">
+            {paymentMethod === 'PLS' ? (
+              `~${Number(formatEther(wplsRequiredWei)).toFixed(0)} PLS`
+            ) : (
+              `${wager.toLocaleString()} MORBIUS`
+            )}
+          </span>
+        </div>
+        </div>
+      </div>
+
+      {/* Play Button */}
+      {!isConnected ? (
+        <ConnectButton />
+      ) : (
+        <Button
+          className={cn(
+            'w-full h-12 font-semibold hover:opacity-80',
+            (busy || selectedNumbers.length !== spotSize)
+              ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold'
+              : 'text-white'
+          )}
+          style={
+            !(busy || selectedNumbers.length !== spotSize)
+              ? {
+                  background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(22, 163, 74, 0.85))',
+                  boxShadow: '0 4px 0 rgba(21, 128, 61, 0.8), 0 6px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                  border: '1px solid rgba(74, 222, 128, 0.5)',
+                }
+              : undefined
+          }
+          disabled={busy || selectedNumbers.length !== spotSize}
+          onClick={handlePlay}
+        >
+          {isApprovePending || isApproveConfirming ? (
+            <AnimatedShinyText className="text-white/40 [-webkit-text-stroke:0.1px_black] font-bold">Approving...</AnimatedShinyText>
+          ) : isPlayPending || isPlaying ? (
+            <AnimatedShinyText className="text-white/40 [-webkit-text-stroke:0.1px_black] font-bold">Playing...</AnimatedShinyText>
+          ) : selectedNumbers.length !== spotSize ? (
+            `Select ${spotSize - selectedNumbers.length} more number${spotSize - selectedNumbers.length !== 1 ? 's' : ''}`
+          ) : (
+            <AnimatedShinyText className="text-white [-webkit-text-stroke:0.1px_black] font-bold">
+              {paymentMethod === 'PLS' ? 'Play with PLS' : 'Play Now'}
+            </AnimatedShinyText>
+          )}
+        </Button>
+      )}
+      </div>
+    </div>
+  )
+
   return (
-    <div 
+    <div
       className="min-h-screen text-white"
       style={{
         background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95))',
       }}
     >
-      <GlobalMainNav 
+      <GlobalMainNav
         onShowKenoPrizePool={() => setShowPrizePool(true)}
+        onOpenPlayerProfile={address ? (game) => { setPlayerProfileGame(game); setPlayerProfileOpen(true); } : undefined}
       >
       <main className="px-2 sm:px-4 md:px-6 pb-16 pt-4 md:pt-2 w-full max-w-full overflow-x-hidden">
-        <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6">
-          {/* LEFT COLUMN */}
-          <div className="flex flex-col gap-6">
-            {lastDraw && showLiveBoard && (
-              <div id="live-keno-board">
-                <LiveKenoBoard
-                  roundId={lastDraw.roundId}
-                  winningNumbers={lastDraw.winningNumbers}
-                  plus3Numbers={lastDraw.plus3Numbers}
-                  multiplier={lastDraw.multiplier}
-                  bullsEyeNumber={lastDraw.bullsEyeNumber}
-                  active={showLiveBoard}
-                  onClose={() => setShowLiveBoard(false)}
-                  nextDrawTime={nextDrawTime ? Math.floor(nextDrawTime / 1000) : undefined}
-                  tickets={ticketsWithHistory}
-                  insertAfterYourNumbers={
-                    <div className="lg:hidden -mt-4">
-                      <Card
-                        className="relative overflow-hidden p-0 w-full max-w-full"
+        <div className="flex flex-col md:grid md:grid-cols-2 gap-6">
+          {/* LEFT COLUMN: Live board always visible — min-height keeps layout stable when overlay shows/hides */}
+          <div className="flex flex-col gap-6 order-1 md:order-none min-h-[520px] md:min-h-[580px]">
+            {/* Live Keno Board — fixed min-height so overlay doesn't change column size */}
+            <div id="live-keno-board" className="min-h-[380px] flex flex-col">
+              <LiveKenoBoard
+                winningNumbers={lastResult?.winningNumbers ?? []}
+                active={!!lastResult}
+                onDrawComplete={() => setDrawComplete(true)}
+                onDrawProgress={(drawn, total) => setDrawnCount(drawn)}
+                tickets={lastResult ? [{
+                  ticketId: lastResult.ticketId,
+                  numbers: lastResult.playerNumbers,
+                  spotSize: lastResult.spotSize,
+                  wager: Number(formatEther(lastResult.wager)).toFixed(0),
+                  draws: 1,
+                  // Keep drawsRemaining at 1 during animation so "Your Numbers" stays visible;
+                  // the filteredTickets filter in LiveKenoBoard also bypasses this when active=true
+                  drawsRemaining: drawComplete ? 0 : 1,
+                  firstRoundId: BigInt(0),
+                  roundTo: 0,
+                  isActive: !drawComplete,
+                  currentWin: drawComplete ? Number(formatEther(lastResult.netPayout)).toFixed(0) : '0',
+                }] : selectedNumbers.length > 0 ? [{
+                  ticketId: BigInt(0),
+                  numbers: selectedNumbers,
+                  spotSize,
+                  wager: wager.toString(),
+                  draws: 1,
+                  drawsRemaining: 1,
+                  firstRoundId: BigInt(0),
+                  roundTo: 0,
+                  isActive: true,
+                  currentWin: '0',
+                }] : []}
+              />
+            </div>
+
+            {/* Result / drawing status card */}
+            {lastResult && !drawComplete && (
+              <Card
+                className="relative overflow-hidden"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                }}
+              >
+                <div className="p-4 flex flex-col items-center gap-3 text-center">
+                  <p className="font-russo-one text-xl tracking-wide text-white drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]">
+                    Drawing Numbers
+                  </p>
+                  <p className="text-sm text-white/60">
+                    {drawnCount} of 20 balls drawn
+                  </p>
+                  <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-2 rounded-full bg-cyan-500 transition-all duration-500"
+                      style={{ width: `${(drawnCount / 20) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-white/40">Results revealed when drawing completes</p>
+                </div>
+              </Card>
+            )}
+            {/* Mobile ticket builder */}
+            <div className="md:hidden">
+              <Card
+                className="relative overflow-hidden p-0 w-full max-w-full"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                }}
+              >
+                <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
+                  {ticketBuilder}
+                  {confirmPanel}
+                </div>
+                {lastResult && !drawComplete && (
+                  <div
+                    className="absolute inset-0 z-20 flex flex-col rounded-lg"
+                    style={{
+                      background: 'linear-gradient(325deg, rgba(16, 20, 24, 0.98), rgba(24, 28, 32, 0.98))',
+                    }}
+                  >
+                    <div className="flex-1 min-h-0 p-3 grid grid-cols-3 grid-rows-3 gap-2 border-b border-white/10">
+                      {[
+                        { label: 'Balls left', value: <NumberTicker value={20 - drawnCount} animateOnChange direction="down" startValue={20} className="font-russo-one text-2xl md:text-3xl font-black tabular-nums text-white drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" /> },
+                        { label: 'Drawn', value: `${drawnCount} / 20` },
+                        { label: 'Spot', value: lastResult?.spotSize ?? '—' },
+                        { label: 'Wager', value: lastResult ? `${Number(formatEther(lastResult.wager)).toLocaleString()}` : '—' },
+                        { label: 'Total plays', value: kenoStats.totalPlays.toString() },
+                        { label: 'Wagered', value: Number(formatEther(kenoStats.totalWagered)).toLocaleString() },
+                        { label: 'Total won', value: Number(formatEther(kenoStats.totalWon)).toLocaleString() },
+                        { label: 'Win rate', value: `${kenoStats.winRate.toFixed(1)}%` },
+                        { label: 'P/L', value: (kenoStats.profitLoss >= 0n ? '+' : '') + Number(formatEther(kenoStats.profitLoss >= 0n ? kenoStats.profitLoss : -kenoStats.profitLoss)).toLocaleString(), highlight: true },
+                      ].map((stat, i) => (
+                        <div
+                          key={i}
+                          className="flex flex-col items-center justify-center rounded-lg p-2 min-h-0"
+                          style={{
+                            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                            boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.5)',
+                            border: '1px solid rgba(60, 60, 60, 0.5)',
+                          }}
+                        >
+                          <span className="text-cyan-300/80 text-[10px] font-bold uppercase tracking-wider truncate w-full text-center">{stat.label}</span>
+                          <span className={cn('text-white font-bold text-sm md:text-base tabular-nums mt-0.5', stat.highlight && (kenoStats.profitLoss >= 0n ? 'text-emerald-400' : 'text-red-400'))}>
+                            {stat.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex-1 min-h-0 flex items-center justify-center p-4">
+                      <div
+                        className="w-full h-full min-h-[80px] flex items-center justify-center rounded-lg border border-dashed border-white/20 text-white/40 text-sm"
                         style={{
-                          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                          border: '1px inset rgba(60, 60, 60, 0.5)',
+                          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.6), rgba(40, 40, 40, 0.4))',
                         }}
                       >
-                        {/* Radial gradient overlay */}
-                        <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
-                          {/* LEFT PANEL - Builder */}
-                          <div className="space-y-4 min-w-0 w-full overflow-x-hidden">
-                            <h2 className="text-xl font-bold text-white">BUILD YOUR KENO TICKET</h2>
-
-                            {/* Spot Selection & Payout Table - 2 Column */}
-                            <div className="grid grid-cols-2 gap-4">
-                              {/* Spot Size Selection */}
-                              <div
-                                className="space-y-1 p-3 rounded-lg relative"
-                                style={{
-                                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                                }}
-                              >
-                                {/* Radial gradient overlay */}
-                                <div className="relative z-10 space-y-1">
-                                <label className="text-white/70 text-sm">How many spots? (1-10)</label>
-                                <div className="grid grid-cols-4 gap-1">
-                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                                    <button
-                                      key={num}
-                                      onClick={() => setSpotSize(num)}
-                                      className={cn(
-                                        "w-full h-8 rounded-lg font-semibold text-sm transition-all hover:opacity-80",
-                                        spotSize === num ? "text-cyan-500" : "text-gray-300"
-                                      )}
-                                      style={
-                                        spotSize === num
-                                          ? {
-                                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 12px rgba(34, 197, 94, 0.3)',
-                                              border: '1px inset rgba(60, 60, 60, 0.5)',
-                                            }
-                                          : {
-                                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                              border: '1px inset rgba(60, 60, 60, 0.5)',
-                                            }
-                                      }
-                                    >
-                                      {num}
-                                    </button>
-                                  ))}
-                                </div>
-                                </div>
-                              </div>
-
-                              {/* Payout Table for Selected Spot Size */}
-                              <div
-                                className="rounded-lg p-3 relative"
-                                style={{
-                                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                                }}
-                              >
-                                {/* Radial gradient overlay */}
-                                <div className="relative">
-                                <h3 className="text-sm font-bold text-cyan-500 mb-2 text-center">{spotSize}-Spot Payouts</h3>
-                                <div className="space-y-1">
-                                  {Object.entries(PAYTABLE[spotSize] || {}).map(([matches, payout]) => (
-                                    <div key={matches} className="flex justify-between items-center text-xs">
-                                      <span className="text-white/70">
-                                        {matches === '0' ? 'No Match' : `Match ${matches}${spotSize > 1 ? ` of ${spotSize}` : ''}`}
-                                      </span>
-                                      <span className="text-cyan-500 font-semibold">
-                                        {payout}x
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Wager */}
-                            <div className="space-y-2 mb-4">
-                              <label className="block text-sm font-medium text-gray-300">Wager per Draw</label>
-                              <Input
-                                type="number"
-                                step="1000"
-                                min="1000"
-                                max="100000"
-                                value={wager}
-                                onChange={(e) => setWager(parseFloat(e.target.value) || 0)}
-                                className="text-white relative"
-                                style={{
-                                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                                }}
-                              />
-                              <div className="grid grid-cols-3 gap-1.5">
-                                {[1000, 5000, 10000, 25000, 50000, 100000].map((preset) => (
-                                  <button
-                                    key={preset}
-                                    onClick={() => setWager(preset)}
-                                    className={cn(
-                                      "w-full py-2.5 text-sm rounded-none transition-all hover:opacity-80",
-                                      wager === preset ? "text-cyan-500" : "text-white/70"
-                                    )}
-                                    style={
-                                      wager === preset
-                                        ? {
-                                            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(6, 182, 212, 0.2)',
-                                            border: '1px inset rgba(60, 60, 60, 0.5)',
-                                          }
-                                        : {
-                                            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                            border: '1px inset rgba(60, 60, 60, 0.5)',
-                                          }
-                                    }
-                                  >
-                                    {preset.toLocaleString()}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Quick Actions - Always Visible */}
-                            <div className="space-y-3">
-                              <h3 className="text-lg font-semibold text-white">Pick your numbers</h3>
-                              <div className="grid grid-cols-2 gap-3">
-                                <button
-                                  onClick={quickPick}
-                                  className="h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all relative"
-                                  style={{
-                                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                    border: '1px inset rgba(60, 60, 60, 0.5)',
-                                  }}
-                                >
-                                  {/* Radial gradient overlay */}
-                                  <span className="relative z-10">Quick Pick</span>
-                                </button>
-                                <button
-                                  onClick={() => setSelectedNumbers([])}
-                                  className="h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all relative"
-                                  style={{
-                                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                    border: '1px inset rgba(60, 60, 60, 0.5)',
-                                  }}
-                                >
-                                  {/* Radial gradient overlay */}
-                                  <span className="relative z-10">Clear</span>
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Number Selection Section - Collapsible */}
-                            <div className="space-y-2">
-                              {isNumberPickerCollapsed ? (
-                                <button
-                                  onClick={() => setIsNumberPickerCollapsed(false)}
-                                  className="w-full h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all"
-                                  style={{
-                                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                    border: '1px inset rgba(60, 60, 60, 0.5)',
-                                  }}
-                                >
-                                  Pick Your Own Numbers
-                                </button>
-                              ) : (
-                                <div className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <h4 className="text-sm font-medium text-white/70">Select {spotSize} number{spotSize !== 1 ? 's' : ''} from 1-80</h4>
-                                    <button
-                                      onClick={() => setIsNumberPickerCollapsed(true)}
-                                      className="text-white/70 hover:text-white text-sm underline"
-                                    >
-                                      Collapse
-                                    </button>
-                                  </div>
-                                <div className="w-full overflow-x-hidden">
-                                  <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5 mb-3 w-full">
-                                {ALL_NUMBERS.map((n) => {
-                                  const active = selectedNumbers.includes(n)
-                                  return (
-                                    <button
-                                      key={n}
-                                      onClick={() => handleToggleNumber(n)}
-                                      disabled={!active && selectedNumbers.length >= spotSize}
-                                      className={cn(
-                                        'h-8 rounded text-xs font-semibold transition-all cursor-pointer',
-                                        active
-                                          ? 'bg-white text-black border-white text-md scale-115'
-                                          : 'text-white hover:opacity-80'
-                                      )}
-                                      style={
-                                        !active
-                                          ? {
-                                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                              border: '1px inset rgba(60, 60, 60, 0.5)',
-                                            }
-                                          : undefined
-                                      }
-                                    >
-                                      {n}
-                                    </button>
-                                  )
-                                })}
-                                  </div>
-                                </div>
-                                </div>
-                              )}
-
-                            </div>
-
-                          </div>
-
-                          {/* RIGHT PANEL - Confirm */}
-                          <div
-                            className="rounded-lg p-4 flex flex-col min-w-0 w-full overflow-x-hidden relative"
-                            style={{
-                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                              border: '1px inset rgba(60, 60, 60, 0.5)',
-                            }}
-                          >
-                            {/* Radial gradient overlay */}
-                            <div className="relative z-10">
-
-                            {/* Selected Numbers Display */}
-                            <div className="mb-4">
-                              <h2 className="text-lg font-bold text-white text-center mb-3">CONFIRM</h2>
-                              <div
-                                className="rounded-lg p-3 relative"
-                                style={{
-                                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                                }}
-                              >
-                                {/* Radial gradient overlay */}
-                                <div className="relative">
-                                <div className="text-sm text-white/70 mb-2 text-center">Numbers selected</div>
-                                <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center mb-2">
-                                  {selectedNumbers.length > 0 ? (
-                                    selectedNumbers.map((n) => (
-                                      <span
-                                        key={n}
-                                        className="h-7 min-w-7 px-2 flex items-center justify-center rounded-full bg-white text-black font-bold text-sm"
-                                      >
-                                        {n}
-                                      </span>
-                                    ))
-                                  ) : (
-                                    <span className="text-white/50 text-sm">Select {spotSize} numbers</span>
-                                  )}
-                                </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Payment Method Selection */}
-                            <div
-                              className="mb-4 p-3 rounded-lg relative"
-                              style={{
-                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                border: '1px inset rgba(60, 60, 60, 0.5)',
-                              }}
-                            >
-                              {/* Radial gradient overlay */}
-                              <div className="relative">
-                              <div className="text-xs text-white/70 mb-2 font-medium text-center">Pay In...</div>
-                              <div className="flex items-center justify-center gap-4">
-                                <span
-                                  className={cn(
-                                    'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
-                                    paymentMethod === 'MORBIUS'
-                                      ? 'mitr-semibold bg-gradient-to-r from-cyan-400 to-cyan-600 bg-clip-text text-purple-500'
-                                      : 'mitr-regular text-white hover:text-white'
-                                  )}
-                                  onClick={() => setPaymentMethod('MORBIUS')}
-                                >
-                                  MORBIUS
-                                </span>
-                                <span className="text-white/50 text-xl">/</span>
-                                <span
-                                  className={cn(
-                                    'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
-                                    paymentMethod === 'PLS'
-                                      ? 'mitr-semibold bg-gradient-to-r from-pink-400 via-red-400 to-cyan-500 bg-clip-text text-purple-500'
-                                      : 'mitr-regular text-white/70 hover:text-white'
-                                  )}
-                                  onClick={() => setPaymentMethod('PLS')}
-                                >
-                                  PLS
-                                </span>
-                              </div>
-                              </div>
-                            </div>
-
-                            {/* Summary */}
-                            <div
-                              className="space-y-2 border-t border-white/10 pt-3 mb-4 relative"
-                              style={{
-                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                border: '1px inset rgba(60, 60, 60, 0.5)',
-                                borderRadius: '0.5rem',
-                                padding: '0.75rem',
-                              }}
-                            >
-                              {/* Radial gradient overlay */}
-                              <div className="relative">
-                              <div className="flex justify-between text-xs">
-                                <span className="text-white/70">Spot Size</span>
-                                <span className="text-white font-semibold">{spotSize}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-white/70">Numbers Selected</span>
-                                <span className="text-white font-semibold">{selectedNumbers.length}/{spotSize}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-white/70">Wager per Draw</span>
-                                <span className="text-white font-semibold">{wager} MORBIUS</span>
-                              </div>
-                              <div className="flex justify-between text-xs pt-2 border-t border-white/10">
-                                <span className="text-white/70">Total Cost</span>
-                                <span className="text-white font-semibold">
-                                  {paymentMethod === 'PLS' ? (
-                                    `~${Number(formatEther(wplsRequiredWei)).toFixed(0)} PLS`
-                                  ) : (
-                                    `${wager} MORBIUS`
-                                  )}
-                                </span>
-                              </div>
-                              </div>
-                            </div>
-
-                            {/* Buy Button */}
-                            {!isConnected ? (
-                              <ConnectButton />
-                            ) : (
-                              <Button
-                                className={cn(
-                                  'w-full h-12 font-semibold hover:opacity-80',
-                                  (isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize)
-                                    ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold'
-                                    : 'text-white'
-                                )}
-                                style={
-                                  !(isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize)
-                                    ? {
-                                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                        border: '1px inset rgba(60, 60, 60, 0.5)',
-                                      }
-                                    : undefined
-                                }
-                                disabled={isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize}
-                                onClick={handleBuy}
-                              >
-                                {isApprovePending || isApproveConfirming ? (
-                                  <AnimatedShinyText className="text-white/40 [-webkit-text-stroke:0.1px_black] font-bold">Approving...</AnimatedShinyText>
-                                ) : isBuyPending || isBuyConfirming ? (
-                                  <AnimatedShinyText className="text-white/40 [-webkit-text-stroke:0.1px_black] font-bold">Processing...</AnimatedShinyText>
-                                ) : selectedNumbers.length !== spotSize ? (
-                                  `Select ${spotSize - selectedNumbers.length} more number${spotSize - selectedNumbers.length !== 1 ? 's' : ''}`
-                                ) : (
-                                  <AnimatedShinyText className="text-white [-webkit-text-stroke:0.1px_black] font-bold">
-                                    {paymentMethod === 'PLS' ? 'Buy with PLS' : 'Buy Ticket'}
-                                  </AnimatedShinyText>
-                                )}
-                              </Button>
-                            )}
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
-                    </div>
-                  }
-                />
-              </div>
-            )}
-
-            {/* Round Status */}
-            <Card
-              className="p-4 relative order-3 lg:order-none"
-              style={{
-                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px inset rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              {/* Radial gradient overlay */}
-              <div className="relative">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-3 h-3 rounded-full",
-                      roundState === 1 ? "bg-cyan-500" :
-                      roundState === 2 ? "bg-blue-500" :
-                      "bg-yellow-500"
-                    )} />
-                    <div>
-                      <p className="text-white font-semibold">
-                        Round {activeRoundId}
-                      </p>
-                      <p className="text-sm text-gray-400">
-                        {roundState === 0 ? 'Round will start when purchased' :
-                         roundState === 1 ? 'Accepting tickets' :
-                         roundState === 2 ? 'Finalized (next round available)' :
-                         'Unknown state'}
-                      </p>
+                        Advertisement
+                      </div>
                     </div>
                   </div>
-                  {nextDrawTime && (
-                    <div className="text-right">
-                      <p className="text-white font-semibold">
-                        {formatCountdown(nextDrawTime)}
-                      </p>
-                      <p className="text-sm text-gray-400">until draw</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Card>
+                )}
+              </Card>
+            </div>
+
+            {/* Advertising space — fixed height so board/betting panel/ad stay same size after game */}
+            <AdSpace slot="default" />
+
           </div>
 
-          {/* RIGHT COLUMN - Ticket Builder */}
-          {/* Mobile: appears after LiveKenoBoard (which contains "Your Numbers" as 2nd item) */}
-          <div className="hidden lg:block order-2 lg:order-none">
+          {/* RIGHT COLUMN - Ticket Builder (desktop only) — min-height matches left so columns stay same size */}
+          <div className="hidden md:block order-2 md:order-none min-h-[520px] md:min-h-[580px]">
             <Card
               className="relative overflow-hidden p-0 w-full max-w-full"
               style={{
@@ -1204,433 +1006,108 @@ export default function KenoPage() {
                 border: '1px inset rgba(60, 60, 60, 0.5)',
               }}
             >
-          {/* Radial gradient overlay */}
-
-          <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
-            {/* LEFT PANEL - Builder */}
-            <div className="space-y-4 min-w-0 w-full overflow-x-hidden">
-              <h2 className="text-xl font-bold text-white">BUILD YOUR KENO TICKET</h2>
-
-              {/* Spot Selection & Payout Table - 2 Column */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Spot Size Selection */}
+              <div className="relative flex flex-col gap-4 p-4 min-h-0 overflow-x-hidden w-full">
+                {ticketBuilder}
+                {confirmPanel}
+              </div>
+              {lastResult && !drawComplete && (
                 <div
-                  className="space-y-1 p-3 rounded-lg relative"
+                  className="absolute inset-0 z-20 flex flex-col rounded-lg"
                   style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                    background: 'linear-gradient(325deg, rgba(16, 20, 24, 0.98), rgba(24, 28, 32, 0.98))',
                   }}
                 >
-                  {/* Radial gradient overlay */}
-                  <div className="relative z-10 space-y-1">
-                  <label className="text-white/70 text-sm">How many spots? (1-10)</label>
-                  <div className="grid grid-cols-4 gap-1">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                      <button
-                        key={num}
-                        onClick={() => setSpotSize(num)}
-                        className={cn(
-                          "w-full h-8 rounded-lg font-semibold text-sm transition-all hover:opacity-80",
-                          spotSize === num ? "text-cyan-500" : "text-gray-300"
-                        )}
-                        style={
-                          spotSize === num
-                            ? {
-                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 12px rgba(34, 197, 94, 0.3)',
-                                border: '1px inset rgba(60, 60, 60, 0.5)',
-                              }
-                            : {
-                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                border: '1px inset rgba(60, 60, 60, 0.5)',
-                              }
-                        }
+                  <div className="flex-1 min-h-0 p-3 grid grid-cols-3 grid-rows-3 gap-2 border-b border-white/10">
+                    {[
+                      { label: 'Balls left', value: <NumberTicker value={20 - drawnCount} animateOnChange direction="down" startValue={20} className="font-russo-one text-2xl md:text-3xl font-black tabular-nums text-white drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" /> },
+                      { label: 'Drawn', value: `${drawnCount} / 20` },
+                      { label: 'Spot', value: lastResult?.spotSize ?? '—' },
+                      { label: 'Wager', value: lastResult ? `${Number(formatEther(lastResult.wager)).toLocaleString()}` : '—' },
+                      { label: 'Total plays', value: kenoStats.totalPlays.toString() },
+                      { label: 'Wagered', value: Number(formatEther(kenoStats.totalWagered)).toLocaleString() },
+                      { label: 'Total won', value: Number(formatEther(kenoStats.totalWon)).toLocaleString() },
+                      { label: 'Win rate', value: `${kenoStats.winRate.toFixed(1)}%` },
+                      { label: 'P/L', value: (kenoStats.profitLoss >= 0n ? '+' : '') + Number(formatEther(kenoStats.profitLoss >= 0n ? kenoStats.profitLoss : -kenoStats.profitLoss)).toLocaleString(), highlight: true },
+                    ].map((stat, i) => (
+                      <div
+                        key={i}
+                        className="flex flex-col items-center justify-center rounded-lg p-2 min-h-0"
+                        style={{
+                          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                          boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.5)',
+                          border: '1px solid rgba(60, 60, 60, 0.5)',
+                        }}
                       >
-                        {num}
-                      </button>
-                    ))}
-                  </div>
-                  </div>
-                </div>
-
-                {/* Payout Table for Selected Spot Size */}
-                <div
-                  className="rounded-lg p-3 relative"
-                  style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px inset rgba(60, 60, 60, 0.5)',
-                  }}
-                >
-                  {/* Radial gradient overlay */}
-                  <div className="relative">
-                  <h3 className="text-sm font-bold text-cyan-500 mb-2 text-center">{spotSize}-Spot Payouts</h3>
-                  <div className="space-y-1">
-                    {Object.entries(PAYTABLE[spotSize] || {}).map(([matches, payout]) => (
-                      <div key={matches} className="flex justify-between items-center text-xs">
-                        <span className="text-white/70">
-                          {matches === '0' ? 'No Match' : `Match ${matches}${spotSize > 1 ? ` of ${spotSize}` : ''}`}
-                        </span>
-                        <span className="text-cyan-500 font-semibold">
-                          {payout}x
+                        <span className="text-cyan-300/80 text-[10px] font-bold uppercase tracking-wider truncate w-full text-center">{stat.label}</span>
+                        <span className={cn('text-white font-bold text-sm md:text-base tabular-nums mt-0.5', stat.highlight && (kenoStats.profitLoss >= 0n ? 'text-emerald-400' : 'text-red-400'))}>
+                          {stat.value}
                         </span>
                       </div>
                     ))}
                   </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Wager */}
-              <div className="space-y-2 mb-4">
-                <label className="block text-sm font-medium text-gray-300">Wager per Draw</label>
-                <Input
-                  type="number"
-                  step="1000"
-                  min="1000"
-                  max="100000"
-                  value={wager}
-                  onChange={(e) => setWager(parseFloat(e.target.value) || 0)}
-                  className="text-white relative"
-                  style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px inset rgba(60, 60, 60, 0.5)',
-                  }}
-                />
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[1000, 5000, 10000, 25000, 50000, 100000].map((preset) => (
-                    <button
-                      key={preset}
-                      onClick={() => setWager(preset)}
-                      className={cn(
-                        "w-full py-2.5 text-sm rounded-none transition-all hover:opacity-80",
-                        wager === preset ? "text-cyan-500" : "text-white/70"
-                      )}
-                      style={
-                        wager === preset
-                          ? {
-                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(6, 182, 212, 0.2)',
-                              border: '1px inset rgba(60, 60, 60, 0.5)',
-                            }
-                          : {
-                              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                              border: '1px inset rgba(60, 60, 60, 0.5)',
-                            }
-                      }
+                  <div className="flex-1 min-h-0 flex items-center justify-center p-4">
+                    <div
+                      className="w-full h-full min-h-[80px] flex items-center justify-center rounded-lg border border-dashed border-white/20 text-white/40 text-sm"
+                      style={{
+                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.6), rgba(40, 40, 40, 0.4))',
+                      }}
                     >
-                      {preset.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Quick Actions - Always Visible */}
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold text-white">Pick your numbers</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={quickPick}
-                    className="h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all relative"
-                    style={{
-                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      border: '1px inset rgba(60, 60, 60, 0.5)',
-                    }}
-                  >
-                    {/* Radial gradient overlay */}
-                    <span className="relative z-10">Quick Pick</span>
-                  </button>
-                  <button
-                    onClick={() => setSelectedNumbers([])}
-                    className="h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all relative"
-                    style={{
-                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      border: '1px inset rgba(60, 60, 60, 0.5)',
-                    }}
-                  >
-                    {/* Radial gradient overlay */}
-                    <span className="relative z-10">Clear</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Number Selection Section - Collapsible */}
-              <div className="space-y-2">
-                {isNumberPickerCollapsed ? (
-                  <button
-                    onClick={() => setIsNumberPickerCollapsed(false)}
-                    className="w-full h-12 text-white font-semibold rounded-lg hover:opacity-80 transition-all"
-                    style={{
-                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      border: '1px inset rgba(60, 60, 60, 0.5)',
-                    }}
-                  >
-                    Pick Your Own Numbers
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-medium text-white/70">Select {spotSize} number{spotSize !== 1 ? 's' : ''} from 1-80</h4>
-                      <button
-                        onClick={() => setIsNumberPickerCollapsed(true)}
-                        className="text-white/70 hover:text-white text-sm underline"
-                      >
-                        Collapse
-                      </button>
-                    </div>
-                  <div className="w-full overflow-x-hidden">
-                    <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5 mb-3 w-full">
-                  {ALL_NUMBERS.map((n) => {
-                    const active = selectedNumbers.includes(n)
-                    return (
-                      <button
-                        key={n}
-                        onClick={() => handleToggleNumber(n)}
-                        disabled={!active && selectedNumbers.length >= spotSize}
-                        className={cn(
-                          'h-8 rounded text-xs font-semibold transition-all cursor-pointer',
-                          active
-                            ? 'bg-white text-black border-white text-md scale-115'
-                            : 'text-white hover:opacity-80'
-                        )}
-                        style={
-                          !active
-                            ? {
-                                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                                border: '1px inset rgba(60, 60, 60, 0.5)',
-                              }
-                            : undefined
-                        }
-                      >
-                        {n}
-                      </button>
-                    )
-                  })}
+                      Advertisement
                     </div>
                   </div>
-                  </div>
-                )}
-
-              </div>
-
-            </div>
-
-            {/* RIGHT PANEL - Confirm */}
-            <div
-              className="rounded-lg p-4 flex flex-col min-w-0 w-full overflow-x-hidden relative"
-              style={{
-                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px inset rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              {/* Radial gradient overlay */}
-              <div className="relative z-10">
-
-              {/* Selected Numbers Display */}
-              <div className="mb-4">
-                <h2 className="text-lg font-bold text-white text-center mb-3">CONFIRM</h2>
-                <div
-                  className="rounded-lg p-3 relative"
-                  style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    border: '1px inset rgba(60, 60, 60, 0.5)',
-                  }}
-                >
-                  {/* Radial gradient overlay */}
-                  <div className="relative">
-                  <div className="text-sm text-white/70 mb-2 text-center">Numbers selected</div>
-                  <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center mb-2">
-                    {selectedNumbers.length > 0 ? (
-                      selectedNumbers.map((n) => (
-                        <span
-                          key={n}
-                          className="h-7 min-w-7 px-2 flex items-center justify-center rounded-full bg-white text-black font-bold text-sm"
-                        >
-                          {n}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-white/50 text-sm">Select {spotSize} numbers</span>
-                    )}
-                  </div>
-                  </div>
                 </div>
-              </div>
-
-              {/* Payment Method Selection */}
-              <div
-                className="mb-4 p-3 rounded-lg relative"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              >
-                {/* Radial gradient overlay */}
-                <div className="relative">
-                <div className="text-xs text-white/70 mb-2 font-medium text-center">Pay In...</div>
-                <div className="flex items-center justify-center gap-4">
-                  <span
-                    className={cn(
-                      'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
-                      paymentMethod === 'MORBIUS'
-                        ? 'mitr-semibold bg-gradient-to-r from-cyan-400 to-cyan-600 bg-clip-text text-purple-500'
-                        : 'mitr-regular text-white hover:text-white'
-                    )}
-                    onClick={() => setPaymentMethod('MORBIUS')}
-                  >
-                    MORBIUS
-                  </span>
-                  <span className="text-white/50 text-xl">/</span>
-                  <span
-                    className={cn(
-                      'cursor-pointer transition-all duration-300 px-2 py-1 rounded text-xl',
-                      paymentMethod === 'PLS'
-                        ? 'mitr-semibold bg-gradient-to-r from-pink-400 via-red-400 to-cyan-500 bg-clip-text text-purple-500'
-                        : 'mitr-regular text-white/70 hover:text-white'
-                    )}
-                    onClick={() => setPaymentMethod('PLS')}
-                  >
-                    PLS
-                  </span>
-                </div>
-                </div>
-              </div>
-
-              {/* Summary */}
-              <div
-                className="space-y-2 border-t border-white/10 pt-3 mb-4 relative"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                  borderRadius: '0.5rem',
-                  padding: '0.75rem',
-                }}
-              >
-                {/* Radial gradient overlay */}
-                <div className="relative">
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/70">Spot Size</span>
-                  <span className="text-white font-semibold">{spotSize}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/70">Numbers Selected</span>
-                  <span className="text-white font-semibold">{selectedNumbers.length}/{spotSize}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/70">Wager per Draw</span>
-                  <span className="text-white font-semibold">{wager} MORBIUS</span>
-                </div>
-                <div className="flex justify-between text-xs pt-2 border-t border-white/10">
-                  <span className="text-white/70">Total Cost</span>
-                  <span className="text-white font-semibold">
-                    {paymentMethod === 'PLS' ? (
-                      `~${Number(formatEther(wplsRequiredWei)).toFixed(0)} PLS`
-                    ) : (
-                      `${wager} MORBIUS`
-                    )}
-                  </span>
-                </div>
-                </div>
-              </div>
-
-              {/* Buy Button */}
-              {!isConnected ? (
-                <ConnectButton />
-              ) : (
-                <Button
-                  className={cn(
-                    'w-full h-12 font-semibold hover:opacity-80',
-                    (isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize)
-                      ? 'text-white/40 [-webkit-text-stroke:0.1px_black] font-bold'
-                      : 'text-white'
-                  )}
-                  style={
-                    !(isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize)
-                      ? {
-                          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                          border: '1px inset rgba(60, 60, 60, 0.5)',
-                        }
-                      : undefined
-                  }
-                  disabled={isApprovePending || isApproveConfirming || isBuyPending || isBuyConfirming || selectedNumbers.length !== spotSize}
-                  onClick={handleBuy}
-                >
-                  {isApprovePending || isApproveConfirming ? (
-                    <AnimatedShinyText className="text-white/40 [-webkit-text-stroke:0.1px_black] font-bold">Approving...</AnimatedShinyText>
-                  ) : isBuyPending || isBuyConfirming ? (
-                    <AnimatedShinyText className="text-white/40 [-webkit-text-stroke:0.1px_black] font-bold">Processing...</AnimatedShinyText>
-                  ) : selectedNumbers.length !== spotSize ? (
-                    `Select ${spotSize - selectedNumbers.length} more number${spotSize - selectedNumbers.length !== 1 ? 's' : ''}`
-                  ) : (
-                    <AnimatedShinyText className="text-white [-webkit-text-stroke:0.1px_black] font-bold">
-                      {paymentMethod === 'PLS' ? 'Buy with PLS' : 'Buy Ticket'}
-                    </AnimatedShinyText>
-                  )}
-                </Button>
               )}
-              </div>
-            </div>
-          </div>
             </Card>
           </div>
         </div>
 
-      </main>
-
-      {/* Empty tickets dialog */}
-      <Dialog open={showNoTicketsDialog} onOpenChange={setShowNoTicketsDialog}>
-        <DialogContent
-          className="max-w-lg overflow-hidden p-0 text-white"
-          style={{
-            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
-          }}
-        >
-          {/* Radial gradient overlay */}
-          <div className="relative h-72">
-            <Image
-              src="/MORBIUS/821eff6f-8815-47ac-b93d-61d09d859de6.png"
-              alt="MORBIUS Keno bag"
-              fill
-              priority
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 480px"
-            />
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-500 to-slate-600/40" />
-            <div className="absolute inset-0 flex flex-col justify-end gap-3 p-6">
-              <p className="text-xl font-bold">No active tickets yet</p>
-              <p className="text-sm text-gray-100">
-                Build your first ticket to join the next draw. It only takes a minute.
-              </p>
-              <Button
-                className="w-full text-md font-bold text-white hover:opacity-80"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-                onClick={handleStartTicketBuild}
-              >
-                Get Tickets Now!
-              </Button>
-            </div>
+        {/* Recent plays | Recent games — 2-col grid */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-6">
+          <div className="min-w-0">
+            <KenoRecentPlays limit={20} compact />
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="min-w-0">
+            <GlobalKenoHistoryTable limit={20} title="Recent games" />
+          </div>
+        </section>
+
+        {/* How to Play | Leaderboard — 2-col grid */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-6">
+          <Card
+            className="rounded-xl overflow-hidden border border-cyan-500/30"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.9), rgba(40, 40, 40, 0.7))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            <div className="p-4 space-y-4">
+              <h2 className="text-lg font-bold text-cyan-400">How to Play Crypto KENO</h2>
+              <div className="space-y-4 text-sm text-white/90">
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Getting Started</h3>
+                  <p>Connect your Web3 wallet to play on PulseChain. Choose how many spots (1-10) you want to play. Set your wager in MORBIUS or pay with PLS.</p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Selecting Numbers</h3>
+                  <p>Pick numbers from 1-80 or use Quick Pick. The count must match your spot size.</p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Instant Results</h3>
+                  <p>Click Play Now and the contract draws 20 winning numbers in the same transaction. Your result and payout appear instantly!</p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Paytables</h3>
+                  <p>Paytables are shown above for your chosen spot size. Higher spot sizes offer bigger multipliers for full matches.</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+          <div className="min-w-0">
+            <KenoTopPlayers />
+          </div>
+        </section>
+
+      </main>
 
       {/* Prize Pool Modal */}
       <KenoPrizePoolModal
@@ -1638,23 +1115,22 @@ export default function KenoPage() {
         onOpenChange={setShowPrizePool}
       />
 
-      {/* Keno contract address — click to copy */}
-      <div className="w-full flex justify-center py-3">
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(KENO_ADDRESS)
-              toast.success('Keno contract address copied')
-            } catch {
-              toast.error('Failed to copy')
-            }
-          }}
-          className="text-white font-bold font-poppins text-sm cursor-pointer hover:opacity-90 transition-opacity select-all"
-          title="Click to copy Keno contract address"
-        >
-          {KENO_ADDRESS}
-        </button>
+      <PlayerProfileModal
+        isOpen={playerProfileOpen}
+        onClose={() => setPlayerProfileOpen(false)}
+        address={address ?? null}
+        game={playerProfileGame}
+      />
+
+      {/* FAQ (includes contract addresses) */}
+      <div className="w-full flex justify-center py-4">
+        <GameFAQ
+          game="keno"
+          addresses={[
+            { label: 'Keno Contract', address: KENO_ADDRESS },
+            { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+          ]}
+        />
       </div>
 
       {/* Footer */}

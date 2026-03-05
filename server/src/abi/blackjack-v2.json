@@ -38,7 +38,22 @@
       },
       {
         "internalType": "address",
+        "name": "_burnAddress",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
         "name": "_platformFeeRecipient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_lpDistributionRecipient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_plsTreasury",
         "type": "address"
       }
     ],
@@ -141,6 +156,44 @@
       }
     ],
     "name": "BetPlaced",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "oldAddress",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newAddress",
+        "type": "address"
+      }
+    ],
+    "name": "BurnAddressUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldBps",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "BurnFeeUpdated",
     "type": "event"
   },
   {
@@ -273,6 +326,44 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldBps",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "LpDistributionFeeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "oldRecipient",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "LpDistributionRecipientUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": true,
         "internalType": "address",
         "name": "previousOwner",
@@ -337,69 +428,6 @@
       }
     ],
     "name": "PlatformFeeUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "plsAmount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "feeAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "PlsDepositFeeCollected",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "oldRecipient",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "newRecipient",
-        "type": "address"
-      }
-    ],
-    "name": "PlsDepositFeeRecipientUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "oldBps",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newBps",
-        "type": "uint256"
-      }
-    ],
-    "name": "PlsDepositFeeUpdated",
     "type": "event"
   },
   {
@@ -477,7 +505,19 @@
       {
         "indexed": false,
         "internalType": "uint256",
+        "name": "burnFee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
         "name": "platformFee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "lpDistributionFee",
         "type": "uint256"
       },
       {
@@ -511,19 +551,6 @@
         "internalType": "bytes32",
         "name": "",
         "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "HOUSE_EDGE_BPS",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -615,6 +642,32 @@
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "burnAddress",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "burnFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -895,7 +948,17 @@
       },
       {
         "internalType": "uint256",
+        "name": "feeBurn",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
         "name": "feePlatform",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "feeLpDistribution",
         "type": "uint256"
       }
     ],
@@ -916,6 +979,32 @@
         "internalType": "bool",
         "name": "",
         "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lpDistributionFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lpDistributionRecipient",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1077,20 +1166,7 @@
   },
   {
     "inputs": [],
-    "name": "plsDepositFeeBps",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "plsDepositFeeRecipient",
+    "name": "plsTreasury",
     "outputs": [
       {
         "internalType": "address",
@@ -1169,6 +1245,32 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "_burnAddress",
+        "type": "address"
+      }
+    ],
+    "name": "setBurnAddress",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_burnFeeBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "setBurnFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "_distributionFeeBps",
         "type": "uint256"
@@ -1222,6 +1324,32 @@
     "inputs": [
       {
         "internalType": "uint256",
+        "name": "_lpDistributionFeeBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "setLpDistributionFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_lpDistributionRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "setLpDistributionRecipient",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
         "name": "_platformFeeBps",
         "type": "uint256"
       }
@@ -1247,25 +1375,12 @@
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "_plsDepositFeeBps",
-        "type": "uint256"
-      }
-    ],
-    "name": "setPlsDepositFee",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
-        "name": "_plsDepositFeeRecipient",
+        "name": "_plsTreasury",
         "type": "address"
       }
     ],
-    "name": "setPlsDepositFeeRecipient",
+    "name": "setPlsTreasury",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1300,7 +1415,33 @@
   },
   {
     "inputs": [],
+    "name": "totalBurnFeesCollected",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "totalDistributionFeesCollected",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalLpDistributionFeesCollected",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1327,19 +1468,6 @@
   {
     "inputs": [],
     "name": "totalPlatformFeesCollected",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "totalPlsDepositFeesCollected",
     "outputs": [
       {
         "internalType": "uint256",

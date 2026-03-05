@@ -48,18 +48,18 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
   const animatingBucket = useRef<number | null>(null);
   const animatingBucketStartTime = useRef<number | null>(null);
 
-  // Hover state for bucket tooltips
-  const [hoveredBucket, setHoveredBucket] = useState<number | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-  const scaleRef = useRef<number>(1);
-  const offsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const bucketsRef = useRef<{ x: number; y: number; index: number }[]>([]);
+
+  // Stable refs for callbacks used inside collision handler (avoids stale closures)
+  const onScoreRef = useRef(onScore);
+  onScoreRef.current = onScore;
+  const playSoundRef = useRef<typeof playSound>(null as any);
 
   // Sound state management
   const [internalSoundEnabled, setInternalSoundEnabled] = useState(soundEnabled);
 
   // Use the audio hook for mobile-friendly sound playback
   const { playSound, unlockAudio } = useAudio(internalSoundEnabled);
+  playSoundRef.current = playSound;
 
   // Sound toggle handler - also unlocks audio on mobile when enabling
   const handleSoundToggle = () => {
@@ -197,41 +197,34 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
     }
     console.log(`🪣 Buckets created: bottomRowStartX=${bottomRowStartX}, Y=${BUCKET_Y}, width=${bucketWidth - 6}`);
 
-    // Collision Detection
-    Matter.Events.on(engine, 'collisionStart', (event) => {
-      console.log('Collision detected, pairs:', event.pairs.length);
+    // Collision Detection — use refs so handler doesn't go stale
+    const collisionHandler = (event: Matter.IEventCollision<Matter.Engine>) => {
       event.pairs.forEach((pair) => {
         const { bodyA, bodyB } = pair;
-        console.log('Collision pair:', bodyA.label, 'vs', bodyB.label);
         const ball = bodyA.label === 'ball' ? bodyA : bodyB.label === 'ball' ? bodyB : null;
         const bucket = bodyA.label === 'bucket' ? bodyA : bodyB.label === 'bucket' ? bodyB : null;
         const peg = bodyA.label === 'peg' ? bodyA : bodyB.label === 'peg' ? bodyB : null;
 
         // Handle ball-peg collisions (for animation)
         if (ball && peg) {
-          console.log('Peg collision detected!');
           const pegId = `${Math.round(peg.position.x)}_${Math.round(peg.position.y)}`;
           animatingPegs.current.add(pegId);
           pegAnimationStartTimes.current.set(pegId, Date.now());
           setTimeout(() => {
             animatingPegs.current.delete(pegId);
             pegAnimationStartTimes.current.delete(pegId);
-          }, 600); // Extended duration for fade out
+          }, 600);
         }
 
-        // Handle ball-bucket collisions (existing logic)
+        // Handle ball-bucket collisions
         if (ball && bucket && !ballsToRemove.current.has(ball)) {
           const index = bucket.plugin.index;
-          console.log('🎯 BALL HIT BUCKET!', { index, ballId: ball.id, bucketX: bucket.position.x });
 
-          // Get the data we "stored" in the ball earlier
           const contractData = ball.plugin.contractResult;
           const ballRisk = ball.plugin.risk as RiskLevel;
 
-          // Send the score back up, including the contract data if it exists
-          // This is the moment the history will update
           const riskKey = ballRisk.toUpperCase() as 'GREEN' | 'YELLOW' | 'RED';
-          onScore(MULTIPLIERS[riskKey][index], index, contractData ? {
+          onScoreRef.current(MULTIPLIERS[riskKey][index], index, contractData ? {
             ...contractData,
             risk: ballRisk
           } : null);
@@ -239,25 +232,24 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
           // Play appropriate sound based on multiplier
           const finalMultiplier = contractData ? contractData.multiplier : MULTIPLIERS[ballRisk][index];
           if (finalMultiplier >= 1) {
-            playSound('/sounds/positive.wav');
+            playSoundRef.current('/sounds/positive.wav');
           } else {
-            playSound('/sounds/negative.wav');
+            playSoundRef.current('/sounds/negative.wav');
           }
 
           // Trigger bucket animation
-          console.log('🎨 Triggering bucket animation for index:', index);
           animatingBucket.current = index;
           animatingBucketStartTime.current = Date.now();
           setTimeout(() => {
-            console.log('🎨 Clearing bucket animation for index:', index);
             animatingBucket.current = null;
             animatingBucketStartTime.current = null;
-          }, 600); // Clear animation after 600ms
+          }, 600);
 
           ballsToRemove.current.add(ball);
         }
       });
-    });
+    };
+    Matter.Events.on(engine, 'collisionStart', collisionHandler);
 
     // Sub-stepped Game Loop
     const runner = setInterval(() => {
@@ -284,14 +276,8 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
         (dimensions.height * 0.92) / contentHeight
       );
 
-      // Store scale and offset for mouse hit detection
-      scaleRef.current = scale;
       const worldCenterX = WORLD_WIDTH / 2;
       const worldCenterY = (START_Y + BUCKET_Y) / 2 - 10;
-      offsetRef.current = {
-        x: dimensions.width / 2 - worldCenterX * scale,
-        y: dimensions.height / 2 - worldCenterY * scale
-      };
 
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       ctx.save();
@@ -316,7 +302,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
 
         // Apply bounce/zoom animation if this bucket is animating
         if (animatingBucket.current === idx && animatingBucketStartTime.current) {
-          console.log('🎨 Rendering animated bucket:', idx, 'at time:', Date.now());
           // Create a smooth single bounce effect with easing
           const elapsed = Date.now() - animatingBucketStartTime.current;
           const progress = Math.min(elapsed / 600, 1); // 0 to 1 over 600ms
@@ -440,10 +425,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
         const pegId = `${Math.round(peg.position.x)}_${Math.round(peg.position.y)}`;
         const isAnimating = animatingPegs.current.has(pegId);
 
-        if (isAnimating) {
-          console.log('Animating peg:', pegId);
-        }
-
         ctx.save();
 
         // Apply animation effect if peg is being hit
@@ -517,7 +498,10 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
       }
     };
 
-    return () => clearInterval(runner);
+    return () => {
+      clearInterval(runner);
+      Matter.Events.off(engine, 'collisionStart', collisionHandler);
+    };
   }, [dimensions, selectedRiskLevel]);
 
   // 3. Spawning Balls (Deterministic)

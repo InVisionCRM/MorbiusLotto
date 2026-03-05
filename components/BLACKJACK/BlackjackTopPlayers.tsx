@@ -33,7 +33,6 @@ function shortAddress(addr: string): string {
 export default function BlackjackTopPlayers() {
   const { data: players, isLoading, error } = useBlackjackTopPlayers(TOP_N)
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
-    const isBackendUnreachable = typeof message === 'string' && (message.includes('Cannot reach backend') || message.includes('Check CORS'))
 
   if (error) {
     const message = error instanceof Error ? error.message : 'Failed to load leaderboard.'
@@ -92,7 +91,7 @@ export default function BlackjackTopPlayers() {
                     onClick={() => setSelectedAddress(e.wallet_address)}
                     className="text-cyan-400 hover:text-cyan-300 font-mono"
                   >
-                    ...{shortAddress(e.wallet_address)}
+                    {shortAddress(e.wallet_address)}
                   </button>
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-white/90">{e.total_games}</TableCell>

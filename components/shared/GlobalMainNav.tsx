@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react';
+import { useGameLock } from '@/contexts/game-lock-context';
 import { motion } from 'motion/react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -35,7 +36,6 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/BLACKJACK': 'blackjack',
   '/PLINKO': 'plinko',
   '/plinko-dashboard': 'plinko',
-  '/plinko-verifier': 'plinko',
   '/lottery': 'lottery',
   '/keno': 'keno',
   '/keno-dashboard': 'keno',
@@ -49,7 +49,9 @@ const OTHER_GAMES = [
 ] as const;
 
 const SIDEBAR_PANEL_STYLE = {
-  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+  background: 'rgba(74, 103, 125, 0.31)',
+  backdropFilter: 'blur(4px)',
+  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.67), inset 0 -3px 6px rgba(0, 0, 0, 0.65), 0 1px 3px rgba(17, 179, 208, 0.86)',
   border: '1px inset rgba(60, 60, 60, 0.5)',
 } as const;
 
@@ -105,6 +107,9 @@ export interface GlobalMainNavProps {
   onShowKenoPrizePool?: () => void;
   onShowKenoHistory?: () => void;
 
+  /** Open player profile modal (game-specific dashboard). When set, sidebar Dashboard uses this. Pass no arg on home for "all games" with dropdown; pass game on Plinko/Keno to open that game. */
+  onOpenPlayerProfile?: (game?: 'plinko' | 'keno' | 'lottery' | 'blackjack') => void;
+
   // Home / shared
   showBackArrow?: boolean;
   backArrowHref?: string;
@@ -113,6 +118,9 @@ export interface GlobalMainNavProps {
   onOpenAuthModal?: () => void;
   isAuthenticated?: boolean;
   onSignOut?: () => void;
+
+  /** When true, sidebar cannot be opened (e.g. during active Plinko game) */
+  sidebarDisabled?: boolean;
 }
 
 function useNavPage(pageProp?: NavPage): NavPage {
@@ -153,6 +161,7 @@ function NavContent(props: {
   onShowLotteryDashboard?: () => void;
   onShowKenoPrizePool?: () => void;
   onShowKenoHistory?: () => void;
+  onOpenPlayerProfile?: (game?: 'plinko' | 'keno' | 'lottery' | 'blackjack') => void;
   showBackArrow?: boolean;
   backArrowHref?: string;
   backArrowLabel?: string;
@@ -192,6 +201,7 @@ function NavContent(props: {
     onShowLotteryDashboard,
     onShowKenoPrizePool,
     onShowKenoHistory,
+    onOpenPlayerProfile,
     showBackArrow,
     backArrowHref,
     backArrowLabel,
@@ -290,18 +300,18 @@ function NavContent(props: {
 
           {page === 'blackjack' && (
             <>
-              <SidebarLink link={{ label: 'Creator Dashboard', href: '/creators', icon: <i className="fas fa-crown w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-              <SidebarButton label="History" icon={<i className={`fas fa-history w-5 text-center shrink-0 ${currentView === 'history' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('history')} active={currentView === 'history'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'history')}`} />
-              <SidebarButton label="My Stats" icon={<i className={`fas fa-chart-bar w-5 text-center shrink-0 ${currentView === 'stats' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('stats')} active={currentView === 'stats'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'stats')}`} />
+              <SidebarButton label="Dashboard" icon={<i className={`fas fa-chart-bar w-5 text-center shrink-0 ${currentView === 'stats' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('stats')} active={currentView === 'stats'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'stats')}`} />
             </>
           )}
 
           {page === 'plinko' && (
             <>
               {onOpenHowToPlay && <SidebarButton label="How to Play" icon={<i className="fas fa-question-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenHowToPlay} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
-              {onShowPlinkoHistory && <SidebarButton label="My History" icon={<i className="fas fa-history w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowPlinkoHistory} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
-              <SidebarLink link={{ label: 'Dashboard', href: '/plinko-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-              <SidebarLink link={{ label: 'Verifier', href: '/plinko-verifier', icon: <i className="fas fa-check-circle w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              {onOpenPlayerProfile ? (
+                <SidebarButton label="Dashboard" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenPlayerProfile('plinko')} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              ) : (
+                <SidebarLink link={{ label: 'Dashboard', href: '/plinko-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              )}
               {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
             </>
           )}
@@ -309,7 +319,6 @@ function NavContent(props: {
           {page === 'lottery' && (
             <>
               {onShowLotteryDashboard && <SidebarButton label="Dashboard" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowLotteryDashboard} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
-              {onShowLotteryHistory && <SidebarButton label="My History" icon={<i className="fas fa-history w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowLotteryHistory} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
               {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
             </>
           )}
@@ -317,14 +326,19 @@ function NavContent(props: {
           {page === 'keno' && (
             <>
               {onShowKenoPrizePool && <SidebarButton label="Prize Pool" icon={<i className="fas fa-trophy w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowKenoPrizePool} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
-              {onShowKenoHistory && <SidebarButton label="My History" icon={<i className="fas fa-history w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowKenoHistory} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
-              <SidebarLink link={{ label: 'Dashboard', href: '/keno-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              {onOpenPlayerProfile ? (
+                <SidebarButton label="Dashboard" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenPlayerProfile('keno')} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              ) : (
+                <SidebarLink link={{ label: 'Dashboard', href: '/keno-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              )}
             </>
           )}
 
-          {(page === 'home' || (page !== 'blackjack' && page !== 'plinko' && page !== 'lottery' && page !== 'keno')) && (
-            <SidebarLink link={{ label: 'Creator Dashboard', href: '/creators', icon: <i className="fas fa-crown w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          {page === 'home' && onOpenPlayerProfile && (
+            <SidebarButton label="Player Dashboard" icon={<i className="fas fa-chart-pie w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenPlayerProfile()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           )}
+
+          <SidebarLink link={{ label: 'Claim Morbius', href: '/staking', icon: <i className="fas fa-gift w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
         </div>
 
         {/* Other Games - exclude current page */}
@@ -358,6 +372,7 @@ function NavContent(props: {
           </div>
           <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <i className="fas fa-search w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
           <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <i className="fas fa-gamepad w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           {isAdmin && (
             <SidebarLink link={{ label: 'Admin', href: '/admin', icon: <i className="fas fa-cog w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
@@ -375,8 +390,10 @@ function NavContent(props: {
           <motion.div animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="px-2 py-1">
             <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
           </motion.div>
-          <SidebarLink link={{ label: 'Claim fees', href: '/claim-fees', icon: <i className="fas fa-wallet w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarLink link={{ label: 'Earn', href: '/staking', icon: <i className="fas fa-coins w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Swap', href: '/swap', icon: <i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarLink link={{ label: 'Provide LP', href: 'https://pulsex.com', icon: <i className="fas fa-tint w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
+          <SidebarLink link={{ label: 'Chart', href: 'https://scan.morbius.io/geicko?address=0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1&tab=chart', icon: <i className="fas fa-chart-line w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
         </div>
       </nav>
 
@@ -446,6 +463,7 @@ export default function GlobalMainNav({
   onShowLotteryDashboard,
   onShowKenoPrizePool,
   onShowKenoHistory,
+  onOpenPlayerProfile,
   showBackArrow,
   backArrowHref,
   backArrowLabel,
@@ -453,10 +471,12 @@ export default function GlobalMainNav({
   onOpenAuthModal,
   isAuthenticated,
   onSignOut,
+  sidebarDisabled,
 }: GlobalMainNavProps) {
+  const { gameLocked } = useGameLock();
   const page = useNavPage(pageProp);
   const { address, isConnected } = useAccount();
-  const { displayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook } = useProfile();
+  const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook } = useProfile();
   const [responsibleGamingOpen, setResponsibleGamingOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const effectiveOnOpenResponsibleGaming = onOpenResponsibleGaming ?? (() => setResponsibleGamingOpen(true));
@@ -491,7 +511,7 @@ export default function GlobalMainNav({
   );
 
   return (
-    <Sidebar mobileBarContent={mobileBarContent}>
+    <Sidebar mobileBarContent={mobileBarContent} disabled={sidebarDisabled || gameLocked}>
       <div className="flex flex-col md:flex-row min-h-screen w-full">
         <SidebarBody className="shrink-0" style={SIDEBAR_PANEL_STYLE}>
           <NavContent
@@ -523,6 +543,7 @@ export default function GlobalMainNav({
             onShowLotteryDashboard={onShowLotteryDashboard}
             onShowKenoPrizePool={onShowKenoPrizePool}
             onShowKenoHistory={onShowKenoHistory}
+            onOpenPlayerProfile={onOpenPlayerProfile}
             showBackArrow={showBackArrow}
             backArrowHref={backArrowHref}
             backArrowLabel={backArrowLabel}
@@ -533,7 +554,7 @@ export default function GlobalMainNav({
             onOpenReport={() => setReportOpen(true)}
           />
         </SidebarBody>
-        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0">{children}</div>
+        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0" style={gameLocked ? { position: 'relative', zIndex: 100002 } : undefined}>{children}</div>
       </div>
 
       {page === 'blackjack' && onThemeChange && (

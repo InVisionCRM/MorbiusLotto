@@ -15,12 +15,15 @@ import { TournamentSchedulerService } from './services/tournament-scheduler.serv
 import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
+import { InstantLotteryService } from './services/instant-lottery.service';
 import { MerkleDropsService } from './services/merkle-drops.service';
+import { MerkleDropsLPService } from './services/merkle-lp-drops.service';
 import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
-import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
+import { privateKeyToAccount } from 'viem/accounts';
+import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
 
 const ERC20_BALANCE_OF_ABI = [
   { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
@@ -224,18 +227,16 @@ async function initializeServices() {
     tournamentScheduler = new TournamentSchedulerService(dbService.getPool(), tournamentService);
     tournamentScheduler.start();
 
-    // Expire any orphaned pending withdrawals from a previous crash (refunds balances)
-    try {
-      const expired = await dbService.expirePendingWithdrawals();
-      if (expired > 0) {
-        logger.info(`Startup: expired ${expired} orphaned pending withdrawal(s) and refunded balances`);
-      }
-    } catch (err) {
-      logger.error('Startup: failed to expire pending withdrawals', err);
-    }
+    // NOTE: Orphaned pending withdrawals are NOT blindly refunded at startup.
+    // The periodic cron (runs every 60s after withdrawal routes init) checks on-chain
+    // nonces before refunding. This prevents double-withdrawal if the server crashed
+    // after an on-chain withdrawal but before /confirm was called.
 
     // Chain analytics (on-chain games: Plinko, Keno, Lottery, BigWheel)
     const chainAnalytics = new ChainAnalyticsService(dbService);
+
+    // Instant lottery (provably-fair server-side play, MORBIUS only)
+    const instantLotteryService = new InstantLotteryService(dbService, pfService);
 
     // Merkle drops service (MORBIUS holder epoch rewards)
     merkleDropsService = new MerkleDropsService(dbService.getPool());
@@ -243,7 +244,30 @@ async function initializeServices() {
       merkleDropsService.startCron();
     }
 
+    // Merkle LP drops service (LP token holder epoch rewards)
+    merkleDropsLPService = new MerkleDropsLPService(dbService.getPool());
+    if (process.env.MERKLE_LP_DROP_CRON_ENABLED === 'true') {
+      merkleDropsLPService.startCron();
+    }
+
     // API routes
+    // Public config (whitelisted keys only; used for ad creatives, etc.)
+    const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];
+    app.get('/api/config/public', async (req, res) => {
+      try {
+        const full = await dbService.getAdminGameConfig();
+        const publicConfig: Record<string, string> = {};
+        for (const key of PUBLIC_CONFIG_KEYS) {
+          const v = full[key];
+          publicConfig[key] = typeof v === 'string' ? v : '';
+        }
+        sendJson(res, publicConfig);
+      } catch (error) {
+        logger.error('Error fetching public config:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     app.get('/api/player/:address/profile', async (req, res) => {
       try {
         const { address } = req.params;
@@ -328,6 +352,106 @@ async function initializeServices() {
         sendJson(res, topPlayer);
       } catch (error) {
         logger.error('Error fetching top player by category:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // ---------- Lottery (instant 6-of-55): leaderboard + player stats (from indexed chain events) ----------
+    app.get('/api/lottery/top-players', async (req, res) => {
+      try {
+        chainAnalytics.indexInstantLotteryResults().catch((err) => logger.warn('Lottery index (background):', err));
+        const limit = Math.min(parseInt(req.query.limit as string) || 25, 50);
+        const topPlayers = await dbService.getLotteryTopPlayers(limit);
+        sendJson(res, topPlayers);
+      } catch (error) {
+        logger.error('Error fetching lottery top players:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.get('/api/lottery/player/:address/stats', async (req, res) => {
+      try {
+        const address = (req.params.address || '').trim();
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          return res.status(400).json({ error: 'Valid wallet address required' });
+        }
+        chainAnalytics.indexInstantLotteryResults().catch((err) => logger.warn('Lottery index (background):', err));
+        const stats = await dbService.getLotteryPlayerStats(address);
+        if (stats == null) {
+          return sendJson(res, { total_games: 0, total_bet: '0', total_win: '0', profit_loss: '0', win_rate: 0 });
+        }
+        sendJson(res, {
+          total_games: stats.total_games,
+          total_bet: stats.total_bet.toString(),
+          total_win: stats.total_win.toString(),
+          profit_loss: stats.profit_loss.toString(),
+          win_rate: stats.win_rate,
+        });
+      } catch (error) {
+        logger.error('Error fetching lottery player stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Instant lottery provably-fair play (MORBIUS only). Stricter rate limit to avoid abuse.
+    const instantLotteryPlayLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 30,
+      message: 'Too many instant lottery plays from this IP, try again later.',
+      validate: { xForwardedForHeader: false },
+    });
+    app.post('/api/lottery/instant/play', instantLotteryPlayLimiter, async (req, res) => {
+      try {
+        if (!instantLotteryService.isConfigured()) {
+          return res.status(503).json({ error: 'Instant lottery (provably fair) is not configured' });
+        }
+        const body = req.body as { address?: unknown; numbers?: unknown; wager?: unknown; clientSeed?: unknown };
+        const address = typeof body?.address === 'string' ? body.address.trim() : '';
+        const numbers = body?.numbers;
+        const wager = typeof body?.wager === 'string' ? body.wager : (body?.wager != null ? String(body.wager) : '');
+        const clientSeed = typeof body?.clientSeed === 'string' ? body.clientSeed : undefined;
+        if (!address || !numbers || !wager) {
+          return res.status(400).json({ error: 'address, numbers (array of 6), and wager (string) required' });
+        }
+        const result = await instantLotteryService.play({ address, numbers, wager, clientSeed });
+        sendJson(res, result);
+      } catch (error: any) {
+        const msg = error?.message ?? 'Internal server error';
+        if (msg.includes('Valid wallet') || msg.includes('numbers must') || msg.includes('Invalid wager') || msg.includes('Wager must')) {
+          return res.status(400).json({ error: msg });
+        }
+        if (msg.includes('not configured')) return res.status(503).json({ error: msg });
+        logger.error('Instant lottery play error:', error);
+        res.status(500).json({ error: 'Instant lottery play failed' });
+      }
+    });
+
+    // Verify provably-fair instant lottery play by tx hash (returns serverSeed after reveal).
+    app.get('/api/lottery/instant/play/verify/:txHash', async (req, res) => {
+      try {
+        const txHash = (req.params.txHash || '').trim();
+        if (!txHash || !/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+          return res.status(400).json({ error: 'Valid tx hash (0x + 64 hex) required' });
+        }
+        const play = await dbService.getInstantLotteryPlayPFByTxHash(txHash);
+        if (play == null) {
+          return res.status(404).json({ error: 'Play not found', message: 'No provably-fair play with this tx hash' });
+        }
+        sendJson(res, {
+          wallet_address: play.wallet_address,
+          wager: play.wager.toString(),
+          player_numbers: play.player_numbers,
+          winning_numbers: play.winning_numbers,
+          match_count: play.match_count,
+          gross_payout: play.gross_payout.toString(),
+          net_payout: play.net_payout.toString(),
+          server_seed_hash: play.server_seed_hash,
+          server_seed: play.server_seed,
+          client_seed: play.client_seed,
+          nonce: play.nonce,
+        });
+      } catch (error) {
+        logger.error('Error fetching instant lottery verify:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });
@@ -703,6 +827,22 @@ async function initializeServices() {
       }
     });
 
+    // Public: default Blackjack table (theme + table id) from admin config; used when user has no saved preference
+    const DEFAULT_TABLE_THEME = 'image';
+    const DEFAULT_TABLE_ID = 'High-Roller-2';
+    app.get('/api/blackjack/default-table', async (req, res) => {
+      try {
+        const config = await dbService.getAdminGameConfig();
+        let themeKind = (config.blackjack_default_theme_kind ?? '').trim().toLowerCase();
+        if (themeKind !== 'image' && themeKind !== 'video') themeKind = DEFAULT_TABLE_THEME;
+        const tableId = (config.blackjack_default_table_id ?? '').trim() || DEFAULT_TABLE_ID;
+        sendJson(res, { themeKind: themeKind as 'image' | 'video', tableId });
+      } catch (error) {
+        logger.error('Error fetching blackjack default table:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Admin: Blackjack tables CRUD (requires x-admin-wallet in allowed list)
     const dbSchemaError = (err: unknown): string | null => {
       const msg = err && typeof (err as any).message === 'string' ? (err as any).message : '';
@@ -955,7 +1095,7 @@ async function initializeServices() {
 
         // Lottery: MORBIUS balance held by Lottery contract
         try {
-          const balance = await readMorbiusBalance(LOTTERY_ADDRESS);
+          const balance = await readMorbiusBalance(LOTTERY_INSTANT_ADDRESS);
           morbius.lottery = balance.toString();
           const lotteryStats = await chainAnalytics.getLotteryStats();
           games.lottery = lotteryStats ? { rpc: 'ok' } : { rpc: 'ok' };
@@ -968,7 +1108,7 @@ async function initializeServices() {
           blackjack: BLACKJACK_ADDRESS,
           plinko: PLINKO_ADDRESS,
           keno: KENO_ADDRESS,
-          lottery: LOTTERY_ADDRESS,
+          lottery: LOTTERY_INSTANT_ADDRESS,
         };
         sendJson(res, { api, ws, games, morbius, blackjackReservesByContract, contractAddresses });
       } catch (error) {
@@ -1447,11 +1587,8 @@ async function initializeServices() {
 
     // Withdraw prepare: server signs withdrawal approval (amount = min(DB balance, contract reserve))
     const publicClient = getPublicClient();
-    const blackjackContractAddress = process.env.BLACKJACK_CONTRACT_ADDRESS as `0x${string}` | undefined;
-    if (!blackjackContractAddress) {
-      throw new Error('BLACKJACK_CONTRACT_ADDRESS env var is required');
-    }
-    console.log('[Server] Using BLACKJACK_CONTRACT_ADDRESS:', blackjackContractAddress);
+    const blackjackContractAddress = BLACKJACK_ADDRESS;
+    console.log('[Server] Using BLACKJACK_ADDRESS:', blackjackContractAddress);
     const chainId = Number(process.env.BLACKJACK_CHAIN_ID || 369);
     console.log('[Server] Chain ID:', chainId);
 
@@ -1465,6 +1602,77 @@ async function initializeServices() {
         type: 'function',
       },
     ] as const;
+
+    // Verify SETTLEMENT_PRIVATE_KEY matches the contract's authorizedServer.
+    // If they don't match, ALL withdrawWithSignature calls will revert with "Invalid signature".
+    const settlementKey = process.env.SETTLEMENT_PRIVATE_KEY as `0x${string}` | undefined;
+    if (settlementKey) {
+      try {
+        const signerAccount = privateKeyToAccount(settlementKey);
+        const onChainAuthorizedServer = await publicClient.readContract({
+          address: blackjackContractAddress,
+          abi: blackjackAbi,
+          functionName: 'authorizedServer',
+        }) as string;
+        if (signerAccount.address.toLowerCase() !== onChainAuthorizedServer.toString().toLowerCase()) {
+          logger.error('CRITICAL: SETTLEMENT_PRIVATE_KEY does not match contract authorizedServer!', {
+            signerAddress: signerAccount.address,
+            contractAuthorizedServer: onChainAuthorizedServer,
+            contract: blackjackContractAddress,
+          });
+        } else {
+          logger.info('Withdrawal signer verified: matches contract authorizedServer', {
+            signerAddress: signerAccount.address,
+          });
+        }
+      } catch (err) {
+        logger.warn('Could not verify SETTLEMENT_PRIVATE_KEY against contract authorizedServer', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    } else {
+      logger.warn('SETTLEMENT_PRIVATE_KEY not set — withdrawals will fail');
+    }
+
+    // Startup: process any orphaned pending withdrawals with on-chain nonce verification.
+    // This replaces the old blind-refund approach that could cause double withdrawals.
+    try {
+      const orphaned = await dbService.getExpiredPendingWithdrawals();
+      if (orphaned.length > 0) {
+        let refundedCount = 0;
+        let completedCount = 0;
+        for (const row of orphaned) {
+          try {
+            const nonceUsed = await publicClient.readContract({
+              address: blackjackContractAddress,
+              abi: USED_NONCES_ABI,
+              functionName: 'usedNonces',
+              args: [BigInt(row.nonce)],
+            }) as boolean;
+
+            if (nonceUsed) {
+              await dbService.markPendingWithdrawalCompleted(row.wallet_address, BigInt(row.nonce));
+              completedCount++;
+              logger.warn('Startup: pending withdrawal was completed on-chain — marked completed (no refund)', {
+                address: row.wallet_address, nonce: row.nonce, amount: row.amount,
+              });
+            } else {
+              await dbService.expireSinglePendingWithdrawal(row.wallet_address, BigInt(row.nonce), BigInt(row.amount));
+              refundedCount++;
+            }
+          } catch (rpcErr) {
+            logger.error('Startup: failed to check nonce on-chain — skipping (cron will retry)', {
+              address: row.wallet_address, nonce: row.nonce,
+              error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+            });
+          }
+        }
+        if (refundedCount > 0) logger.info(`Startup: expired ${refundedCount} orphaned pending withdrawal(s) and refunded balances`);
+        if (completedCount > 0) logger.info(`Startup: marked ${completedCount} pending withdrawal(s) as completed (on-chain nonce used)`);
+      }
+    } catch (err) {
+      logger.error('Startup: failed to process pending withdrawals', err);
+    }
 
     // Periodic cleanup of expired pending withdrawals.
     // CRITICAL: Before refunding a pending withdrawal, check on-chain whether the nonce
@@ -1559,6 +1767,25 @@ async function initializeServices() {
           args: [normalizedAddress as `0x${string}`],
         }) as bigint;
 
+        // Check the contract's actual MORBIUS token balance — if the contract doesn't hold
+        // enough tokens, the on-chain tx will revert with "Insufficient contract balance".
+        // Catch this early so we don't deduct the DB balance and leave the user waiting
+        // 2 minutes for the expiry cron to refund it.
+        let contractTokenBalance: bigint;
+        try {
+          contractTokenBalance = await publicClient.readContract({
+            address: MORBIUS_TOKEN_ADDRESS,
+            abi: ERC20_BALANCE_OF_ABI,
+            functionName: 'balanceOf',
+            args: [blackjackContractAddress],
+          }) as bigint;
+        } catch (rpcErr) {
+          logger.error('withdraw/prepare: failed to read contract token balance', {
+            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+          });
+          return res.status(503).json({ error: 'Cannot verify contract liquidity. Try again shortly.' });
+        }
+
         // Cap withdrawal to DB balance only. Contract supports off-chain payouts (house bankroll)
         // and enforces daily limits (1M per user, 10M global); liquidity is operator's responsibility.
         const requested = requestedAmount != null ? BigInt(String(requestedAmount)) : dbBalance;
@@ -1569,6 +1796,21 @@ async function initializeServices() {
             error: 'Insufficient withdrawable balance',
             dbBalance: dbBalance.toString(),
             contractReserve: contractReserve.toString(),
+          });
+        }
+
+        // Reject early if the contract doesn't hold enough MORBIUS to pay out.
+        // This prevents the user from waiting 2 min for the expiry cron to refund.
+        if (contractTokenBalance < amount) {
+          logger.warn('withdraw/prepare: contract liquidity too low', {
+            address: normalizedAddress,
+            requestedAmount: amount.toString(),
+            contractTokenBalance: contractTokenBalance.toString(),
+          });
+          return res.status(400).json({
+            error: `Contract liquidity is too low. The contract holds ${(Number(contractTokenBalance) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 0 })} MORBIUS but you requested ${(Number(amount) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 0 })}. Try a smaller amount or contact support.`,
+            contractTokenBalance: contractTokenBalance.toString(),
+            requestedAmount: amount.toString(),
           });
         }
 
@@ -1618,12 +1860,15 @@ async function initializeServices() {
 
     app.post('/api/withdraw/confirm', async (req, res) => {
       try {
-        const { address, nonce } = req.body;
+        const { address, nonce, txHash } = req.body;
         if (!address || typeof address !== 'string') {
           return res.status(400).json({ error: 'Address required' });
         }
         if (nonce == null || (typeof nonce !== 'string' && typeof nonce !== 'number')) {
           return res.status(400).json({ error: 'Nonce required' });
+        }
+        if (!txHash || typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+          return res.status(400).json({ error: 'Valid txHash required' });
         }
         const normalizedAddress = address.toLowerCase().startsWith('0x')
           ? address.toLowerCase()
@@ -1632,11 +1877,34 @@ async function initializeServices() {
           return res.status(400).json({ error: 'Invalid address' });
         }
         const nonceBigInt = BigInt(String(nonce));
-        const { txHash } = req.body;
-        const validTxHash = (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) ? txHash : undefined;
-        const updated = await dbService.markPendingWithdrawalCompleted(normalizedAddress, nonceBigInt, validTxHash);
+
+        // SECURITY: Verify the nonce was actually used on-chain before marking completed.
+        // Without this check, anyone could call confirm to permanently destroy a victim's balance.
+        try {
+          const nonceUsed = await publicClient.readContract({
+            address: blackjackContractAddress,
+            abi: USED_NONCES_ABI,
+            functionName: 'usedNonces',
+            args: [nonceBigInt],
+          }) as boolean;
+
+          if (!nonceUsed) {
+            logger.warn('Withdraw confirm rejected: nonce not used on-chain', {
+              address: normalizedAddress, nonce: nonceBigInt.toString(), txHash,
+            });
+            return res.status(400).json({ error: 'Nonce not yet used on-chain. Wait for tx confirmation.' });
+          }
+        } catch (rpcErr) {
+          logger.error('Withdraw confirm: failed to verify nonce on-chain', {
+            address: normalizedAddress, nonce: nonceBigInt.toString(),
+            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+          });
+          return res.status(503).json({ error: 'Cannot verify on-chain. Try again shortly.' });
+        }
+
+        const updated = await dbService.markPendingWithdrawalCompleted(normalizedAddress, nonceBigInt, txHash);
         if (updated) {
-          logger.info('Withdrawal confirmed (on-chain tx completed)', { address: normalizedAddress, nonce: nonceBigInt.toString() });
+          logger.info('Withdrawal confirmed (on-chain verified)', { address: normalizedAddress, nonce: nonceBigInt.toString(), txHash });
         }
         return res.status(200).json({ ok: true });
       } catch (error) {
@@ -1937,6 +2205,246 @@ async function initializeServices() {
       }
     });
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Merkle LP drop routes — LP token holder rewards
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Public: list published LP epochs
+    app.get('/api/merkle-lp/epochs', async (_req, res) => {
+      try {
+        const epochs = await merkleDropsLPService!.listPublishedEpochs();
+        sendJson(res, epochs);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Public: get claim proof for a wallet
+    app.get('/api/merkle-lp/claim/:epochNumber/:walletAddress', async (req, res) => {
+      try {
+        const epochNumber = parseInt(req.params.epochNumber, 10);
+        const walletAddress = req.params.walletAddress;
+        if (!walletAddress || !walletAddress.startsWith('0x')) {
+          res.status(400).json({ error: 'Invalid wallet address' }); return;
+        }
+        const proof = await merkleDropsLPService!.getClaimProof(epochNumber, walletAddress);
+        if (!proof) { res.status(404).json({ error: 'No claim found' }); return; }
+        sendJson(res, proof);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Public: schedule info
+    app.get('/api/merkle-lp/schedule', async (_req, res) => {
+      try {
+        const info = await merkleDropsLPService!.getScheduleInfo();
+        sendJson(res, info);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: list all LP epochs
+    app.get('/api/admin/merkle-lp/epochs', async (req, res) => {
+      try {
+        const epochs = await merkleDropsLPService!.listEpochs();
+        sendJson(res, epochs);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: create new LP epoch (snapshot runs automatically)
+    app.post('/api/admin/merkle-lp/epoch/create', async (req, res) => {
+      try {
+        const epoch = await merkleDropsLPService!.createEpoch({});
+        sendJson(res, epoch);
+      } catch (error) {
+        logger.error('Error creating LP epoch:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: get single LP epoch
+    app.get('/api/admin/merkle-lp/epoch/:epochId', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const epoch = await merkleDropsLPService!.getEpoch(epochId);
+        if (!epoch) { res.status(404).json({ error: 'Epoch not found' }); return; }
+        sendJson(res, epoch);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: re-run snapshot
+    app.post('/api/admin/merkle-lp/epoch/:epochId/snapshot', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const { snapshotBlock } = req.body as { snapshotBlock?: number };
+        await merkleDropsLPService!.takeSnapshot(epochId, snapshotBlock);
+        const epoch = await merkleDropsLPService!.getEpoch(epochId);
+        sendJson(res, epoch);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: calculate rewards
+    app.post('/api/admin/merkle-lp/epoch/:epochId/calculate', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const { newRewardAmount } = req.body as { newRewardAmount?: string };
+        if (!newRewardAmount) { res.status(400).json({ error: 'newRewardAmount required' }); return; }
+        await merkleDropsLPService!.calculateRewards(epochId, newRewardAmount);
+        const epoch = await merkleDropsLPService!.getEpoch(epochId);
+        sendJson(res, epoch);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: finalize (build Merkle tree)
+    app.post('/api/admin/merkle-lp/epoch/:epochId/finalize', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const root = await merkleDropsLPService!.generateMerkleTree(epochId);
+        const epoch = await merkleDropsLPService!.getEpoch(epochId);
+        sendJson(res, { root, epoch });
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: mark published
+    app.post('/api/admin/merkle-lp/epoch/:epochId/publish', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        await merkleDropsLPService!.markPublished(epochId);
+        const epoch = await merkleDropsLPService!.getEpoch(epochId);
+        sendJson(res, epoch);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: revoke epoch
+    app.post('/api/admin/merkle-lp/epoch/:epochId/revoke', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        await merkleDropsLPService!.revokeEpoch(epochId);
+        const epoch = await merkleDropsLPService!.getEpoch(epochId);
+        sendJson(res, epoch);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: paginated snapshot data
+    app.get('/api/admin/merkle-lp/epoch/:epochId/snapshot', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const page = Math.max(1, parseInt(String(req.query.page || 1), 10));
+        const pageSize = Math.min(200, Math.max(1, parseInt(String(req.query.pageSize || 50), 10)));
+        const data = await merkleDropsLPService!.getSnapshotPage(epochId, page, pageSize);
+        sendJson(res, data);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: LP pair management
+    app.get('/api/admin/merkle-lp/pairs', async (_req, res) => {
+      try {
+        const pairs = await merkleDropsLPService!.listPairs();
+        sendJson(res, pairs);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.post('/api/admin/merkle-lp/pairs', async (req, res) => {
+      try {
+        const { pairAddress, label, dexName } = req.body as {
+          pairAddress: string; label: string; dexName?: string;
+        };
+        if (!pairAddress || !label) { res.status(400).json({ error: 'pairAddress and label required' }); return; }
+        const pair = await merkleDropsLPService!.addPair(pairAddress, label, dexName);
+        sendJson(res, pair);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.patch('/api/admin/merkle-lp/pairs/:address', async (req, res) => {
+      try {
+        const { active } = req.body as { active: boolean };
+        await merkleDropsLPService!.setPairActive(req.params.address, active);
+        res.status(200).json({ ok: true });
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.delete('/api/admin/merkle-lp/pairs/:address', async (req, res) => {
+      try {
+        await merkleDropsLPService!.removePair(req.params.address);
+        res.status(200).json({ ok: true });
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: blocklist
+    app.get('/api/admin/merkle-lp/blocklist', async (_req, res) => {
+      try {
+        sendJson(res, await merkleDropsLPService!.listBlocklist());
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.post('/api/admin/merkle-lp/blocklist', async (req, res) => {
+      try {
+        const { address, reason } = req.body as { address: string; reason?: string };
+        if (!address) { res.status(400).json({ error: 'address required' }); return; }
+        await merkleDropsLPService!.addToBlocklist(address, reason ?? '');
+        res.status(200).json({ ok: true });
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.delete('/api/admin/merkle-lp/blocklist/:address', async (req, res) => {
+      try {
+        await merkleDropsLPService!.removeFromBlocklist(req.params.address);
+        res.status(200).json({ ok: true });
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: settings
+    app.get('/api/admin/merkle-lp/settings', async (_req, res) => {
+      try {
+        sendJson(res, await merkleDropsLPService!.getSettings());
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.post('/api/admin/merkle-lp/settings', async (req, res) => {
+      try {
+        const patch = req.body as Record<string, string>;
+        if (!patch || typeof patch !== 'object') { res.status(400).json({ error: 'Invalid body' }); return; }
+        await merkleDropsLPService!.updateSettings(patch);
+        sendJson(res, await merkleDropsLPService!.getSettings());
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
     logger.info('WebSocket server initialized');
     logger.info('Database connected');
 
@@ -1950,6 +2458,7 @@ async function initializeServices() {
 let freerollScheduler: FreerollSchedulerService | null = null;
 let tournamentScheduler: TournamentSchedulerService | null = null;
 let merkleDropsService: MerkleDropsService | null = null;
+let merkleDropsLPService: MerkleDropsLPService | null = null;
 
 const PG_POOL_DOUBLE_RELEASE_MSG = 'Release called on client which has already been released to the pool';
 
@@ -1982,6 +2491,7 @@ process.on('SIGTERM', () => {
   freerollScheduler?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
+  merkleDropsLPService?.stopCron();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
@@ -1993,6 +2503,7 @@ process.on('SIGINT', () => {
   freerollScheduler?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
+  merkleDropsLPService?.stopCron();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);

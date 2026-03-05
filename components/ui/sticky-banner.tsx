@@ -7,16 +7,18 @@ export const StickyBanner = ({
   className,
   children,
   hideOnScroll = false,
+  closeIconClassName = "text-white",
 }: {
   className?: string;
   children: React.ReactNode;
   hideOnScroll?: boolean;
+  /** Class for the close icon (e.g. text-black for light backgrounds). */
+  closeIconClassName?: string;
 }) => {
   const [open, setOpen] = useState(true);
   const { scrollY } = useScroll();
 
   useMotionValueEvent(scrollY, "change", (latest) => {
-    console.log(latest);
     if (hideOnScroll && latest > 40) {
       setOpen(false);
     } else {
@@ -55,7 +57,7 @@ export const StickyBanner = ({
         className="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer"
         onClick={() => setOpen(!open)}
       >
-        <CloseIcon className="h-5 w-5 text-white" />
+        <CloseIcon className={cn("h-5 w-5", closeIconClassName)} />
       </motion.button>
     </motion.div>
   );

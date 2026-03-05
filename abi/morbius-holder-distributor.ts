@@ -115,6 +115,20 @@ export const morbiusHolderDistributorAbi = [
     stateMutability: 'view',
   },
   {
+    type: 'function',
+    inputs: [],
+    name: 'minHolding',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: '_minHolding', type: 'uint256' }],
+    name: 'setMinHolding',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
     anonymous: false,
     inputs: [
       { indexed: true, name: 'account', type: 'address' },

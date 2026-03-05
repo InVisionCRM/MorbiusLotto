@@ -23,27 +23,6 @@ export const morbiusLPStakingAbi = [
   },
   {
     type: 'function',
-    inputs: [],
-    name: 'BURN_ADDRESS',
-    outputs: [{ name: '', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'UNSTAKE_FEE_PCT',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'TOTAL_PCT',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
     inputs: [{ name: 'amount', type: 'uint256' }],
     name: 'stake',
     outputs: [],
@@ -150,13 +129,6 @@ export const morbiusLPStakingAbi = [
   {
     type: 'function',
     inputs: [],
-    name: 'totalBurned',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
     name: 'totalRewardsClaimed',
     outputs: [{ name: '', type: 'uint256' }],
     stateMutability: 'view',
@@ -239,7 +211,6 @@ export const morbiusLPStakingAbi = [
     inputs: [
       { indexed: true, name: 'user', type: 'address' },
       { indexed: false, name: 'amount', type: 'uint256' },
-      { indexed: false, name: 'burned', type: 'uint256' },
     ],
     name: 'Unstaked',
     type: 'event',

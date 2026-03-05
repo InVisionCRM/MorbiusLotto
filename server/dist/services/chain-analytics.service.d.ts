@@ -46,6 +46,14 @@ export declare class ChainAnalyticsService {
         totalDeposited: bigint;
         totalWithdrawn: bigint;
     }>;
+    /**
+     * Index InstantLotteryResult events into instant_lottery_plays for leaderboard and player stats.
+     * Incremental from last_scanned_block; full scan if none. Skips when LOTTERY_INSTANT_ADDRESS is not set.
+     */
+    indexInstantLotteryResults(): Promise<{
+        indexed: number;
+        lastBlock: bigint | null;
+    }>;
     /** Fetch all on-chain game stats in parallel. */
     getAllChainStats(): Promise<{
         plinko: PlinkoChainStats | null;

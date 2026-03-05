@@ -38,6 +38,8 @@ export type PurchaseEntry = {
   // Expandable data
   roundIds?: number[]  // Array of round IDs for multi-round purchases
   ticketId?: bigint    // Keno ticket ID
+  /** Instant Lottery: one play result (numbers, payout) for expand details */
+  instantPlay?: { playerNumbers: number[]; winningNumbers: number[]; matchCount: number; netPayout: bigint }
 }
 
 export type PurchaseSummary = {

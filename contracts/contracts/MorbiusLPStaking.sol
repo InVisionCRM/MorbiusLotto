@@ -12,22 +12,18 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
  * @notice Stake Morbius/WPLS PLP tokens to earn proportional share of MORBIUS rewards.
  * @dev Synthetix StakingRewards pattern. Rewards are MORBIUS tokens sent to the contract;
  *      `updatePool()` detects new MORBIUS deposits and distributes them proportionally.
- *      5% unstake fee on PLP is burned (sent to dead address), permanently removing liquidity.
+ *      No unstake fee — full PLP amount is returned on unstake.
  */
 contract MorbiusLPStaking is Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
     uint256 private constant SCALE = 1e18;
-    uint256 public constant UNSTAKE_FEE_PCT = 500;  // 5% in basis points
-    uint256 public constant TOTAL_PCT = 10_000;
-    address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     IERC20 public immutable PLP_TOKEN;
     IERC20 public immutable MORBIUS_TOKEN;
 
     uint256 public totalStaked;
     uint256 public totalStakers;
-    uint256 public totalBurned;
     uint256 public totalRewardsClaimed;
     mapping(address => uint256) public stakedBalance;
     mapping(address => uint256) public stakedAt;
@@ -41,7 +37,7 @@ contract MorbiusLPStaking is Ownable, ReentrancyGuard, Pausable {
     uint256 public unallocatedRewards;
 
     event Staked(address indexed user, uint256 amount);
-    event Unstaked(address indexed user, uint256 amount, uint256 burned);
+    event Unstaked(address indexed user, uint256 amount);
     event Claimed(address indexed user, uint256 amount);
     event PoolUpdated(uint256 rewardBalance, uint256 totalStaked);
     event EmergencyUnstaked(address indexed user, uint256 amount);
@@ -117,26 +113,20 @@ contract MorbiusLPStaking is Ownable, ReentrancyGuard, Pausable {
         emit Staked(msg.sender, amount);
     }
 
-    /// @notice Unstake PLP tokens. 5% fee is burned (sent to dead address).
-    ///         Immediate, no cooldown. Works even when paused.
+    /// @notice Unstake PLP tokens. Full amount returned, no fee. Works even when paused.
     function unstake(uint256 amount) external nonReentrant updateRewards(msg.sender) {
         require(amount > 0, "Cannot unstake 0");
         require(stakedBalance[msg.sender] >= amount, "Exceeds staked balance");
 
-        uint256 fee = (amount * UNSTAKE_FEE_PCT) / TOTAL_PCT;
-        uint256 userReceives = amount - fee;
-
         totalStaked -= amount;
-        totalBurned += fee;
         stakedBalance[msg.sender] -= amount;
         if (stakedBalance[msg.sender] == 0) {
             totalStakers -= 1;
             stakedAt[msg.sender] = 0;
         }
 
-        PLP_TOKEN.safeTransfer(msg.sender, userReceives);
-        PLP_TOKEN.safeTransfer(BURN_ADDRESS, fee);
-        emit Unstaked(msg.sender, amount, fee);
+        PLP_TOKEN.safeTransfer(msg.sender, amount);
+        emit Unstaked(msg.sender, amount);
     }
 
     /// @notice Claim accumulated MORBIUS rewards. Works even when paused.
@@ -150,17 +140,13 @@ contract MorbiusLPStaking is Ownable, ReentrancyGuard, Pausable {
         emit Claimed(msg.sender, amount);
     }
 
-    /// @notice Emergency unstake: withdraw PLP without claiming MORBIUS rewards.
-    ///         Use only if normal unstake fails. Forfeits unclaimed rewards. Same 5% burn fee.
+    /// @notice Emergency unstake: withdraw all PLP without claiming MORBIUS rewards.
+    ///         Forfeits unclaimed rewards. No fee.
     function emergencyUnstake() external nonReentrant {
         uint256 amount = stakedBalance[msg.sender];
         require(amount > 0, "Nothing staked");
 
-        uint256 fee = (amount * UNSTAKE_FEE_PCT) / TOTAL_PCT;
-        uint256 userReceives = amount - fee;
-
         totalStaked -= amount;
-        totalBurned += fee;
         stakedBalance[msg.sender] = 0;
         stakedAt[msg.sender] = 0;
         rewards[msg.sender] = 0;
@@ -169,8 +155,7 @@ contract MorbiusLPStaking is Ownable, ReentrancyGuard, Pausable {
             totalStakers -= 1;
         }
 
-        PLP_TOKEN.safeTransfer(msg.sender, userReceives);
-        PLP_TOKEN.safeTransfer(BURN_ADDRESS, fee);
+        PLP_TOKEN.safeTransfer(msg.sender, amount);
         emit EmergencyUnstaked(msg.sender, amount);
     }
 

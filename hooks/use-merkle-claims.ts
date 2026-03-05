@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, usePublicClient, useReadContracts, useWriteContract } from 'wagmi';
 import { formatEther } from 'viem';
 import { toast } from 'sonner';
 import { merkleClaimMorbiusAbi } from '@/abi/merkle-claim-morbius';
 import { MERKLE_CLAIM_MORBIUS_ADDRESS } from '@/lib/contracts';
 import { getApiUrlOptional } from '@/lib/api-urls';
+import { pulsechain } from 'viem/chains';
 
 export interface PublishedEpoch {
   id: number;
@@ -37,6 +38,7 @@ interface UseMerkleClaimsReturn {
   claim: (epochId: number, amount: string, proof: string[]) => Promise<void>;
   isClaiming: boolean;
   claimingEpochId: number | null;
+  claimConfirmed: boolean;
   refetch: () => void;
 }
 
@@ -100,15 +102,24 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
       })
     : [];
 
-  const hasClaimedCalls = claimableEntries.map((e) => ({
+  type HasClaimedCall = {
+    address: `0x${string}`;
+    abi: typeof merkleClaimMorbiusAbi;
+    functionName: 'hasClaimed';
+    args: readonly [bigint, `0x${string}`];
+  };
+
+  const hasClaimedCalls: HasClaimedCall[] = claimableEntries.map((e) => ({
     address: contractAddress as `0x${string}`,
     abi: merkleClaimMorbiusAbi,
     functionName: 'hasClaimed' as const,
     args: [BigInt(e.epoch_number), address!] as const,
   }));
 
-  const { data: hasClaimedResults, refetch: refetchClaimed } = useReadContracts({
-    contracts: hasClaimedCalls,
+  const { data: hasClaimedResults, refetch: refetchClaimed } = useReadContracts<
+    readonly unknown[]
+  >({
+    contracts: hasClaimedCalls as readonly unknown[],
     query: { enabled: hasClaimedCalls.length > 0 },
   });
 
@@ -152,14 +163,10 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
 
   // ── Claim transaction ───────────────────────────────────────────────────────
   const { writeContractAsync } = useWriteContract();
-  const [claimTxHash, setClaimTxHash] = useState<`0x${string}` | undefined>();
+  const publicClient = usePublicClient();
+  const [claimConfirmed, setClaimConfirmed] = useState(false);
 
-  const { isLoading: isWaitingTx } = useWaitForTransactionReceipt({
-    hash: claimTxHash,
-    query: { enabled: Boolean(claimTxHash) },
-  });
-
-  const isClaiming = claimingEpochId !== null || isWaitingTx;
+  const isClaiming = claimingEpochId !== null;
 
   const claim = useCallback(
     async (epochId: number, amount: string, proof: string[]) => {
@@ -169,31 +176,39 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
       }
       setClaimingEpochId(epochId);
       try {
+        const args = [BigInt(epochId), BigInt(amount), proof as `0x${string}`[]] as const;
         const hash = await writeContractAsync({
           address: contractAddress as `0x${string}`,
           abi: merkleClaimMorbiusAbi,
           functionName: 'claim',
-          args: [BigInt(epochId), BigInt(amount), proof as `0x${string}`[]],
+          args,
+          gas: 2_000_000n,
+          maxPriorityFeePerGas: 40_000n,
+          chain: pulsechain,
+          account: address,
         });
-        setClaimTxHash(hash);
         toast.success('Claim submitted! Waiting for confirmation…');
-        // Poll for receipt
-        const waitForReceipt = async () => {
-          await new Promise((r) => setTimeout(r, 3000));
-          setRefreshKey((k) => k + 1);
-          refetchClaimed();
-          setClaimingEpochId(null);
-          setClaimTxHash(undefined);
-          toast.success('MORBIUS claimed successfully!');
-        };
-        waitForReceipt();
+        // Wait for the on-chain receipt and verify it did not revert
+        if (publicClient) {
+          const receipt = await publicClient.waitForTransactionReceipt({ hash });
+          if (receipt.status === 'reverted') {
+            throw new Error(
+              'Transaction reverted on-chain. The claim failed (e.g. invalid proof, already claimed, or epoch not active). Check the transaction on the explorer.',
+            );
+          }
+        }
+        setClaimConfirmed(true);
+        setRefreshKey((k) => k + 1);
+        refetchClaimed();
+        setClaimingEpochId(null);
+        toast.success('MORBIUS claimed successfully!');
       } catch (err: any) {
         const msg = err?.shortMessage || err?.message || 'Claim failed';
         toast.error(msg);
         setClaimingEpochId(null);
       }
     },
-    [contractAddress, writeContractAsync, refetchClaimed],
+    [contractAddress, address, writeContractAsync, refetchClaimed, publicClient],
   );
 
   const refetch = useCallback(() => {
@@ -209,6 +224,7 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
     claim,
     isClaiming,
     claimingEpochId,
+    claimConfirmed,
     refetch,
   };
 }

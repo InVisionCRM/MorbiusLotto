@@ -326,9 +326,142 @@ class DatabaseService {
             return;
         await this.pool.query(`UPDATE blackjack_platform_totals SET total_withdrawn = total_withdrawn + $1::NUMERIC, updated_at = NOW() WHERE id = 1`, [amount.toString()]);
     }
+    // ============================================
+    // Instant Lottery (indexed plays for leaderboard + player stats)
+    // ============================================
+    async getInstantLotteryScanState() {
+        const result = await this.pool.query(`SELECT last_scanned_block FROM instant_lottery_scan WHERE id = 1`);
+        if (result.rows.length === 0)
+            return null;
+        const r = result.rows[0];
+        return {
+            lastScannedBlock: r.last_scanned_block != null ? BigInt(r.last_scanned_block) : null,
+        };
+    }
+    async updateInstantLotteryScanState(lastScannedBlock) {
+        await this.pool.query(`UPDATE instant_lottery_scan SET last_scanned_block = $1, updated_at = NOW() WHERE id = 1`, [lastScannedBlock != null ? Number(lastScannedBlock) : null]);
+    }
+    /** Insert one play (from chain event). ON CONFLICT DO NOTHING so re-scans are safe. */
+    async logInstantLotteryPlay(walletAddress, wager, grossPayout, netPayout, blockNumber, txHash) {
+        const normalized = this.normalizeAddress(walletAddress);
+        await this.pool.query(`INSERT INTO instant_lottery_plays (wallet_address, wager, gross_payout, net_payout, block_number, tx_hash)
+       VALUES ($1, $2::NUMERIC, $3::NUMERIC, $4::NUMERIC, $5, $6)
+       ON CONFLICT (tx_hash) DO NOTHING`, [
+            normalized,
+            wager.toString(),
+            grossPayout.toString(),
+            netPayout.toString(),
+            blockNumber != null ? Number(blockNumber) : null,
+            txHash,
+        ]);
+    }
+    /** Top players by total wagered (all-time from indexed plays). */
+    async getLotteryTopPlayers(limit = 25) {
+        const query = `
+      WITH agg AS (
+        SELECT
+          LOWER(wallet_address) AS wallet_address,
+          COUNT(*)::INTEGER AS total_games,
+          COALESCE(SUM(wager), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(gross_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(gross_payout), 0) - COALESCE(SUM(wager), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE net_payout > 0)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate
+        FROM instant_lottery_plays
+        GROUP BY LOWER(wallet_address)
+      )
+      SELECT ROW_NUMBER() OVER (ORDER BY total_bet DESC)::INTEGER AS rank, *
+      FROM agg
+      ORDER BY total_bet DESC
+      LIMIT $1
+    `;
+        const result = await this.pool.query(query, [limit]);
+        return result.rows.map((r) => this.normalizeTopPlayerEntry(r));
+    }
+    /** Per-player stats from indexed instant lottery plays. */
+    async getLotteryPlayerStats(walletAddress) {
+        const normalized = this.normalizeAddress(walletAddress);
+        const query = `
+      SELECT
+        COUNT(*)::INTEGER AS total_games,
+        COALESCE(SUM(wager), 0)::NUMERIC(78, 0) AS total_bet,
+        COALESCE(SUM(gross_payout), 0)::NUMERIC(78, 0) AS total_win,
+        (COALESCE(SUM(gross_payout), 0) - COALESCE(SUM(wager), 0))::NUMERIC(78, 0) AS profit_loss,
+        CASE WHEN COUNT(*) > 0 THEN
+          ROUND((COUNT(*) FILTER (WHERE net_payout > 0)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+        ELSE 0 END AS win_rate
+      FROM instant_lottery_plays
+      WHERE LOWER(wallet_address) = LOWER($1)
+    `;
+        const result = await this.pool.query(query, [normalized]);
+        if (result.rows.length === 0)
+            return null;
+        const r = result.rows[0];
+        return {
+            total_games: Number(r.total_games ?? 0),
+            total_bet: this.toBigInt(r.total_bet),
+            total_win: this.toBigInt(r.total_win),
+            profit_loss: this.toBigInt(r.profit_loss),
+            win_rate: Number(r.win_rate ?? 0),
+        };
+    }
+    /** Insert a provably-fair instant lottery play (before resolvePlay tx). */
+    async insertInstantLotteryPlayPF(params) {
+        const normalized = this.normalizeAddress(params.walletAddress);
+        const result = await this.pool.query(`INSERT INTO instant_lottery_plays_pf (
+        wallet_address, wager, player_numbers, winning_numbers, match_count,
+        gross_payout, net_payout, server_seed_hash, client_seed, nonce
+      ) VALUES ($1, $2::NUMERIC, $3, $4, $5, $6::NUMERIC, $7::NUMERIC, $8, $9, $10)
+      RETURNING id`, [
+            normalized,
+            params.wager.toString(),
+            params.playerNumbers,
+            params.winningNumbers,
+            params.matchCount,
+            params.grossPayout.toString(),
+            params.netPayout.toString(),
+            params.serverSeedHash,
+            params.clientSeed,
+            params.nonce.toString(),
+        ]);
+        return Number(result.rows[0]?.id ?? 0);
+    }
+    /** Set tx_hash after resolvePlay succeeds (for verification lookup). Stored lowercase for consistent lookup. */
+    async updateInstantLotteryPlayPFTxHash(id, txHash) {
+        const normalized = (txHash || '').trim().toLowerCase();
+        await this.pool.query(`UPDATE instant_lottery_plays_pf SET tx_hash = $1 WHERE id = $2`, [normalized, id]);
+    }
+    /** Reveal server seed for verification (call after play is settled). */
+    async updateInstantLotteryPlayPFReveal(id, serverSeed) {
+        await this.pool.query(`UPDATE instant_lottery_plays_pf SET server_seed = $1 WHERE id = $2`, [serverSeed, id]);
+    }
+    /** Get PF play by tx_hash for verification endpoint. Lookup is case-insensitive (EVM hashes). */
+    async getInstantLotteryPlayPFByTxHash(txHash) {
+        const normalized = txHash.trim().toLowerCase();
+        const result = await this.pool.query(`SELECT wallet_address, wager, player_numbers, winning_numbers, match_count,
+              gross_payout, net_payout, server_seed_hash, server_seed, client_seed, nonce
+       FROM instant_lottery_plays_pf WHERE LOWER(tx_hash) = $1`, [normalized]);
+        if (result.rows.length === 0)
+            return null;
+        const r = result.rows[0];
+        return {
+            wallet_address: r.wallet_address ?? '',
+            wager: this.toBigInt(r.wager),
+            player_numbers: Array.isArray(r.player_numbers) ? r.player_numbers : [],
+            winning_numbers: Array.isArray(r.winning_numbers) ? r.winning_numbers : [],
+            match_count: Number(r.match_count ?? 0),
+            gross_payout: this.toBigInt(r.gross_payout),
+            net_payout: this.toBigInt(r.net_payout),
+            server_seed_hash: r.server_seed_hash ?? '',
+            server_seed: r.server_seed ?? null,
+            client_seed: r.client_seed ?? 'default',
+            nonce: String(r.nonce ?? '0'),
+        };
+    }
     async expirePendingWithdrawals() {
-        // Expire pending withdrawals older than 2 minutes and refund balances (cleanup orphaned).
-        // PulseChain confirms in seconds — anything older than ~2 minutes almost certainly failed.
+        // DEPRECATED: Use getExpiredPendingWithdrawals + expireSinglePendingWithdrawal instead.
+        // This blind-refund version is kept only as a fallback.
         const query = `
       UPDATE pending_withdrawals
       SET status = 'expired'
@@ -340,6 +473,34 @@ class DatabaseService {
             await this.addPlayerBalance(row.wallet_address, BigInt(row.amount));
         }
         return result.rows.length;
+    }
+    /**
+     * Get pending withdrawals older than 2 minutes (candidates for expiry).
+     * Does NOT modify them — caller must verify on-chain before deciding to refund or mark completed.
+     */
+    async getExpiredPendingWithdrawals() {
+        const query = `
+      SELECT wallet_address, nonce, amount
+      FROM pending_withdrawals
+      WHERE status = 'pending' AND created_at < NOW() - INTERVAL '2 minutes'
+    `;
+        const result = await this.pool.query(query);
+        return result.rows;
+    }
+    /**
+     * Expire a single pending withdrawal and refund the balance.
+     * Only call this after verifying on-chain that the nonce was NOT used.
+     */
+    async expireSinglePendingWithdrawal(walletAddress, nonce, amount) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        await this.withTransaction(async (client) => {
+            const result = await client.query(`UPDATE pending_withdrawals SET status = 'expired'
+         WHERE LOWER(wallet_address) = LOWER($1) AND nonce = $2::NUMERIC AND status = 'pending'
+         RETURNING id`, [normalizedAddress, nonce.toString()]);
+            if (result.rows.length > 0) {
+                await client.query(`UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`, [normalizedAddress, amount.toString()]);
+            }
+        });
     }
     /** Expire all pending withdrawals for a wallet (any age). Only used by cron — NOT on prepare (would allow double withdrawal). */
     async expirePendingWithdrawalsForWallet(walletAddress) {

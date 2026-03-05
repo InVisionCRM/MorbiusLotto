@@ -206,7 +206,7 @@ export class BlackjackWebSocketClient {
       let settled = false;
 
       this.ws.onopen = () => {
-        console.log('[WS Client] WebSocket connected to', url, '| canSign:', canSign, '| playerAddress:', this.playerAddress);
+        console.log('%c🦇 MORBIUS.IO — socket open. we do not stop.', 'color:#22d3ee;font-weight:bold;font-size:11px;');
         logger.info('WebSocket connected' + (canSign ? ', waiting for auth challenge...' : ' (legacy mode)'));
         this.reconnectAttempts = 0;
         // If we can't sign, we're in legacy mode — don't wait for auth
@@ -217,18 +217,13 @@ export class BlackjackWebSocketClient {
           const msg = JSON.parse(event.data as string);
 
           if (msg.type === 'auth_challenge' && !settled) {
-            console.log('[WS Client] Received auth_challenge', { nonce: msg.payload?.nonce?.slice(0, 8), canSign, claimedAddress: msg.payload?.claimedAddress });
-            
             // Check if server is in grace period mode (auto-authenticated via query param)
             // If claimedAddress matches our playerAddress, server already authenticated us
-            const isGracePeriodAuth = msg.payload?.claimedAddress && 
-                                     this.playerAddress && 
+            const isGracePeriodAuth = msg.payload?.claimedAddress &&
+                                     this.playerAddress &&
                                      msg.payload.claimedAddress.toLowerCase() === this.playerAddress.toLowerCase();
-            
+
             if (isGracePeriodAuth) {
-              // Server is in grace period and already authenticated us via query param
-              // No need to sign - resolve immediately
-              console.log('[WS Client] Grace period mode detected - server already authenticated via query param, skipping signature');
               settled = true;
               logger.info('WebSocket connected (grace period auto-auth, skipping EIP-712 signature)');
               resolve();
@@ -257,7 +252,6 @@ export class BlackjackWebSocketClient {
 
           if (msg.type === 'auth_success' && !settled) {
             settled = true;
-            console.log('[WS Client] auth_success received! playerAddress:', msg.payload?.playerAddress);
             logger.info('WebSocket authenticated successfully via EIP-712');
             resolve();
             this.handleMessage(event.data as string);
@@ -331,7 +325,6 @@ export class BlackjackWebSocketClient {
    * Handle auth challenge from server: sign nonce with EIP-712 and send back
    */
   private async handleAuthChallenge(payload: { nonce: string; claimedAddress?: string }): Promise<void> {
-    console.log('[WS Client] handleAuthChallenge called', { nonce: payload.nonce?.slice(0, 8), claimedAddress: payload.claimedAddress, hasSignFn: !!this.signTypedData, playerAddress: this.playerAddress });
     if (!this.signTypedData) {
       throw new Error('signTypedData function not provided — cannot authenticate');
     }
@@ -340,17 +333,14 @@ export class BlackjackWebSocketClient {
       throw new Error('No player address — cannot authenticate');
     }
 
-    console.log('[WS Client] Requesting EIP-712 signature from wallet...');
     const signature = await this.signTypedData({
       domain: AUTH_EIP712_DOMAIN,
       types: AUTH_EIP712_TYPES,
       primaryType: 'AuthChallenge',
       message: { nonce: payload.nonce },
     });
-    console.log('[WS Client] Got signature:', signature?.slice(0, 10), '...');
 
     if (this.ws?.readyState === WebSocket.OPEN) {
-      console.log('[WS Client] Sending auth_response to server');
       this.ws.send(JSON.stringify({
         type: 'auth_response',
         payload: {

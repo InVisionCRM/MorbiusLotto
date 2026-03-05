@@ -140,7 +140,7 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
           <div>
             <button
               onClick={onComplete}
-              className="text-cyan-300/50 text-sm hover:text-cyan-300 underline transition-colors"
+              className="text-cyan-300/50 text-sm hover:text-cyan-300  transition-colors"
             >
               Skip Intro
             </button>
@@ -469,6 +469,7 @@ export default function BigWheelPage() {
           functionName: 'placeBetWithPLS',
           args: [betTypeEnum, betAmountWei],
           value: plsRequiredWei,
+          maxPriorityFeePerGas: 40_000n, // PulseChain tip
         } as any);
 
         setPendingTxHash(txHash);
@@ -523,6 +524,7 @@ export default function BigWheelPage() {
           abi: BIGWHEEL_ABI_ARRAY as any,
           functionName: 'placeBet',
           args: [betTypeEnum, betAmountWei],
+          maxPriorityFeePerGas: 40_000n, // PulseChain tip
         } as any);
 
         setPendingTxHash(txHash);

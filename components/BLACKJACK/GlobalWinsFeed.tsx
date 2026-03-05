@@ -192,7 +192,7 @@ export function GlobalWinsFeed({ wsClient, wsConnected, className = '' }: Global
                   <TableCell className={`${cellCls} font-mono text-sm text-white/90 truncate max-w-[80px]`} title={entry.playerAddress}>
                     <button
                       onClick={() => setSelectedAddress(entry.playerAddress)}
-                      className="text-cyan-400 hover:text-cyan-300 underline transition-colors"
+                      className="text-cyan-400 hover:text-cyan-300 transition-colors"
                     >
                       {formatAddress(entry.playerAddress)}
                     </button>

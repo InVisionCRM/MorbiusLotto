@@ -1,5 +1,5 @@
 import { connectorsForWallets } from '@rainbow-me/rainbowkit'
-import { createConfig, http } from 'wagmi'
+import { createConfig, http, fallback } from 'wagmi'
 import { pulsechain } from './chains'
 import {
   metaMaskWallet,
@@ -35,7 +35,11 @@ export const config = createConfig({
   connectors,
   chains: [pulsechain],
   transports: {
-    [pulsechain.id]: http(),
+    [pulsechain.id]: fallback([
+      http('https://rpc.pulsechain.com'),
+      http('https://pulsechain-rpc.publicnode.com'),
+      http('https://rpc-pulsechain.g4mm4.io'),
+    ]),
   },
   ssr: true,
 })

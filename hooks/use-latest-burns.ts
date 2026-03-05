@@ -5,7 +5,7 @@ import { usePublicClient } from 'wagmi'
 import { formatEther, parseAbiItem } from 'viem'
 import {
   KENO_ADDRESS,
-  LOTTERY_ADDRESS,
+  LOTTERY_INSTANT_ADDRESS,
   KENO_DEPLOY_BLOCK,
   LOTTERY_DEPLOY_BLOCK,
 } from '@/lib/contracts'
@@ -63,9 +63,9 @@ export function useLatestBurns() {
           : Promise.resolve([]),
 
         // Lottery BurnExecuted events
-        (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+        (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
           ? publicClient.getLogs({
-              address: LOTTERY_ADDRESS,
+              address: LOTTERY_INSTANT_ADDRESS,
               event: BURN_EXECUTED_EVENT,
               fromBlock: fromBlock > BigInt(LOTTERY_DEPLOY_BLOCK) ? fromBlock : BigInt(LOTTERY_DEPLOY_BLOCK),
               toBlock: currentBlock,

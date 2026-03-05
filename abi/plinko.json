@@ -38,7 +38,17 @@
       },
       {
         "internalType": "address",
+        "name": "_burnAddress",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
         "name": "_platformFeeRecipient",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_lpDistributionRecipient",
         "type": "address"
       }
     ],
@@ -209,6 +219,57 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "uint32[17]",
+        "name": "newThresholds",
+        "type": "uint32[17]"
+      }
+    ],
+    "name": "BucketThresholdsUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "oldAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newAddress",
+        "type": "address"
+      }
+    ],
+    "name": "BurnAddressUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldBps",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "BurnFeeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": true,
         "internalType": "address",
         "name": "funder",
@@ -273,6 +334,44 @@
       }
     ],
     "name": "EmergencyWithdraw",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldBps",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "LpDistributionFeeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "oldRecipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "LpDistributionRecipientUpdated",
     "type": "event"
   },
   {
@@ -388,7 +487,19 @@
       {
         "indexed": false,
         "internalType": "uint256",
+        "name": "burnFee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
         "name": "platformFee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "lpDistributionFee",
         "type": "uint256"
       },
       {
@@ -493,6 +604,19 @@
       }
     ],
     "name": "LOW_RISK_MULTIPLIERS",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_BALLS_PER_DROP",
     "outputs": [
       {
         "internalType": "uint256",
@@ -614,6 +738,32 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "burnAddress",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "burnFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -705,7 +855,17 @@
       },
       {
         "internalType": "uint256",
+        "name": "feeBurn",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
         "name": "feePlatform",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "feeLpDistribution",
         "type": "uint256"
       }
     ],
@@ -791,6 +951,19 @@
         "internalType": "uint256[17]",
         "name": "",
         "type": "uint256[17]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getBucketThresholds",
+    "outputs": [
+      {
+        "internalType": "uint32[17]",
+        "name": "",
+        "type": "uint32[17]"
       }
     ],
     "stateMutability": "view",
@@ -952,6 +1125,32 @@
         "internalType": "uint256",
         "name": "max",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lpDistributionFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lpDistributionRecipient",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1191,6 +1390,45 @@
   {
     "inputs": [
       {
+        "internalType": "uint32[17]",
+        "name": "newThresholds",
+        "type": "uint32[17]"
+      }
+    ],
+    "name": "setBucketThresholds",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newAddress",
+        "type": "address"
+      }
+    ],
+    "name": "setBurnAddress",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "setBurnFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "newBps",
         "type": "uint256"
@@ -1210,6 +1448,32 @@
       }
     ],
     "name": "setDistributionRecipient",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "newBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "setLpDistributionFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "setLpDistributionRecipient",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1294,6 +1558,19 @@
   },
   {
     "inputs": [],
+    "name": "totalBurnFeesCollected",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "totalDistributionFeesCollected",
     "outputs": [
       {
@@ -1308,6 +1585,19 @@
   {
     "inputs": [],
     "name": "totalDrops",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalLpDistributionFeesCollected",
     "outputs": [
       {
         "internalType": "uint256",

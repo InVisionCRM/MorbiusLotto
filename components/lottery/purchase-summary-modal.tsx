@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { LOTTERY_ADDRESS, MORBIUS_TOKEN_ADDRESS, TICKET_PRICE, TOKEN_DECIMALS } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, MORBIUS_TOKEN_ADDRESS, TICKET_PRICE, TOKEN_DECIMALS } from '@/lib/contracts'
 import { pulsechain } from '@/lib/chains'
 import { useBuyTickets, useBuyTicketsForRounds } from '@/hooks/use-lottery-6of55'
 import { ERC20_ABI } from '@/abi/erc20'
@@ -73,7 +73,7 @@ export function PurchaseSummaryModal({
     address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: address ? [address, LOTTERY_ADDRESS as `0x${string}`] : undefined,
+    args: address ? [address, LOTTERY_INSTANT_ADDRESS as `0x${string}`] : undefined,
     query: {
       enabled: !!address && paymentMethod === 'MORBIUS',
       refetchInterval: 3000,
@@ -235,7 +235,7 @@ export function PurchaseSummaryModal({
       address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [LOTTERY_ADDRESS as `0x${string}`, amount],
+      args: [LOTTERY_INSTANT_ADDRESS as `0x${string}`, amount],
       chainId: pulsechain.id,
     })
   }

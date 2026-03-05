@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAccount, usePublicClient, useSignTypedData } from 'wagmi';
+import { useGameLock } from '@/contexts/game-lock-context';
 import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
@@ -14,11 +15,11 @@ import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
 import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
-import { GameHistory } from '@/components/BLACKJACK/GameHistory';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalyticsDashboard';
 // GameVerificationTools removed - use /BLACKJACK/verify page instead
-import { ContractAddress } from '@/components/ui/contract-address';
+import { GameFAQ } from '@/components/shared/GameFAQ';
+import { StickyBanner } from '@/components/ui/sticky-banner';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
 import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
@@ -48,6 +49,7 @@ import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/ho
 import { useTokenApproval } from '@/hooks/use-token-approval';
 import { useAudio } from '@/hooks/use-audio';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
+import { AdSpace } from '@/components/shared/AdSpace';
 
 // Intro screen component
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -68,6 +70,9 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
       }}
       suppressHydrationWarning
     >
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[300px]">
+        <AdSpace slot="loading" width={300} height={100} showCta={false} />
+      </div>
       {/* Wrapper: cards 30px above text, stacked vertically so they never overlap */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
         {/* Animated card dealing effect */}
@@ -180,7 +185,7 @@ export default function BlackjackPage() {
 
   // Background preference state (persisted per wallet). imageSource/videoSource can be static id or API table UUID.
   const { imageOptions, videoOptions, getThemeInfo, getTableProfile } = useBlackjackTables();
-  const [theme, setTheme] = useState<BlackjackThemeKind>('video');
+  const [theme, setTheme] = useState<BlackjackThemeKind>('image');
   const [imageSource, setImageSource] = useState<string>(DEFAULT_BLACKJACK_IMAGE_ID);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const { playSound } = useAudio(soundEnabled);
@@ -247,20 +252,42 @@ export default function BlackjackPage() {
   const validImageIds = useMemo(() => new Set(imageOptions.map((x) => x.id)), [imageOptions]);
   const validVideoIds = useMemo(() => new Set(videoOptions.map((x) => x.id)), [videoOptions]);
 
-  // Load table background preference for this wallet
+  // Load table background: fetch server default, then apply per-wallet localStorage override if present
   useEffect(() => {
-    if (!address || typeof window === 'undefined') return;
-    const key = `${TABLE_PREFS_KEY}_${address.toLowerCase()}`;
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return;
-      const prefs = JSON.parse(raw) as { theme?: string; imageSource?: string; videoSource?: string };
-      if (prefs.theme === 'image' || prefs.theme === 'video') setTheme(prefs.theme);
-      if (prefs.imageSource && validImageIds.has(prefs.imageSource)) setImageSource(prefs.imageSource);
-      if (prefs.videoSource && validVideoIds.has(prefs.videoSource)) setVideoSource(prefs.videoSource);
-    } catch {
-      // ignore invalid stored prefs
-    }
+    if (typeof window === 'undefined') return;
+    let cancelled = false;
+    const key = address ? `${TABLE_PREFS_KEY}_${address.toLowerCase()}` : null;
+    (async () => {
+      const defaultRes = await fetch('/api/blackjack/default-table').catch(() => null);
+      const apiDefault: { themeKind: 'image' | 'video'; tableId: string } =
+        defaultRes?.ok
+          ? await defaultRes.json().catch(() => ({ themeKind: 'image' as const, tableId: DEFAULT_BLACKJACK_IMAGE_ID }))
+          : { themeKind: 'image', tableId: DEFAULT_BLACKJACK_IMAGE_ID };
+      if (cancelled) return;
+      let themeToUse = apiDefault.themeKind;
+      let imageToUse = apiDefault.themeKind === 'image' ? apiDefault.tableId : DEFAULT_BLACKJACK_IMAGE_ID;
+      let videoToUse = apiDefault.themeKind === 'video' ? apiDefault.tableId : 'glowingTable';
+      if (key) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const prefs = JSON.parse(raw) as { theme?: string; imageSource?: string; videoSource?: string };
+            if (prefs.theme === 'image' || prefs.theme === 'video') themeToUse = prefs.theme;
+            if (prefs.imageSource && validImageIds.has(prefs.imageSource)) imageToUse = prefs.imageSource;
+            if (prefs.videoSource && validVideoIds.has(prefs.videoSource)) videoToUse = prefs.videoSource;
+          }
+        } catch {
+          // ignore invalid stored prefs
+        }
+      }
+      if (!validImageIds.has(imageToUse)) imageToUse = DEFAULT_BLACKJACK_IMAGE_ID;
+      if (!validVideoIds.has(videoToUse)) videoToUse = 'glowingTable';
+      if (cancelled) return;
+      setTheme(themeToUse);
+      setImageSource(imageToUse);
+      setVideoSource(videoToUse);
+    })();
+    return () => { cancelled = true; };
   }, [address, validImageIds, validVideoIds]);
 
   // Persist table background preference when it changes
@@ -489,6 +516,13 @@ export default function BlackjackPage() {
     canSplit: false
   });
 
+  // Block interactions outside game area while playing
+  const { setGameLocked } = useGameLock();
+  useEffect(() => {
+    setGameLocked(gameState.isPlaying);
+    return () => setGameLocked(false);
+  }, [gameState.isPlaying, setGameLocked]);
+
   // Ref to track current game for callbacks that can't access gameState directly
   const currentGameRef = useRef<Game | null>(null);
   // When createGame is in progress, game_created handler skips (handleStartGame handles it)
@@ -525,7 +559,6 @@ export default function BlackjackPage() {
       toast.success(`Tournament Complete! Final rank: #${rank}`);
     },
     onLeaderboardUpdate: (leaderboard) => {
-      console.log('Leaderboard updated:', leaderboard);
     },
   });
 
@@ -573,14 +606,12 @@ export default function BlackjackPage() {
   const fetchBalance = useCallback(async (clientOverride?: BlackjackWebSocketClient) => {
     const client = clientOverride ?? wsClient;
     const connected = clientOverride ? true : wsConnected;
-    console.log('[Balance] fetchBalance called | wsClient:', !!client, '| wsConnected:', connected);
     if (!client || !connected) {
       throw new Error('Not connected to game server. Please wait for connection or refresh the page.');
     }
     try {
       const { balance } = await client.getBalance();
       const balanceBigInt = BigInt(balance);
-      console.log('[Balance] Server returned balance:', balance, '| as BigInt:', balanceBigInt.toString());
       setOffChainBalance(balanceBigInt);
       setGameState(prev => ({ ...prev, balance: balanceBigInt }));
     } catch (error) {
@@ -753,21 +784,18 @@ export default function BlackjackPage() {
   // Callbacks must be wrapped in useCallback to maintain hook order
   const handleDepositEvent = useCallback((player: string, morbiusAmount: bigint, plsAmount: bigint) => {
     if (player.toLowerCase() === address?.toLowerCase()) {
-      console.log('Deposit event detected, syncing balance...', { player, morbiusAmount });
       syncBalance().catch(() => {});
     }
   }, [address, syncBalance]);
 
   const handleDepositMORBIUSEvent = useCallback((player: string, amount: bigint) => {
     if (player.toLowerCase() === address?.toLowerCase()) {
-      console.log('MORBIUS deposit event detected, syncing balance...', { player, amount });
       syncBalance().catch(() => {});
     }
   }, [address, syncBalance]);
 
   const handleWithdrawalEvent = useCallback((player: string, amount: bigint) => {
     if (player.toLowerCase() === address?.toLowerCase()) {
-      console.log('Withdrawal event detected, syncing balance...', { player, amount });
       syncBalance().catch(() => {});
     }
   }, [address, syncBalance]);
@@ -792,10 +820,6 @@ export default function BlackjackPage() {
 
     // If address changed and we have an existing client, disconnect it first
     if (wsClient && address && wsAddressRef.current !== address.toLowerCase()) {
-      console.log('Wallet changed, disconnecting old WebSocket...', {
-        oldAddress: wsAddressRef.current,
-        newAddress: address.toLowerCase()
-      });
       wsClient.disconnect();
       setWsClient(null);
       setWsConnected(false);
@@ -882,14 +906,6 @@ export default function BlackjackPage() {
           const isBlackjack = Array.isArray(processedGame.playerHands) && 
             processedGame.playerHands.some((h: any) => h.result === 'blackjack');
           
-          console.log('Game completed in game_updated handler:', {
-            gameId: processedGame.id,
-            playerHands: processedGame.playerHands,
-            dealerHand: processedGame.dealerHand,
-            betAmount: betAmount.toString(),
-            payout: payout.toString()
-          });
-          
           handleGameCompletion({
             gameId: processedGame.id,
             betAmount,
@@ -901,8 +917,7 @@ export default function BlackjackPage() {
         }
       });
 
-      client.on('game_completed', (data: any) => {
-        console.log('Game completed event received:', data);
+      client.on('game_completed', (_data: any) => {
         // Don't handle here - we already handle it in game_updated when status is 'completed'
         // Balance refreshes after dealer reveal (handleDealerRevealComplete) for immersion
       });
@@ -914,12 +929,10 @@ export default function BlackjackPage() {
       });
 
       // Connect
-      console.log('[WS Page] Initiating WebSocket connection to', wsUrl, 'for address', normalizedAddress);
       client.connect()
         .then(() => {
           setWsConnected(true);
           setWsClient(client);
-          console.log('[WS Page] Connected and authenticated to blackjack server');
           // Fetch initial balance (pass client - state may not have updated yet)
           fetchBalance(client).catch(() => {});
         })
@@ -1649,16 +1662,6 @@ export default function BlackjackPage() {
         const gameId = String(serverGameState.gameId || serverGameState.id || '');
         const currentHandIndex = Number(serverGameState.currentHandIndex ?? 0);
         
-        console.log('handleGameCompletion: Extracting cards from gameState', {
-          gameId,
-          playerHands: serverGameState.playerHands,
-          dealerCards: serverGameState.dealerCards,
-          hasPlayerHands: Array.isArray(serverGameState.playerHands),
-          hasDealerCards: Array.isArray(serverGameState.dealerCards),
-          playerHandsLength: Array.isArray(serverGameState.playerHands) ? serverGameState.playerHands.length : 0,
-          dealerCardsLength: Array.isArray(serverGameState.dealerCards) ? serverGameState.dealerCards.length : 0
-        });
-        
         const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
         const suitFor = (idx: number) => {
           const salt = gameId.length;
@@ -1691,15 +1694,6 @@ export default function BlackjackPage() {
         };
         
         const rawHands = Array.isArray(serverGameState.playerHands) ? serverGameState.playerHands : [];
-        console.log('handleGameCompletion: Processing playerHands', {
-          rawHandsLength: rawHands.length,
-          rawHands: rawHands.map((h: any) => ({
-            cards: h.cards,
-            cardsLength: Array.isArray(h.cards) ? h.cards.length : 0,
-            cardsType: Array.isArray(h.cards) && h.cards.length > 0 ? typeof h.cards[0] : 'none'
-          }))
-        });
-        
         if (rawHands.length > 0) {
           const playerHands: Hand[] = rawHands.map((h: any, handIdx: number) => {
             const rawCards: number[] = Array.isArray(h.cards) ? h.cards.map((c: any) => Number(c)) : [];
@@ -1760,22 +1754,12 @@ export default function BlackjackPage() {
         // Use extracted hands if available, otherwise fallback to currentGame
         if (extractedPlayerHand && extractedPlayerHand.cards.length > 0) {
           playerHand = extractedPlayerHand;
-          console.log('handleGameCompletion: Using extracted playerHand from gameState', {
-            cards: playerHand.cards.map(c => c.value),
-            total: playerHand.total
-          });
         } else {
-          // Fallback: use currentGame (which should be updated by updateGameStateFromServer)
           const currentPlayerHand = gameState.currentGame?.playerHand || createEmptyHand();
           playerHand = {
             ...currentPlayerHand,
             betAmount: currentPlayerHand.betAmount || betAmount
           };
-          console.log('handleGameCompletion: Using currentGame playerHand (fallback)', {
-            cards: playerHand.cards.map(c => c.value),
-            cardsLength: playerHand.cards.length,
-            hasCurrentGame: !!gameState.currentGame
-          });
         }
         
         if (extractedDealerHand && extractedDealerHand.cards.length > 0) {
@@ -1784,27 +1768,13 @@ export default function BlackjackPage() {
           dealerHand = gameState.currentGame?.dealerHand || createEmptyHand();
         }
       } else {
-        // Final fallback: use currentGame
         const currentPlayerHand = gameState.currentGame?.playerHand || createEmptyHand();
         playerHand = {
           ...currentPlayerHand,
           betAmount: currentPlayerHand.betAmount || betAmount
         };
         dealerHand = gameState.currentGame?.dealerHand || createEmptyHand();
-        console.log('handleGameCompletion: Using currentGame (final fallback)', {
-          playerCards: playerHand.cards.map(c => c.value),
-          dealerCards: dealerHand.cards.map(c => c.value)
-        });
       }
-      
-      console.log('handleGameCompletion: Final hands before creating GameResult', {
-        playerHandCards: playerHand.cards.map(c => c.value),
-        dealerHandCards: dealerHand.cards.map(c => c.value),
-        playerHandTotal: playerHand.total,
-        dealerHandTotal: dealerHand.total,
-        playerHandCardsLength: playerHand.cards.length,
-        dealerHandCardsLength: dealerHand.cards.length
-      });
 
       // Detect split/double — prefer processedGame (fresh, synchronously returned by updateGameStateFromServer)
       // over gameState.currentGame which is from a stale React closure and will be the *previous* game
@@ -2139,8 +2109,7 @@ export default function BlackjackPage() {
     }
 
     const finalClientSeed = clientSeed || generateClientSeed();
-    console.log('Main handleStartGame called with:', { betAmount, perfectPairsBetAmount: sideBet.toString(), clientSeed: finalClientSeed, isConnected, address });
-    
+
     // Reset card counts for new game animations
     prevPlayerCardCount.current = 0;
     prevDealerCardCount.current = 0;
@@ -2157,7 +2126,6 @@ export default function BlackjackPage() {
       return;
     }
     if (!wsConnected || !wsClient) {
-      console.log('Game server not connected yet');
       toast.error('Connecting to game server… try again in a second');
       return;
     }
@@ -2188,8 +2156,6 @@ export default function BlackjackPage() {
       const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
       const gameHash = ('0x' + hashHex) as `0x${string}`;
 
-      console.log('Generated game hash:', gameHash, { totalStake: totalStake.toString(), betAmount: betAmount.toString(), perfectPairs: sideBet.toString() });
-
       // Step 3: Create game on server (off-chain betting; total stake = main + Perfect Pairs)
       createGameInProgressRef.current = true;
       let serverGameState: any;
@@ -2198,7 +2164,6 @@ export default function BlackjackPage() {
       } finally {
         createGameInProgressRef.current = false;
       }
-      console.log('Game started:', serverGameState);
 
       // Apply returned game state. Player blackjack: use phased deal so cards animate with same delay as other hands.
       const status = String(serverGameState?.status);
@@ -2320,7 +2285,6 @@ export default function BlackjackPage() {
     try {
       // Send action to server
       const serverGameState = await wsClient.playerAction(gameState.currentGame.id, action);
-      console.log('Player action processed:', serverGameState);
       updateGameStateFromServer(serverGameState);
       // Balance refreshes after dealer reveal (handleDealerRevealComplete) for immersion
       return;
@@ -2463,6 +2427,12 @@ export default function BlackjackPage() {
         preload="metadata"
         style={{ display: 'none' }}
       />
+
+      <StickyBanner
+        className="bg-amber-600/95 text-black font-bold text-center text-sm sm:text-base shadow-lg"
+      >
+        <span>DO NOT DEPOSIT. DEVELOPMENT IN PROGRESS</span>
+      </StickyBanner>
 
       <GlobalMainNav
         onOpenDepositModal={handleOpenDepositModal}
@@ -2668,8 +2638,8 @@ export default function BlackjackPage() {
 
         </div>
 
-          {/* 3. Betting panel (always visible) + tabbed sidebar — self-contained height so tab content doesn't resize the table */}
-          <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2 md:max-h-[calc(100vh-8rem)] md:overflow-hidden">
+          {/* 3. Betting panel (always visible) + tabbed sidebar */}
+          <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2 overflow-hidden">
           {tournament.tournamentState.inTournament ? (
             <TournamentBetPanel
               chips={(tournament.displayedTournamentState ?? tournament.tournamentState).chips}
@@ -2726,8 +2696,9 @@ export default function BlackjackPage() {
               </div>
             </div>
           )}
-          <BlackjackSidebar
-            history={gameState.history}
+          <div className="md:h-[420px] overflow-hidden rounded-xl">
+            <BlackjackSidebar
+              history={gameState.history}
             reserveBalance={offChainBalance}
             chartRef={chartRef}
             chartSessionStartTime={chartSessionStartTime.current}
@@ -2754,7 +2725,8 @@ export default function BlackjackPage() {
                 />
               ) : null
             }
-          />
+            />
+          </div>
         </div>
         </div>
 
@@ -3055,15 +3027,6 @@ export default function BlackjackPage() {
           isLoading={tournament.isJoinLoading}
         />
 
-        {currentView === 'history' && (
-          <div className="max-w-7xl mx-auto">
-            <GameHistory
-              history={gameHistoryEntries}
-              onVerifyGame={openVerifyView}
-            />
-          </div>
-        )}
-
         {currentView === 'stats' && (
           <div className="max-w-7xl mx-auto">
             {playerStatsLoading ? (
@@ -3119,10 +3082,15 @@ export default function BlackjackPage() {
 
       </main>
 
-      {/* Contract Addresses - Above Footer */}
-      <div className="w-full py-4 px-4 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 bg-transparent">
-        <ContractAddress address={MORBIUS_TOKEN_ADDRESS} label="MORBIUS Token" />
-        <ContractAddress address={BLACKJACK_ADDRESS} label="Blackjack Contract" />
+      {/* FAQ (includes contract addresses) */}
+      <div className="w-full flex justify-center py-4 px-4">
+        <GameFAQ
+          game="blackjack"
+          addresses={[
+            { label: 'Blackjack Contract', address: BLACKJACK_ADDRESS },
+            { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+          ]}
+        />
       </div>
 
       <Footer />

@@ -10,7 +10,7 @@ import { TermsOfServiceModal } from '@/components/footer/terms-of-service'
 import { AboutUsModal } from '@/components/footer/about-us'
 import { UserAgreementModal } from '@/components/footer/user-agreement'
 import { FAQModal } from '@/components/footer/faq-modal'
-import { LOTTERY_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { toast } from 'sonner'
 
 export function Footer() {
@@ -73,37 +73,37 @@ export function Footer() {
             <div className="flex flex-wrap justify-center gap-4 text-xs">
               <button
                 onClick={() => setShowPulseChain(true)}
-                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors "
               >
                 What is PulseChain?
               </button>
               <button
                 onClick={() => setShowFAQ(true)}
-                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors "
               >
                 FAQ
               </button>
               <button
                 onClick={() => setShowPrivacy(true)}
-                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors "
               >
                 Privacy Policy
               </button>
               <button
                 onClick={() => setShowTerms(true)}
-                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors "
               >
                 Terms of Service
               </button>
               <button
                 onClick={() => setShowUserAgreement(true)}
-                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors "
               >
                 User Agreement
               </button>
               <button
                 onClick={() => setShowAbout(true)}
-                className="text-white/90 hover:text-cyan-500/80 transition-colors underline"
+                className="text-white/90 hover:text-cyan-500/80 transition-colors "
               >
                 About Us
               </button>
@@ -111,14 +111,14 @@ export function Footer() {
 
             {/* Contract Address */}
             <ContractAddress
-              address={LOTTERY_ADDRESS}
+              address={LOTTERY_INSTANT_ADDRESS}
               label="Morbius Games"
             />
 
             {/* Disclaimer Button */}
             <button
               onClick={() => setShowDisclaimer(true)}
-              className="text-white/90 hover:text-cyan-500/80 text-sm underline transition-colors"
+              className="text-white/90 hover:text-cyan-500/80 text-sm  transition-colors"
             >
               Important Disclaimer
             </button>

@@ -11,12 +11,23 @@ const uuid_1 = require("uuid");
 const crypto_1 = __importDefault(require("crypto"));
 const viem_1 = require("viem");
 const chain_client_1 = require("../utils/chain-client");
+const contracts_1 = require("../config/contracts");
 // Minimal ABI for getPlayerReserve - avoids full ABI parse issues in readContract
 const GET_PLAYER_RESERVE_ABI = [
     {
         inputs: [{ name: 'player', type: 'address' }],
         name: 'getPlayerReserve',
         outputs: [{ type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+];
+// Minimal ABI for usedNonces - check if a withdrawal nonce was used on-chain
+const USED_NONCES_ABI = [
+    {
+        inputs: [{ name: '', type: 'uint256' }],
+        name: 'usedNonces',
+        outputs: [{ type: 'bool' }],
         stateMutability: 'view',
         type: 'function',
     },
@@ -90,12 +101,8 @@ class WebSocketService {
         this.wss = new ws_1.WebSocketServer({ server });
         // Initialize public client for reading contract state
         this.publicClient = (0, chain_client_1.getPublicClient)();
-        const envAddr = process.env.BLACKJACK_CONTRACT_ADDRESS;
-        if (!envAddr) {
-            throw new Error('BLACKJACK_CONTRACT_ADDRESS env var is required');
-        }
-        this.contractAddress = envAddr;
-        console.log('[WebSocketService] Using BLACKJACK_CONTRACT_ADDRESS:', this.contractAddress);
+        this.contractAddress = contracts_1.BLACKJACK_ADDRESS;
+        console.log('[WebSocketService] Using BLACKJACK_ADDRESS:', this.contractAddress);
         console.log('[WebSocketService] REQUIRE_WS_AUTH:', REQUIRE_WS_AUTH);
         this.wss.on('connection', this.handleConnection.bind(this));
         // Heartbeat to keep connections alive
@@ -806,27 +813,76 @@ class WebSocketService {
             this.sendError(ws, errorMessage, message.requestId);
         }
     }
+    /**
+     * Resolve any pending withdrawals for a player by checking on-chain nonce usage.
+     * If the nonce was used (withdrawal succeeded on-chain), marks it completed (no refund).
+     * If the nonce was NOT used, leaves it pending for the expiry cron to refund.
+     */
+    async resolvePendingWithdrawals(playerAddress) {
+        const pending = await this.dbService.getActivePendingWithdrawal(playerAddress);
+        if (!pending)
+            return;
+        try {
+            const nonceUsed = await this.publicClient.readContract({
+                address: this.contractAddress,
+                abi: USED_NONCES_ABI,
+                functionName: 'usedNonces',
+                args: [BigInt(pending.nonce)],
+            });
+            if (nonceUsed) {
+                // Withdrawal succeeded on-chain but confirm POST failed — mark completed now
+                await this.dbService.markPendingWithdrawalCompleted(playerAddress, BigInt(pending.nonce));
+                logger_1.logger.warn('Resolved pending withdrawal as completed (on-chain nonce used)', {
+                    playerAddress,
+                    nonce: pending.nonce,
+                    amount: pending.amount,
+                });
+            }
+        }
+        catch (rpcErr) {
+            logger_1.logger.warn('Failed to check nonce for pending withdrawal during sync', {
+                playerAddress,
+                nonce: pending.nonce,
+                error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+            });
+        }
+    }
     async handleSyncBalance(ws, message) {
         try {
             if (!ws.playerAddress) {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
+            // CRITICAL: Before syncing balance, check if there's a pending withdrawal that
+            // actually completed on-chain (nonce used). If so, mark it completed to prevent
+            // the expiry cron from refunding it (which would duplicate funds).
+            await this.resolvePendingWithdrawals(ws.playerAddress);
             // Normalize address (checksum) to avoid viem encodeFunctionData issues
             const playerAddress = (0, viem_1.getAddress)(ws.playerAddress);
-            // Get contract reserve balance (use minimal ABI to avoid full-ABI parse errors)
-            const contractBalance = await this.publicClient.readContract({
+            const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
+            const hasActive = await this.dbService.hasActiveGames(ws.playerAddress);
+            // Read contract reserve, retrying once if the RPC returns a stale value (i.e. same as DB,
+            // which may happen right after a deposit if the node hasn't caught up yet).
+            let contractBalance = await this.publicClient.readContract({
                 address: this.contractAddress,
                 abi: GET_PLAYER_RESERVE_ABI,
                 functionName: 'getPlayerReserve',
                 args: [playerAddress],
             });
-            const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
-            // Use max(contract, db). The DB is authoritative for off-chain winnings and is
-            // always >= 0 after legitimate operations. A contractBalance of 0 is normal after
-            // a full on-chain withdrawal — the player may still have off-chain winnings in DB.
-            // Never wipe the DB balance based on contractBalance; only raise it if the contract
-            // shows a higher reserve (e.g. an on-chain deposit not yet credited to DB).
-            const newBalance = contractBalance > currentDbBalance ? contractBalance : currentDbBalance;
+            if (!hasActive && contractBalance <= currentDbBalance) {
+                // Possibly stale — wait 1s and retry once
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                contractBalance = await this.publicClient.readContract({
+                    address: this.contractAddress,
+                    abi: GET_PLAYER_RESERVE_ABI,
+                    functionName: 'getPlayerReserve',
+                    args: [playerAddress],
+                });
+            }
+            // Only raise DB balance to match contract if player has NO active games.
+            // During gameplay, bets are deducted off-chain in DB while the on-chain reserve
+            // stays unchanged. Using max(contract, db) here would overwrite the bet deduction
+            // and restore the pre-bet balance (the "bounce-back" bug).
+            const newBalance = (!hasActive && contractBalance > currentDbBalance) ? contractBalance : currentDbBalance;
             if (newBalance !== currentDbBalance) {
                 await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
             }
@@ -835,6 +891,7 @@ class WebSocketService {
                 contractBalance: contractBalance.toString(),
                 previousDbBalance: currentDbBalance.toString(),
                 newBalance: newBalance.toString(),
+                hasActiveGames: hasActive,
             });
             this.sendMessage(ws, {
                 type: 'balance_synced',
@@ -855,28 +912,37 @@ class WebSocketService {
             if (!ws.playerAddress) {
                 return this.sendError(ws, 'Player address not authenticated', message.requestId);
             }
+            // CRITICAL: Before reading balance, resolve any pending withdrawals that
+            // completed on-chain but weren't confirmed to the server.
+            await this.resolvePendingWithdrawals(ws.playerAddress);
             let balance = await this.dbService.getPlayerBalance(ws.playerAddress);
-            // If the contract shows a higher reserve than DB (e.g. deposit not yet credited),
-            // raise the DB balance to match. Never lower it — a 0 contract reserve is normal
-            // after a full on-chain withdrawal while off-chain winnings still exist in DB.
-            try {
-                const playerAddress = (0, viem_1.getAddress)(ws.playerAddress);
-                const contractBalance = await this.publicClient.readContract({
-                    address: this.contractAddress,
-                    abi: GET_PLAYER_RESERVE_ABI,
-                    functionName: 'getPlayerReserve',
-                    args: [playerAddress],
-                });
-                if (contractBalance > balance) {
-                    await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, contractBalance);
-                    balance = contractBalance;
+            // Only compare with on-chain reserve if the player has NO active games.
+            // During gameplay, bets are deducted off-chain in DB. The on-chain reserve
+            // never changes during play, so comparing would overwrite legitimate bet
+            // deductions and restore the pre-bet balance (the "bounce-back" bug).
+            // Deposits already trigger an explicit sync_balance call, so skipping the
+            // contract check here does not miss new deposits.
+            const hasActive = await this.dbService.hasActiveGames(ws.playerAddress);
+            if (!hasActive) {
+                try {
+                    const playerAddress = (0, viem_1.getAddress)(ws.playerAddress);
+                    const contractBalance = await this.publicClient.readContract({
+                        address: this.contractAddress,
+                        abi: GET_PLAYER_RESERVE_ABI,
+                        functionName: 'getPlayerReserve',
+                        args: [playerAddress],
+                    });
+                    if (contractBalance > balance) {
+                        await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, contractBalance);
+                        balance = contractBalance;
+                    }
                 }
-            }
-            catch (rpcErr) {
-                logger_1.logger.warn('getBalance: contract check failed, returning DB balance as-is', {
-                    playerAddress: ws.playerAddress,
-                    error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
-                });
+                catch (rpcErr) {
+                    logger_1.logger.warn('getBalance: contract check failed, returning DB balance as-is', {
+                        playerAddress: ws.playerAddress,
+                        error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+                    });
+                }
             }
             this.sendMessage(ws, {
                 type: 'balance',

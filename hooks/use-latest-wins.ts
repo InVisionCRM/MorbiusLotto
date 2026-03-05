@@ -8,7 +8,7 @@ import {
   BIGWHEEL_ADDRESS,
   BLACKJACK_ADDRESS,
   KENO_ADDRESS,
-  LOTTERY_ADDRESS,
+  LOTTERY_INSTANT_ADDRESS,
   PLINKO_DEPLOY_BLOCK,
   BIGWHEEL_DEPLOY_BLOCK,
   BLACKJACK_DEPLOY_BLOCK,
@@ -122,9 +122,9 @@ export function useLatestWins() {
           : Promise.resolve([]),
 
         // Lottery PrizesClaimed events
-        (LOTTERY_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+        (LOTTERY_INSTANT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
           ? publicClient.getLogs({
-              address: LOTTERY_ADDRESS,
+              address: LOTTERY_INSTANT_ADDRESS,
               event: LOTTERY_PRIZES_CLAIMED,
               fromBlock: fromBlock > BigInt(LOTTERY_DEPLOY_BLOCK) ? fromBlock : BigInt(LOTTERY_DEPLOY_BLOCK),
               toBlock: currentBlock,

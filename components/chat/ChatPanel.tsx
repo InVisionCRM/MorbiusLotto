@@ -249,7 +249,7 @@ export function ChatPanel({
                   <button
                     type="button"
                     onClick={() => setSelectedPlayer({ address: msg.senderAddress!, displayName: msg.displayName })}
-                    className="text-cyan-300/90 text-xs font-medium shrink-0 hover:text-cyan-200 hover:underline cursor-pointer transition-colors"
+                    className="text-cyan-300/90 text-xs font-medium shrink-0 hover:text-cyan-200 hover: cursor-pointer transition-colors"
                   >
                     {senderLabel(msg)}
                   </button>

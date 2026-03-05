@@ -11,7 +11,8 @@ import { usePlsQuote } from '@/hooks/use-pls-quote'
 import { useBlackjackContract, useLegacyPlayerReserveAt, useLegacyEmergencyPausedAt, isLegacyAddress } from '@/hooks/use-blackjack-contract'
 import { useTokenApproval } from '@/hooks/use-token-approval'
 import { getBlackjackServerUrl } from '@/lib/api-urls'
-import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, BLACKJACK_LEGACY_ADDRESS_4, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, BLACKJACK_LEGACY_ADDRESS_4, BLACKJACK_LEGACY_ADDRESS_5, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { blackjackAbi } from '@/abi/blackjack'
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -135,6 +136,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const legacy3Paused = useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS_3)
   const legacy4Reserve = useLegacyPlayerReserveAt(BLACKJACK_LEGACY_ADDRESS_4)
   const legacy4Paused = useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS_4)
+  const legacy5Reserve = useLegacyPlayerReserveAt(BLACKJACK_LEGACY_ADDRESS_5)
+  const legacy5Paused = useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS_5)
   const legacyItems: { address: `0x${string}`; reserve: bigint; paused: boolean; refetch: () => void; label: string }[] = []
   if (isLegacyAddress(BLACKJACK_LEGACY_ADDRESS)) {
     legacyItems.push({
@@ -170,6 +173,15 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       paused: legacy4Paused.data === true,
       refetch: legacy4Reserve.refetch ?? (() => {}),
       label: 'Previous contract (4)',
+    })
+  }
+  if (isLegacyAddress(BLACKJACK_LEGACY_ADDRESS_5)) {
+    legacyItems.push({
+      address: BLACKJACK_LEGACY_ADDRESS_5,
+      reserve: (legacy5Reserve.data ?? BigInt(0)) as bigint,
+      paused: legacy5Paused.data === true,
+      refetch: legacy5Reserve.refetch ?? (() => {}),
+      label: 'Previous contract (5)',
     })
   }
   const hasAnyLegacyBalance = legacyItems.some((item) => item.reserve > BigInt(0))
@@ -261,8 +273,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         duration: 5000,
       })
 
-      // Wait a brief moment for contract state to update, then sync balance
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Wait for RPC nodes to reflect new contract state, then sync balance
+      await new Promise(resolve => setTimeout(resolve, 2000))
 
       // Log deposit to history immediately (non-blocking)
       if (plsEquivalent) notifyDeposit(txHash, plsEquivalent)
@@ -273,7 +285,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
           await onBalanceSync()
         } catch (syncErr) {
           console.error('Balance sync failed after deposit:', syncErr)
-          toast.info('Refresh the page to update your balance', { duration: 4000 })
+          // Fall back to a simple balance fetch (no contract comparison)
+          if (onRefreshBalance) {
+            onRefreshBalance().catch(() => {})
+          } else {
+            toast.info('Refresh the page to update your balance', { duration: 4000 })
+          }
         }
       }
       setDepositAmount('')
@@ -328,13 +345,20 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       // Log deposit to history immediately (non-blocking)
       notifyDeposit(txHash, parseEther(depositAmount))
 
+      // Wait for RPC nodes to reflect new contract state, then sync balance
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
       // Sync off-chain balance with contract (non-blocking: deposit already succeeded)
       if (onBalanceSync) {
         try {
           await onBalanceSync()
         } catch (syncErr) {
           console.error('Balance sync failed after deposit:', syncErr)
-          toast.info('Refresh the page to update your balance', { duration: 4000 })
+          if (onRefreshBalance) {
+            onRefreshBalance().catch(() => {})
+          } else {
+            toast.info('Refresh the page to update your balance', { duration: 4000 })
+          }
         }
       }
       setDepositAmount('')
@@ -449,7 +473,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
       // Check if the transaction actually succeeded on-chain
       if (receipt.status === 'reverted') {
-        throw new Error('Transaction reverted on-chain. The withdrawal failed — your balance has not changed.')
+        throw new Error(
+          'Transaction reverted on-chain. Common causes: contract may not have enough MORBIUS to cover the withdrawal, or daily withdrawal limit exceeded. Your balance will be refunded automatically within 2 minutes.'
+        )
       }
 
       // Mark pending withdrawal completed so expiry cron never refunds (prevents double withdrawal)
@@ -511,10 +537,24 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
           id: toastId,
           description: 'You cancelled the transaction',
         })
-      } else if (errorMessage.includes('Insufficient') || errorMessage.includes('insufficient')) {
-        toast.error('Insufficient balance', {
+      } else if (errorMessage.includes('Contract liquidity is too low') || errorMessage.includes('Insufficient contract balance') || errorMessage.includes('Insufficient') || errorMessage.includes('insufficient')) {
+        toast.error('Contract liquidity low', {
           id: toastId,
-          description: errorMessage,
+          description: errorMessage.includes('Contract liquidity is too low')
+            ? errorMessage.slice(0, 200)
+            : errorMessage.includes('Insufficient contract balance')
+              ? 'The Blackjack contract does not have enough MORBIUS to cover this withdrawal. Try a smaller amount or contact support.'
+              : errorMessage,
+        })
+      } else if (errorMessage.includes('Daily withdrawal limit exceeded')) {
+        toast.error('Daily limit exceeded', {
+          id: toastId,
+          description: 'You hit the per-user or global daily withdrawal cap. Your balance will be refunded within 2 minutes. Try again tomorrow or withdraw a smaller amount.',
+        })
+      } else if (errorMessage.includes('Invalid signature')) {
+        toast.error('Invalid signature', {
+          id: toastId,
+          description: 'Server contract config may not match this app (BLACKJACK_ADDRESS / authorizedServer). Your balance will be refunded within 2 minutes. Contact support if this persists.',
         })
       } else if (errorMessage.includes('gas')) {
         toast.error('Gas estimation failed', {

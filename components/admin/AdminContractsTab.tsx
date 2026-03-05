@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_ADDRESS, BLACKJACK_ADDRESS, TOURNAMENT_PRIZE_ESCROW_ADDRESS, MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS } from '@/lib/contracts';
+import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, TOURNAMENT_PRIZE_ESCROW_ADDRESS, MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS } from '@/lib/contracts';
 import { PLINKO_ABI } from '@/abi/plinko';
 import { KENO_ABI } from '@/lib/keno-abi';
-import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2';
+import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55';
 import { blackjackAbi } from '@/abi/blackjack';
 import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
 import { morbiusHolderDistributorAbi } from '@/abi/morbius-holder-distributor';
@@ -308,7 +308,7 @@ export default function AdminContractsTab() {
     outputs: fn.outputs || [],
   }));
   
-  const lotteryReadFunctions = LOTTERY_6OF55_V2_ABI.filter(
+  const lotteryReadFunctions = INSTANT_LOTTERY_6OF55_ABI.filter(
     (fn: any) => fn.type === 'function' && (fn.stateMutability === 'view' || fn.stateMutability === 'pure')
   ).map((fn: any) => ({
     name: fn.name,
@@ -396,8 +396,8 @@ export default function AdminContractsTab() {
         <TabsContent value="lottery" className="mt-3">
           <ContractSection
             contractName="Lottery"
-            address={LOTTERY_ADDRESS}
-            abi={LOTTERY_6OF55_V2_ABI}
+            address={LOTTERY_INSTANT_ADDRESS}
+            abi={INSTANT_LOTTERY_6OF55_ABI}
             functions={lotteryReadFunctions}
           />
         </TabsContent>

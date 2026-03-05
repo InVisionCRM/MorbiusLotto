@@ -23,6 +23,12 @@ export interface AnimatedBeamProps {
   startYOffset?: number
   endXOffset?: number
   endYOffset?: number
+  /** Sweep gradient along Y axis instead of X (for vertical beams) */
+  vertical?: boolean
+  /** Start path at bottom center of fromRef (so beam merges with card edge) */
+  startFromBottom?: boolean
+  /** End path at top center of toRef (so beam merges with target edge) */
+  endAtTop?: boolean
 }
 
 export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
@@ -32,7 +38,7 @@ export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
   toRef,
   curvature = 115,
   reverse = false, // Include the reverse prop
-  duration = Math.random() * 3 + 4,
+  duration = Math.random() * 1.5 + 2,
   delay = 0,
   pathColor = "gray",
   pathWidth = 2,
@@ -43,25 +49,42 @@ export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
   startYOffset = 0,
   endXOffset = 0,
   endYOffset = 0,
+  vertical = false,
+  startFromBottom = false,
+  endAtTop = false,
 }) => {
   const id = useId()
   const [pathD, setPathD] = useState("")
   const [svgDimensions, setSvgDimensions] = useState({ width: 0, height: 0 })
 
-  // Calculate the gradient coordinates based on the reverse prop
-  const gradientCoordinates = reverse
-    ? {
-        x1: ["90%", "-10%"],
-        x2: ["100%", "0%"],
-        y1: ["0%", "0%"],
-        y2: ["0%", "0%"],
-      }
-    : {
-        x1: ["10%", "110%"],
-        x2: ["0%", "100%"],
-        y1: ["0%", "0%"],
-        y2: ["0%", "0%"],
-      }
+  // Calculate the gradient coordinates based on the reverse and vertical props
+  const gradientCoordinates = vertical
+    ? reverse
+      ? {
+          x1: ["0%", "0%"],
+          x2: ["0%", "0%"],
+          y1: ["90%", "-10%"],
+          y2: ["100%", "0%"],
+        }
+      : {
+          x1: ["0%", "0%"],
+          x2: ["0%", "0%"],
+          y1: ["10%", "110%"],
+          y2: ["0%", "100%"],
+        }
+    : reverse
+      ? {
+          x1: ["90%", "-10%"],
+          x2: ["100%", "0%"],
+          y1: ["0%", "0%"],
+          y2: ["0%", "0%"],
+        }
+      : {
+          x1: ["10%", "110%"],
+          x2: ["0%", "100%"],
+          y1: ["0%", "0%"],
+          y2: ["0%", "0%"],
+        }
 
   useEffect(() => {
     const updatePath = () => {
@@ -76,12 +99,14 @@ export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
 
         const startX =
           rectA.left - containerRect.left + rectA.width / 2 + startXOffset
-        const startY =
-          rectA.top - containerRect.top + rectA.height / 2 + startYOffset
+        const startY = startFromBottom
+          ? rectA.bottom - containerRect.top
+          : rectA.top - containerRect.top + rectA.height / 2 + startYOffset
         const endX =
           rectB.left - containerRect.left + rectB.width / 2 + endXOffset
-        const endY =
-          rectB.top - containerRect.top + rectB.height / 2 + endYOffset
+        const endY = endAtTop
+          ? rectB.top - containerRect.top
+          : rectB.top - containerRect.top + rectB.height / 2 + endYOffset
 
         const controlY = startY - curvature
         const d = `M ${startX},${startY} Q ${
@@ -117,6 +142,8 @@ export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
     startYOffset,
     endXOffset,
     endYOffset,
+    startFromBottom,
+    endAtTop,
   ])
 
   return (

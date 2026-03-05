@@ -1,5 +1,5 @@
 import { PublicClient, parseAbiItem, keccak256, toHex } from 'viem'
-import { KENO_ADDRESS, LOTTERY_ADDRESS, LOTTERY_DEPLOY_BLOCK, KENO_DEPLOY_BLOCK } from './contracts'
+import { KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, LOTTERY_DEPLOY_BLOCK, KENO_DEPLOY_BLOCK } from './contracts'
 
 // Calculate function selectors for Keno
 const BUY_TICKET_WITH_PLS_SELECTOR = keccak256(
@@ -66,7 +66,7 @@ export async function analyzeLotteryPurchase(
 
     // Query for WPLSSwappedForTickets events in the specific block
     const logs = await publicClient.getLogs({
-      address: LOTTERY_ADDRESS as `0x${string}`,
+      address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
       event,
       fromBlock: tx.blockNumber,
       toBlock: tx.blockNumber,

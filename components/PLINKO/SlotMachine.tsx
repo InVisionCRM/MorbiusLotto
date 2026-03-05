@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Volume2, VolumeX } from 'lucide-react';
 import { LoaderOne } from '@/components/ui/loader';
 import { AudioManager } from '@/hooks/use-audio';
 
@@ -29,6 +30,14 @@ interface SlotMachineProps {
 // Sound generator using shared Web Audio API context (mobile-friendly)
 class SlotSoundEngine {
   private masterGain: GainNode | null = null;
+  private muted = false;
+
+  setMuted(muted: boolean) {
+    this.muted = muted;
+    if (this.masterGain) {
+      this.masterGain.gain.value = muted ? 0 : 0.25;
+    }
+  }
 
   private getContext(): AudioContext | null {
     return AudioManager.getContext();
@@ -37,6 +46,7 @@ class SlotSoundEngine {
   init() {
     const ctx = this.getContext();
     if (!ctx || this.masterGain) return;
+    if (this.muted) return;
 
     try {
       // Unlock audio for mobile browsers
@@ -44,13 +54,14 @@ class SlotSoundEngine {
 
       this.masterGain = ctx.createGain();
       this.masterGain.connect(ctx.destination);
-      this.masterGain.gain.value = 0.25;
+      this.masterGain.gain.value = this.muted ? 0 : 0.25;
     } catch (e) {
       console.warn('Web Audio API not supported');
     }
   }
 
   private playTone(frequency: number, duration: number, type: OscillatorType = 'sine') {
+    if (this.muted) return;
     const ctx = this.getContext();
     if (!ctx || !this.masterGain) return;
 
@@ -76,6 +87,7 @@ class SlotSoundEngine {
   }
 
   spinStart() {
+    if (this.muted) return;
     this.init();
     const ctx = this.getContext();
     if (!ctx || !this.masterGain) return;
@@ -102,17 +114,20 @@ class SlotSoundEngine {
   }
 
   tick() {
+    if (this.muted) return;
     this.init();
     this.playTone(600 + Math.random() * 200, 0.03, 'square');
   }
 
   reelStop(reelIndex: number) {
+    if (this.muted) return;
     this.init();
     const baseFreq = 180 - reelIndex * 25;
     this.playTone(baseFreq, 0.12, 'square');
   }
 
   win() {
+    if (this.muted) return;
     this.init();
     const notes = [523, 659, 784, 1047, 1319];
     notes.forEach((freq, i) => {
@@ -121,6 +136,7 @@ class SlotSoundEngine {
   }
 
   lose() {
+    if (this.muted) return;
     this.init();
     this.playTone(250, 0.3, 'triangle');
     setTimeout(() => this.playTone(180, 0.4, 'triangle'), 150);
@@ -145,8 +161,13 @@ const SlotMachine: React.FC<SlotMachineProps> = ({
   const [spinningReels, setSpinningReels] = useState([false, false, false]);
   const [result, setResult] = useState<{ symbols: typeof SYMBOLS[number][]; isWinner: boolean; multiplier: number } | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   const soundEngine = useRef(new SlotSoundEngine());
+
+  useEffect(() => {
+    soundEngine.current.setMuted(!soundEnabled);
+  }, [soundEnabled]);
   const animationFrameRef = useRef<number | null>(null);
   const velocitiesRef = useRef([0, 0, 0]);
   const targetPositionsRef = useRef([0, 0, 0]);
@@ -362,17 +383,27 @@ const SlotMachine: React.FC<SlotMachineProps> = ({
         border: '1px solid rgba(6, 182, 212, 0.2)',
       }}
     >
-      {/* Close Button */}
-      {onClose && (
+      {/* Sound toggle + Close button */}
+      <div className="absolute top-2 right-2 flex items-center gap-1">
         <button
-          onClick={onClose}
-          className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full text-cyan-300/60 hover:text-cyan-300 hover:bg-cyan-400/10 transition-all"
+          type="button"
+          onClick={() => setSoundEnabled(prev => !prev)}
+          className="w-8 h-8 flex items-center justify-center rounded-full text-cyan-300/60 hover:text-cyan-300 hover:bg-cyan-400/10 transition-all"
+          title={soundEnabled ? 'Mute sound' : 'Unmute sound'}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
         </button>
-      )}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="w-5 h-5 flex items-center justify-center rounded-full text-cyan-300/60 hover:text-cyan-300 hover:bg-cyan-400/10 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
 
       {/* Header */}
       <div className="text-center mb-4">

@@ -42,7 +42,7 @@ const CARDS = [
           href={TELEGRAM_LINK}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+          className="text-cyan-400 hover:text-cyan-300  -offset-2"
         >
           Telegram
         </a>{' '}
@@ -51,7 +51,7 @@ const CARDS = [
           href={X_LINK}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+          className="text-cyan-400 hover:text-cyan-300  -offset-2"
         >
           X
         </a>{' '}

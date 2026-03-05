@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePublicClient } from 'wagmi'
 import { formatUnits, decodeEventLog } from 'viem'
-import { LOTTERY_ADDRESS, LOTTERY_DEPLOY_BLOCK, TOKEN_DECIMALS } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS, LOTTERY_DEPLOY_BLOCK, TOKEN_DECIMALS } from '@/lib/contracts'
 import { LOTTERY_6OF55_ABI } from '@/abi/lottery6of55'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -53,7 +53,7 @@ export function MORBIUSMovementFeed() {
     async function load() {
       if (
         !publicClient ||
-        (LOTTERY_ADDRESS as string).toLowerCase() === '0x0000000000000000000000000000000000000000'
+        (LOTTERY_INSTANT_ADDRESS as string).toLowerCase() === '0x0000000000000000000000000000000000000000'
       ) {
         setIsLoading(false)
         return
@@ -67,7 +67,7 @@ export function MORBIUSMovementFeed() {
         // RoundFinalized: base allocations (winners/burn/mega)
         if (eventAbis.finalized) {
           const logs = await publicClient.getLogs({
-            address: LOTTERY_ADDRESS as `0x${string}`,
+            address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
             event: eventAbis.finalized as any,
             fromBlock,
             toBlock: 'latest',
@@ -134,7 +134,7 @@ export function MORBIUSMovementFeed() {
         // UnclaimedPrizeRolledOver: add rollovers
         if (eventAbis.rollover) {
           const logs = await publicClient.getLogs({
-            address: LOTTERY_ADDRESS as `0x${string}`,
+            address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
             event: eventAbis.rollover as any,
             fromBlock,
             toBlock: 'latest',
@@ -171,7 +171,7 @@ export function MORBIUSMovementFeed() {
         // MegaMillionsTriggered: payouts from mega bank
         if (eventAbis.mega) {
           const logs = await publicClient.getLogs({
-            address: LOTTERY_ADDRESS as `0x${string}`,
+            address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
             event: eventAbis.mega as any,
             fromBlock,
             toBlock: 'latest',

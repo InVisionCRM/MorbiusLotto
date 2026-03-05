@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { usePublicClient } from 'wagmi'
 import { Card } from '@/components/ui/card'
 import { Clock, Loader2 } from 'lucide-react'
-import { LOTTERY_ADDRESS } from '@/lib/contracts'
+import { LOTTERY_INSTANT_ADDRESS } from '@/lib/contracts'
 import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
 
 interface LockedRoundCountdownProps {

@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatUnits, parseUnits } from 'viem'
-import { LOTTERY_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
-import { LOTTERY_6OF55_V2_ABI } from '@/abi/lottery6of55-v2'
+import { LOTTERY_INSTANT_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
+import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55'
 import { useCurrentRound, useMegaMillionsBank } from '@/hooks/use-lottery-6of55'
 import { toast } from 'sonner'
 import { Heart, Coins, Trophy, Users, Sparkles } from 'lucide-react'
@@ -65,10 +65,11 @@ export default function DonatePage() {
 
       // Call the donateToPool function
       const hash = await walletClient.writeContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
-        abi: LOTTERY_6OF55_V2_ABI,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
+        abi: INSTANT_LOTTERY_6OF55_ABI,
         functionName: 'donateToPool',
-        args: [amount]
+        args: [amount],
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       })
 
       toast.success('Donation transaction submitted!', {
@@ -127,10 +128,11 @@ export default function DonatePage() {
 
       // Call the donateToMegaMORBIUS function
       const hash = await walletClient.writeContract({
-        address: LOTTERY_ADDRESS as `0x${string}`,
+        address: LOTTERY_INSTANT_ADDRESS as `0x${string}`,
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'donateToMegaMORBIUS',
-        args: [amount]
+        args: [amount],
+        maxPriorityFeePerGas: 40_000n, // PulseChain tip
       })
 
       toast.success('Jackpot donation transaction submitted!', {

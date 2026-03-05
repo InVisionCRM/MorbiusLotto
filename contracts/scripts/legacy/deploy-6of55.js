@@ -25,7 +25,7 @@ async function main() {
 
   console.log("✅ SuperStakeLottery6of55 deployed to:", address);
   console.log("\n📋 Next Steps:");
-  console.log("1. Update LOTTERY_ADDRESS in lib/contracts.ts to:", address);
+  console.log("1. Update LOTTERY_INSTANT_ADDRESS in lib/contracts.ts to:", address);
   console.log("2. Verify contract on PulseScan:");
   console.log(`   npx hardhat verify --network pulsechain ${address} "${MORBIUS_TOKEN_ADDRESS}" ${INITIAL_ROUND_DURATION}`);
   console.log("\n3. Save this deployment info!");
