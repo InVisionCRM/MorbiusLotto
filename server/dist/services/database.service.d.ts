@@ -185,11 +185,12 @@ export declare class DatabaseService {
      * Atomically deduct the player's balance AND create the pending withdrawal record in a single
      * transaction. If either step fails, both are rolled back — preventing permanent balance loss
      * from a partial failure between the two operations.
+     * expiresAt: on-chain signature deadline; cron only refunds when NOW() > expiresAt.
      *
      * Returns the remaining balance after deduction.
      * Throws if the player has insufficient balance (same as deductPlayerBalance).
      */
-    deductAndCreatePendingWithdrawal(walletAddress: string, nonce: bigint, amount: bigint): Promise<bigint>;
+    deductAndCreatePendingWithdrawal(walletAddress: string, nonce: bigint, amount: bigint, expiresAt: Date): Promise<bigint>;
     /**
      * Mark a pending withdrawal as completed after the user has successfully completed the on-chain tx.
      * Prevents the expiry cron from refunding the amount (double-credit). Idempotent: safe to call if already completed.
@@ -248,7 +249,7 @@ export declare class DatabaseService {
     } | null>;
     expirePendingWithdrawals(): Promise<number>;
     /**
-     * Get pending withdrawals older than 2 minutes (candidates for expiry).
+     * Get pending withdrawals past their on-chain deadline (expires_at).
      * Does NOT modify them — caller must verify on-chain before deciding to refund or mark completed.
      */
     getExpiredPendingWithdrawals(): Promise<Array<{
@@ -256,6 +257,14 @@ export declare class DatabaseService {
         nonce: string;
         amount: string;
     }>>;
+    /**
+     * Get one expired pending withdrawal for a wallet (oldest first).
+     * Used by admin to manually trigger refund when cron couldn't verify (e.g. RPC issues).
+     */
+    getExpiredPendingForWallet(walletAddress: string): Promise<{
+        nonce: string;
+        amount: string;
+    } | null>;
     /**
      * Expire a single pending withdrawal and refund the balance.
      * Only call this after verifying on-chain that the nonce was NOT used.
@@ -283,6 +292,15 @@ export declare class DatabaseService {
         created_at?: Date;
     }>>;
     getPlayerGames(walletAddress: string, limit?: number, offset?: number): Promise<Game[]>;
+    /** Recent completed games globally (all players) for "Recent Play" feed. */
+    getRecentGamesGlobal(limit?: number): Promise<Array<{
+        id: string;
+        wallet_address: string;
+        result: string | null;
+        total_bet_amount: bigint;
+        total_payout: bigint;
+        created_at: Date;
+    }>>;
     createGameSession(playerId: string, serverSeed: string, serverSeedHash: string): Promise<GameSession>;
     getActiveSession(playerId: string): Promise<GameSession | null>;
     getSessionById(sessionId: string): Promise<GameSession | null>;

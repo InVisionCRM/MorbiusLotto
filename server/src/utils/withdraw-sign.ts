@@ -84,12 +84,11 @@ export async function signWithdrawApproval(
   const signature = await sign({
     hash: digest,
     privateKey,
-    to: 'hex',
   });
 
-  const r = (`0x${signature.slice(2, 66)}`) as `0x${string}`;
-  const s = (`0x${signature.slice(66, 130)}`) as `0x${string}`;
-  const v = parseInt(signature.slice(130, 132), 16);
+  const r = signature.r;
+  const s = signature.s;
+  const v = Number(signature.v);
 
   return {
     amount: amount.toString(),

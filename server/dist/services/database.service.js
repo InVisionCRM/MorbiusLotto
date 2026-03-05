@@ -262,11 +262,12 @@ class DatabaseService {
      * Atomically deduct the player's balance AND create the pending withdrawal record in a single
      * transaction. If either step fails, both are rolled back — preventing permanent balance loss
      * from a partial failure between the two operations.
+     * expiresAt: on-chain signature deadline; cron only refunds when NOW() > expiresAt.
      *
      * Returns the remaining balance after deduction.
      * Throws if the player has insufficient balance (same as deductPlayerBalance).
      */
-    async deductAndCreatePendingWithdrawal(walletAddress, nonce, amount) {
+    async deductAndCreatePendingWithdrawal(walletAddress, nonce, amount, expiresAt) {
         const normalizedAddress = this.normalizeAddress(walletAddress);
         return this.withTransaction(async (client) => {
             // Deduct balance (fails if insufficient)
@@ -279,9 +280,9 @@ class DatabaseService {
                 throw new Error(`Insufficient balance: have ${have}, need ${amount.toString()}`);
             }
             const remainingBalance = BigInt(deductResult.rows[0].balance || '0');
-            // Create pending withdrawal record
-            await client.query(`INSERT INTO pending_withdrawals (nonce, wallet_address, amount, status)
-         VALUES ($1::NUMERIC, $2, $3::NUMERIC, 'pending')`, [nonce.toString(), normalizedAddress, amount.toString()]);
+            // Create pending withdrawal record (expires_at = on-chain signature deadline)
+            await client.query(`INSERT INTO pending_withdrawals (nonce, wallet_address, amount, status, expires_at)
+         VALUES ($1::NUMERIC, $2, $3::NUMERIC, 'pending', $4::timestamptz)`, [nonce.toString(), normalizedAddress, amount.toString(), expiresAt]);
             // Update platform analytics total
             await client.query(`UPDATE blackjack_platform_totals
          SET total_withdrawn = total_withdrawn + $1::NUMERIC, updated_at = NOW()
@@ -475,17 +476,33 @@ class DatabaseService {
         return result.rows.length;
     }
     /**
-     * Get pending withdrawals older than 2 minutes (candidates for expiry).
+     * Get pending withdrawals past their on-chain deadline (expires_at).
      * Does NOT modify them — caller must verify on-chain before deciding to refund or mark completed.
      */
     async getExpiredPendingWithdrawals() {
         const query = `
       SELECT wallet_address, nonce, amount
       FROM pending_withdrawals
-      WHERE status = 'pending' AND created_at < NOW() - INTERVAL '2 minutes'
+      WHERE status = 'pending' AND expires_at IS NOT NULL AND NOW() > expires_at
     `;
         const result = await this.pool.query(query);
         return result.rows;
+    }
+    /**
+     * Get one expired pending withdrawal for a wallet (oldest first).
+     * Used by admin to manually trigger refund when cron couldn't verify (e.g. RPC issues).
+     */
+    async getExpiredPendingForWallet(walletAddress) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const query = `
+      SELECT nonce, amount FROM pending_withdrawals
+      WHERE LOWER(wallet_address) = LOWER($1) AND status = 'pending' AND expires_at IS NOT NULL AND NOW() > expires_at
+      ORDER BY expires_at ASC LIMIT 1
+    `;
+        const result = await this.pool.query(query, [normalizedAddress]);
+        if (result.rows.length === 0)
+            return null;
+        return result.rows[0];
     }
     /**
      * Expire a single pending withdrawal and refund the balance.
@@ -780,6 +797,41 @@ class DatabaseService {
         const result = await this.pool.query(query, [normalizedAddress, limit, offset]);
         const games = result.rows.map((r) => this.normalizeGame(r));
         return games;
+    }
+    /** Recent completed games globally (all players) for "Recent Play" feed. */
+    async getRecentGamesGlobal(limit = 20) {
+        const query = `
+      WITH gh_agg AS (
+        SELECT game_id,
+          SUM(bet_amount) AS bet_sum,
+          SUM(payout) AS payout_sum
+        FROM game_hands
+        GROUP BY game_id
+      )
+      SELECT
+        g.id,
+        p.wallet_address,
+        g.result,
+        CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
+        CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
+        g.created_at
+      FROM games g
+      JOIN game_sessions gs ON g.session_id = gs.id
+      JOIN players p ON gs.player_id = p.id
+      LEFT JOIN gh_agg gh ON gh.game_id = g.id
+      WHERE g.result IS NOT NULL AND g.result != 'ongoing'
+      ORDER BY g.created_at DESC
+      LIMIT $1
+    `;
+        const result = await this.pool.query(query, [limit]);
+        return result.rows.map((r) => ({
+            id: r.id,
+            wallet_address: r.wallet_address ?? '',
+            result: r.result ?? null,
+            total_bet_amount: this.toBigInt(r.total_bet_amount),
+            total_payout: this.toBigInt(r.total_payout),
+            created_at: r.created_at ? new Date(r.created_at) : new Date(0),
+        }));
     }
     // Game session operations
     async createGameSession(playerId, serverSeed, serverSeedHash) {

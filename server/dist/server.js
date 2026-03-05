@@ -90,10 +90,12 @@ if (trustProxyValue === 0) {
     console.warn(`[Server] WARNING: Trust proxy is DISABLED - rate limiter will fail behind reverse proxy if X-Forwarded-For header is present.`);
 }
 // CORS: allow frontend origin(s). Set FRONTEND_URL on Railway to your app URL (comma-separated for multiple).
-const allowedOrigins = (process.env.FRONTEND_URL || 'https://win.morbius.io')
+const DEFAULT_ORIGINS = ['https://morbius.io'];
+const envOrigins = (process.env.FRONTEND_URL || '')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
+const allowedOrigins = [...new Set([...DEFAULT_ORIGINS, ...envOrigins])];
 app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginOpenerPolicy: false,
@@ -263,6 +265,23 @@ async function initializeServices() {
             merkleDropsLPService.startCron();
         }
         // API routes
+        // Public config (whitelisted keys only; used for ad creatives, etc.)
+        const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];
+        app.get('/api/config/public', async (req, res) => {
+            try {
+                const full = await dbService.getAdminGameConfig();
+                const publicConfig = {};
+                for (const key of PUBLIC_CONFIG_KEYS) {
+                    const v = full[key];
+                    publicConfig[key] = typeof v === 'string' ? v : '';
+                }
+                sendJson(res, publicConfig);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching public config:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         app.get('/api/player/:address/profile', async (req, res) => {
             try {
                 const { address } = req.params;
@@ -644,6 +663,18 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
+        // Blackjack global recent games (for Recent Play feed)
+        app.get('/api/blackjack/recent-games', async (req, res) => {
+            try {
+                const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+                const games = await dbService.getRecentGamesGlobal(limit);
+                sendJson(res, games);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching blackjack recent games:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         // Tournament API endpoints
         app.get('/api/tournament/active', async (req, res) => {
             try {
@@ -816,6 +847,23 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error fetching blackjack limits:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Public: default Blackjack table (theme + table id) from admin config; used when user has no saved preference
+        const DEFAULT_TABLE_THEME = 'image';
+        const DEFAULT_TABLE_ID = 'High-Roller-2';
+        app.get('/api/blackjack/default-table', async (req, res) => {
+            try {
+                const config = await dbService.getAdminGameConfig();
+                let themeKind = (config.blackjack_default_theme_kind ?? '').trim().toLowerCase();
+                if (themeKind !== 'image' && themeKind !== 'video')
+                    themeKind = DEFAULT_TABLE_THEME;
+                const tableId = (config.blackjack_default_table_id ?? '').trim() || DEFAULT_TABLE_ID;
+                sendJson(res, { themeKind: themeKind, tableId });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching blackjack default table:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
@@ -1084,6 +1132,101 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error in admin health:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Admin: recent holder and LP reward claims (when users claim holder/LP rewards)
+        app.get('/api/admin/rewards/claims', async (req, res) => {
+            try {
+                const limit = Math.min(parseInt(String(req.query.limit), 10) || 50, 200);
+                const pool = dbService.getPool();
+                const holderRows = await pool.query(`SELECT ms.wallet_address, ms.reward_amount::text AS reward_amount, ms.claimed_at, me.epoch_number
+           FROM merkle_snapshots ms
+           JOIN merkle_epochs me ON me.id = ms.epoch_id
+           WHERE ms.claimed_at IS NOT NULL
+           ORDER BY ms.claimed_at DESC
+           LIMIT $1`, [limit]);
+                const lpRows = await pool.query(`SELECT ms.wallet_address, ms.reward_amount::text AS reward_amount, ms.claimed_at, me.epoch_number
+           FROM merkle_lp_snapshots ms
+           JOIN merkle_lp_epochs me ON me.id = ms.epoch_id
+           WHERE ms.claimed_at IS NOT NULL
+           ORDER BY ms.claimed_at DESC
+           LIMIT $1`, [limit]);
+                sendJson(res, {
+                    holderClaims: holderRows.rows.map((r) => ({
+                        walletAddress: r.wallet_address,
+                        rewardAmount: r.reward_amount,
+                        claimedAt: r.claimed_at.toISOString(),
+                        epochNumber: r.epoch_number,
+                    })),
+                    lpClaims: lpRows.rows.map((r) => ({
+                        walletAddress: r.wallet_address,
+                        rewardAmount: r.reward_amount,
+                        claimedAt: r.claimed_at.toISOString(),
+                        epochNumber: r.epoch_number,
+                    })),
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching reward claims:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Admin: manually refund an expired pending withdrawal (when cron couldn't verify due to RPC, etc.)
+        app.post('/api/admin/withdrawals/refund-expired', async (req, res) => {
+            try {
+                const address = (req.body?.address ?? req.query?.address);
+                const force = (req.body?.force ?? req.query?.force) === true || (req.body?.force ?? req.query?.force) === 'true';
+                if (!address || typeof address !== 'string') {
+                    return res.status(400).json({ error: 'address required (body or query)' });
+                }
+                const normalizedAddress = address.toLowerCase().startsWith('0x')
+                    ? address.toLowerCase()
+                    : `0x${address.toLowerCase()}`;
+                if (normalizedAddress.length !== 42) {
+                    return res.status(400).json({ error: 'Invalid address' });
+                }
+                const pending = await dbService.getExpiredPendingForWallet(normalizedAddress);
+                if (!pending) {
+                    return res.status(404).json({
+                        error: 'No expired pending withdrawal found for this address. Wait until the signature has expired (~15 min) or the balance was already refunded.',
+                    });
+                }
+                if (!force) {
+                    try {
+                        const nonceUsed = await publicClient.readContract({
+                            address: blackjackContractAddress,
+                            abi: USED_NONCES_ABI,
+                            functionName: 'usedNonces',
+                            args: [BigInt(pending.nonce)],
+                        });
+                        if (nonceUsed) {
+                            await dbService.markPendingWithdrawalCompleted(normalizedAddress, BigInt(pending.nonce));
+                            return res.status(400).json({
+                                error: 'This withdrawal was already completed on-chain (nonce used). Balance was not refunded; it was marked completed.',
+                            });
+                        }
+                    }
+                    catch (rpcErr) {
+                        return res.status(503).json({
+                            error: 'Could not verify on-chain whether the withdrawal was used. If you have verified no tx exists, retry with ?force=1 (use with caution).',
+                            detail: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+                        });
+                    }
+                }
+                else {
+                    logger_1.logger.warn('Admin force-refund expired pending (on-chain check skipped)', {
+                        address: normalizedAddress,
+                        nonce: pending.nonce,
+                        amount: pending.amount,
+                    });
+                }
+                await dbService.expireSinglePendingWithdrawal(normalizedAddress, BigInt(pending.nonce), BigInt(pending.amount));
+                logger_1.logger.info('Admin refunded expired pending withdrawal', { address: normalizedAddress, nonce: pending.nonce, amount: pending.amount });
+                sendJson(res, { ok: true, refunded: pending.amount, address: normalizedAddress });
+            }
+            catch (error) {
+                logger_1.logger.error('Error refunding expired withdrawal:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
@@ -1708,6 +1851,74 @@ async function initializeServices() {
                 logger_1.logger.error('Error expiring pending withdrawals:', err);
             }
         }, 60_000); // every minute
+        // Authoritative balance over HTTP (survives refresh; no WebSocket required).
+        // Resolves pending withdrawals (mark completed if nonce used on-chain), then returns
+        // DB balance, syncing from contract when no active games and contract > DB (catches missed deposits).
+        app.get('/api/player/:address/balance', async (req, res) => {
+            try {
+                const rawAddress = req.params.address;
+                if (!rawAddress || typeof rawAddress !== 'string') {
+                    return res.status(400).json({ error: 'Address required' });
+                }
+                const normalizedAddress = rawAddress.toLowerCase().startsWith('0x')
+                    ? rawAddress.toLowerCase()
+                    : `0x${rawAddress.toLowerCase()}`;
+                if (normalizedAddress.length !== 42) {
+                    return res.status(400).json({ error: 'Invalid address' });
+                }
+                const pending = await dbService.getActivePendingWithdrawal(normalizedAddress);
+                if (pending) {
+                    try {
+                        const nonceUsed = await publicClient.readContract({
+                            address: blackjackContractAddress,
+                            abi: USED_NONCES_ABI,
+                            functionName: 'usedNonces',
+                            args: [BigInt(pending.nonce)],
+                        });
+                        if (nonceUsed) {
+                            await dbService.markPendingWithdrawalCompleted(normalizedAddress, BigInt(pending.nonce));
+                            logger_1.logger.info('Balance endpoint: resolved pending withdrawal as completed', {
+                                address: normalizedAddress,
+                                nonce: pending.nonce,
+                            });
+                        }
+                    }
+                    catch (rpcErr) {
+                        logger_1.logger.warn('Balance endpoint: could not check pending withdrawal nonce', {
+                            address: normalizedAddress,
+                            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+                        });
+                    }
+                }
+                let balance = await dbService.getPlayerBalance(normalizedAddress);
+                const hasActive = await dbService.hasActiveGames(normalizedAddress);
+                if (!hasActive) {
+                    try {
+                        const contractBalance = await publicClient.readContract({
+                            address: blackjackContractAddress,
+                            abi: blackjack_1.blackjackAbi,
+                            functionName: 'getPlayerReserve',
+                            args: [normalizedAddress],
+                        });
+                        if (contractBalance > balance) {
+                            await dbService.syncPlayerBalanceWithContract(normalizedAddress, contractBalance);
+                            balance = contractBalance;
+                        }
+                    }
+                    catch (rpcErr) {
+                        logger_1.logger.warn('Balance endpoint: contract read failed', {
+                            address: normalizedAddress,
+                            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+                        });
+                    }
+                }
+                return res.status(200).json({ balance: balance.toString() });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching player balance:', error);
+                return res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         app.post('/api/withdraw/prepare', async (req, res) => {
             try {
                 const { address, requestedAmount } = req.body;
@@ -1724,7 +1935,7 @@ async function initializeServices() {
                 const existingPending = await dbService.getActivePendingWithdrawal(normalizedAddress);
                 if (existingPending) {
                     return res.status(409).json({
-                        error: 'You have a pending withdrawal. Wait for it to complete (or 2 minutes for it to expire) before requesting another.',
+                        error: 'You have a pending withdrawal. Wait for it to complete or wait until the signed withdrawal expires (about 15 minutes) before requesting another.',
                     });
                 }
                 // Get database balance for this specific wallet
@@ -1739,7 +1950,7 @@ async function initializeServices() {
                 // Check the contract's actual MORBIUS token balance — if the contract doesn't hold
                 // enough tokens, the on-chain tx will revert with "Insufficient contract balance".
                 // Catch this early so we don't deduct the DB balance and leave the user waiting
-                // 2 minutes for the expiry cron to refund it.
+                // until the signed withdrawal expires (~15 min) for the cron to refund.
                 let contractTokenBalance;
                 try {
                     contractTokenBalance = await publicClient.readContract({
@@ -1755,6 +1966,11 @@ async function initializeServices() {
                     });
                     return res.status(503).json({ error: 'Cannot verify contract liquidity. Try again shortly.' });
                 }
+                logger_1.logger.info('withdraw/prepare: contract MORBIUS balance read', {
+                    blackjackContract: blackjackContractAddress,
+                    contractTokenBalance: contractTokenBalance.toString(),
+                    balanceMorbius: Number(contractTokenBalance) / 1e18,
+                });
                 // Cap withdrawal to DB balance only. Contract supports off-chain payouts (house bankroll)
                 // and enforces daily limits (1M per user, 10M global); liquidity is operator's responsibility.
                 const requested = requestedAmount != null ? BigInt(String(requestedAmount)) : dbBalance;
@@ -1773,11 +1989,14 @@ async function initializeServices() {
                         address: normalizedAddress,
                         requestedAmount: amount.toString(),
                         contractTokenBalance: contractTokenBalance.toString(),
+                        blackjackContract: blackjackContractAddress,
                     });
                     return res.status(400).json({
                         error: `Contract liquidity is too low. The contract holds ${(Number(contractTokenBalance) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 0 })} MORBIUS but you requested ${(Number(amount) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 0 })}. Try a smaller amount or contact support.`,
                         contractTokenBalance: contractTokenBalance.toString(),
                         requestedAmount: amount.toString(),
+                        blackjackContractAddress: blackjackContractAddress,
+                        hint: 'Verify the contract MORBIUS balance on the block explorer. If the balance is higher there, the server may be using a different contract address (check BLACKJACK_ADDRESS in server .env) or an RPC returned stale data.',
                     });
                 }
                 const privateKey = process.env.SETTLEMENT_PRIVATE_KEY;
@@ -1787,11 +2006,13 @@ async function initializeServices() {
                 }
                 // Generate unique nonce using timestamp + random
                 const nonce = BigInt(Date.now()) * BigInt(1e6) + BigInt(Math.floor(Math.random() * 1e6));
+                const withdrawExpirySeconds = Number(process.env.WITHDRAW_SIGNATURE_EXPIRY_SECONDS ?? '900'); // default 15 min
+                const expiryTimestamp = Math.floor(Date.now() / 1000) + withdrawExpirySeconds;
                 // Atomically deduct balance AND create pending withdrawal record in one transaction.
                 // If either step fails (e.g. insufficient balance or DB error), both are rolled back —
                 // preventing permanent balance loss from a partial failure between the two operations.
                 try {
-                    await dbService.deductAndCreatePendingWithdrawal(normalizedAddress, nonce, amount);
+                    await dbService.deductAndCreatePendingWithdrawal(normalizedAddress, nonce, amount, new Date(expiryTimestamp * 1000));
                 }
                 catch (deductErr) {
                     return res.status(400).json({
@@ -1799,7 +2020,26 @@ async function initializeServices() {
                         dbBalance: dbBalance.toString(),
                     });
                 }
-                const payload = await (0, withdraw_sign_1.signWithdrawApproval)(normalizedAddress, amount, nonce, blackjackContractAddress, chainId, privateKey);
+                let domainSeparatorHex;
+                try {
+                    domainSeparatorHex = await publicClient.readContract({
+                        address: blackjackContractAddress,
+                        abi: blackjack_1.blackjackAbi,
+                        functionName: 'DOMAIN_SEPARATOR',
+                    });
+                }
+                catch (rpcErr) {
+                    logger_1.logger.warn('Withdrawal signing: could not read DOMAIN_SEPARATOR from contract, using signTypedData', {
+                        error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+                    });
+                }
+                logger_1.logger.info('Withdrawal signing (EIP-712)', {
+                    verifyingContract: blackjackContractAddress,
+                    chainId,
+                    player: normalizedAddress,
+                    useContractDomain: !!domainSeparatorHex,
+                });
+                const payload = await (0, withdraw_sign_1.signWithdrawApproval)(normalizedAddress, amount, nonce, expiryTimestamp, blackjackContractAddress, chainId, privateKey, domainSeparatorHex);
                 logger_1.logger.info('Withdrawal prepared (balance deducted)', {
                     address: normalizedAddress,
                     amount: amount.toString(),

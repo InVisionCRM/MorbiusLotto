@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BIGWHEEL_GET_GLOBAL_STATS_ABI = exports.INSTANT_LOTTERY_STATS_ABI = exports.LOTTERY_STATS_ABI = exports.KENO_GET_GLOBAL_STATS_ABI = exports.PLINKO_GET_GLOBAL_STATS_ABI = exports.BLACKJACK_LEGACY_ADDRESS_6 = exports.BLACKJACK_LEGACY_ADDRESS_5 = exports.BLACKJACK_LEGACY_ADDRESS_4 = exports.BLACKJACK_LEGACY_ADDRESS_3 = exports.BLACKJACK_LEGACY_ADDRESS_2 = exports.BLACKJACK_LEGACY_ADDRESS = exports.BLACKJACK_ADDRESS = exports.BIGWHEEL_ADDRESS = exports.LOTTERY_INSTANT_ADDRESS = exports.KENO_ADDRESS = exports.PLINKO_ADDRESS = exports.MORBIUS_TOKEN_ADDRESS = void 0;
+exports.BIGWHEEL_GET_GLOBAL_STATS_ABI = exports.INSTANT_LOTTERY_STATS_ABI = exports.LOTTERY_STATS_ABI = exports.KENO_GET_GLOBAL_STATS_ABI = exports.PLINKO_GET_GLOBAL_STATS_ABI = exports.BLACKJACK_LEGACY_ADDRESS_7 = exports.BLACKJACK_LEGACY_ADDRESS_6 = exports.BLACKJACK_LEGACY_ADDRESS_5 = exports.BLACKJACK_LEGACY_ADDRESS_4 = exports.BLACKJACK_LEGACY_ADDRESS_3 = exports.BLACKJACK_LEGACY_ADDRESS_2 = exports.BLACKJACK_LEGACY_ADDRESS = exports.BLACKJACK_ADDRESS = exports.BIGWHEEL_ADDRESS = exports.LOTTERY_INSTANT_ADDRESS = exports.KENO_ADDRESS = exports.PLINKO_ADDRESS = exports.MORBIUS_TOKEN_ADDRESS = void 0;
 exports.getAllBlackjackContracts = getAllBlackjackContracts;
 /**
  * Contract addresses and ABIs for platform analytics (Plinko, Keno, Lottery, BigWheel, Blackjack).
@@ -18,12 +18,12 @@ const PLINKO_ABI = plinko_1.plinkoAbi;
 const KENO_ABI = keno_1.kenoAbi;
 exports.MORBIUS_TOKEN_ADDRESS = (process.env.MORBIUS_TOKEN_ADDRESS || '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1');
 exports.PLINKO_ADDRESS = (process.env.PLINKO_ADDRESS || '0xeC29f41bA9380E34b71d0AeB53bd637ba5258A93');
-exports.KENO_ADDRESS = (process.env.KENO_ADDRESS || '0xc8d2b17e4c2959c61f1745b023B65BA7b1f59283');
+exports.KENO_ADDRESS = (process.env.KENO_ADDRESS || '0x496fCE9733E2102102f448c533b84C7A88856e8a');
 /** Instant Lottery 6-of-55 (house bankroll). When set, analytics use this for lottery stats. */
 exports.LOTTERY_INSTANT_ADDRESS = (process.env.LOTTERY_INSTANT_ADDRESS || process.env.NEXT_PUBLIC_LOTTERY_INSTANT_ADDRESS || '0x6CCecFd3165f4d911BA8D196eb5202cc80fEF8a8');
 exports.BIGWHEEL_ADDRESS = (process.env.BIGWHEEL_ADDRESS || '0x53331B63ef24904Ea470Cf07b924c7C13A699d8F');
 /** Blackjack V2. Set BLACKJACK_ADDRESS in .env (BLACKJACK_CONTRACT_ADDRESS also accepted). */
-exports.BLACKJACK_ADDRESS = (process.env.BLACKJACK_ADDRESS || process.env.BLACKJACK_CONTRACT_ADDRESS || '0x62cb20cd01F5af1f951B0Ec6bBD499143afF906c');
+exports.BLACKJACK_ADDRESS = (process.env.BLACKJACK_ADDRESS || process.env.BLACKJACK_CONTRACT_ADDRESS || '0xc2Ae080dE01108b5C9C0f2C5C86051CFd3D18C00');
 /** Legacy Blackjack contracts (for admin health). Accept BLACKJACK_LEGACY_CONTRACT_ADDRESS* or NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS*. */
 exports.BLACKJACK_LEGACY_ADDRESS = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS || '');
 exports.BLACKJACK_LEGACY_ADDRESS_2 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || '');
@@ -31,6 +31,7 @@ exports.BLACKJACK_LEGACY_ADDRESS_3 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDR
 exports.BLACKJACK_LEGACY_ADDRESS_4 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_4 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_4 || '');
 exports.BLACKJACK_LEGACY_ADDRESS_5 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_5 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_5 || '');
 exports.BLACKJACK_LEGACY_ADDRESS_6 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_6 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_6 || '');
+exports.BLACKJACK_LEGACY_ADDRESS_7 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_7 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_7 || '0x62cb20cd01F5af1f951B0Ec6bBD499143afF906c');
 function isLegacyAddress(v) {
     return typeof v === 'string' && v.trim().length >= 42 && v.trim().toLowerCase().startsWith('0x');
 }
@@ -46,6 +47,7 @@ function getAllBlackjackContracts() {
         [exports.BLACKJACK_LEGACY_ADDRESS_4, 'Legacy 4'],
         [exports.BLACKJACK_LEGACY_ADDRESS_5, 'Legacy 5'],
         [exports.BLACKJACK_LEGACY_ADDRESS_6, 'Legacy 6'],
+        [exports.BLACKJACK_LEGACY_ADDRESS_7, 'Legacy 7'],
     ];
     for (const [addr, label] of legacies) {
         const v = (addr || '').trim();

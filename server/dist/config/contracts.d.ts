@@ -13,6 +13,7 @@ export declare const BLACKJACK_LEGACY_ADDRESS_3: `0x${string}`;
 export declare const BLACKJACK_LEGACY_ADDRESS_4: `0x${string}`;
 export declare const BLACKJACK_LEGACY_ADDRESS_5: `0x${string}`;
 export declare const BLACKJACK_LEGACY_ADDRESS_6: `0x${string}`;
+export declare const BLACKJACK_LEGACY_ADDRESS_7: `0x${string}`;
 /** All Blackjack contracts to show in admin health: current first, then legacy 1–6 (only those set). */
 export declare function getAllBlackjackContracts(): Array<{
     address: `0x${string}`;
