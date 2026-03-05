@@ -329,7 +329,10 @@ export default function BlackjackPage() {
     depositMORBIUS,
     withdraw,
     playerReserve,
-    refetchPlayerReserve
+    refetchPlayerReserve,
+    isPaused: contractIsPaused,
+    emergencyPaused: contractEmergencyPaused,
+    contractPaused: contractOzPaused,
   } = useBlackjackContract();
 
   // Off-chain balance state (like Stake.com)
@@ -2563,6 +2566,14 @@ export default function BlackjackPage() {
         {/* View-specific content */}
         {currentView === 'game' && (
           <>
+        {/* Show when smart contract is paused (on-chain) */}
+        {contractIsPaused && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm">
+            <strong>Blackjack contract is paused.</strong> Deposits, withdrawals, and betting are disabled on-chain.
+            {contractEmergencyPaused && ' Emergency pause is active (emergency admin must call setEmergencyPause(false)).'}
+            {contractOzPaused && !contractEmergencyPaused && ' Owner has paused the contract (owner must call unpause()).'}
+          </div>
+        )}
         {/* Show when game server is not configured (so user knows why they can't connect) */}
         {!getWebSocketUrlOptional() && (
           <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-sm">

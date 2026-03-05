@@ -72,6 +72,24 @@ export function useEmergencyPaused() {
 }
 
 /**
+ * Whether the main Blackjack contract is paused (OpenZeppelin Pausable).
+ * Owner can pause/unpause; when true, deposit/withdraw/placeBet revert.
+ */
+export function useContractPaused() {
+  const isValidAddress = (BLACKJACK_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+
+  return useReadContract({
+    address: BLACKJACK_ADDRESS,
+    abi: blackjackAbi,
+    functionName: 'paused',
+    query: {
+      enabled: isValidAddress,
+      refetchInterval: 10000,
+    },
+  })
+}
+
+/**
  * Get daily withdrawal info for player
  */
 export function useDailyWithdrawalInfo() {
@@ -281,6 +299,7 @@ export function useBlackjackContract() {
   const playerReserve = usePlayerReserve()
   const totalReserves = useTotalReserves()
   const emergencyPaused = useEmergencyPaused()
+  const contractPaused = useContractPaused()
   const dailyWithdrawalInfo = useDailyWithdrawalInfo()
 
   // Write hooks
@@ -398,6 +417,8 @@ export function useBlackjackContract() {
     playerReserve: playerReserve.data,
     totalReserves: totalReserves.data,
     emergencyPaused: emergencyPaused.data,
+    contractPaused: contractPaused.data,
+    isPaused: (emergencyPaused.data === true) || (contractPaused.data === true),
     dailyWithdrawalInfo: dailyWithdrawalInfo.data,
 
     // Loading states
