@@ -654,6 +654,18 @@ async function initializeServices() {
       }
     });
 
+    // Blackjack global recent games (for Recent Play feed)
+    app.get('/api/blackjack/recent-games', async (req, res) => {
+      try {
+        const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+        const games = await dbService.getRecentGamesGlobal(limit);
+        sendJson(res, games);
+      } catch (error) {
+        logger.error('Error fetching blackjack recent games:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Tournament API endpoints
     app.get('/api/tournament/active', async (req, res) => {
       try {

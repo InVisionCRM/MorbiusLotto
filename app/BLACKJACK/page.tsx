@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
 import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers';
+import { BlackjackRecentPlays } from '@/components/BLACKJACK/BlackjackRecentPlays';
+import { BlackjackRecentGames } from '@/components/BLACKJACK/BlackjackRecentGames';
 import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar';
 import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
@@ -2561,6 +2563,17 @@ export default function BlackjackPage() {
         {/* View-specific content */}
         {currentView === 'game' && (
           <>
+        {/* Show when game server is not configured (so user knows why they can't connect) */}
+        {!getWebSocketUrlOptional() && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-sm">
+            <strong>Game server not connected.</strong>{' '}
+            {typeof process !== 'undefined' && process.env.NODE_ENV === 'production' ? (
+              <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in your deployment (e.g. Vercel → Project → Settings → Environment Variables). Use your backend URL: <code className="font-mono text-xs bg-black/30 px-1 rounded">https://your-api.com</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">wss://your-api.com</code>. Then <strong>redeploy</strong> — Next.js bakes these in at build time.</>
+            ) : (
+              <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in <code className="font-mono text-xs bg-black/30 px-1 rounded">.env.local</code> (e.g. <code className="font-mono text-xs bg-black/30 px-1 rounded">http://localhost:3001</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">ws://localhost:3001</code>), then restart the dev server. Run the backend with <code className="font-mono text-xs bg-black/30 px-1 rounded">cd server && npm run dev</code>.</>
+            )}
+          </div>
+        )}
         {/* Game layout: table + betting fit when possible; min height so table stays usable */}
         <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] grid-rows-[1fr_auto_auto] md:grid-rows-[1fr_auto] gap-2 md:gap-4 min-h-0">
           {/* 1. Table + mobile controls (right of table on mobile) */}
@@ -2749,7 +2762,19 @@ export default function BlackjackPage() {
             onChangeTableClick={() => setThemeModalOpen(true)}
           />
           <BlackjackTopPlayers />
-          {/* Tournament card - commented out
+        </div>
+
+        {/* Recent Games + Recent Play (same as Plinko/Keno/Lottery) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-4 px-0">
+          <div className="min-w-0">
+            <BlackjackRecentGames limit={20} compact title="Recent Games" />
+          </div>
+          <div className="min-w-0">
+            <BlackjackRecentPlays limit={20} compact title="Recent Play" />
+          </div>
+        </div>
+
+        {/* Tournament card - commented out
           <div
             className="min-h-[280px] lg:min-h-[340px] rounded-xl overflow-hidden flex flex-col min-w-0"
             style={{
@@ -2806,7 +2831,6 @@ export default function BlackjackPage() {
             </div>
           </div>
           */}
-        </div>
 
         {/* Tournament Leaderboard (shown when in tournament) */}
         {tournament.tournamentState.inTournament && (

@@ -1091,6 +1091,49 @@ export class DatabaseService {
     return games;
   }
 
+  /** Recent completed games globally (all players) for "Recent Play" feed. */
+  async getRecentGamesGlobal(limit: number = 20): Promise<Array<{
+    id: string;
+    wallet_address: string;
+    result: string | null;
+    total_bet_amount: bigint;
+    total_payout: bigint;
+    created_at: Date;
+  }>> {
+    const query = `
+      WITH gh_agg AS (
+        SELECT game_id,
+          SUM(bet_amount) AS bet_sum,
+          SUM(payout) AS payout_sum
+        FROM game_hands
+        GROUP BY game_id
+      )
+      SELECT
+        g.id,
+        p.wallet_address,
+        g.result,
+        CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
+        CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
+        g.created_at
+      FROM games g
+      JOIN game_sessions gs ON g.session_id = gs.id
+      JOIN players p ON gs.player_id = p.id
+      LEFT JOIN gh_agg gh ON gh.game_id = g.id
+      WHERE g.result IS NOT NULL AND g.result != 'ongoing'
+      ORDER BY g.created_at DESC
+      LIMIT $1
+    `;
+    const result = await this.pool.query(query, [limit]);
+    return result.rows.map((r: any) => ({
+      id: r.id,
+      wallet_address: r.wallet_address ?? '',
+      result: r.result ?? null,
+      total_bet_amount: this.toBigInt(r.total_bet_amount),
+      total_payout: this.toBigInt(r.total_payout),
+      created_at: r.created_at ? new Date(r.created_at) : new Date(0),
+    }));
+  }
+
   // Game session operations
   async createGameSession(playerId: string, serverSeed: string, serverSeedHash: string): Promise<GameSession> {
     const query = `

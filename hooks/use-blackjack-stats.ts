@@ -179,16 +179,15 @@ export interface TopPlayerEntry {
 }
 
 /**
- * Hook to fetch top players leaderboard (by total volume)
+ * Hook to fetch top players leaderboard (by total volume).
+ * Only runs when API URL is configured.
  */
 export function useBlackjackTopPlayers(limit: number = 10) {
+  const apiUrl = getApiUrlOptional();
   return useQuery<TopPlayerEntry[]>({
-    queryKey: ['blackjackTopPlayers', limit],
+    queryKey: ['blackjackTopPlayers', limit, !!apiUrl],
     queryFn: async () => {
-      const apiUrl = getApiUrlOptional();
-      if (!apiUrl) {
-        return [];
-      }
+      if (!apiUrl) return [];
       try {
         const response = await fetch(`${apiUrl}/api/analytics/top-players?limit=${limit}`);
         const text = await response.text();
@@ -221,9 +220,32 @@ export function useBlackjackTopPlayers(limit: number = 10) {
         throw error;
       }
     },
+    enabled: !!apiUrl,
     refetchInterval: 60000,
     retry: 1,
   });
+}
+
+/** Single game row from API (BigInt fields as strings over JSON). */
+export interface PlayerGameRow {
+  id: string;
+  session_id: string;
+  game_number: number;
+  total_bet_amount: string;
+  total_payout: string;
+  result?: 'win' | 'loss' | 'push' | 'blackjack' | 'ongoing';
+  created_at: string;
+  [key: string]: unknown;
+}
+
+/** Global recent game row from /api/blackjack/recent-games (BigInt as strings). */
+export interface RecentGameGlobalRow {
+  id: string;
+  wallet_address: string;
+  result: string | null;
+  total_bet_amount: string;
+  total_payout: string;
+  created_at: string;
 }
 
 /**
@@ -233,7 +255,7 @@ export function usePlayerGames(limit: number = 50, offset: number = 0) {
   const { address } = useAccount();
   const apiUrl = getApiUrlOptional();
 
-  return useQuery({
+  return useQuery<PlayerGameRow[]>({
     queryKey: ['playerGames', address, limit, offset, !!apiUrl],
     queryFn: async () => {
       if (!address) throw new Error('Wallet not connected');
@@ -247,7 +269,25 @@ export function usePlayerGames(limit: number = 50, offset: number = 0) {
       }
       return response.json();
     },
-    enabled: !!address,
+    enabled: !!address && !!apiUrl,
+  });
+}
+
+/**
+ * Hook to fetch global recent blackjack games (all players) for Recent Play feed.
+ */
+export function useBlackjackRecentGamesGlobal(limit: number = 20) {
+  const apiUrl = getApiUrlOptional();
+  return useQuery<RecentGameGlobalRow[]>({
+    queryKey: ['blackjackRecentGamesGlobal', limit, !!apiUrl],
+    queryFn: async () => {
+      if (!apiUrl) return [];
+      const response = await fetch(`${apiUrl}/api/blackjack/recent-games?limit=${limit}`);
+      if (!response.ok) throw new Error('Failed to fetch recent games');
+      return response.json();
+    },
+    enabled: !!apiUrl,
+    refetchInterval: 30000,
   });
 }
 

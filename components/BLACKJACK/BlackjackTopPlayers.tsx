@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { formatEther } from 'viem'
 import { useBlackjackTopPlayers, type TopPlayerEntry } from '@/hooks/use-blackjack-stats'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
+import { getApiUrlOptional } from '@/lib/api-urls'
 import {
   Table,
   TableBody,
@@ -31,15 +32,42 @@ function shortAddress(addr: string): string {
 }
 
 export default function BlackjackTopPlayers() {
-  const { data: players, isLoading, error } = useBlackjackTopPlayers(TOP_N)
+  const apiUrl = getApiUrlOptional()
+  const { data: players, isLoading, error, refetch, isRefetching } = useBlackjackTopPlayers(TOP_N)
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
+
+  if (!apiUrl) {
+    return (
+      <div className="rounded-xl overflow-hidden min-w-0" style={PANEL_STYLE}>
+        <div className="px-3 py-2 border-b border-white/10">
+          <h3 className="text-cyan-300 font-semibold text-sm">Leaderboard</h3>
+        </div>
+        <div className="py-6 text-center">
+          <p className="text-white/50 text-sm font-poppins">Leaderboard unavailable. Connect to the server to see top players.</p>
+        </div>
+      </div>
+    )
+  }
 
   if (error) {
     const message = error instanceof Error ? error.message : 'Failed to load leaderboard.'
     return (
-      <div className="text-center py-4 min-w-0">
-        <p className="text-red-400/90 text-sm font-poppins">Failed to load leaderboard.</p>
-        <p className="text-red-300/80 text-xs mt-2 font-poppins font-mono max-w-xl mx-auto break-words">{message}</p>
+      <div className="rounded-xl overflow-hidden min-w-0" style={PANEL_STYLE}>
+        <div className="px-3 py-2 border-b border-white/10">
+          <h3 className="text-cyan-300 font-semibold text-sm">Leaderboard</h3>
+        </div>
+        <div className="text-center py-4 min-w-0">
+          <p className="text-red-400/90 text-sm font-poppins">Couldn&apos;t load leaderboard.</p>
+          <p className="text-white/60 text-xs mt-2 font-poppins font-mono max-w-xl mx-auto break-words">{message}</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            className="mt-3 py-1.5 px-3 rounded-lg text-xs font-medium bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 disabled:opacity-50"
+          >
+            {isRefetching ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
       </div>
     )
   }
