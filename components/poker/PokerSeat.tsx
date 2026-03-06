@@ -30,7 +30,7 @@ function shortAddr(addr: string): string {
 
 function SeatBadge({ children, variant }: { children: React.ReactNode; variant: 'dealer' | 'blind' | 'you' }) {
   const base =
-    'inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide border backdrop-blur-md';
+    'inline-flex items-center justify-center rounded-full px-1 py-0.5 sm:px-2 text-[9px] sm:text-[11px] font-semibold tracking-wide border backdrop-blur-md';
   if (variant === 'dealer') {
     return (
       <span
@@ -65,7 +65,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks }: P
 
   return (
     <div
-      className={`relative rounded-2xl border p-3 min-w-[120px] select-none transition ${
+      className={`relative rounded-xl sm:rounded-2xl border p-1.5 sm:p-3 min-w-0 w-full max-w-full sm:max-w-none sm:min-w-[120px] select-none transition ${
         empty ? 'border-dashed border-slate-500/60 bg-slate-950/25' : 'border-cyan-500/20 bg-slate-950/40'
       } ${isFolded ? 'opacity-60' : 'opacity-100'} ${
         isActing ? 'border-cyan-300/70 ring-2 ring-cyan-300/35' : ''
@@ -88,27 +88,32 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks }: P
         />
       )}
 
-      <div className="relative flex flex-col items-center gap-1.5">
-        <div className="flex flex-wrap items-center justify-center gap-1.5">
-          {seat.isDealer && <SeatBadge variant="dealer">DEALER</SeatBadge>}
+      <div className="relative flex flex-col items-center gap-0.5 sm:gap-1.5">
+        <div className="flex flex-wrap items-center justify-center gap-0.5 sm:gap-1.5">
+          {seat.isDealer && (
+            <SeatBadge variant="dealer">
+              <span className="sm:hidden">D</span>
+              <span className="hidden sm:inline">DEALER</span>
+            </SeatBadge>
+          )}
           {seat.isSmallBlind && <SeatBadge variant="blind">SB</SeatBadge>}
           {seat.isBigBlind && <SeatBadge variant="blind">BB</SeatBadge>}
           {isCurrentPlayer && !empty && <SeatBadge variant="you">YOU</SeatBadge>}
         </div>
 
         <div className="flex flex-col items-center leading-tight">
-          <span className={`text-sm font-medium max-w-full truncate ${empty ? 'text-slate-400' : 'text-slate-100'}`}>
-            {empty ? 'Empty Seat' : shortAddr(seat.playerAddress!)}
+          <span className={`text-[10px] sm:text-sm font-medium max-w-full truncate ${empty ? 'text-slate-400' : 'text-slate-100'}`}>
+            {empty ? 'Empty' : shortAddr(seat.playerAddress!)}
           </span>
           {!empty && (
-            <span className="text-cyan-200 text-[13px] font-semibold tabular-nums">{formatChips(seat.stack)}</span>
+            <span className="text-cyan-200 text-[10px] sm:text-[13px] font-semibold tabular-nums">{formatChips(seat.stack)}</span>
           )}
         </div>
 
-        {isFolded && <span className="text-[11px] text-red-200/80">Folded</span>}
+        {isFolded && <span className="text-[9px] sm:text-[11px] text-red-200/80">Folded</span>}
 
         {(showMyCards || showBacks) && (
-          <div className={`flex gap-1 mt-1 ${isFolded ? 'grayscale opacity-70' : ''}`}>
+          <div className={`flex gap-0.5 sm:gap-1 mt-0.5 sm:mt-1 ${isFolded ? 'grayscale opacity-70' : ''}`}>
             {showMyCards ? (
               <>
                 <CardDisplay cardIndex={holeCards![0]} small />

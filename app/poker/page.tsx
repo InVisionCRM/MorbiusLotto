@@ -200,41 +200,41 @@ export default function PokerLobbyPage() {
     <GlobalMainNav page="home">
       <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)]" />
-        <div className="relative w-full max-w-4xl mx-auto px-4 py-8">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-            <div className="flex items-center gap-4">
-              <Link href="/" className="text-cyan-400 hover:text-cyan-300 text-sm">← Back</Link>
-              <Link href="/poker/designer" className="text-slate-400 hover:text-cyan-400 text-sm">Design layout</Link>
+        <div className="relative w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4 mb-4 sm:mb-8">
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+              <Link href="/" className="text-cyan-400 hover:text-cyan-300 text-xs sm:text-sm">← Back</Link>
+              <Link href="/poker/designer" className="text-slate-400 hover:text-cyan-400 text-xs sm:text-sm">Design layout</Link>
               {isConnected && (
                 <>
                   {balance != null && (
-                    <span className="text-slate-300 text-sm">
+                    <span className="text-slate-300 text-xs sm:text-sm">
                       Balance: <span className="text-cyan-400 font-medium">{Number(formatEther(BigInt(balance))).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span> chips
                     </span>
                   )}
                   <Link
                     href="/BLACKJACK?open=deposit"
-                    className="text-sm px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-700 hover:to-blue-700"
+                    className="text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-700 hover:to-blue-700"
                   >
                     Get chips
                   </Link>
                 </>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl md:text-3xl font-bold text-cyan-400">Texas Hold&apos;em</h1>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-bold text-cyan-400">Texas Hold&apos;em</h1>
               {isConnected && (
                 <button
                   type="button"
                   onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6 })}
-                  className="px-4 py-2 rounded-lg border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 text-sm"
+                  className="px-2 py-1.5 sm:px-4 sm:py-2 rounded-lg border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 text-xs sm:text-sm"
                 >
                   Create table
                 </button>
               )}
             </div>
           </div>
-          <p className="text-slate-400 mb-6">Multiplayer no-limit Hold&apos;em. Join a table and play. Chips are the same balance as Blackjack — deposit on Blackjack to play.</p>
+          <p className="text-slate-400 mb-4 sm:mb-6 text-xs sm:text-base">Multiplayer no-limit Hold&apos;em. Join a table and play. Chips are the same balance as Blackjack — deposit on Blackjack to play.</p>
 
           {loading && <p className="text-slate-400">Loading tables...</p>}
           {error && <p className="text-red-400 mb-4">{error}</p>}
@@ -244,29 +244,29 @@ export default function PokerLobbyPage() {
             </p>
           )}
           {!loading && tables.length > 0 && (
-            <div className="grid gap-4">
+            <div className="grid gap-3 sm:gap-4">
               {tables.map((t) => (
                 <div
                   key={t.id}
-                  className="rounded-xl border border-cyan-500/30 p-4 flex flex-wrap items-center justify-between gap-4"
+                  className="rounded-xl border border-cyan-500/30 p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 sm:gap-4"
                   style={{
                     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                     boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
                   }}
                 >
-                  <div>
-                    <span className="text-cyan-400 font-medium">{t.smallBlind}/{t.bigBlind}</span>
-                    <span className="text-slate-400 ml-2">
+                  <div className="min-w-0">
+                    <span className="text-cyan-400 font-medium text-sm sm:text-base">{t.smallBlind}/{t.bigBlind}</span>
+                    <span className="text-slate-400 ml-1 sm:ml-2 text-xs sm:text-sm">
                       {t.seatedCount}/{t.maxSeats} seated
                     </span>
-                    <span className="ml-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs font-medium uppercase tracking-wider text-slate-500">
                       {t.status === 'playing' ? 'In progress' : 'Waiting'}
                     </span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5 sm:gap-2 shrink-0">
                     <Link
                       href={`/poker/${t.id}`}
-                      className="px-4 py-2 rounded-lg bg-cyan-600/50 text-cyan-200 hover:bg-cyan-600 text-sm"
+                      className="px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-cyan-600/50 text-cyan-200 hover:bg-cyan-600 text-xs sm:text-sm"
                     >
                       Watch
                     </Link>
@@ -274,7 +274,7 @@ export default function PokerLobbyPage() {
                       <button
                         type="button"
                         onClick={() => setJoinModal({ tableId: t.id })}
-                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-700 hover:to-blue-700 text-sm"
+                        className="px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-700 hover:to-blue-700 text-xs sm:text-sm"
                       >
                         Join
                       </button>

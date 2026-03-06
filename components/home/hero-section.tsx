@@ -12,6 +12,11 @@ export function HeroSection() {
       className="relative w-full min-h-[100dvh] min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 pt-0 pb-14"
       style={{ background: Theme.greyGradient.background }}
     >
+      {/* Tour card backdrop at 5% opacity */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.05] z-0"
+        style={{ backgroundImage: 'url(/BlackJack/TourCards/TourCard5.png)' }}
+      />
       {/* Background: chip rotates inside a fixed gradient mask so the fade stays in place */}
       <div
         className="absolute inset-0"

@@ -7,10 +7,11 @@ import { useAccount, useSignTypedData } from 'wagmi';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { PokerTableState } from '@/lib/websocket-client';
-import { defaultPokerLayout, getChatRect } from '@/lib/poker-layout';
+import { defaultPokerLayout } from '@/lib/poker-layout';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer';
 import { PokerTable } from '@/components/poker/PokerTable';
+import { PokerActions } from '@/components/poker/PokerActions';
 import { toast } from 'sonner';
 
 export default function PokerTablePage() {
@@ -126,22 +127,32 @@ export default function PokerTablePage() {
       .catch((err) => toast.error((err as Error).message));
   }, [tableId, router]);
 
-  const chatRect = getChatRect(defaultPokerLayout);
+  const hand = state?.currentHand;
+  const mySeatIndex = state ? state.seats.findIndex((s) => s.playerAddress === normalizedAddress) : -1;
+  const mySeat = mySeatIndex >= 0 && state ? state.seats[mySeatIndex] : null;
+  const canAct =
+    !!hand &&
+    hand.actingPosition != null &&
+    mySeat &&
+    state!.seats[hand.actingPosition]?.playerAddress === normalizedAddress &&
+    !mySeat.folded;
+  const canCheck = hand?.toCall === '0' || hand?.toCall === '';
+  const callAmount = hand?.toCall ?? '0';
 
   return (
     <GlobalMainNav page="home">
       <div className="min-h-screen text-white flex flex-col items-center justify-center bg-slate-950">
-        {/* Canvas: true aspect ratio of Pokerbg.jpg, no scaling */}
-        <div className="relative max-w-full max-h-screen w-fit flex-shrink-0">
+        {/* Canvas: fit in viewport on mobile; desktop preserves aspect */}
+        <div className="relative w-full max-w-full h-[100dvh] max-h-[100dvh] md:max-h-none md:h-auto md:w-fit flex-shrink-0 flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/POKER/Pokerbg.jpg"
             alt=""
-            className="block max-w-full max-h-[100vh] w-auto h-auto object-contain pointer-events-none"
+            className="block w-full h-full max-w-full max-h-full object-contain pointer-events-none md:max-h-[100vh] md:w-auto md:h-auto"
           />
           <div className="absolute inset-0 bg-black/40 pointer-events-none" aria-hidden />
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-0 pointer-events-auto">
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute inset-0 pointer-events-auto min-w-0 min-h-0">
               <Link href="/poker" className="absolute left-2 top-2 z-20 text-cyan-400 hover:text-cyan-300 text-sm">
                 ← Lobby
               </Link>
@@ -153,11 +164,6 @@ export default function PokerTablePage() {
                   layout={defaultPokerLayout}
                   state={state}
                   currentPlayerAddress={normalizedAddress}
-                  onFold={handleFold}
-                  onCheck={handleCheck}
-                  onCall={handleCall}
-                  onBet={handleBet}
-                  onRaise={handleRaise}
                   onLeave={handleLeave}
                 />
               )}
@@ -167,6 +173,32 @@ export default function PokerTablePage() {
             </div>
           </div>
         </div>
+
+        {/* Betting controls: outside game board (only when it's your turn) */}
+        {state && hand && canAct && (
+          <div
+            className="w-full max-w-2xl px-3 py-3 sm:px-4 sm:py-4 flex-shrink-0"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(34, 211, 238, 0.3)',
+            }}
+          >
+            <PokerActions
+              canAct={!!canAct}
+              canCheck={canCheck}
+              minRaise={hand.minRaise}
+              stack={mySeat?.stack ?? '0'}
+              callAmount={callAmount}
+              onFold={handleFold}
+              onCheck={handleCheck}
+              onCall={handleCall}
+              onBet={handleBet}
+              onRaise={handleRaise}
+            />
+          </div>
+        )}
+
         <Footer />
       </div>
     </GlobalMainNav>

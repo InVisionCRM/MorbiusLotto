@@ -102,23 +102,23 @@ export function PokerActions({
 
   return (
     <div
-      className="w-full max-w-[720px] rounded-2xl border border-cyan-500/25 bg-slate-950/55 backdrop-blur-md px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_14px_40px_rgba(0,0,0,0.6)]"
+      className="w-full max-w-[720px] rounded-xl sm:rounded-2xl border border-cyan-500/25 bg-slate-950/55 backdrop-blur-md px-2 py-2 sm:px-3 sm:py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_14px_40px_rgba(0,0,0,0.6)]"
       role="group"
       aria-label="Poker actions"
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center sm:justify-between gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={onFold}
-            className="h-10 px-4 rounded-xl bg-red-500/15 text-red-200 border border-red-500/30 hover:bg-red-500/25 hover:border-red-400/50 transition text-sm font-medium"
+            className="h-8 sm:h-10 px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-red-500/15 text-red-200 border border-red-500/30 hover:bg-red-500/25 hover:border-red-400/50 transition text-xs sm:text-sm font-medium"
           >
             Fold
           </button>
           <button
             type="button"
             onClick={handleSecondary}
-            className="h-10 px-4 rounded-xl bg-slate-400/10 text-slate-100 border border-slate-400/20 hover:bg-slate-400/15 hover:border-slate-300/30 transition text-sm font-medium"
+            className="h-8 sm:h-10 px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-slate-400/10 text-slate-100 border border-slate-400/20 hover:bg-slate-400/15 hover:border-slate-300/30 transition text-xs sm:text-sm font-medium min-w-0 max-w-[100px] sm:max-w-none truncate"
           >
             {secondaryLabel}
           </button>
@@ -139,10 +139,10 @@ export function PokerActions({
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col items-end leading-none">
-            <span className="text-[11px] text-slate-300/80">Min {formatAmount(minRaiseAmt)}</span>
-            <span className="text-[11px] text-slate-300/80">Stack {formatAmount(stackAmt)}</span>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0 justify-end">
+          <div className="hidden sm:flex flex-col items-end leading-none shrink-0">
+            <span className="text-[9px] sm:text-[11px] text-slate-300/80">Min {formatAmount(minRaiseAmt)}</span>
+            <span className="text-[9px] sm:text-[11px] text-slate-300/80">Stack {formatAmount(stackAmt)}</span>
           </div>
           <input
             inputMode="numeric"
@@ -150,28 +150,28 @@ export function PokerActions({
             type="text"
             value={customAmount}
             onChange={(e) => setCustomAmount(e.target.value)}
-            className="h-10 w-[110px] rounded-xl bg-slate-900/60 border border-cyan-500/25 px-3 text-white text-sm outline-none focus:ring-2 focus:ring-cyan-400/40"
+            className="h-8 sm:h-10 w-16 sm:w-[110px] rounded-lg sm:rounded-xl bg-slate-900/60 border border-cyan-500/25 px-2 sm:px-3 text-white text-xs sm:text-sm outline-none focus:ring-2 focus:ring-cyan-400/40"
             aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
           />
           <button
             type="button"
             onClick={handlePrimary}
             disabled={!hasValidAmount}
-            className="h-10 px-5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-semibold shadow-[0_10px_22px_rgba(0,0,0,0.45)] hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:hover:from-cyan-600 disabled:hover:to-blue-600 transition"
+            className="h-8 sm:h-10 px-3 sm:px-5 rounded-lg sm:rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs sm:text-sm font-semibold shadow-[0_10px_22px_rgba(0,0,0,0.45)] hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:hover:from-cyan-600 disabled:hover:to-blue-600 transition shrink-0"
           >
             {primaryLabel}
           </button>
         </div>
       </div>
 
-      <div className="sm:hidden mt-2 flex flex-wrap gap-1.5">
+      <div className="sm:hidden mt-1.5 flex flex-wrap gap-1 justify-center">
         {quickSizes.map((q) => (
           <button
             key={q.label}
             type="button"
             onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
             disabled={stackAmt === 0n}
-            className="h-9 px-3 rounded-xl bg-cyan-400/10 text-cyan-100 border border-cyan-400/20 hover:bg-cyan-400/15 hover:border-cyan-300/30 transition text-xs font-semibold disabled:opacity-50"
+            className="h-7 px-2 rounded-lg bg-cyan-400/10 text-cyan-100 border border-cyan-400/20 hover:bg-cyan-400/15 hover:border-cyan-300/30 transition text-[10px] font-semibold disabled:opacity-50"
           >
             {q.label}
           </button>
@@ -179,7 +179,7 @@ export function PokerActions({
       </div>
 
       {clamped != null && parsed != null && parsed !== clamped && (
-        <div className="mt-2 text-[11px] text-amber-200/80">
+        <div className="mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] text-amber-200/80">
           Amount adjusted to {formatAmount(clamped)} to fit min/stack.
         </div>
       )}

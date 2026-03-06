@@ -3,20 +3,14 @@
 import React from 'react';
 import { PokerSeat } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
-import { PokerActions } from './PokerActions';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
 import type { PokerLayout } from '@/lib/poker-layout';
-import { getTableRect, getSeatRect, getCommunityRect, getActionBarRect } from '@/lib/poker-layout';
+import { getTableRect, getSeatRect, getCommunityRect } from '@/lib/poker-layout';
 
 export interface PokerTableProps {
   layout: PokerLayout;
   state: TableState;
   currentPlayerAddress: string | null;
-  onFold: () => void;
-  onCheck: () => void;
-  onCall: () => void;
-  onBet: (amount: string) => void;
-  onRaise: (amount: string) => void;
   onLeave: () => void;
 }
 
@@ -24,41 +18,26 @@ export function PokerTable({
   layout,
   state,
   currentPlayerAddress,
-  onFold,
-  onCheck,
-  onCall,
-  onBet,
-  onRaise,
   onLeave,
 }: PokerTableProps) {
   const hand = state.currentHand;
   const mySeatIndex = state.seats.findIndex((s) => s.playerAddress === currentPlayerAddress);
-  const mySeat = mySeatIndex >= 0 ? state.seats[mySeatIndex] : null;
-  const canAct =
-    !!hand &&
-    hand.actingPosition != null &&
-    mySeat &&
-    state.seats[hand.actingPosition]?.playerAddress === currentPlayerAddress &&
-    !mySeat.folded;
-  const canCheck = hand?.toCall === '0' || hand?.toCall === '';
-  const callAmount = hand?.toCall ?? '0';
 
   const tableRect = getTableRect(layout);
   const communityRect = getCommunityRect(layout);
-  const actionBarRect = getActionBarRect(layout);
 
   return (
     <div className="absolute inset-0">
       {/* Top bar: blinds, leave */}
-      <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-2 py-1.5 z-10">
-        <div className="w-16" />
-        <span className="text-cyan-400 font-medium text-xs md:text-sm">
+      <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-1.5 py-1 sm:px-2 sm:py-1.5 z-10">
+        <div className="w-10 sm:w-16" />
+        <span className="text-cyan-400 font-medium text-[10px] sm:text-xs md:text-sm">
           {state.smallBlind}/{state.bigBlind} · {state.seats.filter((s) => s.playerAddress).length}/{state.maxSeats} seats
         </span>
         <button
           type="button"
           onClick={onLeave}
-          className="px-2 py-1 rounded border border-red-500/50 text-red-400 hover:bg-red-500/20 text-xs md:text-sm"
+          className="px-1.5 py-0.5 sm:px-2 sm:py-1 rounded border border-red-500/50 text-red-400 hover:bg-red-500/20 text-[10px] sm:text-xs md:text-sm"
         >
           Leave
         </button>
@@ -122,32 +101,6 @@ export function PokerTable({
           </div>
         );
       })}
-
-      {/* Action bar (layout %) */}
-      {hand && actionBarRect && (
-        <div
-          className="absolute flex items-center justify-center min-h-0"
-          style={{
-            left: `${actionBarRect.x}%`,
-            top: `${actionBarRect.y}%`,
-            width: `${actionBarRect.width}%`,
-            height: `${actionBarRect.height}%`,
-          }}
-        >
-          <PokerActions
-            canAct={!!canAct}
-            canCheck={canCheck}
-            minRaise={hand.minRaise}
-            stack={mySeat?.stack ?? '0'}
-            callAmount={callAmount}
-            onFold={onFold}
-            onCheck={onCheck}
-            onCall={onCall}
-            onBet={onBet}
-            onRaise={onRaise}
-          />
-        </div>
-      )}
     </div>
   );
 }

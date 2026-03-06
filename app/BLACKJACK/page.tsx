@@ -22,7 +22,6 @@ import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboar
 import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalyticsDashboard';
 // GameVerificationTools removed - use /BLACKJACK/verify page instead
 import { GameFAQ } from '@/components/shared/GameFAQ';
-import { StickyBanner } from '@/components/ui/sticky-banner';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
 import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
@@ -2474,12 +2473,6 @@ export default function BlackjackPage() {
         preload="metadata"
         style={{ display: 'none' }}
       />
-
-      <StickyBanner
-        className="bg-amber-600/95 text-black font-bold text-center text-sm sm:text-base shadow-lg"
-      >
-        <span>DO NOT DEPOSIT. DEVELOPMENT IN PROGRESS</span>
-      </StickyBanner>
 
       <GlobalMainNav
         onOpenDepositModal={handleOpenDepositModal}

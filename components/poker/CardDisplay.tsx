@@ -18,10 +18,11 @@ export interface CardDisplayProps {
 }
 
 export function CardDisplay({ cardIndex, small, faceDown, className = '' }: CardDisplayProps) {
+  const smallClasses = small ? 'w-6 h-8 sm:w-8 sm:h-11 text-[10px] sm:text-xs' : 'w-10 h-14 text-sm';
   if (faceDown || (cardIndex != null && (cardIndex < 0 || cardIndex > 51))) {
     return (
       <div
-        className={`rounded border border-amber-800/60 bg-gradient-to-br from-amber-900 to-amber-950 flex items-center justify-center ${small ? 'w-8 h-11 text-xs' : 'w-10 h-14 text-sm'} ${className}`}
+        className={`rounded border border-amber-800/60 bg-gradient-to-br from-amber-900 to-amber-950 flex items-center justify-center ${smallClasses} ${className}`}
         style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.3)' }}
       >
         <span className="text-amber-700/80 font-bold">♠</span>
@@ -31,7 +32,7 @@ export function CardDisplay({ cardIndex, small, faceDown, className = '' }: Card
   if (cardIndex == null) {
     return (
       <div
-        className={`rounded border border-cyan-500/30 bg-slate-800 flex items-center justify-center ${small ? 'w-8 h-11 text-xs' : 'w-10 h-14 text-sm'} ${className}`}
+        className={`rounded border border-cyan-500/30 bg-slate-800 flex items-center justify-center ${smallClasses} ${className}`}
         style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)' }}
       >
         <span className="text-slate-500">?</span>
@@ -42,7 +43,7 @@ export function CardDisplay({ cardIndex, small, faceDown, className = '' }: Card
   const suit = Math.floor(cardIndex / 13);
   return (
     <div
-      className={`rounded border border-cyan-500/30 bg-slate-900 flex flex-col items-center justify-center ${small ? 'w-8 h-11 text-xs' : 'w-10 h-14 text-sm'} ${className}`}
+      className={`rounded border border-cyan-500/30 bg-slate-900 flex flex-col items-center justify-center ${small ? smallClasses : 'w-10 h-14 text-sm'} ${className}`}
       style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.3)' }}
     >
       <span className="text-white font-medium">{RANKS[rank]}</span>

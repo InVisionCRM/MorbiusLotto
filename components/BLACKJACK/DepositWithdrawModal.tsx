@@ -25,15 +25,14 @@ import { toast } from 'sonner'
 interface DepositWithdrawModalProps {
   isOpen: boolean
   onClose: () => void
-  onBalanceSync?: () => Promise<void> // Callback to sync balance after deposit/withdraw (overwrites DB with contract)
-  onRefreshBalance?: () => Promise<void> // Callback to refresh display from server only (safe, no overwrite)
-  onWithdrawSuccess?: () => void | Promise<void> // Optional: called after successful withdrawal (e.g. refetch contract reserve)
-  contractReserve?: bigint // Contract reserve for withdrawals (still needed for withdraw limits)
-  offChainBalance?: bigint // Off-chain balance from server (for display)
+  onBalanceSync?: () => Promise<void>
+  onRefreshBalance?: () => Promise<void>
+  onWithdrawSuccess?: () => void | Promise<void>
+  contractReserve?: bigint
+  offChainBalance?: bigint
 }
 
 export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefreshBalance, onWithdrawSuccess, contractReserve, offChainBalance }: DepositWithdrawModalProps) {
-  // Display balance: prefer off-chain whenever it's defined (including 0 after withdraw), else contract reserve
   const displayBalance = (offChainBalance !== undefined && offChainBalance !== null)
     ? offChainBalance
     : (contractReserve !== undefined && contractReserve !== null ? contractReserve : BigInt(0));
@@ -49,12 +48,9 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const [depositMethod, setDepositMethod] = useState<'pls' | 'morbius'>('pls')
   const [showApprovalModal, setShowApprovalModal] = useState(false)
   const [isPreparingWithdraw, setIsPreparingWithdraw] = useState(false)
-  /** Amount to withdraw per legacy contract (address -> amount string). Lets users withdraw in chunks under the 1M contract limit. */
   const [legacyWithdrawAmounts, setLegacyWithdrawAmounts] = useState<Record<string, string>>({})
-  /** Dismissed legacy cards (reset on modal open) */
   const [dismissedLegacy, setDismissedLegacy] = useState<Set<string>>(new Set())
 
-  // Transaction history state
   interface TxHistoryItem {
     type: 'deposit' | 'withdrawal'
     amount: string
@@ -92,14 +88,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     }
   }
 
-  // Fetch when switching to the history tab (lazy, once per open)
   useEffect(() => {
     if (activeTab === 'history' && !txLoaded && !txLoading) {
       fetchTxHistory()
     }
   }, [activeTab])
 
-  // Notify server of a confirmed deposit so it appears in history immediately
   const notifyDeposit = async (txHash: string, amountWei: bigint) => {
     if (!address) return
     try {
@@ -109,17 +103,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: address, txHash, amount: amountWei.toString() }),
       })
-      // Invalidate cached history so next open refreshes
       setTxLoaded(false)
     } catch {
-      // Non-fatal — chain analytics will pick it up on next scan
     }
   }
 
-  // Legacy contracts cap withdrawal at 1,000,000 MORBIUS per tx (MAX_DAILY_WITHDRAWAL)
   const LEGACY_MAX_WITHDRAW_WEI = BigInt(1_000_000) * BigInt(1e18)
 
-  // Contract hooks
   const {
     depositTx,
     depositMORBIISTx,
@@ -129,7 +119,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     withdrawTx,
   } = useBlackjackContract()
 
-  // Legacy contracts: balances in previous Blackjack contracts (after upgrades)
   const legacy1Reserve = useLegacyPlayerReserveAt(BLACKJACK_LEGACY_ADDRESS)
   const legacy1Paused = useLegacyEmergencyPausedAt(BLACKJACK_LEGACY_ADDRESS)
   const legacy2Reserve = useLegacyPlayerReserveAt(BLACKJACK_LEGACY_ADDRESS_2)
@@ -188,17 +177,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   }
   const hasAnyLegacyBalance = legacyItems.some((item) => item.reserve > BigInt(0))
 
-  // Balance hooks (pass address so PLS balance is actually fetched)
   const { balance: morbiusBalance } = useTokenBalance(address)
   const { balance: plsBalance } = useNativeBalance(address ?? undefined)
 
-  // PLS quote for MORBIUS deposits
   const { plsValue: plsEquivalent, isLoading: plsQuoteLoading } = usePlsQuote({
     morbiusCost: depositAmount ? parseEther(depositAmount) : BigInt(0),
     enabled: activeTab === 'deposit' && depositMethod === 'pls' && depositAmount !== ''
   })
 
-  // Token approval for MORBIUS deposits
   const requiredMorbiusAmount = depositAmount && depositMethod === 'morbius' 
     ? parseEther(depositAmount) 
     : BigInt(0)
@@ -218,7 +204,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     defaultToUnlimited: true,
   })
 
-  // Handle approval success
   useEffect(() => {
     if (isApprovalSuccess) {
       toast.success('Approval successful', {
@@ -229,7 +214,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     }
   }, [isApprovalSuccess])
 
-  // Reset history state and dismissed legacy cards when modal closes so they refetch/reappear on next open
   useEffect(() => {
     if (!isOpen) {
       setTxLoaded(false)
@@ -239,55 +223,33 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     }
   }, [isOpen])
 
-  // Do NOT auto-sync when modal opens. During play, off-chain balance is the source of truth
-  // (bets/losses are deducted there); contract balance stays higher until user withdraws.
-  // Syncing on open would overwrite correct off-chain balance with contract and "restore" lost bets.
-
-  // Handle deposit PLS
   const handleDepositPLS = async () => {
     if (!depositAmount || !plsEquivalent || !publicClient) return
-
-    // Show persistent loading toast
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS worth of PLS`,
     })
-
     try {
       const txHash = await deposit(plsEquivalent)
-
-      // Update toast to show transaction is processing
       toast.loading('Transaction processing...', {
         id: toastId,
         description: 'Waiting for blockchain confirmation...',
       })
-
-      // Wait for transaction receipt
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
-
       if (receipt.status === 'reverted') {
         throw new Error('Transaction reverted on-chain. The deposit failed.')
       }
-
-      // Dismiss loading and show success
       toast.success('Deposit successful', {
         id: toastId,
-        description: `Deposited ${depositAmount} MORBIUS worth of PLS`,
+        description: `Deposited ${depositAmount} MORBIUS worth of PLS. Refresh the page to see your balance update.`,
         duration: 5000,
       })
-
-      // Wait for RPC nodes to reflect new contract state, then sync balance
       await new Promise(resolve => setTimeout(resolve, 2000))
-
-      // Log deposit to history immediately (non-blocking)
       if (plsEquivalent) notifyDeposit(txHash, plsEquivalent)
-
-      // Sync off-chain balance with contract (non-blocking: deposit already succeeded)
       if (onBalanceSync) {
         try {
           await onBalanceSync()
         } catch (syncErr) {
           console.error('Balance sync failed after deposit:', syncErr)
-          // Fall back to a simple balance fetch (no contract comparison)
           if (onRefreshBalance) {
             onRefreshBalance().catch(() => {})
           } else {
@@ -306,55 +268,33 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     }
   }
 
-  // Handle deposit MORBIUS
   const handleDepositMORBIUS = async () => {
     if (!depositAmount || !publicClient) return
-
-    // Check if approval is needed
     if (needsApproval) {
       setShowApprovalModal(true)
       return
     }
-
-    // Capture amount once: use this for both the contract call and notify. If we re-read
-    // depositAmount after await, the user could have changed the input during confirmation.
     const amountWei = parseEther(depositAmount)
-
-    // Show persistent loading toast
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS`,
     })
-
     try {
       const txHash = await depositMORBIUS(amountWei)
-
-      // Update toast to show transaction is processing
       toast.loading('Transaction processing...', {
         id: toastId,
         description: 'Waiting for blockchain confirmation...',
       })
-
-      // Wait for transaction receipt
       const depositReceipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
-
       if (depositReceipt.status === 'reverted') {
         throw new Error('Transaction reverted on-chain. The deposit failed.')
       }
-
-      // Show success
       toast.success('Deposit successful', {
         id: toastId,
-        description: `Deposited ${depositAmount} MORBIUS`,
+        description: `Deposited ${depositAmount} MORBIUS. Refresh the page to see your balance update.`,
         duration: 5000,
       })
-
-      // Log deposit to history: use the same amount we sent on-chain, not current input state.
       notifyDeposit(txHash, amountWei)
-
-      // Wait for RPC nodes to reflect new contract state, then sync balance
       await new Promise(resolve => setTimeout(resolve, 2000))
-
-      // Sync off-chain balance with contract (non-blocking: deposit already succeeded)
       if (onBalanceSync) {
         try {
           await onBalanceSync()
@@ -370,8 +310,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       setDepositAmount('')
     } catch (error: any) {
       console.error('Deposit failed:', error)
-
-      // Check if error is due to insufficient allowance
       if (error?.message?.includes('allowance') || error?.message?.includes('ERC20')) {
         toast.error('Approval required', {
           id: toastId,
@@ -388,17 +326,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     }
   }
 
-  // Handle approval from modal
   const handleApprove = (amount: bigint) => {
-    // #region agent log
-    // #endregion
     approve(amount)
   }
 
-  // Handle withdrawal — hot-wallet model: enqueue, then poll status until completed or failed.
   const handleWithdraw = async () => {
     if (!withdrawAmount || !address) return
-
     let amountWei: bigint
     try {
       amountWei = parseEther(withdrawAmount)
@@ -406,15 +339,12 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       toast.error('Invalid amount', { description: 'Please enter a valid number' })
       return
     }
-
     if (offChainBalance !== undefined && amountWei > offChainBalance) {
       toast.error('Insufficient balance')
       return
     }
-
     setIsPreparingWithdraw(true)
     const toastId = toast.loading('Withdrawal queued...')
-
     try {
       const serverUrl = getBlackjackServerUrl()
       const response = await fetch(`${serverUrl}/api/withdraw`, {
@@ -425,18 +355,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
           amount: amountWei.toString(),
         }),
       })
-
       const data = await response.json()
-
       if (!response.ok) {
         throw new Error(data.error || 'Withdrawal failed')
       }
-
       const jobId = data.jobId
       if (!jobId) {
         throw new Error('Server did not return jobId')
       }
-
       const pollIntervalMs = 2000
       const maxPolls = 120
       for (let i = 0; i < maxPolls; i++) {
@@ -447,7 +373,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         }
         const status = statusData.status as string
         const txHash = statusData.txHash as string | undefined
-
         if (status === 'completed') {
           toast.success('Withdrawal successful!', {
             id: toastId,
@@ -467,7 +392,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
           if (onRefreshBalance) await onRefreshBalance()
           return
         }
-
         if (status === 'pending_confirmation' && txHash) {
           toast.loading('Confirming on chain...', {
             id: toastId,
@@ -476,10 +400,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         } else if (status === 'queued' || status === 'broadcasting') {
           toast.loading('Processing withdrawal...', { id: toastId })
         }
-
         await new Promise((r) => setTimeout(r, pollIntervalMs))
       }
-
       toast.error('Withdrawal timed out', {
         id: toastId,
         description: 'Check your balance or transaction history. If funds were deducted, contact support.',
@@ -498,7 +420,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
 
   const maxDepositPLS = plsBalance ? Math.floor(Number(formatEther(plsBalance))) : 0
   const maxDepositMORBIUS = morbiusBalance ? Math.floor(Number(formatEther(morbiusBalance))) : 0
-  // Withdrawable = off-chain balance (server signs up to dbBalance; contract handles liquidity/daily limits)
   const maxWithdraw =
     offChainBalance !== undefined && offChainBalance !== null
       ? Math.floor(Number(formatEther(offChainBalance)))
@@ -509,7 +430,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const isDepositLoading = depositTx.isPending || depositMORBIISTx.isPending
   const isWithdrawLoading = isPreparingWithdraw
   const isLegacyWithdrawLoading = withdrawTx.isPending
-  /** Disable all deposit/withdraw controls when any tx is pending to avoid double-submits */
   const controlsDisabled = isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading
 
   const handleWithdrawLegacy = async (legacyAddress: `0x${string}`, amount: bigint, refetch: () => void) => {
@@ -560,7 +480,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -568,218 +487,103 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               className="fixed inset-0 z-50 bg-black/20 backdrop-blur-md"
               onClick={onClose}
             />
-
-            {/* Modal */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-[100px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-3"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4"
             >
-              <Card
-                className="w-[98vw] max-w-[42rem] sm:max-w-[48rem] lg:max-w-3xl xl:max-w-3xl max-h-[65vh] flex flex-col overflow-hidden pointer-events-auto rounded-md bg-black/20 backdrop-blur-md border border-white/10 shadow-2xl"
-                style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
-              >
-                <CardHeader className={`flex flex-row items-center justify-between space-y-0 py-2 px-2 shrink-0 rounded-t-lg ${Theme.modal.header}`} style={{ ...Theme.inset.light }}>
-                  <CardTitle className="text-white text-sm font-poppins">Reserve Management</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onClose}
-                    className="text-white/80 hover:text-white hover:bg-white/10"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </CardHeader>
-
-                <CardContent className="px-1 pb-2 pt-6 flex flex-col min-h-0 overflow-hidden">
-                  {(isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading) && (
-                    <div className="flex items-center gap-0.5 py-1 px-1 rounded text-xs text-yellow-400 border border-cyan-500/30 bg-cyan-950/20 shrink-0 mb-2">
-                      <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-                      <span>Confirming...</span>
+              <div className="bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md relative border border-gray-100 pointer-events-auto overflow-y-auto max-h-[90vh]">
+                <button onClick={onClose} className="absolute top-6 right-6 text-gray-400 hover:text-black bg-gray-100 p-2 rounded-full transition-colors">
+                  <X size={20}/>
+                </button>
+                
+                <div className="text-center mt-4 mb-10">
+                  <p className="text-sm text-gray-500 uppercase tracking-widest font-semibold mb-2">Reserve Balance</p>
+                  <h4 className="text-5xl font-light tracking-tight text-gray-900 mb-2">
+                    {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0}
+                  </h4>
+                  <p className="text-gray-400 font-medium">MORBIUS</p>
+                  <p className="text-xs text-gray-400 mt-1">Refresh the page after depositing to see funds in the UI.</p>
+                  {contractReserve && contractReserve !== displayBalance && (
+                    <div className="flex items-center justify-center gap-2 mt-3">
+                      <span className="text-xs text-gray-400 font-medium">
+                        On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()}
+                      </span>
+                      {onRefreshBalance && contractReserve <= displayBalance && (
+                        <button
+                          onClick={async () => {
+                            toast.info('Refreshing...')
+                            try {
+                              await onRefreshBalance()
+                              toast.success('Refreshed', { duration: 3000 })
+                            } catch (error) {
+                              console.error('Refresh failed:', error)
+                              toast.error('Refresh failed.')
+                            }
+                          }}
+                          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          Refresh
+                        </button>
+                      )}
                     </div>
                   )}
+                </div>
 
-                  {/* Always 2 cols: left = balances, right = deposit/withdraw — width only, no extra height */}
-                  <div className="grid grid-cols-2 gap-2 min-h-0 flex-1 overflow-hidden">
-                    <div className="space-y-2 min-h-0 overflow-y-auto pr-1" style={{ ...getPanelStyles('base'), borderRadius: 8, padding: 10 }}>
-                      {legacyItems
-                        .filter((item) => item.reserve > BigInt(0) && !dismissedLegacy.has(item.address))
-                        .map((item) => {
-                          const maxAllowedWei = item.reserve > LEGACY_MAX_WITHDRAW_WEI ? LEGACY_MAX_WITHDRAW_WEI : item.reserve
-                          const rawInput = legacyWithdrawAmounts[item.address] ?? ''
-                          let amountWei: bigint
-                          try {
-                            amountWei = rawInput.trim() === '' ? maxAllowedWei : parseEther(rawInput)
-                          } catch {
-                            amountWei = 0n
-                          }
-                          const validAmount = amountWei > 0n && amountWei <= item.reserve && amountWei <= LEGACY_MAX_WITHDRAW_WEI
-                          const setMax = () => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: formatEther(maxAllowedWei) }))
-                          return (
-                            <div key={item.address} className="rounded border border-cyan-500/30 bg-slate-900/60 p-2 space-y-1 relative" style={{ ...Theme.inset }}>
-                              <button
-                                onClick={() => setDismissedLegacy((prev) => new Set(prev).add(item.address))}
-                                className="absolute top-1 right-1 text-cyan-500/50 hover:text-white transition-colors"
-                                aria-label="Dismiss"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                              <div className="text-xs font-poppins text-cyan-500 pr-4">{item.label}</div>
-                              {item.paused ? (
-                                <p className="text-[11px] font-poppins text-cyan-500/80">Withdrawals paused.</p>
-                              ) : (
-                                <p className="text-[11px] font-poppins font-bold text-cyan-500/90">Max 1M per withdrawal.</p>
-                              )}
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-1">
-                                  <Input
-                                    type="text"
-                                    inputMode="decimal"
-                                    placeholder={formatEther(maxAllowedWei)}
-                                    value={rawInput}
-                                    onChange={(e) => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: e.target.value }))}
-                                    disabled={controlsDisabled}
-                                    className="h-7 text-xs font-poppins bg-slate-800 border-cyan-500/30 text-white max-w-[100px]"
-                                  />
-                                  <Button type="button" variant="outline" size="sm" onClick={setMax} disabled={controlsDisabled} className="h-7 px-1.5 border-cyan-500/30 text-cyan-300 text-[11px] shrink-0">
-                                    Max
-                                  </Button>
-                                </div>
-                                <div className="flex items-center justify-between gap-1 flex-wrap">
-                                  <span className="text-xs font-poppins text-white">
-                                    {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} MORBIUS
-                                  </span>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => validAmount && handleWithdrawLegacy(item.address, amountWei, item.refetch)}
-                                    disabled={item.paused || controlsDisabled || !validAmount}
-                                    className={`h-7 text-[11px] font-poppins shrink-0 disabled:opacity-60 ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
-                                  >
-                                    {isLegacyWithdrawLoading ? (
-                                      <Loader2 className="w-3 h-3 animate-spin" />
-                                    ) : item.paused ? (
-                                      'Paused'
-                                    ) : (
-                                      'Withdraw'
-                                    )}
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      <div className="text-center py-2 px-2 rounded border border-cyan-500/30 bg-slate-900/60" style={{ ...Theme.inset }}>
-                        <div className="text-[15px] font-poppins font-bold text-cyan-500/70">Current Balance</div>
-                        <div className="text-[26px] font-poppins font-bold text-white">
-                          {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0} MORBIUS
-                        </div>
-                        {contractReserve && contractReserve !== displayBalance && (
-                          <div className="flex items-center justify-center gap-1 mt-1 flex-wrap">
-                            <span className="text-[1px] font-poppins font-bold text-cyan-500/60">
-                              On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()}
-                            </span>
-                            {onRefreshBalance && contractReserve <= displayBalance && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={async () => {
-                                  toast.info('Refreshing...')
-                                  try {
-                                    await onRefreshBalance()
-                                    toast.success('Refreshed', { duration: 3000 })
-                                  } catch (error) {
-                                    console.error('Refresh failed:', error)
-                                    toast.error('Refresh failed.')
-                                  }
-                                }}
-                                className="h-5 px-1 text-[10px] font-poppins border-cyan-500/30 text-cyan-300"
-                              >
-                                Refresh
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="rounded border border-red-500/70 bg-slate-900/50 p-2 shrink-0">
-                        <p className="text-[14px] font-semibold font-poppins text-white/80 leading-relaxed">
-                          READ ME: Withdrawals are capped at 1,000,000 MORBIUS per user per day. Our contracts and code are battle-tested, but we recommend withdrawing your funds at the end of each play session as a safe practice.
-                        </p>
-                      </div>
-                    </div>
+                <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
+                  <TabsList className="flex gap-2 mb-8 bg-gray-100 p-1 rounded-2xl h-auto border-0 w-full">
+                    <TabsTrigger value="deposit" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-xl transition-all">Deposit</TabsTrigger>
+                    <TabsTrigger value="withdraw" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-xl transition-all">Withdraw</TabsTrigger>
+                    <TabsTrigger value="history" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-xl transition-all">History</TabsTrigger>
+                  </TabsList>
 
-                    <div className="min-h-0 flex flex-col overflow-hidden">
-                  <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'deposit' | 'withdraw' | 'history')} className="flex flex-col min-h-0">
-                    <TabsList className="grid w-full grid-cols-3 h-8 bg-slate-500/80 border border-cyan-500/30 rounded-sm p-0.5 shrink-0">
-                      <TabsTrigger
-                        value="deposit"
-                        className="text-xs font-poppins data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        Deposit
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="withdraw"
-                        className="text-xs font-poppins data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
-                      >
-                        <Minus className="w-3 h-3 mr-1" />
-                        Withdraw
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="history"
-                        className="text-xs font-poppins data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-sm"
-                      >
-                        <History className="w-3 h-3 mr-1" />
-                        History
-                      </TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="deposit" className="space-y-2 mt-2 min-h-0 overflow-y-auto">
-                      <div className="flex gap-1">
-                        <Button
-                          variant={depositMethod === 'pls' ? 'default' : 'outline'}
-                          size="sm"
+                  <div className="space-y-4">
+                    <TabsContent value="deposit" className="space-y-4 mt-0">
+                      <div className="flex gap-2 bg-gray-50 p-1 rounded-xl">
+                        <button
                           onClick={() => setDepositMethod('pls')}
                           disabled={controlsDisabled}
-                          className={`flex-1 h-7 text-xs ${depositMethod === 'pls' ? Theme.cyan.gradient.button : 'border-cyan-500/30 text-cyan-300'}`}
+                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'pls' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}
                         >
                           PLS
-                        </Button>
-                        <Button
-                          variant={depositMethod === 'morbius' ? 'default' : 'outline'}
-                          size="sm"
+                        </button>
+                        <button
                           onClick={() => setDepositMethod('morbius')}
                           disabled={controlsDisabled}
-                          className={`flex-1 h-7 text-xs ${depositMethod === 'morbius' ? Theme.cyan.gradient.button : 'border-cyan-500/30 text-cyan-300'}`}
+                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'morbius' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}
                         >
                           MORBIUS
-                        </Button>
+                        </button>
                       </div>
-                      <div className="space-y-0.5">
-                        <Label htmlFor="deposit-amount" className="text-[14px] font-poppins text-cyan-500">
-                          Amount ({depositMethod === 'pls' ? 'MORBIUS equiv.' : 'MORBIUS'})
-                        </Label>
-                        <Input
-                          id="deposit-amount"
-                          type="number"
-                          placeholder="0"
-                          value={depositAmount}
-                          onChange={(e) => setDepositAmount(e.target.value)}
-                          min="0"
-                          step="1"
-                          max={depositMethod === 'pls' ? maxDepositPLS : maxDepositMORBIUS}
-                          disabled={controlsDisabled}
-                          className="h-7 text-sm font-poppins bg-slate-800 border-cyan-500/30 text-white"
-                        />
+                      
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center px-1">
+                          <label className="text-sm font-medium text-gray-700">Amount</label>
+                          <span className="text-xs text-gray-500">
+                            {depositMethod === 'pls' ? (
+                              <>Avail: {maxDepositPLS} PLS{plsEquivalent && depositAmount && <> · ≈{Math.floor(Number(formatEther(plsEquivalent)))} PLS</>}</>
+                            ) : (
+                              <>Avail: {maxDepositMORBIUS} MORBIUS</>
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={depositAmount}
+                            onChange={(e) => setDepositAmount(e.target.value)}
+                            min="0"
+                            step="1"
+                            max={depositMethod === 'pls' ? maxDepositPLS : maxDepositMORBIUS}
+                            disabled={controlsDisabled}
+                            className="flex-1 w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                          />
+                        </div>
                       </div>
-                      <div className="text-[10px] text-cyan-500/60">
-                        {depositMethod === 'pls' ? (
-                          <>Avail: {maxDepositPLS} PLS{plsEquivalent && depositAmount && <> · ≈{Math.floor(Number(formatEther(plsEquivalent)))} PLS</>}</>
-                        ) : (
-                          <>Avail: {maxDepositMORBIUS} MORBIUS</>
-                        )}
-                      </div>
-                      <Button
+
+                      <button
                         onClick={depositMethod === 'pls' ? handleDepositPLS : handleDepositMORBIUS}
                         disabled={
                           controlsDisabled ||
@@ -788,138 +592,213 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           (depositMethod === 'morbius' && isLoadingAllowance) ||
                           (depositMethod === 'morbius' && isApproving)
                         }
-                        className={`w-full h-7 text-xs ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
+                        className="w-full py-4 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                       >
                         {isDepositLoading ? (
-                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Processing...</>
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</>
                         ) : depositMethod === 'morbius' && isApproving ? (
-                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Approving...</>
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Approving...</>
                         ) : depositMethod === 'morbius' && needsApproval ? (
                           'Approve'
                         ) : (
                           `Deposit ${depositMethod === 'pls' ? 'PLS' : 'MORBIUS'}`
                         )}
-                      </Button>
+                      </button>
                     </TabsContent>
 
-                    <TabsContent value="withdraw" className="space-y-2 mt-2 min-h-0 overflow-y-auto">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="withdraw-amount" className="text-[11px] text-cyan-300/80">Amount (MORBIUS)</Label>
-                        <Input
-                          id="withdraw-amount"
-                          type="number"
-                          placeholder="0"
-                          value={withdrawAmount}
-                          onChange={(e) => setWithdrawAmount(e.target.value)}
-                          min="0"
-                          step="1"
-                          max={maxWithdraw}
-                          disabled={controlsDisabled}
-                          className="h-7 text-sm bg-slate-800 border-cyan-500/30 text-white"
-                        />
+                    <TabsContent value="withdraw" className="space-y-4 mt-0">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center px-1">
+                          <label className="text-sm font-medium text-gray-700">Amount (MORBIUS)</label>
+                          <span className="text-xs text-gray-500">Avail: {maxWithdraw} MORBIUS</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={withdrawAmount}
+                            onChange={(e) => setWithdrawAmount(e.target.value)}
+                            min="0"
+                            step="1"
+                            max={maxWithdraw}
+                            disabled={controlsDisabled}
+                            className="flex-1 w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                          />
+                          <button
+                            onClick={() => setWithdrawAmount(maxWithdraw.toString())}
+                            disabled={controlsDisabled}
+                            className="px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                          >
+                            MAX
+                          </button>
+                        </div>
                       </div>
-                      <div className="text-[10px] font-poppins text-cyan-500/60">Avail: {maxWithdraw} MORBIUS</div>
-                      <Button
+
+                      <button
                         onClick={handleWithdraw}
                         disabled={controlsDisabled || !withdrawAmount}
-                        className={`w-full h-7 text-xs ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white border-0`}
+                        className="w-full py-4 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                       >
                         {isWithdrawLoading ? (
-                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Processing...</>
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</>
                         ) : (
                           'Withdraw MORBIUS'
                         )}
-                      </Button>
+                      </button>
                     </TabsContent>
 
-                    {/* History tab */}
-                    <TabsContent value="history" className="mt-2 min-h-0 flex flex-col overflow-hidden">
-                      <div className="flex items-center justify-between mb-1.5 shrink-0">
-                        <span className="text-[11px] font-poppins text-cyan-500/70">Last 50 transactions</span>
-                        <button
-                          onClick={() => { setTxLoaded(false); setTxHistory([]); fetchTxHistory() }}
-                          disabled={txLoading}
-                          className="text-cyan-500 hover:text-cyan-200 disabled:opacity-50 transition-colors"
-                          aria-label="Refresh"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${txLoading ? 'animate-spin' : ''}`} />
-                        </button>
-                      </div>
-
-                      {txLoading && (
-                        <div className="flex items-center justify-center py-8 text-[11px] font-poppins text-cyan-500/60">
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading...
+                    <TabsContent value="history" className="mt-0">
+                      <div className="border border-gray-100 rounded-2xl p-5">
+                        <div className="flex justify-between items-center mb-4">
+                          <h5 className="font-medium text-sm">Last 50 transactions</h5>
+                          <button
+                            onClick={() => { setTxLoaded(false); setTxHistory([]); fetchTxHistory() }}
+                            disabled={txLoading}
+                            className="text-gray-400 hover:text-black transition-colors"
+                          >
+                            <RefreshCw size={14} className={txLoading ? 'animate-spin' : ''} />
+                          </button>
                         </div>
-                      )}
-                      {txError && !txLoading && (
-                        <p className="text-[11px] font-poppins text-red-400 text-center py-4">{txError}</p>
-                      )}
-                      {!txLoading && !txError && txHistory.length === 0 && (
-                        <p className="text-[11px] font-poppins text-cyan-500/60 text-center py-8">No transactions yet.</p>
-                      )}
 
-                      <div className="space-y-1 overflow-y-auto min-h-0 flex-1">
-                        {txHistory.map((tx, i) => {
-                          const isDeposit = tx.type === 'deposit'
-                          const morbius = Math.floor(Number(formatEther(BigInt(tx.amount)))).toLocaleString()
-                          const date = new Date(tx.created_at)
-                          const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                          const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-                          const isCopied = copiedHash === tx.tx_hash
-                          return (
-                            <div
-                              key={i}
-                              className="flex items-start gap-2 px-2.5 py-2 rounded-md bg-slate-800/60 border border-slate-700/40"
-                            >
-                              {isDeposit ? (
-                                <ArrowDownCircle className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
-                              ) : (
-                                <ArrowUpCircle className="w-4 h-4 shrink-0 mt-0.5 text-cyan-400" />
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className={`text-[11px] font-poppins ${isDeposit ? 'text-emerald-300' : 'text-cyan-300'}`}>
-                                    {isDeposit ? '+' : '−'}{morbius}
-                                  </span>
-                                  <span className="text-[10px] text-slate-500">MORBIUS</span>
-                                </div>
-                                <div className="text-[10px] text-slate-500 mt-0.5">{dateStr} · {timeStr}</div>
-                                {tx.tx_hash && (
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    <span className="text-[10px] font-poppins text-slate-500">
-                                      {tx.tx_hash.slice(0, 10)}…{tx.tx_hash.slice(-6)}
-                                    </span>
-                                    <button
-                                      onClick={() => copyHash(tx.tx_hash!)}
-                                      className="text-slate-500 hover:text-cyan-300 transition-colors"
-                                      aria-label="Copy transaction hash"
-                                    >
-                                      {isCopied
-                                        ? <Check className="w-3 h-3 text-emerald-400" />
-                                        : <Copy className="w-3 h-3" />
-                                      }
-                                    </button>
+                        {txLoading && (
+                          <div className="flex items-center justify-center py-8 text-sm text-gray-400 bg-gray-50 rounded-xl">
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading...
+                          </div>
+                        )}
+                        {txError && !txLoading && (
+                          <p className="text-sm text-red-500 text-center py-4">{txError}</p>
+                        )}
+                        {!txLoading && !txError && txHistory.length === 0 && (
+                          <div className="text-center py-8 text-sm text-gray-400 bg-gray-50 rounded-xl">
+                            No transactions yet.
+                          </div>
+                        )}
+
+                        {!txLoading && !txError && txHistory.length > 0 && (
+                          <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">
+                            {txHistory.map((tx, i) => {
+                              const isDeposit = tx.type === 'deposit'
+                              const morbius = Math.floor(Number(formatEther(BigInt(tx.amount)))).toLocaleString()
+                              const date = new Date(tx.created_at)
+                              const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                              const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                              const isCopied = copiedHash === tx.tx_hash
+                              return (
+                                <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isDeposit ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-600'}`}>
+                                      {isDeposit ? <ArrowDownCircle size={16} /> : <ArrowUpCircle size={16} />}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-900">
+                                        {isDeposit ? '+' : '−'}{morbius} MORBIUS
+                                      </p>
+                                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                                        <span>{dateStr} · {timeStr}</span>
+                                        {tx.tx_hash && (
+                                          <button
+                                            onClick={() => copyHash(tx.tx_hash!)}
+                                            className="hover:text-black transition-colors flex items-center gap-1"
+                                          >
+                                            {isCopied ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                              <span className="text-[10px] text-slate-500 shrink-0 mt-0.5 capitalize">
-                                {isDeposit ? 'Deposit' : 'Withdraw'}
-                              </span>
-                            </div>
-                          )
-                        })}
+                                  <span className="text-xs font-medium text-gray-400 capitalize">
+                                    {tx.type}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">
+                          Expired = withdrawal was signed but the on-chain transaction was not submitted within 2 minutes. Balance refunded.
+                        </p>
                       </div>
                     </TabsContent>
-                  </Tabs>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </Tabs>
+
+                {legacyItems.filter((item) => item.reserve > BigInt(0) && !dismissedLegacy.has(item.address)).length > 0 && (
+                  <div className="mt-4 space-y-4">
+                    {legacyItems
+                      .filter((item) => item.reserve > BigInt(0) && !dismissedLegacy.has(item.address))
+                      .map((item) => {
+                        const maxAllowedWei = item.reserve > LEGACY_MAX_WITHDRAW_WEI ? LEGACY_MAX_WITHDRAW_WEI : item.reserve
+                        const rawInput = legacyWithdrawAmounts[item.address] ?? ''
+                        let amountWei: bigint
+                        try {
+                          amountWei = rawInput.trim() === '' ? maxAllowedWei : parseEther(rawInput)
+                        } catch {
+                          amountWei = 0n
+                        }
+                        const validAmount = amountWei > 0n && amountWei <= item.reserve && amountWei <= LEGACY_MAX_WITHDRAW_WEI
+                        const setMax = () => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: formatEther(maxAllowedWei) }))
+                        
+                        return (
+                          <div key={item.address} className="border border-gray-100 rounded-2xl p-5 bg-gray-50">
+                            <div className="flex justify-between items-center mb-4">
+                              <h5 className="font-medium text-sm text-gray-900">{item.label}</h5>
+                              <button onClick={() => setDismissedLegacy((prev) => new Set(prev).add(item.address))}>
+                                <X size={14} className="text-gray-400 hover:text-black transition-colors"/>
+                              </button>
+                            </div>
+                            
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-xs text-gray-500 font-medium">
+                                Balance: {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} MORBIUS
+                              </span>
+                              {item.paused && <span className="text-[10px] font-medium text-red-500">Paused</span>}
+                            </div>
+
+                            <div className="flex gap-2 mb-3">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder={formatEther(maxAllowedWei)}
+                                value={rawInput}
+                                onChange={(e) => setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: e.target.value }))}
+                                disabled={controlsDisabled}
+                                className="flex-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                              />
+                              <button
+                                type="button"
+                                onClick={setMax}
+                                disabled={controlsDisabled}
+                                className="px-4 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50"
+                              >
+                                MAX
+                              </button>
+                            </div>
+                            
+                            <div className="flex justify-between items-center">
+                              <p className="text-xs text-gray-500">Max 1M / tx</p>
+                              <button
+                                onClick={() => validAmount && handleWithdrawLegacy(item.address, amountWei, item.refetch)}
+                                disabled={item.paused || controlsDisabled || !validAmount}
+                                className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                              >
+                                {isLegacyWithdrawLoading ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Processing...</> : 'Withdraw'}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+
+                <p className="text-[10px] text-gray-400 text-center mt-8 px-4">
+                  Withdrawals capped at 1,000,000 MORBIUS/day.
+                </p>
+              </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
-      {/* Approval Modal */}
       <CustomApprovalModal
         open={showApprovalModal}
         onOpenChange={setShowApprovalModal}
