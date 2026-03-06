@@ -1,8 +1,17 @@
 'use client';
 
 import React from 'react';
+import { formatEther } from 'viem';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
+
+function formatChips(wei: string): string {
+  try {
+    return Number(formatEther(BigInt(wei))).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  } catch {
+    return wei;
+  }
+}
 
 export interface PokerSeatProps {
   seat: SeatState;
@@ -92,7 +101,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks }: P
             {empty ? 'Empty Seat' : shortAddr(seat.playerAddress!)}
           </span>
           {!empty && (
-            <span className="text-cyan-200 text-[13px] font-semibold tabular-nums">{seat.stack}</span>
+            <span className="text-cyan-200 text-[13px] font-semibold tabular-nums">{formatChips(seat.stack)}</span>
           )}
         </div>
 

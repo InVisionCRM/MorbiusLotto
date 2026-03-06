@@ -1,7 +1,12 @@
+import { formatEther } from 'viem';
 import { DatabaseService, Game, GameHand } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { TournamentService, TournamentState, TOURNAMENT_CONFIG } from './tournament.service';
 import { logger } from '../utils/logger';
+
+function formatWei(w: bigint): string {
+  return Number(formatEther(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
 
 /**
  * Simple per-key mutex using Promise chaining.
@@ -655,7 +660,7 @@ export class BlackjackGameService {
       const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
       const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
       if (currentBalance < handToSplit.betAmount) {
-        throw new Error(`Insufficient balance to split. Need ${handToSplit.betAmount.toString()}, have ${currentBalance.toString()}`);
+        throw new Error(`Insufficient balance to split. Need ${formatWei(handToSplit.betAmount)}, have ${formatWei(currentBalance)}`);
       }
       await this.dbService.deductPlayerBalance(playerAddress, handToSplit.betAmount);
       await this.dbService.updateSessionStats(game.session_id, handToSplit.betAmount, 0n, false);
@@ -808,7 +813,7 @@ export class BlackjackGameService {
       const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
       const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
       if (currentBalance < originalBet) {
-        throw new Error(`Insufficient balance to double down. Need ${originalBet.toString()}, have ${currentBalance.toString()}`);
+        throw new Error(`Insufficient balance to double down. Need ${formatWei(originalBet)}, have ${formatWei(currentBalance)}`);
       }
 
       currentHand.betAmount *= 2n;

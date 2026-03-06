@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { formatEther, parseEther } from 'viem';
 
 type Amount = bigint;
 
+/** Parse human amount (e.g. "1000" or "1,000") to wei. */
 function safeParseAmount(input: string): Amount | null {
   try {
-    const cleaned = input.trim();
+    const cleaned = input.trim().replace(/,/g, '');
     if (!cleaned) return null;
-    if (!/^[0-9]+$/.test(cleaned)) return null;
-    return BigInt(cleaned);
+    return parseEther(cleaned);
   } catch {
     return null;
   }
@@ -21,8 +22,9 @@ function clampAmount(value: Amount, min: Amount, max: Amount): Amount {
   return value;
 }
 
+/** Human-readable display (e.g. 1000000000000000000000 -> "1,000") */
 function formatAmount(v: Amount): string {
-  return v.toString();
+  return Number(formatEther(v)).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 export interface PokerActionsProps {
@@ -87,9 +89,9 @@ export function PokerActions({
 
   const handlePrimary = () => {
     if (!hasValidAmount || clamped == null) return;
-    const amt = formatAmount(clamped);
-    if (isFacingBet) onRaise(amt);
-    else onBet(amt);
+    const amtWei = clamped.toString();
+    if (isFacingBet) onRaise(amtWei);
+    else onBet(amtWei);
   };
 
   const secondaryLabel = canCheck ? 'Check' : `Call ${formatAmount(callAmt)}`;

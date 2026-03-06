@@ -1,5 +1,10 @@
 import { Pool, PoolClient } from 'pg';
+import { formatEther } from 'viem';
 import { logger } from '../utils/logger';
+
+function formatWei(w: bigint): string {
+  return Number(formatEther(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
 import { sendEscrowPayout } from '../utils/escrow-payout';
 import { setMorbiusTournamentCompleted, setMorbiusTournamentActive, hasJoinedMorbiusTournament, sendMorbiusTournamentPayout } from '../utils/morbius-tournament';
 import { getEscrowPoolStatus } from '../utils/escrow-status';
@@ -458,7 +463,7 @@ export class TournamentService {
 
     const balance = this.toBigInt(balanceResult.rows[0].balance);
     if (balance < tournament.buy_in_amount) {
-      throw new Error(`Insufficient balance for tournament buy-in. Need ${tournament.buy_in_amount.toString()}, have ${balance.toString()}`);
+      throw new Error(`Insufficient balance for tournament buy-in. Need ${formatWei(tournament.buy_in_amount)}, have ${formatWei(balance)}`);
     }
 
     // Use transaction for atomic buy-in
@@ -1842,7 +1847,7 @@ export class TournamentService {
 
       const balance = this.toBigInt(balanceResult.rows[0].balance);
       if (balance < tournament.buy_in_amount) {
-        throw new Error(`Insufficient balance for buy-in. Need ${tournament.buy_in_amount.toString()}, have ${balance.toString()}`);
+        throw new Error(`Insufficient balance for buy-in. Need ${formatWei(tournament.buy_in_amount)}, have ${formatWei(balance)}`);
       }
     }
 

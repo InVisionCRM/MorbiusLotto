@@ -1,5 +1,15 @@
 import { Pool } from 'pg';
+import { formatEther } from 'viem';
 import { logger } from '../utils/logger';
+
+function formatWei(wei: bigint | string): string {
+  try {
+    const n = Number(formatEther(BigInt(wei)));
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  } catch {
+    return String(wei);
+  }
+}
 
 export interface Player {
   id: string;
@@ -397,7 +407,7 @@ export class DatabaseService {
     if (result.rows.length === 0) {
       // Either player not found or insufficient balance
       const currentBalance = await this.getPlayerBalance(walletAddress);
-      throw new Error(`Insufficient balance: have ${currentBalance.toString()}, need ${amount.toString()}`);
+      throw new Error(`Insufficient balance: have ${formatWei(currentBalance)}, need ${formatWei(amount)}`);
     }
     return BigInt(result.rows[0].balance || '0');
   }
@@ -473,7 +483,7 @@ export class DatabaseService {
           [normalizedAddress],
         );
         const have = current.rows[0]?.balance ?? '0';
-        throw new Error(`Insufficient balance: have ${have}, need ${amount.toString()}`);
+        throw new Error(`Insufficient balance: have ${formatWei(have)}, need ${formatWei(amount)}`);
       }
       const remainingBalance = BigInt(deductResult.rows[0].balance || '0');
 
@@ -551,7 +561,7 @@ export class DatabaseService {
           [normalizedAddress],
         );
         const have = cur.rows[0]?.balance ?? '0';
-        throw new Error(`Insufficient balance: have ${have}, need ${amountWei.toString()}`);
+        throw new Error(`Insufficient balance: have ${formatWei(have)}, need ${formatWei(amountWei)}`);
       }
       const insertResult = await client.query(
         `INSERT INTO hot_withdrawal_jobs (wallet_address, amount_wei, net_to_user_wei, fee_wei, status)

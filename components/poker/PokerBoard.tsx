@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { formatEther } from 'viem';
 import { CardDisplay } from './CardDisplay';
 
 export interface PokerBoardProps {
@@ -39,7 +40,7 @@ export function PokerBoard({ communityCards, pot }: PokerBoardProps) {
             aria-hidden
           />
           <div className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-[12px] font-semibold tracking-wide text-amber-100 shadow-[0_12px_30px_rgba(0,0,0,0.55)]">
-            POT {potAmt.toString()}
+            POT {Number(formatEther(potAmt)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </div>
         </div>
       )}

@@ -7,7 +7,7 @@ import { PokerGameService, PokerTableState } from './poker-game.service';
 import { logger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
-import { createPublicClient, http, verifyTypedData, getAddress } from 'viem';
+import { createPublicClient, http, verifyTypedData, getAddress, formatEther } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { blackjackAbi } from '../abi/blackjack';
 import { getPublicClient } from '../utils/chain-client';
@@ -760,7 +760,8 @@ export class WebSocketService {
       try {
         const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
         if (balance < totalStake) {
-          return this.sendError(ws, `Insufficient balance. You have ${balance.toString()}, but need ${totalStake.toString()} (main + Perfect Pairs)`, message.requestId);
+          const fmt = (n: bigint) => Number(formatEther(n)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          return this.sendError(ws, `Insufficient balance. You have ${fmt(balance)}, but need ${fmt(totalStake)} (main + Perfect Pairs)`, message.requestId);
         }
       } catch (error) {
         logger.error('Error checking player balance:', error);
