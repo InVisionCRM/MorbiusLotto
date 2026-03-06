@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { config } from '@/lib/wagmi-config'
 import { useState } from 'react'
 import { GameLockProvider } from '@/contexts/game-lock-context'
+import { LocaleProvider } from '@/contexts/locale-context'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient once per provider instance to prevent cache resets
@@ -31,6 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <GameLockProvider>
+      <LocaleProvider>
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
@@ -49,6 +51,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           </RainbowKitProvider>
         </QueryClientProvider>
       </WagmiProvider>
+      </LocaleProvider>
     </GameLockProvider>
   )
 }

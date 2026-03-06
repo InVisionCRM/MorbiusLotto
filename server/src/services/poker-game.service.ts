@@ -227,7 +227,7 @@ export class PokerGameService {
   }
 
   /**
-   * Get full table state. Hole cards only for forPlayerAddress.
+   * Get full table state. Hole cards only for the requesting player (forPlayerAddress).
    */
   async getTableState(tableId: string, forPlayerAddress: string | null): Promise<PokerTableState> {
     const pool = this.getPool();
@@ -308,19 +308,19 @@ export class PokerGameService {
       );
       const foldedSet = new Set(foldResult.rows.map((r: any) => r.player_address));
 
+      const isHeadsUp = seatMap.size === 2;
+      const sbDisplayPos = isHeadsUp ? buttonPosition : this.nextActiveSeatPosition(buttonPosition, seatsResult.rows, maxSeats);
+      const bbDisplayPos = this.nextActiveSeatPosition(sbDisplayPos, seatsResult.rows, maxSeats);
+
       for (const seat of seats) {
         if (!seat.playerAddress) continue;
         const pos = seat.position;
         seat.isDealer = pos === buttonPosition;
-        seat.isSmallBlind = pos === (buttonPosition + 1) % maxSeats && seatMap.has((buttonPosition + 1) % maxSeats);
-        seat.isBigBlind = pos === (buttonPosition + 2) % maxSeats && seatMap.has((buttonPosition + 2) % maxSeats);
+        seat.isSmallBlind = pos === sbDisplayPos;
+        seat.isBigBlind = pos === bbDisplayPos;
         seat.folded = foldedSet.has(seat.playerAddress);
         seat.isActing = actingPosition === pos;
       }
-      const sbPos = (buttonPosition + 1) % maxSeats;
-      const bbPos = (buttonPosition + 2) % maxSeats;
-      if (seatMap.has(sbPos)) seats[sbPos].isSmallBlind = true;
-      if (seatMap.has(bbPos)) seats[bbPos].isBigBlind = true;
 
       let lastAction: PokerCurrentHand['lastAction'] = null;
       if (lastActionRow) {
@@ -659,17 +659,22 @@ export class PokerGameService {
     maxSeats: number
   ): Promise<void> {
     const communityCards = Array.isArray(hand.community_cards) ? hand.community_cards : [];
+    const foldResult = await pool.query('SELECT player_address FROM poker_hand_actions WHERE hand_id = $1 AND action = $2', [handId, 'fold']);
+    const foldedSet = new Set((foldResult.rows as { player_address: string }[]).map((r) => (r.player_address || '').toLowerCase()));
+
     const holeResult = await pool.query('SELECT player_address, cards FROM poker_hand_hole_cards WHERE hand_id = $1', [handId]);
     const pot = BigInt(hand.pot_amount ?? '0');
 
     const hands: number[][] = [];
     const addresses: string[] = [];
     for (const row of holeResult.rows) {
+      const addr = (row.player_address || '').toLowerCase();
+      if (foldedSet.has(addr)) continue;
       const cards = Array.isArray(row.cards) ? row.cards : JSON.parse(row.cards || '[]');
       const full = [...cards, ...communityCards];
       if (full.length >= 5) {
         hands.push(full);
-        addresses.push(row.player_address);
+        addresses.push(addr);
       }
     }
 
@@ -748,7 +753,16 @@ export class PokerGameService {
     const deck = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, handNumber);
     let deckIndex = 0;
 
-    const firstToAct = this.nextActiveSeatPosition((buttonSeatPos + 2) % maxSeats, seatsResult.rows, maxSeats);
+    // SB/BB by next active seat so heads-up and sparse seating work (e.g. players at 0 and 2 only).
+    const isHeadsUp = withStack.length === 2;
+    const sbSeatPos = isHeadsUp ? buttonSeatPos : this.nextActiveSeatPosition(buttonSeatPos, seatsResult.rows, maxSeats);
+    const bbSeatPos = this.nextActiveSeatPosition(sbSeatPos, seatsResult.rows, maxSeats);
+    const sbSeat = seatsResult.rows.find((r: any) => r.position === sbSeatPos);
+    const bbSeat = seatsResult.rows.find((r: any) => r.position === bbSeatPos);
+
+    // Preflop: heads-up the button (SB) acts first; otherwise first to act is after the BB.
+    const firstToAct = isHeadsUp ? buttonSeatPos : this.nextActiveSeatPosition(bbSeatPos, seatsResult.rows, maxSeats);
+
     const handInsert = await pool.query(
       `INSERT INTO poker_hands (table_id, hand_number, button_position, server_seed_hash, server_seed, client_seed, community_cards, pot_amount, street, acting_position)
        VALUES ($1, $2, $3, $4, $5, $6, '[]', 0, 'preflop', $7) RETURNING id`,
@@ -764,11 +778,6 @@ export class PokerGameService {
         [handId, seat.player_address, JSON.stringify([hole1, hole2])]
       );
     }
-
-    const sbPos = (buttonSeatPos + 1) % maxSeats;
-    const bbPos = (buttonSeatPos + 2) % maxSeats;
-    const sbSeat = seatsResult.rows.find((r: any) => r.position === sbPos);
-    const bbSeat = seatsResult.rows.find((r: any) => r.position === bbPos);
 
     let pot = 0n;
     if (sbSeat) {

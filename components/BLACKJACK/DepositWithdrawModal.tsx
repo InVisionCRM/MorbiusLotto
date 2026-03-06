@@ -565,7 +565,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className={`fixed inset-0 z-50 ${Theme.modal.overlay}`}
+              className="fixed inset-0 z-50 bg-black/20 backdrop-blur-md"
               onClick={onClose}
             />
 
@@ -577,7 +577,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               className="fixed top-[100px] left-1/2 -translate-x-1/2 z-50 pointer-events-none p-3"
             >
               <Card
-                className={`w-[98vw] max-w-[42rem] sm:max-w-[48rem] lg:max-w-3xl xl:max-w-3xl max-h-[65vh] flex flex-col overflow-hidden pointer-events-auto rounded-md ${Theme.modal.container}`}
+                className="w-[98vw] max-w-[42rem] sm:max-w-[48rem] lg:max-w-3xl xl:max-w-3xl max-h-[65vh] flex flex-col overflow-hidden pointer-events-auto rounded-md bg-black/20 backdrop-blur-md border border-white/10 shadow-2xl"
                 style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
               >
                 <CardHeader className={`flex flex-row items-center justify-between space-y-0 py-2 px-2 shrink-0 rounded-t-lg ${Theme.modal.header}`} style={{ ...Theme.inset.light }}>
@@ -870,7 +870,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           const date = new Date(tx.created_at)
                           const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                           const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-                          const isExpired = tx.status === 'expired'
                           const isCopied = copiedHash === tx.tx_hash
                           return (
                             <div
@@ -880,17 +879,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                               {isDeposit ? (
                                 <ArrowDownCircle className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
                               ) : (
-                                <ArrowUpCircle className={`w-4 h-4 shrink-0 mt-0.5 ${isExpired ? 'text-slate-500' : 'text-cyan-400'}`} />
+                                <ArrowUpCircle className="w-4 h-4 shrink-0 mt-0.5 text-cyan-400" />
                               )}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className={`text-[11px] font-poppins ${isDeposit ? 'text-emerald-300' : isExpired ? 'text-slate-400' : 'text-cyan-300'}`}>
+                                  <span className={`text-[11px] font-poppins ${isDeposit ? 'text-emerald-300' : 'text-cyan-300'}`}>
                                     {isDeposit ? '+' : '−'}{morbius}
                                   </span>
                                   <span className="text-[10px] text-slate-500">MORBIUS</span>
-                                  {isExpired && (
-                                    <span className="text-[9px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full border border-slate-600">expired</span>
-                                  )}
                                 </div>
                                 <div className="text-[10px] text-slate-500 mt-0.5">{dateStr} · {timeStr}</div>
                                 {tx.tx_hash && (

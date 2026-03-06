@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useGameLock } from '@/contexts/game-lock-context';
+import { useLocale, SUPPORTED_LOCALES } from '@/contexts/locale-context';
 import { motion } from 'motion/react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -130,6 +131,30 @@ function useNavPage(pageProp?: NavPage): NavPage {
     if (pathname?.startsWith(path)) return p;
   }
   return 'home';
+}
+
+function LanguageSelect({ open }: { open: boolean }) {
+  const { locale, setLocale, localeLabel } = useLocale();
+  return (
+    <div className="px-2 py-2">
+      <motion.div animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="flex items-center gap-2">
+        <span className="text-sm text-white whitespace-nowrap truncate min-w-0">{localeLabel}</span>
+        <select
+          value={locale}
+          onChange={(e) => setLocale(e.target.value as typeof locale)}
+          className="flex-1 min-w-0 text-sm bg-white/10 text-white border border-white/20 rounded-lg px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-cyan-500/50 appearance-none"
+          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23fff'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '1rem', paddingRight: '1.5rem' }}
+          aria-label="Select language"
+        >
+          {SUPPORTED_LOCALES.map(({ code, label }) => (
+            <option key={code} value={code} className="bg-slate-800 text-white">
+              {label}
+            </option>
+          ))}
+        </select>
+      </motion.div>
+    </div>
+  );
 }
 
 function NavContent(props: {
@@ -377,6 +402,14 @@ function NavContent(props: {
           {isAdmin && (
             <SidebarLink link={{ label: 'Admin', href: '/admin', icon: <i className="fas fa-cog w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           )}
+        </div>
+
+        {/* Language */}
+        <div className="pt-2 mt-2 border-t border-white/10">
+          <div className="px-2 py-1 overflow-hidden">
+            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Language</motion.span>
+          </div>
+          <LanguageSelect open={open} />
         </div>
 
         {/* Morbius */}
