@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Loader2, RefreshCw, Plus, ChevronDown, ChevronRight,
   CheckCircle2, Gift, TreePine, Globe, ShieldX, Trash2, XCircle,
-  Wallet, Coins, ArrowRight, ExternalLink, Info, Settings, Zap,
+  Wallet, Coins, ArrowRight, ExternalLink, Info, Settings, Zap, Layers,
 } from 'lucide-react';
 import { merkleClaimMorbiusAbi } from '@/abi/merkle-claim-morbius';
 import { ERC20_ABI } from '@/abi/erc20';
@@ -522,6 +522,7 @@ export default function AdminMerkleDropsTab() {
   const [blocklistBusy, setBlocklistBusy] = useState(false);
   const [lpPairAddresses, setLpPairAddresses] = useState<string[]>([]);
   const [seedBlocklistBusy, setSeedBlocklistBusy] = useState(false);
+  const [syncFromLpBlocklistBusy, setSyncFromLpBlocklistBusy] = useState(false);
 
   // ── Operator management ────────────────────────────────────────────────────
   const [newOperatorAddr, setNewOperatorAddr] = useState('');
@@ -686,6 +687,39 @@ export default function AdminMerkleDropsTab() {
       setSeedBlocklistBusy(false);
     }
   }, [address, adminHeaders, blocklist, lpPairAddresses, fetchBlocklist]);
+
+  const handleSyncFromLpBlocklist = useCallback(async () => {
+    if (!address) return;
+    setSyncFromLpBlocklistBusy(true);
+    setError(null);
+    const apiBaseUrl = getApiUrlOptional() ?? '';
+    try {
+      const lpRes = await fetch(`${apiBaseUrl}/api/admin/merkle-lp/blocklist`, { headers: adminHeaders() });
+      if (!lpRes.ok) throw new Error('Failed to load LP Staking blocklist');
+      const lpEntries = (await lpRes.json()) as Array<{ address: string; reason?: string | null }>;
+      const existingSet = new Set(blocklist.map((e) => e.address.toLowerCase()));
+      const toAdd = lpEntries.filter((e) => e?.address && !existingSet.has(String(e.address).toLowerCase()));
+      for (let i = 0; i < toAdd.length; i++) {
+        const entry = toAdd[i];
+        const addr = entry.address.startsWith('0x') ? entry.address : `0x${entry.address}`;
+        const res = await fetch('/api/admin/merkle/blocklist', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            address: addr,
+            reason: entry.reason?.trim() || 'From LP Staking blocklist',
+          }),
+        });
+        if (!res.ok) throw new Error(`Failed to add ${addr}`);
+        existingSet.add(addr.toLowerCase());
+      }
+      await fetchBlocklist();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to sync from LP Staking blocklist');
+    } finally {
+      setSyncFromLpBlocklistBusy(false);
+    }
+  }, [address, adminHeaders, blocklist, fetchBlocklist]);
 
   // ── Create epoch ─────────────────────────────────────────────────────────
 
@@ -1501,6 +1535,15 @@ export default function AdminMerkleDropsTab() {
             >
               {seedBlocklistBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <ShieldX className="w-3 h-3 mr-1" />}
               Add all contracts &amp; LPs to blocklist
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSyncFromLpBlocklist}
+              disabled={syncFromLpBlocklistBusy || blocklistLoading}
+              className="h-8 bg-slate-600 hover:bg-slate-500 text-white text-xs"
+            >
+              {syncFromLpBlocklistBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Layers className="w-3 h-3 mr-1" />}
+              Add all LP Staking exclusions to this blocklist
             </Button>
             <span className="text-[10px] text-slate-500">
               ({SNAPSHOT_EXCLUSION_SET.size} contracts + {lpPairAddresses.length} LP pair{lpPairAddresses.length !== 1 ? 's' : ''})
