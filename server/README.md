@@ -45,6 +45,34 @@ Stake.com-style Blackjack server with provably fair gameplay and real-time WebSo
 | `SETTLEMENT_PRIVATE_KEY` | Private key for settlements | No |
 | `PORT` | Server port (default: 3001) | No |
 | `FRONTEND_URL` | Frontend URL for CORS | No |
+| `HOT_WALLET_PRIVATE_KEY` | Hot wallet key for relayer withdrawals | Yes (for hot-wallet model) |
+| `DEPOSIT_CONFIRMATIONS_REQUIRED` | Block confirmations before crediting deposits (default: 12) | No |
+| `HOT_WALLET_LOW_BALANCE_WEI` | If set, admin health returns hot wallet MORBIUS balance and a low-balance warning | No |
+
+### Hot wallet / Cold wallet (relayer model)
+
+When using the hot-wallet relayer for withdrawals:
+
+- **Hot wallet**: Holds only **~5–10%** of platform liquidity (enough to cover a day of normal withdrawals). This is the wallet whose private key is in `HOT_WALLET_PRIVATE_KEY`. If the server is compromised, only this fraction is at risk.
+- **Cold wallet**: The rest of the funds (e.g. 90%+) should be kept in a hardware wallet (e.g. Ledger) that never touches the server. Refill the hot wallet manually from cold when it runs low.
+- **Monitoring**: Set `HOT_WALLET_LOW_BALANCE_WEI` in env; then `GET /api/admin/health` includes `hotWalletMorbius` and `hotWalletLowWarning` so you can alert when the hot wallet is below threshold.
+
+### Production deployment (hot-wallet)
+
+Before going live with the hot-wallet relayer:
+
+1. **Run migrations** (from repo root):
+   ```bash
+   node server/run-migration.js migrations/050_hot_withdrawal_jobs.sql
+   node server/run-migration.js migrations/051_pending_deposits.sql
+   ```
+2. **Set `HOT_WALLET_PRIVATE_KEY`** in production server env (0x-prefixed hex). Keep it secret; never commit.
+3. **Fund the hot wallet** with enough MORBIUS to cover withdrawals (e.g. 5–10% of platform liquidity). Refill from cold when low.
+4. **Optional:** Set `HOT_WALLET_LOW_BALANCE_WEI` so admin health can alert when the hot wallet is low.
+5. **Optional:** `DEPOSIT_CONFIRMATIONS_REQUIRED=12` (default); increase for more reorg safety.
+6. **User experience:** Deposits are credited only after N block confirmations (~1–3 min). Withdrawals return 202 and complete asynchronously; the UI polls status until done.
+
+No other code changes are required; the frontend already uses the new withdraw flow (enqueue + poll).
 
 ## API Endpoints
 

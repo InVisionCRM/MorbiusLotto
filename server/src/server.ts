@@ -22,12 +22,29 @@ import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
+import { createWalletClient, http } from 'viem';
+import { pulsechain } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
 
 const ERC20_BALANCE_OF_ABI = [
   { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 ] as const;
+
+const ERC20_TRANSFER_ABI = [
+  { name: 'transfer', type: 'function', stateMutability: 'nonpayable' as const, inputs: [{ name: 'to', type: 'address' }, { name: 'value', type: 'uint256' }], outputs: [{ type: 'bool' }] },
+] as const;
+
+function getHotWalletClient(): ReturnType<typeof createWalletClient> | null {
+  const pk = process.env.HOT_WALLET_PRIVATE_KEY as `0x${string}` | undefined;
+  if (!pk || !pk.startsWith('0x')) return null;
+  const account = privateKeyToAccount(pk);
+  return createWalletClient({
+    account,
+    chain: pulsechain,
+    transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+  });
+}
 
 // Admin: comma-separated wallet addresses (server-side, for /api/admin/*)
 const ADMIN_WALLETS: string[] = (process.env.ADMIN_WALLETS || '')
@@ -1124,7 +1141,39 @@ async function initializeServices() {
           keno: KENO_ADDRESS,
           lottery: LOTTERY_INSTANT_ADDRESS,
         };
-        sendJson(res, { api, ws, games, morbius, blackjackReservesByContract, contractAddresses });
+
+        // Optional: hot wallet MORBIUS balance and low-balance warning (set HOT_WALLET_LOW_BALANCE_WEI to enable)
+        let hotWalletMorbius: string | undefined;
+        let hotWalletLowWarning: boolean | undefined;
+        const lowBalanceThreshold = process.env.HOT_WALLET_LOW_BALANCE_WEI;
+        if (lowBalanceThreshold) {
+          const wallet = getHotWalletClient();
+          if (wallet?.account?.address) {
+            try {
+              const bal = await client.readContract({
+                address: MORBIUS_TOKEN_ADDRESS,
+                abi: ERC20_BALANCE_OF_ABI,
+                functionName: 'balanceOf',
+                args: [wallet.account.address],
+              }) as bigint;
+              hotWalletMorbius = bal.toString();
+              hotWalletLowWarning = bal < BigInt(lowBalanceThreshold);
+            } catch {
+              hotWalletMorbius = '0';
+              hotWalletLowWarning = true;
+            }
+          }
+        }
+
+        sendJson(res, {
+          api,
+          ws,
+          games,
+          morbius,
+          blackjackReservesByContract,
+          contractAddresses,
+          ...(hotWalletMorbius !== undefined && { hotWalletMorbius, hotWalletLowWarning }),
+        });
       } catch (error) {
         logger.error('Error in admin health:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -1675,12 +1724,10 @@ async function initializeServices() {
       }
     });
 
-    // Deposit notify: frontend calls this immediately after a deposit tx is confirmed so it
-    // appears in history right away (before the next chain-analytics scan picks it up).
-    // Amount and player come from the frontend; tx hash is trusted as display-only data.
+    // Deposit notify: record deposit as pending; balance is credited only after N block confirmations (reorg protection).
     app.post('/api/deposit/notify', async (req, res) => {
       try {
-        const { walletAddress, txHash, amount } = req.body;
+        const { walletAddress, txHash, amount, blockNumber } = req.body;
         if (!walletAddress || typeof walletAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(walletAddress)) {
           return res.status(400).json({ error: 'Invalid wallet address' });
         }
@@ -1693,8 +1740,22 @@ async function initializeServices() {
         let amountBigInt: bigint;
         try { amountBigInt = BigInt(amount); } catch { return res.status(400).json({ error: 'Invalid amount' }); }
         if (amountBigInt <= 0n) return res.status(400).json({ error: 'Amount must be positive' });
-        await dbService.logDeposit(walletAddress, amountBigInt, txHash, null);
-        return res.status(200).json({ ok: true });
+        const confirmationsRequired = Number(process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || '12');
+        let blockNum: bigint | null = null;
+        if (blockNumber != null) {
+          try { blockNum = BigInt(blockNumber); } catch { /* ignore */ }
+        }
+        if (blockNum == null) {
+          try {
+            const publicClient = getPublicClient();
+            const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+            if (receipt?.blockNumber != null) blockNum = receipt.blockNumber;
+          } catch {
+            // Confirmation job will fetch block_number later
+          }
+        }
+        await dbService.insertPendingDeposit(walletAddress, amountBigInt, txHash, blockNum, confirmationsRequired);
+        return res.status(200).json({ ok: true, message: 'Deposit recorded; balance will update after confirmations' });
       } catch (error) {
         logger.error('Error in deposit/notify:', error);
         return res.status(500).json({ error: 'Internal server error' });
@@ -1845,6 +1906,116 @@ async function initializeServices() {
         }
       } catch (err) {
         logger.error('Error expiring pending withdrawals:', err);
+      }
+    }, 60_000); // every minute
+
+    // Hot withdrawal queue worker: process one queued job at a time (broadcast only; confirmation worker finalizes).
+    const HOT_WITHDRAW_QUEUE_INTERVAL_MS = Number(process.env.HOT_WITHDRAW_QUEUE_INTERVAL_MS) || 3000;
+    setInterval(async () => {
+      const walletClient = getHotWalletClient();
+      if (!walletClient) return;
+      try {
+        const job = await dbService.claimNextHotWithdrawalJob();
+        if (!job) return;
+        const netToUser = BigInt(job.net_to_user_wei);
+        const amountWei = BigInt(job.amount_wei);
+        const addr = job.wallet_address as `0x${string}`;
+        try {
+          const txHash = await walletClient.writeContract({
+            account: walletClient.account!,
+            chain: pulsechain,
+            address: MORBIUS_TOKEN_ADDRESS,
+            abi: ERC20_TRANSFER_ABI,
+            functionName: 'transfer',
+            args: [addr, netToUser],
+          });
+          await dbService.updateHotWithdrawalJob(job.id, { status: 'pending_confirmation', tx_hash: txHash });
+          logger.info('Hot withdrawal broadcast', { jobId: job.id, txHash, address: job.wallet_address });
+        } catch (txErr: any) {
+          const errMsg = txErr?.message?.slice(0, 500) ?? String(txErr);
+          await dbService.updateHotWithdrawalJob(job.id, {
+            status: 'failed',
+            error_message: errMsg,
+          });
+          await dbService.refundHotWithdrawalJob(job.wallet_address, amountWei);
+          logger.error('Hot withdrawal broadcast failed, refunded', { jobId: job.id, error: errMsg });
+        }
+      } catch (err) {
+        logger.error('Hot withdrawal queue worker error', err);
+      }
+    }, HOT_WITHDRAW_QUEUE_INTERVAL_MS);
+
+    // Hot withdrawal confirmation worker: poll receipts; complete or fail (with 15min timeout for dropped tx).
+    const HOT_WITHDRAW_CONFIRM_PENDING_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+    setInterval(async () => {
+      try {
+        const publicClient = getPublicClient();
+        const jobs = await dbService.getHotWithdrawalJobsPendingConfirmation();
+        for (const job of jobs) {
+          const ageMs = Date.now() - new Date(job.updated_at).getTime();
+          const markDroppedAndRefund = async () => {
+            await dbService.updateHotWithdrawalJob(job.id, {
+              status: 'failed',
+              error_message: 'Transaction not found after 15 minutes (dropped?)',
+            });
+            await dbService.refundHotWithdrawalJob(job.wallet_address, BigInt(job.amount_wei));
+            logger.warn('Hot withdrawal dropped/timeout, refunded', { jobId: job.id, txHash: job.tx_hash });
+          };
+          try {
+            const receipt = await publicClient.getTransactionReceipt({ hash: job.tx_hash as `0x${string}` });
+            if (receipt) {
+              if (receipt.status === 'success') {
+                await dbService.updateHotWithdrawalJob(job.id, { status: 'completed' });
+                await dbService.addToBlackjackWithdrawnTotal(BigInt(job.amount_wei));
+                await dbService.recordHotWalletWithdrawal(job.wallet_address, BigInt(job.amount_wei), job.tx_hash);
+                logger.info('Hot withdrawal confirmed', { jobId: job.id, txHash: job.tx_hash });
+              } else {
+                await dbService.updateHotWithdrawalJob(job.id, { status: 'failed', error_message: 'Transaction reverted on-chain' });
+                await dbService.refundHotWithdrawalJob(job.wallet_address, BigInt(job.amount_wei));
+                logger.warn('Hot withdrawal reverted, refunded', { jobId: job.id, txHash: job.tx_hash });
+              }
+            } else if (ageMs > HOT_WITHDRAW_CONFIRM_PENDING_TIMEOUT_MS) {
+              await markDroppedAndRefund();
+            }
+          } catch (receiptErr: any) {
+            if (ageMs > HOT_WITHDRAW_CONFIRM_PENDING_TIMEOUT_MS) {
+              await markDroppedAndRefund();
+            }
+          }
+        }
+      } catch (err) {
+        logger.error('Hot withdrawal confirmation worker error', err);
+      }
+    }, 30_000); // every 30s
+
+    // Pending deposits confirmation: credit balance only after N block confirmations (reorg protection).
+    setInterval(async () => {
+      try {
+        const publicClient = getPublicClient();
+        const currentBlock = await publicClient.getBlockNumber();
+        const pending = await dbService.getPendingDepositsForConfirmation();
+        for (const row of pending) {
+          let blockNumber = row.block_number != null ? BigInt(row.block_number) : null;
+          if (blockNumber == null) {
+            try {
+              const receipt = await publicClient.getTransactionReceipt({ hash: row.tx_hash as `0x${string}` });
+              if (receipt?.blockNumber != null) {
+                blockNumber = receipt.blockNumber;
+                await dbService.updatePendingDepositBlockNumber(row.id, blockNumber);
+              }
+            } catch {
+              continue;
+            }
+          }
+          if (blockNumber == null) continue;
+          const confirmations = Number(currentBlock - blockNumber);
+          if (confirmations >= row.confirmations_required) {
+            await dbService.creditPendingDeposit(row.id);
+            logger.info('Deposit confirmed and credited', { wallet: row.wallet_address, txHash: row.tx_hash, confirmations });
+          }
+        }
+      } catch (err) {
+        logger.error('Pending deposits confirmation worker error', err);
       }
     }, 60_000); // every minute
 
@@ -2135,6 +2306,77 @@ async function initializeServices() {
       } catch (error) {
         logger.error('Error confirming withdrawal:', error);
         return res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Hot-wallet auto-withdrawal (Stake/Rollbit model): enqueue only; worker broadcasts; confirmation worker finalizes.
+    app.post('/api/withdraw', async (req, res) => {
+      try {
+        const { address, amount } = req.body;
+
+        if (!address || typeof address !== 'string') {
+          return res.status(400).json({ error: 'Address required' });
+        }
+        const normalizedAddress = address.toLowerCase().startsWith('0x')
+          ? address.toLowerCase()
+          : `0x${address.toLowerCase()}`;
+        if (normalizedAddress.length !== 42) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+
+        const amountBigInt = amount != null ? BigInt(String(amount)) : 0n;
+        if (amountBigInt < MIN_WITHDRAWAL_WEI) {
+          return res.status(400).json({ error: 'Amount required (min 1 MORBIUS)', minWei: MIN_WITHDRAWAL_WEI.toString() });
+        }
+
+        const walletClient = getHotWalletClient();
+        if (!walletClient) {
+          logger.error('Hot wallet not configured (HOT_WALLET_PRIVATE_KEY)');
+          return res.status(503).json({ error: 'Withdrawals temporarily unavailable' });
+        }
+
+        const feeBps = 500n; // 5%
+        const feeAmount = (amountBigInt * feeBps) / 10000n;
+        const netToUser = amountBigInt - feeAmount;
+
+        const jobId = await dbService.enqueueHotWithdrawal(
+          normalizedAddress,
+          amountBigInt,
+          netToUser,
+          feeAmount,
+        );
+
+        return res.status(202).json({
+          jobId,
+          message: 'Queued',
+          status: 'queued',
+        });
+      } catch (error: any) {
+        if (error?.message?.startsWith('Insufficient balance')) {
+          return res.status(400).json({ error: error.message });
+        }
+        logger.error('Withdrawal enqueue error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.get('/api/withdraw/status/:jobId', async (req, res) => {
+      try {
+        const { jobId } = req.params;
+        if (!jobId) return res.status(400).json({ error: 'jobId required' });
+        const job = await dbService.getHotWithdrawalJobById(jobId);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+        const payload: { jobId: string; status: string; txHash?: string; error?: string; netToUser?: string } = {
+          jobId: job.id,
+          status: job.status,
+        };
+        if (job.tx_hash) payload.txHash = job.tx_hash;
+        if (job.error_message) payload.error = job.error_message;
+        if (job.net_to_user_wei) payload.netToUser = job.net_to_user_wei;
+        return res.status(200).json(payload);
+      } catch (error) {
+        logger.error('Withdraw status error:', error);
+        res.status(500).json({ error: 'Internal server error' });
       }
     });
 

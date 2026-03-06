@@ -126,9 +126,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     deposit,
     depositMORBIUS,
     withdrawLegacy,
-    withdrawWithSignature,
     withdrawTx,
-    withdrawWithSignatureTx,
   } = useBlackjackContract()
 
   // Legacy contracts: balances in previous Blackjack contracts (after upgrades)
@@ -393,210 +391,104 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
     approve(amount)
   }
 
-  // Handle withdrawal - uses server-signed withdrawWithSignature for off-chain balance support
+  // Handle withdrawal — hot-wallet model: enqueue, then poll status until completed or failed.
   const handleWithdraw = async () => {
-    if (!withdrawAmount || !publicClient || !address) return
+    if (!withdrawAmount || !address) return
 
-    const signedForAddress = address
-    const amountWei = parseEther(withdrawAmount)
-
-    // Validate amount is positive
-    if (amountWei <= BigInt(0)) {
-      toast.error('Invalid amount', {
-        description: 'Please enter a positive amount to withdraw',
-      })
+    let amountWei: bigint
+    try {
+      amountWei = parseEther(withdrawAmount)
+    } catch {
+      toast.error('Invalid amount', { description: 'Please enter a valid number' })
       return
     }
 
-    // Validate against off-chain balance (source of truth for game winnings)
-    if (offChainBalance !== undefined && offChainBalance !== null && amountWei > offChainBalance) {
-      toast.error('Insufficient balance', {
-        description: `Your withdrawable balance is ${Math.floor(Number(formatEther(offChainBalance))).toLocaleString()} MORBIUS`,
-      })
+    if (offChainBalance !== undefined && amountWei > offChainBalance) {
+      toast.error('Insufficient balance')
       return
     }
 
     setIsPreparingWithdraw(true)
-
-    // Show persistent loading toast
-    const toastId = toast.loading('Preparing withdrawal...', {
-      description: 'Getting server authorization...',
-    })
+    const toastId = toast.loading('Withdrawal queued...')
 
     try {
-      // Step 1: Get server signature for the withdrawal
       const serverUrl = getBlackjackServerUrl()
-      const response = await fetch(`${serverUrl}/api/withdraw/prepare`, {
+      const response = await fetch(`${serverUrl}/api/withdraw`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          address: address,
-          requestedAmount: amountWei.toString(),
+          address,
+          amount: amountWei.toString(),
         }),
       })
 
-      if (response.status === 409) {
-        setIsPreparingWithdraw(false)
-        const data = await response.json().catch(() => ({}))
-        const msg = data?.error || 'Withdrawal conflict.'
-        toast.error('Withdrawal failed', { id: toastId, description: msg })
-        return
-      }
+      const data = await response.json()
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Server error: ${response.status}`)
+        throw new Error(data.error || 'Withdrawal failed')
       }
 
-      const { amount, nonce, expiryTimestamp, v, r, s } = await response.json()
-
-      // Server authorization complete, wallet tx state will take over
-      setIsPreparingWithdraw(false)
-
-      // Signature is valid only for the wallet that requested it; submitting from another wallet causes "Invalid signature"
-      const currentAddress = latestAddressRef.current
-      if (!currentAddress || currentAddress.toLowerCase() !== signedForAddress.toLowerCase()) {
-        toast.error('Wallet changed', {
-          id: toastId,
-          description: 'Please use the same wallet that requested this withdrawal. Request a new withdrawal from the currently connected wallet.',
-        })
-        return
+      const jobId = data.jobId
+      if (!jobId) {
+        throw new Error('Server did not return jobId')
       }
 
-      // Server already deducted balance; refresh so current balance and playable amount drop immediately (player cannot bet the pending amount)
-      if (onRefreshBalance) {
-        try {
-          await onRefreshBalance()
-        } catch (_) {
-          /* non-fatal */
+      const pollIntervalMs = 2000
+      const maxPolls = 120
+      for (let i = 0; i < maxPolls; i++) {
+        const statusRes = await fetch(`${serverUrl}/api/withdraw/status/${jobId}`)
+        const statusData = await statusRes.json()
+        if (!statusRes.ok) {
+          throw new Error(statusData.error || 'Failed to get status')
         }
-      }
+        const status = statusData.status as string
+        const txHash = statusData.txHash as string | undefined
 
-      // Update toast for wallet confirmation
-      toast.loading('Confirm in wallet...', {
-        id: toastId,
-        description: `Withdrawing ${Math.floor(Number(formatEther(BigInt(amount)))).toLocaleString()} MORBIUS`,
-      })
-
-      // Step 2: Call the contract with the server signature
-      const txHash = await withdrawWithSignature(
-        BigInt(amount),
-        BigInt(nonce),
-        BigInt(expiryTimestamp),
-        v,
-        r as `0x${string}`,
-        s as `0x${string}`
-      )
-
-      // Update toast for blockchain confirmation
-      toast.loading('Transaction processing...', {
-        id: toastId,
-        description: 'Waiting for blockchain confirmation...',
-      })
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
-
-      // Check if the transaction actually succeeded on-chain
-      if (receipt.status === 'reverted') {
-        throw new Error(
-          'Transaction reverted on-chain. Common causes: contract may not have enough MORBIUS to cover the withdrawal, or daily withdrawal limit exceeded. Your balance will be refunded automatically once the signed withdrawal expires (about 15 minutes).'
-        )
-      }
-
-      // Mark pending withdrawal completed so expiry cron never refunds (prevents double withdrawal)
-      let confirmOk = false
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const res = await fetch(`${serverUrl}/api/withdraw/confirm`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address, nonce: String(nonce), txHash }),
+        if (status === 'completed') {
+          toast.success('Withdrawal successful!', {
+            id: toastId,
+            description: txHash ? `Sent to your wallet. Tx: ${txHash.slice(0, 10)}...` : 'Sent to your wallet.',
           })
-          if (res.ok) {
-            confirmOk = true
-            break
-          }
-        } catch (e) {
-          console.error(`Withdraw confirm attempt ${attempt} failed:`, e)
+          if (onRefreshBalance) await onRefreshBalance()
+          if (onWithdrawSuccess) await Promise.resolve(onWithdrawSuccess())
+          setWithdrawAmount('')
+          setTxLoaded(false)
+          return
         }
-        if (attempt < 3) await new Promise((r) => setTimeout(r, 1000))
-      }
-      if (!confirmOk) {
-        console.error('Withdraw confirm failed after 3 attempts — balance may double-credit if you withdraw again. Refresh the page.')
+        if (status === 'failed') {
+          toast.error('Withdrawal failed', {
+            id: toastId,
+            description: (statusData.error as string) || 'Transaction failed or was dropped.',
+          })
+          if (onRefreshBalance) await onRefreshBalance()
+          return
+        }
+
+        if (status === 'pending_confirmation' && txHash) {
+          toast.loading('Confirming on chain...', {
+            id: toastId,
+            description: `Tx: ${txHash.slice(0, 10)}...`,
+          })
+        } else if (status === 'queued' || status === 'broadcasting') {
+          toast.loading('Processing withdrawal...', { id: toastId })
+        }
+
+        await new Promise((r) => setTimeout(r, pollIntervalMs))
       }
 
-      // Show success
-      toast.success('Withdrawal successful', {
+      toast.error('Withdrawal timed out', {
         id: toastId,
-        description: `Withdrew ${Math.floor(Number(formatEther(BigInt(amount)))).toLocaleString()} MORBIUS`,
-        duration: 5000,
+        description: 'Check your balance or transaction history. If funds were deducted, contact support.',
       })
-
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      if (onBalanceSync) {
-        try {
-          await onBalanceSync()
-        } catch (syncErr) {
-          console.error('Balance sync failed after withdrawal:', syncErr)
-          toast.info('Refresh the page to update your balance', { duration: 4000 })
-        }
-      }
-      if (onWithdrawSuccess) {
-        try {
-          await Promise.resolve(onWithdrawSuccess())
-        } catch (err) {
-          console.error('onWithdrawSuccess failed:', err)
-        }
-      }
-      setWithdrawAmount('')
-      setTxLoaded(false) // Invalidate history so it refreshes on next view
+      if (onRefreshBalance) await onRefreshBalance()
     } catch (error: any) {
+      toast.error('Withdrawal failed', {
+        id: toastId,
+        description: error?.message ?? 'Something went wrong',
+      })
+      if (onRefreshBalance) await onRefreshBalance()
+    } finally {
       setIsPreparingWithdraw(false)
-      console.error('Withdrawal failed:', error)
-
-      // Parse specific error types for better user feedback
-      const errorMessage = error?.message || ''
-
-      if (errorMessage.includes('rejected') || errorMessage.includes('denied') || errorMessage.includes('cancelled')) {
-        toast.error('Transaction cancelled', {
-          id: toastId,
-          description: 'You cancelled the transaction',
-        })
-      } else if (errorMessage.includes('Contract liquidity is too low') || errorMessage.includes('Insufficient contract balance') || errorMessage.includes('Insufficient') || errorMessage.includes('insufficient')) {
-        toast.error('Contract liquidity low', {
-          id: toastId,
-          description: errorMessage.includes('Contract liquidity is too low')
-            ? errorMessage.slice(0, 200)
-            : errorMessage.includes('Insufficient contract balance')
-              ? 'The Blackjack contract does not have enough MORBIUS to cover this withdrawal. Try a smaller amount or contact support.'
-              : errorMessage,
-        })
-      } else if (errorMessage.includes('Daily withdrawal limit exceeded')) {
-        toast.error('Daily limit exceeded', {
-          id: toastId,
-          description: 'You hit the per-user or global daily withdrawal cap. Your balance will be refunded within 2 minutes. Try again tomorrow or withdraw a smaller amount.',
-        })
-      } else if (errorMessage.includes('Invalid signature')) {
-        toast.error('Invalid signature', {
-          id: toastId,
-          description: 'Server contract config may not match this app (BLACKJACK_ADDRESS / authorizedServer). Your balance will be refunded within 2 minutes. Contact support if this persists.',
-        })
-      } else if (errorMessage.includes('gas')) {
-        toast.error('Gas estimation failed', {
-          id: toastId,
-          description: 'Unable to estimate gas. The transaction may fail.',
-        })
-      } else if (errorMessage.includes('Server error') || errorMessage.includes('fetch')) {
-        toast.error('Server error', {
-          id: toastId,
-          description: 'Could not connect to the game server. Please try again.',
-        })
-      } else {
-        toast.error('Withdrawal failed', {
-          id: toastId,
-          description: errorMessage.slice(0, 100) || 'There was an error processing your withdrawal',
-        })
-      }
     }
   }
 
@@ -611,7 +503,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         : 0
 
   const isDepositLoading = depositTx.isPending || depositMORBIISTx.isPending
-  const isWithdrawLoading = isPreparingWithdraw || withdrawWithSignatureTx.isPending
+  const isWithdrawLoading = isPreparingWithdraw
   const isLegacyWithdrawLoading = withdrawTx.isPending
   /** Disable all deposit/withdraw controls when any tx is pending to avoid double-submits */
   const controlsDisabled = isDepositLoading || isWithdrawLoading || isLegacyWithdrawLoading

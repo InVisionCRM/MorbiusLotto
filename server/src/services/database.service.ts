@@ -512,6 +512,237 @@ export class DatabaseService {
     return result.rows.length > 0;
   }
 
+  /**
+   * Record a completed hot-wallet withdrawal for history (shows in getPlayerTransactionHistory).
+   * Uses a synthetic negative nonce so it does not clash with signature-based pending withdrawals.
+   */
+  async recordHotWalletWithdrawal(walletAddress: string, amount: bigint, txHash: string): Promise<void> {
+    const normalizedAddress = this.normalizeAddress(walletAddress);
+    const nonce = -BigInt(Date.now()) * 1000000n - BigInt(Math.floor(Math.random() * 1000000));
+    await this.pool.query(
+      `INSERT INTO pending_withdrawals (nonce, wallet_address, amount, status, tx_hash)
+       VALUES ($1::NUMERIC, $2, $3::NUMERIC, 'completed', $4)`,
+      [nonce.toString(), normalizedAddress, amount.toString(), txHash],
+    );
+  }
+
+  // ============================================
+  // Hot Withdrawal Jobs (queue + confirmation)
+  // ============================================
+
+  /** Enqueue a hot-wallet withdrawal: deduct balance and insert job in one transaction. Returns job id. */
+  async enqueueHotWithdrawal(
+    walletAddress: string,
+    amountWei: bigint,
+    netToUserWei: bigint,
+    feeWei: bigint,
+  ): Promise<string> {
+    const normalizedAddress = this.normalizeAddress(walletAddress);
+    return this.withTransaction(async (client) => {
+      const deductResult = await client.query(
+        `UPDATE players SET balance = balance - $2::NUMERIC
+         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+         RETURNING id`,
+        [normalizedAddress, amountWei.toString()],
+      );
+      if (deductResult.rows.length === 0) {
+        const cur = await client.query(
+          `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`,
+          [normalizedAddress],
+        );
+        const have = cur.rows[0]?.balance ?? '0';
+        throw new Error(`Insufficient balance: have ${have}, need ${amountWei.toString()}`);
+      }
+      const insertResult = await client.query(
+        `INSERT INTO hot_withdrawal_jobs (wallet_address, amount_wei, net_to_user_wei, fee_wei, status)
+         VALUES ($1, $2::NUMERIC, $3::NUMERIC, $4::NUMERIC, 'queued')
+         RETURNING id`,
+        [normalizedAddress, amountWei.toString(), netToUserWei.toString(), feeWei.toString()],
+      );
+      return insertResult.rows[0].id;
+    });
+  }
+
+  /** Claim next queued job: SELECT FOR UPDATE SKIP LOCKED and set status = 'broadcasting' in one transaction. Returns null if none. */
+  async claimNextHotWithdrawalJob(): Promise<{
+    id: string;
+    wallet_address: string;
+    amount_wei: string;
+    net_to_user_wei: string;
+    fee_wei: string;
+    created_at: Date;
+  } | null> {
+    return this.withTransaction(async (client) => {
+      const result = await client.query(
+        `SELECT id, wallet_address, amount_wei, net_to_user_wei, fee_wei, created_at
+         FROM hot_withdrawal_jobs
+         WHERE status = 'queued'
+         ORDER BY created_at ASC
+         LIMIT 1
+         FOR UPDATE SKIP LOCKED`,
+      );
+      if (result.rows.length === 0) return null;
+      const row = result.rows[0];
+      await client.query(
+        `UPDATE hot_withdrawal_jobs SET status = 'broadcasting', updated_at = NOW() WHERE id = $1`,
+        [row.id],
+      );
+      return row;
+    });
+  }
+
+  /** Update job status (and optionally tx_hash, error_message). */
+  async updateHotWithdrawalJob(
+    jobId: string,
+    updates: { status: string; tx_hash?: string | null; error_message?: string | null },
+  ): Promise<void> {
+    const sets: string[] = ['status = $2', 'updated_at = NOW()'];
+    const vals: (string | null)[] = [jobId, updates.status];
+    let i = 3;
+    if (updates.tx_hash !== undefined) {
+      sets.push(`tx_hash = $${i++}`);
+      vals.push(updates.tx_hash);
+    }
+    if (updates.error_message !== undefined) {
+      sets.push(`error_message = $${i++}`);
+      vals.push(updates.error_message);
+    }
+    await this.pool.query(
+      `UPDATE hot_withdrawal_jobs SET ${sets.join(', ')} WHERE id = $1`,
+      vals,
+    );
+  }
+
+  /** Get job by id for status API. */
+  async getHotWithdrawalJobById(jobId: string): Promise<{
+    id: string;
+    wallet_address: string;
+    amount_wei: string;
+    net_to_user_wei: string;
+    status: string;
+    tx_hash: string | null;
+    error_message: string | null;
+    created_at: Date;
+    updated_at: Date;
+  } | null> {
+    const result = await this.pool.query(
+      `SELECT id, wallet_address, amount_wei, net_to_user_wei, status, tx_hash, error_message, created_at, updated_at
+       FROM hot_withdrawal_jobs WHERE id = $1`,
+      [jobId],
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  }
+
+  /** List jobs in pending_confirmation for the confirmation worker. */
+  async getHotWithdrawalJobsPendingConfirmation(): Promise<
+    Array<{ id: string; wallet_address: string; amount_wei: string; tx_hash: string; created_at: Date; updated_at: Date }>
+  > {
+    const result = await this.pool.query(
+      `SELECT id, wallet_address, amount_wei, tx_hash, created_at, updated_at
+       FROM hot_withdrawal_jobs
+       WHERE status = 'pending_confirmation' AND tx_hash IS NOT NULL`,
+    );
+    return result.rows;
+  }
+
+  /** Refund balance for a failed hot withdrawal job. */
+  async refundHotWithdrawalJob(walletAddress: string, amountWei: bigint): Promise<void> {
+    const normalizedAddress = this.normalizeAddress(walletAddress);
+    await this.pool.query(
+      `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+      [normalizedAddress, amountWei.toString()],
+    );
+  }
+
+  // ============================================
+  // Pending Deposits (reorg protection)
+  // ============================================
+
+  /** Insert a pending deposit (do not credit balance until confirmations). */
+  async insertPendingDeposit(
+    walletAddress: string,
+    amountWei: bigint,
+    txHash: string,
+    blockNumber: bigint | null,
+    confirmationsRequired: number = 12,
+  ): Promise<void> {
+    const normalizedAddress = this.normalizeAddress(walletAddress);
+    await this.pool.query(
+      `INSERT INTO pending_deposits (wallet_address, amount_wei, tx_hash, block_number, confirmations_required, status)
+       VALUES ($1, $2::NUMERIC, $3, $4, $5, 'pending_confirmation')
+       ON CONFLICT (tx_hash) DO NOTHING`,
+      [
+        normalizedAddress,
+        amountWei.toString(),
+        txHash,
+        blockNumber != null ? Number(blockNumber) : null,
+        confirmationsRequired,
+      ],
+    );
+  }
+
+  /** Get pending deposits that need confirmation check. */
+  async getPendingDepositsForConfirmation(): Promise<
+    Array<{ id: string; wallet_address: string; amount_wei: string; tx_hash: string; block_number: number | null; confirmations_required: number }>
+  > {
+    const result = await this.pool.query(
+      `SELECT id, wallet_address, amount_wei, tx_hash, block_number, confirmations_required
+       FROM pending_deposits
+       WHERE status = 'pending_confirmation'`,
+    );
+    return result.rows;
+  }
+
+  /** Mark pending deposit as credited and credit players.balance. */
+  async creditPendingDeposit(jobId: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const row = await client.query(
+        `SELECT wallet_address, amount_wei, tx_hash, block_number
+         FROM pending_deposits
+         WHERE id = $1 AND status = 'pending_confirmation'
+         FOR UPDATE`,
+        [jobId],
+      );
+      if (row.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      const { wallet_address, amount_wei, tx_hash, block_number } = row.rows[0];
+      await client.query(
+        `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+        [wallet_address, amount_wei],
+      );
+      await client.query(
+        `INSERT INTO player_deposits (wallet_address, amount, tx_hash, block_number)
+         VALUES ($1, $2::NUMERIC, $3, $4)
+         ON CONFLICT (tx_hash) DO NOTHING`,
+        [wallet_address, amount_wei, tx_hash, block_number ?? null],
+      );
+      await client.query(
+        `UPDATE pending_deposits SET status = 'credited', updated_at = NOW() WHERE id = $1`,
+        [jobId],
+      );
+      await client.query('COMMIT');
+      return true;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Update pending deposit block_number (e.g. after fetching from chain). */
+  async updatePendingDepositBlockNumber(jobId: string, blockNumber: bigint): Promise<void> {
+    await this.pool.query(
+      `UPDATE pending_deposits SET block_number = $2, updated_at = NOW() WHERE id = $1`,
+      [jobId, Number(blockNumber)],
+    );
+  }
+
   /** Get stored Blackjack platform totals (deposit/withdraw). Used by chain-analytics for derived totals. */
   async getBlackjackPlatformTotals(): Promise<{
     totalDeposited: bigint;
