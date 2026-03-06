@@ -316,13 +316,17 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       return
     }
 
+    // Capture amount once: use this for both the contract call and notify. If we re-read
+    // depositAmount after await, the user could have changed the input during confirmation.
+    const amountWei = parseEther(depositAmount)
+
     // Show persistent loading toast
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS`,
     })
 
     try {
-      const txHash = await depositMORBIUS(parseEther(depositAmount))
+      const txHash = await depositMORBIUS(amountWei)
 
       // Update toast to show transaction is processing
       toast.loading('Transaction processing...', {
@@ -344,8 +348,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         duration: 5000,
       })
 
-      // Log deposit to history immediately (non-blocking)
-      notifyDeposit(txHash, parseEther(depositAmount))
+      // Log deposit to history: use the same amount we sent on-chain, not current input state.
+      notifyDeposit(txHash, amountWei)
 
       // Wait for RPC nodes to reflect new contract state, then sync balance
       await new Promise(resolve => setTimeout(resolve, 2000))

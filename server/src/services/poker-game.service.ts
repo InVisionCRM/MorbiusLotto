@@ -56,6 +56,29 @@ export interface PokerTableState {
 
 const STREETS: PokerStreet[] = ['preflop', 'flop', 'turn', 'river', 'showdown'];
 
+/** Aggregate total contributed chips per player for a given hand+street. */
+async function getStreetContributions(
+  pool: Pool,
+  handId: string,
+  street: string
+): Promise<Map<string, bigint>> {
+  const r = await pool.query(
+    `SELECT player_address, SUM(amount) AS total
+       FROM poker_hand_actions
+      WHERE hand_id = $1 AND street = $2
+        AND action IN ('bet', 'raise', 'call')
+      GROUP BY player_address`,
+    [handId, street]
+  );
+  const map = new Map<string, bigint>();
+  for (const row of r.rows) {
+    const addr = (row.player_address || '').toLowerCase();
+    const total = BigInt(row.total ?? '0');
+    map.set(addr, total);
+  }
+  return map;
+}
+
 export class PokerGameService {
   constructor(
     private dbService: DatabaseService,

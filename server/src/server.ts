@@ -22,7 +22,7 @@ import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
-import { createWalletClient, http } from 'viem';
+import { createWalletClient, http, decodeEventLog } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
@@ -1725,6 +1725,10 @@ async function initializeServices() {
     });
 
     // Deposit notify: record deposit as pending; balance is credited only after N block confirmations (reorg protection).
+    // Amount is derived from on-chain DepositMORBIUS event when possible so credited amount matches chain regardless of client.
+    const DEPOSIT_MORBIUS_ABI = [
+      { type: 'event', name: 'DepositMORBIUS', inputs: [{ name: 'player', type: 'address', indexed: true }, { name: 'amount', type: 'uint256', indexed: false }] },
+    ] as const;
     app.post('/api/deposit/notify', async (req, res) => {
       try {
         const { walletAddress, txHash, amount, blockNumber } = req.body;
@@ -1742,22 +1746,80 @@ async function initializeServices() {
         if (amountBigInt <= 0n) return res.status(400).json({ error: 'Amount must be positive' });
         const confirmationsRequired = Number(process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || '12');
         let blockNum: bigint | null = null;
-        if (blockNumber != null) {
-          try { blockNum = BigInt(blockNumber); } catch { /* ignore */ }
+        const publicClient = getPublicClient();
+        let receipt: Awaited<ReturnType<typeof publicClient.getTransactionReceipt>> | null = null;
+        try {
+          receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+          if (receipt?.blockNumber != null) blockNum = receipt.blockNumber;
+        } catch {
+          if (blockNumber != null) {
+            try { blockNum = BigInt(blockNumber); } catch { /* ignore */ }
+          }
         }
-        if (blockNum == null) {
-          try {
-            const publicClient = getPublicClient();
-            const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
-            if (receipt?.blockNumber != null) blockNum = receipt.blockNumber;
-          } catch {
-            // Confirmation job will fetch block_number later
+        // Prefer on-chain amount from Blackjack DepositMORBIUS event so credit matches chain (avoids client typos/units).
+        if (receipt?.logs) {
+          const walletLower = walletAddress.toLowerCase();
+          for (const log of receipt.logs) {
+            if (log.address?.toLowerCase() !== BLACKJACK_ADDRESS.toLowerCase()) continue;
+            try {
+              const decoded = decodeEventLog({
+                abi: DEPOSIT_MORBIUS_ABI,
+                data: log.data,
+                topics: log.topics,
+              });
+              if (decoded.eventName === 'DepositMORBIUS' && (decoded.args as { player: string; amount: bigint }).player?.toLowerCase() === walletLower) {
+                amountBigInt = (decoded.args as { player: string; amount: bigint }).amount;
+                break;
+              }
+            } catch {
+              /* not this event */
+            }
           }
         }
         await dbService.insertPendingDeposit(walletAddress, amountBigInt, txHash, blockNum, confirmationsRequired);
         return res.status(200).json({ ok: true, message: 'Deposit recorded; balance will update after confirmations' });
       } catch (error) {
         logger.error('Error in deposit/notify:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Admin: credit deposit shortfall (e.g. when client sent wrong amount to notify and user was under-credited).
+    app.post('/api/admin/deposit/credit-shortfall', async (req, res) => {
+      try {
+        const { txHash, correctAmountWei } = req.body;
+        if (!txHash || typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+          return res.status(400).json({ error: 'Invalid tx hash' });
+        }
+        if (!correctAmountWei || typeof correctAmountWei !== 'string') {
+          return res.status(400).json({ error: 'correctAmountWei required (string)' });
+        }
+        let correctBigInt: bigint;
+        try { correctBigInt = BigInt(correctAmountWei); } catch { return res.status(400).json({ error: 'Invalid correctAmountWei' }); }
+        if (correctBigInt <= 0n) return res.status(400).json({ error: 'correctAmountWei must be positive' });
+        const row = await dbService.getCreditedPendingDepositByTxHash(txHash);
+        if (!row) {
+          return res.status(404).json({ error: 'No credited deposit found for this tx hash' });
+        }
+        const creditedWei = BigInt(row.amount_wei);
+        const shortfall = correctBigInt - creditedWei;
+        if (shortfall <= 0n) {
+          return res.status(400).json({ error: 'No shortfall; correctAmountWei must be greater than already credited amount' });
+        }
+        await dbService.addPlayerBalance(row.wallet_address, shortfall);
+        logger.info('Deposit shortfall credited', {
+          txHash,
+          wallet: row.wallet_address,
+          creditedBefore: row.amount_wei,
+          shortfallAdded: shortfall.toString(),
+        });
+        return res.status(200).json({
+          ok: true,
+          wallet: row.wallet_address,
+          shortfallCredited: shortfall.toString(),
+        });
+      } catch (error) {
+        logger.error('Error in admin deposit/credit-shortfall:', error);
         return res.status(500).json({ error: 'Internal server error' });
       }
     });
@@ -1969,6 +2031,47 @@ async function initializeServices() {
                 await dbService.addToBlackjackWithdrawnTotal(BigInt(job.amount_wei));
                 await dbService.recordHotWalletWithdrawal(job.wallet_address, BigInt(job.amount_wei), job.tx_hash);
                 logger.info('Hot withdrawal confirmed', { jobId: job.id, txHash: job.tx_hash });
+                // Distribute 5% fee to holders, burn, platform, LP (same split as BlackjackV2: 1.25% / 0.5% / 1.75% / 1.5%)
+                const feeWei = (BigInt(job.amount_wei) * 500n) / 10000n;
+                if (feeWei > 0n) {
+                  const walletClient = getHotWalletClient();
+                  if (walletClient?.account) {
+                    try {
+                      const [distRecipient, burnAddr, platformRecipient, lpRecipient] = await Promise.all([
+                        publicClient.readContract({ address: blackjackContractAddress, abi: blackjackAbi, functionName: 'distributionRecipient' }) as Promise<`0x${string}`>,
+                        publicClient.readContract({ address: blackjackContractAddress, abi: blackjackAbi, functionName: 'burnAddress' }) as Promise<`0x${string}`>,
+                        publicClient.readContract({ address: blackjackContractAddress, abi: blackjackAbi, functionName: 'platformFeeRecipient' }) as Promise<`0x${string}`>,
+                        publicClient.readContract({ address: blackjackContractAddress, abi: blackjackAbi, functionName: 'lpDistributionRecipient' }) as Promise<`0x${string}`>,
+                      ]);
+                      const distAmt = (feeWei * 125n) / 500n;
+                      const burnAmt = (feeWei * 50n) / 500n;
+                      const platformAmt = (feeWei * 175n) / 500n;
+                      const lpAmt = (feeWei * 150n) / 500n;
+                      const send = async (to: string, amount: bigint, label: string) => {
+                        if (amount <= 0n || !to || to === '0x0000000000000000000000000000000000000000') return;
+                        try {
+                          await walletClient.writeContract({
+                            account: walletClient.account!,
+                            chain: pulsechain,
+                            address: MORBIUS_TOKEN_ADDRESS,
+                            abi: ERC20_TRANSFER_ABI,
+                            functionName: 'transfer',
+                            args: [to as `0x${string}`, amount],
+                          });
+                          logger.info('Hot withdrawal fee sent', { jobId: job.id, to: label, amount: amount.toString() });
+                        } catch (e) {
+                          logger.error('Hot withdrawal fee transfer failed', { jobId: job.id, to: label, error: e });
+                        }
+                      };
+                      await send(distRecipient, distAmt, 'distributionRecipient');
+                      await send(burnAddr, burnAmt, 'burnAddress');
+                      await send(platformRecipient, platformAmt, 'platformFeeRecipient');
+                      await send(lpRecipient, lpAmt, 'lpDistributionRecipient');
+                    } catch (e) {
+                      logger.error('Hot withdrawal fee distribution failed (reading recipients)', { jobId: job.id, error: e });
+                    }
+                  }
+                }
               } else {
                 await dbService.updateHotWithdrawalJob(job.id, { status: 'failed', error_message: 'Transaction reverted on-chain' });
                 await dbService.refundHotWithdrawalJob(job.wallet_address, BigInt(job.amount_wei));

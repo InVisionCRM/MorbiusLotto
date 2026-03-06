@@ -743,6 +743,18 @@ export class DatabaseService {
     );
   }
 
+  /** Get a credited pending deposit by tx_hash (for admin shortfall correction). */
+  async getCreditedPendingDepositByTxHash(
+    txHash: string,
+  ): Promise<{ wallet_address: string; amount_wei: string } | null> {
+    const result = await this.pool.query(
+      `SELECT wallet_address, amount_wei FROM pending_deposits WHERE tx_hash = $1 AND status = 'credited'`,
+      [txHash],
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  }
+
   /** Get stored Blackjack platform totals (deposit/withdraw). Used by chain-analytics for derived totals. */
   async getBlackjackPlatformTotals(): Promise<{
     totalDeposited: bigint;
