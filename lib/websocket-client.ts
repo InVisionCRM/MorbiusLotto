@@ -631,6 +631,11 @@ export class BlackjackWebSocketClient {
     return this.sendRequest('poker_get_state', { tableId });
   }
 
+  /** Create a new table. Auth required. Returns the new table id. */
+  async pokerCreateTable(smallBlind: string, bigBlind: string, maxSeats: number = 6): Promise<{ tableId: string }> {
+    return this.sendRequest('poker_create_table', { smallBlind, bigBlind, maxSeats });
+  }
+
   // === Chat API (main + per-game rooms) ===
 
   /**

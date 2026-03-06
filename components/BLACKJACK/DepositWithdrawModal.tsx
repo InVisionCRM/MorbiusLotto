@@ -846,11 +846,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                         </button>
                       </div>
 
-                      {/* Expired explanation */}
-                      <div className="mb-2 rounded bg-slate-800/50 border border-slate-700/40 px-2.5 py-1.5 text-[10px] font-poppins text-cyan-500/70 shrink-0">
-                          <span className="text-cyan-500/70 font-poppins">Expired</span> = withdrawal was signed but the on-chain transaction was not submitted within 2 minutes. Your balance was automatically refunded.
-                      </div>
-
                       {txLoading && (
                         <div className="flex items-center justify-center py-8 text-[11px] font-poppins text-cyan-500/60">
                           <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading...

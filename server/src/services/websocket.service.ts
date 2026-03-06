@@ -560,6 +560,11 @@ export class WebSocketService {
           await this.handlePokerGetState(ws, message);
           break;
 
+        case 'poker_create_table':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handlePokerCreateTable(ws, message);
+          break;
+
         default:
           this.sendError(ws, 'Unknown message type', message.requestId);
       }
@@ -1273,6 +1278,31 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error getting poker state:', error);
       this.sendError(ws, (error as Error).message || 'Failed to get state', message.requestId);
+    }
+  }
+
+  private async handlePokerCreateTable(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerGameService || !ws.playerAddress) {
+        return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+      }
+      const payload = message.payload as { smallBlind?: string; bigBlind?: string; maxSeats?: number };
+      const smallBlindStr = payload?.smallBlind != null ? String(payload.smallBlind) : undefined;
+      const bigBlindStr = payload?.bigBlind != null ? String(payload.bigBlind) : undefined;
+      if (!smallBlindStr || !bigBlindStr) {
+        return this.sendError(ws, 'smallBlind and bigBlind required', message.requestId);
+      }
+      const smallBlind = BigInt(smallBlindStr);
+      const bigBlind = BigInt(bigBlindStr);
+      if (smallBlind <= 0n || bigBlind <= 0n || bigBlind < smallBlind) {
+        return this.sendError(ws, 'Invalid blinds: must be positive and bigBlind >= smallBlind', message.requestId);
+      }
+      const maxSeats = Math.min(10, Math.max(2, Number(payload?.maxSeats) || 6));
+      const tableId = await this.pokerGameService.createTable(smallBlind, bigBlind, maxSeats);
+      this.sendMessage(ws, { type: 'poker_create_table', payload: { tableId }, requestId: message.requestId });
+    } catch (error) {
+      logger.error('Error creating poker table:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to create table', message.requestId);
     }
   }
 

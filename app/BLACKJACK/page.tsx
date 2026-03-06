@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAccount, usePublicClient, useSignTypedData } from 'wagmi';
 import { useGameLock } from '@/contexts/game-lock-context';
 import { toast } from 'sonner';
@@ -718,6 +719,14 @@ export default function BlackjackPage() {
       setCurrentView('game');
     }
   }, [currentView, isDeployer]);
+
+  // Open deposit modal when arriving with ?open=deposit (e.g. from Poker "Get chips")
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('open') === 'deposit') {
+      setShowDepositModal(true);
+    }
+  }, [searchParams]);
 
   // Fetch real analytics data
   const { data: playerStatsData, isLoading: playerStatsLoading, refetch: refetchPlayerStats, error: playerStatsError } = usePlayerStatsEnhanced();
