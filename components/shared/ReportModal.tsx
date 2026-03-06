@@ -111,7 +111,7 @@ export function ReportModal({ isOpen, onClose, balance }: ReportModalProps) {
               onChange={(e) => setDescription(e.target.value.slice(0, 2000))}
               placeholder="Describe what you were doing and what went wrong..."
               rows={5}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 resize-none"
+              className="w-full rounded-md border border-slate-600 bg-slate-100 px-3 py-2 text-sm text-black/90 placeholder:text-black/50 focus:outline-none focus:ring-1 focus:ring-slate-500 resize-none"
             />
             <p className={`text-right text-[11px] ${remaining < 100 ? 'text-amber-400' : 'text-slate-500'}`}>
               {remaining} chars remaining

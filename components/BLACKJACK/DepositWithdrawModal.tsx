@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Minus, Loader2, ArrowDownCircle, ArrowUpCircle, History, RefreshCw, Copy, Check } from 'lucide-react'
+import { X, Plus, Minus, Loader2, ArrowDownCircle, ArrowUpCircle, History, RefreshCw, Copy, Check, Flag } from 'lucide-react'
 import { useAccount, usePublicClient } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
 import { useTokenBalance } from '@/hooks/use-token'
@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Theme, getPanelStyles } from '@/lib/theme'
 import { toast } from 'sonner'
+import { ReportModal } from '@/components/shared/ReportModal'
 
 interface DepositWithdrawModalProps {
   isOpen: boolean
@@ -63,6 +64,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const [txError, setTxError] = useState<string | null>(null)
   const [txLoaded, setTxLoaded] = useState(false)
   const [copiedHash, setCopiedHash] = useState<string | null>(null)
+  const [reportOpen, setReportOpen] = useState(false)
 
   const copyHash = (hash: string) => {
     navigator.clipboard.writeText(hash).catch(() => {})
@@ -240,7 +242,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       }
       toast.success('Deposit successful', {
         id: toastId,
-        description: `Deposited ${depositAmount} MORBIUS worth of PLS. Refresh the page to see your balance update.`,
+        description: `Deposited ${depositAmount} MORBIUS worth of PLS. Refresh the page after deposit confirmation to see funds in the UI.`,
         duration: 5000,
       })
       await new Promise(resolve => setTimeout(resolve, 2000))
@@ -290,7 +292,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       }
       toast.success('Deposit successful', {
         id: toastId,
-        description: `Deposited ${depositAmount} MORBIUS. Refresh the page to see your balance update.`,
+        description: `Deposited ${depositAmount} MORBIUS. Refresh the page after deposit confirmation to see funds in the UI.`,
         duration: 5000,
       })
       notifyDeposit(txHash, amountWei)
@@ -497,6 +499,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                 <button onClick={onClose} className="absolute top-6 right-6 text-gray-400 hover:text-black bg-gray-100 p-2 rounded-full transition-colors">
                   <X size={20}/>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setReportOpen(true)}
+                  className="absolute bottom-4 right-4 flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+                >
+                  <Flag size={12} />
+                  Report
+                </button>
                 
                 <div className="text-center mt-4 mb-10">
                   <p className="text-sm text-gray-500 uppercase tracking-widest font-semibold mb-2">Reserve Balance</p>
@@ -504,31 +514,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                     {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0}
                   </h4>
                   <p className="text-gray-400 font-medium">MORBIUS</p>
-                  <p className="text-xs text-gray-400 mt-1">Refresh the page after depositing to see funds in the UI.</p>
-                  {contractReserve && contractReserve !== displayBalance && (
-                    <div className="flex items-center justify-center gap-2 mt-3">
-                      <span className="text-xs text-gray-400 font-medium">
-                        On-chain: {Math.floor(Number(formatEther(contractReserve))).toLocaleString()}
-                      </span>
-                      {onRefreshBalance && contractReserve <= displayBalance && (
-                        <button
-                          onClick={async () => {
-                            toast.info('Refreshing...')
-                            try {
-                              await onRefreshBalance()
-                              toast.success('Refreshed', { duration: 3000 })
-                            } catch (error) {
-                              console.error('Refresh failed:', error)
-                              toast.error('Refresh failed.')
-                            }
-                          }}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                        >
-                          Refresh
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  <p className="text-xs text-gray-400 mt-1">Refresh the page after deposit confirmation to see funds in the UI.</p>
                 </div>
 
                 <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
@@ -715,9 +701,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           </div>
                         )}
 
-                        <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">
-                          Expired = withdrawal was signed but the on-chain transaction was not submitted within 2 minutes. Balance refunded.
-                        </p>
+                        <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">                        </p>
                       </div>
                     </TabsContent>
                   </div>
@@ -806,6 +790,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         isApproving={isApproving}
         tokenSymbol="MORBIUS"
         spenderName="Blackjack Contract"
+      />
+      <ReportModal
+        isOpen={reportOpen}
+        onClose={() => setReportOpen(false)}
+        balance={offChainBalance ?? contractReserve}
       />
     </>
   )
