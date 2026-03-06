@@ -181,4 +181,4 @@ npm start
 
 The server can automatically settle games on-chain if `SETTLEMENT_PRIVATE_KEY` is configured. Otherwise, settlements are stored for manual processing.
 
-Settlements use the contract's `settleGame()` function with provably fair verification data.
+e
