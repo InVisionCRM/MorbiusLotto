@@ -502,7 +502,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                 <button
                   type="button"
                   onClick={() => setReportOpen(true)}
-                  className="absolute bottom-4 right-4 flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+                  className="absolute bottom-4 right-4 flex items-center gap-1.5 text-xs text-red-500 hover:text-gray-700"
                 >
                   <Flag size={12} />
                   Report
@@ -518,7 +518,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                 </div>
 
                 <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
-                  <TabsList className="flex gap-2 mb-8 bg-gray-100 p-1 rounded-2xl h-auto border-0 w-full">
+                  <TabsList className="flex gap-2 mb-8 bg-cyan-500/20 p-1 rounded-2xl h-auto border-0 w-full">
                     <TabsTrigger value="deposit" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-xl transition-all">Deposit</TabsTrigger>
                     <TabsTrigger value="withdraw" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-xl transition-all">Withdraw</TabsTrigger>
                     <TabsTrigger value="history" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-xl transition-all">History</TabsTrigger>
@@ -564,7 +564,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                             step="1"
                             max={depositMethod === 'pls' ? maxDepositPLS : maxDepositMORBIUS}
                             disabled={controlsDisabled}
-                            className="flex-1 w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                            className="flex-1 w-full bg-white text-black/90 placeholder:text-black/50 border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
                           />
                         </div>
                       </div>
