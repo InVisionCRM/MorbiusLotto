@@ -1,14 +1,29 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
+import { usePokerTheme } from './PokerThemeContext';
 
-/** Card index 0-51: rank = (idx % 13) + 1 (A=1..K=13), suit = floor(idx/13) (0=hearts,1=diamonds,2=clubs,3=spades) */
-const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-const SUITS = ['♥', '♦', '♣', '♠'];
-const SUIT_COLOR = ['text-red-400', 'text-red-400', 'text-slate-200', 'text-slate-200'];
+/** Card index 0-51: rank = (idx % 13), suit = floor(idx/13) */
+const RANK_NAMES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const SUIT_SYMBOLS = ['♥', '♦', '♣', '♠'];
+const SUIT_LETTERS = ['H', 'D', 'C', 'S'];
+const SUIT_NAMES = ['hearts', 'diamonds', 'clubs', 'spades'];
+
+function getCardImagePath(cardIndex: number): string {
+  const rank = cardIndex % 13;
+  const suit = Math.floor(cardIndex / 13);
+  return `/BlackJack/Cards/PNG/${RANK_NAMES[rank]}${SUIT_LETTERS[suit]}.png`;
+}
+
+function getCardAlt(cardIndex: number): string {
+  const rank = cardIndex % 13;
+  const suit = Math.floor(cardIndex / 13);
+  return `${RANK_NAMES[rank]} of ${SUIT_NAMES[suit]}`;
+}
 
 export interface CardDisplayProps {
-  /** Card index 0-51. If null/undefined, show face-down placeholder. */
+  /** Card index 0-51. If null/undefined, show placeholder slot. */
   cardIndex: number | null | undefined;
   /** Smaller card for board/opponent */
   small?: boolean;
@@ -18,36 +33,138 @@ export interface CardDisplayProps {
 }
 
 export function CardDisplay({ cardIndex, small, faceDown, className = '' }: CardDisplayProps) {
-  const smallClasses = small ? 'w-6 h-8 sm:w-8 sm:h-11 text-[10px] sm:text-xs' : 'w-10 h-14 text-sm';
-  if (faceDown || (cardIndex != null && (cardIndex < 0 || cardIndex > 51))) {
+  const themeId = usePokerTheme();
+  const useTextVariant = themeId === 'cyberpunk';
+
+  const sizeClasses = small
+    ? 'w-7 h-10 sm:w-10 sm:h-14 md:w-12 md:h-[68px]'
+    : 'w-12 h-[68px] sm:w-14 sm:h-20';
+
+  const imageSize = small
+    ? { width: 48, height: 68 }
+    : { width: 56, height: 80 };
+
+  const cardShadow = '0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)';
+  const innerGlow = 'inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.15)';
+
+  const isFaceDown = faceDown || (cardIndex != null && (cardIndex < 0 || cardIndex > 51));
+  const isEmpty = !isFaceDown && cardIndex == null;
+  const isFaceUp = !isFaceDown && !isEmpty;
+
+  if (useTextVariant) {
+    const textSize = small ? 'text-sm sm:text-lg' : 'text-xl';
+    if (isFaceDown) {
+      return (
+        <div
+          className={`rounded border ${sizeClasses} flex items-center justify-center bg-[var(--poker-card-bg)]`}
+          style={{ borderColor: 'var(--poker-text-muted)' }}
+        >
+          <span className="text-[var(--poker-text-muted)] text-xs">?</span>
+        </div>
+      );
+    }
+    if (isEmpty) {
+      return (
+        <div
+          className={`rounded border ${sizeClasses} flex items-center justify-center`}
+          style={{ borderColor: 'var(--poker-card-border)', background: 'var(--poker-card-bg)' }}
+        >
+          <div className="w-3 h-3 rounded-full border border-[var(--poker-text-muted)]" />
+        </div>
+      );
+    }
+    const rank = cardIndex! % 13;
+    const suit = Math.floor(cardIndex! / 13);
+    const isRed = suit <= 1;
     return (
       <div
-        className={`rounded border border-amber-800/60 bg-gradient-to-br from-amber-900 to-amber-950 flex items-center justify-center ${smallClasses} ${className}`}
-        style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.3)' }}
+        className={`poker-card-deal rounded border ${sizeClasses} flex flex-col items-center justify-center ${textSize} font-bold`}
+        style={{
+          borderColor: 'var(--poker-card-border)',
+          background: 'var(--poker-card-bg)',
+          boxShadow: '0 0 8px var(--poker-accent-muted)',
+          color: isRed ? 'var(--poker-danger)' : 'var(--poker-accent)',
+        }}
       >
-        <span className="text-amber-700/80 font-bold">♠</span>
+        {RANK_NAMES[rank]}{SUIT_SYMBOLS[suit]}
       </div>
     );
   }
-  if (cardIndex == null) {
-    return (
-      <div
-        className={`rounded border border-cyan-500/30 bg-slate-800 flex items-center justify-center ${smallClasses} ${className}`}
-        style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)' }}
-      >
-        <span className="text-slate-500">?</span>
-      </div>
-    );
-  }
-  const rank = cardIndex % 13;
-  const suit = Math.floor(cardIndex / 13);
+
   return (
-    <div
-      className={`rounded border border-cyan-500/30 bg-slate-900 flex flex-col items-center justify-center ${small ? smallClasses : 'w-10 h-14 text-sm'} ${className}`}
-      style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.3)' }}
-    >
-      <span className="text-white font-medium">{RANKS[rank]}</span>
-      <span className={SUIT_COLOR[suit]}>{SUITS[suit]}</span>
+    <div className={`poker-card-wrapper ${className}`}>
+      {isFaceDown && (
+        <div
+          className={`poker-card-deal relative ${sizeClasses} rounded-lg overflow-hidden`}
+          style={{ boxShadow: cardShadow }}
+        >
+          <div className="absolute inset-0 bg-slate-900 overflow-hidden">
+            <Image
+              src="/Pulse Branding/Logo/ball.png"
+              alt="Card back"
+              width={imageSize.width}
+              height={imageSize.height}
+              className="w-full h-full object-cover"
+              priority
+            />
+          </div>
+          <div className="absolute inset-0 rounded-lg pointer-events-none" style={{ boxShadow: innerGlow }} />
+        </div>
+      )}
+
+      {isEmpty && (
+        <div
+          className={`relative ${sizeClasses} rounded-lg border border-white/10`}
+          style={{
+            background: 'linear-gradient(145deg, rgba(15,23,42,0.6), rgba(15,23,42,0.3))',
+            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3)',
+          }}
+        >
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full border border-white/10" />
+          </div>
+        </div>
+      )}
+
+      {isFaceUp && (
+        <div
+          className={`poker-card-deal relative ${sizeClasses} rounded-lg overflow-hidden bg-white`}
+          style={{ boxShadow: cardShadow }}
+        >
+          <Image
+            src={getCardImagePath(cardIndex!)}
+            alt={getCardAlt(cardIndex!)}
+            width={imageSize.width}
+            height={imageSize.height}
+            className="w-full h-full object-cover"
+            priority
+          />
+          <div className="absolute inset-0 rounded-lg pointer-events-none" style={{ boxShadow: innerGlow }} />
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes pokerCardDeal {
+          0% {
+            opacity: 0;
+            transform: translateY(-18px) scale(0.88) rotateX(15deg);
+          }
+          50% {
+            opacity: 1;
+            transform: translateY(2px) scale(1.03) rotateX(-2deg);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1) rotateX(0deg);
+          }
+        }
+        .poker-card-deal {
+          animation: pokerCardDeal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        .poker-card-wrapper {
+          perspective: 600px;
+        }
+      `}</style>
     </div>
   );
 }

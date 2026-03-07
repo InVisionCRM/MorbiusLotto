@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
@@ -11,6 +11,18 @@ import type { PokerTableSummary } from '@/lib/websocket-client';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer';
 import { Theme } from '@/lib/theme';
+
+/** Format a wei string to human-readable chips (e.g. "10000000000000000000" -> "10") */
+function formatChips(wei: string): string {
+  try {
+    const num = Number(formatEther(BigInt(wei)));
+    return Number.isInteger(num)
+      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  } catch {
+    return wei;
+  }
+}
 
 // Intro screen component (same style as Blackjack)
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -86,20 +98,11 @@ export default function PokerLobbyPage() {
   const [error, setError] = useState<string | null>(null);
   const [joinModal, setJoinModal] = useState<{ tableId: string } | null>(null);
   const [buyIn, setBuyIn] = useState('1000');
-  const [joining, setJoining] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   const [createModal, setCreateModal] = useState<{ smallBlind: string; bigBlind: string; maxSeats: number } | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const fetchTables = useCallback(async () => {
-    const wsUrl = getWebSocketUrlOptional();
-    if (!wsUrl) return;
-    const client = new BlackjackWebSocketClient(wsUrl);
-    await client.connect();
-    const res = await client.pokerListTables();
-    setTables(res.tables ?? []);
-    client.disconnect();
-  }, []);
+  const clientRef = React.useRef<BlackjackWebSocketClient | null>(null);
 
   useEffect(() => {
     const wsUrl = getWebSocketUrlOptional();
@@ -108,14 +111,42 @@ export default function PokerLobbyPage() {
       setLoading(false);
       return;
     }
-    fetchTables()
-      .then(() => setError(null))
+
+    const client = new BlackjackWebSocketClient(wsUrl);
+    clientRef.current = client;
+
+    // Listen for broadcast table list updates
+    client.on('poker_table_list', (payload: { tables: PokerTableSummary[] }) => {
+      setTables(payload.tables ?? []);
+    });
+
+    client
+      .connect()
+      .then(() => client.pokerListTables())
+      .then((res) => {
+        setTables(res.tables ?? []);
+        setError(null);
+      })
       .catch((err) => {
         setError(err?.message ?? 'Failed to load tables');
         setTables([]);
       })
       .finally(() => setLoading(false));
-  }, [fetchTables]);
+
+    // Poll every 5s for fresh table list (lobby broadcasts not guaranteed)
+    const interval = setInterval(() => {
+      client
+        .pokerListTables()
+        .then((res) => setTables(res.tables ?? []))
+        .catch(() => {});
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      client.disconnect();
+      clientRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!address || !getApiUrlOptional()) {
@@ -130,60 +161,49 @@ export default function PokerLobbyPage() {
       .catch(() => setBalance(null));
   }, [address]);
 
-  const handleJoin = async () => {
-    if (!joinModal || !address) return;
+  /** Create a short-lived authenticated WS client for mutations (create table only). Join is done on table page to avoid duplicate auth. */
+  const makeAuthClient = async () => {
     const wsUrl = getWebSocketUrlOptional();
-    if (!wsUrl) return;
-    setJoining(true);
+    if (!wsUrl || !address) return null;
+    const client = new BlackjackWebSocketClient(wsUrl, address.toLowerCase(), signTypedDataAsync as any);
+    await client.connect();
+    return client;
+  };
+
+  /** Navigate to table page with join params; table page will connect once and call pokerJoinTable. */
+  const handleJoin = () => {
+    if (!joinModal || !address) return;
     setError(null);
+    let buyInWei: string;
     try {
-      const client = new BlackjackWebSocketClient(wsUrl, address.toLowerCase(), signTypedDataAsync as any);
-      await client.connect();
-      const buyInWei = (() => {
-        try {
-          const parsed = parseEther(buyIn.trim() || '0');
-          return parsed.toString();
-        } catch {
-          return buyIn;
-        }
-      })();
-      await client.pokerJoinTable(joinModal.tableId, buyInWei);
-      const targetTableId = joinModal.tableId;
-      setJoinModal(null);
-      router.push(`/poker/${targetTableId}`);
-    } catch (err) {
-      setError((err as Error).message ?? 'Failed to join');
-    } finally {
-      setJoining(false);
+      buyInWei = parseEther(buyIn.trim().replace(/,/g, '') || '0').toString();
+    } catch {
+      setError('Invalid buy-in amount');
+      return;
     }
+    const targetTableId = joinModal.tableId;
+    setJoinModal(null);
+    router.push(`/poker/${targetTableId}?join=1&buyIn=${encodeURIComponent(buyInWei)}`);
   };
 
   const handleCreateTable = async () => {
     if (!createModal || !address) return;
-    const wsUrl = getWebSocketUrlOptional();
-    if (!wsUrl) return;
     setCreating(true);
     setError(null);
     try {
       const sbWei = (() => {
-        try {
-          return parseEther(createModal.smallBlind.trim() || '0').toString();
-        } catch {
-          return createModal.smallBlind;
-        }
+        try { return parseEther(createModal.smallBlind.trim().replace(/,/g, '') || '0').toString(); }
+        catch { return createModal.smallBlind; }
       })();
       const bbWei = (() => {
-        try {
-          return parseEther(createModal.bigBlind.trim() || '0').toString();
-        } catch {
-          return createModal.bigBlind;
-        }
+        try { return parseEther(createModal.bigBlind.trim().replace(/,/g, '') || '0').toString(); }
+        catch { return createModal.bigBlind; }
       })();
-      const client = new BlackjackWebSocketClient(wsUrl, address.toLowerCase(), signTypedDataAsync as any);
-      await client.connect();
+      const client = await makeAuthClient();
+      if (!client) return;
       const { tableId } = await client.pokerCreateTable(sbWei, bbWei, createModal.maxSeats);
+      client.disconnect();
       setCreateModal(null);
-      await fetchTables();
       router.push(`/poker/${tableId}`);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to create table');
@@ -198,9 +218,9 @@ export default function PokerLobbyPage() {
 
   return (
     <GlobalMainNav page="home">
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)]" />
-        <div className="relative w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
+        <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
           <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4 mb-4 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
               <Link href="/" className="text-cyan-400 hover:text-cyan-300 text-xs sm:text-sm">← Back</Link>
@@ -209,7 +229,7 @@ export default function PokerLobbyPage() {
                 <>
                   {balance != null && (
                     <span className="text-slate-300 text-xs sm:text-sm">
-                      Balance: <span className="text-cyan-400 font-medium">{Number(formatEther(BigInt(balance))).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span> chips
+                      Balance: <span className="text-cyan-400 font-medium">{formatChips(balance)}</span> chips
                     </span>
                   )}
                   <Link
@@ -255,7 +275,7 @@ export default function PokerLobbyPage() {
                   }}
                 >
                   <div className="min-w-0">
-                    <span className="text-cyan-400 font-medium text-sm sm:text-base">{t.smallBlind}/{t.bigBlind}</span>
+                    <span className="text-cyan-400 font-medium text-sm sm:text-base">{formatChips(t.smallBlind)}/{formatChips(t.bigBlind)}</span>
                     <span className="text-slate-400 ml-1 sm:ml-2 text-xs sm:text-sm">
                       {t.seatedCount}/{t.maxSeats} seated
                     </span>
@@ -298,7 +318,7 @@ export default function PokerLobbyPage() {
               <div className="p-4 space-y-4">
                 {balance != null && (() => {
                   try {
-                    return parseEther(buyIn.trim() || '0') > BigInt(balance);
+                    return parseEther(buyIn.trim().replace(/,/g, '') || '0') > BigInt(balance);
                   } catch {
                     return false;
                   }
@@ -326,16 +346,16 @@ export default function PokerLobbyPage() {
                   <button
                     type="button"
                     onClick={handleJoin}
-                    disabled={joining || (balance != null && (() => {
+                    disabled={balance != null && (() => {
                       try {
-                        return parseEther(buyIn.trim() || '0') > BigInt(balance);
+                        return parseEther(buyIn.trim().replace(/,/g, '') || '0') > BigInt(balance);
                       } catch {
                         return false;
                       }
-                    })())}
+                    })()}
                     className="flex-1 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white disabled:opacity-50"
                   >
-                    {joining ? 'Joining...' : 'Join'}
+                    Join
                   </button>
                 </div>
               </div>

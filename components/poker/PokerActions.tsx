@@ -5,7 +5,7 @@ import { formatEther, parseEther } from 'viem';
 
 type Amount = bigint;
 
-/** Parse human amount (e.g. "1000" or "1,000") to wei. */
+/** Parse human chip amount (e.g. "1000" or "1,000") to wei. */
 function safeParseAmount(input: string): Amount | null {
   try {
     const cleaned = input.trim().replace(/,/g, '');
@@ -22,9 +22,12 @@ function clampAmount(value: Amount, min: Amount, max: Amount): Amount {
   return value;
 }
 
-/** Human-readable display (e.g. 1000000000000000000000 -> "1,000") */
+/** Human-readable chip display (wei -> "1,000") */
 function formatAmount(v: Amount): string {
-  return Number(formatEther(v)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const n = Number(formatEther(v));
+  return Number.isInteger(n)
+    ? n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export interface PokerActionsProps {
@@ -38,6 +41,8 @@ export interface PokerActionsProps {
   stack: string;
   /** Call amount (string) - 0 if can check */
   callAmount: string;
+  /** Current pot (string wei) for pot-sized bet calculation */
+  pot: string;
   onFold: () => void;
   onCheck: () => void;
   onCall: () => void;
@@ -51,6 +56,7 @@ export function PokerActions({
   minRaise,
   stack,
   callAmount,
+  pot,
   onFold,
   onCheck,
   onCall,
@@ -60,6 +66,7 @@ export function PokerActions({
   const minRaiseAmt = useMemo(() => safeParseAmount(minRaise) ?? 0n, [minRaise]);
   const stackAmt = useMemo(() => safeParseAmount(stack) ?? 0n, [stack]);
   const callAmt = useMemo(() => safeParseAmount(callAmount) ?? 0n, [callAmount]);
+  const potAmt = useMemo(() => safeParseAmount(pot) ?? 0n, [pot]);
 
   const isFacingBet = callAmt > 0n;
   const primaryLabel = isFacingBet ? 'Raise' : 'Bet';
@@ -79,7 +86,7 @@ export function PokerActions({
   const quickSizes: Array<{ label: string; value: Amount }> = [
     { label: 'Min', value: minRaiseAmt },
     { label: '½', value: stackAmt / 2n },
-    { label: 'Pot', value: clampAmount(callAmt * 2n, minRaiseAmt, stackAmt) },
+    { label: 'Pot', value: clampAmount(potAmt + callAmt, minRaiseAmt, stackAmt) },
     { label: 'All-in', value: stackAmt },
   ];
 
@@ -102,7 +109,11 @@ export function PokerActions({
 
   return (
     <div
-      className="w-full max-w-[720px] rounded-xl sm:rounded-2xl border border-cyan-500/25 bg-slate-950/55 backdrop-blur-md px-2 py-2 sm:px-3 sm:py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_14px_40px_rgba(0,0,0,0.6)]"
+      className="w-full max-w-[720px] rounded-xl sm:rounded-2xl border backdrop-blur-md px-2 py-2 sm:px-3 sm:py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_14px_40px_rgba(0,0,0,0.6)]"
+      style={{
+        borderColor: 'var(--poker-panel-border)',
+        background: 'var(--poker-panel-bg)',
+      }}
       role="group"
       aria-label="Poker actions"
     >
@@ -111,14 +122,24 @@ export function PokerActions({
           <button
             type="button"
             onClick={onFold}
-            className="h-8 sm:h-10 px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-red-500/15 text-red-200 border border-red-500/30 hover:bg-red-500/25 hover:border-red-400/50 transition text-xs sm:text-sm font-medium"
+            className="h-8 sm:h-10 px-2.5 sm:px-4 rounded-lg sm:rounded-xl border transition text-xs sm:text-sm font-medium hover:opacity-80"
+            style={{
+              color: 'var(--poker-danger)',
+              borderColor: 'var(--poker-danger-muted)',
+              background: 'color-mix(in srgb, var(--poker-danger) 15%, transparent)',
+            }}
           >
             Fold
           </button>
           <button
             type="button"
             onClick={handleSecondary}
-            className="h-8 sm:h-10 px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-slate-400/10 text-slate-100 border border-slate-400/20 hover:bg-slate-400/15 hover:border-slate-300/30 transition text-xs sm:text-sm font-medium min-w-0 max-w-[100px] sm:max-w-none truncate"
+            className="h-8 sm:h-10 px-2.5 sm:px-4 rounded-lg sm:rounded-xl border transition text-xs sm:text-sm font-medium min-w-0 max-w-[100px] sm:max-w-none truncate hover:opacity-90"
+            style={{
+              color: 'var(--poker-text)',
+              borderColor: 'var(--poker-panel-border)',
+              background: 'color-mix(in srgb, var(--poker-accent) 10%, transparent)',
+            }}
           >
             {secondaryLabel}
           </button>
@@ -131,7 +152,12 @@ export function PokerActions({
               type="button"
               onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
               disabled={stackAmt === 0n}
-              className="h-9 px-3 rounded-xl bg-cyan-400/10 text-cyan-100 border border-cyan-400/20 hover:bg-cyan-400/15 hover:border-cyan-300/30 transition text-xs font-semibold disabled:opacity-50"
+              className="h-9 px-3 rounded-xl border transition text-xs font-semibold disabled:opacity-50 hover:opacity-90"
+              style={{
+                color: 'var(--poker-accent)',
+                borderColor: 'var(--poker-accent-muted)',
+                background: 'color-mix(in srgb, var(--poker-accent) 10%, transparent)',
+              }}
               title={q.label}
             >
               {q.label}
@@ -141,8 +167,8 @@ export function PokerActions({
 
         <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0 justify-end">
           <div className="hidden sm:flex flex-col items-end leading-none shrink-0">
-            <span className="text-[9px] sm:text-[11px] text-slate-300/80">Min {formatAmount(minRaiseAmt)}</span>
-            <span className="text-[9px] sm:text-[11px] text-slate-300/80">Stack {formatAmount(stackAmt)}</span>
+            <span className="text-[9px] sm:text-[11px]" style={{ color: 'var(--poker-text-muted)' }}>Min {formatAmount(minRaiseAmt)}</span>
+            <span className="text-[9px] sm:text-[11px]" style={{ color: 'var(--poker-text-muted)' }}>Stack {formatAmount(stackAmt)}</span>
           </div>
           <input
             inputMode="numeric"
@@ -150,14 +176,25 @@ export function PokerActions({
             type="text"
             value={customAmount}
             onChange={(e) => setCustomAmount(e.target.value)}
-            className="h-8 sm:h-10 w-16 sm:w-[110px] rounded-lg sm:rounded-xl bg-slate-900/60 border border-cyan-500/25 px-2 sm:px-3 text-white text-xs sm:text-sm outline-none focus:ring-2 focus:ring-cyan-400/40"
+            className="h-8 sm:h-10 w-16 sm:w-[110px] rounded-lg sm:rounded-xl px-2 sm:px-3 text-xs sm:text-sm outline-none focus:ring-2 transition shrink-0"
+            style={{
+              color: 'var(--poker-text)',
+              background: 'var(--poker-bg-elevated)',
+              borderColor: 'var(--poker-panel-border)',
+              ['--tw-ring-color' as string]: 'var(--poker-accent)',
+            }}
             aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
           />
           <button
             type="button"
             onClick={handlePrimary}
             disabled={!hasValidAmount}
-            className="h-8 sm:h-10 px-3 sm:px-5 rounded-lg sm:rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs sm:text-sm font-semibold shadow-[0_10px_22px_rgba(0,0,0,0.45)] hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:hover:from-cyan-600 disabled:hover:to-blue-600 transition shrink-0"
+            className="h-8 sm:h-10 px-3 sm:px-5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition shrink-0 disabled:opacity-50 hover:opacity-90"
+            style={{
+              color: 'var(--poker-bg)',
+              background: 'var(--poker-accent)',
+              boxShadow: '0 10px 22px rgba(0,0,0,0.45)',
+            }}
           >
             {primaryLabel}
           </button>
@@ -171,7 +208,12 @@ export function PokerActions({
             type="button"
             onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
             disabled={stackAmt === 0n}
-            className="h-7 px-2 rounded-lg bg-cyan-400/10 text-cyan-100 border border-cyan-400/20 hover:bg-cyan-400/15 hover:border-cyan-300/30 transition text-[10px] font-semibold disabled:opacity-50"
+            className="h-7 px-2 rounded-lg border transition text-[10px] font-semibold disabled:opacity-50 hover:opacity-90"
+            style={{
+              color: 'var(--poker-accent)',
+              borderColor: 'var(--poker-accent-muted)',
+              background: 'color-mix(in srgb, var(--poker-accent) 10%, transparent)',
+            }}
           >
             {q.label}
           </button>
@@ -179,7 +221,7 @@ export function PokerActions({
       </div>
 
       {clamped != null && parsed != null && parsed !== clamped && (
-        <div className="mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] text-amber-200/80">
+        <div className="mt-1.5 sm:mt-2 text-[10px] sm:text-[11px]" style={{ color: 'var(--poker-chip)' }}>
           Amount adjusted to {formatAmount(clamped)} to fit min/stack.
         </div>
       )}

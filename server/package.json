@@ -10,7 +10,8 @@
     "watch": "nodemon --exec 'ts-node -r dotenv/config src/server.ts'",
     "simulate:blackjack": "ts-node src/scripts/simulate-blackjack-house-edge.ts",
     "tournament:bot": "ts-node src/scripts/tournament-bot-flow.ts",
-    "tournament:bot:freeroll": "TOURNAMENT_BOT_MODE=freeroll ts-node src/scripts/tournament-bot-flow.ts"
+    "tournament:bot:freeroll": "TOURNAMENT_BOT_MODE=freeroll ts-node src/scripts/tournament-bot-flow.ts",
+    "poker:bot": "ts-node src/scripts/poker-bot.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.7.2",

@@ -17,16 +17,16 @@ export function HeroSection() {
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.05] z-0"
         style={{ backgroundImage: 'url(/BlackJack/TourCards/TourCard5.png)' }}
       />
-      {/* Background: chip rotates inside a fixed gradient mask so the fade stays in place */}
+      {/* Background: chip rotates in front of tour card image */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 z-[1]"
         style={{
           maskImage: 'linear-gradient(to bottom, black 30%, transparent 50%)',
           WebkitMaskImage: 'linear-gradient(to bottom, black 30%, transparent 50%)',
         }}
       >
         <motion.div
-          className="absolute flex inset-0 bg-contain bg-center bg-no-repeat opacity-20 z-10"
+          className="absolute flex inset-0 bg-contain bg-center bg-no-repeat opacity-50"
           style={{
             backgroundImage: 'url(/PokerChips/bluepokerchip010.png)',
           }}

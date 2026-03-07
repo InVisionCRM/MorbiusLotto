@@ -3015,6 +3015,155 @@ async function initializeServices() {
       }
     });
 
+    // ---- Poker Bot API ----
+    // POST /api/poker/bots  { tableId, numBots?: 1-5 }
+    // Spawns AI bot players that join a table and play automatically.
+    // Must be 42 chars (0x + 40 hex) for players.wallet_address VARCHAR(42)
+    const POKER_BOT_ADDRESSES = [
+      '0xB07000000000000000000000000000000000de01',
+      '0xB07000000000000000000000000000000000de02',
+      '0xB07000000000000000000000000000000000de03',
+      '0xB07000000000000000000000000000000000de04',
+      '0xB07000000000000000000000000000000000de05',
+    ];
+    const activeBots = new Map<string, { address: string; interval: ReturnType<typeof setInterval> }[]>();
+
+    app.post('/api/poker/bots', async (req, res) => {
+      try {
+        const { tableId, numBots: rawNum } = req.body ?? {};
+        if (!tableId || typeof tableId !== 'string') {
+          return res.status(400).json({ error: 'tableId required' });
+        }
+        const numBots = Math.min(5, Math.max(1, Number(rawNum) || 2));
+
+        // Check table exists
+        const tableCheck = await pokerGameService.listTables();
+        const table = tableCheck.find((t: any) => t.id === tableId);
+        if (!table) {
+          return res.status(404).json({ error: 'Table not found' });
+        }
+
+        // Use big blind * 100 as buy-in (reasonable stack)
+        const bb = BigInt(table.bigBlind || '20000000000000000000');
+        const buyIn = bb * 100n;
+
+        const botsToSpawn = POKER_BOT_ADDRESSES.slice(0, numBots);
+        const spawned: string[] = [];
+
+        for (const botAddr of botsToSpawn) {
+          // Give bot balance (upsert)
+          await dbService.addBalanceToAddress(botAddr, buyIn * 10n);
+
+          // Join the table
+          try {
+            await pokerGameService.joinTable(tableId, botAddr, buyIn.toString());
+            spawned.push(botAddr);
+          } catch (joinErr: any) {
+            if (joinErr.message?.includes('Already seated')) {
+              spawned.push(botAddr);
+            } else {
+              logger.warn(`Bot ${botAddr} failed to join: ${joinErr.message}`);
+            }
+          }
+        }
+
+        // Start bot AI loop for each spawned bot
+        const botEntries: { address: string; interval: ReturnType<typeof setInterval> }[] = [];
+
+        for (const botAddr of spawned) {
+          const interval = setInterval(async () => {
+            try {
+              const state = await pokerGameService.getTableState(tableId, botAddr);
+              if (!state?.currentHand) return;
+              const hand = state.currentHand;
+              if (hand.actingPosition == null) return;
+
+              // Is it this bot's turn?
+              const mySeat = state.seats.find((s: any) => s.playerAddress === botAddr);
+              if (!mySeat || mySeat.position !== hand.actingPosition) return;
+              if (mySeat.folded) return;
+
+              // Simple AI decision
+              const toCall = BigInt(hand.toCall || '0');
+              const pot = BigInt(hand.pot || '0');
+              const minRaise = BigInt(hand.minRaise || '0');
+              const stack = BigInt(mySeat.stack || '0');
+              const canCheck = toCall === 0n;
+              const rand = Math.random();
+
+              let action: string;
+              let amount: string | undefined;
+
+              if (canCheck) {
+                if (rand < 0.25 && stack > 0n && minRaise > 0n) {
+                  action = 'bet';
+                  const betSize = pot / 2n;
+                  const betAmt = betSize < minRaise ? minRaise : betSize > stack ? stack : betSize;
+                  amount = betAmt.toString();
+                } else {
+                  action = 'check';
+                }
+              } else if (rand < 0.15) {
+                action = 'fold';
+              } else if (rand < 0.85) {
+                action = 'call';
+                amount = toCall.toString();
+              } else {
+                action = 'raise';
+                const raiseAmt = minRaise > stack ? stack : minRaise;
+                amount = raiseAmt.toString();
+              }
+
+              await pokerGameService.playerAction(tableId, hand.handId, botAddr, action, amount);
+              logger.info(`[PokerBot ${botAddr.slice(0, 10)}] ${action}${amount ? ' ' + amount : ''}`);
+            } catch (err: any) {
+              // Not our turn or hand ended — that's fine
+              if (!err.message?.includes('Not your turn') && !err.message?.includes('not found')) {
+                logger.warn(`[PokerBot ${botAddr.slice(0, 10)}] Error: ${err.message}`);
+              }
+            }
+          }, 1500 + Math.random() * 1500); // Poll every 1.5-3s
+
+          botEntries.push({ address: botAddr, interval });
+        }
+
+        // Track active bots for cleanup
+        const existing = activeBots.get(tableId) || [];
+        activeBots.set(tableId, [...existing, ...botEntries]);
+
+        // Broadcast new table state so connected clients see the hand/cards immediately
+        await wsService.broadcastPokerTableState(tableId);
+
+        sendJson(res, { success: true, bots: spawned, buyIn: buyIn.toString() });
+      } catch (error) {
+        logger.error('Error spawning poker bots:', error);
+        res.status(500).json({ error: (error as Error).message || 'Failed to spawn bots' });
+      }
+    });
+
+    // DELETE /api/poker/bots  { tableId }
+    // Stops and removes bots from a table
+    app.delete('/api/poker/bots', async (req, res) => {
+      try {
+        const tableId = (req.query.tableId || req.body?.tableId) as string;
+        if (!tableId) {
+          return res.status(400).json({ error: 'tableId required' });
+        }
+        const bots = activeBots.get(tableId) || [];
+        for (const bot of bots) {
+          clearInterval(bot.interval);
+          try {
+            await pokerGameService.leaveTable(tableId, bot.address);
+          } catch { /* already left */ }
+        }
+        activeBots.delete(tableId);
+        sendJson(res, { success: true, removed: bots.length });
+      } catch (error) {
+        logger.error('Error removing poker bots:', error);
+        res.status(500).json({ error: (error as Error).message || 'Failed to remove bots' });
+      }
+    });
+
     logger.info('WebSocket server initialized');
     logger.info('Database connected');
 

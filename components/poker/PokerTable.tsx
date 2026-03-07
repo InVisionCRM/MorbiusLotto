@@ -1,11 +1,23 @@
 'use client';
 
 import React from 'react';
+import { formatEther } from 'viem';
 import { PokerSeat } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
 import type { PokerLayout } from '@/lib/poker-layout';
 import { getTableRect, getSeatRect, getCommunityRect } from '@/lib/poker-layout';
+
+function formatChips(wei: string): string {
+  try {
+    const num = Number(formatEther(BigInt(wei)));
+    return Number.isInteger(num)
+      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  } catch {
+    return wei;
+  }
+}
 
 export interface PokerTableProps {
   layout: PokerLayout;
@@ -31,13 +43,13 @@ export function PokerTable({
       {/* Top bar: blinds, leave */}
       <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-1.5 py-1 sm:px-2 sm:py-1.5 z-10">
         <div className="w-10 sm:w-16" />
-        <span className="text-cyan-400 font-medium text-[10px] sm:text-xs md:text-sm">
-          {state.smallBlind}/{state.bigBlind} · {state.seats.filter((s) => s.playerAddress).length}/{state.maxSeats} seats
+        <span className="text-[var(--poker-accent)] font-medium text-[10px] sm:text-xs md:text-sm">
+          {formatChips(state.smallBlind)}/{formatChips(state.bigBlind)} · {state.seats.filter((s) => s.playerAddress).length}/{state.maxSeats} seats
         </span>
         <button
           type="button"
           onClick={onLeave}
-          className="px-1.5 py-0.5 sm:px-2 sm:py-1 rounded border border-red-500/50 text-red-400 hover:bg-red-500/20 text-[10px] sm:text-xs md:text-sm"
+          className="px-1.5 py-0.5 sm:px-2 sm:py-1 rounded border border-[var(--poker-danger)] text-[var(--poker-danger)] hover:opacity-80 text-[10px] sm:text-xs md:text-sm"
         >
           Leave
         </button>
@@ -46,17 +58,21 @@ export function PokerTable({
       {/* Oval table (layout %) */}
       {tableRect && (
         <div
-          className="absolute rounded-[50%] overflow-hidden border-2 border-black/50"
+          className="absolute rounded-[50%] overflow-visible border-2"
           style={{
             left: `${tableRect.x}%`,
             top: `${tableRect.y}%`,
             width: `${tableRect.width}%`,
             height: `${tableRect.height}%`,
-            background: 'linear-gradient(160deg, #0d5c2e 0%, #0a4d26 50%, #083d1e 100%)',
-            boxShadow: 'inset 0 2px 12px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.5)',
+            background: 'var(--poker-table-bg)',
+            borderColor: 'var(--poker-table-border)',
+            boxShadow: 'inset 0 2px 12px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.5), 0 0 50px rgba(0,255,170,0.1)',
           }}
         >
-          <div className="absolute inset-[15%] rounded-[50%] border border-black/20 pointer-events-none" />
+          <div
+            className="absolute inset-[15%] rounded-[50%] border border-dashed pointer-events-none"
+            style={{ borderColor: 'var(--poker-table-inner)' }}
+          />
         </div>
       )}
 
@@ -97,6 +113,7 @@ export function PokerTable({
               holeCards={mySeatIndex === idx ? state.myHoleCards ?? undefined : undefined}
               isCurrentPlayer={idx === mySeatIndex}
               showCardBacks={inHand && idx !== mySeatIndex}
+              lastAction={hand?.lastAction?.position === idx ? { action: hand.lastAction.action, amount: hand.lastAction.amount } : null}
             />
           </div>
         );

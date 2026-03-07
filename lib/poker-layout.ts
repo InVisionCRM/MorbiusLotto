@@ -26,8 +26,26 @@ export function getTableRect(layout: PokerLayout) {
   return byId(layout, 'table');
 }
 
-export function getSeatRect(layout: PokerLayout, seatIndex: number) {
-  return byId(layout, `seat${seatIndex}`);
+export function getSeatRect(layout: PokerLayout, seatIndex: number): PokerLayoutElement | undefined {
+  const defined = byId(layout, `seat${seatIndex}`);
+  if (defined) return defined;
+  // Fallback: distribute unknown seats evenly around the table oval
+  const table = byId(layout, 'table');
+  if (!table) return undefined;
+  const cx = table.x + table.width / 2;
+  const cy = table.y + table.height / 2;
+  const rx = table.width / 2 + 8;
+  const ry = table.height / 2 + 4;
+  const angle = (2 * Math.PI * seatIndex) / 10 - Math.PI / 2;
+  return {
+    id: `seat${seatIndex}`,
+    type: 'seat',
+    label: `Seat ${seatIndex}`,
+    x: cx + rx * Math.cos(angle) - 6,
+    y: cy + ry * Math.sin(angle) - 7,
+    width: 12,
+    height: 14,
+  };
 }
 
 export function getCommunityRect(layout: PokerLayout) {
@@ -58,6 +76,10 @@ export const defaultPokerLayout: PokerLayout = {
     { id: 'seat3', type: 'seat', label: 'Seat 3', x: 44.035536504424776, y: 1.3106686822553149, width: 12, height: 14 },
     { id: 'seat4', type: 'seat', label: 'Seat 4', x: 4.802267699115044, y: 18.70155350422952, width: 12, height: 14 },
     { id: 'seat5', type: 'seat', label: 'Seat 5', x: 6.36684181415929, y: 73.61294265221446, width: 12, height: 14 },
+    { id: 'seat6', type: 'seat', label: 'Seat 6', x: 87, y: 42, width: 12, height: 14 },
+    { id: 'seat7', type: 'seat', label: 'Seat 7', x: 64, y: 1.3, width: 12, height: 14 },
+    { id: 'seat8', type: 'seat', label: 'Seat 8', x: 24, y: 1.3, width: 12, height: 14 },
+    { id: 'seat9', type: 'seat', label: 'Seat 9', x: 0, y: 42, width: 12, height: 14 },
     { id: 'communityCards', type: 'community', label: 'Community cards', x: 37.820105088495566, y: 35.60837541410697, width: 24, height: 12 },
     { id: 'pot', type: 'pot', label: 'Pot', x: 43.6850110619469, y: 53.94326332379145, width: 12, height: 5 },
     { id: 'actionBar', type: 'actions', label: 'Action bar', x: 25.69759402654867, y: 90.7649158920588, width: 48.4070796460177, height: 9.235084107941205 },

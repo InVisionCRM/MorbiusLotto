@@ -530,14 +530,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                         <button
                           onClick={() => setDepositMethod('pls')}
                           disabled={controlsDisabled}
-                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'pls' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}
+                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'pls' ? 'bg-white text-gradient-to-r from-red-500 to-purple-500 via-pink-500 shadow-sm' : 'text-gray-500 hover:text-black'}`}
                         >
                           PLS
                         </button>
                         <button
                           onClick={() => setDepositMethod('morbius')}
                           disabled={controlsDisabled}
-                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'morbius' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}
+                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'morbius' ? 'bg-white text-gradient-to-r from-purple-500 to-cyan-500 via-purple-500 shadow-sm' : 'text-gray-500 hover:text-black'}`}
                         >
                           MORBIUS
                         </button>

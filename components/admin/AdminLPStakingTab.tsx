@@ -16,6 +16,7 @@ import { merkleClaimLpAbi } from '@/abi/merkle-claim-lp';
 import { ERC20_ABI } from '@/abi/erc20';
 import { MERKLE_CLAIM_LP_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { getApiUrlOptional } from '@/lib/api-urls';
+import { SNAPSHOT_EXCLUSION_CONTRACTS } from '@/lib/snapshot-exclusions';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -421,6 +422,7 @@ export default function AdminLPStakingTab() {
   const [newBlockAddr, setNewBlockAddr] = useState('');
   const [newBlockReason, setNewBlockReason] = useState('');
   const [blocklistBusy, setBlocklistBusy] = useState(false);
+  const [seedFromAllDeploymentsBusy, setSeedFromAllDeploymentsBusy] = useState(false);
 
   // ── Snapshot viewer state ──────────────────────────────────────────────────
   const [snapshotData, setSnapshotData] = useState<Record<number, { rows: SnapshotRow[]; total: number; page: number; loading: boolean }>>({});
@@ -829,6 +831,31 @@ export default function AdminLPStakingTab() {
       await fetchBlocklist();
     } catch { /* non-critical */ } finally {
       setBlocklistBusy(false);
+    }
+  };
+
+  const handleSeedFromAllDeployments = async () => {
+    if (!address) return;
+    setSeedFromAllDeploymentsBusy(true);
+    setError('');
+    try {
+      const existingSet = new Set(blocklist.map((e) => e.address.toLowerCase()));
+      const toAdd = SNAPSHOT_EXCLUSION_CONTRACTS.filter((addr) => addr && !existingSet.has(addr.toLowerCase()));
+      for (let i = 0; i < toAdd.length; i++) {
+        const addr = toAdd[i].startsWith('0x') ? toAdd[i] : `0x${toAdd[i]}`;
+        const res = await fetch(`${apiBase}/api/admin/merkle-lp/blocklist`, {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({ address: addr, reason: 'ALL_DEPLOYMENTS.MD / game or LP contract' }),
+        });
+        if (!res.ok) throw new Error(`Failed to add ${addr}`);
+        existingSet.add(addr.toLowerCase());
+      }
+      await fetchBlocklist();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to seed from ALL_DEPLOYMENTS');
+    } finally {
+      setSeedFromAllDeploymentsBusy(false);
     }
   };
 
@@ -1691,6 +1718,18 @@ export default function AdminLPStakingTab() {
           <p className="text-xs text-slate-400">
             Excluded from all LP snapshots. Burn addresses, game contracts, and staking contracts are pre-populated.
           </p>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <Button
+              size="sm"
+              onClick={handleSeedFromAllDeployments}
+              disabled={seedFromAllDeploymentsBusy || blocklistLoading}
+              className="h-8 bg-slate-700 hover:bg-slate-600 text-white text-xs"
+            >
+              {seedFromAllDeploymentsBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <ShieldX className="w-3 h-3 mr-1" />}
+              Add all ALL_DEPLOYMENTS contracts to this blocklist
+            </Button>
+            <span className="text-[10px] text-slate-500">({SNAPSHOT_EXCLUSION_CONTRACTS.length} addresses)</span>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <input type="text" value={newBlockAddr} onChange={(e) => setNewBlockAddr(e.target.value)}
               placeholder="0x… address"

@@ -217,8 +217,26 @@ export class BlackjackWebSocketClient {
           const msg = JSON.parse(event.data as string);
 
           if (msg.type === 'auth_challenge' && !settled) {
-            // Check if server is in grace period mode (auto-authenticated via query param)
-            // If claimedAddress matches our playerAddress, server already authenticated us
+            const skipAuth = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SKIP_WS_AUTH === 'true';
+            if (skipAuth) {
+              settled = true;
+              logger.info('WebSocket connected (NEXT_PUBLIC_SKIP_WS_AUTH: no sign)');
+              resolve();
+              return;
+            }
+            if (canSign) {
+              // Full EIP-712 auth: sign the nonce and send auth_response, wait for auth_success
+              this.handleAuthChallenge(msg.payload).catch((err) => {
+                console.error('[WS Client] handleAuthChallenge failed:', err.message, err);
+                if (!settled) {
+                  settled = true;
+                  reject(new Error(`Auth challenge failed: ${err.message}`));
+                }
+              });
+              return;
+            }
+
+            // Can't sign — check if server auto-authenticated us via query param (grace period)
             const isGracePeriodAuth = msg.payload?.claimedAddress &&
                                      this.playerAddress &&
                                      msg.payload.claimedAddress.toLowerCase() === this.playerAddress.toLowerCase();
@@ -229,25 +247,12 @@ export class BlackjackWebSocketClient {
               resolve();
               return;
             }
-            
-            if (canSign) {
-              // New auth flow: sign the nonce and send auth_response
-              this.handleAuthChallenge(msg.payload).catch((err) => {
-                console.error('[WS Client] handleAuthChallenge failed:', err.message, err);
-                if (!settled) {
-                  settled = true;
-                  reject(new Error(`Auth challenge failed: ${err.message}`));
-                }
-              });
-              return;
-            } else {
-              // Legacy mode: server sent challenge but we can't sign.
-              // Server is in grace period — resolve immediately.
-              settled = true;
-              logger.info('WebSocket connected (legacy auth, no EIP-712 signing)');
-              resolve();
-              return;
-            }
+
+            // Legacy mode: server sent challenge but we can't sign and no grace period match.
+            settled = true;
+            logger.info('WebSocket connected (legacy auth, no EIP-712 signing)');
+            resolve();
+            return;
           }
 
           if (msg.type === 'auth_success' && !settled) {
@@ -393,12 +398,13 @@ export class BlackjackWebSocketClient {
         return;
       }
 
-      // Set timeout for request
+      // Set timeout (poker_get_state can be slow on cold DB / many players)
+      const timeoutMs = type === 'poker_get_state' ? 60000 : 30000;
       const timeout = setTimeout(() => {
         this.requestPromises.delete(requestId);
         logger.error('Request timeout', { type, requestId, payload });
         reject(new Error(`Request timeout: ${type} (requestId: ${requestId})`));
-      }, 30000);
+      }, timeoutMs);
 
       this.requestPromises.set(requestId, {
         resolve: (data: any) => {

@@ -86,8 +86,9 @@ function getTournamentIdFromRoom(room: string): string {
 }
 
 // When false, unauthenticated clients fall back to trusting the query-param address (V1 behavior).
-// Set to "true" in env once all clients support EIP-712 auth.
 const REQUIRE_WS_AUTH = process.env.REQUIRE_WS_AUTH === 'true';
+// When true, never send auth_challenge — always trust query-param address (stops sign prompts for testing).
+const DISABLE_WS_AUTH = process.env.DISABLE_WS_AUTH === 'true';
 
 const CHAT_MAX_LENGTH = 500;
 const CHAT_RATE_LIMIT_MS = 2000; // min 2s between messages per connection
@@ -138,7 +139,7 @@ export class WebSocketService {
     
     this.contractAddress = BLACKJACK_ADDRESS;
     console.log('[WebSocketService] Using BLACKJACK_ADDRESS:', this.contractAddress);
-    console.log('[WebSocketService] REQUIRE_WS_AUTH:', REQUIRE_WS_AUTH);
+    console.log('[WebSocketService] REQUIRE_WS_AUTH:', REQUIRE_WS_AUTH, 'DISABLE_WS_AUTH:', DISABLE_WS_AUTH);
 
     this.wss.on('connection', this.handleConnection.bind(this));
 
@@ -277,7 +278,8 @@ export class WebSocketService {
 
     this.clients.set(connectionId, ws);
 
-    if (REQUIRE_WS_AUTH) {
+    const sendAuthChallenge = REQUIRE_WS_AUTH && !DISABLE_WS_AUTH;
+    if (sendAuthChallenge) {
       // Strict mode: generate auth challenge, client must sign to proceed
       const authNonce = crypto.randomBytes(32).toString('hex');
       ws.authNonce = authNonce;
@@ -288,16 +290,13 @@ export class WebSocketService {
         payload: { connectionId, nonce: authNonce, claimedAddress }
       });
     } else {
-      // Grace period: trust query-param address (V1 behavior) but still offer auth
-      const authNonce = crypto.randomBytes(32).toString('hex');
-      ws.authNonce = authNonce;
-      console.log('[WS Auth] Grace period mode: claimedAddress=', claimedAddress, 'connectionId=', connectionId);
+      // No challenge: trust query-param address (DISABLE_WS_AUTH or REQUIRE_WS_AUTH=false)
+      console.log('[WS Auth] No challenge:', DISABLE_WS_AUTH ? 'DISABLE_WS_AUTH' : 'REQUIRE_WS_AUTH=false', 'claimedAddress=', claimedAddress, 'connectionId=', connectionId);
 
       if (claimedAddress) {
-        // Auto-authenticate with the query-param address (legacy support)
         ws.playerAddress = claimedAddress;
         ws.isAuthenticated = true;
-        console.log('[WS Auth] Legacy auto-auth for', claimedAddress);
+        console.log('[WS Auth] Auto-auth for', claimedAddress);
 
         try {
           const player = await this.dbService.getOrCreatePlayer(claimedAddress);
@@ -310,11 +309,10 @@ export class WebSocketService {
         logger.warn('WebSocket connection without player address', { connectionId });
       }
 
-      // Still send auth_challenge so new clients can upgrade to EIP-712 auth
-      console.log('[WS Auth] Sending auth_challenge (upgrade offer)', { connectionId });
+      // Send connection_established so client connects without any auth prompt
       this.sendMessage(ws, {
-        type: 'auth_challenge',
-        payload: { connectionId, nonce: authNonce, claimedAddress }
+        type: 'connection_established',
+        payload: { connectionId, playerAddress: claimedAddress ?? undefined }
       });
     }
   }
@@ -570,7 +568,14 @@ export class WebSocketService {
       }
     } catch (error) {
       logger.error('Error handling WebSocket message:', error);
-      this.sendError(ws, 'Invalid message format', undefined);
+      let requestId: string | undefined;
+      try {
+        const parsed = JSON.parse(data.toString());
+        requestId = parsed?.requestId;
+      } catch {
+        // ignore
+      }
+      this.sendError(ws, (error as Error)?.message || 'Invalid message format', requestId);
     }
   }
 
@@ -582,8 +587,8 @@ export class WebSocketService {
     if (ws.isAuthenticated) {
       return true;
     }
-    // In grace period, having a playerAddress (from query param) is enough
-    if (!REQUIRE_WS_AUTH && ws.playerAddress) {
+    // No challenge mode or grace period: trust query-param address
+    if ((DISABLE_WS_AUTH || !REQUIRE_WS_AUTH) && ws.playerAddress) {
       return true;
     }
     this.sendError(ws, 'Not authenticated. Please sign the auth challenge first.', message.requestId);
@@ -1597,6 +1602,17 @@ export class WebSocketService {
       type: 'chat_message_deleted',
       payload: { roomId, messageId }
     });
+  }
+
+  /** Broadcast current poker table state to room (e.g. after API adds bots so UI updates). */
+  public async broadcastPokerTableState(tableId: string): Promise<void> {
+    if (!this.pokerGameService) return;
+    try {
+      const state = await this.pokerGameService.getTableState(tableId, null);
+      this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: state });
+    } catch (err) {
+      logger.error('broadcastPokerTableState failed', { tableId, error: err });
+    }
   }
 
   // Get connection count

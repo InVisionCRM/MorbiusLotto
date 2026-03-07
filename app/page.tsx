@@ -61,16 +61,13 @@ export default function HomePage() {
       onOpenPlayerProfile={address ? (game) => { setPlayerProfileGame(game ?? 'all'); setPlayerProfileOpen(true); } : undefined}
     >
       <div className="min-h-screen text-white flex flex-col items-center relative" style={{ background: Theme.greyGradient.background }}>
-        <StickyBanner
-          className="!min-h-0 py-1 px-3 bg-gradient-to-r from-cyan-400 via-cyan-300 to-cyan-400 text-black font-poppins text-xs font-medium tracking-wide"
-          closeIconClassName="text-black"
-        >
-          The Morbius token analyzer has been redirected to{' '}
+        <StickyBanner className="font-poppins text-md md:text-lg tracking-wide">
+          The Morbius token analyzer has been redirected to...{' '}
           <a
             href="https://scan.morbius.io"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-bold underline underline-offset-1 hover:opacity-80"
+            className="font-bold underline underline-offset-1 hover:opacity-80 text-cyan-300"
           >
             Scan.Morbius.io
           </a>

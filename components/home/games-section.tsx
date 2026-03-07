@@ -2,7 +2,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { PaymentBadges } from '@/components/home/payment-badges'
-import { Theme } from '@/lib/theme'
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 40 },
@@ -23,10 +22,16 @@ const staggerContainer = {
 
 export function GamesSection() {
   return (
-    <main className="w-full px-4 py-6 md:py-8 relative z-10" id="games">
+    <main className="w-full px-4 py-6 md:py-8 relative z-10 overflow-hidden" id="games">
+      {/* Static background */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.06] pointer-events-none"
+        style={{ backgroundImage: 'url(/BlackJack/TourCards/TourCard2.png)' }}
+        aria-hidden
+      />
       {/* Section header — matches other home sections */}
       <motion.div
-        className="text-center mb-8"
+        className="relative z-10 text-center mb-8"
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, margin: "0%" }}
@@ -39,7 +44,7 @@ export function GamesSection() {
 
       {/* Games Grid — 2 cols min, 4 max; tight gaps; scroll animation */}
       <motion.div
-        className="grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-2 max-w-6xl mx-auto relative"
+        className="relative z-10 grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-2 max-w-6xl mx-auto"
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, margin: '-40px' }}
@@ -49,13 +54,13 @@ export function GamesSection() {
         {/* Lottery Card */}
         <motion.div variants={fadeInUp}>
           <Link href="/lottery" className="group block">
-            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
               <div className="relative h-full w-full rounded-xl overflow-hidden">
                 <Image
                   src="/morbius/Lottoscreenshot.png"
                   alt="Mega Morbius Lotto"
                   fill
-                  className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+                  className="object-cover opacity-[0.05] group-hover:opacity-10 transition-opacity duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <PaymentBadges />
@@ -70,13 +75,13 @@ export function GamesSection() {
         {/* Keno Card */}
         <motion.div variants={fadeInUp}>
           <Link href="/keno" className="group block">
-            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
               <div className="relative h-full w-full rounded-xl overflow-hidden">
                 <Image
                   src="/morbius/KENOscreenshot.png"
                   alt="Crypto Keno"
                   fill
-                  className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+                  className="object-cover opacity-[0.05] group-hover:opacity-10 transition-opacity duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <PaymentBadges />
@@ -91,7 +96,7 @@ export function GamesSection() {
         {/* Plinko Card */}
         <motion.div variants={fadeInUp}>
           <Link href="/PLINKO" className="group block">
-            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
               <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
                 NEW!
               </div>
@@ -100,7 +105,7 @@ export function GamesSection() {
                   src="/morbius/plinkoscreenshot.png"
                   alt="Plinko"
                   fill
-                  className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+                  className="object-cover opacity-[0.05] group-hover:opacity-10 transition-opacity duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <PaymentBadges />
@@ -115,7 +120,7 @@ export function GamesSection() {
         {/* BlackJack Card */}
         <motion.div variants={fadeInUp}>
           <Link href="/BLACKJACK" className="group block">
-            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105" style={Theme.panel.base}>
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
               <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
                 NEW!
               </div>
@@ -124,7 +129,7 @@ export function GamesSection() {
                   src="/BlackJack/TableBackground1.png"
                   alt="BlackJack"
                   fill
-                  className="object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-300"
+                  className="object-cover opacity-[0.05] group-hover:opacity-10 transition-opacity duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <PaymentBadges />

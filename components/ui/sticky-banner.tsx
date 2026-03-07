@@ -2,17 +2,18 @@
 import React, { SVGProps, useState } from "react";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
 import { cn } from "@/lib/utils";
+import { Theme } from "@/lib/theme";
 
 export const StickyBanner = ({
   className,
   children,
   hideOnScroll = false,
-  closeIconClassName = "text-white",
+  closeIconClassName = "text-cyan-400",
 }: {
   className?: string;
   children: React.ReactNode;
   hideOnScroll?: boolean;
-  /** Class for the close icon (e.g. text-black for light backgrounds). */
+  /** Class for the close icon (e.g. text-cyan-400 for dark backgrounds). */
   closeIconClassName?: string;
 }) => {
   const [open, setOpen] = useState(true);
@@ -29,9 +30,10 @@ export const StickyBanner = ({
   return (
     <motion.div
       className={cn(
-        "sticky inset-x-0 top-0 z-40 flex min-h-14 w-full items-center justify-center bg-transparent px-4 py-1",
+        "sticky inset-x-0 top-0 z-40 flex min-h-[4rem] w-full items-center justify-center px-4 py-3 text-cyan-400 text-base font-medium",
         className,
       )}
+      style={{ background: Theme.greyGradient.background }}
       initial={{
         y: -100,
         opacity: 0,
