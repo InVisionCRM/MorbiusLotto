@@ -265,7 +265,7 @@ export function MerkleClaimsPanel() {
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 space-y-1.5">
         <p className="text-[10px] uppercase tracking-wider text-white/20 font-poppins font-semibold">How it works</p>
         <p className="text-[11px] text-white/35 font-poppins leading-relaxed">
-          <span className="text-white/50">2.5% of every game withdrawal</span> on MORBlotto is set aside for MORBIUS holders. Rewards are distributed proportionally — the more MORBIUS you hold, the larger your share. No staking or locking required.
+          <span className="text-white/50">1.25% of all wagers or withdraws</span> on MORBlotto is set aside for MORBIUS holders. Rewards are distributed proportionally — the more MORBIUS you hold, the larger your share. No staking or locking required.
         </p>
         <p className="text-[11px] text-white/25 font-poppins">
           Unclaimed rewards carry forward automatically — miss a drop and your share rolls into the next one so you never lose out.
