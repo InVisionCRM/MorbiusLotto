@@ -548,6 +548,11 @@ export class WebSocketService {
           await this.handlePokerLeaveTable(ws, message);
           break;
 
+        case 'poker_add_chips':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handlePokerAddChips(ws, message);
+          break;
+
         case 'poker_action':
           if (!this.requireAuth(ws, message)) return;
           await this.handlePokerAction(ws, message);
@@ -1239,6 +1244,30 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error leaving poker table:', error);
       this.sendError(ws, (error as Error).message || 'Failed to leave table', message.requestId);
+    }
+  }
+
+  private async handlePokerAddChips(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerGameService || !ws.playerAddress) {
+        return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+      }
+      const payload = message.payload as { tableId?: string; amount?: string };
+      const { tableId, amount } = payload ?? {};
+      if (!tableId || typeof tableId !== 'string') {
+        return this.sendError(ws, 'tableId required', message.requestId);
+      }
+      if (!amount || typeof amount !== 'string') {
+        return this.sendError(ws, 'amount required', message.requestId);
+      }
+      const state = await this.pokerGameService.addChips(tableId, ws.playerAddress, amount);
+      this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+      const roomId = `poker:table:${tableId}`;
+      const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+      this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: broadcastState });
+    } catch (error) {
+      logger.error('Error adding chips to poker table:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to add chips', message.requestId);
     }
   }
 

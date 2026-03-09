@@ -236,7 +236,7 @@ export class MerkleDropsLPService {
     const epoch = await this.getEpoch(epochId);
     if (!epoch) throw new Error(`LP Epoch ${epochId} not found`);
 
-    // Load blocklist
+    // Load blocklist from DB (includes ALL_DEPLOYMENTS.MD rows from migration 053)
     const { rows: blockedRows } = await this.pool.query<{ address: string }>(
       'SELECT address FROM merkle_lp_blocklist',
     );

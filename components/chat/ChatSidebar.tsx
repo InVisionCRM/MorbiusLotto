@@ -87,7 +87,7 @@ export function ChatSidebar() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex flex-col items-center justify-center gap-1.5 w-12 h-40 rounded-l-xl hover:bg-white/10 transition-colors"
+          className="flex flex-col items-center justify-center gap-1.5 w-8 h-30 rounded-l-xl hover:bg-white/10 transition-colors"
           style={{
             position: 'fixed',
             right: 0,

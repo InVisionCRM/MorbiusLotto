@@ -22,7 +22,7 @@ export function MorbiusInfoSection() {
           Not just a game, but a tokenomics engine.
         </h2>
         <p className="text-white/90 text-lg md:text-xl font-medium max-w-2xl mx-auto leading-relaxed">
-          Morbius was created to prove the power of what a simple meme coin can become. The Morbius Platform is built for the community and to bring more utility to not only Morbius Token but anyones tokens, especially to those who are new to the space. Weones launched on Pump.Tires. We will try to garner the most utility possible through partnerships and building. Currently, $Morbius is the token used to play games on morbius.io and the rewards token given to holders and LP providers.
+          Morbius was created to prove the power of what a simple meme coin can become. The Morbius Platform is built for the community and to bring more utility to not only Morbius Token but anyones tokens, especially to those that were launched on Pump.Tires. We will try to garner the most utility possible through partnerships and building. Currently, $Morbius is the token used to play games on morbius.io and the rewards token given to holders and LP providers.
         </p>
       </div>
 

@@ -38,7 +38,7 @@ export default function BlackjackTopPlayers() {
 
   if (!apiUrl) {
     return (
-      <div className="rounded-xl overflow-hidden min-w-0" style={PANEL_STYLE}>
+      <div className="rounded-xl overflow-hidden min-w-0 h-full flex flex-col" style={PANEL_STYLE}>
         <div className="px-3 py-2 border-b border-white/10">
           <h3 className="text-cyan-300 font-semibold text-sm">Leaderboard</h3>
         </div>
@@ -52,7 +52,7 @@ export default function BlackjackTopPlayers() {
   if (error) {
     const message = error instanceof Error ? error.message : 'Failed to load leaderboard.'
     return (
-      <div className="rounded-xl overflow-hidden min-w-0" style={PANEL_STYLE}>
+      <div className="rounded-xl overflow-hidden min-w-0 h-full flex flex-col" style={PANEL_STYLE}>
         <div className="px-3 py-2 border-b border-white/10">
           <h3 className="text-cyan-300 font-semibold text-sm">Leaderboard</h3>
         </div>
@@ -93,10 +93,11 @@ export default function BlackjackTopPlayers() {
 
   return (
     <>
-      <div className="rounded-xl overflow-hidden" style={PANEL_STYLE}>
-        <div className="px-3 py-2 border-b border-white/10">
+      <div className="rounded-xl overflow-hidden h-full flex flex-col min-h-0" style={PANEL_STYLE}>
+        <div className="px-3 py-2 border-b border-white/10 shrink-0">
           <h3 className="text-cyan-300 font-semibold text-sm">Leaderboard</h3>
         </div>
+        <div className="flex-1 min-h-0 overflow-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-white/10 hover:bg-transparent">
@@ -132,6 +133,7 @@ export default function BlackjackTopPlayers() {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <PlayerProfileModal

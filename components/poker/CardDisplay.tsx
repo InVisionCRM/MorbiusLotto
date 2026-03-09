@@ -2,11 +2,9 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { usePokerTheme } from './PokerThemeContext';
 
 /** Card index 0-51: rank = (idx % 13), suit = floor(idx/13) */
 const RANK_NAMES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-const SUIT_SYMBOLS = ['♥', '♦', '♣', '♠'];
 const SUIT_LETTERS = ['H', 'D', 'C', 'S'];
 const SUIT_NAMES = ['hearts', 'diamonds', 'clubs', 'spades'];
 
@@ -33,9 +31,6 @@ export interface CardDisplayProps {
 }
 
 export function CardDisplay({ cardIndex, small, faceDown, className = '' }: CardDisplayProps) {
-  const themeId = usePokerTheme();
-  const useTextVariant = themeId === 'cyberpunk';
-
   const sizeClasses = small
     ? 'w-7 h-10 sm:w-10 sm:h-14 md:w-12 md:h-[68px]'
     : 'w-12 h-[68px] sm:w-14 sm:h-20';
@@ -50,46 +45,6 @@ export function CardDisplay({ cardIndex, small, faceDown, className = '' }: Card
   const isFaceDown = faceDown || (cardIndex != null && (cardIndex < 0 || cardIndex > 51));
   const isEmpty = !isFaceDown && cardIndex == null;
   const isFaceUp = !isFaceDown && !isEmpty;
-
-  if (useTextVariant) {
-    const textSize = small ? 'text-sm sm:text-lg' : 'text-xl';
-    if (isFaceDown) {
-      return (
-        <div
-          className={`rounded border ${sizeClasses} flex items-center justify-center bg-[var(--poker-card-bg)]`}
-          style={{ borderColor: 'var(--poker-text-muted)' }}
-        >
-          <span className="text-[var(--poker-text-muted)] text-xs">?</span>
-        </div>
-      );
-    }
-    if (isEmpty) {
-      return (
-        <div
-          className={`rounded border ${sizeClasses} flex items-center justify-center`}
-          style={{ borderColor: 'var(--poker-card-border)', background: 'var(--poker-card-bg)' }}
-        >
-          <div className="w-3 h-3 rounded-full border border-[var(--poker-text-muted)]" />
-        </div>
-      );
-    }
-    const rank = cardIndex! % 13;
-    const suit = Math.floor(cardIndex! / 13);
-    const isRed = suit <= 1;
-    return (
-      <div
-        className={`poker-card-deal rounded border ${sizeClasses} flex flex-col items-center justify-center ${textSize} font-bold`}
-        style={{
-          borderColor: 'var(--poker-card-border)',
-          background: 'var(--poker-card-bg)',
-          boxShadow: '0 0 8px var(--poker-accent-muted)',
-          color: isRed ? 'var(--poker-danger)' : 'var(--poker-accent)',
-        }}
-      >
-        {RANK_NAMES[rank]}{SUIT_SYMBOLS[suit]}
-      </div>
-    );
-  }
 
   return (
     <div className={`poker-card-wrapper ${className}`}>

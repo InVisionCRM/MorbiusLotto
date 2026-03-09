@@ -33,19 +33,10 @@ export function PokerBoard({ communityCards, pot }: PokerBoardProps) {
           </span>
         </div>
       )}
-      <div
-        className="rounded-xl sm:rounded-2xl border backdrop-blur-md px-1.5 py-1 sm:px-3 sm:py-2"
-        style={{
-          borderColor: 'var(--poker-card-border)',
-          background: 'var(--poker-card-bg)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 18px 50px rgba(0,0,0,0.55)',
-        }}
-      >
-        <div className="flex gap-0.5 sm:gap-1.5 flex-wrap justify-center">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <CardDisplay key={i} cardIndex={communityCards[i]} small />
-          ))}
-        </div>
+      <div className="grid grid-cols-5 gap-2 sm:gap-3">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <CardDisplay key={i} cardIndex={communityCards[i]} small />
+        ))}
       </div>
     </div>
   );

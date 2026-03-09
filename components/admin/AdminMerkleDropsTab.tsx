@@ -571,9 +571,6 @@ export default function AdminMerkleDropsTab() {
     try {
       const existingSet = new Set(blocklist.map((e) => e.address.toLowerCase()));
       const toAdd: string[] = [];
-      SNAPSHOT_EXCLUSION_SET.forEach((addr) => {
-        if (!existingSet.has(addr)) toAdd.push(addr);
-      });
       lpPairAddresses.forEach((addr) => {
         if (addr && !existingSet.has(addr)) {
           toAdd.push(addr);
@@ -587,7 +584,7 @@ export default function AdminMerkleDropsTab() {
           headers: adminHeaders(),
           body: JSON.stringify({
             address: addr.startsWith('0x') ? addr : `0x${addr}`,
-            reason: SNAPSHOT_EXCLUSION_SET.has(addr) ? 'Contract (ALL_DEPLOYMENTS / lib/contracts)' : 'LP pair (merkle-lp)',
+            reason: 'LP pair (merkle-lp)',
           }),
         });
         if (!res.ok) throw new Error(`Failed to add ${addr}`);
@@ -889,6 +886,47 @@ export default function AdminMerkleDropsTab() {
 
   return (
     <div className="space-y-4">
+
+      {/* ── Send MORBIUS: deposit addresses ── */}
+      <Card className="bg-slate-900/80 border-cyan-500/30">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+            <Wallet className="w-4 h-4 text-cyan-400" />
+            Send MORBIUS to be added to claims
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-3">
+          <p className="text-xs text-slate-400">
+            Send MORBIUS to these contract addresses. Tokens are distributed in the next epoch to holders (Morbius claims) or LP stakers (LP drops).
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 px-3 py-2.5 space-y-1">
+              <p className="text-[10px] uppercase tracking-wider text-cyan-400/80 font-semibold">Morbius holder claims</p>
+              <a
+                href={`https://scan.pulsechain.com/address/${MERKLE_CLAIM_MORBIUS_ADDRESS}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] font-mono text-slate-200 hover:text-cyan-400 break-all flex items-center gap-1"
+              >
+                {MERKLE_CLAIM_MORBIUS_ADDRESS}
+                <ExternalLink className="w-3 h-3 shrink-0" />
+              </a>
+            </div>
+            <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 px-3 py-2.5 space-y-1">
+              <p className="text-[10px] uppercase tracking-wider text-cyan-400/80 font-semibold">LP drops</p>
+              <a
+                href={`https://scan.pulsechain.com/address/${MERKLE_CLAIM_LP_ADDRESS}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] font-mono text-slate-200 hover:text-cyan-400 break-all flex items-center gap-1"
+              >
+                {MERKLE_CLAIM_LP_ADDRESS}
+                <ExternalLink className="w-3 h-3 shrink-0" />
+              </a>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ── Schedule & Settings Card ── */}
       <Card className="bg-slate-900/80 border-slate-700/50">
@@ -1435,9 +1473,34 @@ export default function AdminMerkleDropsTab() {
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-4 space-y-3">
-          <p className="text-xs text-slate-400">
-            Excluded from all snapshots. Burn addresses, LP pairs, game/staking contracts are pre-populated.
-          </p>
+          <div className="rounded border border-emerald-500/20 bg-emerald-950/10 px-3 py-2.5 text-[11px] text-slate-300 space-y-2">
+            <p className="font-medium text-emerald-400/90">
+              All {SNAPSHOT_EXCLUSION_SET.size} contract addresses from ALL_DEPLOYMENTS.MD are in the real exclusion list: they are stored in <code className="text-slate-500">merkle_blocklist</code> and <code className="text-slate-500">merkle_lp_blocklist</code> (migration 053). You will see them in the table below with reason &quot;ALL_DEPLOYMENTS.MD&quot;.
+            </p>
+            <p className="text-slate-400">
+              The list below is for <span className="text-slate-300">additional</span> exclusions (e.g. LP pairs, one-off addresses). Add LP pairs with the button, or type an address to block.
+            </p>
+            <details className="group mt-2">
+              <summary className="cursor-pointer list-none flex items-center gap-1.5 text-slate-400 hover:text-slate-300 text-[10px] font-medium uppercase tracking-wider">
+                <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+                Show built-in exclusion addresses ({SNAPSHOT_EXCLUSION_SET.size})
+              </summary>
+              <div className="mt-2 max-h-48 overflow-y-auto rounded border border-slate-700/50 bg-slate-900/60 p-2 space-y-1">
+                {Array.from(SNAPSHOT_EXCLUSION_SET).map((addr) => (
+                  <a
+                    key={addr}
+                    href={`https://scan.pulsechain.com/address/${addr}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-[10px] font-mono text-slate-400 hover:text-cyan-400 truncate"
+                    title={addr}
+                  >
+                    {addr}
+                  </a>
+                ))}
+              </div>
+            </details>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               size="sm"
@@ -1446,7 +1509,7 @@ export default function AdminMerkleDropsTab() {
               className="h-8 bg-slate-700 hover:bg-slate-600 text-white text-xs"
             >
               {seedBlocklistBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <ShieldX className="w-3 h-3 mr-1" />}
-              Add all contracts &amp; LPs to blocklist
+              Add LP pairs to blocklist
             </Button>
             <Button
               size="sm"
@@ -1458,7 +1521,7 @@ export default function AdminMerkleDropsTab() {
               Add all LP Staking exclusions to this blocklist
             </Button>
             <span className="text-[10px] text-slate-500">
-              ({SNAPSHOT_EXCLUSION_SET.size} contracts + {lpPairAddresses.length} LP pair{lpPairAddresses.length !== 1 ? 's' : ''})
+              ({lpPairAddresses.length} LP pair{lpPairAddresses.length !== 1 ? 's' : ''} available to add)
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">

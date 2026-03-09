@@ -217,7 +217,7 @@ export class MerkleDropsService {
       Math.floor(Number(epoch.min_holding_threshold)) * 1e18,
     );
 
-    // Load blocklist
+    // Load blocklist from DB (includes ALL_DEPLOYMENTS.MD rows from migration 053)
     const { rows: blockedRows } = await this.pool.query<{ address: string }>(
       'SELECT address FROM merkle_blocklist',
     );

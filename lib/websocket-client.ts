@@ -119,6 +119,8 @@ export interface PokerCurrentHand {
   lastAction: { position: number; action: string; amount: string } | null;
   minRaise: string;
   toCall: string;
+  /** At showdown: all players' revealed hole cards keyed by lowercase address */
+  showdownHands?: Record<string, number[]>;
 }
 
 export interface PokerTableState {
@@ -448,25 +450,22 @@ export class BlackjackWebSocketClient {
           logger.debug('Found promise for request', { requestId: message.requestId, type: message.type });
 
           if (message.type === 'error') {
-            // Handle various error payload formats
+            // Handle various error payload formats — coerce everything to a string
             let errorMessage = 'Unknown server error';
             if (message.payload) {
               if (typeof message.payload === 'string') {
                 errorMessage = message.payload;
-              } else if (message.payload.message) {
-                errorMessage = message.payload.message;
-              } else if (message.payload.error) {
-                errorMessage = message.payload.error;
-              } else if (Object.keys(message.payload).length > 0) {
-                errorMessage = JSON.stringify(message.payload);
+              } else {
+                const raw = message.payload.message ?? message.payload.error;
+                if (raw != null) {
+                  errorMessage = typeof raw === 'string' ? raw : JSON.stringify(raw);
+                } else if (Object.keys(message.payload).length > 0) {
+                  errorMessage = JSON.stringify(message.payload);
+                }
               }
             }
-            // Log only serializable primitives so console never shows {}
-            logger.error('Server returned error', {
-              requestId: message.requestId,
-              message: errorMessage,
-              requestType: message.type,
-            });
+            // Embed message in the primary string so it's always visible in the console
+            logger.error(`Server returned error: ${errorMessage}`, { requestId: message.requestId });
             promise.reject(new Error(errorMessage));
           } else {
             logger.debug('Resolving promise', { requestId: message.requestId, type: message.type });
@@ -623,6 +622,11 @@ export class BlackjackWebSocketClient {
   /** Leave a table (stack is credited back to balance). Auth required. */
   async pokerLeaveTable(tableId: string): Promise<PokerTableState | null> {
     return this.sendRequest('poker_leave_table', { tableId });
+  }
+
+  /** Add chips to an existing seat (deducted from balance, takes effect immediately). Auth required. */
+  async pokerAddChips(tableId: string, amount: string): Promise<PokerTableState> {
+    return this.sendRequest('poker_add_chips', { tableId, amount });
   }
 
   /** Send a poker action: fold, check, call, bet, raise. For bet/raise pass amount as string. Auth required. */

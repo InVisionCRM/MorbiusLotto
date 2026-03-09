@@ -2803,12 +2803,12 @@ export default function BlackjackPage() {
         </div>
 
         {/* Leaderboard + Recent Play (same as Plinko/Keno/Lottery) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-4 px-0">
-          <div className="min-w-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-4 px-0 items-stretch">
+          <div className="min-w-0 min-h-0 flex flex-col">
             <BlackjackTopPlayers />
           </div>
-          <div className="min-w-0">
-            <BlackjackRecentPlays limit={20} compact title="Recent Play" />
+          <div className="min-w-0 min-h-0 flex flex-col">
+            <BlackjackRecentPlays limit={25} compact title="Recent Play" />
           </div>
         </div>
 

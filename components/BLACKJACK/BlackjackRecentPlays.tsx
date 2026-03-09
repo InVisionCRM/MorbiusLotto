@@ -89,7 +89,7 @@ export interface BlackjackRecentPlaysProps {
 
 /** Global recent blackjack games (all players) for Recent Play feed. */
 export function BlackjackRecentPlays({
-  limit = 20,
+  limit = 25,
   compact = true,
   title = 'Recent Play',
 }: BlackjackRecentPlaysProps) {
@@ -99,11 +99,11 @@ export function BlackjackRecentPlays({
 
   return (
     <>
-      <div className="rounded-xl overflow-hidden w-full max-w-xl" style={panelStyle}>
-        <div className="px-3 py-2 border-b border-white/10">
+      <div className="rounded-xl overflow-hidden w-full max-w-xl h-full flex flex-col min-h-0" style={panelStyle}>
+        <div className="px-3 py-2 border-b border-white/10 shrink-0">
           <h3 className="text-cyan-300 font-semibold text-sm">{title}</h3>
         </div>
-        <div className="max-h-64 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {error ? (
             <div className="p-4 text-center text-red-400/90 text-sm">Couldn&apos;t load recent plays.</div>
           ) : isLoading ? (

@@ -204,7 +204,14 @@ export default function PokerLobbyPage() {
       const { tableId } = await client.pokerCreateTable(sbWei, bbWei, createModal.maxSeats);
       client.disconnect();
       setCreateModal(null);
-      router.push(`/poker/${tableId}`);
+      // Navigate with join params so the table page seats the creator automatically
+      let buyInWei: string;
+      try {
+        buyInWei = parseEther(buyIn.trim().replace(/,/g, '') || '0').toString();
+      } catch {
+        buyInWei = parseEther('1000').toString();
+      }
+      router.push(`/poker/${tableId}?join=1&buyIn=${encodeURIComponent(buyInWei)}`);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to create table');
     } finally {
@@ -219,7 +226,7 @@ export default function PokerLobbyPage() {
   return (
     <GlobalMainNav page="home">
       <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
         <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
           <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4 mb-4 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
@@ -264,44 +271,83 @@ export default function PokerLobbyPage() {
             </p>
           )}
           {!loading && tables.length > 0 && (
-            <div className="grid gap-3 sm:gap-4">
-              {tables.map((t) => (
-                <div
-                  key={t.id}
-                  className="rounded-xl border border-cyan-500/30 p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 sm:gap-4"
-                  style={{
-                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  <div className="min-w-0">
-                    <span className="text-cyan-400 font-medium text-sm sm:text-base">{formatChips(t.smallBlind)}/{formatChips(t.bigBlind)}</span>
-                    <span className="text-slate-400 ml-1 sm:ml-2 text-xs sm:text-sm">
-                      {t.seatedCount}/{t.maxSeats} seated
-                    </span>
-                    <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs font-medium uppercase tracking-wider text-slate-500">
-                      {t.status === 'playing' ? 'In progress' : 'Waiting'}
-                    </span>
-                  </div>
-                  <div className="flex gap-1.5 sm:gap-2 shrink-0">
-                    <Link
-                      href={`/poker/${t.id}`}
-                      className="px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-cyan-600/50 text-cyan-200 hover:bg-cyan-600 text-xs sm:text-sm"
-                    >
-                      Watch
-                    </Link>
-                    {isConnected && (
-                      <button
-                        type="button"
-                        onClick={() => setJoinModal({ tableId: t.id })}
-                        className="px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-700 hover:to-blue-700 text-xs sm:text-sm"
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {tables.map((t) => {
+                const isPlaying = t.status === 'playing';
+                const openSeats = t.maxSeats - t.seatedCount;
+                return (
+                  <div
+                    key={t.id}
+                    className="bg-[#e0e5ec] rounded-[2rem] p-6 flex flex-col justify-between gap-6"
+                    style={{ boxShadow: '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)' }}
+                  >
+                    {/* Top row: icon + status */}
+                    <div className="flex justify-between items-center">
+                      <div
+                        className="w-11 h-11 rounded-full bg-[#e0e5ec] flex items-center justify-center text-slate-500 text-lg"
+                        style={{ boxShadow: 'inset 5px 5px 10px rgb(163,177,198,0.6), inset -5px -5px 10px rgba(255,255,255,0.5)' }}
                       >
-                        Join
-                      </button>
-                    )}
+                        ♠
+                      </div>
+                      <div
+                        className="px-3 py-1.5 rounded-full bg-[#e0e5ec]"
+                        style={{ boxShadow: '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)' }}
+                      >
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isPlaying ? 'text-emerald-600' : 'text-slate-500'}`}>
+                          {isPlaying ? 'In Progress' : 'Waiting'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Middle: blinds + game type */}
+                    <div className="text-center">
+                      <h3 className="text-2xl font-bold text-slate-700 tracking-tight mb-1">
+                        {formatChips(t.smallBlind)} / {formatChips(t.bigBlind)}
+                      </h3>
+                      <p className="text-slate-500 font-medium text-sm">No-Limit Texas Hold&apos;em</p>
+                    </div>
+
+                    {/* Stats row */}
+                    <div className="flex justify-between items-center px-1">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Players</span>
+                        <span className="text-base font-bold text-slate-700 flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" /></svg>
+                          {t.seatedCount}/{t.maxSeats}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 text-right">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Open Seats</span>
+                        <span className="text-base font-bold text-slate-700">{openSeats}</span>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-3">
+                      <Link
+                        href={`/poker/${t.id}`}
+                        className="flex-1 py-3 rounded-2xl bg-[#e0e5ec] text-slate-500 font-bold uppercase tracking-widest text-xs text-center transition-all duration-200"
+                        style={{ boxShadow: '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)' }}
+                        onMouseDown={(e) => { e.currentTarget.style.boxShadow = 'inset 5px 5px 10px rgb(163,177,198,0.6), inset -5px -5px 10px rgba(255,255,255,0.5)'; }}
+                        onMouseUp={(e) => { e.currentTarget.style.boxShadow = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)'; }}
+                      >
+                        Watch
+                      </Link>
+                      {isConnected && (
+                        <button
+                          type="button"
+                          onClick={() => setJoinModal({ tableId: t.id })}
+                          className="flex-1 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs text-white transition-all duration-200 active:scale-95"
+                          style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', boxShadow: '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)' }}
+                        >
+                          Sit Down
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

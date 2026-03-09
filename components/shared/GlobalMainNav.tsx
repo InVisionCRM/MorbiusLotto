@@ -390,6 +390,15 @@ function NavContent(props: {
           ))}
         </div>
 
+        {/* Advertising */}
+        <div className="pt-2 mt-2 border-t border-white/10">
+          <div className="px-2 py-1 overflow-hidden">
+            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Advertising</motion.span>
+          </div>
+          <SidebarLink link={{ label: 'Add Table', href: '/marketing', icon: <i className="fas fa-plus-square w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <i className="fas fa-bullhorn w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+        </div>
+
         {/* Other */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <div className="px-2 py-1 overflow-hidden">

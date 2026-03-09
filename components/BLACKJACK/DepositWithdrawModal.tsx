@@ -23,6 +23,20 @@ import { Theme, getPanelStyles } from '@/lib/theme'
 import { toast } from 'sonner'
 import { ReportModal } from '@/components/shared/ReportModal'
 
+const MORBIUS_LOGO = '/morbius/MorbiusLogo-2.svg'
+const PLS_LOGO = '/Pulse Branding/Logo/ball.png'
+
+function TokenLabel({ symbol, size = 'md' }: { symbol: 'MORBIUS' | 'PLS'; size?: 'sm' | 'md' }) {
+  const src = symbol === 'MORBIUS' ? MORBIUS_LOGO : PLS_LOGO
+  const dim = size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'
+  return (
+    <span className="inline-flex items-center gap-1 shrink-0">
+      <img src={src} alt="" className={`${dim} object-contain`} />
+      <span>{symbol}</span>
+    </span>
+  )
+}
+
 interface DepositWithdrawModalProps {
   isOpen: boolean
   onClose: () => void
@@ -51,6 +65,10 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   const [isPreparingWithdraw, setIsPreparingWithdraw] = useState(false)
   const [legacyWithdrawAmounts, setLegacyWithdrawAmounts] = useState<Record<string, string>>({})
   const [dismissedLegacy, setDismissedLegacy] = useState<Set<string>>(new Set())
+  const [showLegacyPanel, setShowLegacyPanel] = useState(false)
+  type DepositPhase = 'idle' | 'confirming' | 'confirming_on_chain' | 'success' | 'error'
+  const [depositPhase, setDepositPhase] = useState<DepositPhase>('idle')
+  const [depositError, setDepositError] = useState<string | null>(null)
 
   interface TxHistoryItem {
     type: 'deposit' | 'withdrawal'
@@ -111,6 +129,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   }
 
   const LEGACY_MAX_WITHDRAW_WEI = BigInt(1_000_000) * BigInt(1e18)
+  const MIN_LEGACY_MORBIUS_WEI = BigInt(500) * BigInt(1e18)
 
   const {
     depositTx,
@@ -177,8 +196,6 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       label: 'Previous contract (5)',
     })
   }
-  const hasAnyLegacyBalance = legacyItems.some((item) => item.reserve > BigInt(0))
-
   const { balance: morbiusBalance } = useTokenBalance(address)
   const { balance: plsBalance } = useNativeBalance(address ?? undefined)
 
@@ -222,16 +239,22 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       setTxHistory([])
       setTxError(null)
       setDismissedLegacy(new Set())
+      setShowLegacyPanel(false)
+      setDepositPhase('idle')
+      setDepositError(null)
     }
   }, [isOpen])
 
   const handleDepositPLS = async () => {
     if (!depositAmount || !plsEquivalent || !publicClient) return
+    setDepositError(null)
+    setDepositPhase('confirming')
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS worth of PLS`,
     })
     try {
       const txHash = await deposit(plsEquivalent)
+      setDepositPhase('confirming_on_chain')
       toast.loading('Transaction processing...', {
         id: toastId,
         description: 'Waiting for blockchain confirmation...',
@@ -240,6 +263,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       if (receipt.status === 'reverted') {
         throw new Error('Transaction reverted on-chain. The deposit failed.')
       }
+      setDepositPhase('success')
       toast.success('Deposit successful', {
         id: toastId,
         description: `Deposited ${depositAmount} MORBIUS worth of PLS. Refresh the page after deposit confirmation to see funds in the UI.`,
@@ -260,13 +284,17 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         }
       }
       setDepositAmount('')
+      setDepositPhase('idle')
     } catch (error: any) {
       console.error('Deposit failed:', error)
       const isUserRejection = error?.message?.includes('rejected') || error?.message?.includes('denied')
+      setDepositPhase('error')
+      setDepositError(isUserRejection ? 'Cancelled' : 'Deposit failed')
       toast.error(isUserRejection ? 'Transaction cancelled' : 'Deposit failed', {
         id: toastId,
         description: isUserRejection ? 'You cancelled the transaction' : 'There was an error processing your deposit',
       })
+      setTimeout(() => { setDepositPhase('idle'); setDepositError(null) }, 4000)
     }
   }
 
@@ -277,11 +305,14 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       return
     }
     const amountWei = parseEther(depositAmount)
+    setDepositError(null)
+    setDepositPhase('confirming')
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS`,
     })
     try {
       const txHash = await depositMORBIUS(amountWei)
+      setDepositPhase('confirming_on_chain')
       toast.loading('Transaction processing...', {
         id: toastId,
         description: 'Waiting for blockchain confirmation...',
@@ -290,6 +321,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       if (depositReceipt.status === 'reverted') {
         throw new Error('Transaction reverted on-chain. The deposit failed.')
       }
+      setDepositPhase('success')
       toast.success('Deposit successful', {
         id: toastId,
         description: `Deposited ${depositAmount} MORBIUS. Refresh the page after deposit confirmation to see funds in the UI.`,
@@ -310,9 +342,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         }
       }
       setDepositAmount('')
+      setDepositPhase('idle')
     } catch (error: any) {
       console.error('Deposit failed:', error)
       if (error?.message?.includes('allowance') || error?.message?.includes('ERC20')) {
+        setDepositPhase('idle')
         toast.error('Approval required', {
           id: toastId,
           description: 'Please approve MORBIUS spending first',
@@ -320,10 +354,13 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         setShowApprovalModal(true)
       } else {
         const isUserRejection = error?.message?.includes('rejected') || error?.message?.includes('denied')
+        setDepositPhase('error')
+        setDepositError(isUserRejection ? 'Cancelled' : 'Deposit failed')
         toast.error(isUserRejection ? 'Transaction cancelled' : 'Deposit failed', {
           id: toastId,
           description: isUserRejection ? 'You cancelled the transaction' : (error?.message || 'There was an error processing your deposit'),
         })
+        setTimeout(() => { setDepositPhase('idle'); setDepositError(null) }, 4000)
       }
     }
   }
@@ -499,29 +536,29 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                 <button onClick={onClose} className="absolute top-6 right-6 text-gray-400 hover:text-black bg-gray-100 p-2 rounded-full transition-colors">
                   <X size={20}/>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setReportOpen(true)}
-                  className="absolute bottom-4 right-4 flex items-center gap-1.5 text-xs text-red-500 hover:text-gray-700"
-                >
-                  <Flag size={12} />
-                  Report
-                </button>
-                
+                {legacyItems.some((item) => item.reserve >= MIN_LEGACY_MORBIUS_WEI) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowLegacyPanel((v) => !v)}
+                    className="absolute bottom-4 left-4 text-xs text-gray-500 hover:text-cyan-500 transition-colors"
+                  >
+                    {showLegacyPanel ? 'Hide' : 'Previous contract'} withdrawals
+                  </button>
+                )}
                 <div className="text-center mt-4 mb-10">
                   <p className="text-sm text-gray-500 uppercase tracking-widest font-semibold mb-2">Reserve Balance</p>
                   <h4 className="text-5xl font-light tracking-tight text-gray-900 mb-2">
                     {displayBalance ? Math.floor(Number(formatEther(displayBalance))).toLocaleString() : 0}
                   </h4>
-                  <p className="text-gray-400 font-medium">MORBIUS</p>
+                  <p className="text-gray-400 font-medium inline-flex items-center justify-center gap-1"><img src={MORBIUS_LOGO} alt="" className="w-4 h-4 object-contain" />MORBIUS</p>
                   <p className="text-xs text-gray-400 mt-1">Refresh the page after deposit confirmation to see funds in the UI.</p>
                 </div>
 
                 <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
-                  <TabsList className="flex gap-2 mb-8 bg-cyan-500/20 p-1 rounded-2xl h-auto border-0 w-full">
-                    <TabsTrigger value="deposit" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-xl transition-all">Deposit</TabsTrigger>
-                    <TabsTrigger value="withdraw" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-xl transition-all">Withdraw</TabsTrigger>
-                    <TabsTrigger value="history" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-xl transition-all">History</TabsTrigger>
+                  <TabsList className="flex gap-2 mb-8 bg-gray-50 p-1 rounded-2xl h-auto border-0 w-full">
+                    <TabsTrigger value="deposit" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-cyan-500 data-[state=active]:shadow-sm rounded-xl transition-all">Deposit</TabsTrigger>
+                    <TabsTrigger value="withdraw" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-cyan-500 data-[state=active]:shadow-sm rounded-xl transition-all">Withdraw</TabsTrigger>
+                    <TabsTrigger value="history" className="flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-cyan-500 data-[state=active]:shadow-sm rounded-xl transition-all">History</TabsTrigger>
                   </TabsList>
 
                   <div className="space-y-4">
@@ -530,16 +567,16 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                         <button
                           onClick={() => setDepositMethod('pls')}
                           disabled={controlsDisabled}
-                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'pls' ? 'bg-white text-gradient-to-r from-red-500 to-purple-500 via-pink-500 shadow-sm' : 'text-gray-500 hover:text-black'}`}
+                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'pls' ? 'bg-white text-cyan-500 shadow-sm' : 'text-gray-500 hover:text-black'}`}
                         >
-                          PLS
+                          <TokenLabel symbol="PLS" />
                         </button>
                         <button
                           onClick={() => setDepositMethod('morbius')}
                           disabled={controlsDisabled}
-                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'morbius' ? 'bg-white text-gradient-to-r from-purple-500 to-cyan-500 via-purple-500 shadow-sm' : 'text-gray-500 hover:text-black'}`}
+                          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${depositMethod === 'morbius' ? 'bg-white text-cyan-500 shadow-sm' : 'text-gray-500 hover:text-black'}`}
                         >
-                          MORBIUS
+                          <TokenLabel symbol="MORBIUS" />
                         </button>
                       </div>
                       
@@ -548,9 +585,11 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                           <label className="text-sm font-medium text-gray-700">Amount</label>
                           <span className="text-xs text-gray-500">
                             {depositMethod === 'pls' ? (
-                              <>Avail: {maxDepositPLS} PLS{plsEquivalent && depositAmount && <> · ≈{Math.floor(Number(formatEther(plsEquivalent)))} PLS</>}</>
+                              <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                                Avail: {maxDepositPLS.toLocaleString()} <TokenLabel symbol="PLS" size="sm" />{depositAmount && plsEquivalent != null && plsEquivalent > 0n ? <> · ≈{Math.floor(Number(formatEther(plsEquivalent))).toLocaleString()} <TokenLabel symbol="PLS" size="sm" /></> : null}
+                              </span>
                             ) : (
-                              <>Avail: {maxDepositMORBIUS} MORBIUS</>
+                              <>Avail: {maxDepositMORBIUS.toLocaleString()} <TokenLabel symbol="MORBIUS" size="sm" /></>
                             )}
                           </span>
                         </div>
@@ -569,34 +608,69 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                         </div>
                       </div>
 
-                      <button
-                        onClick={depositMethod === 'pls' ? handleDepositPLS : handleDepositMORBIUS}
-                        disabled={
-                          controlsDisabled ||
-                          !depositAmount ||
-                          plsQuoteLoading ||
-                          (depositMethod === 'morbius' && isLoadingAllowance) ||
-                          (depositMethod === 'morbius' && isApproving)
-                        }
-                        className="w-full py-4 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                      >
-                        {isDepositLoading ? (
-                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</>
-                        ) : depositMethod === 'morbius' && isApproving ? (
-                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Approving...</>
-                        ) : depositMethod === 'morbius' && needsApproval ? (
-                          'Approve'
-                        ) : (
-                          `Deposit ${depositMethod === 'pls' ? 'PLS' : 'MORBIUS'}`
+                      <div className="space-y-1.5">
+                        <button
+                          onClick={depositMethod === 'pls' ? handleDepositPLS : handleDepositMORBIUS}
+                          disabled={
+                            controlsDisabled ||
+                            !depositAmount ||
+                            plsQuoteLoading ||
+                            (depositMethod === 'morbius' && isLoadingAllowance) ||
+                            (depositMethod === 'morbius' && isApproving) ||
+                            depositPhase === 'confirming' ||
+                            depositPhase === 'confirming_on_chain' ||
+                            depositPhase === 'success'
+                          }
+                          className={`w-full py-4 text-sm font-medium rounded-xl flex items-center justify-center transition-colors disabled:cursor-not-allowed ${
+                            depositPhase === 'error'
+                              ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                              : depositPhase === 'success'
+                                ? 'bg-green-600 text-white cursor-default'
+                                : 'bg-black text-white hover:bg-gray-800 disabled:opacity-50'
+                          }`}
+                        >
+                          {depositPhase === 'confirming' && (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Confirm in wallet...</>
+                          )}
+                          {depositPhase === 'confirming_on_chain' && (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Confirming...</>
+                          )}
+                          {depositPhase === 'success' && (
+                            <><Check className="w-4 h-4 mr-2" />Deposit successful</>
+                          )}
+                          {depositPhase === 'error' && (
+                            <><X className="w-4 h-4 mr-2" />{depositError ?? 'Error'}</>
+                          )}
+                          {depositPhase === 'idle' && (
+                            <>
+                              {isDepositLoading ? (
+                                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</>
+                              ) : depositMethod === 'morbius' && isApproving ? (
+                                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Approving...</>
+                              ) : depositMethod === 'morbius' && needsApproval ? (
+                                'Approve'
+                              ) : (
+                                <>Deposit <TokenLabel symbol={depositMethod === 'pls' ? 'PLS' : 'MORBIUS'} /></>
+                              )}
+                            </>
+                          )}
+                        </button>
+                        {depositPhase !== 'idle' && depositPhase !== 'error' && (
+                          <p className="text-xs text-center text-gray-500">
+                            {depositPhase === 'confirming' && 'Approve the transaction in your wallet'}
+                            {depositPhase === 'confirming_on_chain' && 'Waiting for blockchain confirmation'}
+                            {depositPhase === 'success' && 'Funds will appear after refresh'}
+                          </p>
                         )}
-                      </button>
+                      </div>
+                      <p className="text-[10px] text-gray-400 text-center mt-3">Withdrawals capped at 1,000,000 <TokenLabel symbol="MORBIUS" size="sm" />/day.</p>
                     </TabsContent>
 
                     <TabsContent value="withdraw" className="space-y-4 mt-0">
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
-                          <label className="text-sm font-medium text-gray-700">Amount (MORBIUS)</label>
-                          <span className="text-xs text-gray-500">Avail: {maxWithdraw} MORBIUS</span>
+                          <label className="text-sm font-medium text-gray-700">Amount (<TokenLabel symbol="MORBIUS" size="sm" />)</label>
+                          <span className="text-xs text-gray-500">Avail: {maxWithdraw.toLocaleString()} <TokenLabel symbol="MORBIUS" size="sm" /></span>
                         </div>
                         <div className="flex gap-2">
                           <input
@@ -628,15 +702,16 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                         {isWithdrawLoading ? (
                           <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</>
                         ) : (
-                          'Withdraw MORBIUS'
+                          <>Withdraw <TokenLabel symbol="MORBIUS" /></>
                         )}
                       </button>
+                      <p className="text-[10px] text-gray-400 text-center mt-3">Withdrawals capped at 1,000,000 <TokenLabel symbol="MORBIUS" size="sm" />/day.</p>
                     </TabsContent>
 
                     <TabsContent value="history" className="mt-0">
-                      <div className="border border-gray-100 rounded-2xl p-5">
+                      <div className="border border-gray-100 rounded-2xl p-3">
                         <div className="flex justify-between items-center mb-4">
-                          <h5 className="font-medium text-sm">Last 50 transactions</h5>
+                          <h5 className="font-medium text-cyan-500 text-sm">Last 50 transactions</h5>
                           <button
                             onClick={() => { setTxLoaded(false); setTxHistory([]); fetchTxHistory() }}
                             disabled={txLoading}
@@ -677,7 +752,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                                     </div>
                                     <div>
                                       <p className="text-sm font-medium text-gray-900">
-                                        {isDeposit ? '+' : '−'}{morbius} MORBIUS
+                                        {isDeposit ? '+' : '−'}{morbius} <TokenLabel symbol="MORBIUS" size="sm" />
                                       </p>
                                       <div className="flex items-center gap-2 text-xs text-gray-500">
                                         <span>{dateStr} · {timeStr}</span>
@@ -707,10 +782,10 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                   </div>
                 </Tabs>
 
-                {legacyItems.filter((item) => item.reserve > BigInt(0) && !dismissedLegacy.has(item.address)).length > 0 && (
+                {showLegacyPanel && legacyItems.filter((item) => item.reserve >= MIN_LEGACY_MORBIUS_WEI && !dismissedLegacy.has(item.address)).length > 0 && (
                   <div className="mt-4 space-y-4">
                     {legacyItems
-                      .filter((item) => item.reserve > BigInt(0) && !dismissedLegacy.has(item.address))
+                      .filter((item) => item.reserve >= MIN_LEGACY_MORBIUS_WEI && !dismissedLegacy.has(item.address))
                       .map((item) => {
                         const maxAllowedWei = item.reserve > LEGACY_MAX_WITHDRAW_WEI ? LEGACY_MAX_WITHDRAW_WEI : item.reserve
                         const rawInput = legacyWithdrawAmounts[item.address] ?? ''
@@ -734,7 +809,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                             
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-xs text-gray-500 font-medium">
-                                Balance: {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} MORBIUS
+                                Balance: {Math.floor(Number(formatEther(item.reserve))).toLocaleString()} <TokenLabel symbol="MORBIUS" size="sm" />
                               </span>
                               {item.paused && <span className="text-[10px] font-medium text-red-500">Paused</span>}
                             </div>
@@ -775,9 +850,16 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                   </div>
                 )}
 
-                <p className="text-[10px] text-gray-400 text-center mt-8 px-4">
-                  Withdrawals capped at 1,000,000 MORBIUS/day.
-                </p>
+                <div className="mt-6 pt-3 pb-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setReportOpen(true)}
+                    className="flex items-center gap-1.5 text-xs text-red-500 hover:text-gray-700"
+                  >
+                    <Flag size={12} />
+                    Report
+                  </button>
+                </div>
               </div>
             </motion.div>
           </>
