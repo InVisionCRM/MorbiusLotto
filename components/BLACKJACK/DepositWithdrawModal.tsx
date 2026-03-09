@@ -682,7 +682,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                             step="1"
                             max={maxWithdraw}
                             disabled={controlsDisabled}
-                            className="flex-1 w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                            className="flex-1 w-full bg-white text-black/90 placeholder:text-black/50 border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
                           />
                           <button
                             onClick={() => setWithdrawAmount(maxWithdraw.toString())}
@@ -697,7 +697,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                       <button
                         onClick={handleWithdraw}
                         disabled={controlsDisabled || !withdrawAmount}
-                        className="w-full py-4 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                        className="w-full py-4 bg-black text-gray-500 text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                       >
                         {isWithdrawLoading ? (
                           <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</>
