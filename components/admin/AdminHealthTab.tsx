@@ -58,6 +58,12 @@ export interface AdminHealthData {
     addressesWithReserve: Array<{ address: string; reserve: string }>;
   };
   contractAddresses?: Record<string, string>;
+  /** Hot wallet used for withdrawals (when HOT_WALLET_PRIVATE_KEY is set) */
+  hotWalletAddress?: string;
+  hotWalletMorbius?: string;
+  hotWalletLowWarning?: boolean;
+  /** Treasury / platform fee / distribution addresses and MORBIUS balance */
+  treasuryWallets?: Array<{ label: string; address: string; morbiusWei: string }>;
 }
 
 function formatMorbius(wei: string): string {
@@ -92,6 +98,16 @@ function truncateAddress(address: string, start = 6, end = 4): string {
   if (address.length <= start + end) return address;
   return `${address.slice(0, start)}...${address.slice(-end)}`;
 }
+
+// Hot wallet address (withdrawals) — shown even when backend omits it
+const HOT_WALLET_ADDRESS = '0x8f6Dc8FD8A5115fdec3CCbE36BE6cf9B28635F2e' as `0x${string}`;
+
+// Treasury / fee / distribution addresses (fallback when backend does not return treasuryWallets)
+const TREASURY_WALLET_ADDRESSES = [
+  { label: 'Treasury', address: '0x41682815B05fE6b54a6C0f8813bB99423EE0309D' as `0x${string}` },
+  { label: 'Platform fee wallet', address: '0x41682815B05fE6b54a6C0f8813bB99423EE0309D' as `0x${string}` },
+  { label: 'Distribution recipient', address: '0x3807f417617E53d4c5C7D7A825a5ce4D105A75d2' as `0x${string}` },
+];
 
 // BigWheel ABI for getGlobalStats + admin (pause/withdraw)
 const BIGWHEEL_GET_GLOBAL_STATS_ABI = [
@@ -406,6 +422,59 @@ export default function AdminHealthTab() {
     abi: blackjackAbi,
     functionName: 'paused',
   }) as { data: boolean | undefined };
+
+  // Client-side MORBIUS balance for treasury addresses (fallback when backend omits treasuryWallets)
+  const { data: treasuryBal0 } = useReadContract({
+    address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [TREASURY_WALLET_ADDRESSES[0].address],
+  }) as { data: bigint | undefined };
+  const { data: treasuryBal1 } = useReadContract({
+    address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [TREASURY_WALLET_ADDRESSES[1].address],
+  }) as { data: bigint | undefined };
+  const { data: treasuryBal2 } = useReadContract({
+    address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [TREASURY_WALLET_ADDRESSES[2].address],
+  }) as { data: bigint | undefined };
+
+  // Hot wallet MORBIUS balance (client-side so row always shows even when backend omits it)
+  const { data: hotWalletMorbiusClient } = useReadContract({
+    address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [HOT_WALLET_ADDRESS],
+  }) as { data: bigint | undefined };
+
+  // Hot wallet row: prefer server data; fallback to known address + client-side balance
+  const hotWalletDisplay = useMemo((): { address: string; morbiusWei: string; lowWarning?: boolean } | null => {
+    if (data?.hotWalletAddress != null) {
+      return {
+        address: data.hotWalletAddress,
+        morbiusWei: data.hotWalletMorbius ?? '0',
+        lowWarning: data.hotWalletLowWarning,
+      };
+    }
+    return {
+      address: HOT_WALLET_ADDRESS,
+      morbiusWei: hotWalletMorbiusClient != null ? String(hotWalletMorbiusClient) : '0',
+    };
+  }, [data?.hotWalletAddress, data?.hotWalletMorbius, data?.hotWalletLowWarning, hotWalletMorbiusClient]);
+
+  // Prefer server treasuryWallets; fallback to client-side balances so section always shows
+  const treasuryWalletsDisplay = useMemo(() => {
+    const fromServer = data?.treasuryWallets;
+    if (fromServer && fromServer.length > 0) return fromServer;
+    return TREASURY_WALLET_ADDRESSES.map((w, i) => {
+      const bal = [treasuryBal0, treasuryBal1, treasuryBal2][i];
+      return { label: w.label, address: w.address, morbiusWei: bal != null ? String(bal) : '0' };
+    });
+  }, [data?.treasuryWallets, treasuryBal0, treasuryBal1, treasuryBal2]);
 
   const plinkoData = plinkoStats ? {
     totalRevenue: plinkoStats[2],
@@ -887,6 +956,40 @@ export default function AdminHealthTab() {
             <div>
               <p className="text-slate-500 mb-1">MORBIUS in contract — fund with MORBIUS</p>
               <div className="space-y-2">
+                {(hotWalletDisplay != null || treasuryWalletsDisplay.length > 0) && (
+                  <p className="text-slate-500 text-[10px] mb-0.5">Wallets (hot wallet, treasury, fee, distribution)</p>
+                )}
+                {hotWalletDisplay != null && (
+                  <div className="flex flex-wrap items-center gap-2 py-1.5 border-b border-slate-700/50">
+                    <span className="capitalize text-slate-300 w-24 shrink-0">Hot wallet</span>
+                    <span className="font-mono text-cyan-300/90 text-[11px] w-20 shrink-0">{formatMorbius(hotWalletDisplay.morbiusWei)} MORBIUS</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(hotWalletDisplay.address)}
+                      className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1"
+                      title="Copy hot wallet address"
+                    >
+                      <Copy className="w-3 h-3" />
+                      {hotWalletDisplay.address.slice(0, 10)}…{hotWalletDisplay.address.slice(-8)}
+                    </button>
+                    {hotWalletDisplay.lowWarning && <span className="text-amber-400 text-[10px]">Low balance</span>}
+                  </div>
+                )}
+                {treasuryWalletsDisplay.map((w) => (
+                  <div key={w.address + w.label} className="flex flex-wrap items-center gap-2 py-1.5 border-b border-slate-700/50">
+                    <span className="text-slate-300 w-40 shrink-0">{w.label}</span>
+                    <span className="font-mono text-cyan-300/90 text-[11px] w-20 shrink-0">{formatMorbius(w.morbiusWei)} MORBIUS</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(w.address)}
+                      className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1"
+                      title="Copy address"
+                    >
+                      <Copy className="w-3 h-3" />
+                      {w.address.slice(0, 10)}…{w.address.slice(-8)}
+                    </button>
+                  </div>
+                ))}
                 {FUNDABLE_GAMES.map((game) => {
                   const reserve =
                     game.key === 'bigwheel' && bigWheelData

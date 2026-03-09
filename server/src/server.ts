@@ -1166,26 +1166,48 @@ async function initializeServices() {
           lottery: LOTTERY_INSTANT_ADDRESS,
         };
 
-        // Optional: hot wallet MORBIUS balance and low-balance warning (set HOT_WALLET_LOW_BALANCE_WEI to enable)
+        // Hot wallet (withdrawals): address + MORBIUS balance when configured
+        let hotWalletAddress: string | undefined;
         let hotWalletMorbius: string | undefined;
         let hotWalletLowWarning: boolean | undefined;
         const lowBalanceThreshold = process.env.HOT_WALLET_LOW_BALANCE_WEI;
-        if (lowBalanceThreshold) {
-          const wallet = getHotWalletClient();
-          if (wallet?.account?.address) {
-            try {
-              const bal = await client.readContract({
-                address: MORBIUS_TOKEN_ADDRESS,
-                abi: ERC20_BALANCE_OF_ABI,
-                functionName: 'balanceOf',
-                args: [wallet.account.address],
-              }) as bigint;
-              hotWalletMorbius = bal.toString();
-              hotWalletLowWarning = bal < BigInt(lowBalanceThreshold);
-            } catch {
-              hotWalletMorbius = '0';
-              hotWalletLowWarning = true;
-            }
+        const wallet = getHotWalletClient();
+        if (wallet?.account?.address) {
+          hotWalletAddress = wallet.account.address;
+          try {
+            const bal = await client.readContract({
+              address: MORBIUS_TOKEN_ADDRESS,
+              abi: ERC20_BALANCE_OF_ABI,
+              functionName: 'balanceOf',
+              args: [wallet.account.address],
+            }) as bigint;
+            hotWalletMorbius = bal.toString();
+            if (lowBalanceThreshold) hotWalletLowWarning = bal < BigInt(lowBalanceThreshold);
+          } catch {
+            hotWalletMorbius = '0';
+            if (lowBalanceThreshold) hotWalletLowWarning = true;
+          }
+        }
+
+        // Treasury / fee / distribution addresses: MORBIUS balance for each (env with fallbacks)
+        const treasuryWalletEntries: Array<{ label: string; address: string; envKey: string }> = [
+          { label: 'Treasury', address: (process.env.PLS_TREASURY || process.env.TREASURY || '0x41682815B05fE6b54a6C0f8813bB99423EE0309D').trim(), envKey: 'PLS_TREASURY' },
+          { label: 'Platform fee wallet', address: (process.env.PLATFORM_FEE_WALLET || '0x41682815B05fE6b54a6C0f8813bB99423EE0309D').trim(), envKey: 'PLATFORM_FEE_WALLET' },
+          { label: 'Distribution recipient', address: (process.env.DISTRIBUTION_RECIPIENT || '0x3807f417617E53d4c5C7D7A825a5ce4D105A75d2').trim(), envKey: 'DISTRIBUTION_RECIPIENT' },
+        ];
+        const treasuryWallets: Array<{ label: string; address: string; morbiusWei: string }> = [];
+        for (const entry of treasuryWalletEntries) {
+          if (!entry.address || !/^0x[0-9a-fA-F]{40}$/.test(entry.address)) continue;
+          try {
+            const bal = await client.readContract({
+              address: MORBIUS_TOKEN_ADDRESS,
+              abi: ERC20_BALANCE_OF_ABI,
+              functionName: 'balanceOf',
+              args: [entry.address as `0x${string}`],
+            }) as bigint;
+            treasuryWallets.push({ label: entry.label, address: entry.address, morbiusWei: bal.toString() });
+          } catch {
+            treasuryWallets.push({ label: entry.label, address: entry.address, morbiusWei: '0' });
           }
         }
 
@@ -1196,7 +1218,8 @@ async function initializeServices() {
           morbius,
           blackjackReservesByContract,
           contractAddresses,
-          ...(hotWalletMorbius !== undefined && { hotWalletMorbius, hotWalletLowWarning }),
+          ...(hotWalletAddress != null && { hotWalletAddress, hotWalletMorbius: hotWalletMorbius ?? '0', ...(hotWalletLowWarning !== undefined && { hotWalletLowWarning }) }),
+          treasuryWallets,
         });
       } catch (error) {
         logger.error('Error in admin health:', error);

@@ -69,6 +69,15 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
   type DepositPhase = 'idle' | 'confirming' | 'confirming_on_chain' | 'success' | 'error'
   const [depositPhase, setDepositPhase] = useState<DepositPhase>('idle')
   const [depositError, setDepositError] = useState<string | null>(null)
+  type WithdrawPhase = 'idle' | 'queued' | 'confirming' | 'success' | 'error'
+  const [withdrawPhase, setWithdrawPhase] = useState<WithdrawPhase>('idle')
+  const [withdrawError, setWithdrawError] = useState<string | null>(null)
+  const DEPOSIT_CONFIRMATIONS_REQUIRED = 3
+  const [depositBlockNumber, setDepositBlockNumber] = useState<bigint | null>(null)
+  const [depositConfirmations, setDepositConfirmations] = useState(0)
+  const [depositTxHash, setDepositTxHash] = useState<string | null>(null)
+  const [depositNotifyAmountWei, setDepositNotifyAmountWei] = useState<bigint | null>(null)
+  const depositToastIdRef = useRef<string | number | null>(null)
 
   interface TxHistoryItem {
     type: 'deposit' | 'withdrawal'
@@ -242,8 +251,63 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       setShowLegacyPanel(false)
       setDepositPhase('idle')
       setDepositError(null)
+      setWithdrawPhase('idle')
+      setWithdrawError(null)
+      setDepositBlockNumber(null)
+      setDepositConfirmations(0)
+      setDepositTxHash(null)
+      setDepositNotifyAmountWei(null)
     }
   }, [isOpen])
+
+  // Poll for confirmation count when deposit tx is mined; transition to success at 3 confirmations
+  useEffect(() => {
+    if (depositBlockNumber == null || depositPhase !== 'confirming_on_chain' || !publicClient || !depositTxHash || depositNotifyAmountWei == null) return
+    let cancelled = false
+    const poll = async () => {
+      if (cancelled) return
+      try {
+        const currentBlock = await publicClient.getBlockNumber()
+        const confirmations = Number(currentBlock - depositBlockNumber)
+        const capped = Math.min(Math.max(confirmations, 0), DEPOSIT_CONFIRMATIONS_REQUIRED)
+        setDepositConfirmations(capped)
+        if (depositToastIdRef.current != null) {
+          toast.loading('Confirming...', {
+            id: depositToastIdRef.current,
+            description: `${capped}/${DEPOSIT_CONFIRMATIONS_REQUIRED} confirmations`,
+          })
+        }
+        if (confirmations >= DEPOSIT_CONFIRMATIONS_REQUIRED) {
+          if (depositToastIdRef.current != null) {
+            toast.success('Deposit successful', {
+              id: depositToastIdRef.current,
+              description: 'Funds will appear after refresh.',
+              duration: 5000,
+            })
+          }
+          notifyDeposit(depositTxHash, depositNotifyAmountWei).catch(() => {})
+          if (onBalanceSync) {
+            try { await onBalanceSync() } catch (e) {
+              if (onRefreshBalance) onRefreshBalance().catch(() => {})
+              else toast.info('Refresh the page to update your balance', { duration: 4000 })
+            }
+          }
+          setDepositAmount('')
+          setDepositPhase('success')
+          setDepositBlockNumber(null)
+          setDepositTxHash(null)
+          setDepositNotifyAmountWei(null)
+          setTimeout(() => setDepositPhase('idle'), 2000)
+          return
+        }
+      } catch {
+        // ignore RPC errors, will retry next tick
+      }
+    }
+    poll()
+    const interval = setInterval(poll, 2000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [depositBlockNumber, depositPhase, publicClient, depositTxHash, depositNotifyAmountWei, DEPOSIT_CONFIRMATIONS_REQUIRED, onBalanceSync, onRefreshBalance])
 
   const handleDepositPLS = async () => {
     if (!depositAmount || !plsEquivalent || !publicClient) return
@@ -263,28 +327,15 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       if (receipt.status === 'reverted') {
         throw new Error('Transaction reverted on-chain. The deposit failed.')
       }
-      setDepositPhase('success')
-      toast.success('Deposit successful', {
+      depositToastIdRef.current = toastId
+      setDepositTxHash(txHash)
+      setDepositNotifyAmountWei(plsEquivalent)
+      setDepositBlockNumber(receipt.blockNumber)
+      setDepositConfirmations(0)
+      toast.loading('Confirming...', {
         id: toastId,
-        description: `Deposited ${depositAmount} MORBIUS worth of PLS. Refresh the page after deposit confirmation to see funds in the UI.`,
-        duration: 5000,
+        description: '0/3 confirmations',
       })
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      if (plsEquivalent) notifyDeposit(txHash, plsEquivalent)
-      if (onBalanceSync) {
-        try {
-          await onBalanceSync()
-        } catch (syncErr) {
-          console.error('Balance sync failed after deposit:', syncErr)
-          if (onRefreshBalance) {
-            onRefreshBalance().catch(() => {})
-          } else {
-            toast.info('Refresh the page to update your balance', { duration: 4000 })
-          }
-        }
-      }
-      setDepositAmount('')
-      setDepositPhase('idle')
     } catch (error: any) {
       console.error('Deposit failed:', error)
       const isUserRejection = error?.message?.includes('rejected') || error?.message?.includes('denied')
@@ -321,28 +372,15 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       if (depositReceipt.status === 'reverted') {
         throw new Error('Transaction reverted on-chain. The deposit failed.')
       }
-      setDepositPhase('success')
-      toast.success('Deposit successful', {
+      depositToastIdRef.current = toastId
+      setDepositTxHash(txHash)
+      setDepositNotifyAmountWei(amountWei)
+      setDepositBlockNumber(depositReceipt.blockNumber)
+      setDepositConfirmations(0)
+      toast.loading('Confirming...', {
         id: toastId,
-        description: `Deposited ${depositAmount} MORBIUS. Refresh the page after deposit confirmation to see funds in the UI.`,
-        duration: 5000,
+        description: '0/3 confirmations',
       })
-      notifyDeposit(txHash, amountWei)
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      if (onBalanceSync) {
-        try {
-          await onBalanceSync()
-        } catch (syncErr) {
-          console.error('Balance sync failed after deposit:', syncErr)
-          if (onRefreshBalance) {
-            onRefreshBalance().catch(() => {})
-          } else {
-            toast.info('Refresh the page to update your balance', { duration: 4000 })
-          }
-        }
-      }
-      setDepositAmount('')
-      setDepositPhase('idle')
     } catch (error: any) {
       console.error('Deposit failed:', error)
       if (error?.message?.includes('allowance') || error?.message?.includes('ERC20')) {
@@ -382,6 +420,8 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
       toast.error('Insufficient balance')
       return
     }
+    setWithdrawError(null)
+    setWithdrawPhase('queued')
     setIsPreparingWithdraw(true)
     const toastId = toast.loading('Withdrawal queued...')
     try {
@@ -413,6 +453,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         const status = statusData.status as string
         const txHash = statusData.txHash as string | undefined
         if (status === 'completed') {
+          setWithdrawPhase('success')
           toast.success('Withdrawal successful!', {
             id: toastId,
             description: txHash ? `Sent to your wallet. Tx: ${txHash.slice(0, 10)}...` : 'Sent to your wallet.',
@@ -421,17 +462,23 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
           if (onWithdrawSuccess) await Promise.resolve(onWithdrawSuccess())
           setWithdrawAmount('')
           setTxLoaded(false)
+          await new Promise((r) => setTimeout(r, 2000))
+          setWithdrawPhase('idle')
           return
         }
         if (status === 'failed') {
+          setWithdrawPhase('error')
+          setWithdrawError((statusData.error as string) || 'Withdrawal failed')
           toast.error('Withdrawal failed', {
             id: toastId,
             description: (statusData.error as string) || 'Transaction failed or was dropped.',
           })
           if (onRefreshBalance) await onRefreshBalance()
+          setTimeout(() => { setWithdrawPhase('idle'); setWithdrawError(null) }, 4000)
           return
         }
         if (status === 'pending_confirmation' && txHash) {
+          setWithdrawPhase('confirming')
           toast.loading('Confirming on chain...', {
             id: toastId,
             description: `Tx: ${txHash.slice(0, 10)}...`,
@@ -441,17 +488,23 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
         }
         await new Promise((r) => setTimeout(r, pollIntervalMs))
       }
+      setWithdrawPhase('error')
+      setWithdrawError('Withdrawal timed out')
       toast.error('Withdrawal timed out', {
         id: toastId,
         description: 'Check your balance or transaction history. If funds were deducted, contact support.',
       })
       if (onRefreshBalance) await onRefreshBalance()
+      setTimeout(() => { setWithdrawPhase('idle'); setWithdrawError(null) }, 4000)
     } catch (error: any) {
+      setWithdrawPhase('error')
+      setWithdrawError(error?.message ?? 'Withdrawal failed')
       toast.error('Withdrawal failed', {
         id: toastId,
         description: error?.message ?? 'Something went wrong',
       })
       if (onRefreshBalance) await onRefreshBalance()
+      setTimeout(() => { setWithdrawPhase('idle'); setWithdrawError(null) }, 4000)
     } finally {
       setIsPreparingWithdraw(false)
     }
@@ -533,9 +586,45 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
               className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4"
             >
               <div className="bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md relative border border-gray-100 pointer-events-auto overflow-y-auto max-h-[90vh]">
-                <button onClick={onClose} className="absolute top-6 right-6 text-gray-400 hover:text-black bg-gray-100 p-2 rounded-full transition-colors">
+                <button onClick={onClose} className="absolute top-6 right-6 z-20 text-gray-400 hover:text-black bg-gray-100 p-2 rounded-full transition-colors">
                   <X size={20}/>
                 </button>
+                <div className="relative min-h-[280px]">
+                {(withdrawPhase !== 'idle' || isLegacyWithdrawLoading) && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[2.5rem] bg-white/90 backdrop-blur-sm">
+                    <div className="text-center px-4">
+                      {isLegacyWithdrawLoading && withdrawPhase === 'idle' ? (
+                        <>
+                          <Loader2 className="w-10 h-10 animate-spin text-cyan-500 mx-auto mb-3" />
+                          <p className="text-sm font-medium text-gray-900">Withdrawing from previous contract...</p>
+                        </>
+                      ) : withdrawPhase === 'queued' ? (
+                        <>
+                          <Loader2 className="w-10 h-10 animate-spin text-cyan-500 mx-auto mb-3" />
+                          <p className="text-sm font-medium text-gray-900">Processing withdrawal...</p>
+                          <p className="text-xs text-gray-500 mt-1">Queued with server</p>
+                        </>
+                      ) : withdrawPhase === 'confirming' ? (
+                        <>
+                          <Loader2 className="w-10 h-10 animate-spin text-cyan-500 mx-auto mb-3" />
+                          <p className="text-sm font-medium text-gray-900">Confirming on chain...</p>
+                          <p className="text-xs text-gray-500 mt-1">Waiting for confirmation</p>
+                        </>
+                      ) : withdrawPhase === 'success' ? (
+                        <>
+                          <Check className="w-10 h-10 text-green-500 mx-auto mb-3" />
+                          <p className="text-sm font-medium text-gray-900">Withdrawal successful</p>
+                        </>
+                      ) : withdrawPhase === 'error' ? (
+                        <>
+                          <X className="w-10 h-10 text-red-500 mx-auto mb-3" />
+                          <p className="text-sm font-medium text-gray-900">Withdrawal failed</p>
+                          {withdrawError && <p className="text-xs text-gray-500 mt-1">{withdrawError}</p>}
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
                 {legacyItems.some((item) => item.reserve >= MIN_LEGACY_MORBIUS_WEI) && (
                   <button
                     type="button"
@@ -658,7 +747,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                         {depositPhase !== 'idle' && depositPhase !== 'error' && (
                           <p className="text-xs text-center text-gray-500">
                             {depositPhase === 'confirming' && 'Approve the transaction in your wallet'}
-                            {depositPhase === 'confirming_on_chain' && 'Waiting for blockchain confirmation'}
+                            {depositPhase === 'confirming_on_chain' && (depositBlockNumber != null ? `${depositConfirmations}/${DEPOSIT_CONFIRMATIONS_REQUIRED} confirmations` : 'Waiting for blockchain confirmation')}
                             {depositPhase === 'success' && 'Funds will appear after refresh'}
                           </p>
                         )}
@@ -859,6 +948,7 @@ export function DepositWithdrawModal({ isOpen, onClose, onBalanceSync, onRefresh
                     <Flag size={12} />
                     Report
                   </button>
+                </div>
                 </div>
               </div>
             </motion.div>
