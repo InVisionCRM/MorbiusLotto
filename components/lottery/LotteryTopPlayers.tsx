@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-const TOP_N = 25
+const TOP_N = 50
 
 const PANEL_STYLE = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',

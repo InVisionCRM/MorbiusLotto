@@ -1066,10 +1066,10 @@ export default function KenoPage() {
         {/* Recent plays | Recent games — 2-col grid */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-6">
           <div className="min-w-0">
-            <KenoRecentPlays limit={20} compact />
+            <KenoRecentPlays compact />
           </div>
           <div className="min-w-0">
-            <GlobalKenoHistoryTable limit={20} title="Recent games" />
+            <GlobalKenoHistoryTable title="Recent games" />
           </div>
         </section>
 

@@ -48,6 +48,9 @@ export interface AdminMetricsData {
     failed_settlements: number;
     largest_bet: string;
     largest_payout: string;
+    total_wins?: number;
+    total_losses?: number;
+    total_pushes?: number;
   };
   tournaments: {
     totalTournaments: number;
@@ -362,6 +365,9 @@ export default function AdminMetricsTab() {
           failed_settlements: 0,
           largest_bet: '0',
           largest_payout: '0',
+          total_wins: 0,
+          total_losses: 0,
+          total_pushes: 0,
         },
         tournaments: adminData.tournaments || {
           totalTournaments: 0,
@@ -616,6 +622,9 @@ export default function AdminMetricsTab() {
                         <MetricRow label="Total Players" value={formatNumber(data.blackjack?.total_players || 0)} />
                         <MetricRow label="Active Players" value={formatNumber(data.blackjack?.active_players || 0)} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
                         <MetricRow label="Total Games" value={formatNumber(data.blackjack?.total_games_played || 0)} />
+                        <MetricRow label="Wins" value={formatNumber(data.blackjack?.total_wins ?? 0)} valueClassName="text-emerald-400 font-mono text-sm font-bold" />
+                        <MetricRow label="Losses" value={formatNumber(data.blackjack?.total_losses ?? 0)} valueClassName="text-red-400 font-mono text-sm font-bold" />
+                        <MetricRow label="Pushes" value={formatNumber(data.blackjack?.total_pushes ?? 0)} valueClassName="text-slate-400 font-mono text-sm font-bold" />
                         <MetricRow label="Total Volume" value={`${formatMorbius(data.blackjack?.total_volume || '0')} MORBIUS`} />
                         <MetricRow label="Total Payouts" value={`${formatMorbius(data.blackjack?.total_payouts || '0')} MORBIUS`} />
                         <MetricRow label="House Profit" value={`${formatMorbius(data.blackjack?.house_profit || '0')} MORBIUS`} valueClassName={`font-mono text-sm font-bold ${Number(data.blackjack?.house_profit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`} />

@@ -89,7 +89,7 @@ export function usePlinkoResults(options: {
     const fetchRecent = async () => {
       try {
         const toBlock = await publicClient.getBlockNumber()
-        const blockWindow = playerAddress ? 50000n : 5000n
+        const blockWindow = playerAddress ? 50000n : 50000n
         const fromBlock = toBlock - blockWindow > 0n ? toBlock - blockWindow : 0n
         const logs = await publicClient.getContractEvents({
           address: PLINKO_ADDRESS,

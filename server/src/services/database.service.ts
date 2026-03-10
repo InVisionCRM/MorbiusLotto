@@ -145,6 +145,9 @@ export interface GlobalAnalytics {
   failed_settlements: number;
   largest_bet: bigint;
   largest_payout: bigint;
+  total_wins: number;
+  total_losses: number;
+  total_pushes: number;
 }
 
 export interface ChatMessage {
@@ -322,6 +325,9 @@ export class DatabaseService {
       failed_settlements: Number(row.failed_settlements ?? 0),
       largest_bet: this.toBigInt(row.largest_bet),
       largest_payout: this.toBigInt(row.largest_payout),
+      total_wins: Number(row.total_wins ?? 0),
+      total_losses: Number(row.total_losses ?? 0),
+      total_pushes: Number(row.total_pushes ?? 0),
     };
   }
 
@@ -2673,5 +2679,46 @@ export class DatabaseService {
   async deleteBlackjackTable(id: string): Promise<boolean> {
     const r = await this.pool.query('DELETE FROM blackjack_tables WHERE id = $1', [id]);
     return (r.rowCount ?? 0) > 0;
+  }
+
+  // ── Contract daily snapshots ────────────────────────────────────────────────
+
+  /** Upsert a snapshot for today. Called hourly by the snapshot scheduler. */
+  async saveContractDailySnapshot(
+    game: string,
+    totalWagered: bigint,
+    totalPayouts: bigint,
+    contractReserve: bigint,
+  ): Promise<void> {
+    const today = new Date().toISOString().slice(0, 10);
+    await this.pool.query(
+      `INSERT INTO contract_daily_snapshots (snapshot_date, game, total_wagered, total_payouts, contract_reserve)
+       VALUES ($1, $2, $3::NUMERIC, $4::NUMERIC, $5::NUMERIC)
+       ON CONFLICT (snapshot_date, game) DO UPDATE SET
+         total_wagered    = EXCLUDED.total_wagered,
+         total_payouts    = EXCLUDED.total_payouts,
+         contract_reserve = EXCLUDED.contract_reserve,
+         captured_at      = NOW()`,
+      [today, game, totalWagered.toString(), totalPayouts.toString(), contractReserve.toString()],
+    );
+  }
+
+  /** Return snapshots for the last N days, oldest first. */
+  async getContractDailySnapshots(days = 7): Promise<Array<{
+    snapshot_date: string;
+    game: string;
+    total_wagered: string;
+    total_payouts: string;
+    contract_reserve: string;
+  }>> {
+    const result = await this.pool.query(
+      `SELECT snapshot_date::TEXT, game,
+              total_wagered::TEXT, total_payouts::TEXT, contract_reserve::TEXT
+       FROM contract_daily_snapshots
+       WHERE snapshot_date >= CURRENT_DATE - ($1 - 1) * INTERVAL '1 day'
+       ORDER BY snapshot_date ASC, game ASC`,
+      [days],
+    );
+    return result.rows;
   }
 }

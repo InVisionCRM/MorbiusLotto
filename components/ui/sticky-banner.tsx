@@ -30,7 +30,7 @@ export const StickyBanner = ({
   return (
     <motion.div
       className={cn(
-        "sticky inset-x-0 top-0 z-40 flex min-h-[4rem] w-full items-center justify-center px-4 py-3 text-cyan-400 text-base font-medium",
+        "sticky inset-x-0 top-0 z-40 flex min-h-[3rem] sm:min-h-[4rem] w-full items-center justify-center px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base font-medium text-cyan-400",
         className,
       )}
       style={{ background: Theme.greyGradient.background }}

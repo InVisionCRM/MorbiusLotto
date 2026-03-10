@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import { MessageCircle, X, Home } from 'lucide-react';
+import { Theme } from '@/lib/theme';
 import { ChatPanel } from './ChatPanel';
 
 const PATH_TO_ROOM: Record<string, { roomId: string; title: string }> = {
@@ -29,17 +30,18 @@ function getRoomForPath(pathname: string): { roomId: string; title: string } {
   return PATH_TO_ROOM[normalized] ?? DEFAULT_ROOM;
 }
 
-const PANEL_BG: React.CSSProperties = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-  boxShadow: 'inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.1), -2px 0 8px rgba(0,0,0,0.4)',
+/** LightModal panel with Theme.inset offset shadows (recessed look) */
+const LIGHT_PANEL_STYLE: React.CSSProperties = {
+  background: 'white',
+  boxShadow: Theme.inset.boxShadow,
+  border: Theme.inset.border,
 };
 
-const TAG_BG: React.CSSProperties = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6), -2px 0 6px rgba(0,0,0,0.4)',
-  borderWidth: '3px 0 3px 3px',
-  borderStyle: 'solid',
-  borderColor: 'rgb(6 182 212)', /* cyan-500 */
+/** Collapsed chat tag: light panel + inset shadow */
+const LIGHT_TAG_STYLE: React.CSSProperties = {
+  background: 'white',
+  boxShadow: Theme.inset.light.boxShadow,
+  border: Theme.inset.light.border,
 };
 
 export function ChatSidebar() {
@@ -69,14 +71,15 @@ export function ChatSidebar() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const lm = Theme.lightModal;
   const closeButton = (
     <button
       type="button"
       onClick={() => setOpen(false)}
-      className="w-6 h-6 rounded flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-gray-200 border-2 border-gray-400 text-gray-700 hover:bg-gray-300 hover:text-black hover:border-gray-500 transition-colors shadow-sm"
       aria-label="Close chat"
     >
-      <X className="w-3.5 h-3.5" />
+      <X className="w-5 h-5 stroke-[2.5]" />
     </button>
   );
 
@@ -87,18 +90,18 @@ export function ChatSidebar() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex flex-col items-center justify-center gap-1.5 w-8 h-30 rounded-l-xl hover:bg-white/10 transition-colors"
+          className={`flex flex-col items-center justify-center gap-1.5 w-8 h-30 rounded-l-xl border-l-2 border-gray-200 hover:bg-gray-50 transition-colors ${lm.accentText}`}
           style={{
             position: 'fixed',
             right: 0,
             top: '50%',
             transform: 'translateY(-50%)',
             zIndex: 500,
-            ...TAG_BG,
+            ...LIGHT_TAG_STYLE,
           }}
           aria-label={hasUnread ? 'Open chat (unread messages)' : 'Open chat'}
         >
-          <MessageCircle className="w-6 h-6 text-cyan-400 shrink-0" />
+          <MessageCircle className="w-6 h-6 shrink-0" />
           {hasUnread && (
             <span
               className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500"
@@ -106,7 +109,7 @@ export function ChatSidebar() {
             />
           )}
           <span
-            className="text-[18px] text-white/70 tracking-widest uppercase"
+            className={`text-[18px] ${lm.mutedText} tracking-widest uppercase`}
             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
           >
             Chat
@@ -118,22 +121,22 @@ export function ChatSidebar() {
       <AnimatePresence>
         {open && (
           <motion.div
-            className="fixed right-0 top-0 bottom-0 z-[500] flex flex-col border-2 border-cyan-500/50 overflow-hidden"
-            style={{ ...PANEL_BG, width: 300 }}
+            className={`fixed right-0 top-0 bottom-0 z-[500] flex flex-col border-l-2 border-gray-200 overflow-hidden ${lm.bodyText}`}
+            style={{ ...LIGHT_PANEL_STYLE, width: 300 }}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
           >
             {hasGameChat && (
-              <div className="hidden md:flex shrink-0 border-b border-cyan-500/20">
+              <div className={`hidden md:flex shrink-0 ${lm.tabsList} rounded-none border-b border-gray-200 mb-0`}>
                 <button
                   type="button"
                   onClick={() => setActiveTab('page')}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors rounded-none ${
                     activeTab === 'page'
-                      ? 'text-cyan-400 border-b-2 border-cyan-400 bg-white/5'
-                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                      ? 'bg-white text-cyan-500 shadow-sm border-b-2 border-cyan-500'
+                      : `${lm.mutedText} hover:bg-gray-100 hover:text-gray-900`
                   }`}
                 >
                   {pageTitle}
@@ -141,10 +144,10 @@ export function ChatSidebar() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('lobby')}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 rounded-none ${
                     activeTab === 'lobby'
-                      ? 'text-cyan-400 border-b-2 border-cyan-400 bg-white/5'
-                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                      ? 'bg-white text-cyan-500 shadow-sm border-b-2 border-cyan-500'
+                      : `${lm.mutedText} hover:bg-gray-100 hover:text-gray-900`
                   }`}
                 >
                   <Home className="w-3 h-3" />
@@ -172,8 +175,8 @@ export function ChatSidebar() {
       <AnimatePresence>
         {open && (
           <motion.div
-            className="md:hidden fixed right-0 top-0 bottom-0 z-[9002] flex flex-col border-l border-cyan-500/20 overflow-hidden"
-            style={{ ...PANEL_BG, width: 'min(85vw, 320px)' }}
+            className={`md:hidden fixed right-0 top-0 bottom-0 z-[9002] flex flex-col border-l-2 border-gray-200 overflow-hidden ${lm.bodyText}`}
+            style={{ ...LIGHT_PANEL_STYLE, width: 'min(85vw, 320px)' }}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
@@ -182,14 +185,14 @@ export function ChatSidebar() {
             {/* Spacer below mobile top bar */}
             <div className="shrink-0 h-14" />
             {hasGameChat && (
-              <div className="flex shrink-0 border-b border-cyan-500/20">
+              <div className={`flex shrink-0 ${lm.tabsList} rounded-none border-b border-gray-200 mb-0`}>
                 <button
                   type="button"
                   onClick={() => setActiveTab('page')}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors rounded-none ${
                     activeTab === 'page'
-                      ? 'text-cyan-400 border-b-2 border-cyan-400 bg-white/5'
-                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                      ? 'bg-white text-cyan-500 shadow-sm border-b-2 border-cyan-500'
+                      : `${lm.mutedText} hover:bg-gray-100 hover:text-gray-900`
                   }`}
                 >
                   {pageTitle}
@@ -197,10 +200,10 @@ export function ChatSidebar() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('lobby')}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 rounded-none ${
                     activeTab === 'lobby'
-                      ? 'text-cyan-400 border-b-2 border-cyan-400 bg-white/5'
-                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                      ? 'bg-white text-cyan-500 shadow-sm border-b-2 border-cyan-500'
+                      : `${lm.mutedText} hover:bg-gray-100 hover:text-gray-900`
                   }`}
                 >
                   <Home className="w-3 h-3" />

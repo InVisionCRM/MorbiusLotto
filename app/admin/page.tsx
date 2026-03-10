@@ -8,7 +8,7 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon, Flag, Coins, Gift, Droplets, Megaphone } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon, Flag, Gift, Droplets, Megaphone } from 'lucide-react';
 import AdminTablesTab from '@/components/admin/AdminTablesTab';
 import AdminAdvertisingTab from '@/components/admin/AdminAdvertisingTab';
 import AdminHealthTab from '@/components/admin/AdminHealthTab';
@@ -19,7 +19,6 @@ import { AdminEscrowTab } from '@/components/admin/AdminEscrowTab';
 import AdminChatTab from '@/components/admin/AdminChatTab';
 import AdminMemesTab from '@/components/admin/AdminMemesTab';
 import AdminReportsTab from '@/components/admin/AdminReportsTab';
-import AdminStakingTab from '@/components/admin/AdminStakingTab';
 import AdminLPStakingTab from '@/components/admin/AdminLPStakingTab';
 import AdminMerkleDropsTab from '@/components/admin/AdminMerkleDropsTab';
 
@@ -75,9 +74,6 @@ export default function AdminPage() {
             <TabsTrigger value="memes" className="rounded data-[state=active]:bg-pink-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <ImageIcon className="w-3 h-3 mr-1 hidden sm:inline" /> Memes
             </TabsTrigger>
-            <TabsTrigger value="staking" className="rounded data-[state=active]:bg-teal-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Coins className="w-4 h-4 mr-1 hidden sm:inline" /> Staking
-            </TabsTrigger>
             <TabsTrigger value="reports" className="rounded data-[state=active]:bg-red-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <Flag className="w-3 h-3 mr-1 hidden sm:inline" /> Reports
             </TabsTrigger>
@@ -122,10 +118,6 @@ export default function AdminPage() {
 
           <TabsContent value="memes" className="mt-3 focus-visible:outline-none">
             <AdminMemesTab />
-          </TabsContent>
-
-          <TabsContent value="staking" className="mt-3 focus-visible:outline-none">
-            <AdminStakingTab />
           </TabsContent>
 
           <TabsContent value="reports" className="mt-3 focus-visible:outline-none">

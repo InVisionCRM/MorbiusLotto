@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { useAccount } from 'wagmi'
 import { useInstantLotteryResults } from '@/hooks/use-instant-lottery'
 import { formatUnits } from 'viem'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
 import type { InstantLotteryResultRow } from '@/hooks/use-instant-lottery'
+
+const PAGE_SIZE = 25
 
 const panelStyle = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
@@ -12,15 +15,23 @@ const panelStyle = {
   border: '1px inset rgba(60, 60, 60, 0.5)',
 }
 
+function formatTime(ts: number | undefined): string {
+  if (ts == null) return '—'
+  return new Date(ts * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
 function ResultRow({ r, compact }: { r: InstantLotteryResultRow; compact?: boolean }) {
   const win = r.netPayout > 0n
+  const timeStr = formatTime(r.timestamp)
   if (compact) {
     return (
-      <div className="flex items-center justify-between py-1.5 px-2 border-b border-white/5 last:border-0 text-xs">
-        <span className="text-white/70">
+      <div className="flex items-center justify-between gap-2 py-2 px-2 border-b border-white/5 last:border-0 text-sm">
+        <span className="text-white/70 shrink-0 min-w-0">
+          <span className="text-white/50 font-mono">{timeStr}</span>
+          <span className="mx-1.5">·</span>
           [{r.playerNumbers.join(', ')}] → {r.matchCount} match{r.matchCount !== 1 ? 'es' : ''}
         </span>
-        <span className={win ? 'text-green-400' : 'text-white/60'}>
+        <span className={`shrink-0 tabular-nums ${win ? 'text-green-400' : 'text-white/60'}`}>
           {formatUnits(r.netPayout, TOKEN_DECIMALS)} MORBIUS
         </span>
       </div>
@@ -30,20 +41,24 @@ function ResultRow({ r, compact }: { r: InstantLotteryResultRow; compact?: boole
     <div className="py-2 px-3 border-b border-white/5 last:border-0 space-y-1 text-sm">
       <div className="flex gap-1 flex-wrap">
         {r.playerNumbers.map((n, i) => (
-          <span key={i} className="w-6 h-6 rounded bg-white/20 flex items-center justify-center text-xs font-medium text-white">
+          <span key={i} className="w-6 h-6 rounded bg-white/20 flex items-center justify-center text-sm font-medium text-white">
             {n}
           </span>
         ))}
         <span className="text-white/50">→</span>
         {r.winningNumbers.map((n, i) => (
-          <span key={i} className="w-6 h-6 rounded bg-cyan-500/20 flex items-center justify-center text-xs font-medium text-cyan-200">
+          <span key={i} className="w-6 h-6 rounded bg-cyan-500/20 flex items-center justify-center text-sm font-medium text-cyan-200">
             {n}
           </span>
         ))}
       </div>
-      <div className="flex justify-between text-xs text-white/70">
-        <span>{r.matchCount} match{r.matchCount !== 1 ? 'es' : ''} · Wager {formatUnits(r.wager, TOKEN_DECIMALS)}</span>
-        <span className={win ? 'text-green-400' : ''}>{formatUnits(r.netPayout, TOKEN_DECIMALS)} MORBIUS</span>
+      <div className="flex justify-between text-sm text-white/70">
+        <span>
+          <span className="text-white/50 font-mono">{timeStr}</span>
+          <span className="mx-1.5">·</span>
+          {r.matchCount} match{r.matchCount !== 1 ? 'es' : ''} · Wager {formatUnits(r.wager, TOKEN_DECIMALS)}
+        </span>
+        <span className={`tabular-nums ${win ? 'text-green-400' : 'text-white/50'}`}>{formatUnits(r.netPayout, TOKEN_DECIMALS)} MORBIUS</span>
       </div>
     </div>
   )
@@ -51,22 +66,23 @@ function ResultRow({ r, compact }: { r: InstantLotteryResultRow; compact?: boole
 
 export interface InstantLotteryHistoryProps {
   results?: InstantLotteryResultRow[]
-  limit?: number
   compact?: boolean
   /** Optional title (default "My Recent Plays") */
   title?: string
 }
 
+/** My recent instant lottery plays. Shows 25, then "Load more". */
 export function InstantLotteryHistory({
   results: resultsProp,
-  limit = 20,
   compact = true,
   title = 'My Recent Plays',
 }: InstantLotteryHistoryProps) {
   const { address } = useAccount()
-  const { results: resultsFromHook } = useInstantLotteryResults({ playerAddress: address ?? undefined, limit })
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
+  const { results: resultsFromHook } = useInstantLotteryResults({ playerAddress: address ?? undefined, limit: 500 })
   const results = resultsProp ?? resultsFromHook
-  const displayResults = results.slice(0, limit)
+  const displayResults = results.slice(0, displayCount)
+  const hasMore = displayCount < results.length
 
   return (
     <div className="rounded-xl overflow-hidden w-full max-w-xl" style={panelStyle}>
@@ -80,6 +96,17 @@ export function InstantLotteryHistory({
           displayResults.map((r, i) => <ResultRow key={i} r={r} compact={compact} />)
         )}
       </div>
+      {hasMore && displayResults.length > 0 && (
+        <div className="px-2 py-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
+            className="w-full py-1.5 text-sm text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/10"
+          >
+            Load more
+          </button>
+        </div>
+      )}
     </div>
   )
 }

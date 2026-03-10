@@ -235,6 +235,40 @@ export default function PokerTablePage() {
   const canCheck = hand?.toCall === '0' || hand?.toCall === '';
   const callAmount = hand?.toCall ?? '0';
 
+  // ── Turn timer countdown ──────────────────────────────────────────────────
+  const [timeLeft, setTimeLeft] = useState<number>(30);
+  const timerHandIdRef = useRef<string | null>(null);
+  const timerPositionRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const turnStartedAt = hand?.turnStartedAt ?? null;
+    const actingPosition = hand?.actingPosition ?? null;
+
+    // Reset to 30 whenever the acting player changes
+    const key = `${hand?.handId}:${actingPosition}`;
+    const prevKey = `${timerHandIdRef.current}:${timerPositionRef.current}`;
+    if (key !== prevKey) {
+      timerHandIdRef.current = hand?.handId ?? null;
+      timerPositionRef.current = actingPosition;
+      if (turnStartedAt && actingPosition != null) {
+        const elapsed = (Date.now() - new Date(turnStartedAt).getTime()) / 1000;
+        setTimeLeft(Math.max(0, Math.round(30 - elapsed)));
+      } else {
+        setTimeLeft(30);
+      }
+    }
+
+    if (!turnStartedAt || actingPosition == null) return;
+
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - new Date(turnStartedAt).getTime()) / 1000;
+      const remaining = Math.max(0, Math.round(30 - elapsed));
+      setTimeLeft(remaining);
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [hand?.turnStartedAt, hand?.actingPosition, hand?.handId]);
+
   const pokerTheme = DEFAULT_POKER_THEME;
   const themeVars = getPokerThemeVars(pokerTheme);
   const cyberpunk = pokerTheme === 'cyberpunk';
@@ -315,7 +349,7 @@ export default function PokerTablePage() {
           {/* Table area — flex-1 so it fills remaining space above action bar */}
           <div className="flex-1 min-h-0 relative overflow-hidden">
             {state ? (
-              <PokerTable layout={defaultPokerLayout} state={state} currentPlayerAddress={normalizedAddress} onLeave={handleLeave} />
+              <PokerTable layout={defaultPokerLayout} state={state} currentPlayerAddress={normalizedAddress} onLeave={handleLeave} timeLeft={timeLeft} />
             ) : !error ? (
               <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
                 Loading table...
@@ -379,7 +413,7 @@ export default function PokerTablePage() {
                     <p className="absolute left-2 top-8 z-20 text-[var(--poker-danger)] text-sm">{error}</p>
                   )}
                   {state && (
-                    <PokerTable layout={defaultPokerLayout} state={state} currentPlayerAddress={normalizedAddress} onLeave={handleLeave} />
+                    <PokerTable layout={defaultPokerLayout} state={state} currentPlayerAddress={normalizedAddress} onLeave={handleLeave} timeLeft={timeLeft} />
                   )}
                   {!state && !error && (
                     <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-[var(--poker-text-muted)]">Loading table...</p>

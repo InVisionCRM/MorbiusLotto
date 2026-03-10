@@ -47,6 +47,19 @@ function getHotWalletClient(): ReturnType<typeof createWalletClient> | null {
 }
 
 // Admin: comma-separated wallet addresses (server-side, for /api/admin/*)
+// Cache for BJ deposit/withdraw totals (populated by background refresh; avoids blocking health endpoint)
+let _bjTotalsCache: { deposited: string; withdrawn: string } = { deposited: '0', withdrawn: '0' };
+let _bjTotalsRefreshing = false;
+
+function refreshBjTotalsBackground(chainAnalytics: ChainAnalyticsService) {
+  if (_bjTotalsRefreshing) return;
+  _bjTotalsRefreshing = true;
+  chainAnalytics.getBlackjackDepositWithdrawTotals()
+    .then(t => { _bjTotalsCache = { deposited: t.totalDeposited.toString(), withdrawn: t.totalWithdrawn.toString() }; })
+    .catch(() => { /* keep last cached value */ })
+    .finally(() => { _bjTotalsRefreshing = false; });
+}
+
 const ADMIN_WALLETS: string[] = (process.env.ADMIN_WALLETS || '')
   .split(',')
   .map((a) => a.trim().toLowerCase())
@@ -700,7 +713,7 @@ async function initializeServices() {
     // Blackjack global recent games (for Recent Play feed)
     app.get('/api/blackjack/recent-games', async (req, res) => {
       try {
-        const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+        const limit = Math.min(parseInt(req.query.limit as string) || 20, 200);
         const games = await dbService.getRecentGamesGlobal(limit);
         sendJson(res, games);
       } catch (error) {
@@ -1211,6 +1224,11 @@ async function initializeServices() {
           }
         }
 
+        // Blackjack deposit/withdrawal totals: serve cached value immediately, refresh in background
+        refreshBjTotalsBackground(chainAnalytics);
+        const blackjackDeposited = _bjTotalsCache.deposited;
+        const blackjackWithdrawn = _bjTotalsCache.withdrawn;
+
         sendJson(res, {
           api,
           ws,
@@ -1220,6 +1238,8 @@ async function initializeServices() {
           contractAddresses,
           ...(hotWalletAddress != null && { hotWalletAddress, hotWalletMorbius: hotWalletMorbius ?? '0', ...(hotWalletLowWarning !== undefined && { hotWalletLowWarning }) }),
           treasuryWallets,
+          blackjackDeposited,
+          blackjackWithdrawn,
         });
       } catch (error) {
         logger.error('Error in admin health:', error);
@@ -1266,6 +1286,18 @@ async function initializeServices() {
         });
       } catch (error) {
         logger.error('Error fetching reward claims:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Admin: contract daily snapshots (real on-chain cumulative totals, one row per game per day)
+    app.get('/api/admin/analytics/contract-snapshots', async (req, res) => {
+      try {
+        const days = Math.min(Math.max(parseInt(String(req.query.days), 10) || 7, 1), 30);
+        const rows = await dbService.getContractDailySnapshots(days);
+        sendJson(res, { days, snapshots: rows });
+      } catch (error) {
+        logger.error('Error fetching contract snapshots:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });
@@ -2168,6 +2200,22 @@ async function initializeServices() {
         logger.error('Pending deposits confirmation worker error', err);
       }
     }, 10_000); // every 10s
+
+    // Contract daily snapshot scheduler: take on-chain cumulative stats once per hour.
+    // Run immediately on startup so today's row exists, then repeat every hour.
+    const runContractSnapshot = async () => {
+      try {
+        const saved = await chainAnalytics.takeAndSaveDailySnapshots();
+        logger.info(`Contract daily snapshot saved (${saved} games)`);
+      } catch (err) {
+        logger.error('Contract daily snapshot error', err);
+      }
+    };
+    runContractSnapshot();
+    setInterval(runContractSnapshot, 60 * 60 * 1000); // every hour
+
+    // Prime the BJ totals cache on startup (runs in background, non-blocking)
+    refreshBjTotalsBackground(chainAnalytics);
 
     // Authoritative balance over HTTP (survives refresh; no WebSocket required).
     // Resolves pending withdrawals (mark completed if nonce used on-chain), then returns

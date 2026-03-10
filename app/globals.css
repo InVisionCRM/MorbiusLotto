@@ -415,5 +415,33 @@ body {
   font-family: "Russo One", sans-serif;
 }
 
+/* Jost Font */
+.font-jost {
+  font-family: "Jost", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* Autour One Font */
+.font-autour-one {
+  font-family: "Autour One", sans-serif;
+}
+
+/* Climate Crisis Font (variable, YEAR@1979) */
+.font-climate-crisis {
+  font-family: "Climate Crisis", sans-serif;
+}
+
+/* Monoton Font */
+.font-monoton {
+  font-family: "Monoton", sans-serif;
+}
+
+/* Noto Sans Mono (variable) - chat panel */
+.font-noto-sans-mono {
+  font-family: "Noto Sans Mono", monospace;
+}
+
 /* RainbowKit Modal Fix - No longer needed since transform moved to wrapper */
 /* Modals render to body, which is now untransformed, so they center correctly */

@@ -25,7 +25,7 @@ import { GameFAQ } from '@/components/shared/GameFAQ';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
 import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
-import ProfileSettingsModal from '@/components/BLACKJACK/ProfileSettingsModal';
+import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { useTournament, TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
 import {
@@ -701,7 +701,7 @@ export default function BlackjackPage() {
   // Profile (display name + avatar) for nav
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const { openProfileSettings } = useProfileSettingsModal();
 
   // View state
   const [currentView, setCurrentView] = useState<'game' | 'history' | 'stats' | 'analytics'>('game');
@@ -2501,27 +2501,26 @@ export default function BlackjackPage() {
         }}
         profileDisplayName={profileDisplayName}
         profileImageUrl={profileImageUrl}
-        onOpenProfileSettings={() => setProfileModalOpen(true)}
+        onOpenProfileSettings={() =>
+          openProfileSettings({
+            displayName: profileDisplayName ?? '',
+            profileImageUrl,
+            onSave: async (displayName, profileImageUrl) => {
+              if (!wsClient) return;
+              const res = await wsClient.setDisplayName(displayName, profileImageUrl);
+              setProfileDisplayName(res.displayName);
+              setProfileImageUrl(res.profileImageUrl);
+              if (address) {
+                queryClient.invalidateQueries({ queryKey: ['playerProfile', address] });
+              }
+            },
+          })
+        }
         musicTrackName={BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '') ?? 'Music'}
         isMusicPlaying={isMusicPlaying}
         onToggleMusic={toggleMusic}
         onNextTrack={nextTrack}
       >
-        <ProfileSettingsModal
-        open={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        displayName={profileDisplayName ?? ''}
-        profileImageUrl={profileImageUrl}
-        onSave={async (displayName, profileImageUrl) => {
-          if (!wsClient) return;
-          const res = await wsClient.setDisplayName(displayName, profileImageUrl);
-          setProfileDisplayName(res.displayName);
-          setProfileImageUrl(res.profileImageUrl);
-          if (address) {
-            queryClient.invalidateQueries({ queryKey: ['playerProfile', address] });
-          }
-        }}
-      />
 
       {/* Splash Screen Overlay - Dismissible */}
       {showSplash && (
@@ -2799,7 +2798,7 @@ export default function BlackjackPage() {
             getTableProfile={getTableProfile}
             onChangeTableClick={() => setThemeModalOpen(true)}
           />
-          <BlackjackRecentGames limit={20} compact title="Recent Games" />
+          <BlackjackRecentGames compact title="Recent Games" />
         </div>
 
         {/* Leaderboard + Recent Play (same as Plinko/Keno/Lottery) */}
@@ -2808,7 +2807,7 @@ export default function BlackjackPage() {
             <BlackjackTopPlayers />
           </div>
           <div className="min-w-0 min-h-0 flex flex-col">
-            <BlackjackRecentPlays limit={25} compact title="Recent Play" />
+            <BlackjackRecentPlays compact title="Recent Play" />
           </div>
         </div>
 

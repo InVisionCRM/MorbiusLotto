@@ -60,12 +60,12 @@ export function GamesSection() {
                   src="/morbius/Lottoscreenshot.png"
                   alt="Mega Morbius Lotto"
                   fill
-                  className="object-cover opacity-[0.05] group-hover:opacity-10 transition-opacity duration-300"
+                  className="object-cover opacity-30 group-hover:opacity-100 transition-opacity duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <PaymentBadges />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg">Lotto</h3>
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-monoton text-white drop-shadow-lg">Lotto</h3>
                 </div>
               </div>
             </div>
@@ -79,14 +79,14 @@ export function GamesSection() {
               <div className="relative h-full w-full rounded-xl overflow-hidden">
                 <Image
                   src="/morbius/KENOscreenshot.png"
-                  alt="Crypto Keno"
+                  alt="KENO"
                   fill
-                  className="object-cover opacity-[0.05] group-hover:opacity-10 transition-opacity duration-300"
+                  className="object-cover opacity-30 group-hover:opacity-100 transition-opacity duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <PaymentBadges />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg">Crypto Keno</h3>
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-climate-crisis text-white drop-shadow-lg">KENO</h3>
                 </div>
               </div>
             </div>
@@ -105,12 +105,12 @@ export function GamesSection() {
                   src="/morbius/plinkoscreenshot.png"
                   alt="Plinko"
                   fill
-                  className="object-cover opacity-[0.05] group-hover:opacity-10 transition-opacity duration-300"
+                  className="object-cover opacity-30 group-hover:opacity-100 transition-opacity duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <PaymentBadges />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg">Plinko</h3>
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-autour-one text-white drop-shadow-lg">Plinko</h3>
                 </div>
               </div>
             </div>
@@ -129,12 +129,12 @@ export function GamesSection() {
                   src="/BlackJack/TableBackground1.png"
                   alt="BlackJack"
                   fill
-                  className="object-cover opacity-[0.05] group-hover:opacity-10 transition-opacity duration-300"
+                  className="object-cover opacity-30 group-hover:opacity-100 transition-opacity duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <PaymentBadges />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg">BlackJack</h3>
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-jost text-white drop-shadow-lg">BlackJack</h3>
                 </div>
               </div>
             </div>

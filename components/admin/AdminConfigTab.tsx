@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, RefreshCw } from 'lucide-react';
+import { Settings, RefreshCw, Copy } from 'lucide-react';
 import { toast } from 'sonner';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   LOTTERY_INSTANT_ADDRESS,
   KENO_ADDRESS,
@@ -39,6 +40,13 @@ const CONFIG_KEYS = [
   { key: 'blackjack_fee_percent', label: 'Blackjack fee %', placeholder: '0' },
 ] as const;
 
+function morbusToWei(morbiusAmount: string): string {
+  const n = Number(morbiusAmount?.replace(/,/g, '').trim());
+  if (Number.isNaN(n) || n < 0) return '';
+  const wei = BigInt(Math.round(n * 1e9)) * BigInt(1e9);
+  return wei.toString();
+}
+
 function ContractSection({
   title,
   children,
@@ -53,6 +61,58 @@ function ContractSection({
       </CardHeader>
       <CardContent className="py-3 px-3 space-y-4">{children}</CardContent>
     </Card>
+  );
+}
+
+function WeiCalculator() {
+  const [morbiusInput, setMorbiusInput] = useState('');
+  const weiResult = morbusToWei(morbiusInput);
+
+  const copyWei = () => {
+    if (!weiResult) {
+      toast.error('Enter a MORBIUS amount first');
+      return;
+    }
+    navigator.clipboard.writeText(weiResult).then(
+      () => toast.success('Wei copied to clipboard'),
+      () => toast.error('Copy failed')
+    );
+  };
+
+  return (
+    <ContractSection title="MORBIUS → Wei">
+      <p className="text-[11px] text-slate-500 mb-2">Convert MORBIUS amount to wei (18 decimals) for contract calls.</p>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="text"
+            inputMode="decimal"
+            value={morbiusInput}
+            onChange={(e) => setMorbiusInput(e.target.value)}
+            placeholder="e.g. 1000 or 1.5"
+            className="h-8 text-xs w-44 bg-slate-800 border-slate-600 font-mono"
+          />
+          <span className="text-xs text-slate-500">MORBIUS</span>
+        </div>
+        {weiResult ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="text-[11px] font-mono text-slate-300 bg-slate-800/80 border border-slate-600 rounded px-2 py-1.5 break-all max-w-full">
+              {weiResult}
+            </code>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs border-slate-600 text-slate-300 shrink-0"
+              onClick={copyWei}
+            >
+              <Copy className="w-3.5 h-3.5 mr-1" />
+              Copy
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </ContractSection>
   );
 }
 
@@ -1226,87 +1286,127 @@ export default function AdminConfigTab() {
 
   return (
     <div className="space-y-4">
-      <Card className="bg-slate-900/60 border-slate-700/50">
-        <CardHeader className="py-2 px-3 flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
-            <Settings className="w-3.5 h-3.5 text-amber-400" />
-            Config
-          </CardTitle>
-          <button
-            type="button"
-            onClick={() => fetchConfig()}
-            disabled={loading}
-            className="p-1.5 rounded border border-slate-600 text-slate-400 hover:text-white disabled:opacity-50"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-        </CardHeader>
-        <CardContent className="py-2 px-3">
-          <p className="text-[10px] text-slate-500 mb-2">Game parameters (stored in DB). Server/games may use these; ensure keys match what the backend expects.</p>
-          {error && <p className="text-[11px] text-red-400 mb-2">{error}</p>}
-          {loading && Object.keys(config).length === 0 && <p className="text-[11px] text-slate-500">Loading…</p>}
-          <form onSubmit={handleSave} className="space-y-2">
-            {CONFIG_KEYS.map(({ key, label, placeholder }) => (
-              <div key={key}>
-                <Label className="text-[11px] text-slate-400">{label}</Label>
-                <Input
-                  value={config[key] ?? ''}
-                  onChange={(e) => setConfig((c) => ({ ...c, [key]: e.target.value }))}
-                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600 font-mono"
-                  placeholder={placeholder}
-                />
-              </div>
-            ))}
-            <div className="pt-2 border-t border-slate-700/50 mt-2">
-              <Label className="text-[11px] text-slate-400">Blackjack default table (for new users / no saved preference)</Label>
-              <div className="mt-1 flex flex-wrap gap-2 items-center">
-                <select
-                  value={config.blackjack_default_theme_kind ?? 'image'}
-                  onChange={(e) => {
-                    const kind = e.target.value as 'image' | 'video';
-                    const tableList = kind === 'video' ? BLACKJACK_VIDEO_BACKGROUNDS : BLACKJACK_IMAGE_BACKGROUNDS;
-                    const currentId = config.blackjack_default_table_id ?? DEFAULT_BLACKJACK_IMAGE_ID;
-                    const validId = tableList.some((t) => t.id === currentId) ? currentId : tableList[0].id;
-                    setConfig((c) => ({ ...c, blackjack_default_theme_kind: kind, blackjack_default_table_id: validId }));
-                  }}
-                  className="h-8 text-xs bg-slate-800 border border-slate-600 rounded text-slate-200 px-2"
-                >
-                  <option value="image">Image</option>
-                  <option value="video">Video</option>
-                </select>
-                <select
-                  value={config.blackjack_default_table_id ?? DEFAULT_BLACKJACK_IMAGE_ID}
-                  onChange={(e) => setConfig((c) => ({ ...c, blackjack_default_table_id: e.target.value }))}
-                  className="h-8 text-xs bg-slate-800 border border-slate-600 rounded text-slate-200 px-2 min-w-[140px]"
-                >
-                  {(config.blackjack_default_theme_kind ?? 'image') === 'video'
-                    ? BLACKJACK_VIDEO_BACKGROUNDS.map((v) => (
-                        <option key={v.id} value={v.id}>{v.label}</option>
-                      ))
-                    : BLACKJACK_IMAGE_BACKGROUNDS.map((b) => (
-                        <option key={b.id} value={b.id}>{b.label}</option>
-                      ))}
-                </select>
-              </div>
-            </div>
-            <div className="pt-2">
-              <Button type="submit" size="sm" className="text-xs h-7" disabled={saving}>
-                {saving ? 'Saving…' : 'Save config'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="config" className="w-full">
+        <TabsList className="flex flex-wrap h-auto gap-1 p-1.5 bg-slate-800/80 border border-slate-700/50">
+          <TabsTrigger value="config" className="text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white">Config</TabsTrigger>
+          <TabsTrigger value="calculator" className="text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white">Calculator</TabsTrigger>
+          <TabsTrigger value="lottery" className="text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white">Lottery</TabsTrigger>
+          <TabsTrigger value="keno" className="text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white">Keno</TabsTrigger>
+          <TabsTrigger value="plinko" className="text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white">Plinko</TabsTrigger>
+          <TabsTrigger value="blackjack" className="text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white">Blackjack</TabsTrigger>
+          <TabsTrigger value="escrow" className="text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white">Escrow</TabsTrigger>
+          <TabsTrigger value="distributor" className="text-xs data-[state=active]:bg-slate-700 data-[state=active]:text-white">Distributor</TabsTrigger>
+        </TabsList>
 
-      <div className="text-xs font-medium text-slate-400 pt-2 border-t border-slate-700/50">Contract admin: ensure wallet is on PulseChain. Only contract owner (or authorized) can execute these functions.</div>
+        <TabsContent value="config" className="mt-3 space-y-4">
+          <Card className="bg-slate-900/60 border-slate-700/50">
+            <CardHeader className="py-2 px-3 flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
+                <Settings className="w-3.5 h-3.5 text-amber-400" />
+                Config
+              </CardTitle>
+              <button
+                type="button"
+                onClick={() => fetchConfig()}
+                disabled={loading}
+                className="p-1.5 rounded border border-slate-600 text-slate-400 hover:text-white disabled:opacity-50"
+                aria-label="Refresh"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </CardHeader>
+            <CardContent className="py-2 px-3">
+              <p className="text-[10px] text-slate-500 mb-2">Game parameters (stored in DB). Server/games may use these; ensure keys match what the backend expects.</p>
+              {error && <p className="text-[11px] text-red-400 mb-2">{error}</p>}
+              {loading && Object.keys(config).length === 0 && <p className="text-[11px] text-slate-500">Loading…</p>}
+              <form onSubmit={handleSave} className="space-y-2">
+                {CONFIG_KEYS.map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <Label className="text-[11px] text-slate-400">{label}</Label>
+                    <Input
+                      value={config[key] ?? ''}
+                      onChange={(e) => setConfig((c) => ({ ...c, [key]: e.target.value }))}
+                      className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600 font-mono"
+                      placeholder={placeholder}
+                    />
+                  </div>
+                ))}
+                <div className="pt-2 border-t border-slate-700/50 mt-2">
+                  <Label className="text-[11px] text-slate-400">Blackjack default table (for new users / no saved preference)</Label>
+                  <div className="mt-1 flex flex-wrap gap-2 items-center">
+                    <select
+                      value={config.blackjack_default_theme_kind ?? 'image'}
+                      onChange={(e) => {
+                        const kind = e.target.value as 'image' | 'video';
+                        const tableList = kind === 'video' ? BLACKJACK_VIDEO_BACKGROUNDS : BLACKJACK_IMAGE_BACKGROUNDS;
+                        const currentId = config.blackjack_default_table_id ?? DEFAULT_BLACKJACK_IMAGE_ID;
+                        const validId = tableList.some((t) => t.id === currentId) ? currentId : tableList[0].id;
+                        setConfig((c) => ({ ...c, blackjack_default_theme_kind: kind, blackjack_default_table_id: validId }));
+                      }}
+                      className="h-8 text-xs bg-slate-800 border border-slate-600 rounded text-slate-200 px-2"
+                    >
+                      <option value="image">Image</option>
+                      <option value="video">Video</option>
+                    </select>
+                    <select
+                      value={config.blackjack_default_table_id ?? DEFAULT_BLACKJACK_IMAGE_ID}
+                      onChange={(e) => setConfig((c) => ({ ...c, blackjack_default_table_id: e.target.value }))}
+                      className="h-8 text-xs bg-slate-800 border border-slate-600 rounded text-slate-200 px-2 min-w-[140px]"
+                    >
+                      {(config.blackjack_default_theme_kind ?? 'image') === 'video'
+                        ? BLACKJACK_VIDEO_BACKGROUNDS.map((v) => (
+                            <option key={v.id} value={v.id}>{v.label}</option>
+                          ))
+                        : BLACKJACK_IMAGE_BACKGROUNDS.map((b) => (
+                            <option key={b.id} value={b.id}>{b.label}</option>
+                          ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="pt-2">
+                  <Button type="submit" size="sm" className="text-xs h-7" disabled={saving}>
+                    {saving ? 'Saving…' : 'Save config'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <LotteryAdminSection />
-      <KenoAdminSection />
-      <PlinkoAdminSection />
-      <BlackjackAdminSection />
-      <EscrowAdminSection />
-      <DistributorAdminSection />
+        <TabsContent value="calculator" className="mt-3">
+          <WeiCalculator />
+        </TabsContent>
+
+        <TabsContent value="lottery" className="mt-3">
+          <p className="text-xs font-medium text-slate-400 mb-2">Contract admin: ensure wallet is on PulseChain. Only contract owner (or authorized) can execute.</p>
+          <LotteryAdminSection />
+        </TabsContent>
+
+        <TabsContent value="keno" className="mt-3">
+          <p className="text-xs font-medium text-slate-400 mb-2">Contract admin: ensure wallet is on PulseChain. Only contract owner (or authorized) can execute.</p>
+          <KenoAdminSection />
+        </TabsContent>
+
+        <TabsContent value="plinko" className="mt-3">
+          <p className="text-xs font-medium text-slate-400 mb-2">Contract admin: ensure wallet is on PulseChain. Only contract owner (or authorized) can execute.</p>
+          <PlinkoAdminSection />
+        </TabsContent>
+
+        <TabsContent value="blackjack" className="mt-3">
+          <p className="text-xs font-medium text-slate-400 mb-2">Contract admin: ensure wallet is on PulseChain. Only contract owner (or authorized) can execute.</p>
+          <BlackjackAdminSection />
+        </TabsContent>
+
+        <TabsContent value="escrow" className="mt-3">
+          <p className="text-xs font-medium text-slate-400 mb-2">Contract admin: ensure wallet is on PulseChain. Only contract owner (or authorized) can execute.</p>
+          <EscrowAdminSection />
+        </TabsContent>
+
+        <TabsContent value="distributor" className="mt-3">
+          <p className="text-xs font-medium text-slate-400 mb-2">Contract admin: ensure wallet is on PulseChain. Only contract owner (or authorized) can execute.</p>
+          <DistributorAdminSection />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

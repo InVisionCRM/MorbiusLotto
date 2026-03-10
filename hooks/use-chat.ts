@@ -42,13 +42,19 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
   );
 
   const setDisplayName = useCallback(
-    async (displayName: string) => {
+    async (displayName: string, profileImageUrl?: string | null) => {
       const c = externalClient ?? internalClientRef.current;
       if (!c?.isConnected()) throw new Error('Not connected');
-      return c.setDisplayName(displayName);
+      return c.setDisplayName(displayName, profileImageUrl);
     },
     [externalClient]
   );
+
+  const getProfile = useCallback(async () => {
+    const c = externalClient ?? internalClientRef.current;
+    if (!c?.isConnected()) return { displayName: null, profileImageUrl: null };
+    return c.getProfile();
+  }, [externalClient]);
 
   const loadMore = useCallback(async () => {
     const c = externalClient ?? internalClientRef.current;
@@ -203,5 +209,5 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
     setConnected(externalClient.isConnected());
   }, [externalClient, connected]);
 
-  return { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore, chatPaused };
+  return { messages, sendMessage, connected, error, setDisplayName, getProfile, loadMore, loadingMore, chatPaused };
 }

@@ -63,10 +63,25 @@ export const PLINKO_GET_GLOBAL_STATS_ABI = PLINKO_ABI;
 /** Full CryptoKeno ABI from contracts/abi/CryptoKeno.json. */
 export const KENO_GET_GLOBAL_STATS_ABI = KENO_ABI;
 
+/** Minimal ABI: getContractReserve() -> uint256 */
+export const KENO_GET_CONTRACT_RESERVE_ABI = [
+  { inputs: [], name: 'getContractReserve', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+] as const;
+
 /** Full Lottery 6-of-55 V2 ABI from contracts/abi/lottery6of55-v2.json. */
 export const LOTTERY_STATS_ABI = LOTTERY_ABI;
 /** Instant Lottery 6-of-55 ABI (totalPlays, totalWagered, totalPayouts). */
 export const INSTANT_LOTTERY_STATS_ABI = instantLotteryAbi;
+
+/** Minimal Blackjack stats ABI for snapshot reads (fee totals, off-chain payouts, reserves). */
+export const BLACKJACK_STATS_ABI = [
+  { inputs: [], name: 'totalBurnFeesCollected',          outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'totalDistributionFeesCollected',  outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'totalLpDistributionFeesCollected',outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'totalPlatformFeesCollected',      outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'totalOffChainPayouts',            outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'totalReserves',                   outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+] as const;
 
 /** Minimal ABI: getGlobalStats() -> (spins, volume, payouts, contractBalance, contractReserveBalance) */
 export const BIGWHEEL_GET_GLOBAL_STATS_ABI = [

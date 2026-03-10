@@ -198,7 +198,7 @@ export function useInstantLotteryResults(options: {
       try {
         const toBlock = await publicClient.getBlockNumber()
         // When showing a specific player's history, fetch more blocks so "My Recent Plays" is full history
-        const blockWindow = playerAddress ? 50000n : 5000n
+        const blockWindow = playerAddress ? 50000n : 50000n
         const fromBlock = toBlock - blockWindow > 0n ? toBlock - blockWindow : 0n
         const logs = await publicClient.getContractEvents({
           address: LOTTERY_INSTANT_ADDRESS,

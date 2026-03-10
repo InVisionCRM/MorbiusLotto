@@ -9,9 +9,11 @@ import {
   BLACKJACK_ADDRESS,
   PLINKO_GET_GLOBAL_STATS_ABI,
   KENO_GET_GLOBAL_STATS_ABI,
+  KENO_GET_CONTRACT_RESERVE_ABI,
   LOTTERY_STATS_ABI,
   INSTANT_LOTTERY_STATS_ABI,
   BIGWHEEL_GET_GLOBAL_STATS_ABI,
+  BLACKJACK_STATS_ABI,
 } from '../config/contracts';
 
 const DEPOSIT_EVENT = parseAbiItem('event Deposit(address indexed player, uint256 morbiusAmount, uint256 plsAmount)');
@@ -372,5 +374,85 @@ export class ChainAnalyticsService {
       this.getBigWheelStats(),
     ]);
     return { plinko, keno, lottery, bigWheel };
+  }
+
+  /**
+   * Read cumulative on-chain stats for all tracked games and upsert today's snapshot row.
+   * Called hourly. Returns the number of games successfully snapshotted.
+   */
+  async takeAndSaveDailySnapshots(): Promise<number> {
+    const client = getPublicClient();
+    let saved = 0;
+
+    // ── Plinko ──────────────────────────────────────────────────────────────
+    try {
+      const plinko = await this.getPlinkoStats();
+      if (plinko) {
+        const wagered = plinko.totalRevenue + plinko.totalPayouts;
+        await this.dbService.saveContractDailySnapshot('plinko', wagered, plinko.totalPayouts, plinko.contractReserve);
+        saved++;
+      }
+    } catch (err) {
+      console.error('takeAndSaveDailySnapshots plinko:', err);
+    }
+
+    // ── Keno ────────────────────────────────────────────────────────────────
+    try {
+      const [kenoStats, kenoReserve] = await Promise.all([
+        this.getKenoStats(),
+        client.readContract({
+          address: KENO_ADDRESS,
+          abi: KENO_GET_CONTRACT_RESERVE_ABI,
+          functionName: 'getContractReserve',
+        }).catch(() => null) as Promise<bigint | null>,
+      ]);
+      if (kenoStats) {
+        await this.dbService.saveContractDailySnapshot(
+          'keno',
+          kenoStats.totalWagered,
+          kenoStats.totalWon,
+          kenoReserve ?? 0n,
+        );
+        saved++;
+      }
+    } catch (err) {
+      console.error('takeAndSaveDailySnapshots keno:', err);
+    }
+
+    // ── Lottery ─────────────────────────────────────────────────────────────
+    try {
+      const lottery = await this.getLotteryStats();
+      if (lottery) {
+        await this.dbService.saveContractDailySnapshot(
+          'lottery',
+          lottery.totalCollected,
+          lottery.totalClaimed,
+          0n, // lottery has no pooled reserve exposed via a simple view function
+        );
+        saved++;
+      }
+    } catch (err) {
+      console.error('takeAndSaveDailySnapshots lottery:', err);
+    }
+
+    // ── Blackjack ───────────────────────────────────────────────────────────
+    try {
+      const [burnFees, distFees, lpFees, platformFees, offChainPayouts, reserves] = await Promise.all([
+        client.readContract({ address: BLACKJACK_ADDRESS, abi: BLACKJACK_STATS_ABI, functionName: 'totalBurnFeesCollected' }) as Promise<bigint>,
+        client.readContract({ address: BLACKJACK_ADDRESS, abi: BLACKJACK_STATS_ABI, functionName: 'totalDistributionFeesCollected' }) as Promise<bigint>,
+        client.readContract({ address: BLACKJACK_ADDRESS, abi: BLACKJACK_STATS_ABI, functionName: 'totalLpDistributionFeesCollected' }) as Promise<bigint>,
+        client.readContract({ address: BLACKJACK_ADDRESS, abi: BLACKJACK_STATS_ABI, functionName: 'totalPlatformFeesCollected' }) as Promise<bigint>,
+        client.readContract({ address: BLACKJACK_ADDRESS, abi: BLACKJACK_STATS_ABI, functionName: 'totalOffChainPayouts' }) as Promise<bigint>,
+        client.readContract({ address: BLACKJACK_ADDRESS, abi: BLACKJACK_STATS_ABI, functionName: 'totalReserves' }) as Promise<bigint>,
+      ]);
+      const totalFees = burnFees + distFees + lpFees + platformFees;
+      const totalWagered = totalFees + offChainPayouts;
+      await this.dbService.saveContractDailySnapshot('blackjack', totalWagered, offChainPayouts, reserves);
+      saved++;
+    } catch (err) {
+      console.error('takeAndSaveDailySnapshots blackjack:', err);
+    }
+
+    return saved;
   }
 }

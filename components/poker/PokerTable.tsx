@@ -24,6 +24,8 @@ export interface PokerTableProps {
   state: TableState;
   currentPlayerAddress: string | null;
   onLeave: () => void;
+  /** Seconds remaining for the acting player's turn (0-30). */
+  timeLeft?: number;
 }
 
 /**
@@ -50,9 +52,10 @@ const FELT = { left: 5, top: 17, width: 90, height: 58 };
 // Community cards area (% of container), centered on felt
 const BOARD = { left: 18, top: 28, width: 64, height: 32 };
 
-export function PokerTable({ layout, state, currentPlayerAddress, onLeave }: PokerTableProps) {
+export function PokerTable({ layout, state, currentPlayerAddress, onLeave, timeLeft }: PokerTableProps) {
   const hand = state.currentHand;
   const mySeatIndex = state.seats.findIndex((s) => s.playerAddress === currentPlayerAddress);
+  const actingPosition = hand?.actingPosition ?? null;
   const communityRect = getCommunityRect(layout);
 
   /** Render seat props shared between mobile and desktop */
@@ -72,6 +75,7 @@ export function PokerTable({ layout, state, currentPlayerAddress, onLeave }: Pok
         hand?.lastAction?.position === idx
           ? { action: hand.lastAction.action, amount: hand.lastAction.amount }
           : null,
+      timeLeft: actingPosition === idx ? timeLeft : undefined,
     };
   };
 

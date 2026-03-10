@@ -15,6 +15,7 @@ import {
 import { merkleClaimLpAbi } from '@/abi/merkle-claim-lp';
 import { ERC20_ABI } from '@/abi/erc20';
 import { MERKLE_CLAIM_LP_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
+import { pulsechain } from '@/lib/chains';
 import { getApiUrlOptional } from '@/lib/api-urls';
 import { SNAPSHOT_EXCLUSION_CONTRACTS } from '@/lib/snapshot-exclusions';
 
@@ -179,6 +180,21 @@ function OnchainActions({
   });
   const currentAllowance = (allowance as bigint | undefined) ?? 0n;
 
+  // Contract balance: if already >= totalWei, transfer step is done (e.g. after refresh or remount)
+  const { data: contractBalance, refetch: refetchContractBalance } = useReadContract({
+    address: TOKEN_ADDR,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [MERKLE_ADDR],
+    query: { enabled: Boolean(MERKLE_ADDR) && totalWei > 0n },
+  });
+  const merkleContractBalance = (contractBalance as bigint | undefined) ?? 0n;
+
+  // Refetch contract balance when this section mounts so we don't rely on stale cache after a transfer
+  useEffect(() => {
+    refetchContractBalance();
+  }, [refetchContractBalance]);
+
   const [step, setStep] = useState<OnchainStep>(
     depositWei === 0n ? 'setroot' :
     currentAllowance >= depositWei ? 'transfer' : 'approve',
@@ -194,6 +210,13 @@ function OnchainActions({
       setStep('transfer');
     }
   }, [currentAllowance, depositWei, step]);
+
+  // After transfer, contract has the tokens; on remount/refresh we should show setroot, not transfer
+  useEffect(() => {
+    if (totalWei > 0n && merkleContractBalance >= totalWei && step === 'transfer') {
+      setStep('setroot');
+    }
+  }, [merkleContractBalance, totalWei, step]);
 
   const waitForTx = async (hash: `0x${string}`, then: () => void) => {
     setTxHash(hash);
@@ -218,7 +241,9 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [MERKLE_ADDR, MAX_UINT256],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: adminAddr,
       });
       await waitForTx(hash, () => {
         refetchAllowance();
@@ -240,9 +265,12 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'transfer',
         args: [MERKLE_ADDR, depositWei],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: adminAddr,
       });
       await waitForTx(hash, () => {
+        refetchContractBalance();
         setStep('setroot');
         setMsg(`✓ Transferred ${fmtMorbius(epoch.new_reward_amount || epoch.total_reward_amount)} MORBIUS to contract`);
       });
@@ -260,7 +288,9 @@ function OnchainActions({
         abi: merkleClaimLpAbi,
         functionName: 'setEpochRoot',
         args: [BigInt(epoch.epoch_number), epoch.merkle_root as `0x${string}`, totalWei],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: adminAddr,
       });
       await waitForTx(hash, async () => {
         setStep('done');
@@ -285,6 +315,8 @@ function OnchainActions({
     return <p className="text-xs text-yellow-400">Set reward amount first (Calculate Rewards step).</p>;
   }
 
+  // Show setroot when step is setroot, or when still on transfer but contract already has enough (e.g. after refresh)
+  const canSetRoot = step === 'setroot' || (step === 'transfer' && merkleContractBalance >= totalWei);
   const stepNum = step === 'approve' ? 1 : step === 'transfer' ? 2 : step === 'setroot' ? 3 : 4;
   const noNewDeposit = depositWei === 0n;
 
@@ -305,8 +337,8 @@ function OnchainActions({
       {/* Progress bar */}
       <div className="flex items-center gap-1.5 text-[11px]">
         {(['approve', 'transfer', 'setroot'] as const).map((s, i) => {
-          const done = stepNum > i + 1;
-          const active = stepNum === i + 1;
+          const done = stepNum > i + 1 || (s === 'transfer' && canSetRoot);
+          const active = (stepNum === i + 1 && !(s === 'transfer' && canSetRoot)) || (s === 'setroot' && canSetRoot);
           const labels = ['1. Approve MORBIUS', '2. Transfer to Contract', '3. Set Root On-Chain'];
           return (
             <React.Fragment key={s}>
@@ -332,14 +364,14 @@ function OnchainActions({
             Approve MORBIUS
           </Button>
         )}
-        {step === 'transfer' && (
+        {step === 'transfer' && !canSetRoot && (
           <Button size="sm" onClick={handleTransfer} disabled={waiting}
             className="h-8 bg-blue-600 hover:bg-blue-500 text-white text-xs">
             {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Coins className="w-3 h-3 mr-1" />}
             Transfer {fmtMorbius(epoch.new_reward_amount || epoch.total_reward_amount)} MORBIUS
           </Button>
         )}
-        {step === 'setroot' && (
+        {canSetRoot && (
           <Button size="sm" onClick={handleSetRoot} disabled={waiting}
             className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white text-xs">
             {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Globe className="w-3 h-3 mr-1" />}
@@ -393,6 +425,7 @@ export default function AdminLPStakingTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [epochVisibleCount, setEpochVisibleCount] = useState(5);
 
   const [rewardInputs, setRewardInputs] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<Record<number, boolean>>({});
@@ -1220,7 +1253,7 @@ export default function AdminLPStakingTab() {
             <p className="text-center text-sm text-slate-500 py-6">No epochs yet.</p>
           ) : (
             <div className="space-y-2">
-              {epochs.map((epoch) => {
+              {epochs.slice(0, epochVisibleCount).map((epoch) => {
                 const { label, color } = STATUS_LABELS[epoch.status] ?? { label: epoch.status, color: 'text-slate-400 bg-slate-400/10 border-slate-400/20' };
                 const isExpanded = expandedId === epoch.id;
                 const isEpochBusy = busy[epoch.id] ?? false;
@@ -1540,6 +1573,18 @@ export default function AdminLPStakingTab() {
                   </div>
                 );
               })}
+              {epochVisibleCount < epochs.length && (
+                <div className="flex justify-center pt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setEpochVisibleCount((c) => c + 5)}
+                    className="h-8 text-xs border-slate-600 text-slate-400 hover:bg-slate-800 hover:text-white"
+                  >
+                    Load more ({epochs.length - epochVisibleCount} remaining)
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

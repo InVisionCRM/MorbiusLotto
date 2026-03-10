@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { formatEther, parseEther } from 'viem';
 import { Activity, RefreshCw, CheckCircle, XCircle, Copy, Loader2, Gift, X } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { Tooltip, Legend, ResponsiveContainer, Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import {
   BLACKJACK_ADDRESS,
   BLACKJACK_LEGACY_ADDRESS,
@@ -64,6 +64,9 @@ export interface AdminHealthData {
   hotWalletLowWarning?: boolean;
   /** Treasury / platform fee / distribution addresses and MORBIUS balance */
   treasuryWallets?: Array<{ label: string; address: string; morbiusWei: string }>;
+  /** Blackjack all-time deposits and withdrawals (from chain scan) */
+  blackjackDeposited?: string;
+  blackjackWithdrawn?: string;
 }
 
 function formatMorbius(wei: string): string {
@@ -79,20 +82,11 @@ function formatMorbius(wei: string): string {
 }
 
 function copyToClipboard(text: string) {
-  void navigator.clipboard.writeText(text);
+  void navigator.clipboard.writeText(text).then(() => {
+    toast.success('Copied to clipboard', { duration: 1500 });
+  });
 }
 
-// Colors for pie chart segments
-const PIE_COLORS = [
-  'rgba(34, 211, 238, 0.8)',   // cyan
-  'rgba(139, 92, 246, 0.8)',   // violet
-  'rgba(59, 130, 246, 0.8)',   // blue
-  'rgba(16, 185, 129, 0.8)',   // emerald
-  'rgba(251, 146, 60, 0.8)',   // orange
-  'rgba(236, 72, 153, 0.8)',   // pink
-  'rgba(168, 85, 247, 0.8)',   // purple
-  'rgba(34, 197, 94, 0.8)',    // green
-];
 
 function truncateAddress(address: string, start = 6, end = 4): string {
   if (address.length <= start + end) return address;
@@ -155,24 +149,60 @@ function getLast7Days(): { date: string; label: string }[] {
   return out;
 }
 
-/** Build daily chart data: one value per day (current total repeated for chain games; no history). */
-function buildDailySingleSeries(
-  days: { date: string; label: string }[],
-  valueWei: bigint
-): { date: string; label: string; value: number }[] {
-  const v = Number(formatEther(valueWei));
-  return days.map((d) => ({ ...d, value: v }));
+// ── Snapshot types ──────────────────────────────────────────────────────────
+
+interface ContractSnapshot {
+  snapshot_date: string;
+  game: string;
+  total_wagered: string;
+  total_payouts: string;
+  contract_reserve: string;
 }
 
-/** Build daily chart data: two series (wagers, payouts) per day. */
-function buildDailyDualSeries(
+/** Build per-game daily chart data from DB snapshots.
+ *  Computes day-over-day DELTA of cumulative totals so each bar represents
+ *  actual activity on that calendar day, not the running total.
+ *  Days with no snapshot carry the previous day's cumulative (delta = 0). */
+function buildGameChartData(
   days: { date: string; label: string }[],
-  wagersWei: bigint,
-  payoutsWei: bigint
-): { date: string; label: string; wagers: number; payouts: number }[] {
-  const w = Number(formatEther(wagersWei));
-  const p = Number(formatEther(payoutsWei));
-  return days.map((d) => ({ ...d, wagers: w, payouts: p }));
+  snapshots: ContractSnapshot[],
+  game: string,
+): {
+  single:  { date: string; label: string; value: number }[];
+  dual:    { date: string; label: string; wagers: number; payouts: number }[];
+  reserve: { date: string; label: string; value: number }[];
+} {
+  const byDate = new Map<string, ContractSnapshot>();
+  for (const s of snapshots) {
+    if (s.game === game) byDate.set(s.snapshot_date, s);
+  }
+
+  let prevWagered = 0n;
+  let prevPayouts = 0n;
+
+  const single:  { date: string; label: string; value: number }[] = [];
+  const dual:    { date: string; label: string; wagers: number; payouts: number }[] = [];
+  const reserve: { date: string; label: string; value: number }[] = [];
+
+  for (const day of days) {
+    const snap = byDate.get(day.date);
+    const curWagered = snap ? BigInt(snap.total_wagered) : prevWagered;
+    const curPayouts = snap ? BigInt(snap.total_payouts) : prevPayouts;
+    const curReserve = snap ? BigInt(snap.contract_reserve) : 0n;
+
+    const deltaWagered = curWagered > prevWagered ? curWagered - prevWagered : 0n;
+    const deltaPayouts = curPayouts > prevPayouts ? curPayouts - prevPayouts : 0n;
+    const deltaRevenue = deltaWagered > deltaPayouts ? deltaWagered - deltaPayouts : 0n;
+
+    single.push({ ...day, value: Number(formatEther(deltaRevenue)) });
+    dual.push({ ...day, wagers: Number(formatEther(deltaWagered)), payouts: Number(formatEther(deltaPayouts)) });
+    reserve.push({ ...day, value: Number(formatEther(curReserve)) });
+
+    prevWagered = curWagered;
+    prevPayouts = curPayouts;
+  }
+
+  return { single, dual, reserve };
 }
 
 const CHART_HEIGHT = 140;
@@ -308,6 +338,59 @@ function DailyDualChart({
   );
 }
 
+function BjContractCard({ contract }: { contract: BlackjackContractReserves }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">{contract.label}</span>
+        <button
+          type="button"
+          onClick={() => copyToClipboard(contract.contractAddress)}
+          className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1 shrink-0"
+          title="Copy address"
+        >
+          <Copy className="w-3 h-3" />
+          {truncateAddress(contract.contractAddress, 5, 4)}
+        </button>
+      </div>
+      <div>
+        <p className="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wide">Total reserves</p>
+        <p className="text-2xl font-bold text-white tabular-nums leading-none">
+          {formatMorbius(contract.totalMorbiusInContract)}
+        </p>
+        <p className="text-[10px] text-slate-500 mt-0.5">MORBIUS</p>
+      </div>
+      {contract.addressesWithReserve.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-[10px] text-slate-500 hover:text-cyan-300 text-left"
+        >
+          {contract.addressesWithReserve.length} player{contract.addressesWithReserve.length !== 1 ? 's' : ''} with reserve {expanded ? '▲' : '▼'}
+        </button>
+      )}
+      {expanded && (
+        <ul className="space-y-1 text-[10px] font-mono text-slate-400 max-h-36 overflow-y-auto border-t border-slate-700/50 pt-2">
+          {contract.addressesWithReserve.map(({ address: addr, reserve }) => (
+            <li key={`${contract.contractAddress}-${addr}`} className="flex justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => copyToClipboard(addr)}
+                className="hover:text-cyan-300 flex items-center gap-1"
+              >
+                <Copy className="w-2.5 h-2.5 shrink-0" />
+                {addr.slice(0, 8)}…{addr.slice(-6)}
+              </button>
+              <span className="text-slate-300 tabular-nums shrink-0">{formatMorbius(reserve)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function AdminHealthTab() {
   const { address } = useAccount();
   const [data, setData] = useState<AdminHealthData | null>(null);
@@ -317,6 +400,7 @@ export default function AdminHealthTab() {
   const [fundingGame, setFundingGame] = useState<FundableGameKey | null>(null);
   const [actionGame, setActionGame] = useState<FundableGameKey | null>(null);
   const [actionType, setActionType] = useState<'pause' | 'unpause' | 'withdraw' | null>(null);
+  const [snapshots, setSnapshots] = useState<ContractSnapshot[]>([]);
   const [rewardsClaimsOpen, setRewardsClaimsOpen] = useState(false);
   const [rewardsClaimsLoading, setRewardsClaimsLoading] = useState(false);
   const [rewardsClaimsData, setRewardsClaimsData] = useState<{
@@ -498,65 +582,53 @@ export default function AdminHealthTab() {
     contractBalance: bigWheelStats[3],
   } : null;
 
-  const contractFlowSeries = useMemo(() => {
-    const days = getLast7Days();
-    const games: { key: string; label: string; revenueWei: bigint; wagersWei: bigint; payoutsWei: bigint; reserveWei: bigint }[] = [];
+  // Games shown in overview cards (on-chain current totals, same as before)
+  const overviewGames = useMemo(() => {
+    const games: { key: string; label: string; wagersWei: bigint; payoutsWei: bigint }[] = [];
     if (plinkoData) {
-      games.push({
-        key: 'plinko',
-        label: 'Plinko',
-        revenueWei: plinkoData.totalRevenue,
-        wagersWei: plinkoData.totalRevenue + plinkoData.totalPayouts,
-        payoutsWei: plinkoData.totalPayouts,
-        reserveWei: plinkoData.contractReserve,
-      });
+      games.push({ key: 'plinko', label: 'Plinko', wagersWei: plinkoData.totalRevenue + plinkoData.totalPayouts, payoutsWei: plinkoData.totalPayouts });
     }
-    if (kenoData && kenoReserve != null) {
-      games.push({
-        key: 'keno',
-        label: 'Keno',
-        revenueWei: kenoData.totalWagered - kenoData.totalWon,
-        wagersWei: kenoData.totalWagered,
-        payoutsWei: kenoData.totalWon,
-        reserveWei: kenoReserve,
-      });
+    if (kenoData) {
+      games.push({ key: 'keno', label: 'Keno', wagersWei: kenoData.totalWagered, payoutsWei: kenoData.totalWon });
     }
     if (lotteryData) {
-      games.push({
-        key: 'lottery',
-        label: 'Lottery',
-        revenueWei: lotteryData.totalCollected - lotteryData.totalClaimed,
-        wagersWei: lotteryData.totalCollected,
-        payoutsWei: lotteryData.totalClaimed,
-        reserveWei: BigInt(data?.morbius?.lottery ?? '0'),
-      });
+      games.push({ key: 'lottery', label: 'Lottery', wagersWei: lotteryData.totalCollected, payoutsWei: lotteryData.totalClaimed });
     }
-    // Big Wheel excluded from charts per product request
     if (bjTotalPayouts != null && bjBurnFees != null && bjDistFees != null && bjLpFees != null && bjPlatformFees != null) {
       const bjRevenue = bjBurnFees + bjDistFees + bjLpFees + bjPlatformFees;
-      games.push({
-        key: 'blackjack',
-        label: 'Blackjack',
-        revenueWei: bjRevenue,
-        wagersWei: bjRevenue + bjTotalPayouts,
-        payoutsWei: bjTotalPayouts,
-        reserveWei: bjTotalReserves ?? 0n,
-      });
+      games.push({ key: 'blackjack', label: 'Blackjack', wagersWei: bjRevenue + bjTotalPayouts, payoutsWei: bjTotalPayouts });
     }
-    return { days, games };
-  }, [plinkoData, kenoData, kenoReserve, lotteryData, data?.morbius?.lottery, bjTotalPayouts, bjBurnFees, bjDistFees, bjLpFees, bjPlatformFees, bjTotalReserves]);
+    return games;
+  }, [plinkoData, kenoData, lotteryData, bjTotalPayouts, bjBurnFees, bjDistFees, bjLpFees, bjPlatformFees]);
+
+  // Daily chart data — built from DB snapshots (real deltas), not flat repeated totals
+  const chartData = useMemo(() => {
+    const days = getLast7Days();
+    const CHART_GAMES = [
+      { key: 'plinko', label: 'Plinko' },
+      { key: 'keno', label: 'Keno' },
+      { key: 'lottery', label: 'Lottery' },
+      { key: 'blackjack', label: 'Blackjack' },
+    ];
+    return { days, games: CHART_GAMES.map((g) => ({ ...g, ...buildGameChartData(days, snapshots, g.key) })) };
+  }, [snapshots]);
 
   const fetchHealth = useCallback(async () => {
     if (!address) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/admin/health', {
-        headers: { 'x-admin-wallet': address },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
+      const [healthRes, snapshotRes] = await Promise.all([
+        fetch('/api/admin/health', { headers: { 'x-admin-wallet': address } }),
+        fetch('/api/admin/analytics/contract-snapshots?days=7', { headers: { 'x-admin-wallet': address } }),
+      ]);
+      if (!healthRes.ok) throw new Error(`HTTP ${healthRes.status}`);
+      const json = await healthRes.json();
       setData(json);
+      if (snapshotRes.ok) {
+        const snap = await snapshotRes.json();
+        setSnapshots(snap.snapshots ?? []);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load health');
       setData(null);
@@ -877,17 +949,6 @@ export default function AdminHealthTab() {
     return [];
   }, [data?.blackjackReservesByContract, data?.blackjackReserves, data?.contractAddresses?.blackjack]);
 
-  // Pie chart for first contract with reserves (or current)
-  const pieChartData = useMemo(() => {
-    const first = blackjackContracts[0]?.addressesWithReserve;
-    if (!first?.length) return [];
-    return first.map(({ address, reserve }) => ({
-      name: truncateAddress(address),
-      value: Number(formatEther(BigInt(reserve))),
-      address,
-      reserve: formatMorbius(reserve),
-    }));
-  }, [blackjackContracts]);
 
   if (!address) {
     return (
@@ -1077,7 +1138,7 @@ export default function AdminHealthTab() {
             <div>
               <p className="text-slate-500 mb-2">Game overview — total wagered vs total won</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                {contractFlowSeries.games.map((game) => (
+                {overviewGames.map((game) => (
                   <div
                     key={game.key}
                     className="rounded-lg border border-cyan-500/20 p-2.5"
@@ -1105,42 +1166,75 @@ export default function AdminHealthTab() {
                   </div>
                 ))}
               </div>
+              {/* Blackjack deposits vs withdrawals */}
+              {(data.blackjackDeposited != null || data.blackjackWithdrawn != null) && (
+                <div
+                  className="rounded-lg border border-cyan-500/20 p-2.5 mt-2"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  }}
+                >
+                  <p className="text-cyan-400 text-[10px] font-semibold uppercase tracking-wider mb-2">Blackjack — deposits vs withdrawals (all-time)</p>
+                  <div className="flex flex-wrap gap-6 text-[11px]">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-500">Deposited</span>
+                      <span className="font-mono text-slate-200 tabular-nums">{formatMorbius(data.blackjackDeposited ?? '0')} MORBIUS</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-500">Withdrawn</span>
+                      <span className="font-mono text-emerald-400/90 tabular-nums">{formatMorbius(data.blackjackWithdrawn ?? '0')} MORBIUS</span>
+                    </div>
+                    {data.blackjackDeposited != null && data.blackjackWithdrawn != null && (() => {
+                      const dep = BigInt(data.blackjackDeposited ?? '0');
+                      const wit = BigInt(data.blackjackWithdrawn ?? '0');
+                      const net = dep - wit;
+                      return (
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-500">Net retained</span>
+                          <span className={`font-mono tabular-nums ${net >= 0n ? 'text-cyan-300/90' : 'text-red-400'}`}>{net >= 0n ? '' : '-'}{formatMorbius(net >= 0n ? String(net) : String(-net))} MORBIUS</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
-            {/* MORBIUS contract flow: 3 columns (Revenue | Payouts vs Wagers | Reserve), one chart per game per column, daily x-axis — Big Wheel excluded */}
+            {/* MORBIUS contract flow: 3 columns (Revenue | Payouts vs Wagers | Reserve), daily deltas from DB snapshots */}
             <div>
-              <p className="text-slate-500 mb-2">MORBIUS contract flow (daily)</p>
+              <p className="text-slate-500 mb-2">MORBIUS contract flow — daily activity{snapshots.length === 0 ? ' (no snapshots yet — populates hourly)' : ''}</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Revenue</p>
-                  {contractFlowSeries.games.map((game) => (
+                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Revenue (daily)</p>
+                  {chartData.games.map((game) => (
                     <DailySingleChart
                       key={game.key}
                       title={game.label}
-                      data={buildDailySingleSeries(contractFlowSeries.days, game.revenueWei)}
+                      data={game.single}
                       gradientId={`health-${game.key}-revenue`}
                       dataKey="value"
                     />
                   ))}
                 </div>
                 <div className="space-y-2">
-                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Payouts vs Wagers</p>
-                  {contractFlowSeries.games.map((game) => (
+                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Payouts vs Wagers (daily)</p>
+                  {chartData.games.map((game) => (
                     <DailyDualChart
                       key={game.key}
                       title={game.label}
-                      data={buildDailyDualSeries(contractFlowSeries.days, game.wagersWei, game.payoutsWei)}
+                      data={game.dual}
                       gradientIdWagers={`health-${game.key}-wagers`}
                       gradientIdPayouts={`health-${game.key}-payouts`}
                     />
                   ))}
                 </div>
                 <div className="space-y-2">
-                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Reserve</p>
-                  {contractFlowSeries.games.map((game) => (
+                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Reserve (end-of-day)</p>
+                  {chartData.games.map((game) => (
                     <DailySingleChart
                       key={game.key}
                       title={game.label}
-                      data={buildDailySingleSeries(contractFlowSeries.days, game.reserveWei)}
+                      data={game.reserve}
                       gradientId={`health-${game.key}-reserve`}
                       dataKey="value"
                     />
@@ -1228,84 +1322,13 @@ export default function AdminHealthTab() {
               </div>
             </div>
             <div>
-              <p className="text-slate-500 mb-1">Blackjack: all contracts — addresses with reserve &gt; 0</p>
+              <p className="text-slate-500 mb-2">Blackjack contracts</p>
               {blackjackContracts.length === 0 ? (
-                <p className="text-slate-500 text-[10px]">No contract data.</p>
+                <p className="text-slate-500 text-xs">No contract data.</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {blackjackContracts.map((contract) => (
-                    <div key={contract.contractAddress} className="rounded border border-slate-700/50 p-3 bg-slate-800/30 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-cyan-400 text-[11px]">{contract.label}</span>
-                        <span className="text-slate-400 text-[10px]">
-                          Total: {formatMorbius(contract.totalMorbiusInContract)} MORBIUS
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(contract.contractAddress)}
-                          className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1"
-                          title="Copy contract address"
-                        >
-                          <Copy className="w-3 h-3" />
-                          {truncateAddress(contract.contractAddress, 8, 6)}
-                        </button>
-                      </div>
-                      {contract.addressesWithReserve.length === 0 ? (
-                        <p className="text-slate-500 text-[10px]">No addresses with reserve in sample.</p>
-                      ) : (
-                        <>
-                          {contract.label === 'Current' && pieChartData.length > 0 && (
-                            <div className="mb-2">
-                              <ResponsiveContainer width="100%" height={220}>
-                                <PieChart>
-                                  <Pie
-                                    data={pieChartData}
-                                    cx="50%"
-                                    cy="50%"
-                                    labelLine={false}
-                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                                    outerRadius={70}
-                                    fill="#8884d8"
-                                    dataKey="value"
-                                  >
-                                    {pieChartData.map((_, index) => (
-                                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip
-                                    formatter={(value: number, name: string, props: any) => [
-                                      `${props.payload.reserve} MORBIUS`,
-                                      props.payload.name,
-                                    ]}
-                                    contentStyle={{
-                                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                                      border: '1px solid rgba(100, 116, 139, 0.5)',
-                                      borderRadius: '6px',
-                                      color: '#e2e8f0',
-                                      fontSize: '11px',
-                                    }}
-                                  />
-                                  <Legend
-                                    formatter={(value, entry: any) => {
-                                      const p = entry.payload;
-                                      return `${p.name}: ${p.reserve}`;
-                                    }}
-                                    wrapperStyle={{ fontSize: '10px', color: '#94a3b8' }}
-                                  />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </div>
-                          )}
-                          <ul className="max-h-28 overflow-y-auto space-y-0.5 text-[10px] font-mono text-slate-400">
-                            {contract.addressesWithReserve.map(({ address: addr, reserve }) => (
-                              <li key={`${contract.contractAddress}-${addr}`}>
-                                {addr.slice(0, 10)}…{addr.slice(-8)} — {formatMorbius(reserve)} MORBIUS
-                              </li>
-                            ))}
-                          </ul>
-                        </>
-                      )}
-                    </div>
+                    <BjContractCard key={contract.contractAddress} contract={contract} />
                   ))}
                 </div>
               )}

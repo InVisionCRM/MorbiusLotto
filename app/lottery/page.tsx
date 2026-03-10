@@ -245,7 +245,7 @@ export default function LotteryPage() {
               />
             </div>
             <div className="min-w-0">
-              <GlobalLotteryHistoryTable limit={20} title="Recent games" />
+              <GlobalLotteryHistoryTable title="Recent games" />
             </div>
           </section>
         </main>

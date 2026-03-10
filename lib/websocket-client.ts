@@ -119,6 +119,8 @@ export interface PokerCurrentHand {
   lastAction: { position: number; action: string; amount: string } | null;
   minRaise: string;
   toCall: string;
+  /** ISO timestamp when the current player's turn started (for 30s timer). */
+  turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by lowercase address */
   showdownHands?: Record<string, number[]>;
 }

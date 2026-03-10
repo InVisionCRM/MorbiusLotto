@@ -5,6 +5,8 @@ import { formatEther } from 'viem'
 import { useBlackjackRecentGamesGlobal, type RecentGameGlobalRow } from '@/hooks/use-blackjack-stats'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 
+const PAGE_SIZE = 25
+
 const panelStyle = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
   boxShadow:
@@ -14,6 +16,11 @@ const panelStyle = {
 
 function formatMorbius(wei: bigint): string {
   return Math.floor(Number(formatEther(wei))).toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
+
+function formatTime(iso: string): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function last4(addr: string): string {
@@ -35,11 +42,14 @@ function ResultRow({
   const profit = payout - bet
   const win = profit > 0n
   const resultLabel = r.result === 'blackjack' ? 'BJ' : r.result ?? '—'
+  const timeStr = formatTime(r.created_at ?? '')
 
   if (compact) {
     return (
-      <div className="flex items-center justify-between py-1.5 px-2 border-b border-white/5 last:border-0 text-xs">
-        <span className="text-white/70">
+      <div className="flex items-center justify-between gap-2 py-2 px-2 border-b border-white/5 last:border-0 text-sm">
+        <span className="text-white/70 shrink-0 min-w-0">
+          <span className="text-white/50 font-mono">{timeStr}</span>
+          <span className="mx-1.5">·</span>
           <button
             type="button"
             onClick={() => onPlayerClick(r.wallet_address)}
@@ -50,7 +60,7 @@ function ResultRow({
           {' · '}
           {resultLabel}
         </span>
-        <span className={win ? 'text-green-400' : 'text-white/60'}>
+        <span className={`shrink-0 tabular-nums ${win ? 'text-green-400' : 'text-white/60'}`}>
           {win ? '+' : ''}{formatMorbius(profit)} MORBIUS
         </span>
       </div>
@@ -58,7 +68,8 @@ function ResultRow({
   }
   return (
     <div className="py-2 px-3 border-b border-white/5 last:border-0 space-y-1 text-sm">
-      <div className="flex justify-between text-xs text-white/70">
+      <div className="flex justify-between text-sm text-white/70">
+        <span className="text-white/50 font-mono">{timeStr}</span>
         <span>
           <button
             type="button"
@@ -70,10 +81,10 @@ function ResultRow({
           {' · '}
           {resultLabel} · Bet {formatMorbius(bet)}
         </span>
-        <span>Payout {formatMorbius(payout)}</span>
+        <span className="tabular-nums">Payout {formatMorbius(payout)}</span>
       </div>
       <div className="flex justify-end">
-        <span className={win ? 'text-green-400 text-xs' : 'text-white/50 text-xs'}>
+        <span className={`tabular-nums text-sm ${win ? 'text-green-400' : 'text-white/50'}`}>
           {win ? '+' : ''}{formatMorbius(profit)} MORBIUS
         </span>
       </div>
@@ -82,20 +93,20 @@ function ResultRow({
 }
 
 export interface BlackjackRecentPlaysProps {
-  limit?: number
   compact?: boolean
   title?: string
 }
 
-/** Global recent blackjack games (all players) for Recent Play feed. */
+/** Global recent blackjack games (all players). Shows 25, then "Load more". */
 export function BlackjackRecentPlays({
-  limit = 25,
   compact = true,
   title = 'Recent Play',
 }: BlackjackRecentPlaysProps) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
-  const { data: games = [], isLoading, error } = useBlackjackRecentGamesGlobal(limit)
-  const displayGames = games.slice(0, limit)
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
+  const { data: games = [], isLoading, error } = useBlackjackRecentGamesGlobal(200)
+  const displayGames = games.slice(0, displayCount)
+  const hasMore = displayCount < games.length
 
   return (
     <>
@@ -124,6 +135,17 @@ export function BlackjackRecentPlays({
             ))
           )}
         </div>
+        {hasMore && displayGames.length > 0 && (
+          <div className="px-2 py-2 border-t border-white/10 shrink-0">
+            <button
+              type="button"
+              onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
+              className="w-full py-1.5 text-sm text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/10"
+            >
+              Load more
+            </button>
+          </div>
+        )}
       </div>
       <PlayerProfileModal
         isOpen={!!selectedAddress}

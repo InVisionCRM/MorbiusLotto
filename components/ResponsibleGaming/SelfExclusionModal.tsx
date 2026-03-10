@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { Theme } from '@/lib/theme';
 
 type DurationType = '24h' | '7d' | '30d' | '6m' | '1y' | 'permanent';
 
@@ -141,43 +142,35 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
 
   if (!isOpen) return null;
 
+  const lm = Theme.lightModal;
+
   return (
     <div
       className="fixed inset-0 z-[100000] flex items-center justify-center p-4"
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className={`absolute inset-0 ${lm.overlay}`} />
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-lg rounded-2xl overflow-hidden border border-amber-500/30 shadow-2xl max-h-[90vh] overflow-y-auto"
-        style={{
-          background: 'linear-gradient(145deg, rgb(3, 2, 2), rgb(2, 2, 2))',
-          boxShadow: '0 0 40px rgba(245, 158, 11, 0.15)',
-        }}
+        className={`relative ${lm.container} max-w-lg`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div
-          className="flex items-center justify-between px-5 py-4 border-b border-amber-500/20"
-          style={{ background: 'linear-gradient(to right, rgba(245, 158, 11, 0.15), transparent)' }}
-        >
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-              <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+              <svg className={`w-5 h-5 ${lm.accentText}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
             <div>
-              <h2 className="text-amber-300 font-semibold text-lg">Responsible Gaming</h2>
-              <p className="text-white/50 text-xs">Self-exclusion & cooling-off periods</p>
+              <h2 className={`${lm.accentText} font-semibold text-lg`}>Responsible Gaming</h2>
+              <p className={`${lm.mutedText} text-xs`}>Self-exclusion & cooling-off periods</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800/80 border border-amber-500/20 text-white/70 hover:text-white flex items-center justify-center transition"
-          >
+          <button onClick={onClose} className={lm.closeButton}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -185,22 +178,22 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-5">
+        <div className="space-y-5">
           {!address && (
-            <div className="text-center py-8 text-white/50">
+            <div className={`text-center py-8 ${lm.mutedText}`}>
               <p>Please connect your wallet to manage responsible gaming settings.</p>
             </div>
           )}
 
           {address && loading && !status && (
             <div className="text-center py-8">
-              <div className="inline-block w-6 h-6 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-              <p className="text-white/50 text-sm mt-2">Loading...</p>
+              <div className="inline-block w-6 h-6 border-2 border-gray-200 border-t-cyan-500 rounded-full animate-spin" />
+              <p className={`${lm.mutedText} text-sm mt-2`}>Loading...</p>
             </div>
           )}
 
           {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm">
               {error}
             </div>
           )}
@@ -209,22 +202,22 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
           {address && status && (
             <div className={`p-4 rounded-xl ${
               status.isExcluded
-                ? 'bg-red-500/10 border border-red-500/20'
-                : 'bg-emerald-500/10 border border-emerald-500/20'
+                ? 'bg-red-50 border border-red-200'
+                : 'bg-emerald-50 border border-emerald-200'
             }`}>
               <div className="flex items-center gap-2 mb-2">
-                <div className={`w-2 h-2 rounded-full ${status.isExcluded ? 'bg-red-400' : 'bg-emerald-400'}`} />
-                <span className={`font-medium ${status.isExcluded ? 'text-red-400' : 'text-emerald-400'}`}>
+                <div className={`w-2 h-2 rounded-full ${status.isExcluded ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                <span className={`font-medium ${status.isExcluded ? 'text-red-600' : 'text-emerald-600'}`}>
                   {status.isExcluded ? 'Currently Excluded' : 'Account Active'}
                 </span>
               </div>
               {status.isExcluded && (
-                <div className="text-sm text-white/70 space-y-1">
-                  <p>Type: <span className="text-white">{status.exclusionType === 'permanent' ? 'Permanent Self-Exclusion' : `Temporary (${status.durationLabel})`}</span></p>
+                <div className={`text-sm ${lm.bodyText} space-y-1`}>
+                  <p>Type: <span className="text-gray-900">{status.exclusionType === 'permanent' ? 'Permanent Self-Exclusion' : `Temporary (${status.durationLabel})`}</span></p>
                   {status.expiresAt && (
-                    <p>Expires: <span className="text-white">{formatDate(status.expiresAt)}</span></p>
+                    <p>Expires: <span className="text-gray-900">{formatDate(status.expiresAt)}</span></p>
                   )}
-                  <p className="text-amber-400 font-medium mt-2">
+                  <p className="text-amber-600 font-medium mt-2">
                     {getTimeRemaining(status.expiresAt)}
                   </p>
                 </div>
@@ -236,8 +229,8 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
           {address && status && !status.isExcluded && !confirmStep && (
             <>
               <div>
-                <h3 className="text-white font-medium mb-3">Take a Break</h3>
-                <p className="text-white/60 text-sm mb-4">
+                <h3 className={`${lm.bodyText} font-medium mb-3`}>Take a Break</h3>
+                <p className={`${lm.mutedText} text-sm mb-4`}>
                   Choose a cooling-off period. During this time, you will not be able to play any games.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -245,22 +238,22 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
                     <button
                       key={option.value}
                       onClick={() => setSelectedDuration(option.value)}
-                      className={`p-3 rounded-xl text-left transition ${
+                      className={`p-3 rounded-xl text-left transition border-2 ${
                         selectedDuration === option.value
                           ? option.value === 'permanent'
-                            ? 'bg-red-500/20 border-2 border-red-500/50'
-                            : 'bg-amber-500/20 border-2 border-amber-500/50'
-                          : 'bg-black/30 border border-white/10 hover:border-white/20'
+                            ? 'bg-red-50 border-red-300'
+                            : 'bg-cyan-50 border-cyan-300'
+                          : 'bg-gray-50 border-gray-200 hover:border-gray-300'
                       }`}
                     >
                       <p className={`font-medium ${
                         selectedDuration === option.value
-                          ? option.value === 'permanent' ? 'text-red-400' : 'text-amber-400'
-                          : 'text-white'
+                          ? option.value === 'permanent' ? 'text-red-600' : lm.accentText
+                          : 'text-gray-900'
                       }`}>
                         {option.label}
                       </p>
-                      <p className="text-white/50 text-xs">{option.description}</p>
+                      <p className={`${lm.mutedText} text-xs`}>{option.description}</p>
                     </button>
                   ))}
                 </div>
@@ -268,14 +261,14 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
 
               {selectedDuration && (
                 <div>
-                  <label className="block text-white/70 text-sm mb-2">
+                  <label className={`block ${lm.mutedText} text-sm mb-2`}>
                     Reason (optional)
                   </label>
                   <textarea
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     placeholder="Why are you taking a break?"
-                    className="w-full p-3 rounded-xl bg-black/30 border border-white/10 text-white placeholder-white/30 text-sm resize-none focus:border-amber-500/50 focus:outline-none"
+                    className={`${lm.input} resize-none py-3 text-sm`}
                     rows={2}
                   />
                 </div>
@@ -285,11 +278,11 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
                 <button
                   onClick={() => setConfirmStep(true)}
                   disabled={loading}
-                  className={`w-full py-3 rounded-xl font-medium transition ${
+                  className={`w-full py-3 rounded-xl font-medium transition disabled:opacity-50 ${
                     selectedDuration === 'permanent'
                       ? 'bg-red-500 hover:bg-red-600 text-white'
-                      : 'bg-amber-500 hover:bg-amber-600 text-black'
-                  } disabled:opacity-50`}
+                      : lm.primaryButton
+                  }`}
                 >
                   {selectedDuration === 'permanent' ? 'Permanently Exclude Account' : 'Start Cooling-Off Period'}
                 </button>
@@ -302,13 +295,13 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
             <div className="space-y-4">
               <div className={`p-4 rounded-xl ${
                 selectedDuration === 'permanent'
-                  ? 'bg-red-500/20 border border-red-500/30'
-                  : 'bg-amber-500/20 border border-amber-500/30'
+                  ? 'bg-red-50 border border-red-200'
+                  : 'bg-cyan-50 border border-cyan-200'
               }`}>
-                <h3 className={`font-bold mb-2 ${selectedDuration === 'permanent' ? 'text-red-400' : 'text-amber-400'}`}>
+                <h3 className={`font-bold mb-2 ${selectedDuration === 'permanent' ? 'text-red-600' : lm.accentText}`}>
                   {selectedDuration === 'permanent' ? 'Warning: Permanent Self-Exclusion' : 'Confirm Cooling-Off Period'}
                 </h3>
-                <p className="text-white/80 text-sm">
+                <p className={`${lm.bodyText} text-sm`}>
                   {selectedDuration === 'permanent' ? (
                     <>
                       This action is <strong>irreversible</strong>. Your account will be permanently excluded from all games.
@@ -325,15 +318,15 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
 
               {selectedDuration === 'permanent' && (
                 <div>
-                  <label className="block text-white/70 text-sm mb-2">
-                    Type <span className="text-red-400 font-mono">PERMANENTLY EXCLUDE</span> to confirm:
+                  <label className={`block ${lm.mutedText} text-sm mb-2`}>
+                    Type <span className="text-red-600 font-mono">PERMANENTLY EXCLUDE</span> to confirm:
                   </label>
                   <input
                     type="text"
                     value={confirmText}
                     onChange={(e) => setConfirmText(e.target.value)}
                     placeholder="PERMANENTLY EXCLUDE"
-                    className="w-full p-3 rounded-xl bg-black/30 border border-red-500/30 text-white placeholder-white/30 text-sm focus:border-red-500/50 focus:outline-none font-mono"
+                    className={`${lm.input} border-red-200 focus:ring-red-500/30 font-mono text-sm py-3`}
                   />
                 </div>
               )}
@@ -344,7 +337,7 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
                     setConfirmStep(false);
                     setConfirmText('');
                   }}
-                  className="flex-1 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-medium transition"
+                  className={lm.secondaryButton}
                 >
                   Cancel
                 </button>
@@ -354,7 +347,7 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
                   className={`flex-1 py-3 rounded-xl font-medium transition disabled:opacity-50 ${
                     selectedDuration === 'permanent'
                       ? 'bg-red-500 hover:bg-red-600 text-white'
-                      : 'bg-amber-500 hover:bg-amber-600 text-black'
+                      : lm.primaryButton
                   }`}
                 >
                   {loading ? 'Processing...' : 'Confirm'}
@@ -364,9 +357,9 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
           )}
 
           {/* Help Resources */}
-          <div className="pt-4 border-t border-white/10">
-            <h4 className="text-white/70 text-sm font-medium mb-2">Need Help?</h4>
-            <p className="text-white/50 text-xs mb-2">
+          <div className="pt-4 border-t border-gray-100">
+            <h4 className={`${lm.mutedText} text-sm font-medium mb-2`}>Need Help?</h4>
+            <p className={`${lm.mutedText} text-xs mb-2`}>
               If you or someone you know has a gambling problem, help is available:
             </p>
             <div className="flex flex-wrap gap-2">
@@ -374,7 +367,7 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
                 href="https://www.ncpgambling.org/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs px-3 py-1.5 rounded-full bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
+                className={`text-xs px-3 py-1.5 rounded-full bg-cyan-50 ${lm.accentText} hover:bg-cyan-100 transition`}
               >
                 NCPG (US)
               </a>
@@ -382,7 +375,7 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
                 href="https://www.gamblersanonymous.org/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs px-3 py-1.5 rounded-full bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
+                className={`text-xs px-3 py-1.5 rounded-full bg-cyan-50 ${lm.accentText} hover:bg-cyan-100 transition`}
               >
                 Gamblers Anonymous
               </a>
@@ -390,7 +383,7 @@ export function SelfExclusionModal({ isOpen, onClose, wsClient: externalClient }
                 href="https://www.begambleaware.org/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs px-3 py-1.5 rounded-full bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition"
+                className={`text-xs px-3 py-1.5 rounded-full bg-cyan-50 ${lm.accentText} hover:bg-cyan-100 transition`}
               >
                 BeGambleAware (UK)
               </a>

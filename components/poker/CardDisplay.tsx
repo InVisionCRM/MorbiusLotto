@@ -32,12 +32,12 @@ export interface CardDisplayProps {
 
 export function CardDisplay({ cardIndex, small, faceDown, className = '' }: CardDisplayProps) {
   const sizeClasses = small
-    ? 'w-7 h-10 sm:w-10 sm:h-14 md:w-12 md:h-[68px]'
-    : 'w-12 h-[68px] sm:w-14 sm:h-20';
+    ? 'w-7 h-10 sm:w-10 sm:h-14 md:w-12 md:h-[68px] lg:w-14 lg:h-20 xl:w-16 xl:h-[88px]'
+    : 'w-12 h-[68px] sm:w-14 sm:h-20 lg:w-16 lg:h-24 xl:w-20 xl:h-28';
 
   const imageSize = small
-    ? { width: 48, height: 68 }
-    : { width: 56, height: 80 };
+    ? { width: 80, height: 112 }
+    : { width: 80, height: 112 };
 
   const cardShadow = '0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)';
   const innerGlow = 'inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.15)';
@@ -50,7 +50,7 @@ export function CardDisplay({ cardIndex, small, faceDown, className = '' }: Card
     <div className={`poker-card-wrapper ${className}`}>
       {isFaceDown && (
         <div
-          className={`poker-card-deal relative ${sizeClasses} rounded-lg overflow-hidden`}
+          className={`poker-card-deal relative ${sizeClasses} overflow-hidden`}
           style={{ boxShadow: cardShadow }}
         >
           <div className="absolute inset-0 bg-slate-900 overflow-hidden">
@@ -63,13 +63,13 @@ export function CardDisplay({ cardIndex, small, faceDown, className = '' }: Card
               priority
             />
           </div>
-          <div className="absolute inset-0 rounded-lg pointer-events-none" style={{ boxShadow: innerGlow }} />
+          <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: innerGlow }} />
         </div>
       )}
 
       {isEmpty && (
         <div
-          className={`relative ${sizeClasses} rounded-lg border border-white/10`}
+          className={`relative ${sizeClasses} border border-white/10`}
           style={{
             background: 'linear-gradient(145deg, rgba(15,23,42,0.6), rgba(15,23,42,0.3))',
             boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3)',
@@ -83,7 +83,7 @@ export function CardDisplay({ cardIndex, small, faceDown, className = '' }: Card
 
       {isFaceUp && (
         <div
-          className={`poker-card-deal relative ${sizeClasses} rounded-lg overflow-hidden bg-white`}
+          className={`poker-card-deal relative ${sizeClasses} overflow-hidden bg-white`}
           style={{ boxShadow: cardShadow }}
         >
           <Image
@@ -94,7 +94,7 @@ export function CardDisplay({ cardIndex, small, faceDown, className = '' }: Card
             className="w-full h-full object-cover"
             priority
           />
-          <div className="absolute inset-0 rounded-lg pointer-events-none" style={{ boxShadow: innerGlow }} />
+          <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: innerGlow }} />
         </div>
       )}
 

@@ -1,13 +1,21 @@
 'use client'
 
+import { useState } from 'react'
 import { useAccount } from 'wagmi'
 import { usePlinkoResults } from '@/hooks/use-plinko-results'
 import { formatUnits } from 'viem'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
 import type { PlinkoResultRow } from '@/hooks/use-plinko-results'
 
+const PAGE_SIZE = 25
+
 function formatMorbius(wei: bigint): string {
   return Number(formatUnits(wei, TOKEN_DECIMALS)).toFixed(2)
+}
+
+function formatTime(ts: number | undefined): string {
+  if (ts == null) return '—'
+  return new Date(ts * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 const panelStyle = {
@@ -20,13 +28,16 @@ const panelStyle = {
 function ResultRow({ r, compact }: { r: PlinkoResultRow; compact?: boolean }) {
   const win = r.profit > 0n
   const multDisplay = Number(r.multiplier) / 100
+  const timeStr = formatTime(r.timestamp)
   if (compact) {
     return (
-      <div className="flex items-center justify-between py-1.5 px-2 border-b border-white/5 last:border-0 text-xs">
-        <span className="text-white/70">
+      <div className="flex items-center justify-between gap-2 py-2 px-2 border-b border-white/5 last:border-0 text-sm">
+        <span className="text-white/70 shrink-0 min-w-0">
+          <span className="text-white/50 font-mono">{timeStr}</span>
+          <span className="mx-1.5">·</span>
           {r.riskLevelName} · {multDisplay.toFixed(2)}x
         </span>
-        <span className={win ? 'text-green-400' : 'text-white/60'}>
+        <span className={`shrink-0 tabular-nums ${win ? 'text-green-400' : 'text-white/60'}`}>
           {win ? '+' : ''}{formatMorbius(r.profit)} MORBIUS
         </span>
       </div>
@@ -34,13 +45,14 @@ function ResultRow({ r, compact }: { r: PlinkoResultRow; compact?: boolean }) {
   }
   return (
     <div className="py-2 px-3 border-b border-white/5 last:border-0 space-y-1 text-sm">
-      <div className="flex justify-between text-xs text-white/70">
+      <div className="flex justify-between text-sm text-white/70">
+        <span className="text-white/50 font-mono">{timeStr}</span>
         <span>
           {r.riskLevelName} · {multDisplay.toFixed(2)}x · Wager {formatMorbius(r.wager)}
         </span>
       </div>
       <div className="flex justify-end">
-        <span className={win ? 'text-green-400 text-xs' : 'text-white/50 text-xs'}>
+        <span className={`tabular-nums text-sm ${win ? 'text-green-400' : 'text-white/50'}`}>
           {win ? '+' : ''}{formatMorbius(r.profit)} MORBIUS
         </span>
       </div>
@@ -50,25 +62,25 @@ function ResultRow({ r, compact }: { r: PlinkoResultRow; compact?: boolean }) {
 
 export interface PlinkoRecentGamesProps {
   results?: PlinkoResultRow[]
-  limit?: number
   compact?: boolean
   title?: string
 }
 
-/** Shows the most recent Plinko games played by the connected player. */
+/** Shows the most recent Plinko games played by the connected player. Shows 25, then "Load more". */
 export function PlinkoRecentGames({
   results: resultsProp,
-  limit = 20,
   compact = true,
   title = 'Recent Games',
 }: PlinkoRecentGamesProps) {
   const { address } = useAccount()
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
   const { results: resultsFromHook } = usePlinkoResults({
     playerAddress: address ?? undefined,
-    limit,
+    limit: 500,
   })
   const results = resultsProp ?? resultsFromHook
-  const displayResults = results.slice(0, limit)
+  const displayResults = results.slice(0, displayCount)
+  const hasMore = displayCount < results.length
 
   return (
     <div className="rounded-xl overflow-hidden w-full max-w-xl" style={panelStyle}>
@@ -90,6 +102,17 @@ export function PlinkoRecentGames({
           ))
         )}
       </div>
+      {hasMore && displayResults.length > 0 && (
+        <div className="px-2 py-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
+            className="w-full py-1.5 text-sm text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/10"
+          >
+            Load more
+          </button>
+        </div>
+      )}
     </div>
   )
 }

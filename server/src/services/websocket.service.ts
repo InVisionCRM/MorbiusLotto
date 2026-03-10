@@ -117,6 +117,7 @@ export class WebSocketService {
   private chatMessageTimestampsByAddress: Map<string, number[]> = new Map(); // per-address rate limit
   private heartbeatInterval: NodeJS.Timeout;
   private chatRateLimitCleanupInterval: NodeJS.Timeout;
+  private pokerAutoFoldInterval: NodeJS.Timeout | null = null;
   private publicClient: any;
   private contractAddress: `0x${string}`;
   private tournamentService?: TournamentService;
@@ -160,6 +161,18 @@ export class WebSocketService {
     this.chatRateLimitCleanupInterval = setInterval(() => {
       this.cleanupChatRateLimitMap();
     }, CHAT_PER_ADDRESS_CLEANUP_MS);
+
+    // Auto-fold timed-out poker turns (30s timer enforcement)
+    // broadcastState is handled internally by PokerGameService via setBroadcastCallback
+    if (this.pokerGameService) {
+      this.pokerAutoFoldInterval = setInterval(async () => {
+        try {
+          await this.pokerGameService!.autoFoldTimedOutTurns();
+        } catch (err) {
+          logger.error('Poker auto-fold watchdog error', err);
+        }
+      }, 5000);
+    }
 
     logger.info('WebSocket service initialized');
   }
@@ -2982,6 +2995,9 @@ export class WebSocketService {
     }
     if (this.chatRateLimitCleanupInterval) {
       clearInterval(this.chatRateLimitCleanupInterval);
+    }
+    if (this.pokerAutoFoldInterval) {
+      clearInterval(this.pokerAutoFoldInterval);
     }
 
     this.wss.clients.forEach((client: WebSocketClient) => {

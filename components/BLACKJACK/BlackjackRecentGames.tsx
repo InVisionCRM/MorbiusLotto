@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useAccount } from 'wagmi'
 import { formatEther } from 'viem'
 import { usePlayerGames, type PlayerGameRow } from '@/hooks/use-blackjack-stats'
@@ -15,20 +16,28 @@ function formatMorbius(wei: bigint): string {
   return Math.floor(Number(formatEther(wei))).toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
+function formatTime(isoOrMs: string | number): string {
+  const date = typeof isoOrMs === 'string' ? new Date(isoOrMs) : new Date(isoOrMs)
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
 function ResultRow({ r, compact }: { r: PlayerGameRow; compact?: boolean }) {
   const bet = BigInt(r.total_bet_amount ?? 0)
   const payout = BigInt(r.total_payout ?? 0)
   const profit = payout - bet
   const win = profit > 0n
   const resultLabel = r.result === 'blackjack' ? 'BJ' : r.result ?? '—'
+  const timeStr = r.created_at ? formatTime(r.created_at) : '—'
 
   if (compact) {
     return (
-      <div className="flex items-center justify-between py-1.5 px-2 border-b border-white/5 last:border-0 text-xs">
-        <span className="text-white/70">
+      <div className="flex items-center justify-between gap-2 py-2 px-2 border-b border-white/5 last:border-0 text-sm">
+        <span className="text-white/70 shrink-0 min-w-0">
+          <span className="text-white/50 font-mono">{timeStr}</span>
+          <span className="mx-1.5">·</span>
           {resultLabel} · #{r.game_number}
         </span>
-        <span className={win ? 'text-green-400' : 'text-white/60'}>
+        <span className={`shrink-0 tabular-nums ${win ? 'text-green-400' : 'text-white/60'}`}>
           {win ? '+' : ''}{formatMorbius(profit)} MORBIUS
         </span>
       </div>
@@ -36,13 +45,14 @@ function ResultRow({ r, compact }: { r: PlayerGameRow; compact?: boolean }) {
   }
   return (
     <div className="py-2 px-3 border-b border-white/5 last:border-0 space-y-1 text-sm">
-      <div className="flex justify-between text-xs text-white/70">
+      <div className="flex justify-between text-sm text-white/70">
+        <span className="text-white/50 font-mono">{timeStr}</span>
         <span>
           {resultLabel} · Game #{r.game_number} · Bet {formatMorbius(bet)}
         </span>
       </div>
       <div className="flex justify-end">
-        <span className={win ? 'text-green-400 text-xs' : 'text-white/50 text-xs'}>
+        <span className={`tabular-nums ${win ? 'text-green-400' : 'text-white/50'} text-sm`}>
           {win ? '+' : ''}{formatMorbius(profit)} MORBIUS
         </span>
       </div>
@@ -51,20 +61,22 @@ function ResultRow({ r, compact }: { r: PlayerGameRow; compact?: boolean }) {
 }
 
 export interface BlackjackRecentGamesProps {
-  limit?: number
   compact?: boolean
   title?: string
 }
 
-/** Recent blackjack games for the connected player. */
+const PAGE_SIZE = 25
+
+/** Recent blackjack games for the connected player. Shows 25, then "Load more" for next 25. */
 export function BlackjackRecentGames({
-  limit = 20,
   compact = true,
   title = 'Recent Games',
 }: BlackjackRecentGamesProps) {
   const { address } = useAccount()
-  const { data: games = [], isLoading, error } = usePlayerGames(limit, 0)
-  const displayGames = games.slice(0, limit)
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
+  const { data: games = [], isLoading, error } = usePlayerGames(100, 0)
+  const displayGames = games.slice(0, displayCount)
+  const hasMore = displayCount < games.length
 
   return (
     <div className="rounded-xl overflow-hidden w-full max-w-xl" style={panelStyle}>
@@ -84,11 +96,24 @@ export function BlackjackRecentGames({
         ) : displayGames.length === 0 ? (
           <div className="p-4 text-center text-white/50 text-sm">No games yet. Play Blackjack to see history here.</div>
         ) : (
-          displayGames.map((r) => (
-            <ResultRow key={r.id} r={r} compact={compact} />
-          ))
+          <>
+            {displayGames.map((r) => (
+              <ResultRow key={r.id} r={r} compact={compact} />
+            ))}
+          </>
         )}
       </div>
+      {hasMore && displayGames.length > 0 && (
+        <div className="px-2 py-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
+            className="w-full py-1.5 text-sm text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/10"
+          >
+            Load more
+          </button>
+        </div>
+      )}
     </div>
   )
 }

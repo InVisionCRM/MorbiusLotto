@@ -40,6 +40,8 @@ export interface PokerCurrentHand {
   minRaise: string;
   /** Amount the acting player must put in to call (0 if can check). */
   toCall: string;
+  /** ISO timestamp of when the current player's turn started (for the 30s timer). */
+  turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by address */
   showdownHands?: Record<string, number[]>;
 }
@@ -370,7 +372,7 @@ export class PokerGameService {
     let myHoleCards: number[] | null = null;
 
     const handRow = await pool.query(
-      `SELECT id, hand_number, button_position, community_cards, pot_amount, street, acting_position
+      `SELECT id, hand_number, button_position, community_cards, pot_amount, street, acting_position, turn_started_at
        FROM poker_hands WHERE table_id = $1
          AND (completed_at IS NULL OR (street = 'showdown' AND completed_at > NOW() - INTERVAL '8 seconds'))
        ORDER BY CASE WHEN completed_at IS NULL THEN 0 ELSE 1 END, created_at DESC LIMIT 1`,
@@ -389,15 +391,19 @@ export class PokerGameService {
       const lastActionRow = actionsResult.rows.length > 0 ? actionsResult.rows[actionsResult.rows.length - 1] : null;
       const actingPosition = h.acting_position != null ? Number(h.acting_position) : null;
 
-      const currentBetResult = await pool.query(
-        `SELECT player_address, amount FROM poker_hand_actions WHERE hand_id = $1 AND action IN ('bet', 'raise', 'call') ORDER BY "order" DESC LIMIT 1`,
+      // minRaise = what the acting player must put in BEYOND the call to make a valid raise.
+      // Uses last_raise_size stored on the hand (updated each bet/raise) so re-raises are
+      // correctly sized: each raise increment >= the previous one (standard NL rules).
+      const bb = BigInt(tbl.big_blind ?? '0');
+      const lastRaiseSizeResult = await pool.query(
+        'SELECT last_raise_size FROM poker_hands WHERE id = $1',
         [h.id]
       );
-      let minRaise = tbl.big_blind?.toString() ?? '0';
-      if (currentBetResult.rows.length > 0) {
-        const lastBet = BigInt(currentBetResult.rows[0].amount || '0');
-        minRaise = (lastBet + lastBet).toString();
-      }
+      const lastRaiseSize = BigInt(lastRaiseSizeResult.rows[0]?.last_raise_size ?? '0');
+      const minRaiseIncrement = lastRaiseSize > bb ? lastRaiseSize : bb;
+      // toCall for the acting player is computed below; compute minRaise after it.
+      // We'll overwrite minRaise once toCall is known.
+      let minRaise = (minRaiseIncrement).toString(); // placeholder — updated below
 
       const foldResult = await pool.query(
         `SELECT player_address FROM poker_hand_actions WHERE hand_id = $1 AND action = 'fold'`,
@@ -433,7 +439,10 @@ export class PokerGameService {
 
       let toCall = '0';
       if (actingPosition != null) {
-        toCall = (await this.getCurrentBetToCall(pool, h.id, h.street, actingPosition, maxSeats)).toString();
+        const toCallBig = await this.getCurrentBetToCall(pool, h.id, h.street, actingPosition, maxSeats);
+        toCall = toCallBig.toString();
+        // Now that we know toCall, finalise minRaise = toCall + minRaiseIncrement.
+        minRaise = (toCallBig + minRaiseIncrement).toString();
       }
 
       currentHand = {
@@ -445,6 +454,7 @@ export class PokerGameService {
         lastAction,
         minRaise,
         toCall,
+        turnStartedAt: h.turn_started_at ? new Date(h.turn_started_at).toISOString() : null,
       };
 
       if (forPlayer) {
@@ -570,10 +580,21 @@ export class PokerGameService {
     if (action === 'bet' || action === 'raise') {
       const seatRow = await pool.query('SELECT stack FROM poker_seats WHERE table_id = $1 AND player_address = $2', [tableId, normalized]);
       const stack = BigInt(seatRow.rows[0].stack);
-      const minRaise = await this.getMinRaise(pool, handId, street);
-      // Short-stack all-in: if amt === stack, the second condition is false so a
-      // player can go all-in for less than minRaise (correct poker rules behavior).
-      if (amt < minRaise && amt < stack) throw new Error(`Minimum bet/raise is ${minRaise}`);
+
+      // Compute minimum chips to put in for this bet/raise:
+      //   minPutIn = toCall + max(lastRaiseSize, BB)
+      // where toCall = what the player owes just to call the current bet.
+      // This enforces the standard NL rule: a re-raise must be at least as large
+      // as the previous raise increment.
+      const toCallForRaise = await this.getCurrentBetToCall(pool, handId, street, actingPosition, maxSeats);
+      const lastRaiseSizeRow = await pool.query('SELECT last_raise_size FROM poker_hands WHERE id = $1', [handId]);
+      const lastRaiseSize = BigInt(lastRaiseSizeRow.rows[0]?.last_raise_size ?? '0');
+      const minRaiseIncrement = lastRaiseSize > bb ? lastRaiseSize : bb;
+      const minPutIn = toCallForRaise + minRaiseIncrement;
+
+      // Short-stack all-in: if amt >= stack the player is going all-in — allow even
+      // if below minPutIn (correct poker rules behaviour for short stacks).
+      if (amt < minPutIn && amt < stack) throw new Error(`Minimum bet/raise is ${minPutIn}`);
       const deduct = amt > stack ? stack : amt;
       await pool.query(
         `UPDATE poker_seats SET stack = stack - $3::NUMERIC WHERE table_id = $1 AND player_address = $2`,
@@ -587,6 +608,11 @@ export class PokerGameService {
         `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order") VALUES ($1, $2, $3, $4, $5::NUMERIC, $6)`,
         [handId, normalized, street, action, deduct.toString(), nextOrder]
       );
+      // Record the raise increment so subsequent re-raises respect the same minimum.
+      // raiseIncrement = chips committed beyond the call portion.
+      const raiseIncrement = deduct > toCallForRaise ? deduct - toCallForRaise : deduct;
+      const newLastRaiseSize = raiseIncrement > bb ? raiseIncrement : bb;
+      await pool.query('UPDATE poker_hands SET last_raise_size = $2::NUMERIC WHERE id = $1', [handId, newLastRaiseSize.toString()]);
       await this.advanceOrShowdown(pool, tableId, handId, hand, table, maxSeats);
       return this.getTableState(tableId, normalized);
     }
@@ -624,21 +650,6 @@ export class PokerGameService {
     return r.rows[0]?.player_address ?? null;
   }
 
-  private async getMinRaise(pool: Pool, handId: string, street: string): Promise<bigint> {
-    const r = await pool.query(
-      `SELECT amount FROM poker_hand_actions WHERE hand_id = $1 AND street = $2 AND action IN ('bet', 'raise', 'blind') ORDER BY "order" DESC LIMIT 1`,
-      [handId, street]
-    );
-    const bigBlindResult = await pool.query(
-      'SELECT t.big_blind FROM poker_hands h JOIN poker_tables t ON t.id = h.table_id WHERE h.id = $1',
-      [handId]
-    );
-    const bb = BigInt(bigBlindResult.rows[0]?.big_blind ?? '0');
-    if (r.rows.length === 0) return bb;
-    const lastRaise = BigInt(r.rows[0].amount);
-    // Minimum re-raise = last raise size (raise must be at least as large as previous raise)
-    return lastRaise >= bb ? lastRaise + lastRaise : bb;
-  }
 
   /** Sum all chips each player put into this hand across all streets. */
   private async getTotalContributions(pool: Pool, handId: string): Promise<Map<string, bigint>> {
@@ -790,7 +801,7 @@ export class PokerGameService {
       const communityCards = deck.slice(boardStartIndex, boardStartIndex + 3);
       const firstActing = this.firstActivePosition(buttonPosition, 'flop', foldedSet, seatsResult.rows, maxSeats, allInSet);
       await pool.query(
-        `UPDATE poker_hands SET street = 'flop', community_cards = $2::JSONB, acting_position = $3 WHERE id = $1`,
+        `UPDATE poker_hands SET street = 'flop', community_cards = $2::JSONB, acting_position = $3, last_raise_size = 0, turn_started_at = NOW() WHERE id = $1`,
         [handId, JSON.stringify(communityCards), firstActing]
       );
       await this.broadcastState(tableId);
@@ -818,14 +829,15 @@ export class PokerGameService {
       const communityCards = deck.slice(boardStartIndex, boardStartIndex + nextLen);
       const firstActing = this.firstActivePosition(buttonPosition, nextStreet, foldedSet, seatsResult.rows, maxSeats, allInSet);
       await pool.query(
-        `UPDATE poker_hands SET street = $2, community_cards = $3::JSONB, acting_position = $4 WHERE id = $1`,
+        // Reset last_raise_size to 0 for the new street (fresh betting round).
+        `UPDATE poker_hands SET street = $2, community_cards = $3::JSONB, acting_position = $4, last_raise_size = 0, turn_started_at = NOW() WHERE id = $1`,
         [handId, nextStreet, JSON.stringify(communityCards), firstActing]
       );
       await this.broadcastState(tableId);
       return;
     }
 
-    await pool.query('UPDATE poker_hands SET acting_position = $2 WHERE id = $1', [handId, nextPos]);
+    await pool.query('UPDATE poker_hands SET acting_position = $2, turn_started_at = NOW() WHERE id = $1', [handId, nextPos]);
     await this.broadcastState(tableId);
   }
 
@@ -868,8 +880,8 @@ export class PokerGameService {
       'SELECT player_address FROM poker_hand_hole_cards WHERE hand_id = $1',
       [handId]
     );
-    const dealtSet = new Set(dealtResult.rows.map((r: any) => r.player_address));
-    const actedSet = new Set(acted.rows.map((r: any) => r.player_address));
+    const dealtSet = new Set(dealtResult.rows.map((r: any) => (r.player_address || '').toLowerCase()));
+    const actedSet = new Set(acted.rows.map((r: any) => (r.player_address || '').toLowerCase()));
     // Exclude all-in players — they cannot act, so they must not block street advancement
     const inHand = seats.filter((s: any) => {
       const addr = (s.player_address || '').toLowerCase();
@@ -1127,8 +1139,55 @@ export class PokerGameService {
     await pool.query(`UPDATE poker_hands SET pot_amount = $2::NUMERIC WHERE id = $1`, [handId, pot.toString()]);
     await pool.query(`UPDATE poker_tables SET status = 'playing', hand_number = $2, button_position = $3 WHERE id = $1`, [tableId, handNumber, buttonSeatPos]);
 
-    await pool.query(`UPDATE poker_hands SET acting_position = $2 WHERE id = $1`, [handId, firstToAct]);
+    await pool.query(`UPDATE poker_hands SET acting_position = $2, turn_started_at = NOW() WHERE id = $1`, [handId, firstToAct]);
 
     return this.getTableState(tableId, null);
+  }
+
+  /**
+   * Auto-fold any player whose 30-second turn timer has expired.
+   * Called periodically by the WebSocket service watchdog.
+   */
+  async autoFoldTimedOutTurns(): Promise<string[]> {
+    const pool = this.getPool();
+    const timedOut = await pool.query(
+      `SELECT h.id AS hand_id, h.table_id, h.acting_position, h.street,
+              h.button_position, h.community_cards, h.pot_amount,
+              h.hand_number, h.server_seed, h.client_seed, h.last_raise_size
+       FROM poker_hands h
+       WHERE h.completed_at IS NULL
+         AND h.acting_position IS NOT NULL
+         AND h.turn_started_at < NOW() - INTERVAL '30 seconds'`
+    );
+    const folded: string[] = [];
+    for (const row of timedOut.rows) {
+      try {
+        const actingAddr = await this.getPlayerAtPosition(pool, row.hand_id, row.acting_position);
+        if (!actingAddr) continue;
+        const orderResult = await pool.query(
+          'SELECT COALESCE(MAX("order"), 0) + 1 AS next_order FROM poker_hand_actions WHERE hand_id = $1',
+          [row.hand_id]
+        );
+        const nextOrder = Number(orderResult.rows[0].next_order);
+        await pool.query(
+          `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order") VALUES ($1, $2, $3, 'fold', 0, $4)`,
+          [row.hand_id, actingAddr, row.street, nextOrder]
+        );
+        const tableRow = await pool.query(
+          'SELECT small_blind, big_blind, max_seats FROM poker_tables WHERE id = $1',
+          [row.table_id]
+        );
+        if (tableRow.rows.length === 0) continue;
+        const table = tableRow.rows[0];
+        const maxSeats = Number(table.max_seats) || 6;
+        await this.advanceOrShowdown(pool, row.table_id, row.hand_id, row, table, maxSeats);
+        await this.broadcastState(row.table_id);
+        folded.push(actingAddr);
+        logger.info('Auto-folded timed-out turn', { handId: row.hand_id, player: actingAddr });
+      } catch (err) {
+        logger.error('Error auto-folding timed-out turn', { handId: row.hand_id, error: err });
+      }
+    }
+    return folded;
   }
 }

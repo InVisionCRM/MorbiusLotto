@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { useKenoResults } from '@/hooks/use-keno-results'
+
+const PAGE_SIZE = 25
 import { formatUnits } from 'viem'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
 import type { KenoResultRow } from '@/hooks/use-keno-results'
@@ -34,23 +36,24 @@ function last4(addr: string): string {
 }
 
 export interface GlobalKenoHistoryTableProps {
-  limit?: number
   results?: KenoResultRow[]
   title?: string
 }
 
+/** Global Keno recent games. Shows 25, then "Load more". */
 export function GlobalKenoHistoryTable({
-  limit = 20,
   results: resultsProp,
   title = 'Recent games',
 }: GlobalKenoHistoryTableProps) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
   const { results: resultsFromHook } = useKenoResults({
     playerAddress: undefined,
-    limit: resultsProp ? undefined : limit,
+    limit: resultsProp ? undefined : 500,
   })
   const results = resultsProp ?? resultsFromHook
-  const displayResults = results.slice(0, limit)
+  const displayResults = results.slice(0, displayCount)
+  const hasMore = displayCount < results.length
 
   return (
     <>
@@ -83,9 +86,9 @@ export function GlobalKenoHistoryTable({
                   return (
                     <TableRow
                       key={r.transactionHash ? `${r.transactionHash}-${r.blockNumber ?? i}` : `row-${i}`}
-                      className="border-white/10 hover:bg-white/5"
+                      className="border-white/5 hover:bg-white/5"
                     >
-                      <TableCell className="text-white/60 text-xs font-mono py-1.5 whitespace-nowrap">
+                      <TableCell className="text-white/60 font-mono p-2 whitespace-nowrap">
                         {r.timestamp != null
                           ? new Date(r.timestamp * 1000).toLocaleString(undefined, {
                               month: 'short',
@@ -95,19 +98,19 @@ export function GlobalKenoHistoryTable({
                             })
                           : '—'}
                       </TableCell>
-                      <TableCell className="py-1.5 text-center text-white/90 text-xs">{r.spotSize}</TableCell>
-                      <TableCell className="py-1.5 text-center text-white/90 text-xs">{r.hits}</TableCell>
-                      <TableCell className="text-right text-white/80 text-xs tabular-nums py-1.5">
+                      <TableCell className="p-2 text-center text-white/90">{r.spotSize}</TableCell>
+                      <TableCell className="p-2 text-center text-white/90">{r.hits}</TableCell>
+                      <TableCell className="text-right text-white/80 tabular-nums p-2">
                         {formatMorbius(r.wager)}
                       </TableCell>
-                      <TableCell className={`text-right text-xs tabular-nums py-1.5 ${won ? 'text-green-400' : 'text-white/50'}`}>
+                      <TableCell className={`text-right tabular-nums p-2 ${won ? 'text-green-400' : 'text-white/50'}`}>
                         {formatMorbius(r.netPayout)}
                       </TableCell>
-                      <TableCell className="py-1.5">
+                      <TableCell className="p-2">
                         <button
                           type="button"
                           onClick={() => setSelectedAddress(r.player)}
-                          className="text-cyan-400 hover:text-cyan-300 font-mono text-xs"
+                          className="text-cyan-400 hover:text-cyan-300 font-mono"
                           title="View keno stats"
                         >
                           {last4(r.player)}
@@ -120,6 +123,17 @@ export function GlobalKenoHistoryTable({
             </TableBody>
           </Table>
         </div>
+        {hasMore && displayResults.length > 0 && (
+          <div className="px-2 py-2 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
+              className="w-full py-1.5 text-sm text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/10"
+            >
+              Load more
+            </button>
+          </div>
+        )}
       </div>
 
       <PlayerProfileModal

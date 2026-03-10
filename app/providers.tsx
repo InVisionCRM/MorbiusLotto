@@ -8,6 +8,7 @@ import { config } from '@/lib/wagmi-config'
 import { useState } from 'react'
 import { GameLockProvider } from '@/contexts/game-lock-context'
 import { LocaleProvider } from '@/contexts/locale-context'
+import { ProfileSettingsModalProvider } from '@/components/shared/ProfileSettingsModalContext'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient once per provider instance to prevent cache resets
@@ -47,7 +48,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             coolMode={true}
             showRecentTransactions={true}
           >
-            {children}
+            <ProfileSettingsModalProvider>
+              {children}
+            </ProfileSettingsModalProvider>
           </RainbowKitProvider>
         </QueryClientProvider>
       </WagmiProvider>

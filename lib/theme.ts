@@ -99,7 +99,7 @@ export const Theme = {
    */
   modal: {
     overlay: 'bg-black/80 backdrop-blur-sm',
-    container: 'bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl',
+    container: 'bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/40 rounded-2xl shadow-2xl',
     header: 'bg-gradient-to-r from-cyan-600 to-blue-600',
   },
 
@@ -107,8 +107,29 @@ export const Theme = {
    * Toast/Small Info Card Styling
    */
   toast: {
-    container: 'bg-gradient-to-r from-slate-900/90 to-slate-800/90 backdrop-blur-sm border border-cyan-500/30 rounded-xl shadow-xl',
+    container: 'bg-gradient-to-r from-slate-900/90 to-slate-800/90 backdrop-blur-sm border-2 border-cyan-500/30 rounded-xl shadow-xl',
     boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+  },
+
+  /**
+   * Light modal/card style (Blackjack Deposit/Withdraw look)
+   * White card, soft gray tabs, black primary buttons, cyan accent
+   */
+  lightModal: {
+    overlay: 'bg-black/20 backdrop-blur-md',
+    container: 'bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border-2 border-gray-200 overflow-y-auto max-h-[90vh]',
+    closeButton: 'absolute top-6 right-6 z-20 text-gray-400 hover:text-black bg-gray-100 p-2 rounded-full transition-colors',
+    tabsList: 'flex gap-2 mb-8 bg-gray-50 p-1 rounded-2xl h-auto border-0 w-full',
+    tabTrigger: 'flex-1 py-3 text-sm font-medium text-gray-600 data-[state=active]:bg-white data-[state=active]:text-cyan-500 data-[state=active]:shadow-sm rounded-xl transition-all',
+    input: 'flex-1 w-full bg-white text-black/90 placeholder:text-black/50 border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all',
+    primaryButton: 'flex-1 py-3 rounded-xl bg-black text-white hover:bg-gray-800 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+    secondaryButton: 'flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition-colors',
+    panel: 'border border-gray-100 rounded-2xl p-4 bg-gray-50',
+    accentText: 'text-cyan-500',
+    mutedText: 'text-gray-500',
+    bodyText: 'text-gray-700',
+    linkText: 'text-gray-400 hover:text-gray-600 text-xs transition',
+    heading: 'text-sm text-gray-500 uppercase tracking-widest font-semibold',
   },
 } as const;
 

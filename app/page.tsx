@@ -3,12 +3,11 @@
 import React, { useState } from 'react'
 import Image from 'next/image'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
-import { StickyBanner } from '@/components/ui/sticky-banner'
+import { FirstVisitNotification } from '@/components/ui/first-visit-notification'
 import { useAuth } from '@/hooks/use-auth'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { HeroSection } from '@/components/home/hero-section'
-import { BlackjackSection } from '@/components/home/blackjack-section'
 import { GamesSection } from '@/components/home/games-section'
 import { RoadMap } from '@/components/home/RoadMap'
 import { SocialsSection } from '@/components/home/socials-section'
@@ -61,18 +60,20 @@ export default function HomePage() {
       onOpenPlayerProfile={address ? (game) => { setPlayerProfileGame(game ?? 'all'); setPlayerProfileOpen(true); } : undefined}
     >
       <div className="min-h-screen text-white flex flex-col items-center relative" style={{ background: Theme.greyGradient.background }}>
-        <StickyBanner className="font-poppins text-md md:text-lg tracking-wide">
-          The Morbius token analyzer has been redirected to...{' '}
-          <a
-            href="https://scan.morbius.io"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-bold underline underline-offset-1 hover:opacity-80 text-cyan-300"
-          >
-            Scan.Morbius.io
-          </a>
-          .
-        </StickyBanner>
+        <FirstVisitNotification className="font-poppins text-center">
+          <p className="text-gray-700 text-base sm:text-lg tracking-wide">
+            The Morbius token analyzer has been redirected to{' '}
+            <a
+              href="https://scan.morbius.io"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold underline underline-offset-1 text-cyan-500 hover:text-cyan-600"
+            >
+              Scan.Morbius.io
+            </a>
+            .
+          </p>
+        </FirstVisitNotification>
         <style jsx global>{`
           ::-webkit-scrollbar {
             width: 4px;
@@ -102,11 +103,6 @@ export default function HomePage() {
       </section>
 
       <div className="w-full flex flex-col items-center gap-y-0 py-8 px-4">
-        {/* Blackjack Promo + Tournaments */}
-        <SectionWithBg bgImage={TOUR_CARDS[1]}>
-          <BlackjackSection />
-        </SectionWithBg>
-
         {/* Morbius Token Info (DexScreener) — above Tokenomics */}
         <SectionWithBg bgImage={TOUR_CARDS[2]}>
           <MorbiusInfoSection />

@@ -230,6 +230,43 @@ export function TokenomicsSection() {
             </Link>
           </div>
         </div>
+
+        {/* FAQ */}
+        <motion.div
+          className="mt-16 md:mt-20 max-w-2xl mx-auto"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '-40px' }}
+          variants={fadeIn}
+        >
+          <h3 className="text-xl md:text-2xl font-russo-one font-normal text-cyan-500 mb-6 text-center">
+            FAQ
+          </h3>
+          <div className="space-y-4">
+            <div className="rounded-xl border border-cyan-500/30 bg-white/5 backdrop-blur-md px-5 py-4">
+              <h4 className="text-cyan-400 font-semibold text-sm mb-1.5">Do I need to claim or are rewards airdropped?</h4>
+              <p className="text-white/80 text-sm leading-relaxed">
+                You need to claim your rewards. They are not airdropped automatically.{' '}
+                <Link href="/staking" className="text-cyan-400 hover:text-cyan-300 underline font-medium">
+                  Claim here
+                </Link>
+                .
+              </p>
+            </div>
+            <div className="rounded-xl border border-cyan-500/30 bg-white/5 backdrop-blur-md px-5 py-4">
+              <h4 className="text-cyan-400 font-semibold text-sm mb-1.5">How often are payouts?</h4>
+              <p className="text-white/80 text-sm leading-relaxed">
+                Payouts happen based on a threshold. Once the threshold is met, rewards are distributed into the holder reward pool and the LP reward pool.
+              </p>
+            </div>
+            <div className="rounded-xl border border-cyan-500/30 bg-white/5 backdrop-blur-md px-5 py-4">
+              <h4 className="text-cyan-400 font-semibold text-sm mb-1.5">How can you reward LP providers for any pair?</h4>
+              <p className="text-white/80 text-sm leading-relaxed">
+                LP rewards are based on the amount of Morbius in that pair. The more MORBIUS in the pair, the more your share of the LP distribution.
+              </p>
+            </div>
+          </div>
+        </motion.div>
       </motion.div>
       </div>
     </section>

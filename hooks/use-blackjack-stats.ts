@@ -276,7 +276,7 @@ export function usePlayerGames(limit: number = 50, offset: number = 0) {
 /**
  * Hook to fetch global recent blackjack games (all players) for Recent Play feed.
  */
-export function useBlackjackRecentGamesGlobal(limit: number = 20) {
+export function useBlackjackRecentGamesGlobal(limit: number = 50) {
   const apiUrl = getApiUrlOptional();
   return useQuery<RecentGameGlobalRow[]>({
     queryKey: ['blackjackRecentGamesGlobal', limit, !!apiUrl],

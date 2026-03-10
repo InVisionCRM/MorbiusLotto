@@ -1705,7 +1705,7 @@ const Home: React.FC = () => {
             />
           </div>
           <div className="min-w-0 order-2">
-            <PlinkoRecentGames limit={20} compact title="Recent Games" />
+            <PlinkoRecentGames compact title="Recent Games" />
           </div>
         </div>
       </div>
@@ -1717,7 +1717,7 @@ const Home: React.FC = () => {
             <PlinkoTopPlayers />
           </div>
           <div className="min-w-0">
-            <PlinkoRecentPlays limit={20} compact title="Recent Play" />
+            <PlinkoRecentPlays compact title="Recent Play" />
           </div>
         </div>
       </section>

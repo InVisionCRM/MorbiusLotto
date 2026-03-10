@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { useInstantLotteryResults } from '@/hooks/use-instant-lottery'
+
+const PAGE_SIZE = 25
 import { formatUnits } from 'viem'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
 import type { InstantLotteryResultRow } from '@/hooks/use-instant-lottery'
@@ -34,8 +36,6 @@ function last4(addr: string): string {
 }
 
 export interface GlobalLotteryHistoryTableProps {
-  /** Max rows to show (default 20) */
-  limit?: number
   /** Optional: pass results from outside (e.g. from parent hook); otherwise uses global feed */
   results?: InstantLotteryResultRow[]
   /** Optional title override */
@@ -43,22 +43,21 @@ export interface GlobalLotteryHistoryTableProps {
 }
 
 /**
- * Global instant lottery history: last N games from anyone.
- * Shows winning numbers, amount bet, amount won (net), and optionally player.
- * Uses components/ui/table for layout.
+ * Global instant lottery history. Shows 25, then "Load more".
  */
 export function GlobalLotteryHistoryTable({
-  limit = 20,
   results: resultsProp,
   title = 'Recent games',
 }: GlobalLotteryHistoryTableProps) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
   const { results: resultsFromHook } = useInstantLotteryResults({
-    limit: resultsProp ? undefined : limit,
+    limit: resultsProp ? undefined : 500,
     // no playerAddress = global feed
   })
   const results = resultsProp ?? resultsFromHook
-  const displayResults = results.slice(0, limit)
+  const displayResults = results.slice(0, displayCount)
+  const hasMore = displayCount < results.length
 
   return (
     <>
@@ -90,9 +89,9 @@ export function GlobalLotteryHistoryTable({
                 return (
                   <TableRow
                     key={r.transactionHash ? `${r.transactionHash}-${r.blockNumber ?? i}` : `row-${i}`}
-                    className="border-white/10 hover:bg-white/5"
+                    className="border-white/5 hover:bg-white/5"
                   >
-                    <TableCell className="text-white/60 text-xs font-mono py-1.5 whitespace-nowrap">
+                    <TableCell className="text-white/60 font-mono p-2 whitespace-nowrap">
                       {r.timestamp != null
                         ? new Date(r.timestamp * 1000).toLocaleString(undefined, {
                             month: 'short',
@@ -102,22 +101,20 @@ export function GlobalLotteryHistoryTable({
                           })
                         : '—'}
                     </TableCell>
-                    <TableCell className="py-1.5 text-center">
-                      <span className="text-white/90 text-xs">
-                        {r.matchCount} match{r.matchCount !== 1 ? 'es' : ''}
-                      </span>
+                    <TableCell className="p-2 text-center text-white/90">
+                      {r.matchCount} match{r.matchCount !== 1 ? 'es' : ''}
                     </TableCell>
-                    <TableCell className="text-right text-white/80 text-xs tabular-nums py-1.5">
+                    <TableCell className="text-right text-white/80 tabular-nums p-2">
                       {formatMorbius(r.wager)}
                     </TableCell>
-                    <TableCell className={`text-right text-xs tabular-nums py-1.5 ${won ? 'text-green-400' : 'text-white/50'}`}>
+                    <TableCell className={`text-right tabular-nums p-2 ${won ? 'text-green-400' : 'text-white/50'}`}>
                       {formatMorbius(r.netPayout)}
                     </TableCell>
-                    <TableCell className="py-1.5">
+                    <TableCell className="p-2">
                       <button
                         type="button"
                         onClick={() => setSelectedAddress(r.player)}
-                        className="text-cyan-400 hover:text-cyan-300 font-mono text-xs"
+                        className="text-cyan-400 hover:text-cyan-300 font-mono"
                         title="View lottery stats"
                       >
                         {last4(r.player)}
@@ -130,6 +127,17 @@ export function GlobalLotteryHistoryTable({
           </TableBody>
         </Table>
       </div>
+      {hasMore && displayResults.length > 0 && (
+        <div className="px-2 py-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
+            className="w-full py-1.5 text-sm text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/10"
+          >
+            Load more
+          </button>
+        </div>
+      )}
     </div>
 
     <PlayerProfileModal

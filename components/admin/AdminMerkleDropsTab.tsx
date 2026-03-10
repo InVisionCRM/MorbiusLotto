@@ -28,6 +28,7 @@ import {
   MORBIUS_TOURNAMENT_ADDRESS,
   MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS,
 } from '@/lib/contracts';
+import { pulsechain } from '@/lib/chains';
 import { getApiUrlOptional } from '@/lib/api-urls';
 import { SNAPSHOT_EXCLUSION_SET } from '@/lib/snapshot-exclusions';
 
@@ -213,9 +214,9 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [MERKLE_ADDR, MAX_UINT256],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
-        chain: PULSECHAIN,
-        account: address,
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: adminAddr,
       });
       await waitForTx(hash, () => {
         refetchAllowance();
@@ -238,7 +239,9 @@ function OnchainActions({
         abi: merkleClaimMorbiusAbi,
         functionName: 'depositRewards',
         args: [depositWei],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: adminAddr,
       });
       await waitForTx(hash, () => {
         setStep('setroot');
@@ -260,7 +263,9 @@ function OnchainActions({
         abi: merkleClaimMorbiusAbi,
         functionName: 'setEpochRoot',
         args: [BigInt(epoch.epoch_number), epoch.merkle_root as `0x${string}`, totalWei],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: adminAddr,
       });
       await waitForTx(hash, async () => {
         setStep('done');
@@ -405,6 +410,7 @@ export default function AdminMerkleDropsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [epochVisibleCount, setEpochVisibleCount] = useState(5);
 
   const [rewardInputs, setRewardInputs] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<Record<number, boolean>>({});
@@ -812,7 +818,9 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'addOperator',
         args: [newOperatorAddr.trim() as `0x${string}`],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: address!,
       });
       setOperatorMsg(`✓ Operator added — tx: ${hash.slice(0, 14)}…`);
       setNewOperatorAddr('');
@@ -833,7 +841,9 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'removeOperator',
         args: [addr as `0x${string}`],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: address!,
       });
       setOperatorMsg(`✓ Operator removed — tx: ${hash.slice(0, 14)}…`);
       setTimeout(fetchCurrentOperators, 3000);
@@ -856,7 +866,9 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'revokeEpoch',
         args: [BigInt(epoch.epoch_number)],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: address!,
       });
       setEpochMsg(epoch.id, `Revoking on-chain… tx: ${hash.slice(0, 14)}…`);
       await publicClient!.waitForTransactionReceipt({ hash });
@@ -1212,7 +1224,7 @@ export default function AdminMerkleDropsTab() {
             <p className="text-center text-sm text-slate-500 py-6">No epochs yet.</p>
           ) : (
             <div className="space-y-2">
-              {epochs.map((epoch) => {
+              {epochs.slice(0, epochVisibleCount).map((epoch) => {
                 const { label, color } = STATUS_LABELS[epoch.status];
                 const isExpanded = expandedId === epoch.id;
                 const isEpochBusy = busy[epoch.id] ?? false;
@@ -1459,6 +1471,18 @@ export default function AdminMerkleDropsTab() {
                   </div>
                 );
               })}
+              {epochVisibleCount < epochs.length && (
+                <div className="flex justify-center pt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setEpochVisibleCount((c) => c + 5)}
+                    className="h-8 text-xs border-slate-600 text-slate-400 hover:bg-slate-800 hover:text-white"
+                  >
+                    Load more ({epochs.length - epochVisibleCount} remaining)
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

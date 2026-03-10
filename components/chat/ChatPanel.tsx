@@ -3,9 +3,25 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useChat } from '@/hooks/use-chat';
+import { Theme } from '@/lib/theme';
+import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
 import { PlayerStatsModal } from './PlayerStatsModal';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { ChatMessagePayload } from '@/lib/websocket-client';
+
+/** LightModal panel + Theme.inset offset shadows */
+const LIGHT_SHELL_STYLE: React.CSSProperties = {
+  background: 'white',
+  boxShadow: Theme.inset.boxShadow,
+  border: Theme.inset.border,
+};
+
+/** Inner recessed area (message list, emoji picker) */
+const LIGHT_INSET_STYLE: React.CSSProperties = {
+  background: 'rgb(249 250 251)', /* gray-50 */
+  boxShadow: Theme.inset.light.boxShadow,
+  border: Theme.inset.light.border,
+};
 
 const CHAT_MESSAGE_MAX_LENGTH = 150;
 
@@ -13,6 +29,43 @@ const EMOJI_LIST = [
   '😀', '😂', '🤣','👍', '👎', '👏','👋', '💪',
   '❤️', '💯', '🔥','🎉', '👀', '🤔', '😎', '🥳', '🙃',
 ];
+
+/** 25 cross-color gradient placeholders (pink+yellow, red+blue, cyan+pink, etc.); same user always gets same gradient */
+const AVATAR_GRADIENTS: string[] = [
+  'linear-gradient(135deg, #ec4899 0%, #eab308 100%)',   /* pink & yellow */
+  'linear-gradient(135deg, #ef4444 0%, #3b82f6 100%)',   /* red & blue */
+  'linear-gradient(135deg, #ef4444 0%, #eab308 100%)',    /* red & yellow */
+  'linear-gradient(135deg, #06b6d4 0%, #000000 100%)',    /* cyan & black */
+  'linear-gradient(135deg, #06b6d4 0%, #ec4899 100%)',   /* cyan & pink */
+  'linear-gradient(135deg, #8b5cf6 0%, #f97316 100%)',    /* violet & orange */
+  'linear-gradient(135deg, #22c55e 0%, #6366f1 100%)',    /* green & indigo */
+  'linear-gradient(135deg, #f59e0b 0%, #ec4899 100%)',    /* amber & pink */
+  'linear-gradient(135deg, #14b8a6 0%, #dc2626 100%)',    /* teal & red */
+  'linear-gradient(135deg, #a855f7 0%, #22d3ee 100%)',    /* purple & cyan */
+  'linear-gradient(135deg, #fbbf24 0%, #7c3aed 100%)',    /* yellow & violet */
+  'linear-gradient(135deg, #06b6d4 0%, #f43f5e 100%)',    /* cyan & rose */
+  'linear-gradient(135deg, #3b82f6 0%, #f97316 100%)',    /* blue & orange */
+  'linear-gradient(135deg, #84cc16 0%, #ec4899 100%)',   /* lime & pink */
+  'linear-gradient(135deg, #ef4444 0%, #8b5cf6 100%)',   /* red & purple */
+  'linear-gradient(135deg, #22d3ee 0%, #f59e0b 100%)',    /* cyan & amber */
+  'linear-gradient(135deg, #ec4899 0%, #3b82f6 100%)',    /* pink & blue */
+  'linear-gradient(135deg, #eab308 0%, #14b8a6 100%)',    /* yellow & teal */
+  'linear-gradient(135deg, #f97316 0%, #6366f1 100%)',    /* orange & indigo */
+  'linear-gradient(135deg, #dc2626 0%, #22c55e 100%)',    /* red & green */
+  'linear-gradient(135deg, #a855f7 0%, #fbbf24 100%)',    /* purple & yellow */
+  'linear-gradient(135deg, #06b6d4 0%, #ef4444 100%)',    /* cyan & red */
+  'linear-gradient(135deg, #4ade80 0%, #f43f5e 100%)',    /* green & rose */
+  'linear-gradient(135deg, #f59e0b 0%, #6366f1 100%)',    /* amber & indigo */
+  'linear-gradient(135deg, #ec4899 0%, #14b8a6 100%)',    /* pink & teal */
+  'linear-gradient(135deg, #000000 0%, #eab308 100%)',     /* black & yellow */
+];
+
+function avatarGradientIndex(msg: ChatMessagePayload): number {
+  const id = msg.senderAddress ?? msg.displayName?.trim() ?? 'anon';
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h % AVATAR_GRADIENTS.length;
+}
 
 function formatTime(iso: string): string {
   try {
@@ -55,6 +108,16 @@ function senderLabel(msg: ChatMessagePayload): string {
   return 'Anonymous';
 }
 
+function senderInitials(msg: ChatMessagePayload): string {
+  const label = senderLabel(msg);
+  if (msg.displayName?.trim()) {
+    const parts = msg.displayName.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 2);
+    return label.slice(0, 2).toUpperCase();
+  }
+  return label.slice(0, 2).toUpperCase();
+}
+
 export interface ChatPanelProps {
   /** Chat room: 'main' (home), 'blackjack', 'plinko', 'keno', etc. */
   roomId: string;
@@ -90,7 +153,8 @@ export function ChatPanel({
   fillHeight = false,
   headerActions,
 }: ChatPanelProps) {
-  const { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore, chatPaused } = useChat(roomId, { wsClient, wsConnected });
+  const { messages, sendMessage, connected, error, setDisplayName, getProfile, loadMore, loadingMore, chatPaused } = useChat(roomId, { wsClient, wsConnected });
+  const { openProfileSettings } = useProfileSettingsModal();
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
   const [showNameInput, setShowNameInput] = useState(false);
@@ -101,7 +165,7 @@ export function ChatPanel({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastReadCountRef = useRef(0);
   const lastReadWhenSheetOpenRef = useRef(0);
   const lastMessageIdRef = useRef<string | null>(null);
@@ -201,6 +265,7 @@ export function ChatPanel({
     }
   };
 
+  const lm = Theme.lightModal;
   const messageListMaxHeight = fillHeight ? 'flex-1' : collapsible ? 'max-h-[150px]' : 'max-h-[28rem]';
   const panelContent = (
     <>
@@ -208,11 +273,8 @@ export function ChatPanel({
         <div
           ref={listRef}
           onScroll={handleListScroll}
-          className="flex-1 overflow-y-auto p-2 space-y-2"
-          style={{
-            background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1)',
-          }}
+          className="flex-1 overflow-y-auto p-2 space-y-2 rounded-none"
+          style={LIGHT_INSET_STYLE}
         >
           {connected && messages.length > 0 && (
             <div className="flex justify-center py-1">
@@ -220,80 +282,119 @@ export function ChatPanel({
                 type="button"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="text-xs text-cyan-300/80 hover:text-cyan-300 disabled:opacity-50 px-2 py-1 rounded border border-cyan-500/30"
+                className={`text-xs disabled:opacity-50 px-2 py-1 rounded-xl border border-gray-200 ${lm.mutedText} hover:bg-gray-100 hover:text-gray-900`}
               >
                 {loadingMore ? 'Loading…' : 'Load older messages'}
               </button>
             </div>
           )}
           {chatPaused && (
-            <div className="text-amber-400/90 text-xs p-2 rounded bg-amber-500/10 text-center">
+            <div className="text-amber-700 text-xs p-2 rounded-xl bg-amber-50 border border-amber-200 text-center">
               Chat is temporarily paused
             </div>
           )}
           {error && (
-            <div className="text-amber-400/90 text-xs p-2 rounded bg-amber-500/10">
+            <div className="text-amber-700 text-xs p-2 rounded-xl bg-amber-50 border border-amber-200">
               {error}
             </div>
           )}
           {!connected && !error && (
-            <div className="text-white/50 text-xs p-2">Connecting…</div>
+            <div className={`${lm.mutedText} text-xs p-2`}>Connecting…</div>
           )}
           {connected && messages.length === 0 && (
-            <div className="text-white/50 text-xs p-2">No messages yet. Say hi!</div>
+            <div className={`${lm.mutedText} text-xs p-2`}>No messages yet. Say hi!</div>
           )}
-          {messages.map((msg) => (
-            <div key={msg.id} className="text-left">
-              <div className="flex items-baseline gap-2 flex-wrap">
-                {msg.senderAddress ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPlayer({ address: msg.senderAddress!, displayName: msg.displayName })}
-                    className="text-cyan-300/90 text-xs font-medium shrink-0 hover:text-cyan-200 hover: cursor-pointer transition-colors"
-                  >
-                    {senderLabel(msg)}
-                  </button>
-                ) : (
-                  <span className="text-cyan-300/90 text-xs font-medium shrink-0">
-                    {senderLabel(msg)}
-                  </span>
-                )}
-                <span
-                  className="text-white/40 text-[10px] shrink-0"
-                  title={formatTime(msg.timestamp)}
+          {messages.map((msg) => {
+            const isOwnMessage = !!walletAddress && msg.senderAddress?.toLowerCase() === walletAddress.toLowerCase();
+            const avatarStyle = {
+              background: AVATAR_GRADIENTS[avatarGradientIndex(msg)],
+              textShadow: '0 0 1px rgba(0,0,0,0.4)',
+            };
+            return (
+            <div key={msg.id} className="text-left flex gap-2">
+              {isOwnMessage ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const p = await getProfile();
+                      openProfileSettings({
+                        displayName: p.displayName ?? '',
+                        profileImageUrl: p.profileImageUrl,
+                        onSave: async (name, img) => {
+                          await setDisplayName(name, img);
+                        },
+                      });
+                    } catch {
+                      // Not connected or no client
+                    }
+                  }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 text-white cursor-pointer hover:ring-2 hover:ring-cyan-500/50 transition-shadow"
+                  style={avatarStyle}
+                  title="Profile settings"
+                  aria-label="Open profile settings"
                 >
-                  {formatRelative(msg.timestamp)}
-                </span>
+                  {senderInitials(msg)}
+                </button>
+              ) : (
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 text-white"
+                  style={avatarStyle}
+                  aria-hidden
+                >
+                  {senderInitials(msg)}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  {msg.senderAddress ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPlayer({ address: msg.senderAddress!, displayName: msg.displayName })}
+                      className={`font-jost ${lm.accentText} text-xs font-medium shrink-0 hover:text-cyan-600 cursor-pointer transition-colors`}
+                    >
+                      {senderLabel(msg)}
+                    </button>
+                  ) : (
+                    <span className={`font-jost ${lm.accentText} text-xs font-medium shrink-0`}>
+                      {senderLabel(msg)}
+                    </span>
+                  )}
+                  <span
+                    className={`${lm.mutedText} text-[10px] shrink-0`}
+                    title={formatTime(msg.timestamp)}
+                  >
+                    {formatRelative(msg.timestamp)}
+                  </span>
+                </div>
+                <p className={`${lm.bodyText} text-sm break-words pl-0 mt-0.5`}>{msg.text}</p>
               </div>
-              <p className="text-white/90 text-sm break-words pl-0 mt-0.5">{msg.text}</p>
             </div>
-          ))}
+            );
+          })}
         </div>
         {showScrollToBottom && (
           <button
             type="button"
             onClick={scrollToBottom}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-600/90 hover:bg-cyan-500/90 text-white border border-cyan-400/50 shadow-lg"
+            className={`absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-xl text-xs font-medium ${lm.primaryButton}`}
           >
             Scroll to bottom
           </button>
         )}
       </div>
-      <form onSubmit={handleSubmit} className="p-2 border-t border-white/10 flex flex-col gap-1">
+      <form onSubmit={handleSubmit} className={`p-2 border-t border-gray-200 flex flex-col gap-2 ${lm.bodyText}`}>
         {showEmojiPicker && (
           <div
-            className="flex flex-wrap gap-1 p-2 rounded-lg border border-cyan-500/30 bg-black/40 max-h-24 overflow-y-auto"
-            style={{
-              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-              boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.5)',
-            }}
+            className="flex flex-wrap gap-1 p-2 rounded-xl border border-gray-200 max-h-24 overflow-y-auto"
+            style={LIGHT_INSET_STYLE}
           >
             {EMOJI_LIST.map((emoji) => (
               <button
                 key={emoji}
                 type="button"
                 onClick={() => insertEmoji(emoji)}
-                className="w-7 h-7 flex items-center justify-center rounded hover:bg-cyan-500/20 text-lg leading-none transition"
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-200 text-lg leading-none transition"
                 title={emoji}
               >
                 {emoji}
@@ -301,35 +402,35 @@ export function ChatPanel({
             ))}
           </div>
         )}
+        <div className="w-full relative">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value.slice(0, CHAT_MESSAGE_MAX_LENGTH))}
+            placeholder={chatPaused ? 'Chat is paused' : connected ? 'Type a message…' : 'Connect to chat'}
+            disabled={!connected || chatPaused}
+            maxLength={CHAT_MESSAGE_MAX_LENGTH}
+            rows={4}
+            className={`${lm.input} w-full resize-none py-2 pr-14 text-sm`}
+          />
+          <span className={`absolute right-2 bottom-2 text-[10px] tabular-nums pointer-events-none ${lm.mutedText}`}>
+            {input.length}/{CHAT_MESSAGE_MAX_LENGTH}
+          </span>
+        </div>
         <div className="flex gap-2 items-center">
           <button
             type="button"
             onClick={() => setShowEmojiPicker((v) => !v)}
-            className="w-9 h-9 flex-shrink-0 rounded-lg border border-cyan-500/30 bg-black/30 hover:bg-cyan-500/20 text-lg flex items-center justify-center transition"
+            className={`w-9 h-9 flex-shrink-0 rounded-xl text-lg flex items-center justify-center transition ${lm.secondaryButton}`}
             title="Insert emoji"
             aria-label="Insert emoji"
           >
             😀
           </button>
-          <div className="flex-1 min-w-0 relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value.slice(0, CHAT_MESSAGE_MAX_LENGTH))}
-              placeholder={chatPaused ? 'Chat is paused' : connected ? 'Type a message…' : 'Connect to chat'}
-              disabled={!connected || chatPaused}
-              maxLength={CHAT_MESSAGE_MAX_LENGTH}
-              className="w-full rounded-lg px-3 py-2 pr-12 text-sm bg-black/30 text-white placeholder-white/40 border border-cyan-500/30 focus:border-cyan-400/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/30"
-            />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40 tabular-nums pointer-events-none">
-              {input.length}/{CHAT_MESSAGE_MAX_LENGTH}
-            </span>
-          </div>
           <button
             type="submit"
             disabled={!connected || chatPaused || !input.trim()}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:pointer-events-none text-white transition shrink-0"
+            className={`px-4 py-2 rounded-xl text-sm font-medium shrink-0 ml-auto ${lm.primaryButton}`}
           >
             Send
           </button>
@@ -340,22 +441,18 @@ export function ChatPanel({
 
   const shell = (
     <div
-      className={`flex flex-col rounded-2xl overflow-hidden border border-cyan-500/30 shadow-xl h-full min-h-[320px] ${className}`}
-      style={{
-        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-        border: '1px inset rgba(60, 60, 60, 0.5)',
-      }}
+      className={`font-poppins flex flex-col rounded-2xl overflow-hidden border-2 border-gray-200 shadow-xl h-full min-h-[320px] ${className}`}
+      style={LIGHT_SHELL_STYLE}
     >
-      <div className="flex flex-col gap-1 px-3 py-2 border-b border-white/10">
+      <div className={`flex flex-col gap-1 px-3 py-2 border-b border-gray-200 ${lm.bodyText}`}>
         <div className="flex items-center justify-between">
-          <span className="text-cyan-300 font-semibold text-sm">{title}</span>
+          <span className={`${lm.accentText} font-semibold text-sm`}>{title}</span>
           <div className="flex items-center gap-2">
             {walletAddress && connected && !showNameInput && (
               <button
                 type="button"
                 onClick={() => setShowNameInput(true)}
-                className="text-xs text-cyan-300/80 hover:text-cyan-300 shrink-0"
+                className={`text-xs shrink-0 ${lm.linkText}`}
               >
                 Set display name
               </button>
@@ -371,20 +468,20 @@ export function ChatPanel({
               onChange={(e) => setNameInput(e.target.value)}
               placeholder="Display name (3–32 chars)"
               maxLength={32}
-              className="flex-1 min-w-0 rounded px-2 py-1 text-xs bg-black/30 text-white placeholder-white/40 border border-cyan-500/30 focus:border-cyan-400/50 focus:outline-none"
+              className={`flex-1 min-w-0 rounded-xl px-2 py-1 text-xs ${lm.input} py-1.5`}
             />
             <button
               type="button"
               onClick={handleSaveDisplayName}
               disabled={nameInput.trim().length < 3 || nameSaving}
-              className="px-2 py-1 rounded text-xs font-medium bg-cyan-600/80 hover:bg-cyan-500/80 disabled:opacity-50 text-white shrink-0"
+              className={`px-2 py-1 rounded-xl text-xs font-medium shrink-0 ${lm.primaryButton}`}
             >
               {nameSaving ? '…' : 'Save'}
             </button>
             <button
               type="button"
               onClick={() => { setShowNameInput(false); setNameInput(''); }}
-              className="px-2 py-1 rounded text-xs text-white/70 hover:text-white shrink-0"
+              className={`px-2 py-1 rounded-xl text-xs shrink-0 ${lm.linkText}`}
             >
               Cancel
             </button>
@@ -415,11 +512,11 @@ export function ChatPanel({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="absolute -top-1 -right-1 z-10 w-7 h-7 rounded-full bg-slate-800 border border-cyan-500/30 text-white/70 hover:text-white flex items-center justify-center"
+                className="absolute -top-1 -right-1 z-10 w-9 h-9 rounded-full flex items-center justify-center bg-gray-200 border-2 border-gray-400 text-gray-700 hover:bg-gray-300 hover:text-black hover:border-gray-500 transition-colors shadow-sm"
                 aria-label="Close chat"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
               {shell}
@@ -428,10 +525,10 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="w-full rounded-2xl py-3 px-4 text-left flex items-center gap-2 border-2 border-cyan-400/60 text-cyan-300 font-semibold text-sm transition hover:bg-cyan-500/20 hover:border-cyan-400/80 shadow-lg relative"
+              className={`w-full rounded-2xl py-3 px-4 text-left flex items-center gap-2 border-2 border-gray-200 font-semibold text-sm transition hover:bg-gray-50 hover:border-cyan-500/50 shadow-lg relative ${lm.accentText}`}
               style={{
-                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.9))',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5), 0 0 20px rgba(34, 211, 238, 0.15)',
+                background: 'white',
+                boxShadow: Theme.inset.light.boxShadow,
               }}
               aria-label={`Open ${title}${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
             >

@@ -23,10 +23,12 @@ export interface PokerSeatProps {
   isCurrentPlayer?: boolean;
   showCardBacks?: boolean;
   lastAction?: { action: string; amount: string } | null;
+  /** Seconds remaining in turn timer (0-30). Only provided for the acting seat. */
+  timeLeft?: number;
 }
 
 function shortAddr(addr: string): string {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  return addr.slice(-4);
 }
 
 function formatLastAction(action: string, amount: string): string {
@@ -57,7 +59,7 @@ function RoleBadge({ label, gold }: { label: string; gold?: boolean }) {
   );
 }
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction }: PokerSeatProps) {
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -149,6 +151,50 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
       ) : (
         /* No cards yet — spacer so badge stays aligned */
         <div style={{ width: '52px', height: '66px' }} />
+      )}
+
+      {/* "YOUR TURN" banner + countdown bar — only for the local player's turn */}
+      {isActing && isCurrentPlayer && (
+        <div className="flex flex-col items-center gap-0.5 w-full">
+          <span
+            className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full"
+            style={{
+              color: 'var(--poker-bg)',
+              background: 'var(--poker-accent)',
+              boxShadow: '0 0 8px var(--poker-accent-muted)',
+            }}
+          >
+            Your Turn
+          </span>
+          {timeLeft != null && (
+            <div
+              className="w-full rounded-full overflow-hidden"
+              style={{ height: '3px', background: 'rgba(255,255,255,0.12)' }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-1000"
+                style={{
+                  width: `${Math.max(0, (timeLeft / 30) * 100)}%`,
+                  background: timeLeft <= 8
+                    ? 'var(--poker-danger)'
+                    : timeLeft <= 15
+                      ? 'var(--poker-chip)'
+                      : 'var(--poker-accent)',
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Timer countdown for OTHER players' turns (just the number) */}
+      {isActing && !isCurrentPlayer && timeLeft != null && (
+        <span
+          className="text-[9px] font-bold tabular-nums"
+          style={{ color: timeLeft <= 8 ? 'var(--poker-danger)' : 'var(--poker-text-muted)' }}
+        >
+          {timeLeft}s
+        </span>
       )}
 
       {/* Info pill */}
