@@ -362,7 +362,7 @@ export class MerkleDropsService {
     try {
       await client.query('BEGIN');
 
-      // Proportional share of NEW rewards per wallet
+      // Strictly proportional to morbius_balance (not equal per holder): share = (balance / totalBalance) * newReward
       const SCALE = BigInt('1000000000000000000'); // 1e18
       let distributedNew = 0n;
       const assignments: Array<{ address: string; reward: bigint }> = [];
@@ -386,6 +386,18 @@ export class MerkleDropsService {
         await client.query(
           'UPDATE merkle_snapshots SET reward_amount = $1 WHERE epoch_id = $2 AND wallet_address = $3',
           [reward.toString(), epochId, address],
+        );
+      }
+
+      // Safeguard: if every holder got the same amount, something may be wrong (e.g. equal split or identical snapshot balances)
+      const { rows: distinctCheck } = await client.query<{ cnt: string }>(
+        'SELECT COUNT(DISTINCT reward_amount) AS cnt FROM merkle_snapshots WHERE epoch_id = $1',
+        [epochId],
+      );
+      if (distinctCheck[0] && Number(distinctCheck[0].cnt) === 1) {
+        logger.warn(
+          `[MerkleDrops] Epoch #${epoch.epoch_number}: all ${snapshots.length} holders have the same reward_amount. ` +
+          'Expected proportional distribution by MORBIUS balance. Check snapshot balances or recalculate.',
         );
       }
 

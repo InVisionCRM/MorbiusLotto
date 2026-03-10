@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Loader2, RefreshCw, Plus, ChevronDown, ChevronRight,
   CheckCircle2, Gift, TreePine, Globe, ShieldX, Trash2, XCircle,
-  Wallet, Coins, ArrowRight, ExternalLink, Info, Settings, Zap, Layers,
+  Wallet, Coins, ArrowRight, ExternalLink, Info, Settings, Zap, Layers, Users,
 } from 'lucide-react';
 import { merkleClaimMorbiusAbi } from '@/abi/merkle-claim-morbius';
 import { ERC20_ABI } from '@/abi/erc20';
@@ -58,6 +58,13 @@ interface BlocklistEntry {
   address: string;
   reason: string;
   added_at: string;
+}
+
+interface SnapshotRow {
+  wallet_address: string;
+  morbius_balance: string;
+  reward_amount: string;
+  merkle_proof: string[] | null;
 }
 
 interface MerkleSettings {
@@ -172,6 +179,16 @@ function OnchainActions({
   });
   const currentAllowance = (allowance as bigint | undefined) ?? 0n;
 
+  // Contract balance: if already >= totalWei, deposit is done (e.g. after refresh or RPC timeout)
+  const { data: contractBalance } = useReadContract({
+    address: TOKEN_ADDR,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [MERKLE_ADDR],
+    query: { enabled: Boolean(MERKLE_ADDR) && totalWei > 0n },
+  });
+  const contractMorbiusBalance = (contractBalance as bigint | undefined) ?? 0n;
+
   const [step, setStep] = useState<OnchainStep>(
     depositWei === 0n ? 'setroot' :        // no new deposit needed
     currentAllowance >= depositWei ? 'deposit' : 'approve',
@@ -180,23 +197,27 @@ function OnchainActions({
   const [txHash, setTxHash] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
-  // Keep step in sync with allowance (e.g. already approved in a previous session)
+  // Keep step in sync with allowance and contract balance (e.g. already deposited, or after refresh)
   useEffect(() => {
     if (depositWei === 0n && step === 'approve') {
       setStep('setroot');
+    } else if (contractMorbiusBalance >= totalWei && totalWei > 0n && (step === 'approve' || step === 'deposit')) {
+      setStep('setroot'); // contract already has enough — e.g. deposit succeeded, user refreshed or RPC timed out
     } else if (currentAllowance >= depositWei && depositWei > 0n && step === 'approve') {
       setStep('deposit');
     }
-  }, [currentAllowance, depositWei, step]);
+  }, [currentAllowance, contractMorbiusBalance, depositWei, totalWei, step]);
 
   const waitForTx = async (hash: `0x${string}`, then: () => void) => {
     setTxHash(hash);
     setWaiting(true);
+    const RECEIPT_TIMEOUT_MS = 90_000; // 90s — avoid stuck loading if RPC hangs
     try {
-      await publicClient!.waitForTransactionReceipt({ hash });
+      await publicClient!.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
       then();
     } catch {
-      setMsg('Tx failed or timed out — check PulseScan');
+      setMsg('Confirmation timed out. If the tx succeeded on PulseScan, proceed to Set Root.');
+      then(); // advance step so user can continue without getting stuck
     } finally {
       setWaiting(false);
       setTxHash(null);
@@ -449,10 +470,36 @@ export default function AdminMerkleDropsTab() {
   const [currentOperators, setCurrentOperators] = useState<string[]>([]);
   const [operatorsLoading, setOperatorsLoading] = useState(false);
 
+  // ── Snapshot holder viewer (per-epoch, from DB) ─────────────────────────────
+  const [snapshotData, setSnapshotData] = useState<Record<number, { rows: SnapshotRow[]; total: number; page: number; loading: boolean }>>({});
+
   const adminHeaders = useCallback(
     () => address ? { 'x-admin-wallet': address, 'Content-Type': 'application/json' } : {},
     [address],
   );
+
+  const fetchSnapshotPage = useCallback(async (epochId: number, page = 1) => {
+    setSnapshotData((prev) => ({
+      ...prev,
+      [epochId]: { rows: prev[epochId]?.rows ?? [], total: prev[epochId]?.total ?? 0, page, loading: true },
+    }));
+    try {
+      const res = await fetch(`/api/admin/merkle/epoch/${epochId}/snapshot?page=${page}&pageSize=50`, {
+        headers: adminHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load snapshot');
+      setSnapshotData((prev) => ({
+        ...prev,
+        [epochId]: { rows: data.rows ?? [], total: data.total ?? 0, page, loading: false },
+      }));
+    } catch {
+      setSnapshotData((prev) => ({
+        ...prev,
+        [epochId]: { ...prev[epochId], loading: false },
+      }));
+    }
+  }, [adminHeaders]);
 
   // ── Fetch epochs ─────────────────────────────────────────────────────────
 
@@ -1367,6 +1414,123 @@ export default function AdminMerkleDropsTab() {
                             </Button>
                           )}
                         </div>
+
+                        {/* ── Snapshot Holder Viewer (from DB: holdings + claimable) ── */}
+                        {epoch.status !== 'pending' && (
+                          <div className="rounded-lg border border-slate-700/40 bg-slate-800/20 overflow-hidden">
+                            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700/30">
+                              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
+                                <Users className="w-3.5 h-3.5 text-slate-500" />
+                                Eligible Holders ({epoch.total_holders})
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (snapshotData[epoch.id]?.rows?.length && !snapshotData[epoch.id]?.loading) {
+                                    setSnapshotData((prev) => {
+                                      const next = { ...prev };
+                                      delete next[epoch.id];
+                                      return next;
+                                    });
+                                  } else {
+                                    fetchSnapshotPage(epoch.id, 1);
+                                  }
+                                }}
+                                disabled={snapshotData[epoch.id]?.loading}
+                                className="h-6 px-2 text-[10px] text-slate-400 hover:text-white"
+                              >
+                                {snapshotData[epoch.id]?.loading
+                                  ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                  : snapshotData[epoch.id]?.rows?.length
+                                    ? <XCircle className="w-3 h-3 mr-1" />
+                                    : <Users className="w-3 h-3 mr-1" />
+                                }
+                                {snapshotData[epoch.id]?.rows?.length ? 'Hide' : 'View Holders'}
+                              </Button>
+                            </div>
+
+                            {snapshotData[epoch.id]?.rows?.length > 0 && (
+                              <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                                <table className="w-full text-[11px]">
+                                  <thead className="sticky top-0 bg-slate-800">
+                                    <tr className="border-b border-slate-700/50">
+                                      <th className="text-left text-slate-500 font-medium py-1.5 px-3">#</th>
+                                      <th className="text-left text-slate-500 font-medium py-1.5 px-3">Wallet</th>
+                                      <th className="text-right text-slate-500 font-medium py-1.5 px-3">MORBIUS Held</th>
+                                      <th className="text-right text-slate-500 font-medium py-1.5 px-3">Claimable</th>
+                                      <th className="text-center text-slate-500 font-medium py-1.5 px-3">Proof</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {snapshotData[epoch.id].rows.map((row, idx) => {
+                                      const pageOffset = (snapshotData[epoch.id].page - 1) * 50;
+                                      const balance = Number(row.morbius_balance) / 1e18;
+                                      const reward = Number(row.reward_amount) / 1e18;
+                                      const isBurnish = row.wallet_address.startsWith('0x000000000000000000000000000000000000');
+                                      return (
+                                        <tr key={row.wallet_address} className={`border-b border-slate-800/50 hover:bg-slate-700/20 ${isBurnish ? 'bg-red-950/10' : ''}`}>
+                                          <td className="py-1.5 px-3 text-slate-600 font-mono">{pageOffset + idx + 1}</td>
+                                          <td className="py-1.5 px-3">
+                                            <a
+                                              href={`https://scan.pulsechain.com/address/${row.wallet_address}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className={`font-mono hover:text-white transition-colors ${isBurnish ? 'text-red-400' : 'text-slate-300'}`}
+                                            >
+                                              {row.wallet_address}
+                                            </a>
+                                            {isBurnish && <span className="text-[9px] text-red-400 ml-1.5 border border-red-500/30 rounded px-1 py-0.5">burn/system</span>}
+                                          </td>
+                                          <td className="py-1.5 px-3 text-right font-mono text-slate-400">
+                                            {balance >= 1000 ? `${(balance / 1000).toFixed(2)}K` : balance.toFixed(2)}
+                                          </td>
+                                          <td className="py-1.5 px-3 text-right font-mono text-emerald-400">
+                                            {reward > 0 ? (reward >= 1000 ? `${(reward / 1000).toFixed(2)}K` : reward.toFixed(4)) : '—'}
+                                          </td>
+                                          <td className="py-1.5 px-3 text-center">
+                                            {row.merkle_proof
+                                              ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mx-auto" />
+                                              : <span className="text-slate-600">—</span>
+                                            }
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+
+                                {snapshotData[epoch.id].total > 50 && (
+                                  <div className="flex items-center justify-between px-3 py-2 border-t border-slate-700/30 bg-slate-800/40">
+                                    <span className="text-[10px] text-slate-500">
+                                      Showing {((snapshotData[epoch.id].page - 1) * 50) + 1}–{Math.min(snapshotData[epoch.id].page * 50, snapshotData[epoch.id].total)} of {snapshotData[epoch.id].total}
+                                    </span>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={snapshotData[epoch.id].page <= 1 || snapshotData[epoch.id].loading}
+                                        onClick={() => fetchSnapshotPage(epoch.id, snapshotData[epoch.id].page - 1)}
+                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white"
+                                      >
+                                        Prev
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={snapshotData[epoch.id].page * 50 >= snapshotData[epoch.id].total || snapshotData[epoch.id].loading}
+                                        onClick={() => fetchSnapshotPage(epoch.id, snapshotData[epoch.id].page + 1)}
+                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white"
+                                      >
+                                        Next
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* ── On-chain steps (finalized only) ── */}
                         {epoch.status === 'finalized' && address && (
