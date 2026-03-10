@@ -269,7 +269,7 @@ export function ChatPanel({
   const messageListMaxHeight = fillHeight ? 'flex-1' : collapsible ? 'max-h-[150px]' : 'max-h-[28rem]';
   const panelContent = (
     <>
-      <div className={`relative flex-1 min-h-[120px] flex flex-col ${messageListMaxHeight}`}>
+      <div className={`relative flex-1 flex flex-col ${fillHeight ? 'min-h-0' : 'min-h-[120px]'} ${messageListMaxHeight}`}>
         <div
           ref={listRef}
           onScroll={handleListScroll}
@@ -441,7 +441,7 @@ export function ChatPanel({
 
   const shell = (
     <div
-      className={`font-poppins flex flex-col rounded-2xl overflow-hidden border-2 border-gray-200 shadow-xl h-full min-h-[320px] ${className}`}
+      className={`font-poppins flex flex-col rounded-2xl overflow-hidden border-2 border-gray-200 shadow-xl h-full min-h-[320px] ${fillHeight ? 'min-h-0' : ''} ${className}`}
       style={LIGHT_SHELL_STYLE}
     >
       <div className={`flex flex-col gap-1 px-3 py-2 border-b border-gray-200 ${lm.bodyText}`}>

@@ -155,17 +155,19 @@ export function ChatSidebar() {
                 </button>
               </div>
             )}
-            <ChatPanel
-              key={roomId}
-              roomId={roomId}
-              title={title}
-              collapsible={false}
-              fillHeight
-              className="h-full rounded-none border-0"
-              sheetOpen={open}
-              onUnreadChange={setHasUnread}
-              headerActions={closeButton}
-            />
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <ChatPanel
+                key={roomId}
+                roomId={roomId}
+                title={title}
+                collapsible={false}
+                fillHeight
+                className="flex-1 min-h-0 rounded-none border-0"
+                sheetOpen={open}
+                onUnreadChange={setHasUnread}
+                headerActions={closeButton}
+              />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -211,17 +213,19 @@ export function ChatSidebar() {
                 </button>
               </div>
             )}
-            <ChatPanel
-              key={roomId}
-              roomId={roomId}
-              title={title}
-              collapsible={false}
-              fillHeight
-              className="flex-1 min-h-0 rounded-none border-0"
-              sheetOpen={open}
-              onUnreadChange={setHasUnread}
-              headerActions={closeButton}
-            />
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <ChatPanel
+                key={roomId}
+                roomId={roomId}
+                title={title}
+                collapsible={false}
+                fillHeight
+                className="flex-1 min-h-0 rounded-none border-0"
+                sheetOpen={open}
+                onUnreadChange={setHasUnread}
+                headerActions={closeButton}
+              />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
