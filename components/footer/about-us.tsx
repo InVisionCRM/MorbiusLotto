@@ -22,36 +22,36 @@ export function AboutUsModal({ open, onOpenChange }: AboutUsModalProps) {
 
         <div className="space-y-4 text-sm leading-relaxed">
           <p>
-            Welcome to Morbius.io - the premier blockchain gaming platform on PulseChain.
+            Welcome to Morbius.io — a community-driven gaming platform on PulseChain built for fun and connection.
           </p>
 
           <h3 className="text-lg font-semibold mt-6 mb-2">Our Mission</h3>
           <p>
-            To provide fair, transparent, and entertaining blockchain-based gaming experiences that leverage the power of decentralized technology while maintaining the highest standards of security and user experience.
+            To create a welcoming space for entertainment and community. We focus on fair, transparent gameplay and a great experience so players can relax, have fun, and connect with others.
           </p>
 
           <h3 className="text-lg font-semibold mt-6 mb-2">What We Offer</h3>
           <ul className="space-y-1 ml-4">
-            <li>• Mega Morbius Lotto - 6/55 number lottery with massive prize pools</li>
-            <li>• Crypto Keno - Fast-paced number matching games</li>
-            <li>• Plinko - Physics-based ball dropping entertainment</li>
+            <li>• Mega Morbius Lotto — 6/55 number draw for classic lottery-style fun</li>
+            <li>• Crypto Keno — fast-paced number matching</li>
+            <li>• Plinko — physics-based ball dropping</li>
             <li>• Secure wallet integration with PulseChain</li>
-            <li>• Transparent prize distribution via smart contracts</li>
+            <li>• A variety of games designed for entertainment and social play</li>
           </ul>
 
           <h3 className="text-lg font-semibold mt-6 mb-2">Our Technology</h3>
           <p>
-            Built on PulseChain, our platform utilizes cutting-edge smart contract technology to ensure fair gameplay, transparent prize distribution, and complete decentralization. All games are provably fair with results determined by blockchain oracles and cryptographic functions.
+            Built on PulseChain, our platform uses smart contracts to deliver fair, consistent gameplay and a secure experience. Results are verifiable so everyone can play with confidence.
           </p>
 
           <h3 className="text-lg font-semibold mt-6 mb-2">Community First</h3>
           <p>
-            We believe in building a strong gaming community where players can enjoy entertainment while participating in the decentralized future. Join thousands of players who trust Morbius.io for their blockchain gaming needs.
+            We’re here to build a strong, friendly community around shared entertainment. Whether you’re here to unwind or to connect with other players, you’re welcome. Join the growing community that makes Morbius.io a place to play and belong.
           </p>
 
           <h3 className="text-lg font-semibold mt-6 mb-2">Contact Us</h3>
           <p>
-            Have questions or feedback? Reach out through our official channels or interact with our smart contracts directly on PulseChain.
+            Have questions or feedback? Reach out through our official channels — we’d love to hear from you.
           </p>
         </div>
       </DialogContent>

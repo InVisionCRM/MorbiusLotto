@@ -67,6 +67,8 @@ export interface AdminHealthData {
   /** Blackjack all-time deposits and withdrawals (from chain scan) */
   blackjackDeposited?: string;
   blackjackWithdrawn?: string;
+  /** Time-bucketed: allTime, 1h, 24h, 7d */
+  blackjackTimeframes?: Record<string, { deposited: string; withdrawn: string }>;
 }
 
 function formatMorbius(wei: string): string {
@@ -157,6 +159,76 @@ interface ContractSnapshot {
   total_wagered: string;
   total_payouts: string;
   contract_reserve: string;
+}
+
+interface ContractSnapshotHourly {
+  snapshot_hour: string;
+  game: string;
+  total_wagered: string;
+  total_payouts: string;
+  contract_reserve: string;
+}
+
+/** Last 24 hours (hour buckets), label e.g. "0h" … "23h" or "14:00". */
+function getLast24Hours(): { date: string; label: string }[] {
+  const out: { date: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 23; i >= 0; i--) {
+    const d = new Date(now);
+    d.setHours(d.getHours() - i, 0, 0, 0);
+    const hourKey = d.toISOString().slice(0, 13) + ':00:00.000Z';
+    const label = `${d.getHours()}h`;
+    out.push({ date: hourKey, label });
+  }
+  return out;
+}
+
+function normalizeHourKey(isoOrPg: string): string {
+  const d = new Date(isoOrPg);
+  return d.toISOString().slice(0, 13) + ':00:00.000Z';
+}
+
+/** Build per-game hourly chart data from hourly snapshots. Reserve = point-in-time; single/dual = deltas. */
+function buildGameChartDataHourly(
+  hours: { date: string; label: string }[],
+  snapshots: ContractSnapshotHourly[],
+  game: string,
+): {
+  single:  { date: string; label: string; value: number }[];
+  dual:    { date: string; label: string; wagers: number; payouts: number }[];
+  reserve: { date: string; label: string; value: number }[];
+} {
+  const byHour = new Map<string, ContractSnapshotHourly>();
+  for (const s of snapshots) {
+    if (s.game === game) byHour.set(normalizeHourKey(s.snapshot_hour), s);
+  }
+
+  let prevWagered = 0n;
+  let prevPayouts = 0n;
+
+  const single:  { date: string; label: string; value: number }[] = [];
+  const dual:   { date: string; label: string; wagers: number; payouts: number }[] = [];
+  const reserve: { date: string; label: string; value: number }[] = [];
+
+  for (const hour of hours) {
+    const snap = byHour.get(hour.date);
+    const curWagered = snap ? BigInt(snap.total_wagered) : prevWagered;
+    const curPayouts = snap ? BigInt(snap.total_payouts) : prevPayouts;
+    const curReserve = snap ? BigInt(snap.contract_reserve) : 0n;
+
+    const deltaWagered = curWagered > prevWagered ? curWagered - prevWagered : 0n;
+    const deltaPayouts = curPayouts > prevPayouts ? curPayouts - prevPayouts : 0n;
+    const deltaRevenue = deltaWagered > deltaPayouts ? deltaWagered - deltaPayouts : 0n;
+
+    single.push({ ...hour, value: Number(formatEther(deltaRevenue)) });
+    dual.push({ ...hour, wagers: Number(formatEther(deltaWagered)), payouts: Number(formatEther(deltaPayouts)) });
+    reserve.push({ ...hour, value: Number(formatEther(curReserve)) });
+
+    prevWagered = curWagered;
+    prevPayouts = curPayouts;
+  }
+
+  return { single, dual, reserve };
 }
 
 /** Build per-game daily chart data from DB snapshots.
@@ -338,55 +410,209 @@ function DailyDualChart({
   );
 }
 
-function BjContractCard({ contract }: { contract: BlackjackContractReserves }) {
-  const [expanded, setExpanded] = useState(false);
+const HEALTH_CARD_CLASS = 'rounded-xl border border-slate-700/60 bg-slate-900/70 p-4 flex flex-col gap-3';
+
+/** Single wallet row (hot or treasury) as a small card. */
+function WalletCard({ label, address, morbiusWei, lowWarning }: { label: string; address: string; morbiusWei: string; lowWarning?: boolean }) {
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-4 flex flex-col gap-3">
+    <div className={HEALTH_CARD_CLASS}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">{contract.label}</span>
+        <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">{label}</span>
         <button
           type="button"
-          onClick={() => copyToClipboard(contract.contractAddress)}
+          onClick={() => copyToClipboard(address)}
           className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1 shrink-0"
           title="Copy address"
         >
           <Copy className="w-3 h-3" />
-          {truncateAddress(contract.contractAddress, 5, 4)}
+          {truncateAddress(address, 5, 4)}
         </button>
       </div>
       <div>
-        <p className="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wide">Total reserves</p>
-        <p className="text-2xl font-bold text-white tabular-nums leading-none">
-          {formatMorbius(contract.totalMorbiusInContract)}
-        </p>
-        <p className="text-[10px] text-slate-500 mt-0.5">MORBIUS</p>
+        <p className="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wide">MORBIUS</p>
+        <p className="text-xl font-bold text-white tabular-nums leading-none">{formatMorbius(morbiusWei)}</p>
+        {lowWarning && <span className="text-amber-400 text-[10px]">Low balance</span>}
       </div>
-      {contract.addressesWithReserve.length > 0 && (
+    </div>
+  );
+}
+
+/** One fundable game (Plinko, Keno, etc.) as a card: reserve, fund input, Approve/Fund, Pause/Withdraw. */
+function FundableGameCard({
+  game,
+  reserve,
+  fundAmount,
+  onFundAmountChange,
+  onApprove,
+  onFund,
+  onPause,
+  onUnpause,
+  onWithdraw,
+  isFunding,
+  isActioning,
+  actionType,
+  paused,
+  showPauseWithdraw,
+}: {
+  game: (typeof FUNDABLE_GAMES)[number];
+  reserve: string;
+  fundAmount: string;
+  onFundAmountChange: (v: string) => void;
+  onApprove: () => void;
+  onFund: () => void;
+  onPause: () => void;
+  onUnpause: () => void;
+  onWithdraw: () => void;
+  isFunding: boolean;
+  isActioning: boolean;
+  actionType: 'pause' | 'unpause' | 'withdraw' | null;
+  paused: boolean;
+  showPauseWithdraw: boolean;
+}) {
+  return (
+    <div className={HEALTH_CARD_CLASS}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">{game.label}</span>
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="text-[10px] text-slate-500 hover:text-cyan-300 text-left"
+          onClick={() => copyToClipboard(game.address)}
+          className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1 shrink-0"
+          title="Copy address"
         >
-          {contract.addressesWithReserve.length} player{contract.addressesWithReserve.length !== 1 ? 's' : ''} with reserve {expanded ? '▲' : '▼'}
+          <Copy className="w-3 h-3" />
+          {truncateAddress(game.address, 5, 4)}
         </button>
-      )}
-      {expanded && (
-        <ul className="space-y-1 text-[10px] font-mono text-slate-400 max-h-36 overflow-y-auto border-t border-slate-700/50 pt-2">
-          {contract.addressesWithReserve.map(({ address: addr, reserve }) => (
-            <li key={`${contract.contractAddress}-${addr}`} className="flex justify-between gap-2">
-              <button
+      </div>
+      <div>
+        <p className="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wide">In contract</p>
+        <p className="text-2xl font-bold text-white tabular-nums leading-none">{formatMorbius(reserve)}</p>
+        <p className="text-[10px] text-slate-500 mt-0.5">MORBIUS</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="text"
+          placeholder="Amount"
+          value={fundAmount}
+          onChange={(e) => onFundAmountChange(e.target.value)}
+          className="h-8 w-24 text-[11px] font-mono bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 text-[10px] border-slate-600 text-slate-300 hover:bg-slate-700"
+          onClick={onApprove}
+          disabled={isFunding}
+        >
+          {isFunding ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Approve'}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="h-8 text-[10px] bg-cyan-600 hover:bg-cyan-500 text-white"
+          onClick={onFund}
+          disabled={isFunding}
+        >
+          {isFunding ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Fund'}
+        </Button>
+        {showPauseWithdraw && (
+          <>
+            {paused ? (
+              <Button
                 type="button"
-                onClick={() => copyToClipboard(addr)}
-                className="hover:text-cyan-300 flex items-center gap-1"
+                size="sm"
+                variant="outline"
+                className="h-8 text-[10px] border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                onClick={onUnpause}
+                disabled={isActioning}
               >
-                <Copy className="w-2.5 h-2.5 shrink-0" />
-                {addr.slice(0, 8)}…{addr.slice(-6)}
-              </button>
-              <span className="text-slate-300 tabular-nums shrink-0">{formatMorbius(reserve)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+                {isActioning && actionType === 'unpause' ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Unpause'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-[10px] border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                onClick={onPause}
+                disabled={isActioning}
+              >
+                {isActioning && actionType === 'pause' ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Pause'}
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-[10px] border-red-500/50 text-red-400 hover:bg-red-500/20"
+              onClick={onWithdraw}
+              disabled={isActioning || !fundAmount.trim()}
+            >
+              {isActioning && actionType === 'withdraw' ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Withdraw'}
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Merged card: all Blackjack contracts (current + legacy) in one card with expandable sections. */
+function BlackjackContractsMergedCard({ contracts }: { contracts: BlackjackContractReserves[] }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  if (contracts.length === 0) return null;
+  return (
+    <div className={HEALTH_CARD_CLASS}>
+      <p className="text-xs font-semibold text-cyan-400 uppercase tracking-wider mb-2">Blackjack contracts</p>
+      <div className="space-y-3">
+        {contracts.map((contract) => {
+          const isExpanded = expandedKey === contract.contractAddress;
+          return (
+            <div key={contract.contractAddress} className="border-b border-slate-700/50 pb-3 last:border-0 last:pb-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-medium text-slate-300 uppercase tracking-wide">{contract.label}</span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(contract.contractAddress)}
+                  className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1"
+                  title="Copy address"
+                >
+                  <Copy className="w-3 h-3" />
+                  {truncateAddress(contract.contractAddress, 5, 4)}
+                </button>
+              </div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-[10px] text-slate-500">Reserves</span>
+                <span className="text-lg font-bold text-white tabular-nums">{formatMorbius(contract.totalMorbiusInContract)} MORBIUS</span>
+              </div>
+              {contract.addressesWithReserve.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedKey(isExpanded ? null : contract.contractAddress)}
+                    className="text-[10px] text-slate-500 hover:text-cyan-300 text-left mt-1"
+                  >
+                    {contract.addressesWithReserve.length} player{contract.addressesWithReserve.length !== 1 ? 's' : ''} with reserve {isExpanded ? '▲' : '▼'}
+                  </button>
+                  {isExpanded && (
+                    <ul className="space-y-1 text-[10px] font-mono text-slate-400 max-h-28 overflow-y-auto mt-2 pl-1 border-l border-slate-700/50">
+                      {contract.addressesWithReserve.map(({ address: addr, reserve }) => (
+                        <li key={addr} className="flex justify-between gap-2">
+                          <button type="button" onClick={() => copyToClipboard(addr)} className="hover:text-cyan-300 flex items-center gap-1">
+                            <Copy className="w-2.5 h-2.5 shrink-0" />
+                            {addr.slice(0, 8)}…{addr.slice(-6)}
+                          </button>
+                          <span className="text-slate-300 tabular-nums shrink-0">{formatMorbius(reserve)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -401,6 +627,9 @@ export default function AdminHealthTab() {
   const [actionGame, setActionGame] = useState<FundableGameKey | null>(null);
   const [actionType, setActionType] = useState<'pause' | 'unpause' | 'withdraw' | null>(null);
   const [snapshots, setSnapshots] = useState<ContractSnapshot[]>([]);
+  const [hourlySnapshots, setHourlySnapshots] = useState<ContractSnapshotHourly[]>([]);
+  const [chartGranularity, setChartGranularity] = useState<'daily' | 'hourly'>('daily');
+  const [bjTimeframe, setBjTimeframe] = useState<'allTime' | '1h' | '24h' | '7d'>('allTime');
   const [rewardsClaimsOpen, setRewardsClaimsOpen] = useState(false);
   const [rewardsClaimsLoading, setRewardsClaimsLoading] = useState(false);
   const [rewardsClaimsData, setRewardsClaimsData] = useState<{
@@ -601,17 +830,23 @@ export default function AdminHealthTab() {
     return games;
   }, [plinkoData, kenoData, lotteryData, bjTotalPayouts, bjBurnFees, bjDistFees, bjLpFees, bjPlatformFees]);
 
-  // Daily chart data — built from DB snapshots (real deltas), not flat repeated totals
+  const CHART_GAMES = useMemo(() => [
+    { key: 'plinko', label: 'Plinko' },
+    { key: 'keno', label: 'Keno' },
+    { key: 'lottery', label: 'Lottery' },
+    { key: 'blackjack', label: 'Blackjack' },
+    { key: 'bigwheel', label: 'Big Wheel' },
+  ], []);
+
+  // Chart data — daily (7 days) or hourly (24h) from DB snapshots
   const chartData = useMemo(() => {
+    if (chartGranularity === 'hourly') {
+      const hours = getLast24Hours();
+      return { games: CHART_GAMES.map((g) => ({ ...g, ...buildGameChartDataHourly(hours, hourlySnapshots, g.key) })) };
+    }
     const days = getLast7Days();
-    const CHART_GAMES = [
-      { key: 'plinko', label: 'Plinko' },
-      { key: 'keno', label: 'Keno' },
-      { key: 'lottery', label: 'Lottery' },
-      { key: 'blackjack', label: 'Blackjack' },
-    ];
-    return { days, games: CHART_GAMES.map((g) => ({ ...g, ...buildGameChartData(days, snapshots, g.key) })) };
-  }, [snapshots]);
+    return { games: CHART_GAMES.map((g) => ({ ...g, ...buildGameChartData(days, snapshots, g.key) })) };
+  }, [chartGranularity, snapshots, hourlySnapshots, CHART_GAMES]);
 
   const fetchHealth = useCallback(async () => {
     if (!address) return;
@@ -640,6 +875,25 @@ export default function AdminHealthTab() {
   useEffect(() => {
     fetchHealth();
   }, [fetchHealth]);
+
+  // Fetch hourly snapshots when viewing hourly charts
+  useEffect(() => {
+    if (chartGranularity !== 'hourly' || !address) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/analytics/contract-snapshots?granularity=hour&hours=24', {
+          headers: { 'x-admin-wallet': address },
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (!cancelled) setHourlySnapshots(json.snapshots ?? []);
+      } catch {
+        if (!cancelled) setHourlySnapshots([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [chartGranularity, address]);
 
   const fetchRewardsClaims = useCallback(async () => {
     if (!address) return;
@@ -1015,41 +1269,23 @@ export default function AdminHealthTab() {
               </div>
             </div>
             <div>
-              <p className="text-slate-500 mb-1">MORBIUS in contract — fund with MORBIUS</p>
-              <div className="space-y-2">
-                {(hotWalletDisplay != null || treasuryWalletsDisplay.length > 0) && (
-                  <p className="text-slate-500 text-[10px] mb-0.5">Wallets (hot wallet, treasury, fee, distribution)</p>
-                )}
+              <p className="text-slate-500 mb-2">MORBIUS in contract — fund with MORBIUS</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {hotWalletDisplay != null && (
-                  <div className="flex flex-wrap items-center gap-2 py-1.5 border-b border-slate-700/50">
-                    <span className="capitalize text-slate-300 w-24 shrink-0">Hot wallet</span>
-                    <span className="font-mono text-cyan-300/90 text-[11px] w-20 shrink-0">{formatMorbius(hotWalletDisplay.morbiusWei)} MORBIUS</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(hotWalletDisplay.address)}
-                      className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1"
-                      title="Copy hot wallet address"
-                    >
-                      <Copy className="w-3 h-3" />
-                      {hotWalletDisplay.address.slice(0, 10)}…{hotWalletDisplay.address.slice(-8)}
-                    </button>
-                    {hotWalletDisplay.lowWarning && <span className="text-amber-400 text-[10px]">Low balance</span>}
-                  </div>
+                  <WalletCard
+                    label="Hot wallet"
+                    address={hotWalletDisplay.address}
+                    morbiusWei={hotWalletDisplay.morbiusWei}
+                    lowWarning={hotWalletDisplay.lowWarning}
+                  />
                 )}
                 {treasuryWalletsDisplay.map((w) => (
-                  <div key={w.address + w.label} className="flex flex-wrap items-center gap-2 py-1.5 border-b border-slate-700/50">
-                    <span className="text-slate-300 w-40 shrink-0">{w.label}</span>
-                    <span className="font-mono text-cyan-300/90 text-[11px] w-20 shrink-0">{formatMorbius(w.morbiusWei)} MORBIUS</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(w.address)}
-                      className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1"
-                      title="Copy address"
-                    >
-                      <Copy className="w-3 h-3" />
-                      {w.address.slice(0, 10)}…{w.address.slice(-8)}
-                    </button>
-                  </div>
+                  <WalletCard
+                    key={w.address + w.label}
+                    label={w.label}
+                    address={w.address}
+                    morbiusWei={w.morbiusWei}
+                  />
                 ))}
                 {FUNDABLE_GAMES.map((game) => {
                   const reserve =
@@ -1058,78 +1294,24 @@ export default function AdminHealthTab() {
                       : game.key === 'keno' && kenoReserve != null
                         ? String(kenoReserve)
                         : data.morbius[game.key] ?? data.morbius[game.key === 'lottery' ? 'lottery' : game.key === 'blackjack' ? 'blackjack' : game.key] ?? '0';
-                  const isFunding = fundingGame === game.key;
-                  const isActioning = actionGame === game.key;
-                  const paused = isPaused(game.key);
-                  const showPauseWithdraw = hasPauseUnpauseWithdraw(game.key);
                   return (
-                    <div key={game.key} className="flex flex-wrap items-center gap-2 py-1.5 border-b border-slate-700/50 last:border-0">
-                      <span className="capitalize text-slate-300 w-24 shrink-0">{game.label}</span>
-                      <span className="font-mono text-cyan-300/90 text-[11px] w-20 shrink-0">{formatMorbius(reserve)} MORBIUS</span>
-                      <Input
-                        type="text"
-                        placeholder="Amount"
-                        value={fundAmounts[game.key]}
-                        onChange={(e) => setFundAmounts((prev) => ({ ...prev, [game.key]: e.target.value }))}
-                        className="h-8 w-24 text-[11px] font-mono bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-[10px] border-slate-600 text-slate-300 hover:bg-slate-700"
-                        onClick={() => handleApprove(game.key)}
-                        disabled={isFunding}
-                      >
-                        {isFunding ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Approve'}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 text-[10px] bg-cyan-600 hover:bg-cyan-500 text-white"
-                        onClick={() => handleFund(game.key)}
-                        disabled={isFunding}
-                      >
-                        {isFunding ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Fund'}
-                      </Button>
-                      {showPauseWithdraw && (
-                        <>
-                          {paused ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-[10px] border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
-                              onClick={() => handleUnpause(game.key)}
-                              disabled={isActioning}
-                            >
-                              {actionGame === game.key && actionType === 'unpause' ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Unpause'}
-                            </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-[10px] border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
-                              onClick={() => handlePause(game.key)}
-                              disabled={isActioning}
-                            >
-                              {actionGame === game.key && actionType === 'pause' ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Pause'}
-                            </Button>
-                          )}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-[10px] border-red-500/50 text-red-400 hover:bg-red-500/20"
-                            onClick={() => handleWithdraw(game.key)}
-                            disabled={isActioning || !fundAmounts[game.key]?.trim()}
-                          >
-                            {actionGame === game.key && actionType === 'withdraw' ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Withdraw'}
-                          </Button>
-                        </>
-                      )}
-                    </div>
+                    <FundableGameCard
+                      key={game.key}
+                      game={game}
+                      reserve={reserve}
+                      fundAmount={fundAmounts[game.key] ?? ''}
+                      onFundAmountChange={(v) => setFundAmounts((prev) => ({ ...prev, [game.key]: v }))}
+                      onApprove={() => handleApprove(game.key)}
+                      onFund={() => handleFund(game.key)}
+                      onPause={() => handlePause(game.key)}
+                      onUnpause={() => handleUnpause(game.key)}
+                      onWithdraw={() => handleWithdraw(game.key)}
+                      isFunding={fundingGame === game.key}
+                      isActioning={actionGame === game.key}
+                      actionType={actionType}
+                      paused={isPaused(game.key)}
+                      showPauseWithdraw={hasPauseUnpauseWithdraw(game.key)}
+                    />
                   );
                 })}
               </div>
@@ -1166,8 +1348,8 @@ export default function AdminHealthTab() {
                   </div>
                 ))}
               </div>
-              {/* Blackjack deposits vs withdrawals */}
-              {(data.blackjackDeposited != null || data.blackjackWithdrawn != null) && (
+              {/* Blackjack deposits vs withdrawals — timeframes: All-time, Hourly, Daily, 7d */}
+              {(data.blackjackDeposited != null || data.blackjackWithdrawn != null || data.blackjackTimeframes != null) && (
                 <div
                   className="rounded-lg border border-cyan-500/20 p-2.5 mt-2"
                   style={{
@@ -1175,37 +1357,88 @@ export default function AdminHealthTab() {
                     boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
                   }}
                 >
-                  <p className="text-cyan-400 text-[10px] font-semibold uppercase tracking-wider mb-2">Blackjack — deposits vs withdrawals (all-time)</p>
-                  <div className="flex flex-wrap gap-6 text-[11px]">
-                    <div className="flex justify-between gap-2">
-                      <span className="text-slate-500">Deposited</span>
-                      <span className="font-mono text-slate-200 tabular-nums">{formatMorbius(data.blackjackDeposited ?? '0')} MORBIUS</span>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <p className="text-cyan-400 text-[10px] font-semibold uppercase tracking-wider">Blackjack — deposits vs withdrawals</p>
+                    <div className="flex rounded border border-slate-600 overflow-hidden">
+                      {(['allTime', '1h', '24h', '7d'] as const).map((tf) => (
+                        <button
+                          key={tf}
+                          type="button"
+                          onClick={() => setBjTimeframe(tf)}
+                          className={`px-2 py-0.5 text-[10px] font-medium ${bjTimeframe === tf ? 'bg-cyan-600/80 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                        >
+                          {tf === 'allTime' ? 'All-time' : tf === '1h' ? 'Hourly' : tf === '24h' ? 'Daily' : '7d'}
+                        </button>
+                      ))}
                     </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="text-slate-500">Withdrawn</span>
-                      <span className="font-mono text-emerald-400/90 tabular-nums">{formatMorbius(data.blackjackWithdrawn ?? '0')} MORBIUS</span>
-                    </div>
-                    {data.blackjackDeposited != null && data.blackjackWithdrawn != null && (() => {
-                      const dep = BigInt(data.blackjackDeposited ?? '0');
-                      const wit = BigInt(data.blackjackWithdrawn ?? '0');
-                      const net = dep - wit;
-                      return (
+                  </div>
+                  {(() => {
+                    const tfData = data.blackjackTimeframes?.[bjTimeframe] ?? {
+                      deposited: data.blackjackDeposited ?? '0',
+                      withdrawn: data.blackjackWithdrawn ?? '0',
+                    };
+                    const dep = BigInt(tfData.deposited);
+                    const wit = BigInt(tfData.withdrawn);
+                    const net = dep - wit;
+                    return (
+                      <div className="flex flex-wrap gap-6 text-[11px]">
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-500">Deposited</span>
+                          <span className="font-mono text-slate-200 tabular-nums">{formatMorbius(tfData.deposited)} MORBIUS</span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-500">Withdrawn</span>
+                          <span className="font-mono text-emerald-400/90 tabular-nums">{formatMorbius(tfData.withdrawn)} MORBIUS</span>
+                        </div>
                         <div className="flex justify-between gap-2">
                           <span className="text-slate-500">Net retained</span>
                           <span className={`font-mono tabular-nums ${net >= 0n ? 'text-cyan-300/90' : 'text-red-400'}`}>{net >= 0n ? '' : '-'}{formatMorbius(net >= 0n ? String(net) : String(-net))} MORBIUS</span>
                         </div>
-                      );
-                    })()}
-                  </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
-            {/* MORBIUS contract flow: 3 columns (Revenue | Payouts vs Wagers | Reserve), daily deltas from DB snapshots */}
+            {/* MORBIUS contract flow: Reserves first, then Revenue, then Payouts vs Wagers. Toggle Daily / Hourly. */}
             <div>
-              <p className="text-slate-500 mb-2">MORBIUS contract flow — daily activity{snapshots.length === 0 ? ' (no snapshots yet — populates hourly)' : ''}</p>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <p className="text-slate-500">
+                  MORBIUS contract flow — {chartGranularity === 'hourly' ? 'last 24h' : 'daily activity'}
+                  {(chartGranularity === 'daily' ? snapshots.length : hourlySnapshots.length) === 0 ? ' (no snapshots yet — populates hourly)' : ''}
+                </p>
+                <div className="flex rounded border border-slate-600 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setChartGranularity('daily')}
+                    className={`px-2.5 py-1 text-[10px] font-medium ${chartGranularity === 'daily' ? 'bg-cyan-600/80 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                  >
+                    Daily
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartGranularity('hourly')}
+                    className={`px-2.5 py-1 text-[10px] font-medium ${chartGranularity === 'hourly' ? 'bg-cyan-600/80 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                  >
+                    Hourly
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Revenue (daily)</p>
+                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Reserve ({chartGranularity === 'hourly' ? 'per hour' : 'end-of-day'})</p>
+                  {chartData.games.map((game) => (
+                    <DailySingleChart
+                      key={game.key}
+                      title={game.label}
+                      data={game.reserve}
+                      gradientId={`health-${game.key}-reserve`}
+                      dataKey="value"
+                    />
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Revenue ({chartGranularity === 'hourly' ? 'per hour' : 'daily'})</p>
                   {chartData.games.map((game) => (
                     <DailySingleChart
                       key={game.key}
@@ -1217,7 +1450,7 @@ export default function AdminHealthTab() {
                   ))}
                 </div>
                 <div className="space-y-2">
-                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Payouts vs Wagers (daily)</p>
+                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Payouts vs Wagers ({chartGranularity === 'hourly' ? 'per hour' : 'daily'})</p>
                   {chartData.games.map((game) => (
                     <DailyDualChart
                       key={game.key}
@@ -1225,18 +1458,6 @@ export default function AdminHealthTab() {
                       data={game.dual}
                       gradientIdWagers={`health-${game.key}-wagers`}
                       gradientIdPayouts={`health-${game.key}-payouts`}
-                    />
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Reserve (end-of-day)</p>
-                  {chartData.games.map((game) => (
-                    <DailySingleChart
-                      key={game.key}
-                      title={game.label}
-                      data={game.reserve}
-                      gradientId={`health-${game.key}-reserve`}
-                      dataKey="value"
                     />
                   ))}
                 </div>
@@ -1322,15 +1543,10 @@ export default function AdminHealthTab() {
               </div>
             </div>
             <div>
-              <p className="text-slate-500 mb-2">Blackjack contracts</p>
               {blackjackContracts.length === 0 ? (
-                <p className="text-slate-500 text-xs">No contract data.</p>
+                <p className="text-slate-500 text-xs">No Blackjack contract data.</p>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {blackjackContracts.map((contract) => (
-                    <BjContractCard key={contract.contractAddress} contract={contract} />
-                  ))}
-                </div>
+                <BlackjackContractsMergedCard contracts={blackjackContracts} />
               )}
             </div>
           </div>

@@ -113,7 +113,7 @@ export function PokerActions({
 
   return (
     <div
-      className="w-full border-t backdrop-blur-md px-2 py-2 sm:px-4 sm:py-3 rounded-t-2xl sm:rounded-none"
+      className="w-full border-t backdrop-blur-md px-3 py-3 sm:px-4 sm:py-3 rounded-t-2xl sm:rounded-none"
       style={{
         borderColor: 'var(--poker-panel-border)',
         background: 'var(--poker-panel-bg)',
@@ -122,15 +122,15 @@ export function PokerActions({
       role="group"
       aria-label="Poker actions"
     >
-      {/* Quick-size presets — mobile: full row above buttons */}
-      <div className="sm:hidden mb-2 flex gap-1.5 justify-center">
+      {/* Quick-size presets — mobile: full row, 44px+ touch targets */}
+      <div className="sm:hidden mb-2 flex gap-2 justify-center">
         {quickSizes.map((q) => (
           <button
             key={q.label}
             type="button"
             onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
             disabled={!canAct || stackAmt === 0n}
-            className="flex-1 h-8 px-1 border rounded transition-all text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 active:brightness-90"
+            className="flex-1 min-h-[44px] px-2 border rounded-lg transition-all text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 active:brightness-90"
             style={{
               color: 'var(--poker-accent)',
               borderColor: 'var(--poker-accent-muted)',
@@ -148,7 +148,7 @@ export function PokerActions({
             type="button"
             onClick={onFold}
             disabled={!canAct}
-            className="h-11 sm:h-10 px-4 sm:px-4 rounded border transition-all text-sm font-semibold hover:opacity-80 active:scale-95 active:brightness-90 disabled:cursor-not-allowed"
+            className="min-h-[44px] h-11 sm:h-10 px-4 sm:px-4 rounded border transition-all text-sm font-semibold hover:opacity-80 active:scale-95 active:brightness-90 disabled:cursor-not-allowed"
             style={{
               color: 'var(--poker-danger)',
               borderColor: 'var(--poker-danger-muted)',
@@ -161,7 +161,7 @@ export function PokerActions({
             type="button"
             onClick={handleSecondary}
             disabled={!canAct}
-            className="h-11 sm:h-10 px-4 sm:px-4 rounded border transition-all text-sm font-semibold min-w-0 max-w-[130px] sm:max-w-none truncate hover:opacity-90 active:scale-95 active:brightness-90 disabled:cursor-not-allowed"
+            className="min-h-[44px] h-11 sm:h-10 px-4 sm:px-4 rounded border transition-all text-sm font-semibold min-w-0 max-w-[130px] sm:max-w-none truncate hover:opacity-90 active:scale-95 active:brightness-90 disabled:cursor-not-allowed"
             style={{
               color: 'var(--poker-text)',
               borderColor: 'var(--poker-panel-border)',
@@ -192,7 +192,8 @@ export function PokerActions({
           ))}
         </div>
 
-        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+        {/* Amount + primary action — on mobile: larger input (16px prevents iOS zoom), primary is prominent */}
+        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end sm:justify-end">
           <input
             inputMode="numeric"
             pattern="[0-9]*"
@@ -200,7 +201,7 @@ export function PokerActions({
             value={customAmount}
             onChange={(e) => setCustomAmount(e.target.value)}
             disabled={!canAct}
-            className="h-11 sm:h-10 w-24 sm:w-[110px] px-2 sm:px-3 text-sm outline-none focus:ring-2 transition shrink-0 rounded disabled:cursor-not-allowed"
+            className="min-h-[44px] h-11 sm:h-10 w-20 sm:w-[110px] min-w-0 flex-1 sm:flex-none max-w-[100px] sm:max-w-none px-3 sm:px-3 text-base sm:text-sm outline-none focus:ring-2 transition shrink-0 rounded disabled:cursor-not-allowed"
             style={{
               color: 'var(--poker-text)',
               background: 'var(--poker-bg-elevated)',
@@ -213,7 +214,7 @@ export function PokerActions({
             type="button"
             onClick={handlePrimary}
             disabled={!canAct || !hasValidAmount}
-            className="h-11 sm:h-10 px-5 sm:px-5 text-sm font-semibold rounded transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 active:brightness-90"
+            className="min-h-[48px] h-12 sm:h-10 flex-1 sm:flex-none min-w-[120px] sm:min-w-0 px-5 sm:px-5 text-base sm:text-sm font-semibold rounded-lg sm:rounded transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 active:brightness-90"
             style={{
               color: 'var(--poker-bg)',
               background: 'var(--poker-accent)',

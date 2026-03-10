@@ -67,7 +67,7 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
     onStartGame(currentBetAmountBigInt, '');
   };
 
-  const quickBetAmounts = [500, 1000, 2500, 10000, 100000];
+  const quickBetAmounts = [500, 5000, 25000, 50000];
 
   const isChipAffordable = (chipValue: number) => {
     const chipValueWei = parseEther(chipValue.toString());
@@ -76,23 +76,22 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
   const getChipImage = (value: number) => {
     switch (value) {
       case 500: return '/PokerChips/greenpokerchip005.png';
-      case 1000: return '/PokerChips/bluepokerchip010.png';
-      case 2500: return '/PokerChips/redpokerchip015.png';
-      case 10000: return '/PokerChips/blackpokerchip000.png';
-      case 100000: return '/PokerChips/cyanpokerchip020.png';
+      case 5000: return '/PokerChips/bluepokerchip010.png';
+      case 25000: return '/PokerChips/redpokerchip015.png';
+      case 50000: return '/PokerChips/blackpokerchip000.png';
       default: return '/PokerChips/greenpokerchip005.png';
     }
   };
 
   return (
     <div className="w-full">
-      {/* 6-col grid: chips + Clear — compact on mobile (≈50% height reduction) */}
-      <div className="grid grid-cols-6 gap-1 sm:gap-2 place-items-center">
+      {/* 5-col grid: chips (500, 5k, 25k, 50k) + Clear */}
+      <div className="grid grid-cols-5 gap-1 sm:gap-2 place-items-center">
         {quickBetAmounts.map(amount => {
           const chipImage = getChipImage(amount);
           const affordable = isChipAffordable(amount);
-          const isCyanChip = amount === 100000;
-          const label = amount >= 1000 ? (amount >= 10000 ? `${amount / 1000}K` : amount) : amount;
+          const isCyanChip = amount === 50000;
+          const label = amount >= 1000 ? `${amount / 1000}k` : amount;
 
           return (
             <button
@@ -120,7 +119,7 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
                   textShadow: isCyanChip
                     ? '0 0 2px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.3)'
                     : '1px 1px 2px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
-                  fontSize: amount >= 10000 ? '8px' : undefined,
+                  fontSize: amount >= 25000 ? '8px' : undefined,
                 }}
               >
                 {label}

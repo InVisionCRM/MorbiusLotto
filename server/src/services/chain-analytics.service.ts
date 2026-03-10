@@ -390,6 +390,7 @@ export class ChainAnalyticsService {
       if (plinko) {
         const wagered = plinko.totalRevenue + plinko.totalPayouts;
         await this.dbService.saveContractDailySnapshot('plinko', wagered, plinko.totalPayouts, plinko.contractReserve);
+        await this.dbService.saveContractHourlySnapshot('plinko', wagered, plinko.totalPayouts, plinko.contractReserve);
         saved++;
       }
     } catch (err) {
@@ -407,12 +408,9 @@ export class ChainAnalyticsService {
         }).catch(() => null) as Promise<bigint | null>,
       ]);
       if (kenoStats) {
-        await this.dbService.saveContractDailySnapshot(
-          'keno',
-          kenoStats.totalWagered,
-          kenoStats.totalWon,
-          kenoReserve ?? 0n,
-        );
+        const reserve = kenoReserve ?? 0n;
+        await this.dbService.saveContractDailySnapshot('keno', kenoStats.totalWagered, kenoStats.totalWon, reserve);
+        await this.dbService.saveContractHourlySnapshot('keno', kenoStats.totalWagered, kenoStats.totalWon, reserve);
         saved++;
       }
     } catch (err) {
@@ -429,6 +427,7 @@ export class ChainAnalyticsService {
           lottery.totalClaimed,
           0n, // lottery has no pooled reserve exposed via a simple view function
         );
+        await this.dbService.saveContractHourlySnapshot('lottery', lottery.totalCollected, lottery.totalClaimed, 0n);
         saved++;
       }
     } catch (err) {
@@ -448,9 +447,39 @@ export class ChainAnalyticsService {
       const totalFees = burnFees + distFees + lpFees + platformFees;
       const totalWagered = totalFees + offChainPayouts;
       await this.dbService.saveContractDailySnapshot('blackjack', totalWagered, offChainPayouts, reserves);
+      await this.dbService.saveContractHourlySnapshot('blackjack', totalWagered, offChainPayouts, reserves);
       saved++;
     } catch (err) {
       console.error('takeAndSaveDailySnapshots blackjack:', err);
+    }
+
+    // ── Big Wheel ────────────────────────────────────────────────────────────
+    try {
+      const bigWheel = await this.getBigWheelStats();
+      if (bigWheel) {
+        await this.dbService.saveContractDailySnapshot(
+          'bigwheel',
+          bigWheel.volume,
+          bigWheel.payouts,
+          bigWheel.contractReserveBalance,
+        );
+        await this.dbService.saveContractHourlySnapshot(
+          'bigwheel',
+          bigWheel.volume,
+          bigWheel.payouts,
+          bigWheel.contractReserveBalance,
+        );
+        saved++;
+      }
+    } catch (err) {
+      console.error('takeAndSaveDailySnapshots bigwheel:', err);
+    }
+
+    // Prune hourly snapshots older than 48h
+    try {
+      await this.dbService.pruneContractHourlySnapshots(48);
+    } catch (err) {
+      console.error('pruneContractHourlySnapshots:', err);
     }
 
     return saved;

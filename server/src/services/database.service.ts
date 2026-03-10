@@ -810,6 +810,25 @@ export class DatabaseService {
     );
   }
 
+  /** Blackjack deposits and withdrawals since a given time (from player_deposits + pending_withdrawals). */
+  async getBlackjackDepositsWithdrawalsSince(since: Date): Promise<{ deposited: string; withdrawn: string }> {
+    const sinceIso = since.toISOString();
+    const [depResult, witResult] = await Promise.all([
+      this.pool.query<{ sum: string }>(
+        `SELECT COALESCE(SUM(amount), 0)::TEXT AS sum FROM player_deposits WHERE created_at >= $1`,
+        [sinceIso]
+      ),
+      this.pool.query<{ sum: string }>(
+        `SELECT COALESCE(SUM(amount), 0)::TEXT AS sum FROM pending_withdrawals WHERE created_at >= $1`,
+        [sinceIso]
+      ),
+    ]);
+    return {
+      deposited: depResult.rows[0]?.sum ?? '0',
+      withdrawn: witResult.rows[0]?.sum ?? '0',
+    };
+  }
+
   // ============================================
   // Instant Lottery (indexed plays for leaderboard + player stats)
   // ============================================
@@ -2718,6 +2737,54 @@ export class DatabaseService {
        WHERE snapshot_date >= CURRENT_DATE - ($1 - 1) * INTERVAL '1 day'
        ORDER BY snapshot_date ASC, game ASC`,
       [days],
+    );
+    return result.rows;
+  }
+
+  /** Upsert one hourly snapshot (current hour bucket). Called by snapshot scheduler. */
+  async saveContractHourlySnapshot(
+    game: string,
+    totalWagered: bigint,
+    totalPayouts: bigint,
+    contractReserve: bigint,
+  ): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO contract_hourly_snapshots (snapshot_hour, game, total_wagered, total_payouts, contract_reserve)
+       VALUES (date_trunc('hour', NOW()), $1, $2::NUMERIC, $3::NUMERIC, $4::NUMERIC)
+       ON CONFLICT (snapshot_hour, game) DO UPDATE SET
+         total_wagered    = EXCLUDED.total_wagered,
+         total_payouts    = EXCLUDED.total_payouts,
+         contract_reserve = EXCLUDED.contract_reserve,
+         captured_at      = NOW()`,
+      [game, totalWagered.toString(), totalPayouts.toString(), contractReserve.toString()],
+    );
+  }
+
+  /** Prune hourly snapshots older than keepHours. */
+  async pruneContractHourlySnapshots(keepHours = 48): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM contract_hourly_snapshots
+       WHERE snapshot_hour < NOW() - make_interval(hours => $1::int)`,
+      [keepHours],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /** Return hourly snapshots for the last N hours, oldest first. */
+  async getContractHourlySnapshots(hours = 24): Promise<Array<{
+    snapshot_hour: string;
+    game: string;
+    total_wagered: string;
+    total_payouts: string;
+    contract_reserve: string;
+  }>> {
+    const result = await this.pool.query(
+      `SELECT snapshot_hour::TEXT, game,
+              total_wagered::TEXT, total_payouts::TEXT, contract_reserve::TEXT
+       FROM contract_hourly_snapshots
+       WHERE snapshot_hour >= NOW() - make_interval(hours => $1::int)
+       ORDER BY snapshot_hour ASC, game ASC`,
+      [hours],
     );
     return result.rows;
   }

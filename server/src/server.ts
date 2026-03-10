@@ -1229,6 +1229,20 @@ async function initializeServices() {
         const blackjackDeposited = _bjTotalsCache.deposited;
         const blackjackWithdrawn = _bjTotalsCache.withdrawn;
 
+        // Time-bucketed Blackjack deposits/withdrawals (1h, 24h, 7d) from DB
+        const now = new Date();
+        const [bj1h, bj24h, bj7d] = await Promise.all([
+          dbService.getBlackjackDepositsWithdrawalsSince(new Date(now.getTime() - 60 * 60 * 1000)),
+          dbService.getBlackjackDepositsWithdrawalsSince(new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+          dbService.getBlackjackDepositsWithdrawalsSince(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)),
+        ]);
+        const blackjackTimeframes = {
+          allTime: { deposited: blackjackDeposited, withdrawn: blackjackWithdrawn },
+          '1h': bj1h,
+          '24h': bj24h,
+          '7d': bj7d,
+        };
+
         sendJson(res, {
           api,
           ws,
@@ -1240,6 +1254,7 @@ async function initializeServices() {
           treasuryWallets,
           blackjackDeposited,
           blackjackWithdrawn,
+          blackjackTimeframes,
         });
       } catch (error) {
         logger.error('Error in admin health:', error);
@@ -1290,12 +1305,19 @@ async function initializeServices() {
       }
     });
 
-    // Admin: contract daily snapshots (real on-chain cumulative totals, one row per game per day)
+    // Admin: contract snapshots (daily or hourly). Daily: one row per game per day; hourly: one per game per hour.
     app.get('/api/admin/analytics/contract-snapshots', async (req, res) => {
       try {
-        const days = Math.min(Math.max(parseInt(String(req.query.days), 10) || 7, 1), 30);
-        const rows = await dbService.getContractDailySnapshots(days);
-        sendJson(res, { days, snapshots: rows });
+        const granularity = String(req.query.granularity || 'daily').toLowerCase();
+        if (granularity === 'hour' || granularity === 'hourly') {
+          const hours = Math.min(Math.max(parseInt(String(req.query.hours), 10) || 24, 1), 48);
+          const rows = await dbService.getContractHourlySnapshots(hours);
+          sendJson(res, { granularity: 'hourly', hours, snapshots: rows });
+        } else {
+          const days = Math.min(Math.max(parseInt(String(req.query.days), 10) || 7, 1), 30);
+          const rows = await dbService.getContractDailySnapshots(days);
+          sendJson(res, { days, snapshots: rows });
+        }
       } catch (error) {
         logger.error('Error fetching contract snapshots:', error);
         res.status(500).json({ error: 'Internal server error' });

@@ -67,7 +67,7 @@ export function BettingPanelMobile({
     setInputValue(''); // blank when user starts editing
   };
 
-  const PRESETS = [500, 2500, 10000, 100000];
+  const PRESETS = [500, 5000, 25000, 50000];
   const addPreset = (amount: number) => {
     if (isPlaying) return;
     const current = numValue;
@@ -111,7 +111,7 @@ export function BettingPanelMobile({
               onFocus={handleFocus}
               disabled={isPlaying}
               className="flex-1 min-w-0 bg-transparent text-white font-bold text-sm outline-none placeholder:text-gray-500 disabled:opacity-60"
-              placeholder="MIN-500 MAX-100,000"
+              placeholder="MIN-500 MAX-50,000"
               aria-label="Bet amount in MORBIUS"
             />
             <Image
@@ -166,7 +166,7 @@ export function BettingPanelMobile({
             type="button"
             onClick={handleClearBet}
             disabled={isPlaying}
-            className="h-7 min-h-0 py-0 px-0 text-white/80 text-xs font-bold hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="h-7 min-h-0 py-0 px-0 text-white/90 text-xs font-medium hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             aria-label="Clear bet"
           >
             Clear

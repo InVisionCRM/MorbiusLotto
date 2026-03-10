@@ -370,7 +370,7 @@ export default function BlackjackPage() {
   const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
 
   // Convert integer MORBIUS amount to chip stack (same denominations as rebet/half/double)
-  const CHIP_VALUES = [100000, 10000, 2500, 1000, 500];
+  const CHIP_VALUES = [50000, 25000, 5000, 500];
   const amountToChipStack = useCallback((amount: number): number[] => {
     const chips: number[] = [];
     let remaining = Math.floor(amount);
@@ -426,7 +426,7 @@ export default function BlackjackPage() {
       setManualBetAmount(null);
       const chips: number[] = [];
       let remaining = Math.floor(lastBet);
-      const chipValues = [100000, 10000, 2500, 1000, 500];
+      const chipValues = [50000, 25000, 5000, 500];
       for (const chipValue of chipValues) {
         while (remaining >= chipValue) {
           chips.push(chipValue);
@@ -2302,7 +2302,7 @@ export default function BlackjackPage() {
     // Set chip stack to last bet (visual sync)
     const chips: number[] = [];
     let remaining = lastBet;
-    const chipValues = [100000, 10000, 2500, 1000, 500];
+    const chipValues = [50000, 25000, 5000, 500];
     for (const chipValue of chipValues) {
       while (remaining >= chipValue) {
         chips.push(chipValue);

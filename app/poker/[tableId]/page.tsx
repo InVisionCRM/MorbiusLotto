@@ -146,6 +146,27 @@ export default function PokerTablePage() {
     return () => clearInterval(interval);
   }, [tableId, wsConnected, fetchLatestState]);
 
+  // Mobile viewport lock (768px breakpoint, same as Plinko) — restore on unmount
+  useEffect(() => {
+    const viewport = document.querySelector('meta[name="viewport"]');
+    const originalContent = viewport?.getAttribute('content') ?? '';
+    const setViewport = (mobile: boolean) => {
+      if (!viewport) return;
+      if (mobile) {
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+      } else {
+        viewport.setAttribute('content', originalContent || 'width=device-width, initial-scale=1');
+      }
+    };
+    const check = () => setViewport(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => {
+      window.removeEventListener('resize', check);
+      if (viewport) viewport.setAttribute('content', originalContent || 'width=device-width, initial-scale=1');
+    };
+  }, []);
+
   // Leave table when navigating away (browser tab close / navigation)
   useEffect(() => {
     if (!tableId || !normalizedAddress) return;
@@ -303,12 +324,21 @@ export default function PokerTablePage() {
         {/* ─── MOBILE LAYOUT (< sm) ─── */}
         <div
           className={`sm:hidden flex flex-col bg-[var(--poker-bg)] text-[var(--poker-text)] tracking-[var(--poker-tracking)] ${cyberpunk ? 'font-mono uppercase' : ''}`}
-          style={{ ...themeVars, height: '100dvh' }}
+          style={{
+            ...themeVars,
+            height: '100dvh',
+            paddingLeft: 'env(safe-area-inset-left, 0px)',
+            paddingRight: 'env(safe-area-inset-right, 0px)',
+          }}
         >
-          {/* Top nav bar */}
+          {/* Top nav bar — safe area top so it clears notch */}
           <div
             className="flex-shrink-0 flex items-center justify-between px-3 py-2 z-10 gap-2"
-            style={{ background: 'rgba(0,0,0,0.55)', borderBottom: '1px solid var(--poker-panel-border)' }}
+            style={{
+              background: 'rgba(0,0,0,0.55)',
+              borderBottom: '1px solid var(--poker-panel-border)',
+              paddingTop: 'max(8px, env(safe-area-inset-top, 0px))',
+            }}
           >
             <Link href="/poker" className="text-[var(--poker-accent)] text-sm font-medium shrink-0 hover:opacity-80">
               ← Lobby
@@ -362,8 +392,15 @@ export default function PokerTablePage() {
             )}
           </div>
 
-          {/* Action bar — always pinned at bottom */}
-          {state && mySeat && <div className="flex-shrink-0">{sharedActions}</div>}
+          {/* Action bar — always pinned at bottom; safe area so it clears home indicator */}
+          {state && mySeat && (
+            <div
+              className="flex-shrink-0"
+              style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            >
+              {sharedActions}
+            </div>
+          )}
         </div>
 
         {/* ─── DESKTOP LAYOUT (≥ sm) ─── */}
