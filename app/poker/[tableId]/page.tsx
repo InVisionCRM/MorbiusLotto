@@ -512,13 +512,13 @@ export default function PokerTablePage() {
             </div>
           )}
 
-          {/* Table chat drawer — theme-consistent, safe area, limited height on mobile */}
+          {/* Table chat drawer — normal font, compact input + tappable Send */}
           <AnimatePresence>
             {showChat && wsClient && pokerChatRoomId && (
               <motion.div
-                className="fixed left-0 right-0 bottom-0 z-40 flex flex-col"
+                className="fixed left-0 right-0 bottom-0 z-40 flex flex-col font-sans normal-case"
                 style={{
-                  maxHeight: 'min(45vh, 320px)',
+                  maxHeight: 'min(50vh, 340px)',
                   paddingLeft: 'env(safe-area-inset-left, 0px)',
                   paddingRight: 'env(safe-area-inset-right, 0px)',
                   paddingBottom: 'env(safe-area-inset-bottom, 0px)',
@@ -538,20 +538,20 @@ export default function PokerTablePage() {
                     color: 'var(--poker-text)',
                   }}
                 >
-                  <span className="text-xs font-semibold">Table chat</span>
+                  <span className="text-sm font-medium">Table chat</span>
                   <button
                     type="button"
                     onClick={() => setShowChat(false)}
-                    className="w-8 h-8 rounded flex items-center justify-center transition-colors hover:bg-white/10"
+                    className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-white/10 touch-manipulation"
                     style={{ color: 'var(--poker-text-muted)' }}
                     aria-label="Close chat"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </div>
-                <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ minHeight: 120 }}>
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white/95" style={{ minHeight: 100 }}>
                   <ChatPanel
                     key={pokerChatRoomId}
                     roomId={pokerChatRoomId}
@@ -560,6 +560,7 @@ export default function PokerTablePage() {
                     wsConnected={wsConnected}
                     collapsible={false}
                     fillHeight
+                    compact
                     className="flex-1 min-h-0 rounded-none border-0 shadow-none"
                   />
                 </div>

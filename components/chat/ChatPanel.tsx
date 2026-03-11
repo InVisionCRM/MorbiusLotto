@@ -139,6 +139,8 @@ export interface ChatPanelProps {
   fillHeight?: boolean;
   /** Extra content rendered on the right side of the panel header (e.g. a close button). */
   headerActions?: React.ReactNode;
+  /** Compact mode: single-line input + send on one row, normal font, minimal chrome (e.g. table chat). */
+  compact?: boolean;
 }
 
 export function ChatPanel({
@@ -152,6 +154,7 @@ export function ChatPanel({
   onUnreadChange,
   fillHeight = false,
   headerActions,
+  compact = false,
 }: ChatPanelProps) {
   const { messages, sendMessage, connected, error, setDisplayName, getProfile, loadMore, loadingMore, chatPaused } = useChat(roomId, { wsClient, wsConnected });
   const { openProfileSettings } = useProfileSettingsModal();
@@ -267,16 +270,17 @@ export function ChatPanel({
 
   const lm = Theme.lightModal;
   const messageListMaxHeight = fillHeight ? 'flex-1' : collapsible ? 'max-h-[150px]' : 'max-h-[28rem]';
+  const listStyle = compact ? { background: 'rgba(248,250,252,0.98)' } : LIGHT_INSET_STYLE;
   const panelContent = (
     <>
       <div className={`relative flex-1 flex flex-col ${fillHeight ? 'min-h-0' : 'min-h-[120px]'} ${messageListMaxHeight}`}>
         <div
           ref={listRef}
           onScroll={handleListScroll}
-          className="flex-1 overflow-y-auto p-2 space-y-2 rounded-none"
-          style={LIGHT_INSET_STYLE}
+          className={`flex-1 overflow-y-auto rounded-none font-sans ${compact ? 'px-2 py-1.5 space-y-1' : 'p-2 space-y-2'}`}
+          style={listStyle}
         >
-          {connected && messages.length > 0 && (
+          {connected && messages.length > 0 && !compact && (
             <div className="flex justify-center py-1">
               <button
                 type="button"
@@ -289,20 +293,20 @@ export function ChatPanel({
             </div>
           )}
           {chatPaused && (
-            <div className="text-amber-700 text-xs p-2 rounded-xl bg-amber-50 border border-amber-200 text-center">
+            <div className="text-amber-700 text-xs p-2 rounded-lg bg-amber-50 border border-amber-200 text-center font-sans">
               Chat is temporarily paused
             </div>
           )}
           {error && (
-            <div className="text-amber-700 text-xs p-2 rounded-xl bg-amber-50 border border-amber-200">
+            <div className="text-amber-700 text-xs p-2 rounded-lg bg-amber-50 border border-amber-200 font-sans">
               {error}
             </div>
           )}
           {!connected && !error && (
-            <div className={`${lm.mutedText} text-xs p-2`}>Connecting…</div>
+            <div className={`${lm.mutedText} text-xs p-2 font-sans`}>Connecting…</div>
           )}
           {connected && messages.length === 0 && (
-            <div className={`${lm.mutedText} text-xs p-2`}>No messages yet. Say hi!</div>
+            <div className={`${lm.mutedText} text-xs p-2 font-sans`}>No messages yet. Say hi!</div>
           )}
           {messages.map((msg) => {
             const isOwnMessage = !!walletAddress && msg.senderAddress?.toLowerCase() === walletAddress.toLowerCase();
@@ -310,8 +314,16 @@ export function ChatPanel({
               background: AVATAR_GRADIENTS[avatarGradientIndex(msg)],
               textShadow: '0 0 1px rgba(0,0,0,0.4)',
             };
+            if (compact) {
+              return (
+                <div key={msg.id} className="text-left flex gap-1.5 items-baseline font-sans">
+                  <span className="text-[11px] text-gray-500 shrink-0">{senderLabel(msg)}:</span>
+                  <span className="text-[13px] text-gray-900 break-words min-w-0">{msg.text}</span>
+                </div>
+              );
+            }
             return (
-            <div key={msg.id} className="text-left flex gap-2">
+            <div key={msg.id} className="text-left flex gap-2 font-sans">
               {isOwnMessage ? (
                 <button
                   type="button"
@@ -373,7 +385,7 @@ export function ChatPanel({
             );
           })}
         </div>
-        {showScrollToBottom && (
+        {showScrollToBottom && !compact && (
           <button
             type="button"
             onClick={scrollToBottom}
@@ -383,8 +395,11 @@ export function ChatPanel({
           </button>
         )}
       </div>
-      <form onSubmit={handleSubmit} className={`p-2 border-t border-gray-200 flex flex-col gap-2 ${lm.bodyText}`}>
-        {showEmojiPicker && (
+      <form
+        onSubmit={handleSubmit}
+        className={`font-sans flex-shrink-0 border-t border-gray-200 ${lm.bodyText} ${compact ? 'p-2 flex items-end gap-2' : 'p-2 flex flex-col gap-2'}`}
+      >
+        {!compact && showEmojiPicker && (
           <div
             className="flex flex-wrap gap-1 p-2 rounded-xl border border-gray-200 max-h-24 overflow-y-auto"
             style={LIGHT_INSET_STYLE}
@@ -402,35 +417,56 @@ export function ChatPanel({
             ))}
           </div>
         )}
-        <div className="w-full relative">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value.slice(0, CHAT_MESSAGE_MAX_LENGTH))}
-            placeholder={chatPaused ? 'Chat is paused' : connected ? 'Type a message…' : 'Connect to chat'}
-            disabled={!connected || chatPaused}
-            maxLength={CHAT_MESSAGE_MAX_LENGTH}
-            rows={4}
-            className={`${lm.input} w-full resize-none py-2 pr-14 text-sm`}
-          />
-          <span className={`absolute right-2 bottom-2 text-[10px] tabular-nums pointer-events-none ${lm.mutedText}`}>
-            {input.length}/{CHAT_MESSAGE_MAX_LENGTH}
-          </span>
+        <div className={compact ? 'flex-1 min-w-0 flex items-center' : 'w-full relative'}>
+          {compact ? (
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value.slice(0, CHAT_MESSAGE_MAX_LENGTH))}
+              placeholder={chatPaused ? 'Chat paused' : connected ? 'Message…' : 'Connect to chat'}
+              disabled={!connected || chatPaused}
+              maxLength={CHAT_MESSAGE_MAX_LENGTH}
+              rows={1}
+              className="w-full min-w-0 h-11 py-2.5 px-3 rounded-full border border-gray-200 bg-white text-[15px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-400 resize-none overflow-hidden font-sans"
+              aria-label="Message"
+            />
+          ) : (
+            <>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value.slice(0, CHAT_MESSAGE_MAX_LENGTH))}
+                placeholder={chatPaused ? 'Chat is paused' : connected ? 'Type a message…' : 'Connect to chat'}
+                disabled={!connected || chatPaused}
+                maxLength={CHAT_MESSAGE_MAX_LENGTH}
+                rows={4}
+                className={`${lm.input} w-full resize-none py-2 pr-14 text-sm`}
+              />
+              <span className={`absolute right-2 bottom-2 text-[10px] tabular-nums pointer-events-none ${lm.mutedText}`}>
+                {input.length}/{CHAT_MESSAGE_MAX_LENGTH}
+              </span>
+            </>
+          )}
         </div>
-        <div className="flex gap-2 items-center">
-          <button
-            type="button"
-            onClick={() => setShowEmojiPicker((v) => !v)}
-            className={`w-9 h-9 flex-shrink-0 rounded-xl text-lg flex items-center justify-center transition ${lm.secondaryButton}`}
-            title="Insert emoji"
-            aria-label="Insert emoji"
-          >
-            😀
-          </button>
+        <div className={`flex gap-2 items-center ${compact ? 'shrink-0' : ''}`}>
+          {!compact && (
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker((v) => !v)}
+              className={`w-9 h-9 flex-shrink-0 rounded-xl text-lg flex items-center justify-center transition ${lm.secondaryButton}`}
+              title="Insert emoji"
+              aria-label="Insert emoji"
+            >
+              😀
+            </button>
+          )}
           <button
             type="submit"
             disabled={!connected || chatPaused || !input.trim()}
-            className={`px-4 py-2 rounded-xl text-sm font-medium shrink-0 ml-auto ${lm.primaryButton}`}
+            className={compact
+              ? 'min-w-[52px] min-h-[44px] h-11 px-4 rounded-full bg-cyan-500 hover:bg-cyan-600 disabled:opacity-40 disabled:pointer-events-none text-white font-medium text-[15px] flex items-center justify-center transition-colors touch-manipulation'
+              : `px-4 py-2 rounded-xl text-sm font-medium shrink-0 ml-auto ${lm.primaryButton}`}
+            aria-label="Send"
           >
             Send
           </button>
@@ -441,53 +477,55 @@ export function ChatPanel({
 
   const shell = (
     <div
-      className={`font-poppins flex flex-col rounded-2xl overflow-hidden border-2 border-gray-200 shadow-xl h-full min-h-[320px] ${fillHeight ? 'min-h-0' : ''} ${className}`}
-      style={LIGHT_SHELL_STYLE}
+      className={`flex flex-col overflow-hidden h-full font-sans ${compact ? 'min-h-0 border-0 shadow-none rounded-none bg-transparent' : `font-poppins rounded-2xl border-2 border-gray-200 shadow-xl min-h-[320px] ${fillHeight ? 'min-h-0' : ''}`} ${className}`}
+      style={compact ? undefined : LIGHT_SHELL_STYLE}
     >
-      <div className={`flex flex-col gap-1 px-3 py-2 border-b border-gray-200 ${lm.bodyText}`}>
-        <div className="flex items-center justify-between">
-          <span className={`${lm.accentText} font-semibold text-sm`}>{title}</span>
-          <div className="flex items-center gap-2">
-            {walletAddress && connected && !showNameInput && (
+      {(!compact || title) && (
+        <div className={`flex flex-col gap-1 px-3 py-2 border-b border-gray-200 ${lm.bodyText} ${compact ? 'py-1.5' : ''}`}>
+          <div className="flex items-center justify-between">
+            <span className={`${lm.accentText} font-semibold text-sm`}>{title}</span>
+            <div className="flex items-center gap-2">
+              {!compact && walletAddress && connected && !showNameInput && (
+                <button
+                  type="button"
+                  onClick={() => setShowNameInput(true)}
+                  className={`text-xs shrink-0 ${lm.linkText}`}
+                >
+                  Set display name
+                </button>
+              )}
+              {headerActions}
+            </div>
+          </div>
+          {walletAddress && connected && showNameInput && (
+            <div className="flex gap-2 items-center mt-1">
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="Display name (3–32 chars)"
+                maxLength={32}
+                className={`flex-1 min-w-0 rounded-xl px-2 py-1 text-xs ${lm.input} py-1.5`}
+              />
               <button
                 type="button"
-                onClick={() => setShowNameInput(true)}
-                className={`text-xs shrink-0 ${lm.linkText}`}
+                onClick={handleSaveDisplayName}
+                disabled={nameInput.trim().length < 3 || nameSaving}
+                className={`px-2 py-1 rounded-xl text-xs font-medium shrink-0 ${lm.primaryButton}`}
               >
-                Set display name
+                {nameSaving ? '…' : 'Save'}
               </button>
-            )}
-            {headerActions}
-          </div>
+              <button
+                type="button"
+                onClick={() => { setShowNameInput(false); setNameInput(''); }}
+                className={`px-2 py-1 rounded-xl text-xs shrink-0 ${lm.linkText}`}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
-        {walletAddress && connected && showNameInput && (
-          <div className="flex gap-2 items-center mt-1">
-            <input
-              type="text"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              placeholder="Display name (3–32 chars)"
-              maxLength={32}
-              className={`flex-1 min-w-0 rounded-xl px-2 py-1 text-xs ${lm.input} py-1.5`}
-            />
-            <button
-              type="button"
-              onClick={handleSaveDisplayName}
-              disabled={nameInput.trim().length < 3 || nameSaving}
-              className={`px-2 py-1 rounded-xl text-xs font-medium shrink-0 ${lm.primaryButton}`}
-            >
-              {nameSaving ? '…' : 'Save'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowNameInput(false); setNameInput(''); }}
-              className={`px-2 py-1 rounded-xl text-xs shrink-0 ${lm.linkText}`}
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-      </div>
+      )}
       {panelContent}
     </div>
   );
