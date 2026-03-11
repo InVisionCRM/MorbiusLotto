@@ -6,6 +6,11 @@ import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
 
+function shortAddr(addr: string): string {
+  if (!addr || addr.length < 10) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
 // 10-seat oval positions as fractions of table container
 const SEAT_ANCHORS = [
   { fx: 0.50, fy: 0.90 }, // 0 — bottom center (current player)
@@ -46,6 +51,16 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft }: PokerTable
   const hand = state.currentHand;
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
   const actingPosition = hand?.actingPosition ?? null;
+  const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
+  const winnerSeatIndices = isShowdownWithWinners
+    ? (hand!.winners!.map((w) => state.seats.findIndex((s) => s.playerAddress === w.address)).filter((i) => i >= 0) as number[])
+    : [];
+  const winnerDisplaySlots = winnerSeatIndices.map(
+    (idx) => (mySeatIndex >= 0 ? (idx - mySeatIndex + state.seats.length) % state.seats.length : idx)
+  );
+  const firstWinnerAnchor = winnerDisplaySlots.length > 0 ? SEAT_ANCHORS[winnerDisplaySlots[0]] : null;
+  const firstWinnerAddr = isShowdownWithWinners ? hand!.winners![0].address : null;
+  const isCurrentPlayerWinner = firstWinnerAddr && currentPlayerAddress && firstWinnerAddr === currentPlayerAddress.toLowerCase();
 
   const seatProps = (idx: number) => {
     const seat = state.seats[idx];
@@ -112,7 +127,67 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft }: PokerTable
         )}
       </div>
 
-      {/* Chip stacks — between each seat and pot */}
+      {/* Winner announcement overlay */}
+      <AnimatePresence>
+        {isShowdownWithWinners && firstWinnerAddr && (
+          <motion.div
+            key="winner-banner"
+            className="absolute z-40 flex items-center justify-center pointer-events-none"
+            style={{ left: '50%', top: '28%', transform: 'translate(-50%, -50%)' }}
+            initial={{ opacity: 0, scale: 0.5, y: -20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+          >
+            <div
+              className="px-6 py-3 rounded-xl text-center shadow-2xl"
+              style={{
+                background: 'linear-gradient(135deg, rgba(251,191,36,0.95), rgba(245,158,11,0.95))',
+                border: '2px solid rgba(255,255,255,0.4)',
+                boxShadow: '0 0 24px rgba(251,191,36,0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                color: '#1a1a1a',
+                fontWeight: 800,
+                fontSize: 'clamp(14px, 3vw, 22px)',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {isCurrentPlayerWinner ? 'You win!' : `${shortAddr(firstWinnerAddr)} wins!`}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Chips sliding from pot to winner at showdown */}
+      <AnimatePresence>
+        {isShowdownWithWinners && hand?.pot && firstWinnerAnchor && (
+          <motion.div
+            key={`chips-to-winner-${hand.handId}`}
+            className="absolute z-30 pointer-events-none"
+            style={{ transform: 'translate(-50%, -50%)' }}
+            initial={{
+              left: `${POT_ANCHOR.fx * 100}%`,
+              top: `${POT_ANCHOR.fy * 100}%`,
+            }}
+            animate={{
+              left: `${firstWinnerAnchor.fx * 100}%`,
+              top: `${firstWinnerAnchor.fy * 100}%`,
+            }}
+            exit={{ opacity: 0 }}
+            transition={{
+              type: 'spring',
+              stiffness: 80,
+              damping: 18,
+              delay: 0.4,
+            }}
+          >
+            <PokerChipStack weiAmount={hand.pot} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Chip stacks — between each seat and pot (hidden at showdown so only sliding pot shows) */}
+      {!isShowdownWithWinners && (
       <AnimatePresence>
         {SEAT_ANCHORS.map((anchor, displaySlot) => {
           const actualIdx = mySeatIndex >= 0
@@ -147,6 +222,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft }: PokerTable
           );
         })}
       </AnimatePresence>
+      )}
 
       {/* Seats */}
       {state.seats.map((_, idx) => {

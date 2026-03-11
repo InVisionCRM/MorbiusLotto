@@ -14,6 +14,7 @@ import Footer from '@/components/BIG-WHEEL/Footer';
 import { FloatingPokerChips } from '@/components/home/FloatingPokerChips';
 import { Theme } from '@/lib/theme';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
+import { isAdminWallet } from '@/lib/admin';
 
 /** Format a wei string to human-readable chips (e.g. "10000000000000000000" -> "10") */
 function formatChips(wei: string): string {
@@ -134,8 +135,10 @@ export default function PokerLobbyPage() {
   const [playersDropdownTableId, setPlayersDropdownTableId] = useState<string | null>(null);
   const [tablePlayers, setTablePlayers] = useState<{ tableId: string; seats: PokerSeatState[] } | null>(null);
   const [tablePlayersLoading, setTablePlayersLoading] = useState(false);
+  const [removingTableId, setRemovingTableId] = useState<string | null>(null);
 
   const clientRef = React.useRef<BlackjackWebSocketClient | null>(null);
+  const isAdmin = isAdminWallet(address);
 
   const fetchTablePlayers = React.useCallback((tableId: string) => {
     const client = clientRef.current;
@@ -161,6 +164,29 @@ export default function PokerLobbyPage() {
     if (!addr || addr.length < 12) return addr;
     return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
   }
+
+  const removeTable = React.useCallback(async (tableId: string) => {
+    if (!address || !isAdmin) return;
+    setRemovingTableId(tableId);
+    try {
+      const res = await fetch(`/api/admin/poker/tables/${tableId}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-wallet': address },
+      });
+      if (res.status === 204) {
+        setTables((prev) => prev.filter((t) => t.id !== tableId));
+        setPlayersDropdownTableId((id) => (id === tableId ? null : id));
+        setTablePlayers((p) => (p?.tableId === tableId ? null : p));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError((data.error || data.message || 'Failed to remove table') as string);
+      }
+    } catch (e) {
+      setError((e as Error).message ?? 'Failed to remove table');
+    } finally {
+      setRemovingTableId(null);
+    }
+  }, [address, isAdmin]);
 
   useEffect(() => {
     const wsUrl = getWebSocketUrlOptional();
@@ -443,25 +469,37 @@ export default function PokerLobbyPage() {
                     )}
 
                     {/* Action buttons */}
-                    <div className="flex gap-3">
-                      <Link
-                        href={`/poker/${t.id}`}
-                        className="flex-1 py-3 rounded-2xl bg-[#e0e5ec] text-slate-500 font-bold uppercase tracking-widest text-xs text-center transition-all duration-200"
-                        style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
-                        onMouseDown={(e) => { e.currentTarget.style.boxShadow = 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)'; }}
-                        onMouseUp={(e) => { e.currentTarget.style.boxShadow = '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)'; }}
-                      >
-                        Watch
-                      </Link>
-                      {isConnected && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-3">
+                        <Link
+                          href={`/poker/${t.id}`}
+                          className="flex-1 py-3 rounded-2xl bg-[#e0e5ec] text-slate-500 font-bold uppercase tracking-widest text-xs text-center transition-all duration-200"
+                          style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
+                          onMouseDown={(e) => { e.currentTarget.style.boxShadow = 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)'; }}
+                          onMouseUp={(e) => { e.currentTarget.style.boxShadow = '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)'; }}
+                        >
+                          Watch
+                        </Link>
+                        {isConnected && (
+                          <button
+                            type="button"
+                            onClick={() => setJoinModal({ tableId: t.id })}
+                            className="flex-1 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs text-white transition-all duration-200 active:scale-95 shadow"
+                            style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', boxShadow: '2px 2px 6px rgba(0,0,0,0.2)' }}
+                          >
+                            Sit
+                          </button>
+                        )}
+                      </div>
+                      {isAdmin && (
                         <button
                           type="button"
-                          onClick={() => setJoinModal({ tableId: t.id })}
-                          className="flex-1 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs text-white transition-all duration-200 active:scale-95 shadow"
-                          style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', boxShadow: '2px 2px 6px rgba(0,0,0,0.2)' }}
+                          onClick={() => removeTable(t.id)}
+                          disabled={removingTableId === t.id}
+                          className="text-[10px] font-medium text-slate-400 hover:text-red-500 uppercase tracking-wider transition-colors disabled:opacity-50"
                         >
-                          Sit
+                          {removingTableId === t.id ? 'Removing…' : 'Remove table'}
                         </button>
                       )}
                     </div>

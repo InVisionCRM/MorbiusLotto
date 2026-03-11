@@ -332,18 +332,28 @@ export default function PokerTablePage() {
         >
           {/* Top nav bar */}
           <div
-            className="flex-shrink-0 flex items-center justify-between px-3 py-2 z-30 gap-2"
+            className="flex-shrink-0 flex items-center justify-between px-2 z-30 gap-2"
             style={{
-              background: 'rgba(0,0,0,0.55)',
-              borderBottom: '1px solid var(--poker-panel-border)',
+              background: 'rgba(10,10,10,0.96)',
+              borderBottom: '1px solid rgba(255,255,255,0.07)',
               paddingTop: 'max(8px, env(safe-area-inset-top, 0px))',
+              paddingBottom: '8px',
             }}
           >
-            <Link href="/poker" className="text-[var(--poker-accent)] text-sm font-medium shrink-0 hover:opacity-80">
+            <Link
+              href="/poker"
+              className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide flex items-center hover:brightness-125 active:scale-[0.97] transition-all shrink-0"
+              style={{
+                background: 'rgba(255,255,255,0.07)',
+                color: 'rgba(255,255,255,0.75)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+              }}
+            >
               ← Lobby
             </Link>
             {state && (
-              <span className="text-[10px] text-[var(--poker-accent)] tabular-nums truncate flex-1 text-center">
+              <span className="text-[10px] text-[rgba(255,255,255,0.45)] tabular-nums truncate flex-1 text-center">
                 {fmtChips(state.smallBlind)}/{fmtChips(state.bigBlind)} · {state.seats.filter(s => s.playerAddress).length}/{state.maxSeats} seats
               </span>
             )}
@@ -351,14 +361,26 @@ export default function PokerTablePage() {
               <button
                 type="button"
                 onClick={() => setShowDepositModal(true)}
-                className="px-2.5 py-1 rounded border border-[var(--poker-accent)] text-[var(--poker-accent)] text-[11px] font-medium hover:opacity-80 active:scale-95 transition-all"
+                className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
+                style={{
+                  background: 'rgba(255,255,255,0.07)',
+                  color: 'rgba(255,255,255,0.75)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                }}
               >
-                {mySeat ? 'Re-up' : 'Bal'}
+                {mySeat ? 'Re-up' : 'Balance'}
               </button>
               <button
                 type="button"
                 onClick={handleLeave}
-                className="px-2.5 py-1 rounded border border-[var(--poker-danger)] text-[var(--poker-danger)] text-[11px] font-medium hover:opacity-80 active:scale-95 transition-all"
+                className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97]"
+                style={{
+                  background: 'linear-gradient(180deg, #8b1a1a 0%, #6b1111 100%)',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)',
+                }}
               >
                 Leave
               </button>
@@ -375,8 +397,8 @@ export default function PokerTablePage() {
             </div>
           )}
 
-          {/* Table */}
-          <div className="flex-1 relative" style={{ minHeight: 0, overflow: 'visible' }}>
+          {/* Table — bottom padding so current player tag stays above action bar */}
+          <div className="flex-1 relative" style={{ minHeight: 0, overflow: 'visible', paddingBottom: state && mySeat ? 140 : 0 }}>
             {state ? (
               <PokerTable state={state} currentPlayerAddress={normalizedAddress} onLeave={handleLeave} timeLeft={timeLeft} />
             ) : !error ? (

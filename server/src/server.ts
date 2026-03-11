@@ -1080,6 +1080,23 @@ async function initializeServices() {
       }
     });
 
+    // Admin: delete poker table (credits seated players' stacks back to balance, then removes table)
+    app.delete('/api/admin/poker/tables/:tableId', async (req, res) => {
+      try {
+        const { tableId } = req.params;
+        const ok = await pokerGameService.deleteTable(tableId);
+        if (!ok) {
+          res.status(404).json({ error: 'Poker table not found' });
+          return;
+        }
+        res.status(204).send();
+      } catch (error) {
+        logger.error('Error deleting poker table:', error);
+        const msg = dbSchemaError(error);
+        res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
+      }
+    });
+
     // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves for current + all legacy)
     // MORBIUS in contract = MORBIUS_TOKEN.balanceOf(gameContract) for each game (canonical addresses in config/contracts.ts).
     app.get('/api/admin/health', async (req, res) => {

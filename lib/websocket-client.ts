@@ -123,6 +123,8 @@ export interface PokerCurrentHand {
   turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by lowercase address */
   showdownHands?: Record<string, number[]>;
+  /** At showdown: winner(s) and amount each receives */
+  winners?: { address: string; amount: string }[];
 }
 
 export interface PokerTableState {

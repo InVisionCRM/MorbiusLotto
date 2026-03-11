@@ -44,6 +44,8 @@ export interface PokerCurrentHand {
   turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by address */
   showdownHands?: Record<string, number[]>;
+  /** At showdown: winner(s) and amount each receives (from hand result) */
+  winners?: { address: string; amount: string }[];
 }
 
 export interface PokerTableState {
@@ -151,6 +153,31 @@ export class PokerGameService {
       [smallBlind.toString(), bigBlind.toString(), maxSeats]
     );
     return r.rows[0].id;
+  }
+
+  /**
+   * Admin: Remove a table. Credits each seated player's stack back to balance, then deletes the table (CASCADE removes seats/hands).
+   */
+  async deleteTable(tableId: string): Promise<boolean> {
+    const pool = this.getPool();
+    const tableRow = await pool.query('SELECT id FROM poker_tables WHERE id = $1', [tableId]);
+    if (tableRow.rows.length === 0) return false;
+
+    const seats = await pool.query(
+      'SELECT player_address, stack FROM poker_seats WHERE table_id = $1',
+      [tableId]
+    );
+    for (const row of seats.rows) {
+      const stack = BigInt(row.stack ?? '0');
+      if (stack > 0n && row.player_address) {
+        await this.dbService.addBalanceToAddress(row.player_address, stack);
+        logger.info('Poker admin delete table: credited stack', { tableId, playerAddress: row.player_address, stack: stack.toString() });
+      }
+    }
+
+    await pool.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);
+    logger.info('Poker admin delete table', { tableId });
+    return true;
   }
 
   /**
@@ -372,7 +399,7 @@ export class PokerGameService {
     let myHoleCards: number[] | null = null;
 
     const handRow = await pool.query(
-      `SELECT id, hand_number, button_position, community_cards, pot_amount, street, acting_position, turn_started_at
+      `SELECT id, hand_number, button_position, community_cards, pot_amount, street, acting_position, turn_started_at, result
        FROM poker_hands WHERE table_id = $1
          AND (completed_at IS NULL OR (street = 'showdown' AND completed_at > NOW() - INTERVAL '8 seconds'))
        ORDER BY CASE WHEN completed_at IS NULL THEN 0 ELSE 1 END, created_at DESC LIMIT 1`,
@@ -467,7 +494,7 @@ export class PokerGameService {
         }
       }
 
-      // At showdown reveal all hole cards to everyone
+      // At showdown reveal all hole cards to everyone and include winners from result
       if (h.street === 'showdown') {
         const allHoleResult = await pool.query(
           'SELECT player_address, cards FROM poker_hand_hole_cards WHERE hand_id = $1',
@@ -479,6 +506,19 @@ export class PokerGameService {
           showdownHands[row.player_address] = cards;
         }
         currentHand!.showdownHands = showdownHands;
+        if (h.result) {
+          try {
+            const parsed = typeof h.result === 'string' ? JSON.parse(h.result) : h.result;
+            if (parsed?.winners?.length) {
+              currentHand!.winners = parsed.winners.map((w: { address: string; amount: string }) => ({
+                address: (w.address || '').toLowerCase(),
+                amount: String(w.amount ?? '0'),
+              }));
+            }
+          } catch {
+            // ignore invalid result json
+          }
+        }
       }
     }
 
