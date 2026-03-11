@@ -8,7 +8,7 @@ import { useAccount, useSignTypedData } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
-import type { PokerTableSummary } from '@/lib/websocket-client';
+import type { PokerTableSummary, PokerSeatState } from '@/lib/websocket-client';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer';
 import { FloatingPokerChips } from '@/components/home/FloatingPokerChips';
@@ -131,8 +131,36 @@ export default function PokerLobbyPage() {
   const [creating, setCreating] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [playersDropdownTableId, setPlayersDropdownTableId] = useState<string | null>(null);
+  const [tablePlayers, setTablePlayers] = useState<{ tableId: string; seats: PokerSeatState[] } | null>(null);
+  const [tablePlayersLoading, setTablePlayersLoading] = useState(false);
 
   const clientRef = React.useRef<BlackjackWebSocketClient | null>(null);
+
+  const fetchTablePlayers = React.useCallback((tableId: string) => {
+    const client = clientRef.current;
+    if (!client) return;
+    setTablePlayersLoading(true);
+    client
+      .pokerGetState(tableId)
+      .then((state) => setTablePlayers({ tableId, seats: state.seats }))
+      .catch(() => setTablePlayers({ tableId, seats: [] }))
+      .finally(() => setTablePlayersLoading(false));
+  }, []);
+
+  const openPlayersDropdown = React.useCallback((tableId: string) => {
+    if (playersDropdownTableId === tableId) {
+      setPlayersDropdownTableId(null);
+      return;
+    }
+    setPlayersDropdownTableId(tableId);
+    if (tablePlayers?.tableId !== tableId) fetchTablePlayers(tableId);
+  }, [playersDropdownTableId, tablePlayers?.tableId, fetchTablePlayers]);
+
+  function truncateAddress(addr: string): string {
+    if (!addr || addr.length < 12) return addr;
+    return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  }
 
   useEffect(() => {
     const wsUrl = getWebSocketUrlOptional();
@@ -363,11 +391,57 @@ export default function PokerLobbyPage() {
                           {t.seatedCount}/{t.maxSeats}
                         </span>
                       </div>
-                      <div className="flex flex-col gap-0.5 text-right">
+                      <div className="flex flex-col gap-0.5 items-end">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Open Seats</span>
-                        <span className="text-base font-bold text-slate-700">{openSeats}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-bold text-slate-700">{openSeats}</span>
+                          <button
+                            type="button"
+                            onClick={() => openPlayersDropdown(t.id)}
+                            className="text-[10px] font-bold text-slate-500 hover:text-slate-700 uppercase tracking-wider underline"
+                          >
+                            {playersDropdownTableId === t.id ? 'Hide' : 'View'}
+                          </button>
+                        </div>
                       </div>
                     </div>
+                    {/* Players dropdown */}
+                    {playersDropdownTableId === t.id && (
+                      <div
+                        className="rounded-xl bg-[#e0e5ec] border border-slate-300/50 overflow-hidden"
+                        style={{ boxShadow: 'inset 2px 2px 4px rgba(163,177,198,0.4), inset -2px -2px 4px rgba(255,255,255,0.4)' }}
+                      >
+                        <div className="px-3 py-2 border-b border-slate-300/50">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Seated players</span>
+                        </div>
+                        <div className="p-2 max-h-32 overflow-y-auto">
+                          {tablePlayersLoading ? (
+                            <p className="text-slate-500 text-xs">Loading…</p>
+                          ) : tablePlayers?.tableId === t.id ? (
+                            (() => {
+                              const seated = tablePlayers.seats.filter((s) => s.playerAddress);
+                              if (seated.length === 0) {
+                                return <p className="text-slate-500 text-xs">No players seated</p>;
+                              }
+                              return (
+                                <ul className="space-y-1.5 text-xs">
+                                  {seated.map((s) => (
+                                    <li key={s.position} className="flex items-center justify-between gap-2 text-slate-700">
+                                      <span className="font-medium">Seat {s.position + 1}</span>
+                                      <span className="font-mono text-slate-600 truncate max-w-[140px]" title={s.playerAddress ?? ''}>
+                                        {s.playerAddress ? truncateAddress(s.playerAddress) : '—'}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              );
+                            })()
+                          ) : (
+                            <p className="text-slate-500 text-xs">No players seated</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Action buttons */}
                     <div className="flex gap-3">
