@@ -193,9 +193,13 @@ export interface PokerSeatProps {
   lastAction?: { action: string; amount: string } | null;
   timeLeft?: number;
   maxTime?: number;
+  /** Chat message to show above this seat for a few seconds (table chat bubble). */
+  chatBubble?: string | null;
 }
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft, maxTime = 30 }: PokerSeatProps) {
+const CHAT_BUBBLE_MAX_LENGTH = 80;
+
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft, maxTime = 30, chatBubble }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -242,17 +246,53 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
   /* ── Occupied seat ── */
   return (
     <div
-      className={`poker-seat flex flex-col items-center gap-0.5 select-none transition-opacity ${isFolded ? 'opacity-50' : 'opacity-100'}`}
+      className={`poker-seat relative flex flex-col items-center gap-0.5 select-none transition-opacity ${isFolded ? 'opacity-50' : 'opacity-100'}`}
       aria-label={`Seat ${displayName}`}
     >
+      {/* Table chat bubble — above seat, 5s then cleared by parent */}
+      <AnimatePresence>
+        {chatBubble && chatBubble.trim() && (
+          <motion.div
+            key={chatBubble}
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-30"
+            style={{
+              maxWidth: 'min(160px, 42vw)',
+              minWidth: 48,
+            }}
+            initial={{ opacity: 0, scale: 0.85, y: 4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+          >
+            <div
+              className="px-2 py-1.5 rounded-lg text-left break-words"
+              style={{
+                background: 'rgba(0,0,0,0.92)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)',
+                color: 'var(--poker-text)',
+                fontSize: 'clamp(10px, 2.2vw, 12px)',
+                lineHeight: 1.3,
+              }}
+            >
+              <span className="line-clamp-3">
+                {chatBubble.length > CHAT_BUBBLE_MAX_LENGTH
+                  ? `${chatBubble.slice(0, CHAT_BUBBLE_MAX_LENGTH)}…`
+                  : chatBubble}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Fanned hole cards */}
       {hasCards ? (
         <div
           className="relative"
           style={
             showMyCards
-              ? { width: 'clamp(68px, 16vw, 100px)', height: 'clamp(84px, 20vw, 118px)' }
-              : { width: 'clamp(36px, 8vw, 52px)',   height: 'clamp(44px, 10vw, 62px)'  }
+              ? { width: 'clamp(76px, 20vw, 110px)', height: 'clamp(92px, 24vw, 124px)' }
+              : { width: 'clamp(48px, 14vw, 58px)',  height: 'clamp(58px, 16vw, 72px)' }
           }
         >
           {[0, 1].map((ci) => (
@@ -282,7 +322,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           )}
         </div>
       ) : (
-        <div style={{ width: '38px', height: '48px' }} />
+        <div style={{ width: 38, height: 48 }} aria-hidden />
       )}
 
       {/* "Your Turn" banner */}
@@ -332,22 +372,29 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
               isCurrentPlayer ? 'rgba(251,191,36,0.5)'      :
                                 'rgba(255,255,255,0.12)'
             }`,
-            borderRadius: 5,
-            minWidth: isCurrentPlayer ? '90px' : '72px',
+            borderRadius: 6,
+            minWidth: isCurrentPlayer ? 98 : 88,
             boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
           }}
         >
           {/* Name + stack */}
-          <div className="px-2 py-1 text-center">
+          <div className="px-2.5 py-1.5 sm:px-2 sm:py-1 text-center">
             <div
               className="font-bold truncate leading-tight"
-              style={{ color: isCurrentPlayer ? '#fde68a' : '#e2e8f0', fontSize: 'clamp(9px, 1.8vw, 11px)', maxWidth: 86 }}
+              style={{
+                color: isCurrentPlayer ? '#fde68a' : '#e2e8f0',
+                fontSize: isCurrentPlayer ? 'clamp(11px, 2vw, 13px)' : 'clamp(12px, 2.5vw, 14px)',
+                maxWidth: isCurrentPlayer ? 96 : 110,
+              }}
             >
               {displayName}
             </div>
             <div
               className="font-bold tabular-nums leading-tight"
-              style={{ color: '#fbbf24', fontSize: 'clamp(9px, 2vw, 12px)' }}
+              style={{
+                color: '#fbbf24',
+                fontSize: isCurrentPlayer ? 'clamp(11px, 2.2vw, 13px)' : 'clamp(12px, 2.5vw, 14px)',
+              }}
             >
               ${formatChips(seat.stack)}
             </div>
@@ -365,8 +412,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
                 className="overflow-hidden"
               >
                 <div
-                  className="text-center font-bold uppercase tracking-widest py-0.5"
-                  style={{ background: actionStyle.bg, color: '#fff', fontSize: 'clamp(8px, 1.4vw, 9px)' }}
+                  className="text-center font-bold uppercase tracking-widest py-0.5 sm:py-0.5"
+                  style={{ background: actionStyle.bg, color: '#fff', fontSize: 'clamp(9px, 1.6vw, 10px)' }}
                 >
                   {actionStyle.label}
                 </div>

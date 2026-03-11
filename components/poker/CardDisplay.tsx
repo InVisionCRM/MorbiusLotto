@@ -51,8 +51,8 @@ const dealVariants = {
 
 export function CardDisplay({ cardIndex, small, faceDown, className = '', dealDelay = 0 }: CardDisplayProps) {
   const sizeClasses = small
-    ? 'w-7 h-10 sm:w-10 sm:h-14 md:w-12 md:h-[68px] lg:w-14 lg:h-20 xl:w-16 xl:h-[88px]'
-    : 'w-12 h-[68px] sm:w-14 sm:h-20 lg:w-16 lg:h-24 xl:w-20 xl:h-28';
+    ? 'w-10 h-14 sm:w-11 sm:h-[62px] md:w-12 md:h-[68px] lg:w-14 lg:h-20 xl:w-16 xl:h-[88px]'
+    : 'w-14 h-20 sm:w-16 sm:h-24 lg:w-[72px] lg:h-[100px] xl:w-20 xl:h-28';
 
   const imageSize = { width: 80, height: 112 };
 

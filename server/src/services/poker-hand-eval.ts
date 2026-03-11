@@ -134,6 +134,22 @@ export function bestHand(cardIndices: number[]): RankedHand {
   return best;
 }
 
+/** Human-readable hand name for UI. */
+export function handRankToName(rank: HandRank): string {
+  const names: Record<HandRank, string> = {
+    [HandRank.HighCard]: 'High Card',
+    [HandRank.Pair]: 'Pair',
+    [HandRank.TwoPair]: 'Two Pair',
+    [HandRank.Trips]: 'Three of a Kind',
+    [HandRank.Straight]: 'Straight',
+    [HandRank.Flush]: 'Flush',
+    [HandRank.FullHouse]: 'Full House',
+    [HandRank.Quads]: 'Four of a Kind',
+    [HandRank.StraightFlush]: 'Straight Flush',
+  };
+  return names[rank] ?? 'Hand';
+}
+
 /**
  * Compare two ranked hands. Returns positive if a > b, negative if a < b, 0 if tie.
  */

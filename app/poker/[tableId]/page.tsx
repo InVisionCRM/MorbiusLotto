@@ -1,20 +1,24 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatEther } from 'viem';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
-import type { PokerTableState } from '@/lib/websocket-client';
+import type { PokerTableState, ChatMessagePayload } from '@/lib/websocket-client';
 import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
 import { PokerTable } from '@/components/poker/PokerTable';
 import { PokerActions } from '@/components/poker/PokerActions';
 import { PokerDepositModal } from '@/components/poker/PokerDepositModal';
+import { ChatPanel } from '@/components/chat/ChatPanel';
 import { toast } from 'sonner';
+
+const POKER_CHAT_BUBBLE_DURATION_MS = 5000;
 
 export default function PokerTablePage() {
   const params = useParams();
@@ -32,6 +36,10 @@ export default function PokerTablePage() {
   const [error, setError] = useState<string | null>(null);
   const [disconnected, setDisconnected] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  /** Chat bubbles above seats: id, senderAddress (lowercase), text, expiresAt. Cleared after 5s. */
+  const [seatBubbles, setSeatBubbles] = useState<Array<{ id: string; senderAddress: string; text: string; expiresAt: number }>>([]);
+  const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const clientRef = useRef<BlackjackWebSocketClient | null>(null);
   // Monotonic counter to discard out-of-order pokerGetState responses.
   const fetchSeqRef = useRef(0);
@@ -122,6 +130,41 @@ export default function PokerTablePage() {
     if (!wsConnected || !clientRef.current || !tableId) return;
     clientRef.current.joinRoom(`poker:table:${tableId}`).catch(() => {});
   }, [wsConnected, tableId]);
+
+  // Table chat: show message above sender's seat for 5s
+  const pokerChatRoomId = tableId ? `poker:table:${tableId}` : '';
+  useEffect(() => {
+    const client = clientRef.current;
+    if (!client || !pokerChatRoomId) return;
+
+    const onChatMessage = (payload: ChatMessagePayload) => {
+      if (payload.roomId?.toLowerCase() !== pokerChatRoomId.toLowerCase()) return;
+      const sender = payload.senderAddress?.trim()?.toLowerCase();
+      if (!sender || !payload.text?.trim()) return;
+
+      const id = payload.id || `chat-${Date.now()}-${sender}`;
+      const expiresAt = Date.now() + POKER_CHAT_BUBBLE_DURATION_MS;
+
+      setSeatBubbles((prev) => {
+        const next = prev.filter((b) => b.id !== id);
+        next.push({ id, senderAddress: sender, text: payload.text.trim(), expiresAt });
+        return next;
+      });
+
+      const t = setTimeout(() => {
+        setSeatBubbles((prev) => prev.filter((b) => b.id !== id));
+        bubbleTimeoutsRef.current.delete(id);
+      }, POKER_CHAT_BUBBLE_DURATION_MS);
+      bubbleTimeoutsRef.current.set(id, t);
+    };
+
+    client.on('chat_message', onChatMessage);
+    return () => {
+      client.off('chat_message', onChatMessage);
+      bubbleTimeoutsRef.current.forEach((t) => clearTimeout(t));
+      bubbleTimeoutsRef.current.clear();
+    };
+  }, [pokerChatRoomId]);
 
   // Heartbeat: detect disconnect/reconnect and re-sync state
   useEffect(() => {
@@ -241,6 +284,24 @@ export default function PokerTablePage() {
       .catch((err) => toast.error((err as Error).message));
   }, [tableId, router]);
 
+  // Map chat bubbles to seat index (latest bubble per seat)
+  const chatBubbleBySeatIndex = useMemo(() => {
+    if (!state) return undefined;
+    const now = Date.now();
+    const active = seatBubbles.filter((b) => b.expiresAt > now);
+    if (active.length === 0) return undefined;
+    const bySeat: Record<number, string> = {};
+    state.seats.forEach((seat, idx) => {
+      const addr = seat.playerAddress?.toLowerCase();
+      if (!addr) return;
+      const bubble = active
+        .filter((b) => b.senderAddress === addr)
+        .sort((a, b) => b.expiresAt - a.expiresAt)[0];
+      if (bubble) bySeat[idx] = bubble.text;
+    });
+    return Object.keys(bySeat).length ? bySeat : undefined;
+  }, [state, seatBubbles]);
+
   const hand = state?.currentHand;
   const mySeatIndex = state ? state.seats.findIndex((s) => s.playerAddress === normalizedAddress) : -1;
   const mySeat = mySeatIndex >= 0 && state ? state.seats[mySeatIndex] : null;
@@ -253,6 +314,15 @@ export default function PokerTablePage() {
     !!state?.myHoleCards && state.myHoleCards.length > 0;
   const canCheck = hand?.toCall === '0' || hand?.toCall === '';
   const callAmount = hand?.toCall ?? '0';
+
+  // ── Your turn sound ───────────────────────────────────────────────────────
+  const prevCanActRef = useRef(false);
+  useEffect(() => {
+    if (canAct && !prevCanActRef.current) {
+      new Audio('/sounds/peghit.mp3').play().catch(() => {});
+    }
+    prevCanActRef.current = !!canAct;
+  }, [canAct]);
 
   // ── Turn timer countdown ──────────────────────────────────────────────────
   const [timeLeft, setTimeLeft] = useState<number>(30);
@@ -360,6 +430,19 @@ export default function PokerTablePage() {
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
+                onClick={() => setShowChat((v) => !v)}
+                className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
+                style={{
+                  background: showChat ? 'rgba(34, 211, 238, 0.2)' : 'rgba(255,255,255,0.07)',
+                  color: showChat ? 'var(--poker-accent)' : 'rgba(255,255,255,0.75)',
+                  border: `1px solid ${showChat ? 'rgba(34, 211, 238, 0.4)' : 'rgba(255,255,255,0.1)'}`,
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                }}
+              >
+                Chat
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowDepositModal(true)}
                 className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
                 style={{
@@ -397,10 +480,19 @@ export default function PokerTablePage() {
             </div>
           )}
 
-          {/* Table — bottom padding so current player tag stays above action bar */}
-          <div className="flex-1 relative" style={{ minHeight: 0, overflow: 'visible', paddingBottom: state && mySeat ? 140 : 0 }}>
+          {/* Table — bottom padding so current player/cards overlay open center on mobile, above bar on desktop */}
+          <div
+            className={`flex-1 relative ${state && mySeat ? 'pb-[100px] sm:pb-[200px]' : ''}`}
+            style={{ minHeight: 0, overflow: 'visible' }}
+          >
             {state ? (
-              <PokerTable state={state} currentPlayerAddress={normalizedAddress} onLeave={handleLeave} timeLeft={timeLeft} />
+              <PokerTable
+                state={state}
+                currentPlayerAddress={normalizedAddress}
+                onLeave={handleLeave}
+                timeLeft={timeLeft}
+                chatBubbleBySeatIndex={chatBubbleBySeatIndex}
+              />
             ) : !error ? (
               <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
                 Loading table...
@@ -419,6 +511,61 @@ export default function PokerTablePage() {
               {sharedActions}
             </div>
           )}
+
+          {/* Table chat drawer — theme-consistent, safe area, limited height on mobile */}
+          <AnimatePresence>
+            {showChat && wsClient && pokerChatRoomId && (
+              <motion.div
+                className="fixed left-0 right-0 bottom-0 z-40 flex flex-col"
+                style={{
+                  maxHeight: 'min(45vh, 320px)',
+                  paddingLeft: 'env(safe-area-inset-left, 0px)',
+                  paddingRight: 'env(safe-area-inset-right, 0px)',
+                  paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                  background: 'rgba(10,10,10,0.98)',
+                  borderTop: '1px solid rgba(255,255,255,0.07)',
+                  boxShadow: '0 -4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)',
+                }}
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 36 }}
+              >
+                <div
+                  className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/[0.07]"
+                  style={{
+                    background: 'rgba(0,0,0,0.3)',
+                    color: 'var(--poker-text)',
+                  }}
+                >
+                  <span className="text-xs font-semibold">Table chat</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowChat(false)}
+                    className="w-8 h-8 rounded flex items-center justify-center transition-colors hover:bg-white/10"
+                    style={{ color: 'var(--poker-text-muted)' }}
+                    aria-label="Close chat"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ minHeight: 120 }}>
+                  <ChatPanel
+                    key={pokerChatRoomId}
+                    roomId={pokerChatRoomId}
+                    title=""
+                    wsClient={wsClient}
+                    wsConnected={wsConnected}
+                    collapsible={false}
+                    fillHeight
+                    className="flex-1 min-h-0 rounded-none border-0 shadow-none"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <PokerDepositModal

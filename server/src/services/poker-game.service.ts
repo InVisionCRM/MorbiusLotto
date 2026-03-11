@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
-import { bestHand, compareHands, winners } from './poker-hand-eval';
+import { bestHand, compareHands, winners, handRankToName } from './poker-hand-eval';
 import { logger } from '../utils/logger';
 import crypto from 'crypto';
 
@@ -44,8 +44,8 @@ export interface PokerCurrentHand {
   turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by address */
   showdownHands?: Record<string, number[]>;
-  /** At showdown: winner(s) and amount each receives (from hand result) */
-  winners?: { address: string; amount: string }[];
+  /** At showdown: winner(s), amount each receives, and optional hand name */
+  winners?: { address: string; amount: string; handName?: string }[];
 }
 
 export interface PokerTableState {
@@ -510,9 +510,10 @@ export class PokerGameService {
           try {
             const parsed = typeof h.result === 'string' ? JSON.parse(h.result) : h.result;
             if (parsed?.winners?.length) {
-              currentHand!.winners = parsed.winners.map((w: { address: string; amount: string }) => ({
+              currentHand!.winners = parsed.winners.map((w: { address: string; amount: string; handName?: string }) => ({
                 address: (w.address || '').toLowerCase(),
                 amount: String(w.amount ?? '0'),
+                handName: w.handName,
               }));
             }
           } catch {
@@ -789,7 +790,7 @@ export class PokerGameService {
         );
       }
       const resultJson = stillIn.length
-        ? JSON.stringify({ winners: [{ address: stillIn[0].player_address, amount: hand.pot_amount }] })
+        ? JSON.stringify({ winners: [{ address: stillIn[0].player_address, amount: hand.pot_amount, handName: 'Win (all folded)' }] })
         : '{}';
       await pool.query(
         `UPDATE poker_hands SET completed_at = NOW(), street = 'showdown', acting_position = NULL, result = $2 WHERE id = $1`,
@@ -1014,14 +1015,16 @@ export class PokerGameService {
       }
     }
 
-    // Credit stacks and build result record
-    const resultWinners: { address: string; amount: string }[] = [];
+    // Credit stacks and build result record (include hand name for each winner)
+    const resultWinners: { address: string; amount: string; handName?: string }[] = [];
     for (const [addr, amt] of winningsByAddr) {
       await pool.query(
         `UPDATE poker_seats SET stack = stack + $3::NUMERIC WHERE table_id = $1 AND player_address = $2`,
         [tableId, addr, amt.toString()]
       );
-      resultWinners.push({ address: addr, amount: amt.toString() });
+      const cards = handsByAddr.get(addr);
+      const handName = cards && cards.length >= 5 ? handRankToName(bestHand(cards).rank) : undefined;
+      resultWinners.push({ address: addr, amount: amt.toString(), handName });
     }
 
     await pool.query(

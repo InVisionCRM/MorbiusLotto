@@ -123,8 +123,8 @@ export interface PokerCurrentHand {
   turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by lowercase address */
   showdownHands?: Record<string, number[]>;
-  /** At showdown: winner(s) and amount each receives */
-  winners?: { address: string; amount: string }[];
+  /** At showdown: winner(s), amount each receives, and optional hand name */
+  winners?: { address: string; amount: string; handName?: string }[];
 }
 
 export interface PokerTableState {
@@ -165,7 +165,7 @@ export class BlackjackWebSocketClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
-  private messageHandlers: Map<string, (payload: any) => void> = new Map();
+  private messageHandlers: Map<string, Set<(payload: any) => void>> = new Map();
   private requestPromises: Map<string, { resolve: Function; reject: Function }> = new Map();
   private intentionalClose = false;
   private signTypedData: SignTypedDataFn | null = null;
@@ -479,9 +479,9 @@ export class BlackjackWebSocketClient {
           // application errors (e.g. insufficient balance); the promise was already rejected.
           // The 'error' handler is for connection/transport errors only.
           if (message.type !== 'error') {
-            const handler = this.messageHandlers.get(message.type);
-            if (handler) {
-              handler(message.payload);
+            const handlers = this.messageHandlers.get(message.type);
+            if (handlers) {
+              handlers.forEach((h) => h(message.payload));
             }
           }
           return;
@@ -496,10 +496,10 @@ export class BlackjackWebSocketClient {
       }
 
       // Handle event messages
-      const handler = this.messageHandlers.get(message.type);
-      if (handler) {
+      const handlers = this.messageHandlers.get(message.type);
+      if (handlers && handlers.size > 0) {
         logger.debug('Handling event message', { type: message.type });
-        handler(message.payload);
+        handlers.forEach((h) => h(message.payload));
       } else {
         // Known broadcast types (handled by optional listeners like GlobalWinsFeed) — don't warn.
         const knownEventTypes = new Set([
@@ -543,17 +543,30 @@ export class BlackjackWebSocketClient {
   }
 
   /**
-   * Register event handler
+   * Register event handler. Multiple handlers per event are supported.
    */
   on(event: string, handler: (payload: any) => void) {
-    this.messageHandlers.set(event, handler);
+    let set = this.messageHandlers.get(event);
+    if (!set) {
+      set = new Set();
+      this.messageHandlers.set(event, set);
+    }
+    set.add(handler);
   }
 
   /**
-   * Remove event handler
+   * Remove event handler(s). If handler is provided, removes only that handler; otherwise removes all for the event.
    */
-  off(event: string) {
-    this.messageHandlers.delete(event);
+  off(event: string, handler?: (payload: any) => void) {
+    if (handler) {
+      const set = this.messageHandlers.get(event);
+      if (set) {
+        set.delete(handler);
+        if (set.size === 0) this.messageHandlers.delete(event);
+      }
+    } else {
+      this.messageHandlers.delete(event);
+    }
   }
 
   // === Game API ===

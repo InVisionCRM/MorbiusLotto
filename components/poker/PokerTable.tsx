@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
+import { formatEther } from 'viem';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
@@ -11,9 +12,20 @@ function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-// 10-seat oval positions as fractions of table container
+function formatChips(wei: string): string {
+  try {
+    const num = Number(formatEther(BigInt(wei)));
+    return Number.isInteger(num)
+      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  } catch {
+    return wei;
+  }
+}
+
+// 10-seat oval positions as fractions of table container (seat 0 raised so player tag stays above action bar)
 const SEAT_ANCHORS = [
-  { fx: 0.50, fy: 0.90 }, // 0 — bottom center (current player)
+  { fx: 0.50, fy: 0.78 }, // 0 — bottom center (current player), raised so badge is visible above controls
   { fx: 0.72, fy: 0.83 }, // 1
   { fx: 0.89, fy: 0.63 }, // 2
   { fx: 0.89, fy: 0.36 }, // 3
@@ -32,9 +44,11 @@ export interface PokerTableProps {
   currentPlayerAddress: string | null;
   onLeave?: () => void;
   timeLeft?: number;
+  /** Chat bubble text to show above each seat (key = seat index). Cleared after ~5s by parent. */
+  chatBubbleBySeatIndex?: Record<number, string>;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [, setDims] = useState({ w: 640, h: 500 });
 
@@ -59,8 +73,13 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft }: PokerTable
     (idx) => (mySeatIndex >= 0 ? (idx - mySeatIndex + state.seats.length) % state.seats.length : idx)
   );
   const firstWinnerAnchor = winnerDisplaySlots.length > 0 ? SEAT_ANCHORS[winnerDisplaySlots[0]] : null;
-  const firstWinnerAddr = isShowdownWithWinners ? hand!.winners![0].address : null;
+  const firstWinner = isShowdownWithWinners ? hand!.winners![0] : null;
+  const firstWinnerAddr = firstWinner?.address ?? null;
   const isCurrentPlayerWinner = firstWinnerAddr && currentPlayerAddress && firstWinnerAddr === currentPlayerAddress.toLowerCase();
+  const firstWinnerSeat = firstWinnerAddr ? state.seats.find((s) => s.playerAddress === firstWinnerAddr) : null;
+  const winnerStack = firstWinnerSeat?.stack ?? '0';
+  const winnerAmount = firstWinner?.amount ?? hand?.pot ?? '0';
+  const winnerHandName = firstWinner?.handName;
 
   const seatProps = (idx: number) => {
     const seat = state.seats[idx];
@@ -79,6 +98,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft }: PokerTable
           ? { action: hand.lastAction.action, amount: hand.lastAction.amount }
           : null,
       timeLeft: actingPosition === idx ? timeLeft : undefined,
+      chatBubble: chatBubbleBySeatIndex?.[idx] ?? null,
     };
   };
 
@@ -127,32 +147,56 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft }: PokerTable
         )}
       </div>
 
-      {/* Winner announcement overlay */}
+      {/* Winner announcement — detailed panel (same style as betting controls) */}
       <AnimatePresence>
         {isShowdownWithWinners && firstWinnerAddr && (
           <motion.div
-            key="winner-banner"
+            key="winner-panel"
             className="absolute z-40 flex items-center justify-center pointer-events-none"
-            style={{ left: '50%', top: '28%', transform: 'translate(-50%, -50%)' }}
-            initial={{ opacity: 0, scale: 0.5, y: -20 }}
+            style={{ left: '50%', top: '26%', transform: 'translate(-50%, -50%)' }}
+            initial={{ opacity: 0, scale: 0.92, y: -12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 24 }}
           >
             <div
-              className="px-6 py-3 rounded-xl text-center shadow-2xl"
+              className="rounded-lg overflow-hidden min-w-[220px] max-w-[min(92vw,320px)]"
               style={{
-                background: 'linear-gradient(135deg, rgba(251,191,36,0.95), rgba(245,158,11,0.95))',
-                border: '2px solid rgba(255,255,255,0.4)',
-                boxShadow: '0 0 24px rgba(251,191,36,0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
-                color: '#1a1a1a',
-                fontWeight: 800,
-                fontSize: 'clamp(14px, 3vw, 22px)',
-                letterSpacing: '0.05em',
-                textTransform: 'uppercase',
+                background: 'rgba(10,10,10,0.96)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04)',
               }}
             >
-              {isCurrentPlayerWinner ? 'You win!' : `${shortAddr(firstWinnerAddr)} wins!`}
+              {/* Header */}
+              <div
+                className="px-4 py-2.5 text-center border-b border-white/[0.07]"
+                style={{
+                  background: 'linear-gradient(180deg, rgba(192,57,43,0.35) 0%, rgba(139,26,26,0.25) 100%)',
+                  color: '#fff',
+                  fontSize: 'clamp(13px, 2.5vw, 16px)',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {isCurrentPlayerWinner ? 'You win!' : `${shortAddr(firstWinnerAddr)} wins`}
+              </div>
+              {/* Details */}
+              <div className="px-4 py-3 space-y-2">
+                {winnerHandName && (
+                  <div className="flex justify-between items-center gap-4 text-sm">
+                    <span style={{ color: 'rgba(255,255,255,0.55)' }}>Hand</span>
+                    <span style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>{winnerHandName}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center gap-4 text-sm">
+                  <span style={{ color: 'rgba(255,255,255,0.55)' }}>Won</span>
+                  <span style={{ color: '#fbbf24', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatChips(winnerAmount)}</span>
+                </div>
+                <div className="flex justify-between items-center gap-4 text-sm border-t border-white/[0.07] pt-2">
+                  <span style={{ color: 'rgba(255,255,255,0.55)' }}>Stack</span>
+                  <span style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatChips(winnerStack)}</span>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
