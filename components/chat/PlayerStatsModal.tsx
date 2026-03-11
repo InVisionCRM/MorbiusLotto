@@ -6,6 +6,7 @@ import { createPublicClient, http, formatUnits } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { PLINKO_ADDRESS } from '@/lib/contracts';
 import { PLINKO_ABI } from '@/abi/plinko';
+import { usePlayerReserveForAddress } from '@/hooks/use-blackjack-contract';
 
 function MorbiusIcon({ size = 16 }: { size?: number }) {
   return (
@@ -78,6 +79,7 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'blackjack' | 'plinko'>('blackjack');
+  const { data: reserveBalance } = usePlayerReserveForAddress(address);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -229,6 +231,12 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
 
                   {/* Main Stats Grid */}
                   <div className="grid grid-cols-2 gap-3">
+                    {reserveBalance !== undefined && (
+                      <StatCard
+                        label="Reserve"
+                        value={<>{formatMorbius(reserveBalance.toString())} <MorbiusIcon /></>}
+                      />
+                    )}
                     <StatCard label="Games Played" value={stats.total_games.toString()} />
                     <StatCard label="Win Rate" value={`${stats.win_rate.toFixed(1)}%`} />
                     <StatCard label="Total Wagered" value={<>{formatMorbius(stats.total_bet)} <MorbiusIcon /></>} />

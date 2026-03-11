@@ -38,6 +38,26 @@ export function usePlayerReserve() {
 }
 
 /**
+ * Get a specific player's MORBIUS reserve balance (for modals/profile viewing another address).
+ */
+export function usePlayerReserveForAddress(playerAddress: string | null) {
+  const isValidAddress = (BLACKJACK_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
+  const addr = playerAddress
+    ? (playerAddress.startsWith('0x') ? playerAddress : `0x${playerAddress}`) as `0x${string}`
+    : undefined
+  return useReadContract({
+    address: BLACKJACK_ADDRESS,
+    abi: blackjackAbi,
+    functionName: 'getPlayerReserve',
+    args: addr ? [addr] : undefined,
+    query: {
+      enabled: isValidAddress && !!playerAddress,
+      refetchInterval: 10000,
+    },
+  })
+}
+
+/**
  * Get total reserves in contract
  */
 export function useTotalReserves() {

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { usePlayerProfileStats } from '@/hooks/use-player-profile'
+import { usePlayerReserveForAddress } from '@/hooks/use-blackjack-contract'
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard'
 import { useLotteryPlayerStats, useInstantLotteryResults } from '@/hooks/use-instant-lottery'
 import { LotteryPlayerDashboard } from '@/components/lottery/LotteryPlayerDashboard'
@@ -38,6 +39,7 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all' }: P
   }, [isOpen, game])
 
   const { data: stats, isLoading: statsLoading } = usePlayerProfileStats(selectedGame === 'blackjack' ? address : null)
+  const { data: reserveBalance } = usePlayerReserveForAddress(selectedGame === 'blackjack' ? address : null)
   const lotteryAddress = address ? (address.startsWith('0x') ? address : `0x${address}`) as `0x${string}` : undefined
   const lotteryStats = useLotteryPlayerStats(selectedGame === 'lottery' || selectedGame === 'all' ? lotteryAddress : undefined)
   const { results: lotteryResults } = useInstantLotteryResults(
@@ -137,7 +139,7 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all' }: P
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
               </div>
             ) : dashboardStats ? (
-              <PlayerStatsDashboard stats={dashboardStats} isLoading={false} playerAddress={address} />
+              <PlayerStatsDashboard stats={dashboardStats} isLoading={false} playerAddress={address} reserveBalance={typeof reserveBalance === 'bigint' ? reserveBalance : undefined} />
             ) : (
               <div className="text-center py-12 text-white/60">
                 <p>No stats available for this address</p>
