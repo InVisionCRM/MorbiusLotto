@@ -289,8 +289,7 @@ export default function PokerLobbyPage() {
         <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
           <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4 mb-4 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-              <Link href="/" className="text-cyan-400 hover:text-cyan-300 text-xs sm:text-sm">← Back</Link>
-              <Link href="/poker/designer" className="text-slate-400 hover:text-cyan-400 text-xs sm:text-sm">Design layout</Link>
+              <Link href="/" className="text-cyan-500 hover:text-cyan-400 text-xs sm:text-sm">← Back</Link>
               <button
                 type="button"
                 onClick={() => setShowHowToPlay(true)}

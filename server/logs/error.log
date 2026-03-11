@@ -33747,3 +33747,9 @@
 {"level":"error","message":"TournamentScheduler: failed to complete stuck tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-11T21:44:45.377Z"}
 {"level":"error","message":"TournamentScheduler: failed to complete time-expired tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-11T21:45:45.651Z"}
 {"level":"error","message":"TournamentScheduler: failed to complete stuck tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-11T21:45:46.082Z"}
+{"level":"error","message":"TournamentScheduler: failed to complete time-expired tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-11T21:46:45.256Z"}
+{"level":"error","message":"TournamentScheduler: failed to complete stuck tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-11T21:46:45.669Z"}
+{"level":"error","message":"TournamentScheduler: failed to complete time-expired tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-11T21:47:45.275Z"}
+{"level":"error","message":"TournamentScheduler: failed to complete stuck tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-11T21:47:45.676Z"}
+{"level":"error","message":"TournamentScheduler: failed to complete time-expired tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-11T21:48:45.260Z"}
+{"level":"error","message":"TournamentScheduler: failed to complete stuck tournament %s: %s","service":"blackjack-server","timestamp":"2026-03-11T21:48:45.668Z"}
