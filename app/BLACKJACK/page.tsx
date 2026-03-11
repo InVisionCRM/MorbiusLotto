@@ -3119,7 +3119,7 @@ export default function BlackjackPage() {
                 </button>
               </div>
             ) : playerStats ? (
-              <PlayerStatsDashboard stats={playerStats} isLoading={playerStatsLoading} playerAddress={address ?? null} wsClient={wsConnected ? wsClient : null} />
+              <PlayerStatsDashboard stats={playerStats} isLoading={playerStatsLoading} playerAddress={address ?? null} wsClient={wsConnected ? wsClient : null} reserveBalance={offChainBalance} />
             ) : (
               <div className="text-center py-12 text-cyan-300">No statistics available. Play some games to see your stats!</div>
             )}

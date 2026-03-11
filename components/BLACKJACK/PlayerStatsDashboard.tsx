@@ -16,7 +16,8 @@ import {
   Clock,
   Crown,
   Copy,
-  Check
+  Check,
+  Wallet
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatEther } from 'viem'
@@ -61,9 +62,11 @@ interface PlayerStatsDashboardProps {
   isLoading?: boolean
   playerAddress?: string | null // Optional: if provided, fetch game history for cumulative chart
   wsClient?: BlackjackWebSocketClient | null // Optional: if provided, show Creator tab
+  /** Player's balance in reserves (wei) — when provided, shown as top stat */
+  reserveBalance?: bigint
 }
 
-export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient }: PlayerStatsDashboardProps) {
+export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient, reserveBalance }: PlayerStatsDashboardProps) {
   const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'creator'>('stats')
   const [addressCopied, setAddressCopied] = useState(false)
   const { displayName, profileImageUrl } = useProfileForAddress(playerAddress ?? null)
@@ -115,6 +118,17 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
   }
 
   const statsCards = [
+    ...(reserveBalance !== undefined
+      ? [
+          {
+            title: 'Reserve',
+            value: `${formatCurrency(reserveBalance)} MORBIUS`,
+            icon: Wallet,
+            subtitle: 'Balance available to wager',
+            color: 'text-cyan-400'
+          }
+        ]
+      : []),
     {
       title: 'Total Games',
       value: stats.totalGames.toLocaleString(),
