@@ -261,6 +261,18 @@ export function MerkleClaimsPanel() {
         </div>
       </div>
 
+      {/* ── Claim processing note ───────────────────────────────────── */}
+      <div className="rounded-xl border border-amber-500/20 bg-amber-950/10 px-4 py-2.5 flex items-start gap-2">
+        <AlertCircle className="w-4 h-4 text-amber-400/80 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-amber-200/90 font-poppins leading-relaxed">
+          Claims take longer than usual to process. If your claim fails, try increasing the gas or send the failed tx hash to{' '}
+          <a href="https://t.me/KyleCruise" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300 underline font-medium">
+            @KyleCruise on Telegram
+          </a>
+          .
+        </p>
+      </div>
+
       {/* ── How it works footer ───────────────────────────────────── */}
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 space-y-1.5">
         <p className="text-[10px] uppercase tracking-wider text-white/20 font-poppins font-semibold">How it works</p>

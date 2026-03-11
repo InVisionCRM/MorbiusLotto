@@ -335,6 +335,13 @@ export class MerkleDropsLPService {
       throw new Error(`Epoch must be in 'snapshot' status (current: ${epoch.status})`);
     }
 
+    // Sync on-chain claim status so rollup only includes truly unclaimed amounts.
+    try {
+      await this.syncClaimStatus();
+    } catch (err) {
+      logger.warn('[MerkleLP] syncClaimStatus failed before calculateRewards — rollup may be inflated', err);
+    }
+
     const { rows: snapshots } = await this.pool.query<{
       wallet_address: string;
       morbius_equivalent: string;

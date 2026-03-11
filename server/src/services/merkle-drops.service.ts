@@ -316,6 +316,14 @@ export class MerkleDropsService {
       throw new Error(`Epoch must be in 'snapshot' status to calculate rewards (current: ${epoch.status})`);
     }
 
+    // Sync on-chain claim status so rollup only includes truly unclaimed amounts.
+    // Otherwise we roll up prior rewards that were already claimed on-chain but have claimed_at = NULL in DB.
+    try {
+      await this.syncClaimStatus();
+    } catch (err) {
+      logger.warn('[MerkleDrops] syncClaimStatus failed before calculateRewards — rollup may be inflated', err);
+    }
+
     const { rows: snapshots } = await this.pool.query<{ wallet_address: string; morbius_balance: string }>(
       'SELECT wallet_address, morbius_balance FROM merkle_snapshots WHERE epoch_id = $1',
       [epochId],

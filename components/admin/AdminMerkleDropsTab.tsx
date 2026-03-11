@@ -470,6 +470,16 @@ export default function AdminMerkleDropsTab() {
   const [currentOperators, setCurrentOperators] = useState<string[]>([]);
   const [operatorsLoading, setOperatorsLoading] = useState(false);
 
+  // Live MORBIUS balance in the holder claim contract (same as MerkleClaimsPanel "Reward Pool")
+  const { data: holderContractBalance } = useReadContract({
+    address: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [MERKLE_CLAIM_MORBIUS_ADDRESS as `0x${string}`],
+    query: { enabled: Boolean(MERKLE_CLAIM_MORBIUS_ADDRESS) },
+  });
+  const holderContractBalanceWei = (holderContractBalance as bigint | undefined) ?? 0n;
+
   // ── Snapshot holder viewer (per-epoch, from DB) ─────────────────────────────
   const [snapshotData, setSnapshotData] = useState<Record<number, { rows: SnapshotRow[]; total: number; page: number; loading: boolean }>>({});
 
@@ -970,6 +980,9 @@ export default function AdminMerkleDropsTab() {
                 {MERKLE_CLAIM_MORBIUS_ADDRESS}
                 <ExternalLink className="w-3 h-3 shrink-0" />
               </a>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Contract balance: <span className="font-mono text-cyan-400">{fmtMorbius(holderContractBalanceWei.toString())} MORBIUS</span>
+              </p>
             </div>
             <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 px-3 py-2.5 space-y-1">
               <p className="text-[10px] uppercase tracking-wider text-cyan-400/80 font-semibold">LP drops</p>
@@ -1305,10 +1318,17 @@ export default function AdminMerkleDropsTab() {
                         </span>
                         <span>{epoch.total_holders.toLocaleString()} holders</span>
                         {Number(epoch.total_reward_amount) > 0 && (
-                          <span className="text-emerald-400 font-mono flex items-center gap-1">
-                            {fmtMorbius(epoch.total_reward_amount)} MORBIUS
-                            {Number(epoch.rollup_amount) > 0 && (
-                              <span className="text-[9px] text-amber-400 border border-amber-400/30 bg-amber-400/5 rounded px-1 py-0.5 ml-1" title={`Includes ${fmtMorbius(epoch.rollup_amount)} MORBIUS rolled up from prior epochs`}>+rollup</span>
+                          <span className="text-emerald-400 font-mono flex items-center gap-1 flex-wrap">
+                            {Number(epoch.rollup_amount) > 0 ? (
+                              <>
+                                {fmtMorbius(epoch.new_reward_amount || '0')} new
+                                <span className="text-slate-500">+</span>
+                                <span className="text-amber-400">{fmtMorbius(epoch.rollup_amount)} rollup</span>
+                                <span className="text-slate-500">=</span>
+                                {fmtMorbius(epoch.total_reward_amount)} total
+                              </>
+                            ) : (
+                              <>{fmtMorbius(epoch.total_reward_amount)} MORBIUS</>
                             )}
                           </span>
                         )}
@@ -1336,23 +1356,32 @@ export default function AdminMerkleDropsTab() {
 
                         {/* Reward breakdown (shown once calculated) */}
                         {Number(epoch.total_reward_amount) > 0 && (
-                          <div className="grid grid-cols-3 gap-3 text-xs bg-slate-800/40 rounded p-3 border border-slate-700/30">
-                            <div>
-                              <p className="text-[10px] text-slate-500 uppercase tracking-wider">New Rewards</p>
-                              <p className="text-blue-300 font-mono mt-0.5">{fmtMorbius(epoch.new_reward_amount || '0')} MORBIUS</p>
-                              <p className="text-[9px] text-slate-600 mt-0.5">admin deposits this</p>
+                          <>
+                            <div className="grid grid-cols-3 gap-3 text-xs bg-slate-800/40 rounded p-3 border border-slate-700/30">
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">New Rewards</p>
+                                <p className="text-blue-300 font-mono mt-0.5">{fmtMorbius(epoch.new_reward_amount || '0')} MORBIUS</p>
+                                <p className="text-[9px] text-slate-600 mt-0.5">admin deposits this</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Rolled Up</p>
+                                <p className="text-amber-300 font-mono mt-0.5">{fmtMorbius(epoch.rollup_amount || '0')} MORBIUS</p>
+                                <p className="text-[9px] text-slate-600 mt-0.5">already in contract</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Epoch</p>
+                                <p className="text-emerald-300 font-mono mt-0.5">{fmtMorbius(epoch.total_reward_amount)} MORBIUS</p>
+                                <p className="text-[9px] text-slate-600 mt-0.5">sum of all leaves</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Rolled Up</p>
-                              <p className="text-amber-300 font-mono mt-0.5">{fmtMorbius(epoch.rollup_amount || '0')} MORBIUS</p>
-                              <p className="text-[9px] text-slate-600 mt-0.5">already in contract</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Epoch</p>
-                              <p className="text-emerald-300 font-mono mt-0.5">{fmtMorbius(epoch.total_reward_amount)} MORBIUS</p>
-                              <p className="text-[9px] text-slate-600 mt-0.5">sum of all leaves</p>
-                            </div>
-                          </div>
+                            {BigInt(epoch.total_reward_amount) > holderContractBalanceWei && (
+                              <div className="rounded border border-amber-500/50 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-200">
+                                <strong>Epoch total ({fmtMorbius(epoch.total_reward_amount)} MORBIUS)</strong> exceeds{' '}
+                                <strong>contract balance ({fmtMorbius(holderContractBalanceWei.toString())} MORBIUS)</strong>.
+                                Claims will fail for the shortfall. Deposit more MORBIUS to the contract or recalculate this epoch with a lower total.
+                              </div>
+                            )}
+                          </>
                         )}
 
                         {epoch.merkle_root && (
@@ -1600,6 +1629,9 @@ export default function AdminMerkleDropsTab() {
                               <div>
                                 <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Distributed</p>
                                 <p className="text-emerald-400 font-semibold font-mono mt-0.5">{fmtMorbius(epoch.total_reward_amount)} MORBIUS</p>
+                                {Number(epoch.rollup_amount) > 0 && (
+                                  <p className="text-[9px] text-slate-500 mt-0.5">{fmtMorbius(epoch.new_reward_amount || '0')} new + {fmtMorbius(epoch.rollup_amount)} rollup</p>
+                                )}
                               </div>
                             </div>
 

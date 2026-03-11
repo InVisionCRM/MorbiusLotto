@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { getRecentErrors } from '@/lib/error-log';
+import { getApiUrlOptional } from '@/lib/api-urls';
 
 const CATEGORIES = ['Balance Issue', 'Game Bug', 'Transaction Failed', 'Other'] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -45,10 +46,15 @@ export function ReportModal({ isOpen, onClose, balance }: ReportModalProps) {
 
     setSubmitting(true);
     try {
-      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? '';
+      const apiBase = getApiUrlOptional();
+      if (!apiBase) {
+        toast.error('Report service unavailable', { description: 'Backend URL is not configured. Set NEXT_PUBLIC_API_URL.' });
+        setSubmitting(false);
+        return;
+      }
       const recentErrors = getRecentErrors();
 
-      const res = await fetch(`${serverUrl}/api/reports`, {
+      const res = await fetch(`${apiBase}/api/reports`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Flag, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { getApiUrlOptional } from '@/lib/api-urls';
 
 interface Report {
   id: string;
@@ -49,15 +50,19 @@ export default function AdminReportsTab() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
-  const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? '';
+  const apiBase = getApiUrlOptional() ?? '';
 
   const fetchReports = useCallback(async () => {
     if (!address) return;
+    if (!apiBase) {
+      setError('Backend URL not configured (NEXT_PUBLIC_API_URL)');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const qs = statusFilter !== 'all' ? `?status=${statusFilter}` : '';
-      const res = await fetch(`${serverUrl}/api/admin/reports${qs}`, {
+      const res = await fetch(`${apiBase}/api/admin/reports${qs}`, {
         headers: { 'x-admin-wallet': address },
       });
       if (!res.ok) {
@@ -70,7 +75,7 @@ export default function AdminReportsTab() {
     } finally {
       setLoading(false);
     }
-  }, [address, statusFilter, serverUrl]);
+  }, [address, statusFilter, apiBase]);
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
@@ -78,7 +83,7 @@ export default function AdminReportsTab() {
     if (!address) return;
     setUpdating(id);
     try {
-      const res = await fetch(`${serverUrl}/api/admin/reports/${id}`, {
+      const res = await fetch(`${apiBase}/api/admin/reports/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'x-admin-wallet': address },
         body: JSON.stringify({ status }),
