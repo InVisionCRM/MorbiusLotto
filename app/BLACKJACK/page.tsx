@@ -44,6 +44,7 @@ import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACK
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
+import { usePendingWithdrawal } from '@/hooks/use-pending-withdrawal';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
 import { useQueryClient } from '@tanstack/react-query';
@@ -172,6 +173,8 @@ export default function BlackjackPage() {
   const publicClient = usePublicClient();
   const { signTypedDataAsync } = useSignTypedData();
 
+  const { pendingJob, clearPendingJob } = usePendingWithdrawal(address, getApiUrlOptional() ?? undefined);
+
   // Intro screen state
   const [showIntro, setShowIntro] = useState(true);
 
@@ -201,13 +204,14 @@ export default function BlackjackPage() {
 
   // Background music player state (lifted from BlackjackTable)
   const BLACKJACK_MUSIC_PLAYLIST = [
+    '/BlackJack/music/Sera-di-Blackjack.mp3',
     '/BlackJack/music/Winning-Big.mp3',
     '/BlackJack/music/Lucky-Ducky.mp3',
     '/BlackJack/music/Smooth-Gains.mp3',
     '/BlackJack/music/Top-Tier.mp3',
     '/BlackJack/music/Chances.mp3',
   ] as const;
-  const [musicTrackIndex, setMusicTrackIndex] = useState(1); // Start with song 2 (Lucky-Ducky)
+  const [musicTrackIndex, setMusicTrackIndex] = useState(0); // Start with first track (Sera di Blackjack)
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
   const [musicVolume, setMusicVolume] = useState(25); // 0–100
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -461,16 +465,18 @@ export default function BlackjackPage() {
   }, [totalBetAmount, manageChipStack]);
 
   // Reset game result after chip animation completes
-  // Clear chips on loss AFTER animation completes (chips stay on win/blackjack/push)
+  // On loss: clear chips. On win/push/blackjack: restore to initial bet (undoes double-down/split inflation).
   const handleChipAnimationComplete = useCallback(() => {
-    // Clear chips on loss after animation completes
-    // Use ref to avoid stale closure issues
     if (chipResultRef.current === 'loss') {
       manageChipStack('', undefined, true);
-      chipResultRef.current = null; // Reset ref
+    } else if (initialBetRef.current > 0) {
+      // Restore chip stack to the bet placed before double-down/split
+      setManualBetAmount(null);
+      setChipStack(amountToChipStack(initialBetRef.current));
     }
+    chipResultRef.current = null;
     setCurrentGameResult(null);
-  }, [manageChipStack]);
+  }, [manageChipStack, amountToChipStack]);
 
   // Double down chips: add chips only for the current hand's bet
   // If split, only add chips for half the stack (current hand)
@@ -553,6 +559,8 @@ export default function BlackjackPage() {
 
   // Ref to track current game for callbacks that can't access gameState directly
   const currentGameRef = useRef<Game | null>(null);
+  // Tracks the initial bet placed before double-down/split so rebet and chip restore use the correct amount
+  const initialBetRef = useRef<number>(0);
   // When createGame is in progress, game_created handler skips (handleStartGame handles it)
   const createGameInProgressRef = useRef(false);
   useEffect(() => {
@@ -1646,8 +1654,8 @@ export default function BlackjackPage() {
         typeof data?.betAmount === 'bigint' ? data.betAmount : BigInt(String(data?.betAmount || '0'));
       const profit: bigint = payout - betAmount;
 
-      // Save last bet amount (in whole MORBIUS tokens)
-      const betInMorbius = Math.floor(Number(formatEther(betAmount)));
+      // Save last bet amount using the initial bet (before double-down/split inflated it)
+      const betInMorbius = initialBetRef.current > 0 ? initialBetRef.current : Math.floor(Number(formatEther(betAmount)));
       setLastBetAmount(betInMorbius.toString());
 
       // Determine game result for chip animations (will be set after dealer reveal)
@@ -2284,6 +2292,8 @@ export default function BlackjackPage() {
         setManualBetAmount(null);
       }
     }
+    // Capture initial bet before double-down/split can inflate it
+    initialBetRef.current = Math.floor(Number(formatEther(effectiveTotalBetWei)));
     const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
     handleStartGame(effectiveTotalBetWei, clientSeed, ppBetWei);
   }, [manualBetAmount, effectiveTotalBetWei, clientSeed, handleStartGame, amountToChipStack, perfectPairsBet]);
@@ -2310,6 +2320,7 @@ export default function BlackjackPage() {
       }
     }
     setChipStack(chips);
+    initialBetRef.current = Math.floor(lastBet);
     const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
     handleStartGame(lastBetWei, clientSeed, ppBetWei);
   }, [lastBetAmount, clientSeed, handleStartGame, perfectPairsBet]);
@@ -2883,10 +2894,26 @@ export default function BlackjackPage() {
           </div>
         )}
 
+        {/* Pending withdrawal banner — visible after page refresh without opening modal */}
+        {pendingJob && (
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-black text-white text-sm px-4 py-3 rounded-xl shadow-lg border border-white/10 max-w-sm w-full">
+            <svg className="animate-spin h-4 w-4 shrink-0 text-white/70" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <span className="flex-1">
+              {pendingJob.status === 'pending_confirmation'
+                ? <>Withdrawal confirming on chain&hellip; {pendingJob.txHash && <span className="text-white/50">{pendingJob.txHash.slice(0, 10)}…</span>}</>
+                : 'Withdrawal processing\u2026'}
+            </span>
+          </div>
+        )}
+
         {/* Deposit/Withdraw Modal (available on all views) */}
         <DepositWithdrawModal
           isOpen={showDepositModal}
           onClose={() => setShowDepositModal(false)}
+          balanceLabel="Reserve Balance"
           onBalanceSync={async () => {
             await fetchBalanceFromApi();
             await syncBalance().catch(() => {});
@@ -2895,9 +2922,10 @@ export default function BlackjackPage() {
             await fetchBalanceFromApi();
             await fetchBalance().catch(() => {});
           }}
-          onWithdrawSuccess={async () => { await refetchPlayerReserve(); }}
+          onWithdrawSuccess={async () => { await refetchPlayerReserve(); clearPendingJob(); }}
           contractReserve={typeof playerReserve === 'bigint' ? playerReserve : BigInt(0)}
-          offChainBalance={offChainBalance}
+          externalBalance={offChainBalance}
+          externalWithdrawLock={!!pendingJob}
         />
           </>
         )}

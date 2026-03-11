@@ -2100,8 +2100,7 @@ async function initializeServices() {
             status: 'failed',
             error_message: errMsg,
           });
-          await dbService.refundHotWithdrawalJob(job.wallet_address, amountWei);
-          logger.error('Hot withdrawal broadcast failed, refunded', { jobId: job.id, error: errMsg });
+          logger.error('Hot withdrawal broadcast failed (no refund — contact support)', { jobId: job.id, error: errMsg });
         }
       } catch (err) {
         logger.error('Hot withdrawal queue worker error', err);
@@ -2116,13 +2115,12 @@ async function initializeServices() {
         const jobs = await dbService.getHotWithdrawalJobsPendingConfirmation();
         for (const job of jobs) {
           const ageMs = Date.now() - new Date(job.updated_at).getTime();
-          const markDroppedAndRefund = async () => {
+          const markDropped = async () => {
             await dbService.updateHotWithdrawalJob(job.id, {
               status: 'failed',
-              error_message: 'Transaction not found after 15 minutes (dropped?)',
+              error_message: 'Transaction not found after 15 minutes (dropped?) — contact support',
             });
-            await dbService.refundHotWithdrawalJob(job.wallet_address, BigInt(job.amount_wei));
-            logger.warn('Hot withdrawal dropped/timeout, refunded', { jobId: job.id, txHash: job.tx_hash });
+            logger.warn('Hot withdrawal dropped/timeout (no refund — contact support)', { jobId: job.id, txHash: job.tx_hash });
           };
           try {
             const receipt = await publicClient.getTransactionReceipt({ hash: job.tx_hash as `0x${string}` });
@@ -2174,16 +2172,15 @@ async function initializeServices() {
                   }
                 }
               } else {
-                await dbService.updateHotWithdrawalJob(job.id, { status: 'failed', error_message: 'Transaction reverted on-chain' });
-                await dbService.refundHotWithdrawalJob(job.wallet_address, BigInt(job.amount_wei));
-                logger.warn('Hot withdrawal reverted, refunded', { jobId: job.id, txHash: job.tx_hash });
+                await dbService.updateHotWithdrawalJob(job.id, { status: 'failed', error_message: 'Transaction reverted on-chain — contact support' });
+                logger.warn('Hot withdrawal reverted on-chain (no refund — contact support)', { jobId: job.id, txHash: job.tx_hash });
               }
             } else if (ageMs > HOT_WITHDRAW_CONFIRM_PENDING_TIMEOUT_MS) {
-              await markDroppedAndRefund();
+              await markDropped();
             }
           } catch (receiptErr: any) {
             if (ageMs > HOT_WITHDRAW_CONFIRM_PENDING_TIMEOUT_MS) {
-              await markDroppedAndRefund();
+              await markDropped();
             }
           }
         }
@@ -2281,7 +2278,8 @@ async function initializeServices() {
 
         let balance = await dbService.getPlayerBalance(normalizedAddress);
         const hasActive = await dbService.hasActiveGames(normalizedAddress);
-        if (!hasActive) {
+        const hasPendingDeposit = await dbService.hasPendingDeposit(normalizedAddress);
+        if (!hasActive && !hasPendingDeposit) {
           try {
             const contractBalance = await publicClient.readContract({
               address: blackjackContractAddress,
@@ -2596,6 +2594,30 @@ async function initializeServices() {
         return res.status(200).json(payload);
       } catch (error) {
         logger.error('Withdraw status error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Withdraw pending: returns the latest in-progress job for a wallet (so frontend can resume polling after refresh)
+    app.get('/api/withdraw/pending', async (req, res) => {
+      try {
+        const address = req.query.address as string;
+        if (!address || typeof address !== 'string') return res.status(400).json({ error: 'address required' });
+        const normalizedAddress = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
+        if (normalizedAddress.length !== 42) return res.status(400).json({ error: 'Invalid address' });
+        const job = await dbService.getActiveHotWithdrawalJob(normalizedAddress);
+        if (!job) return res.status(200).json({ job: null });
+        return res.status(200).json({
+          job: {
+            jobId: job.id,
+            status: job.status,
+            txHash: job.tx_hash ?? undefined,
+            error: job.error_message ?? undefined,
+            netToUser: job.net_to_user_wei,
+          },
+        });
+      } catch (error) {
+        logger.error('Withdraw pending error:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });

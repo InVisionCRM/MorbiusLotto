@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
@@ -10,7 +11,9 @@ import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { PokerTableSummary } from '@/lib/websocket-client';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer';
+import { FloatingPokerChips } from '@/components/home/FloatingPokerChips';
 import { Theme } from '@/lib/theme';
+import { GameWalletModal } from '@/components/shared/GameWalletModal';
 
 /** Format a wei string to human-readable chips (e.g. "10000000000000000000" -> "10") */
 function formatChips(wei: string): string {
@@ -22,6 +25,31 @@ function formatChips(wei: string): string {
   } catch {
     return wei;
   }
+}
+
+/** Blind-based accent for lobby card blob (yellow → green → cyan → red → purple → gold) */
+const BLIND_COLORS = [
+  { max: 200, color: 'rgba(59, 130, 246, 0.35)' }, // blue (lowest blinds)
+  { max: 1000, color: 'rgba(34, 197, 94, 0.35)' },
+  { max: 5000, color: 'rgba(34, 211, 238, 0.35)' },
+  { max: 20000, color: 'rgba(239, 68, 68, 0.35)' },
+  { max: 100000, color: 'rgba(168, 85, 247, 0.35)' },
+  { max: Infinity, color: 'rgba(245, 158, 11, 0.4)' },
+];
+function getBlindAccentColor(bigBlindWei: string): string {
+  try {
+    const total = Number(formatEther(BigInt(bigBlindWei)));
+    const tier = BLIND_COLORS.find((t) => total <= t.max) ?? BLIND_COLORS[BLIND_COLORS.length - 1];
+    return tier.color;
+  } catch {
+    return BLIND_COLORS[0].color;
+  }
+}
+
+/** Solid version of accent color for icons (same RGB, full opacity). */
+function getBlindAccentSolid(bigBlindWei: string): string {
+  const rgba = getBlindAccentColor(bigBlindWei);
+  return rgba.replace(/[\d.]+\)$/, '1)');
 }
 
 // Intro screen component (same style as Blackjack)
@@ -101,6 +129,8 @@ export default function PokerLobbyPage() {
   const [balance, setBalance] = useState<string | null>(null);
   const [createModal, setCreateModal] = useState<{ smallBlind: string; bigBlind: string; maxSeats: number } | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
 
   const clientRef = React.useRef<BlackjackWebSocketClient | null>(null);
 
@@ -225,13 +255,27 @@ export default function PokerLobbyPage() {
 
   return (
     <GlobalMainNav page="home">
-      <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
+      <div className="relative min-h-screen h-full w-full flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
+        <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.1),transparent_70%)] pointer-events-none" />
+        <FloatingPokerChips />
         <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
           <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4 mb-4 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
               <Link href="/" className="text-cyan-400 hover:text-cyan-300 text-xs sm:text-sm">← Back</Link>
               <Link href="/poker/designer" className="text-slate-400 hover:text-cyan-400 text-xs sm:text-sm">Design layout</Link>
+              <button
+                type="button"
+                onClick={() => setShowHowToPlay(true)}
+                className="text-slate-400 hover:text-cyan-400 text-xs sm:text-sm"
+              >
+                How to Play
+              </button>
+              <Link
+                href="/poker/demo?tutorial=1"
+                className="text-slate-400 hover:text-cyan-400 text-xs sm:text-sm"
+              >
+                Interactive tutorial
+              </Link>
               {isConnected && (
                 <>
                   {balance != null && (
@@ -239,12 +283,13 @@ export default function PokerLobbyPage() {
                       Balance: <span className="text-cyan-400 font-medium">{formatChips(balance)}</span> chips
                     </span>
                   )}
-                  <Link
-                    href="/BLACKJACK?open=deposit"
+                  <button
+                    type="button"
+                    onClick={() => setShowDepositModal(true)}
                     className="text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-700 hover:to-blue-700"
                   >
                     Get chips
-                  </Link>
+                  </button>
                 </>
               )}
             </div>
@@ -261,7 +306,7 @@ export default function PokerLobbyPage() {
               )}
             </div>
           </div>
-          <p className="text-slate-400 mb-4 sm:mb-6 text-xs sm:text-base">Multiplayer no-limit Hold&apos;em. Join a table and play. Chips are the same balance as Blackjack — deposit on Blackjack to play.</p>
+          <p className="text-slate-400 mb-4 sm:mb-6 text-xs sm:text-base">Multiplayer no-limit Hold&apos;em. Join a table and play.</p>
 
           {loading && <p className="text-slate-400">Loading tables...</p>}
           {error && <p className="text-red-400 mb-4">{error}</p>}
@@ -271,27 +316,29 @@ export default function PokerLobbyPage() {
             </p>
           )}
           {!loading && tables.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               {tables.map((t) => {
                 const isPlaying = t.status === 'playing';
                 const openSeats = t.maxSeats - t.seatedCount;
+                const accentSolid = getBlindAccentSolid(t.bigBlind);
                 return (
                   <div
                     key={t.id}
-                    className="bg-[#e0e5ec] rounded-[2rem] p-6 flex flex-col justify-between gap-6"
-                    style={{ boxShadow: '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)' }}
+                    className="relative bg-[#e0e5ec] rounded-[2rem] p-6 flex flex-col justify-between gap-6 overflow-hidden"
+                    style={{ boxShadow: '2px 2px 6px rgba(163,177,198,0.25), -2px -2px 6px rgba(255,255,255,0.25)' }}
                   >
-                    {/* Top row: icon + status */}
+                    {/* Content */}
+                    <div className="relative z-10 flex flex-col justify-between gap-6">
                     <div className="flex justify-between items-center">
                       <div
-                        className="w-11 h-11 rounded-full bg-[#e0e5ec] flex items-center justify-center text-slate-500 text-lg"
-                        style={{ boxShadow: 'inset 5px 5px 10px rgb(163,177,198,0.6), inset -5px -5px 10px rgba(255,255,255,0.5)' }}
+                        className="w-11 h-11 rounded-full bg-[#e0e5ec] flex items-center justify-center text-lg"
+                        style={{ boxShadow: 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)', color: accentSolid }}
                       >
                         ♠
                       </div>
                       <div
                         className="px-3 py-1.5 rounded-full bg-[#e0e5ec]"
-                        style={{ boxShadow: '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)' }}
+                        style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
                       >
                         <span className={`text-[10px] font-bold uppercase tracking-wider ${isPlaying ? 'text-emerald-600' : 'text-slate-500'}`}>
                           {isPlaying ? 'In Progress' : 'Waiting'}
@@ -327,10 +374,10 @@ export default function PokerLobbyPage() {
                       <Link
                         href={`/poker/${t.id}`}
                         className="flex-1 py-3 rounded-2xl bg-[#e0e5ec] text-slate-500 font-bold uppercase tracking-widest text-xs text-center transition-all duration-200"
-                        style={{ boxShadow: '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)' }}
-                        onMouseDown={(e) => { e.currentTarget.style.boxShadow = 'inset 5px 5px 10px rgb(163,177,198,0.6), inset -5px -5px 10px rgba(255,255,255,0.5)'; }}
-                        onMouseUp={(e) => { e.currentTarget.style.boxShadow = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)'; }}
+                        style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
+                        onMouseDown={(e) => { e.currentTarget.style.boxShadow = 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)'; }}
+                        onMouseUp={(e) => { e.currentTarget.style.boxShadow = '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)'; }}
                       >
                         Watch
                       </Link>
@@ -338,12 +385,13 @@ export default function PokerLobbyPage() {
                         <button
                           type="button"
                           onClick={() => setJoinModal({ tableId: t.id })}
-                          className="flex-1 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs text-white transition-all duration-200 active:scale-95"
-                          style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', boxShadow: '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)' }}
+                          className="flex-1 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs text-white transition-all duration-200 active:scale-95 shadow"
+                          style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', boxShadow: '2px 2px 6px rgba(0,0,0,0.2)' }}
                         >
-                          Sit Down
+                          Sit
                         </button>
                       )}
+                    </div>
                     </div>
                   </div>
                 );
@@ -370,7 +418,7 @@ export default function PokerLobbyPage() {
                   }
                 })() && (
                   <p className="text-amber-400 text-sm">
-                    Insufficient balance. <Link href="/BLACKJACK?open=deposit" className="underline hover:text-amber-300">Get chips</Link>
+                    Insufficient balance. <button type="button" onClick={() => setShowDepositModal(true)} className="underline hover:text-amber-300">Get chips</button>
                   </p>
                 )}
                 <label className="block text-sm text-slate-400">Buy-in (MORBIUS)</label>
@@ -404,6 +452,119 @@ export default function PokerLobbyPage() {
                     Join
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showHowToPlay && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div
+              className="bg-[#e0e5ec] rounded-[2rem] max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col"
+              style={{ boxShadow: '4px 4px 8px rgba(163,177,198,0.4), -4px -4px 8px rgba(255,255,255,0.4)' }}
+            >
+              <div className="flex items-center justify-between p-4 border-b border-slate-300/60 shrink-0">
+                <div className="w-10 h-10 rounded-full bg-[#e0e5ec] flex items-center justify-center text-slate-500 text-lg" style={{ boxShadow: 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)' }}>
+                  ♠
+                </div>
+                <h2 className="text-xl font-bold text-slate-700">How to Play</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowHowToPlay(false)}
+                  className="w-10 h-10 rounded-full bg-[#e0e5ec] flex items-center justify-center text-slate-500 hover:text-slate-700 transition-colors"
+                  style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
+                <section>
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Overview</h3>
+                  <p className="text-slate-700 text-sm leading-relaxed">
+                    Texas Hold&apos;em is a community-card poker game. Each player gets two private cards (hole cards) and shares five community cards. You make the best five-card hand using any combination of your two cards and the five on the table.
+                  </p>
+                </section>
+
+                <section>
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Objective</h3>
+                  <p className="text-slate-700 text-sm leading-relaxed">
+                    Win chips by having the best hand at showdown, or by making all other players fold. In no-limit Hold&apos;em you can bet any amount up to your full stack at any time.
+                  </p>
+                </section>
+
+                <section>
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Game flow</h3>
+                  <ul className="text-slate-700 text-sm space-y-2 list-disc pl-4">
+                    <li><strong className="text-slate-600">Blinds:</strong> Before each hand, the two players to the left of the dealer post the small blind and big blind.</li>
+                    <li><strong className="text-slate-600">Pre-flop:</strong> You receive two hole cards. First betting round (everyone can fold, call the big blind, or raise).</li>
+                    <li><strong className="text-slate-600">Flop:</strong> Three community cards are dealt. Second betting round.</li>
+                    <li><strong className="text-slate-600">Turn:</strong> One more community card. Third betting round.</li>
+                    <li><strong className="text-slate-600">River:</strong> Final community card. Fourth betting round.</li>
+                    <li><strong className="text-slate-600">Showdown:</strong> Remaining players reveal their hands. Best five-card hand wins the pot.</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Actions</h3>
+                  <ul className="text-slate-700 text-sm space-y-1.5 list-none">
+                    <li><strong className="text-slate-600">Fold</strong> — Drop out of the hand and give up your cards.</li>
+                    <li><strong className="text-slate-600">Check</strong> — Stay in without betting (only when no one has bet this round).</li>
+                    <li><strong className="text-slate-600">Bet</strong> — Put chips into the pot (first to act in a round).</li>
+                    <li><strong className="text-slate-600">Call</strong> — Match the current bet to stay in.</li>
+                    <li><strong className="text-slate-600">Raise</strong> — Increase the bet; others must call the new amount or fold.</li>
+                    <li><strong className="text-slate-600">All-in</strong> — Bet your entire stack. You can only win up to what each opponent has put in for that hand.</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Hand rankings</h3>
+                  <p className="text-slate-500 text-xs mb-3">Best (1) to worst (10). Examples use cards from the deck.</p>
+                  <ol className="space-y-4 text-sm">
+                    {[
+                      { rank: 1, name: 'Royal Flush', desc: 'A, K, Q, J, 10 of the same suit.', cards: ['AS', 'KS', 'QS', 'JS', '10S'] },
+                      { rank: 2, name: 'Straight Flush', desc: 'Five consecutive cards of the same suit.', cards: ['9H', '8H', '7H', '6H', '5H'] },
+                      { rank: 3, name: 'Four of a Kind', desc: 'Four cards of the same rank.', cards: ['KC', 'KH', 'KD', 'KS', '3D'] },
+                      { rank: 4, name: 'Full House', desc: 'Three of a kind plus a pair.', cards: ['AC', 'AD', 'AH', 'KS', 'KD'] },
+                      { rank: 5, name: 'Flush', desc: 'Five cards of the same suit (not in sequence).', cards: ['AH', 'JH', '9H', '6H', '2H'] },
+                      { rank: 6, name: 'Straight', desc: 'Five consecutive cards of mixed suits.', cards: ['10C', '9D', '8H', '7S', '6C'] },
+                      { rank: 7, name: 'Three of a Kind', desc: 'Three cards of the same rank.', cards: ['QC', 'QD', 'QH', '5S', '2D'] },
+                      { rank: 8, name: 'Two Pair', desc: 'Two different pairs.', cards: ['JC', 'JD', '9H', '9S', '3C'] },
+                      { rank: 9, name: 'One Pair', desc: 'Two cards of the same rank.', cards: ['KC', 'KD', '10H', '5D', '2S'] },
+                      { rank: 10, name: 'High Card', desc: 'No pair; highest card wins.', cards: ['AS', 'KD', '10C', '5H', '2S'] },
+                    ].map(({ rank, name, desc, cards }) => (
+                      <li key={rank} className="flex gap-3 items-start">
+                        <span className="shrink-0 w-6 h-6 rounded-full bg-[#e0e5ec] flex items-center justify-center text-[10px] font-bold text-slate-500" style={{ boxShadow: 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)' }}>{rank}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mb-1">
+                            {cards.map((c) => (
+                              <Image
+                                key={c}
+                                src={`/BlackJack/Cards/PNG/${c}.png`}
+                                alt={c}
+                                width={36}
+                                height={50}
+                                className="rounded shadow-sm object-contain"
+                              />
+                            ))}
+                          </div>
+                          <span className="font-bold text-slate-700">{name}</span>
+                          <span className="text-slate-600"> — {desc}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              </div>
+              <div className="p-4 border-t border-slate-300/60 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowHowToPlay(false)}
+                  className="w-full py-3 rounded-2xl font-bold uppercase tracking-widest text-xs text-white transition-all duration-200 active:scale-95"
+                  style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', boxShadow: '2px 2px 6px rgba(0,0,0,0.2)' }}
+                >
+                  Got it
+                </button>
               </div>
             </div>
           </div>
@@ -467,6 +628,12 @@ export default function PokerLobbyPage() {
 
         <Footer />
       </div>
+
+      <GameWalletModal
+        isOpen={showDepositModal}
+        onClose={() => setShowDepositModal(false)}
+        balanceLabel="Poker Balance"
+      />
     </GlobalMainNav>
   );
 }

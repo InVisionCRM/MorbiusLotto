@@ -5,12 +5,10 @@ import { formatEther, parseEther } from 'viem';
 
 type Amount = bigint;
 
-/** Parse a raw wei string from the server into a bigint. */
 function parsePropWei(s: string): Amount {
   try { return BigInt(s); } catch { return 0n; }
 }
 
-/** Parse a human-readable chip amount typed by the user (e.g. "1000") into wei. */
 function safeParseAmount(input: string): Amount | null {
   try {
     const cleaned = input.trim().replace(/,/g, '');
@@ -27,7 +25,6 @@ function clampAmount(value: Amount, min: Amount, max: Amount): Amount {
   return value;
 }
 
-/** Human-readable chip display (wei -> "1,000") */
 function formatAmount(v: Amount): string {
   const n = Number(formatEther(v));
   return Number.isInteger(n)
@@ -35,18 +32,17 @@ function formatAmount(v: Amount): string {
     : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** Convert a wei bigint to a plain chip number for slider math */
+function toChips(v: Amount): number {
+  return Number(formatEther(v));
+}
+
 export interface PokerActionsProps {
-  /** Can the current player act (is it their turn and not folded)? */
   canAct: boolean;
-  /** Can check (current bet to call is 0)? */
   canCheck: boolean;
-  /** Minimum raise amount (string) */
   minRaise: string;
-  /** Current player stack (string) for max bet */
   stack: string;
-  /** Call amount (string) - 0 if can check */
   callAmount: string;
-  /** Current pot (string wei) for pot-sized bet calculation */
   pot: string;
   onFold: () => void;
   onCheck: () => void;
@@ -68,73 +64,98 @@ export function PokerActions({
   onBet,
   onRaise,
 }: PokerActionsProps) {
-  // Props arrive as raw wei strings from the server — parse with BigInt, not parseEther
   const minRaiseAmt = useMemo(() => parsePropWei(minRaise), [minRaise]);
-  const stackAmt = useMemo(() => parsePropWei(stack), [stack]);
-  const callAmt = useMemo(() => parsePropWei(callAmount), [callAmount]);
-  const potAmt = useMemo(() => parsePropWei(pot), [pot]);
+  const stackAmt    = useMemo(() => parsePropWei(stack),    [stack]);
+  const callAmt     = useMemo(() => parsePropWei(callAmount),[callAmount]);
+  const potAmt      = useMemo(() => parsePropWei(pot),       [pot]);
 
   const isFacingBet = callAmt > 0n;
-  const primaryLabel = isFacingBet ? 'Raise' : 'Bet';
 
   const [customAmount, setCustomAmount] = useState(() => formatAmount(minRaiseAmt));
 
   useEffect(() => {
-    // Keep the input aligned with server constraints when a new street/hand updates minRaise.
-    // Only auto-bump if the user entered something smaller.
     const current = safeParseAmount(customAmount);
     if (current == null || current < minRaiseAmt) setCustomAmount(formatAmount(minRaiseAmt));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minRaiseAmt]);
 
-  const quickSizes: Array<{ label: string; value: Amount }> = [
-    { label: 'Min', value: minRaiseAmt },
-    { label: '½', value: stackAmt / 2n },
-    { label: 'Pot', value: clampAmount(potAmt + callAmt, minRaiseAmt, stackAmt) },
-    { label: 'All-in', value: stackAmt },
-  ];
-
-  const parsed = safeParseAmount(customAmount);
+  // ── Derived values ─────────────────────────────────────────────────────────
+  const parsed  = safeParseAmount(customAmount);
   const clamped = parsed == null ? null : clampAmount(parsed, minRaiseAmt, stackAmt);
   const hasValidAmount = clamped != null && stackAmt > 0n;
 
+  const minChips   = toChips(minRaiseAmt);
+  const maxChips   = toChips(stackAmt);
+  const stepChips  = Math.max(1, Math.round(minChips / 10)); // ~10% of min as step
+  const sliderVal  = clamped != null ? Math.max(minChips, Math.min(maxChips, toChips(clamped))) : minChips;
+
+  // ── Quick size presets ─────────────────────────────────────────────────────
+  const quickSizes: Array<{ label: string; value: Amount }> = [
+    { label: 'Min',   value: minRaiseAmt },
+    { label: '½ Pot', value: clampAmount(potAmt / 2n, minRaiseAmt, stackAmt) },
+    { label: 'Pot',   value: clampAmount(potAmt + callAmt, minRaiseAmt, stackAmt) },
+    { label: 'Max',   value: stackAmt },
+  ];
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const handlePrimary = () => {
     if (!hasValidAmount || clamped == null) return;
-    const amtWei = clamped.toString();
-    if (isFacingBet) onRaise(amtWei);
-    else onBet(amtWei);
+    if (isFacingBet) onRaise(clamped.toString());
+    else             onBet(clamped.toString());
   };
+
+  const handleSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    setCustomAmount(val.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+  };
+
+  const nudge = (dir: 1 | -1) => {
+    const base = clamped ?? minRaiseAmt;
+    const step = minRaiseAmt > 0n ? minRaiseAmt : parseEther('1');
+    const next = clampAmount(base + BigInt(dir) * step, minRaiseAmt, stackAmt);
+    setCustomAmount(formatAmount(next));
+  };
+
+  const primaryLabel = isFacingBet
+    ? `Raise To ${hasValidAmount && clamped ? formatAmount(clamped) : '—'}`
+    : `Bet ${hasValidAmount && clamped ? formatAmount(clamped) : '—'}`;
 
   const secondaryLabel = canCheck ? 'Check' : `Call ${formatAmount(callAmt)}`;
+
   const handleSecondary = () => {
     if (canCheck) onCheck();
-    else onCall();
+    else          onCall();
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div
-      className="w-full border-t backdrop-blur-md px-3 py-3 sm:px-4 sm:py-3 rounded-t-2xl sm:rounded-none"
+      className="w-full select-none"
       style={{
-        borderColor: 'var(--poker-panel-border)',
-        background: 'var(--poker-panel-bg)',
-        opacity: canAct ? 1 : 0.5,
+        background: 'rgba(10,10,10,0.96)',
+        borderTop: '1px solid rgba(255,255,255,0.07)',
+        opacity: canAct ? 1 : 0.45,
+        // Slight upward overlap into the table
+        marginTop: '-6px',
+        position: 'relative',
+        zIndex: 30,
       }}
       role="group"
       aria-label="Poker actions"
     >
-      {/* Quick-size presets — mobile: full row, 44px+ touch targets */}
-      <div className="sm:hidden mb-2 flex gap-2 justify-center">
+      {/* ── Row 1: quick sizes (right-aligned above bet sizing area) ── */}
+      <div className="flex items-center justify-end gap-1 px-2 pt-1.5">
         {quickSizes.map((q) => (
           <button
             key={q.label}
             type="button"
             onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
             disabled={!canAct || stackAmt === 0n}
-            className="flex-1 min-h-[44px] px-2 border rounded-lg transition-all text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 active:brightness-90"
+            className="h-7 px-2.5 text-[11px] font-semibold rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95"
             style={{
-              color: 'var(--poker-accent)',
-              borderColor: 'var(--poker-accent-muted)',
-              background: 'color-mix(in srgb, var(--poker-accent) 10%, transparent)',
+              color: 'rgba(255,255,255,0.75)',
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.1)',
             }}
           >
             {q.label}
@@ -142,97 +163,167 @@ export function PokerActions({
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center justify-center sm:justify-between gap-2 sm:gap-3">
-        <div className="flex items-center gap-2 sm:gap-2">
+      {/* ── Row 2: action buttons + slider ── */}
+      <div
+        className="flex items-stretch gap-1.5 px-2 pb-2 pt-1"
+        style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))' }}
+      >
+        {/* Left — 3 main action buttons */}
+        <div className="flex gap-1.5 flex-1 min-w-0">
+          {/* Fold */}
           <button
             type="button"
             onClick={onFold}
             disabled={!canAct}
-            className="min-h-[44px] h-11 sm:h-10 px-4 sm:px-4 rounded border transition-all text-sm font-semibold hover:opacity-80 active:scale-95 active:brightness-90 disabled:cursor-not-allowed"
+            className="flex-1 h-12 min-w-0 rounded-sm text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none"
             style={{
-              color: 'var(--poker-danger)',
-              borderColor: 'var(--poker-danger-muted)',
-              background: 'color-mix(in srgb, var(--poker-danger) 15%, transparent)',
+              background: 'linear-gradient(180deg, #8b1a1a 0%, #6b1111 100%)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)',
             }}
           >
             Fold
           </button>
+
+          {/* Check / Call */}
           <button
             type="button"
             onClick={handleSecondary}
             disabled={!canAct}
-            className="min-h-[44px] h-11 sm:h-10 px-4 sm:px-4 rounded border transition-all text-sm font-semibold min-w-0 max-w-[130px] sm:max-w-none truncate hover:opacity-90 active:scale-95 active:brightness-90 disabled:cursor-not-allowed"
+            className="flex-1 h-12 min-w-0 rounded-sm text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none truncate px-2"
             style={{
-              color: 'var(--poker-text)',
-              borderColor: 'var(--poker-panel-border)',
-              background: 'color-mix(in srgb, var(--poker-accent) 10%, transparent)',
+              background: 'linear-gradient(180deg, #c0392b 0%, #96291f 100%)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)',
             }}
           >
             {secondaryLabel}
           </button>
-        </div>
 
-        <div className="hidden sm:flex items-center gap-1.5">
-          {quickSizes.map((q) => (
-            <button
-              key={q.label}
-              type="button"
-              onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
-              disabled={!canAct || stackAmt === 0n}
-              className="h-9 px-3 border transition-all text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 active:brightness-90"
-              style={{
-                color: 'var(--poker-accent)',
-                borderColor: 'var(--poker-accent-muted)',
-                background: 'color-mix(in srgb, var(--poker-accent) 10%, transparent)',
-              }}
-              title={q.label}
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Amount + primary action — on mobile: larger input (16px prevents iOS zoom), primary is prominent */}
-        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end sm:justify-end">
-          <input
-            inputMode="numeric"
-            pattern="[0-9]*"
-            type="text"
-            value={customAmount}
-            onChange={(e) => setCustomAmount(e.target.value)}
-            disabled={!canAct}
-            className="min-h-[44px] h-11 sm:h-10 w-20 sm:w-[110px] min-w-0 flex-1 sm:flex-none max-w-[100px] sm:max-w-none px-3 sm:px-3 text-base sm:text-sm outline-none focus:ring-2 transition shrink-0 rounded disabled:cursor-not-allowed"
-            style={{
-              color: 'var(--poker-text)',
-              background: 'var(--poker-bg-elevated)',
-              borderColor: 'var(--poker-panel-border)',
-              ['--tw-ring-color' as string]: 'var(--poker-accent)',
-            }}
-            aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
-          />
+          {/* Bet / Raise */}
           <button
             type="button"
             onClick={handlePrimary}
             disabled={!canAct || !hasValidAmount}
-            className="min-h-[48px] h-12 sm:h-10 flex-1 sm:flex-none min-w-[120px] sm:min-w-0 px-5 sm:px-5 text-base sm:text-sm font-semibold rounded-lg sm:rounded transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 active:brightness-90"
+            className="flex-1 h-12 min-w-0 rounded-sm text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 truncate px-2"
             style={{
-              color: 'var(--poker-bg)',
-              background: 'var(--poker-accent)',
-              boxShadow: '0 10px 22px rgba(0,0,0,0.45)',
+              background: 'linear-gradient(180deg, #c0392b 0%, #96291f 100%)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)',
             }}
           >
             {primaryLabel}
           </button>
         </div>
+
+        {/* Right — amount input + slider */}
+        <div className="flex items-center gap-1 shrink-0" style={{ width: '44%' }}>
+          {/* Amount input */}
+          <input
+            inputMode="numeric"
+            pattern="[0-9,]*"
+            type="text"
+            value={customAmount}
+            onChange={(e) => setCustomAmount(e.target.value)}
+            disabled={!canAct}
+            className="h-12 w-16 rounded-sm text-sm font-bold tabular-nums text-center outline-none focus:ring-1 transition disabled:pointer-events-none"
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.15)',
+              ['--tw-ring-color' as string]: 'rgba(255,255,255,0.3)',
+            }}
+            aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
+          />
+
+          {/* Minus */}
+          <button
+            type="button"
+            onClick={() => nudge(-1)}
+            disabled={!canAct || !hasValidAmount}
+            className="h-12 w-8 rounded-sm text-lg font-bold transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center shrink-0"
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              color: 'rgba(255,255,255,0.7)',
+              border: '1px solid rgba(255,255,255,0.12)',
+            }}
+          >
+            −
+          </button>
+
+          {/* Slider */}
+          <div className="flex-1 min-w-0 relative flex items-center">
+            <input
+              type="range"
+              min={minChips}
+              max={maxChips || minChips + 1}
+              step={stepChips}
+              value={sliderVal}
+              onChange={handleSlider}
+              disabled={!canAct || stackAmt === 0n}
+              className="poker-slider w-full disabled:pointer-events-none"
+              aria-label="Bet size slider"
+            />
+          </div>
+
+          {/* Plus */}
+          <button
+            type="button"
+            onClick={() => nudge(1)}
+            disabled={!canAct || !hasValidAmount}
+            className="h-12 w-8 rounded-sm text-lg font-bold transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center shrink-0"
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              color: 'rgba(255,255,255,0.7)',
+              border: '1px solid rgba(255,255,255,0.12)',
+            }}
+          >
+            +
+          </button>
+        </div>
       </div>
 
-      <div className="mt-1 flex items-center justify-end gap-3 text-[10px]" style={{ color: 'var(--poker-text-muted)' }}>
-        {minRaiseAmt > 0n && <span>Min {formatAmount(minRaiseAmt)}</span>}
-        {stackAmt > 0n && <span>Stack {formatAmount(stackAmt)}</span>}
-        {clamped != null && parsed != null && parsed !== clamped && (
-          <span style={{ color: 'var(--poker-chip)' }}>→ adjusted to {formatAmount(clamped)}</span>
-        )}
-      </div>
+      <style jsx>{`
+        .poker-slider {
+          -webkit-appearance: none;
+          appearance: none;
+          height: 4px;
+          border-radius: 2px;
+          outline: none;
+          cursor: pointer;
+          background: linear-gradient(
+            to right,
+            #c0392b ${((sliderVal - minChips) / Math.max(1, maxChips - minChips)) * 100}%,
+            rgba(255,255,255,0.18) ${((sliderVal - minChips) / Math.max(1, maxChips - minChips)) * 100}%
+          );
+        }
+        .poker-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: #fff;
+          border: 2px solid #c0392b;
+          cursor: pointer;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+          transition: transform 0.1s;
+        }
+        .poker-slider::-webkit-slider-thumb:hover {
+          transform: scale(1.15);
+        }
+        .poker-slider::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: #fff;
+          border: 2px solid #c0392b;
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 }

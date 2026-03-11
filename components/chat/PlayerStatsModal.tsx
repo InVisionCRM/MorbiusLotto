@@ -7,6 +7,8 @@ import { pulsechain } from 'viem/chains';
 import { PLINKO_ADDRESS } from '@/lib/contracts';
 import { PLINKO_ABI } from '@/abi/plinko';
 import { usePlayerReserveForAddress } from '@/hooks/use-blackjack-contract';
+import { usePlayerProfileGames } from '@/hooks/use-player-profile';
+import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView';
 
 function MorbiusIcon({ size = 16 }: { size?: number }) {
   return (
@@ -78,8 +80,9 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
   const [plinkoStats, setPlinkoStats] = useState<PlinkoStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'blackjack' | 'plinko'>('blackjack');
+  const [activeTab, setActiveTab] = useState<'blackjack' | 'plinko' | 'audit'>('blackjack');
   const { data: reserveBalance } = usePlayerReserveForAddress(address);
+  const { data: games = [], isLoading: gamesLoading } = usePlayerProfileGames(address, 1000);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -134,7 +137,7 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-cyan-500/30 shadow-2xl"
+        className={`relative w-full rounded-2xl overflow-hidden border border-cyan-500/30 shadow-2xl ${activeTab === 'audit' ? 'max-w-4xl' : 'max-w-sm'}`}
         style={{
           background: 'linear-gradient(145deg, rgb(20, 30, 40), rgb(30, 35, 45))',
           boxShadow: '0 0 40px rgba(34, 211, 238, 0.15)',
@@ -190,8 +193,8 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
           {!loading && (stats || plinkoStats) && (
             <div className="space-y-4">
               {/* Tabs */}
-              {stats && plinkoStats && (
-                <div className="flex gap-2 p-1 rounded-lg bg-black/30">
+              <div className="flex gap-2 p-1 rounded-lg bg-black/30">
+                {stats && (
                   <button
                     onClick={() => setActiveTab('blackjack')}
                     className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition ${
@@ -202,6 +205,8 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
                   >
                     Blackjack
                   </button>
+                )}
+                {plinkoStats && (
                   <button
                     onClick={() => setActiveTab('plinko')}
                     className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition ${
@@ -212,8 +217,18 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
                   >
                     Plinko
                   </button>
-                </div>
-              )}
+                )}
+                <button
+                  onClick={() => setActiveTab('audit')}
+                  className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition ${
+                    activeTab === 'audit'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'text-white/50 hover:text-white/70'
+                  }`}
+                >
+                  Audit
+                </button>
+              </div>
 
               {/* Blackjack Stats */}
               {activeTab === 'blackjack' && stats && (
@@ -377,6 +392,16 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
                 <div className="text-center py-8 text-white/40 text-sm">
                   No Plinko data available
                 </div>
+              )}
+
+              {/* Audit Tab */}
+              {activeTab === 'audit' && (
+                <PlayerAuditView
+                  playerAddress={address}
+                  games={games}
+                  gamesLoading={gamesLoading}
+                  actualBalance={reserveBalance ?? undefined}
+                />
               )}
             </div>
           )}

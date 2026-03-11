@@ -1,64 +1,52 @@
 'use client';
 
-import React from 'react';
-import { formatEther } from 'viem';
-import { PokerSeat } from './PokerSeat';
+import React, { useRef, useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
-import type { PokerLayout } from '@/lib/poker-layout';
-import { getSeatRect, getCommunityRect } from '@/lib/poker-layout';
 
-function formatChips(wei: string): string {
-  try {
-    const num = Number(formatEther(BigInt(wei)));
-    return Number.isInteger(num)
-      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  } catch {
-    return wei;
-  }
-}
+// 10-seat oval positions as fractions of table container
+const SEAT_ANCHORS = [
+  { fx: 0.50, fy: 0.90 }, // 0 — bottom center (current player)
+  { fx: 0.72, fy: 0.83 }, // 1
+  { fx: 0.89, fy: 0.63 }, // 2
+  { fx: 0.89, fy: 0.36 }, // 3
+  { fx: 0.72, fy: 0.13 }, // 4
+  { fx: 0.50, fy: 0.06 }, // 5
+  { fx: 0.28, fy: 0.13 }, // 6
+  { fx: 0.11, fy: 0.36 }, // 7
+  { fx: 0.11, fy: 0.63 }, // 8
+  { fx: 0.28, fy: 0.83 }, // 9
+];
+
+const POT_ANCHOR = { fx: 0.50, fy: 0.50 };
 
 export interface PokerTableProps {
-  layout: PokerLayout;
   state: TableState;
   currentPlayerAddress: string | null;
-  onLeave: () => void;
-  /** Seconds remaining for the acting player's turn (0-30). */
+  onLeave?: () => void;
   timeLeft?: number;
 }
 
-/**
- * Portrait-optimised seat positions (% of container).
- * Slot 0 = current player (always bottom-center after rotation).
- * Slots 1–5 = opponents, clockwise from bottom-right.
- *
- *   4 ──── 3 ──── 2
- *   │   [FELT]   │
- *   5           1
- *        0
- */
-const MOBILE_SEAT_POS: Record<number, React.CSSProperties> = {
-  0: { left: '50%',  top: '67%', transform: 'translateX(-50%)' },
-  1: { right: '1%',  top: '37%', transform: 'translateY(-50%)' },
-  2: { right: '3%',  top: '1%'  },
-  3: { left: '50%',  top: '0%',  transform: 'translateX(-50%)' },
-  4: { left: '3%',   top: '1%'  },
-  5: { left: '1%',   top: '37%', transform: 'translateY(-50%)' },
-};
+export function PokerTable({ state, currentPlayerAddress, timeLeft }: PokerTableProps) {
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [, setDims] = useState({ w: 640, h: 500 });
 
-// Felt oval bounds (% of container)
-const FELT = { left: 5, top: 17, width: 90, height: 58 };
-// Community cards area (% of container), centered on felt
-const BOARD = { left: 18, top: 28, width: 64, height: 32 };
+  useEffect(() => {
+    const el = tableRef.current;
+    if (!el) return;
+    const update = () => setDims({ w: el.offsetWidth, h: el.offsetHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-export function PokerTable({ layout, state, currentPlayerAddress, onLeave, timeLeft }: PokerTableProps) {
   const hand = state.currentHand;
-  const mySeatIndex = state.seats.findIndex((s) => s.playerAddress === currentPlayerAddress);
+  const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
   const actingPosition = hand?.actingPosition ?? null;
-  const communityRect = getCommunityRect(layout);
 
-  /** Render seat props shared between mobile and desktop */
   const seatProps = (idx: number) => {
     const seat = state.seats[idx];
     const inHand = !!hand && seat.playerAddress && !seat.folded;
@@ -80,124 +68,107 @@ export function PokerTable({ layout, state, currentPlayerAddress, onLeave, timeL
   };
 
   return (
-    <div className="absolute inset-0">
+    <div ref={tableRef} className="absolute inset-0" style={{ overflow: 'visible' }}>
 
-      {/* ── MOBILE LAYOUT (< sm) ──────────────────────────────────────────── */}
-      <div className="sm:hidden absolute inset-0">
+      {/* Felt oval */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          left: '4%', top: '5%', width: '92%', height: '88%',
+          borderRadius: '50%',
+          background: 'radial-gradient(ellipse at 50% 38%, rgb(30,110,50) 0%, rgb(15,72,30) 48%, rgb(9,50,20) 100%)',
+          boxShadow:
+            '0 0 0 5px rgba(255,255,255,0.04), ' +
+            '0 0 0 10px rgba(0,0,0,0.3), ' +
+            '0 16px 80px rgba(0,0,0,0.85), ' +
+            'inset 0 2px 50px rgba(0,0,0,0.5)',
+        }}
+      />
+      {/* Rail groove */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          left: '3%', top: '3%', width: '94%', height: '92%',
+          borderRadius: '50%',
+          border: '4px solid rgba(60,30,5,0.65)',
+          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
+        }}
+      />
 
-        {/* Felt oval — pure CSS, no image dependency */}
-        <div
-          className="absolute"
-          style={{
-            left:   `${FELT.left}%`,
-            top:    `${FELT.top}%`,
-            width:  `${FELT.width}%`,
-            height: `${FELT.height}%`,
-            borderRadius: '50%',
-            background:
-              'radial-gradient(ellipse at 50% 40%, rgb(26,96,42) 0%, rgb(14,62,26) 55%, rgb(9,44,18) 100%)',
-            boxShadow:
-              '0 0 0 3px rgba(255,255,255,0.06), ' +
-              '0 8px 48px rgba(0,0,0,0.75), ' +
-              'inset 0 2px 32px rgba(0,0,0,0.4)',
-          }}
-        />
-
-        {/* Community cards + pot */}
-        <div
-          className="absolute flex flex-col items-center justify-center z-10"
-          style={{
-            left:   `${BOARD.left}%`,
-            top:    `${BOARD.top}%`,
-            width:  `${BOARD.width}%`,
-            height: `${BOARD.height}%`,
-          }}
-        >
-          {hand ? (
-            <PokerBoard communityCards={hand.communityCards} pot={hand.pot} />
-          ) : (
-            <span
-              className="text-xl font-bold tracking-[0.25em] uppercase select-none"
-              style={{ color: 'rgba(255,255,255,0.07)' }}
-            >
-              Morbius
-            </span>
-          )}
-        </div>
-
-        {/* Seats */}
-        {state.seats.map((_, idx) => {
-          const displaySlot =
-            mySeatIndex >= 0
-              ? (idx - mySeatIndex + state.seats.length) % state.seats.length
-              : idx;
-          const pos = MOBILE_SEAT_POS[displaySlot];
-          if (pos === undefined) return null;
-          return (
-            <div key={idx} className="absolute z-20" style={pos}>
-              <PokerSeat key={idx} {...seatProps(idx)} />
-            </div>
-          );
-        })}
+      {/* Community board — center of felt */}
+      <div
+        className="absolute flex items-center justify-center"
+        style={{ left: '20%', top: '37%', width: '60%', height: '24%', zIndex: 10 }}
+      >
+        {hand ? (
+          <PokerBoard communityCards={hand.communityCards} pot={hand.pot} />
+        ) : (
+          <span
+            className="text-xl font-bold tracking-[0.25em] uppercase select-none"
+            style={{ color: 'rgba(255,255,255,0.07)' }}
+          >
+            Morbius
+          </span>
+        )}
       </div>
 
-      {/* ── DESKTOP LAYOUT (≥ sm) ─────────────────────────────────────────── */}
-      <div className="hidden sm:block absolute inset-0">
+      {/* Chip stacks — between each seat and pot */}
+      <AnimatePresence>
+        {SEAT_ANCHORS.map((anchor, displaySlot) => {
+          const actualIdx = mySeatIndex >= 0
+            ? (mySeatIndex + displaySlot) % state.seats.length
+            : displaySlot;
+          if (actualIdx >= state.seats.length) return null;
+          const seat = state.seats[actualIdx];
+          const hasBet = (() => { try { return BigInt(seat.currentBet || '0') > 0n; } catch { return false; } })();
+          if (!hasBet) return null;
 
-        {/* Top bar: blinds, leave */}
-        <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-1.5 py-1 sm:px-2 sm:py-1.5 z-10">
-          <div className="w-10 sm:w-16" />
-          <span className="text-[var(--poker-accent)] font-medium text-[10px] sm:text-xs md:text-sm">
-            {formatChips(state.smallBlind)}/{formatChips(state.bigBlind)} · {state.seats.filter((s) => s.playerAddress).length}/{state.maxSeats} seats
-          </span>
-          <button
-            type="button"
-            onClick={onLeave}
-            className="px-1.5 py-0.5 sm:px-2 sm:py-1 rounded border border-[var(--poker-danger)] text-[var(--poker-danger)] hover:opacity-80 active:scale-95 active:brightness-90 transition-all text-[10px] sm:text-xs md:text-sm"
-          >
-            Leave
-          </button>
-        </div>
+          const frac = displaySlot === 0 ? 0.57 : 0.28;
+          const cfx = anchor.fx + (POT_ANCHOR.fx - anchor.fx) * frac;
+          const cfy = anchor.fy + (POT_ANCHOR.fy - anchor.fy) * frac;
 
-        {/* Community cards + pot */}
-        {communityRect && hand && (
+          return (
+            <motion.div
+              key={`chips-${actualIdx}`}
+              className="absolute pointer-events-none"
+              style={{
+                left: `${cfx * 100}%`,
+                top:  `${cfy * 100}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 25,
+              }}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+            >
+              <PokerChipStack weiAmount={seat.currentBet} />
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
+
+      {/* Seats */}
+      {state.seats.map((_, idx) => {
+        const displaySlot = mySeatIndex >= 0
+          ? (idx - mySeatIndex + state.seats.length) % state.seats.length
+          : idx;
+        const anchor = SEAT_ANCHORS[displaySlot];
+        if (!anchor) return null;
+        return (
           <div
-            className="absolute flex flex-col items-center justify-center gap-0.5 min-h-0"
+            key={idx}
+            className="absolute z-20"
             style={{
-              left:   `${communityRect.x}%`,
-              top:    `${communityRect.y}%`,
-              width:  `${communityRect.width}%`,
-              height: `${communityRect.height}%`,
+              left: `${anchor.fx * 100}%`,
+              top:  `${anchor.fy * 100}%`,
+              transform: 'translate(-50%, -50%)',
             }}
           >
-            <PokerBoard communityCards={hand.communityCards} pot={hand.pot} />
+            <PokerSeat {...seatProps(idx)} />
           </div>
-        )}
-
-        {/* Seats */}
-        {state.seats.map((_, idx) => {
-          const displaySlot =
-            mySeatIndex >= 0
-              ? (idx - mySeatIndex + state.seats.length) % state.seats.length
-              : idx;
-          const rect = getSeatRect(layout, displaySlot);
-          if (!rect) return null;
-          return (
-            <div
-              key={idx}
-              className="absolute flex items-center justify-center min-h-0"
-              style={{
-                left:   `${rect.x}%`,
-                top:    `${rect.y}%`,
-                width:  `${rect.width}%`,
-                height: `${rect.height}%`,
-              }}
-            >
-              <PokerSeat {...seatProps(idx)} />
-            </div>
-          );
-        })}
-      </div>
+        );
+      })}
     </div>
   );
 }

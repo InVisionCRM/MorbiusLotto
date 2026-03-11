@@ -420,6 +420,182 @@ function OnchainActions({
   );
 }
 
+// ─── Standalone deposit (top-up) component ───────────────────────────────────
+// Allows depositing an arbitrary MORBIUS amount into the holder claim contract
+// without needing an active epoch — used to cover contract shortfalls.
+
+function StandaloneDepositButton({ adminAddr }: { adminAddr: `0x${string}` }) {
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
+
+  const [amountInput, setAmountInput] = useState('');
+  const [step, setStep] = useState<'idle' | 'approve' | 'deposit' | 'done'>('idle');
+  const [waiting, setWaiting] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [msg, setMsg] = useState('');
+
+  const parsedWei = (() => {
+    const n = parseFloat(amountInput);
+    if (!amountInput || isNaN(n) || n <= 0) return 0n;
+    return BigInt(Math.round(n * 1e9)) * BigInt(1e9);
+  })();
+
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: TOKEN_ADDR,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: [adminAddr, MERKLE_ADDR],
+    query: { enabled: parsedWei > 0n },
+  });
+  const currentAllowance = (allowance as bigint | undefined) ?? 0n;
+
+  const waitForTx = async (hash: `0x${string}`, then: () => void) => {
+    setTxHash(hash);
+    setWaiting(true);
+    try {
+      await publicClient!.waitForTransactionReceipt({ hash, timeout: 90_000 });
+      then();
+    } catch {
+      setMsg('Confirmation timed out — check PulseScan to confirm.');
+      then();
+    } finally {
+      setWaiting(false);
+      setTxHash(null);
+    }
+  };
+
+  const handleBegin = () => {
+    if (parsedWei === 0n) { setMsg('Enter a valid MORBIUS amount'); return; }
+    setMsg('');
+    setStep(currentAllowance >= parsedWei ? 'deposit' : 'approve');
+  };
+
+  const handleApprove = async () => {
+    setMsg('');
+    try {
+      const hash = await writeContractAsync({
+        address: TOKEN_ADDR,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [MERKLE_ADDR, MAX_UINT256],
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: adminAddr,
+      });
+      await waitForTx(hash, () => {
+        refetchAllowance();
+        setStep('deposit');
+        setMsg('✓ Approved');
+      });
+    } catch (e: any) {
+      setMsg(e?.shortMessage || e?.message || 'Approval failed');
+    }
+  };
+
+  const handleDeposit = async () => {
+    setMsg('');
+    try {
+      const hash = await writeContractAsync({
+        address: MERKLE_ADDR,
+        abi: merkleClaimMorbiusAbi,
+        functionName: 'depositRewards',
+        args: [parsedWei],
+        maxPriorityFeePerGas: 40_000n,
+        chain: pulsechain,
+        account: adminAddr,
+      });
+      await waitForTx(hash, () => {
+        setStep('done');
+        setMsg(`✓ Deposited ${fmtMorbius(parsedWei.toString())} MORBIUS into the holder claim contract`);
+        setAmountInput('');
+      });
+    } catch (e: any) {
+      setMsg(e?.shortMessage || e?.message || 'Deposit failed');
+    }
+  };
+
+  const reset = () => { setStep('idle'); setMsg(''); setTxHash(null); };
+
+  return (
+    <div className="mt-3 space-y-2">
+      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Deposit via contract (approve + depositRewards)</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="number"
+          min="0"
+          step="any"
+          placeholder="Amount in MORBIUS"
+          value={amountInput}
+          onChange={(e) => { setAmountInput(e.target.value); reset(); }}
+          disabled={waiting}
+          className="h-8 w-48 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+        />
+
+        {step === 'idle' && (
+          <Button
+            size="sm"
+            onClick={handleBegin}
+            disabled={parsedWei === 0n || waiting}
+            className="h-8 bg-cyan-700 hover:bg-cyan-600 text-white text-xs"
+          >
+            <Coins className="w-3 h-3 mr-1" />
+            Deposit MORBIUS
+          </Button>
+        )}
+
+        {step === 'approve' && (
+          <Button
+            size="sm"
+            onClick={handleApprove}
+            disabled={waiting}
+            className="h-8 bg-yellow-600 hover:bg-yellow-500 text-white text-xs"
+          >
+            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Wallet className="w-3 h-3 mr-1" />}
+            Step 1: Approve MORBIUS
+          </Button>
+        )}
+
+        {step === 'deposit' && (
+          <Button
+            size="sm"
+            onClick={handleDeposit}
+            disabled={waiting}
+            className="h-8 bg-cyan-600 hover:bg-cyan-500 text-white text-xs"
+          >
+            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Coins className="w-3 h-3 mr-1" />}
+            Step 2: Deposit {fmtMorbius(parsedWei.toString())} MORBIUS
+          </Button>
+        )}
+
+        {step === 'done' && (
+          <Button size="sm" onClick={reset} variant="outline" className="h-8 text-xs border-slate-600">
+            Deposit another
+          </Button>
+        )}
+
+        {txHash && (
+          <a
+            href={`https://scan.pulsechain.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1"
+          >
+            Tx <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+      </div>
+
+      {msg && (
+        <p className={`text-xs px-3 py-1.5 rounded border ${
+          msg.startsWith('✓')
+            ? 'text-emerald-400 bg-emerald-950/20 border-emerald-500/20'
+            : 'text-red-400 bg-red-950/20 border-red-500/20'
+        }`}>{msg}</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminMerkleDropsTab() {
@@ -983,6 +1159,7 @@ export default function AdminMerkleDropsTab() {
               <p className="text-[11px] text-slate-400 mt-1">
                 Contract balance: <span className="font-mono text-cyan-400">{fmtMorbius(holderContractBalanceWei.toString())} MORBIUS</span>
               </p>
+              {address && <StandaloneDepositButton adminAddr={address as `0x${string}`} />}
             </div>
             <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 px-3 py-2.5 space-y-1">
               <p className="text-[10px] uppercase tracking-wider text-cyan-400/80 font-semibold">LP drops</p>

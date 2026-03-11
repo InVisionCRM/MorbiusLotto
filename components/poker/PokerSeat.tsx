@@ -1,9 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { formatEther } from 'viem';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function formatChips(wei: string): string {
   try {
@@ -16,6 +19,171 @@ function formatChips(wei: string): string {
   }
 }
 
+function shortAddr(addr: string): string {
+  return addr.slice(-4);
+}
+
+// ── Color-coded action system ──────────────────────────────────────────────
+
+const ACTION_STYLE: Record<string, { bg: string; label: string }> = {
+  fold:     { bg: '#2d4a6b', label: 'FOLD' },
+  check:    { bg: '#0c5f70', label: 'CHECK' },
+  call:     { bg: '#14532d', label: 'CALL' },
+  bet:      { bg: '#92400e', label: 'BET' },
+  raise:    { bg: '#9a3412', label: 'RAISE' },
+  'all-in': { bg: '#7f1d1d', label: 'ALL-IN' },
+  allin:    { bg: '#7f1d1d', label: 'ALL-IN' },
+};
+
+function getActionStyle(action: string) {
+  return ACTION_STYLE[action.toLowerCase()] ?? { bg: '#374151', label: action.toUpperCase() };
+}
+
+// ── Chip stack (exported for use at table level) ──────────────────────────
+
+const CHIP_SIZE    = 26;
+const CHIP_OVERLAP = 5;
+
+const CHIP_SRCS = [
+  { min: 1000, src: '/PokerChips/blackpokerchip000.png' },
+  { min: 100,  src: '/PokerChips/redpokerchip015.png'   },
+  { min: 10,   src: '/PokerChips/greenpokerchip005.png' },
+  { min: 0,    src: '/PokerChips/bluepokerchip010.png'  },
+] as const;
+
+export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
+  let amount = 0;
+  try { amount = Number(formatEther(BigInt(weiAmount))); } catch {}
+  if (amount <= 0) return null;
+
+  const count   = Math.min(5, Math.max(1, Math.ceil(Math.log10(Math.max(amount + 1, 2)))));
+  const chipSrc = (CHIP_SRCS.find(c => amount >= c.min) ?? CHIP_SRCS[CHIP_SRCS.length - 1]).src;
+  const totalH  = CHIP_SIZE + (count - 1) * CHIP_OVERLAP;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+      <div style={{ position: 'relative', width: CHIP_SIZE, height: totalH }}>
+        {Array.from({ length: count }, (_, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={i}
+            src={chipSrc}
+            alt=""
+            aria-hidden
+            style={{
+              position: 'absolute',
+              bottom: i * CHIP_OVERLAP,
+              left: 0,
+              width: CHIP_SIZE,
+              height: CHIP_SIZE,
+              filter: i > 0 ? 'drop-shadow(0 -2px 3px rgba(0,0,0,0.8))' : 'drop-shadow(0 1px 2px rgba(0,0,0,0.6))',
+            }}
+          />
+        ))}
+      </div>
+      <span style={{ color: '#fbbf24', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+        {formatChips(weiAmount)}
+      </span>
+    </div>
+  );
+}
+
+// ── Role token ────────────────────────────────────────────────────────────
+
+const ROLE_TOKEN_STYLE = {
+  D:  { bg: '#ffffff', color: '#1a1a1a', border: '#d4af37', size: 22, fontSize: 11 },
+  SB: { bg: '#1d4ed8', color: '#ffffff', border: '#60a5fa', size: 20, fontSize: 9  },
+  BB: { bg: '#b45309', color: '#ffffff', border: '#fbbf24', size: 20, fontSize: 9  },
+} as const;
+
+function RoleToken({ label }: { label: keyof typeof ROLE_TOKEN_STYLE }) {
+  const s = ROLE_TOKEN_STYLE[label];
+  return (
+    <div style={{
+      width: s.size, height: s.size,
+      borderRadius: '50%',
+      background: s.bg,
+      border: `2px solid ${s.border}`,
+      color: s.color,
+      fontSize: s.fontSize,
+      fontWeight: 800,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      boxShadow: '0 1px 6px rgba(0,0,0,0.8)',
+      letterSpacing: '-0.5px',
+      userSelect: 'none',
+      flexShrink: 0,
+    }}>
+      {label}
+    </div>
+  );
+}
+
+// ── Timer ring SVG ─────────────────────────────────────────────────────────
+
+function TimerRingSVG({ w, h, timeLeft, maxTime }: { w: number; h: number; timeLeft: number; maxTime: number }) {
+  const pad = 3;
+  const W   = w + pad * 2;
+  const H   = h + pad * 2;
+  const r   = 8; // slightly larger than badge border-radius 5
+
+  // Perimeter of the rounded rectangle
+  const perimeter = 2 * (W - 2 * r) + 2 * (H - 2 * r) + 2 * Math.PI * r;
+
+  const progress   = Math.max(0, Math.min(1, timeLeft / maxTime));
+  const visibleLen = progress * perimeter;
+
+  // Green (hsl 120) → yellow (60) → red (0)
+  const hue   = progress * 120;
+  const color = `hsl(${hue}, 90%, 52%)`;
+
+  // Clockwise rounded-rect path starting from top-left corner
+  const path = [
+    `M ${r},0`,
+    `H ${W - r}`,
+    `A ${r},${r} 0 0 1 ${W},${r}`,
+    `V ${H - r}`,
+    `A ${r},${r} 0 0 1 ${W - r},${H}`,
+    `H ${r}`,
+    `A ${r},${r} 0 0 1 0,${H - r}`,
+    `V ${r}`,
+    `A ${r},${r} 0 0 1 ${r},0`,
+  ].join(' ');
+
+  return (
+    <svg
+      aria-hidden
+      style={{
+        position: 'absolute',
+        left: -pad,
+        top: -pad,
+        width: W,
+        height: H,
+        pointerEvents: 'none',
+        zIndex: 5,
+        overflow: 'visible',
+      }}
+    >
+      {/* Dim track */}
+      <path d={path} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={2} />
+      {/* Animated progress ring */}
+      <path
+        d={path}
+        fill="none"
+        stroke={color}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeDasharray={`${visibleLen} ${perimeter}`}
+        style={{
+          filter: `drop-shadow(0 0 4px ${color})`,
+          transition: 'stroke-dasharray 1s linear, stroke 0.5s ease',
+        }}
+      />
+    </svg>
+  );
+}
+
+// ── PokerSeat ─────────────────────────────────────────────────────────────
+
 export interface PokerSeatProps {
   seat: SeatState;
   index: number;
@@ -23,66 +191,49 @@ export interface PokerSeatProps {
   isCurrentPlayer?: boolean;
   showCardBacks?: boolean;
   lastAction?: { action: string; amount: string } | null;
-  /** Seconds remaining in turn timer (0-30). Only provided for the acting seat. */
   timeLeft?: number;
+  maxTime?: number;
 }
 
-function shortAddr(addr: string): string {
-  return addr.slice(-4);
-}
-
-function formatLastAction(action: string, amount: string): string {
-  const a = action.toLowerCase();
-  if (a === 'fold') return 'Fold';
-  if (a === 'check') return 'Check';
-  if (a === 'call') return 'Call';
-  if (a === 'bet') return `Bet ${formatChips(amount)}`;
-  if (a === 'raise') return `Raise ${formatChips(amount)}`;
-  if (a === 'all-in' || a === 'allin') return 'All-in';
-  if (a === 'blind') return '';
-  return action;
-}
-
-/** Small pill for dealer / blind roles */
-function RoleBadge({ label, gold }: { label: string; gold?: boolean }) {
-  return (
-    <span
-      className="inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold border leading-none"
-      style={
-        gold
-          ? { color: 'var(--poker-chip)', borderColor: 'var(--poker-chip)', background: 'color-mix(in srgb, var(--poker-chip) 18%, transparent)' }
-          : { color: 'var(--poker-text-muted)', borderColor: 'var(--poker-panel-border)', background: 'color-mix(in srgb, var(--poker-text-muted) 10%, transparent)' }
-      }
-    >
-      {label}
-    </span>
-  );
-}
-
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft }: PokerSeatProps) {
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft, maxTime = 30 }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
-  const showBacks = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
-  const hasCards = showMyCards || showBacks;
+  const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
+  const hasCards    = showMyCards || showBacks;
 
-  const isActing = !!seat.isActing && !empty && !seat.folded;
-  const isFolded = !!seat.folded && !empty;
+  const isActing  = !!seat.isActing && !empty && !seat.folded;
+  const isFolded  = !!seat.folded && !empty;
 
-  const currentBetBig = (() => {
-    try { return BigInt(seat.currentBet || '0') > 0n; } catch { return false; }
-  })();
+  const displayName = empty ? 'Open' : (isCurrentPlayer ? 'You' : shortAddr(seat.playerAddress!));
 
-  const displayName = empty ? 'Empty' : (isCurrentPlayer ? 'You' : shortAddr(seat.playerAddress!));
+  // Measure badge for timer ring
+  const badgeRef = useRef<HTMLDivElement>(null);
+  const [badgeSize, setBadgeSize] = useState({ w: 90, h: 50 });
+  useEffect(() => {
+    const el = badgeRef.current;
+    if (!el) return;
+    const update = () => setBadgeSize({ w: el.offsetWidth, h: el.offsetHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Resolve active action for color-coded label
+  const activeAction =
+    lastAction && lastAction.action !== 'blind' ? lastAction.action :
+    isFolded ? 'fold' : null;
+  const actionStyle = activeAction ? getActionStyle(activeAction) : null;
 
   /* ── Empty seat ── */
   if (empty) {
     return (
-      <div className="flex flex-col items-center gap-1 select-none opacity-40">
+      <div className="flex flex-col items-center select-none opacity-25">
         <div
-          className="rounded-full px-3 py-1.5 border border-dashed text-[10px] sm:text-xs"
-          style={{ borderColor: 'var(--poker-text-muted)', color: 'var(--poker-text-muted)' }}
+          className="rounded px-2.5 py-1 text-[9px] border border-dashed"
+          style={{ borderColor: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.4)' }}
         >
-          Empty
+          Open
         </div>
       </div>
     );
@@ -91,194 +242,139 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
   /* ── Occupied seat ── */
   return (
     <div
-      className={`poker-seat flex flex-col items-center gap-1 select-none transition ${isFolded ? 'opacity-50' : 'opacity-100'} ${isActing ? 'acting' : ''}`}
+      className={`poker-seat flex flex-col items-center gap-0.5 select-none transition-opacity ${isFolded ? 'opacity-50' : 'opacity-100'}`}
       aria-label={`Seat ${displayName}`}
     >
-      {/* Role badges above cards */}
-      {(seat.isDealer || seat.isSmallBlind || seat.isBigBlind) && (
-        <div className="flex items-center gap-1 mb-0.5">
-          {seat.isDealer && <RoleBadge label="D" gold />}
-          {seat.isSmallBlind && <RoleBadge label="SB" />}
-          {seat.isBigBlind && <RoleBadge label="BB" />}
-        </div>
-      )}
-
-      {/* Fanned cards */}
+      {/* Fanned hole cards */}
       {hasCards ? (
-        <div className="relative" style={{ width: 'clamp(52px, 14vw, 68px)', height: 'clamp(62px, 17vw, 80px)' }}>
-          {/* Left card */}
-          <div
-            className="absolute"
-            style={{
-              bottom: 0,
-              left: 0,
-              zIndex: 1,
-              transform: 'rotate(-10deg)',
-              transformOrigin: 'bottom center',
-              filter: isFolded ? 'grayscale(1) opacity(0.6)' : undefined,
-            }}
-          >
-            {showMyCards
-              ? <CardDisplay cardIndex={holeCards![0]} small />
-              : <CardDisplay cardIndex={null} small faceDown />}
-          </div>
-          {/* Right card */}
-          <div
-            className="absolute"
-            style={{
-              bottom: 0,
-              right: 0,
-              zIndex: 2,
-              transform: 'rotate(10deg)',
-              transformOrigin: 'bottom center',
-              filter: isFolded ? 'grayscale(1) opacity(0.6)' : undefined,
-            }}
-          >
-            {showMyCards
-              ? <CardDisplay cardIndex={holeCards![1]} small />
-              : <CardDisplay cardIndex={null} small faceDown />}
-          </div>
-
-          {/* Acting glow ring */}
+        <div
+          className="relative"
+          style={
+            showMyCards
+              ? { width: 'clamp(68px, 16vw, 100px)', height: 'clamp(84px, 20vw, 118px)' }
+              : { width: 'clamp(36px, 8vw, 52px)',   height: 'clamp(44px, 10vw, 62px)'  }
+          }
+        >
+          {[0, 1].map((ci) => (
+            <div
+              key={ci}
+              className="absolute"
+              style={{
+                bottom: 0,
+                [ci === 0 ? 'left' : 'right']: 0,
+                zIndex: ci + 1,
+                transform: `rotate(${ci === 0 ? -10 : 10}deg)`,
+                transformOrigin: 'bottom center',
+                filter: isFolded ? 'grayscale(1) opacity(0.5)' : undefined,
+              }}
+            >
+              {showMyCards
+                ? <CardDisplay cardIndex={holeCards![ci]} />
+                : <CardDisplay cardIndex={null} small faceDown />}
+            </div>
+          ))}
           {isActing && (
             <div
-              className="pointer-events-none absolute -inset-2 rounded-full blur-md opacity-60 animate-pulse"
+              className="pointer-events-none absolute -inset-2 rounded-full blur-md opacity-50 animate-pulse"
               style={{ background: 'radial-gradient(circle, var(--poker-accent-muted), transparent 70%)' }}
               aria-hidden
             />
           )}
         </div>
       ) : (
-        /* No cards yet — spacer so badge stays aligned */
-        <div style={{ width: '52px', height: '66px' }} />
+        <div style={{ width: '38px', height: '48px' }} />
       )}
 
-      {/* "YOUR TURN" banner + countdown bar — only for the local player's turn */}
-      {isActing && isCurrentPlayer && (
-        <div className="flex flex-col items-center gap-0.5 w-full">
-          <span
-            className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full"
-            style={{
-              color: 'var(--poker-bg)',
-              background: 'var(--poker-accent)',
-              boxShadow: '0 0 8px var(--poker-accent-muted)',
-            }}
+      {/* "Your Turn" banner */}
+      <AnimatePresence>
+        {isActing && isCurrentPlayer && (
+          <motion.div
+            key="your-turn"
+            initial={{ opacity: 0, scale: 0.7, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.7, y: -4 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 22 }}
           >
-            Your Turn
-          </span>
-          {timeLeft != null && (
-            <div
-              className="w-full rounded-full overflow-hidden"
-              style={{ height: '3px', background: 'rgba(255,255,255,0.12)' }}
+            <span
+              className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full"
+              style={{ color: 'var(--poker-bg)', background: 'var(--poker-accent)', boxShadow: '0 0 8px var(--poker-accent-muted)' }}
             >
-              <div
-                className="h-full rounded-full transition-all duration-1000"
-                style={{
-                  width: `${Math.max(0, (timeLeft / 30) * 100)}%`,
-                  background: timeLeft <= 8
-                    ? 'var(--poker-danger)'
-                    : timeLeft <= 15
-                      ? 'var(--poker-chip)'
-                      : 'var(--poker-accent)',
-                }}
-              />
-            </div>
-          )}
-        </div>
-      )}
+              Your Turn
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Timer countdown for OTHER players' turns (just the number) */}
-      {isActing && !isCurrentPlayer && timeLeft != null && (
-        <span
-          className="text-[9px] font-bold tabular-nums"
-          style={{ color: timeLeft <= 8 ? 'var(--poker-danger)' : 'var(--poker-text-muted)' }}
-        >
-          {timeLeft}s
-        </span>
-      )}
+      {/* ── Player badge ── */}
+      <div style={{ position: 'relative', display: 'inline-block' }}>
 
-      {/* Info pill */}
-      <div
-        className={`flex items-center gap-1.5 rounded-full px-2 py-1 border transition ${isActing ? 'acting-badge' : ''}`}
-        style={{
-          background: 'rgba(0,0,0,0.65)',
-          borderColor: isActing ? 'var(--poker-accent)' : (isCurrentPlayer ? 'var(--poker-chip)' : 'rgba(255,255,255,0.12)'),
-          backdropFilter: 'blur(8px)',
-          boxShadow: isActing ? '0 0 12px var(--poker-accent-muted)' : '0 2px 10px rgba(0,0,0,0.5)',
-          minWidth: '80px',
-          maxWidth: '110px',
-        }}
-      >
-        {/* Icon */}
+        {/* Timer ring — wraps badge perimeter */}
+        {isActing && timeLeft != null && (
+          <TimerRingSVG w={badgeSize.w} h={badgeSize.h} timeLeft={timeLeft} maxTime={maxTime} />
+        )}
+
+        {/* Role tokens — top-right corner overhang */}
+        {(seat.isDealer || seat.isSmallBlind || seat.isBigBlind) && (
+          <div style={{ position: 'absolute', top: -10, right: -10, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {seat.isDealer     && <RoleToken label="D"  />}
+            {seat.isSmallBlind && <RoleToken label="SB" />}
+            {seat.isBigBlind   && <RoleToken label="BB" />}
+          </div>
+        )}
+
         <div
-          className="flex-shrink-0 h-5 w-5 rounded-full flex items-center justify-center text-[10px]"
+          ref={badgeRef}
+          className="flex flex-col items-stretch overflow-hidden"
           style={{
-            background: isCurrentPlayer ? 'color-mix(in srgb, var(--poker-chip) 25%, transparent)' : 'rgba(255,255,255,0.08)',
-            border: `1px solid ${isCurrentPlayer ? 'var(--poker-chip)' : 'rgba(255,255,255,0.15)'}`,
-            color: isCurrentPlayer ? 'var(--poker-chip)' : 'var(--poker-text-muted)',
+            background: 'rgba(0,0,0,0.88)',
+            border: `1px solid ${
+              isActing        ? 'transparent'               :
+              isCurrentPlayer ? 'rgba(251,191,36,0.5)'      :
+                                'rgba(255,255,255,0.12)'
+            }`,
+            borderRadius: 5,
+            minWidth: isCurrentPlayer ? '90px' : '72px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
           }}
         >
-          {isCurrentPlayer ? '🛡' : '●'}
-        </div>
+          {/* Name + stack */}
+          <div className="px-2 py-1 text-center">
+            <div
+              className="font-bold truncate leading-tight"
+              style={{ color: isCurrentPlayer ? '#fde68a' : '#e2e8f0', fontSize: 'clamp(9px, 1.8vw, 11px)', maxWidth: 86 }}
+            >
+              {displayName}
+            </div>
+            <div
+              className="font-bold tabular-nums leading-tight"
+              style={{ color: '#fbbf24', fontSize: 'clamp(9px, 2vw, 12px)' }}
+            >
+              ${formatChips(seat.stack)}
+            </div>
+          </div>
 
-        {/* Name + chips */}
-        <div className="flex flex-col leading-none min-w-0">
-          <span
-            className="text-[10px] sm:text-[11px] font-semibold truncate"
-            style={{ color: 'var(--poker-text)' }}
-          >
-            {displayName}
-          </span>
-          <span
-            className="text-[10px] sm:text-[11px] font-bold tabular-nums truncate"
-            style={{ color: 'var(--poker-chip)' }}
-          >
-            {formatChips(seat.stack)}
-          </span>
+          {/* Color-coded action label */}
+          <AnimatePresence mode="wait">
+            {actionStyle && (
+              <motion.div
+                key={activeAction}
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="overflow-hidden"
+              >
+                <div
+                  className="text-center font-bold uppercase tracking-widest py-0.5"
+                  style={{ background: actionStyle.bg, color: '#fff', fontSize: 'clamp(8px, 1.4vw, 9px)' }}
+                >
+                  {actionStyle.label}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
-
-      {/* Current bet chip */}
-      {currentBetBig && (
-        <div className="flex items-center gap-0.5">
-          <div
-            className="h-2.5 w-2.5 rounded-full border"
-            style={{ borderColor: 'var(--poker-chip)', background: 'color-mix(in srgb, var(--poker-chip) 30%, transparent)' }}
-          />
-          <span className="text-[9px] font-semibold tabular-nums" style={{ color: 'var(--poker-chip)' }}>
-            {formatChips(seat.currentBet)}
-          </span>
-        </div>
-      )}
-
-      {/* Last action toast */}
-      {lastAction && lastAction.action !== 'blind' && (
-        <span
-          className="text-[9px] sm:text-[10px] font-semibold rounded-full px-1.5 py-0.5 animate-pulse"
-          style={{
-            color: lastAction.action === 'fold' ? 'var(--poker-danger)' : 'var(--poker-chip)',
-            background: lastAction.action === 'fold'
-              ? 'color-mix(in srgb, var(--poker-danger) 15%, transparent)'
-              : 'color-mix(in srgb, var(--poker-chip) 15%, transparent)',
-          }}
-        >
-          {formatLastAction(lastAction.action, lastAction.amount)}
-        </span>
-      )}
-
-      {isFolded && !lastAction && (
-        <span className="text-[9px]" style={{ color: 'var(--poker-danger)' }}>Folded</span>
-      )}
-
-      <style jsx>{`
-        .poker-seat.acting .acting-badge {
-          animation: badgePulse 1.25s ease-in-out infinite;
-        }
-        @keyframes badgePulse {
-          0%, 100% { box-shadow: 0 0 8px var(--poker-accent-muted); }
-          50% { box-shadow: 0 0 18px var(--poker-accent-muted), 0 0 6px var(--poker-accent); }
-        }
-      `}</style>
     </div>
   );
 }

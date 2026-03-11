@@ -650,6 +650,31 @@ export class DatabaseService {
     return result.rows[0];
   }
 
+  /** Get the latest active (non-terminal) hot withdrawal job for a wallet. */
+  async getActiveHotWithdrawalJob(walletAddress: string): Promise<{
+    id: string;
+    wallet_address: string;
+    amount_wei: string;
+    net_to_user_wei: string;
+    status: string;
+    tx_hash: string | null;
+    error_message: string | null;
+    created_at: Date;
+    updated_at: Date;
+  } | null> {
+    const normalized = this.normalizeAddress(walletAddress);
+    const result = await this.pool.query(
+      `SELECT id, wallet_address, amount_wei, net_to_user_wei, status, tx_hash, error_message, created_at, updated_at
+       FROM hot_withdrawal_jobs
+       WHERE LOWER(wallet_address) = LOWER($1)
+         AND status IN ('queued', 'broadcasting', 'pending_confirmation')
+       ORDER BY created_at DESC LIMIT 1`,
+      [normalized],
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  }
+
   /** List jobs in pending_confirmation for the confirmation worker. */
   async getHotWithdrawalJobsPendingConfirmation(): Promise<
     Array<{ id: string; wallet_address: string; amount_wei: string; tx_hash: string; created_at: Date; updated_at: Date }>
@@ -696,6 +721,16 @@ export class DatabaseService {
         confirmationsRequired,
       ],
     );
+  }
+
+  /** Returns true if the player has any unconfirmed pending deposit in flight. */
+  async hasPendingDeposit(walletAddress: string): Promise<boolean> {
+    const normalizedAddress = this.normalizeAddress(walletAddress);
+    const result = await this.pool.query(
+      `SELECT 1 FROM pending_deposits WHERE LOWER(wallet_address) = LOWER($1) AND status = 'pending_confirmation' LIMIT 1`,
+      [normalizedAddress],
+    );
+    return result.rows.length > 0;
   }
 
   /** Get pending deposits that need confirmation check. */

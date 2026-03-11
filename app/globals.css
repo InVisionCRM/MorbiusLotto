@@ -422,6 +422,12 @@ body {
   font-weight: 700;
   font-style: normal;
 }
+.font-jost-normal {
+  font-family: "Jost", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}
 
 /* Autour One Font */
 .font-autour-one {

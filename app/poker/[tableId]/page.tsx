@@ -8,10 +8,8 @@ import { formatEther } from 'viem';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { PokerTableState } from '@/lib/websocket-client';
-import { defaultPokerLayout } from '@/lib/poker-layout';
 import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
-import Footer from '@/components/BIG-WHEEL/Footer';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
 import { PokerTable } from '@/components/poker/PokerTable';
 import { PokerActions } from '@/components/poker/PokerActions';
@@ -320,20 +318,21 @@ export default function PokerTablePage() {
   return (
     <GlobalMainNav page="home">
       <PokerThemeProvider themeId={pokerTheme}>
-
-        {/* ─── MOBILE LAYOUT (< sm) ─── */}
         <div
-          className={`sm:hidden flex flex-col bg-[var(--poker-bg)] text-[var(--poker-text)] tracking-[var(--poker-tracking)] ${cyberpunk ? 'font-mono uppercase' : ''}`}
+          className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
           style={{
-            ...themeVars,
-            height: '100dvh',
+            ...themeVars as React.CSSProperties,
+            minHeight: '100dvh',
+            background: 'rgb(2 6 23)',
+            color: 'var(--poker-text)',
+            overflow: 'hidden',
             paddingLeft: 'env(safe-area-inset-left, 0px)',
             paddingRight: 'env(safe-area-inset-right, 0px)',
           }}
         >
-          {/* Top nav bar — safe area top so it clears notch */}
+          {/* Top nav bar */}
           <div
-            className="flex-shrink-0 flex items-center justify-between px-3 py-2 z-10 gap-2"
+            className="flex-shrink-0 flex items-center justify-between px-3 py-2 z-30 gap-2"
             style={{
               background: 'rgba(0,0,0,0.55)',
               borderBottom: '1px solid var(--poker-panel-border)',
@@ -376,10 +375,10 @@ export default function PokerTablePage() {
             </div>
           )}
 
-          {/* Table area — flex-1 so it fills remaining space above action bar */}
-          <div className="flex-1 min-h-0 relative overflow-hidden">
+          {/* Table */}
+          <div className="flex-1 relative" style={{ minHeight: 0, overflow: 'visible' }}>
             {state ? (
-              <PokerTable layout={defaultPokerLayout} state={state} currentPlayerAddress={normalizedAddress} onLeave={handleLeave} timeLeft={timeLeft} />
+              <PokerTable state={state} currentPlayerAddress={normalizedAddress} onLeave={handleLeave} timeLeft={timeLeft} />
             ) : !error ? (
               <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
                 Loading table...
@@ -392,80 +391,18 @@ export default function PokerTablePage() {
             )}
           </div>
 
-          {/* Action bar — always pinned at bottom; safe area so it clears home indicator */}
+          {/* Action bar */}
           {state && mySeat && (
-            <div
-              className="flex-shrink-0"
-              style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-            >
+            <div className="flex-shrink-0">
               {sharedActions}
             </div>
           )}
         </div>
 
-        {/* ─── DESKTOP LAYOUT (≥ sm) ─── */}
-        <div
-          className={`hidden sm:flex flex-col items-center w-full flex-1 min-w-0 min-h-screen bg-[var(--poker-bg)] text-[var(--poker-text)] tracking-[var(--poker-tracking)] relative ${cyberpunk ? 'font-mono uppercase' : ''}`}
-          style={themeVars}
-        >
-          {cyberpunk && (
-            <div
-              className="absolute inset-0 pointer-events-none z-0"
-              style={{
-                background: 'linear-gradient(rgba(0,255,170,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,170,0.05) 1px, transparent 1px)',
-                backgroundSize: '40px 40px',
-              }}
-              aria-hidden
-            />
-          )}
-          <div className="z-10 flex flex-col items-center w-full flex-1 min-w-0">
-            <div className="relative w-full max-w-full h-[100dvh] max-h-[100dvh] md:max-h-none md:h-auto md:w-fit flex-shrink-0 flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/POKER/Pokerbg.jpg"
-                alt=""
-                className="block w-full h-full max-w-full max-h-full object-contain pointer-events-none md:max-h-[100vh] md:w-auto md:h-auto"
-              />
-              <div className="absolute inset-0 bg-black/40 pointer-events-none" aria-hidden />
-              <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <div className="absolute inset-0 pointer-events-auto min-w-0 min-h-0">
-                  <div className="absolute left-2 top-2 z-20 flex items-center gap-2">
-                    <Link href="/poker" className="text-[var(--poker-accent)] hover:opacity-90 text-xs sm:text-sm">
-                      ← Lobby
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => setShowDepositModal(true)}
-                      className="px-2 py-0.5 sm:px-3 sm:py-1 rounded border border-[var(--poker-accent)] text-[var(--poker-accent)] hover:opacity-80 active:scale-95 active:brightness-90 transition-all text-[10px] sm:text-xs"
-                    >
-                      {mySeat ? '+ Re-up' : 'Balance'}
-                    </button>
-                  </div>
-                  {disconnected && (
-                    <div className="absolute left-1/2 -translate-x-1/2 top-2 z-30 px-3 py-1.5 rounded-lg border border-[var(--poker-danger)] text-[var(--poker-danger)] text-xs sm:text-sm font-medium animate-pulse backdrop-blur-sm bg-[var(--poker-bg-elevated)]">
-                      Connection lost — reconnecting...
-                    </div>
-                  )}
-                  {error && (
-                    <p className="absolute left-2 top-8 z-20 text-[var(--poker-danger)] text-sm">{error}</p>
-                  )}
-                  {state && (
-                    <PokerTable layout={defaultPokerLayout} state={state} currentPlayerAddress={normalizedAddress} onLeave={handleLeave} timeLeft={timeLeft} />
-                  )}
-                  {!state && !error && (
-                    <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-[var(--poker-text-muted)]">Loading table...</p>
-                  )}
-                </div>
-              </div>
-            </div>
-            {state && mySeat && <div className="w-full flex-shrink-0">{sharedActions}</div>}
-          </div>
-          <Footer />
-        </div>
-
         <PokerDepositModal
           isOpen={showDepositModal}
           onClose={() => setShowDepositModal(false)}
+          balanceLabel="Poker Balance"
           wsClient={mySeat ? wsClient : undefined}
           tableId={mySeat ? tableId : undefined}
           currentStack={mySeat?.stack}

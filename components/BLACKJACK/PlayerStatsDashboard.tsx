@@ -17,7 +17,8 @@ import {
   Crown,
   Copy,
   Check,
-  Wallet
+  Wallet,
+  ShieldAlert,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatEther } from 'viem'
@@ -34,6 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { GameHistory } from '@/components/BLACKJACK/GameHistory'
 import { CreatorDashboard } from '@/components/Creators/CreatorDashboard'
+import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView'
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client'
 import type { GameHistoryEntry } from '@/components/BLACKJACK/GameHistory'
 
@@ -67,7 +69,7 @@ interface PlayerStatsDashboardProps {
 }
 
 export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient, reserveBalance }: PlayerStatsDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'creator'>('stats')
+  const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'creator' | 'audit'>('stats')
   const [addressCopied, setAddressCopied] = useState(false)
   const { displayName, profileImageUrl } = useProfileForAddress(playerAddress ?? null)
 
@@ -286,6 +288,7 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
     { id: 'stats' as const, label: 'Stats', icon: BarChart3 },
     { id: 'history' as const, label: 'History', icon: Activity },
     ...(wsClient && playerAddress ? [{ id: 'creator' as const, label: 'Creator', icon: Crown }] : []),
+    ...(playerAddress ? [{ id: 'audit' as const, label: 'Audit', icon: ShieldAlert }] : []),
   ]
 
   const handleCopyAddress = () => {
@@ -591,6 +594,30 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
         <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
           <CardContent className="p-6">
             <CreatorDashboard wsClient={wsClient} address={playerAddress} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Audit Tab */}
+      {activeTab === 'audit' && playerAddress && (
+        <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-amber-400" />
+              Balance Audit Trail
+            </CardTitle>
+            <p className="text-xs text-gray-500 mt-1">
+              Full reconstructed event timeline — deposits, withdrawals, and game results with running balance.
+              Flags potential exploits or anomalies.
+            </p>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <PlayerAuditView
+              playerAddress={playerAddress}
+              games={games ?? []}
+              gamesLoading={gamesLoading}
+              actualBalance={reserveBalance}
+            />
           </CardContent>
         </Card>
       )}

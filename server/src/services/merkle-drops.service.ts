@@ -316,6 +316,23 @@ export class MerkleDropsService {
       throw new Error(`Epoch must be in 'snapshot' status to calculate rewards (current: ${epoch.status})`);
     }
 
+    // Guard: prevent twin-epoch double-rollup.
+    // If another epoch is already in 'calculated' or 'finalized' state, both
+    // epochs would share the same rollup pool from prior published epochs.
+    // When both get published the next epoch rolls them up together, counting
+    // the same pool twice and creating phantom MORBIUS obligations.
+    const { rows: pendingEpochs } = await this.pool.query<{ id: number; epoch_number: number; status: string }>(
+      `SELECT id, epoch_number, status FROM merkle_epochs
+       WHERE status IN ('calculated', 'finalized') AND id != $1`,
+      [epochId],
+    );
+    if (pendingEpochs.length > 0) {
+      throw new Error(
+        `Cannot calculate rewards: epoch(s) ${pendingEpochs.map((e) => `#${e.epoch_number} (${e.status})`).join(', ')} ` +
+        `are pending publication. Publish or revoke them before calculating a new epoch.`,
+      );
+    }
+
     // Sync on-chain claim status so rollup only includes truly unclaimed amounts.
     // Otherwise we roll up prior rewards that were already claimed on-chain but have claimed_at = NULL in DB.
     try {
