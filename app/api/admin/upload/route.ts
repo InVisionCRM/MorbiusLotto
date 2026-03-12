@@ -81,8 +81,13 @@ export async function POST(req: NextRequest) {
   }
 
   const kind = (formData.get('kind') as string)?.toLowerCase() || 'image';
+  const purpose = (formData.get('purpose') as string)?.toLowerCase();
   if (kind !== 'image' && kind !== 'video') {
     return NextResponse.json({ error: 'kind must be image or video' }, { status: 400 });
+  }
+  // Logo uploads are images only; when purpose=logo we save to a dedicated folder (local dev only)
+  if (purpose === 'logo' && kind !== 'image') {
+    return NextResponse.json({ error: 'Logo must be an image' }, { status: 400 });
   }
 
   const allowedTypes = kind === 'video' ? ALLOWED_VIDEO : ALLOWED_IMAGE;
@@ -99,9 +104,11 @@ export async function POST(req: NextRequest) {
   const safeName = `${base.replace(/[^a-zA-Z0-9-_]/g, '_')}_${Date.now()}${ext}`;
 
   const dir =
-    kind === 'video'
-      ? path.join(process.cwd(), 'public', 'BlackJack', 'video table')
-      : path.join(process.cwd(), 'public', 'BlackJack', 'BrandedTable');
+    purpose === 'logo'
+      ? path.join(process.cwd(), 'public', 'BlackJack', 'logos')
+      : kind === 'video'
+        ? path.join(process.cwd(), 'public', 'BlackJack', 'video table')
+        : path.join(process.cwd(), 'public', 'BlackJack', 'BrandedTable');
   const fullPath = path.join(dir, safeName);
 
   try {
@@ -117,8 +124,10 @@ export async function POST(req: NextRequest) {
   }
 
   const urlPath =
-    kind === 'video'
-      ? `/BlackJack/video%20table/${encodeURIComponent(safeName)}`
-      : `/BlackJack/BrandedTable/${encodeURIComponent(safeName)}`;
+    purpose === 'logo'
+      ? `/BlackJack/logos/${encodeURIComponent(safeName)}`
+      : kind === 'video'
+        ? `/BlackJack/video%20table/${encodeURIComponent(safeName)}`
+        : `/BlackJack/BrandedTable/${encodeURIComponent(safeName)}`;
   return NextResponse.json({ path: urlPath });
 }

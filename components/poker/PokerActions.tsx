@@ -182,61 +182,60 @@ export function PokerActions({
       role="group"
       aria-label="Poker actions"
     >
-      {/* ── Mobile: split left | open center | right ── */}
+      {/* ── Mobile: full-width bar (same layout as desktop, compact) ── */}
       <div
-        className="flex sm:hidden flex-row items-stretch"
-        style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))' }}
+        className="sm:hidden"
+        style={{ ...barStyle, paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))', paddingLeft: 'max(8px, env(safe-area-inset-left, 8px))', paddingRight: 'max(8px, env(safe-area-inset-right, 8px))' }}
       >
-        {/* Left column — Fold, Check/Call */}
-        <div
-          className="flex flex-col gap-2 w-[88px] shrink-0 py-2 pl-2 pr-1"
-          style={{ ...barStyle, paddingLeft: 'max(8px, env(safe-area-inset-left, 8px))' }}
-        >
-          <button
-            type="button"
-            onClick={handleFoldWithSound}
-            disabled={!canAct}
-            className="h-11 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none w-full"
-            style={foldBtnStyle}
-          >
-            Fold
-          </button>
-          <button
-            type="button"
-            onClick={handleSecondary}
-            disabled={!canAct}
-            className="h-11 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none w-full truncate px-1"
-            style={callBtnStyle}
-          >
-            {secondaryLabel}
-          </button>
+        <div className="flex items-center justify-center gap-1 pt-1.5 pb-1">
+          {quickSizes.map((q) => (
+            <button
+              key={q.label}
+              type="button"
+              onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
+              disabled={!canAct || stackAmt === 0n}
+              className="h-7 px-2.5 text-[11px] font-semibold rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95"
+              style={{
+                color: 'rgba(255,255,255,0.75)',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.1)',
+              }}
+            >
+              {q.label}
+            </button>
+          ))}
         </div>
-        {/* Center — open for table / cards overlay */}
-        <div className="flex-1 min-w-0" aria-hidden />
-        {/* Right column — quick sizes, amount + slider, Bet/Raise */}
-        <div
-          className="flex flex-col gap-2 w-[140px] shrink-0 py-2 pr-2 pl-1"
-          style={{ ...barStyle, paddingRight: 'max(8px, env(safe-area-inset-right, 8px))' }}
-        >
-          <div className="flex flex-wrap gap-1 justify-end">
-            {quickSizes.map((q) => (
-              <button
-                key={q.label}
-                type="button"
-                onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
-                disabled={!canAct || stackAmt === 0n}
-                className="h-6 px-2 text-[10px] font-semibold rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95"
-                style={{
-                  color: 'rgba(255,255,255,0.75)',
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                }}
-              >
-                {q.label}
-              </button>
-            ))}
+        <div className="flex items-stretch gap-1.5 pb-2 pt-1">
+          <div className="flex gap-1.5 flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={handleFoldWithSound}
+              disabled={!canAct}
+              className="flex-1 h-11 min-w-0 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none"
+              style={foldBtnStyle}
+            >
+              Fold
+            </button>
+            <button
+              type="button"
+              onClick={handleSecondary}
+              disabled={!canAct}
+              className="flex-1 h-11 min-w-0 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none truncate px-1"
+              style={callBtnStyle}
+            >
+              {secondaryLabel}
+            </button>
+            <button
+              type="button"
+              onClick={handlePrimary}
+              disabled={!canAct || !hasValidAmount}
+              className="flex-1 h-11 min-w-0 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 truncate px-1"
+              style={callBtnStyle}
+            >
+              {primaryLabel}
+            </button>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0" style={{ width: '42%' }}>
             <input
               inputMode="numeric"
               pattern="[0-9,]*"
@@ -244,7 +243,7 @@ export function PokerActions({
               value={customAmount}
               onChange={(e) => setCustomAmount(e.target.value)}
               disabled={!canAct}
-              className="h-9 w-12 rounded-sm text-xs font-bold tabular-nums text-center outline-none focus:ring-1 transition disabled:pointer-events-none flex-shrink-0"
+              className="h-11 w-14 rounded-sm text-xs font-bold tabular-nums text-center outline-none focus:ring-1 transition disabled:pointer-events-none flex-shrink-0"
               style={inputStyle}
               aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
             />
@@ -252,12 +251,12 @@ export function PokerActions({
               type="button"
               onClick={() => nudge(-1)}
               disabled={!canAct || !hasValidAmount}
-              className="h-9 w-7 rounded-sm text-sm font-bold transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center shrink-0"
+              className="h-11 w-8 rounded-sm text-sm font-bold transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center shrink-0"
               style={nudgeBtnStyle}
             >
               −
             </button>
-            <div className="flex-1 min-w-0 flex items-center">
+            <div className="flex-1 min-w-0 relative flex items-center">
               <input
                 type="range"
                 min={minChips}
@@ -274,21 +273,12 @@ export function PokerActions({
               type="button"
               onClick={() => nudge(1)}
               disabled={!canAct || !hasValidAmount}
-              className="h-9 w-7 rounded-sm text-sm font-bold transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center shrink-0"
+              className="h-11 w-8 rounded-sm text-sm font-bold transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center shrink-0"
               style={nudgeBtnStyle}
             >
               +
             </button>
           </div>
-          <button
-            type="button"
-            onClick={handlePrimary}
-            disabled={!canAct || !hasValidAmount}
-            className="h-11 w-full rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 truncate px-2"
-            style={callBtnStyle}
-          >
-            {primaryLabel}
-          </button>
         </div>
       </div>
 

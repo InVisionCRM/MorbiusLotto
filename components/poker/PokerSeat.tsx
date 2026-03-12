@@ -1,10 +1,15 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { formatEther } from 'viem';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
+
+/** 9 emotion emojis for quick reaction above player head */
+const EMOTION_EMOJIS = ['😀', '😢', '😡', '😂', '🥳', '😎', '😍', '🤔', '🙏'];
+const LONG_PRESS_MS = 500;
+const EMOJI_OVERLAY_DURATION_MS = 2000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -223,6 +228,56 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
     return () => ro.disconnect();
   }, []);
 
+  // Quick menu + emoji (current player only): long-press badge → menu → 9 emojis → show above head 2s
+  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [overlayEmoji, setOverlayEmoji] = useState<string | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleBadgePointerDown = useCallback(() => {
+    if (!isCurrentPlayer) return;
+    clearLongPress();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      setQuickMenuOpen(true);
+      setEmojiPickerOpen(false);
+    }, LONG_PRESS_MS);
+  }, [isCurrentPlayer, clearLongPress]);
+
+  const handleBadgePointerUp = useCallback(() => clearLongPress(), [clearLongPress]);
+  const handleBadgePointerLeave = useCallback(() => clearLongPress(), [clearLongPress]);
+  const handleBadgePointerCancel = useCallback(() => clearLongPress(), [clearLongPress]);
+  const handleBadgeContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!isCurrentPlayer) return;
+    setQuickMenuOpen(true);
+    setEmojiPickerOpen(false);
+  }, [isCurrentPlayer]);
+
+  const handleEmojiSelect = useCallback((emoji: string) => {
+    setOverlayEmoji(emoji);
+    setEmojiPickerOpen(false);
+    setQuickMenuOpen(false);
+    if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
+    overlayTimeoutRef.current = setTimeout(() => {
+      setOverlayEmoji(null);
+      overlayTimeoutRef.current = null;
+    }, EMOJI_OVERLAY_DURATION_MS);
+  }, []);
+
+  useEffect(() => () => {
+    clearLongPress();
+    if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
+  }, [clearLongPress]);
+
   // Resolve active action for color-coded label
   const activeAction =
     lastAction && lastAction.action !== 'blind' ? lastAction.action :
@@ -281,6 +336,22 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
                   : chatBubble}
               </span>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Quick-reaction emoji overlay — above head, xl on min / 3xl on max, 2s */}
+      <AnimatePresence>
+        {overlayEmoji && (
+          <motion.div
+            key={overlayEmoji}
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 text-xl lg:text-3xl"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+          >
+            {overlayEmoji}
           </motion.div>
         )}
       </AnimatePresence>
@@ -362,8 +433,97 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           </div>
         )}
 
+        {/* Backdrop to close quick menu / emoji picker when clicking outside */}
+        <AnimatePresence>
+          {isCurrentPlayer && (quickMenuOpen || emojiPickerOpen) && (
+            <motion.div
+              className="fixed inset-0 z-[45]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => { setQuickMenuOpen(false); setEmojiPickerOpen(false); }}
+              aria-hidden
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Quick menu (long-press on badge when current player) */}
+        <AnimatePresence>
+          {isCurrentPlayer && quickMenuOpen && !emojiPickerOpen && (
+            <motion.div
+              className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 z-50"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            >
+              <div
+                className="rounded-lg overflow-hidden min-w-[120px]"
+                style={{
+                  background: 'rgba(10,10,10,0.96)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => { setQuickMenuOpen(false); setEmojiPickerOpen(true); }}
+                  className="w-full px-4 py-2.5 text-sm font-medium text-left hover:bg-white/10 transition-colors flex items-center gap-2"
+                  style={{ color: 'var(--poker-text)' }}
+                >
+                  <span className="text-lg">😀</span>
+                  Emoji
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 9 emotion emojis picker */}
+        <AnimatePresence>
+          {isCurrentPlayer && emojiPickerOpen && (
+            <motion.div
+              className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 z-50"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            >
+              <div
+                className="rounded-xl p-2 grid grid-cols-3 gap-1.5"
+                style={{
+                  background: 'rgba(10,10,10,0.96)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+                }}
+              >
+                {EMOTION_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => handleEmojiSelect(emoji)}
+                    className="w-12 h-12 lg:w-14 lg:h-14 flex items-center justify-center text-2xl lg:text-3xl rounded-lg hover:bg-white/15 active:scale-95 transition-all"
+                    aria-label={`React with ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div
           ref={badgeRef}
+          role={isCurrentPlayer ? 'button' : undefined}
+          aria-label={isCurrentPlayer ? 'Press and hold or right-click for quick menu' : undefined}
+          title={isCurrentPlayer ? 'Hold or right-click for emoji menu' : undefined}
+          onPointerDown={isCurrentPlayer ? handleBadgePointerDown : undefined}
+          onPointerUp={isCurrentPlayer ? handleBadgePointerUp : undefined}
+          onPointerLeave={isCurrentPlayer ? handleBadgePointerLeave : undefined}
+          onPointerCancel={isCurrentPlayer ? handleBadgePointerCancel : undefined}
+          onContextMenu={isCurrentPlayer ? handleBadgeContextMenu : undefined}
           className="flex flex-col items-stretch overflow-hidden"
           style={{
             background: 'rgba(0,0,0,0.88)',
@@ -375,6 +535,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
             borderRadius: 6,
             minWidth: isCurrentPlayer ? 98 : 88,
             boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
+            ...(isCurrentPlayer ? { cursor: 'pointer' } : {}),
           }}
         >
           {/* Name + stack */}

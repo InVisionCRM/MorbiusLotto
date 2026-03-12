@@ -5,6 +5,7 @@ import { formatEther } from 'viem';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
+import { CardDisplay } from './CardDisplay';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
 
 function shortAddr(addr: string): string {
@@ -105,28 +106,19 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   return (
     <div ref={tableRef} className="absolute inset-0" style={{ overflow: 'visible' }}>
 
-      {/* Felt oval */}
+      {/* Custom table image (oval felt + wood rim) */}
       <div
         className="absolute pointer-events-none"
         style={{
-          left: '4%', top: '5%', width: '92%', height: '88%',
+          left: '3%',
+          top: '3%',
+          width: '94%',
+          height: '92%',
           borderRadius: '50%',
-          background: 'radial-gradient(ellipse at 50% 38%, rgb(30,110,50) 0%, rgb(15,72,30) 48%, rgb(9,50,20) 100%)',
-          boxShadow:
-            '0 0 0 5px rgba(255,255,255,0.04), ' +
-            '0 0 0 10px rgba(0,0,0,0.3), ' +
-            '0 16px 80px rgba(0,0,0,0.85), ' +
-            'inset 0 2px 50px rgba(0,0,0,0.5)',
-        }}
-      />
-      {/* Rail groove */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          left: '3%', top: '3%', width: '94%', height: '92%',
-          borderRadius: '50%',
-          border: '4px solid rgba(60,30,5,0.65)',
-          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
+          backgroundImage: 'url(/poker/table.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          boxShadow: '0 16px 80px rgba(0,0,0,0.85)',
         }}
       />
 
@@ -147,20 +139,20 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         )}
       </div>
 
-      {/* Winner announcement — detailed panel (same style as betting controls) */}
+      {/* Winner announcement — centered on table, community cards + details */}
       <AnimatePresence>
-        {isShowdownWithWinners && firstWinnerAddr && (
+        {isShowdownWithWinners && firstWinnerAddr && hand && (
           <motion.div
             key="winner-panel"
             className="absolute z-40 flex items-center justify-center pointer-events-none"
-            style={{ left: '50%', top: '26%', transform: 'translate(-50%, -50%)' }}
+            style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
             initial={{ opacity: 0, scale: 0.92, y: -12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 260, damping: 24 }}
           >
             <div
-              className="rounded-lg overflow-hidden min-w-[220px] max-w-[min(92vw,320px)]"
+              className="rounded-lg overflow-hidden min-w-[240px] max-w-[min(94vw, 360px)]"
               style={{
                 background: 'rgba(10,10,10,0.96)',
                 border: '1px solid rgba(255,255,255,0.07)',
@@ -180,6 +172,23 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               >
                 {isCurrentPlayerWinner ? 'You win!' : `${shortAddr(firstWinnerAddr)} wins`}
               </div>
+              {/* Community cards */}
+              {hand.communityCards && hand.communityCards.length > 0 && (
+                <div className="px-3 py-2 border-b border-white/[0.07] flex justify-center gap-1">
+                  {hand.communityCards.map((cardIdx, i) => (
+                    <CardDisplay key={i} cardIndex={cardIdx} small />
+                  ))}
+                </div>
+              )}
+              {/* Winner hole cards (if showdown) */}
+              {hand.showdownHands?.[firstWinnerAddr] && hand.showdownHands[firstWinnerAddr].length >= 2 && (
+                <div className="px-3 py-1.5 border-b border-white/[0.07] flex justify-center gap-1">
+                  <span className="text-[10px] uppercase text-white/50 mr-1 self-center">Winning hand:</span>
+                  {hand.showdownHands[firstWinnerAddr].map((cardIdx, i) => (
+                    <CardDisplay key={i} cardIndex={cardIdx} small />
+                  ))}
+                </div>
+              )}
               {/* Details */}
               <div className="px-4 py-3 space-y-2">
                 {winnerHandName && (
@@ -189,11 +198,15 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                   </div>
                 )}
                 <div className="flex justify-between items-center gap-4 text-sm">
+                  <span style={{ color: 'rgba(255,255,255,0.55)' }}>Pot</span>
+                  <span style={{ color: '#fbbf24', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatChips(hand.pot ?? '0')}</span>
+                </div>
+                <div className="flex justify-between items-center gap-4 text-sm">
                   <span style={{ color: 'rgba(255,255,255,0.55)' }}>Won</span>
-                  <span style={{ color: '#fbbf24', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatChips(winnerAmount)}</span>
+                  <span style={{ color: '#22c55e', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatChips(winnerAmount)}</span>
                 </div>
                 <div className="flex justify-between items-center gap-4 text-sm border-t border-white/[0.07] pt-2">
-                  <span style={{ color: 'rgba(255,255,255,0.55)' }}>Stack</span>
+                  <span style={{ color: 'rgba(255,255,255,0.55)' }}>New stack</span>
                   <span style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatChips(winnerStack)}</span>
                 </div>
               </div>

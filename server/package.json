@@ -28,7 +28,8 @@
     "viem": "^1.19.9",
     "winston": "^3.11.0",
     "ws": "^8.14.2",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "@chevtek/poker-engine": "^1.1.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.16",

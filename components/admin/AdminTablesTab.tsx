@@ -98,6 +98,22 @@ function ImagePreview({ file }: { file: File }) {
   return <Image src={url} alt="Preview" fill className="object-cover" sizes="140px" unoptimized />;
 }
 
+/** Preview for a replacement file (image or video). */
+function ReplacementPreview({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  if (!url) return <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-500">Loading…</div>;
+  const isVideo = file.type.startsWith('video/');
+  if (isVideo) {
+    return <video src={url} className="absolute inset-0 w-full h-full object-cover" muted playsInline />;
+  }
+  return <Image src={url} alt="Preview" fill className="object-cover" sizes="160px" unoptimized />;
+}
+
 export interface BlackjackTableRow {
   id: string;
   kind: 'image' | 'video';
@@ -371,10 +387,22 @@ function AddTableDialog({
   const [description, setDescription] = useState('');
   const [tokenContract, setTokenContract] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoFile, setLogoFile] = useState<File[]>([]);
   const [ticker, setTicker] = useState('');
   const [iframeUrl, setIframeUrl] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (logoFile.length === 0) {
+      setLogoPreviewUrl(null);
+      return;
+    }
+    const u = URL.createObjectURL(logoFile[0]);
+    setLogoPreviewUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [logoFile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -394,6 +422,24 @@ function AddTableDialog({
         throw new Error(d.error || 'Upload failed');
       }
       const { path } = await uploadRes.json();
+      let resolvedLogoUrl: string | null = logoUrl.trim() || null;
+      if (logoFile.length > 0) {
+        const logoForm = new FormData();
+        logoForm.set('file', logoFile[0]);
+        logoForm.set('kind', 'image');
+        logoForm.set('purpose', 'logo');
+        const logoUploadRes = await fetch('/api/admin/upload', {
+          method: 'POST',
+          headers: { 'x-admin-wallet': address },
+          body: logoForm,
+        });
+        if (!logoUploadRes.ok) {
+          const d = await logoUploadRes.json().catch(() => ({}));
+          throw new Error(d.error || 'Logo upload failed');
+        }
+        const logoData = await logoUploadRes.json();
+        resolvedLogoUrl = logoData.path ?? null;
+      }
       const createRes = await fetch('/api/admin/tables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-wallet': address },
@@ -403,7 +449,7 @@ function AddTableDialog({
           src: path,
           description: description.trim() || null,
           token_contract_address: tokenContract.trim() || null,
-          logo_url: logoUrl.trim() || null,
+          logo_url: resolvedLogoUrl,
           ticker: ticker.trim() || null,
           iframe_url: iframeUrl.trim() || null,
           website_url: websiteUrl.trim() || null,
@@ -419,6 +465,7 @@ function AddTableDialog({
       setDescription('');
       setTokenContract('');
       setLogoUrl('');
+      setLogoFile([]);
       setTicker('');
       setIframeUrl('');
       setWebsiteUrl('');
@@ -429,6 +476,8 @@ function AddTableDialog({
       setSubmitting(false);
     }
   };
+
+  const effectiveLogoUrl = (logoPreviewUrl ?? logoUrl.trim()) || '';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -501,16 +550,24 @@ function AddTableDialog({
                 placeholder="0x… (optional)"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[11px] text-slate-400">Logo URL</Label>
+            <div>
+              <Label className="text-[11px] text-slate-400">Logo (URL or upload)</Label>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2">
                 <Input
                   value={logoUrl}
                   onChange={(e) => setLogoUrl(e.target.value)}
-                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-                  placeholder="https://… (optional)"
+                  className="h-8 flex-1 min-w-[140px] text-xs bg-slate-800 border-slate-600"
+                  placeholder="https://… or upload below"
                 />
+                <div className="w-full sm:w-auto min-w-[120px]">
+                  <FileUpload onChange={(f) => setLogoFile(f)} />
+                </div>
               </div>
+              {logoFile.length > 0 && (
+                <p className="text-[10px] text-slate-500 mt-0.5">Uploaded file will be used (overrides URL on save).</p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-[11px] text-slate-400">Iframe URL</Label>
                 <Input
@@ -520,15 +577,15 @@ function AddTableDialog({
                   placeholder="morbius.io/geicko?… (optional)"
                 />
               </div>
-            </div>
-            <div>
-              <Label className="text-[11px] text-slate-400">Website URL</Label>
-              <Input
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-                className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-                placeholder="https://… (optional)"
-              />
+              <div>
+                <Label className="text-[11px] text-slate-400">Website URL</Label>
+                <Input
+                  value={websiteUrl}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="https://… (optional)"
+                />
+              </div>
             </div>
             <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
               <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
@@ -536,7 +593,7 @@ function AddTableDialog({
                 tableName={name}
                 description={description}
                 tokenContract={tokenContract}
-                logoUrl={logoUrl}
+                logoUrl={effectiveLogoUrl}
                 ticker={ticker}
                 websiteUrl={websiteUrl}
               />
@@ -596,10 +653,23 @@ function EditTableDialog({
   const [description, setDescription] = useState(row.description ?? '');
   const [tokenContract, setTokenContract] = useState(row.token_contract_address ?? '');
   const [logoUrl, setLogoUrl] = useState(row.logo_url ?? '');
+  const [logoFile, setLogoFile] = useState<File[]>([]);
   const [ticker, setTicker] = useState(row.ticker ?? '');
   const [iframeUrl, setIframeUrl] = useState(row.iframe_url ?? '');
   const [websiteUrl, setWebsiteUrl] = useState(row.website_url ?? '');
   const [enabled, setEnabled] = useState(row.enabled);
+  const [replacementFile, setReplacementFile] = useState<File[]>([]);
+
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (logoFile.length === 0) {
+      setLogoPreviewUrl(null);
+      return;
+    }
+    const u = URL.createObjectURL(logoFile[0]);
+    setLogoPreviewUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [logoFile]);
 
   useEffect(() => {
     setName(row.name);
@@ -610,25 +680,64 @@ function EditTableDialog({
     setIframeUrl(row.iframe_url ?? '');
     setWebsiteUrl(row.website_url ?? '');
     setEnabled(row.enabled);
+    setReplacementFile([]);
+    setLogoFile([]);
   }, [row]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
+      let newSrc: string | undefined;
+      if (replacementFile.length > 0) {
+        const form = new FormData();
+        form.set('file', replacementFile[0]);
+        form.set('kind', row.kind);
+        const uploadRes = await fetch('/api/admin/upload', {
+          method: 'POST',
+          headers: { 'x-admin-wallet': address },
+          body: form,
+        });
+        if (!uploadRes.ok) {
+          const d = await uploadRes.json().catch(() => ({}));
+          throw new Error(d.error || 'Upload failed');
+        }
+        const { path } = await uploadRes.json();
+        newSrc = path;
+      }
+      let resolvedLogoUrl: string | null = logoUrl.trim() || null;
+      if (logoFile.length > 0) {
+        const logoForm = new FormData();
+        logoForm.set('file', logoFile[0]);
+        logoForm.set('kind', 'image');
+        logoForm.set('purpose', 'logo');
+        const logoUploadRes = await fetch('/api/admin/upload', {
+          method: 'POST',
+          headers: { 'x-admin-wallet': address },
+          body: logoForm,
+        });
+        if (!logoUploadRes.ok) {
+          const d = await logoUploadRes.json().catch(() => ({}));
+          throw new Error(d.error || 'Logo upload failed');
+        }
+        const logoData = await logoUploadRes.json();
+        resolvedLogoUrl = logoData.path ?? null;
+      }
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        description: description.trim() || null,
+        token_contract_address: tokenContract.trim() || null,
+        logo_url: resolvedLogoUrl,
+        ticker: ticker.trim() || null,
+        iframe_url: iframeUrl.trim() || null,
+        website_url: websiteUrl.trim() || null,
+        enabled,
+      };
+      if (newSrc !== undefined) body.src = newSrc;
       const res = await fetch(`/api/admin/tables/${row.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'x-admin-wallet': address },
-        body: JSON.stringify({
-          name: name.trim(),
-          description: description.trim() || null,
-          token_contract_address: tokenContract.trim() || null,
-          logo_url: logoUrl.trim() || null,
-          ticker: ticker.trim() || null,
-          iframe_url: iframeUrl.trim() || null,
-          website_url: websiteUrl.trim() || null,
-          enabled,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -648,7 +757,7 @@ function EditTableDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm">Edit table</DialogTitle>
           <DialogDescription className="text-xs text-slate-500">
-            Update description and token contract (DexScreener link).
+            Update name, image/video, description and token contract (DexScreener link).
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 gap-3">
@@ -666,6 +775,26 @@ function EditTableDialog({
               <div className="flex items-center gap-2 pt-6">
                 <Switch checked={enabled} onCheckedChange={setEnabled} />
                 <Label className="text-[11px] text-slate-400">Enabled</Label>
+              </div>
+            </div>
+            <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
+              <Label className="text-[11px] text-slate-400">Table {row.kind}</Label>
+              <div className="mt-1 flex flex-wrap items-start gap-3">
+                <div className="relative w-40 aspect-[4/3] rounded border border-slate-600 overflow-hidden bg-slate-800 shrink-0">
+                  {replacementFile.length > 0 ? (
+                    <ReplacementPreview file={replacementFile[0]} />
+                  ) : row.kind === 'video' ? (
+                    <video src={row.src} className="absolute inset-0 w-full h-full object-cover" muted playsInline />
+                  ) : (
+                    <Image src={row.src} alt={row.name} fill className="object-cover" sizes="160px" unoptimized={row.src.startsWith('http')} />
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  <p className="text-[10px] text-slate-500">
+                    {replacementFile.length > 0 ? 'New file selected — save to replace.' : 'Current ' + row.kind + '.'}
+                  </p>
+                  <FileUpload onChange={(f) => setReplacementFile(f)} />
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -697,16 +826,24 @@ function EditTableDialog({
                 placeholder="0x…"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[11px] text-slate-400">Logo URL</Label>
+            <div>
+              <Label className="text-[11px] text-slate-400">Logo (URL or upload)</Label>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2">
                 <Input
                   value={logoUrl}
                   onChange={(e) => setLogoUrl(e.target.value)}
-                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-                  placeholder="https://… (optional)"
+                  className="h-8 flex-1 min-w-[140px] text-xs bg-slate-800 border-slate-600"
+                  placeholder="https://… or upload below"
                 />
+                <div className="w-full sm:w-auto min-w-[120px]">
+                  <FileUpload onChange={(f) => setLogoFile(f)} />
+                </div>
               </div>
+              {logoFile.length > 0 && (
+                <p className="text-[10px] text-slate-500 mt-0.5">Uploaded file will be used (overrides URL on save).</p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-[11px] text-slate-400">Iframe URL</Label>
                 <Input
@@ -716,15 +853,15 @@ function EditTableDialog({
                   placeholder="morbius.io/geicko?… (optional)"
                 />
               </div>
-            </div>
-            <div>
-              <Label className="text-[11px] text-slate-400">Website URL</Label>
-              <Input
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-                className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-                placeholder="https://… (optional)"
-              />
+              <div>
+                <Label className="text-[11px] text-slate-400">Website URL</Label>
+                <Input
+                  value={websiteUrl}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
+                  placeholder="https://… (optional)"
+                />
+              </div>
             </div>
             <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
               <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
@@ -732,7 +869,7 @@ function EditTableDialog({
                 tableName={name}
                 description={description}
                 tokenContract={tokenContract}
-                logoUrl={logoUrl}
+                logoUrl={(logoPreviewUrl ?? logoUrl.trim()) || ''}
                 ticker={ticker}
                 websiteUrl={websiteUrl}
               />
