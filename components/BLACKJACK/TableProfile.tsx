@@ -40,6 +40,8 @@ export interface TableProfileProps {
   ticker?: string
   /** Optional website URL (admin-configured, shown as "Website" link) */
   websiteUrl?: string
+  /** Optional iframe URL (e.g. Morbius/Geicko chart). When unset, defaults to morbius.io/geicko?address=tokenAddress when tokenAddress is present. */
+  iframeUrl?: string
 }
 
 export function TableProfile({
@@ -50,6 +52,7 @@ export function TableProfile({
   logoUrl: logoUrlProp,
   ticker: tickerProp,
   websiteUrl: websiteUrlProp,
+  iframeUrl: iframeUrlProp,
 }: TableProfileProps) {
   const [data, setData] = useState<DexScreenerTokenResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -89,6 +92,7 @@ export function TableProfile({
   const socials = tokenPairs[0]?.info?.socials ?? []
   const websites = tokenPairs[0]?.info?.websites ?? []
   const morbiusUrl = `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress)}`
+  const iframeSrc = iframeUrlProp?.trim() || (tokenAddress ? `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress)}` : '')
 
   const panelStyle = {
     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
@@ -192,6 +196,16 @@ export function TableProfile({
                 <span className="text-red-400/80 text-xs">Token data unavailable</span>
               )}
             </div>
+            {iframeSrc && (
+              <div className="w-full rounded-lg overflow-hidden border border-cyan-500/30 bg-slate-900/80">
+                <iframe
+                  src={iframeSrc}
+                  title="MORBIUS token chart"
+                  className="w-full aspect-video min-h-[180px] border-0"
+                  sandbox="allow-scripts allow-same-origin"
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

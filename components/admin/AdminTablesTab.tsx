@@ -48,6 +48,7 @@ function TokenProfilePreviewCard({
   logoUrl,
   ticker,
   websiteUrl,
+  iframeUrl,
 }: {
   tableName: string;
   description: string;
@@ -55,6 +56,7 @@ function TokenProfilePreviewCard({
   logoUrl: string;
   ticker: string;
   websiteUrl: string;
+  iframeUrl?: string;
 }) {
   const tokenAddress =
     tokenContract.trim().startsWith('0x') && tokenContract.trim().length >= 42
@@ -78,6 +80,7 @@ function TokenProfilePreviewCard({
           logoUrl={logoUrl.trim() || undefined}
           ticker={ticker.trim() || undefined}
           websiteUrl={websiteUrl.trim() || undefined}
+          iframeUrl={iframeUrl?.trim() || undefined}
         />
       </div>
     </div>
@@ -596,6 +599,7 @@ function AddTableDialog({
                 logoUrl={effectiveLogoUrl}
                 ticker={ticker}
                 websiteUrl={websiteUrl}
+                iframeUrl={iframeUrl}
               />
             </div>
             {kind === 'image' && files.length > 0 && (
@@ -872,6 +876,7 @@ function EditTableDialog({
                 logoUrl={(logoPreviewUrl ?? logoUrl.trim()) || ''}
                 ticker={ticker}
                 websiteUrl={websiteUrl}
+                iframeUrl={iframeUrl}
               />
             </div>
           </div>

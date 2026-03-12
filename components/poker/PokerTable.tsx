@@ -106,21 +106,44 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   return (
     <div ref={tableRef} className="absolute inset-0" style={{ overflow: 'visible' }}>
 
-      {/* Custom table image (oval felt + wood rim) */}
+      {/* CSS poker table — outer drop shadow */}
       <div
         className="absolute pointer-events-none"
         style={{
-          left: '3%',
-          top: '3%',
-          width: '94%',
-          height: '92%',
+          left: '3%', top: '3%', width: '94%', height: '92%',
           borderRadius: '50%',
-          backgroundImage: 'url(/poker/table.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          boxShadow: '0 16px 80px rgba(0,0,0,0.85)',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.9), 0 8px 32px rgba(0,0,0,0.7)',
         }}
-      />
+      >
+        {/* Wood rim */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          borderRadius: '50%',
+          background: 'radial-gradient(ellipse at 50% 30%, #6b3a1f 0%, #3d1f0a 55%, #1e0e04 100%)',
+          boxShadow: 'inset 0 4px 12px rgba(255,200,120,0.12), inset 0 -6px 18px rgba(0,0,0,0.6)',
+        }} />
+        {/* Rail cushion (inner ring) */}
+        <div style={{
+          position: 'absolute', inset: '5%',
+          borderRadius: '50%',
+          background: 'radial-gradient(ellipse at 50% 30%, #7c2d12 0%, #450e00 60%, #2a0800 100%)',
+          boxShadow: 'inset 0 3px 10px rgba(255,180,80,0.1), inset 0 -4px 14px rgba(0,0,0,0.7), 0 0 0 2px rgba(0,0,0,0.4)',
+        }} />
+        {/* Felt surface */}
+        <div style={{
+          position: 'absolute', inset: '12%',
+          borderRadius: '50%',
+          background: 'radial-gradient(ellipse at 50% 38%, #1a5c2a 0%, #0f3d1a 45%, #082610 80%, #041509 100%)',
+          boxShadow: 'inset 0 6px 30px rgba(0,0,0,0.5), inset 0 -4px 20px rgba(0,0,0,0.4), inset 0 0 60px rgba(0,0,0,0.25)',
+        }} />
+        {/* Felt sheen highlight */}
+        <div style={{
+          position: 'absolute', inset: '12%',
+          borderRadius: '50%',
+          background: 'radial-gradient(ellipse at 50% 20%, rgba(255,255,255,0.06) 0%, transparent 55%)',
+          pointerEvents: 'none',
+        }} />
+      </div>
 
       {/* Community board — center of felt */}
       <div
