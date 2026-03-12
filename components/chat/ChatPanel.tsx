@@ -233,6 +233,27 @@ export function ChatPanel({
     setInput('');
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== 'Enter') return;
+    if (compact) {
+      e.preventDefault();
+      const trimmed = input.trim();
+      if (trimmed && connected && !chatPaused) {
+        sendMessage(trimmed);
+        setInput('');
+      }
+    } else {
+      if (!e.shiftKey) {
+        e.preventDefault();
+        const trimmed = input.trim();
+        if (trimmed && connected && !chatPaused) {
+          sendMessage(trimmed);
+          setInput('');
+        }
+      }
+    }
+  };
+
   const insertEmoji = (emoji: string) => {
     const el = inputRef.current;
     if (el) {
@@ -423,6 +444,7 @@ export function ChatPanel({
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value.slice(0, CHAT_MESSAGE_MAX_LENGTH))}
+              onKeyDown={handleKeyDown}
               placeholder={chatPaused ? 'Chat paused' : connected ? 'Message…' : 'Connect to chat'}
               disabled={!connected || chatPaused}
               maxLength={CHAT_MESSAGE_MAX_LENGTH}
@@ -436,6 +458,7 @@ export function ChatPanel({
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value.slice(0, CHAT_MESSAGE_MAX_LENGTH))}
+                onKeyDown={handleKeyDown}
                 placeholder={chatPaused ? 'Chat is paused' : connected ? 'Type a message…' : 'Connect to chat'}
                 disabled={!connected || chatPaused}
                 maxLength={CHAT_MESSAGE_MAX_LENGTH}
