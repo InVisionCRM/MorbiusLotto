@@ -14,32 +14,51 @@ interface DexPair {
   liquidity?: { usd?: number }
 }
 
+const PLS_PRICE_REFRESH_MS = 60_000 // refresh every 60s for near real-time amount
+
 export function usePlsUsdPrice() {
   const [price, setPrice] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
+
+    const fetchPrice = () => {
+      fetch(`https://api.dexscreener.com/latest/dex/tokens/${WPLS_TOKEN_ADDRESS}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (cancelled) return
+          const pairs: DexPair[] = data.pairs ?? []
+          const wplsPairs = pairs
+            .filter(
+              (p) =>
+                p.baseToken?.address?.toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase() &&
+                p.priceUsd
+            )
+            .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))
+          if (wplsPairs[0]?.priceUsd) {
+            setPrice(parseFloat(wplsPairs[0].priceUsd))
+            setError(false)
+          } else {
+            setError(true)
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setError(true)
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }
+
     setLoading(true)
-    fetch(`https://api.dexscreener.com/latest/dex/tokens/${WPLS_TOKEN_ADDRESS}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const pairs: DexPair[] = data.pairs ?? []
-        const wplsPairs = pairs
-          .filter(
-            (p) =>
-              p.baseToken?.address?.toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase() &&
-              p.priceUsd
-          )
-          .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))
-        if (wplsPairs[0]?.priceUsd) {
-          setPrice(parseFloat(wplsPairs[0].priceUsd))
-        } else {
-          setError(true)
-        }
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+    fetchPrice()
+    const interval = setInterval(fetchPrice, PLS_PRICE_REFRESH_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [])
 
   return { price, loading, error }
