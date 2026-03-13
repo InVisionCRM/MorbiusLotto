@@ -976,11 +976,16 @@ export class WebSocketService {
       // Normalize address (checksum) to avoid viem encodeFunctionData issues
       const playerAddress = getAddress(ws.playerAddress) as `0x${string}`;
 
+      // Delta-based deposit sync: we track the last on-chain reserve value we
+      // saw at sync time (last_synced_reserve). A new deposit means the reserve
+      // has grown since then — we add only that delta to the DB balance.
+      // This prevents the "bounce-back" bug where gaming losses (which lower
+      // DB balance but never touch the on-chain reserve) were mistakenly
+      // treated as uncredited deposits.
       const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
-      const hasActive = await this.dbService.hasActiveGames(ws.playerAddress);
+      const lastSyncedReserve = await this.dbService.getLastSyncedReserve(ws.playerAddress);
 
-      // Read contract reserve, retrying once if the RPC returns a stale value (i.e. same as DB,
-      // which may happen right after a deposit if the node hasn't caught up yet).
+      // Read contract reserve, retrying once if the RPC returns a stale value.
       let contractBalance = await this.publicClient.readContract({
         address: this.contractAddress,
         abi: GET_PLAYER_RESERVE_ABI,
@@ -988,8 +993,8 @@ export class WebSocketService {
         args: [playerAddress],
       }) as bigint;
 
-      if (!hasActive && contractBalance <= currentDbBalance) {
-        // Possibly stale — wait 1s and retry once
+      if (lastSyncedReserve !== null && contractBalance <= lastSyncedReserve) {
+        // Possibly stale node — wait 1s and retry once
         await new Promise(resolve => setTimeout(resolve, 1000));
         contractBalance = await this.publicClient.readContract({
           address: this.contractAddress,
@@ -999,21 +1004,40 @@ export class WebSocketService {
         }) as bigint;
       }
 
-      // Only raise DB balance to match contract if player has NO active games.
-      // During gameplay, bets are deducted off-chain in DB while the on-chain reserve
-      // stays unchanged. Using max(contract, db) here would overwrite the bet deduction
-      // and restore the pre-bet balance (the "bounce-back" bug).
-      const newBalance: bigint = (!hasActive && contractBalance > currentDbBalance) ? contractBalance : currentDbBalance;
-      if (newBalance !== currentDbBalance) {
-        await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
+      let newBalance = currentDbBalance;
+
+      if (lastSyncedReserve === null) {
+        // First sync ever (migration just ran, or brand-new player):
+        // baseline without crediting so we don't double-credit existing balance.
+        await this.dbService.updateLastSyncedReserve(ws.playerAddress, contractBalance);
+        logger.debug('Balance sync: baselined last_synced_reserve', {
+          playerAddress: ws.playerAddress,
+          contractBalance: contractBalance.toString(),
+        });
+      } else if (contractBalance > lastSyncedReserve) {
+        // Reserve grew — a real deposit occurred. Credit the delta only.
+        const depositDelta = contractBalance - lastSyncedReserve;
+        newBalance = currentDbBalance + depositDelta;
+        await this.dbService.addPlayerBalance(ws.playerAddress, depositDelta);
+        await this.dbService.updateLastSyncedReserve(ws.playerAddress, contractBalance);
+        logger.info('Balance sync: deposit detected', {
+          playerAddress: ws.playerAddress,
+          depositDelta: depositDelta.toString(),
+          newBalance: newBalance.toString(),
+        });
+      } else if (contractBalance < lastSyncedReserve) {
+        // Reserve shrank (on-chain withdrawal confirmed) — update snapshot so
+        // the next deposit delta is computed correctly.
+        await this.dbService.updateLastSyncedReserve(ws.playerAddress, contractBalance);
       }
+      // contractBalance === lastSyncedReserve → no change needed.
 
       logger.debug('Balance synced', {
         playerAddress: ws.playerAddress,
         contractBalance: contractBalance.toString(),
+        lastSyncedReserve: lastSyncedReserve?.toString() ?? 'null',
         previousDbBalance: currentDbBalance.toString(),
         newBalance: newBalance.toString(),
-        hasActiveGames: hasActive,
       });
 
       this.sendMessage(ws, {
@@ -1040,36 +1064,11 @@ export class WebSocketService {
       // completed on-chain but weren't confirmed to the server.
       await this.resolvePendingWithdrawals(ws.playerAddress);
 
-      let balance = await this.dbService.getPlayerBalance(ws.playerAddress);
-
-      // Only compare with on-chain reserve if the player has NO active games.
-      // During gameplay, bets are deducted off-chain in DB. The on-chain reserve
-      // never changes during play, so comparing would overwrite legitimate bet
-      // deductions and restore the pre-bet balance (the "bounce-back" bug).
-      // Deposits already trigger an explicit sync_balance call, so skipping the
-      // contract check here does not miss new deposits.
-      const hasActive = await this.dbService.hasActiveGames(ws.playerAddress);
-      if (!hasActive) {
-        try {
-          const playerAddress = getAddress(ws.playerAddress) as `0x${string}`;
-          const contractBalance = await this.publicClient.readContract({
-            address: this.contractAddress,
-            abi: GET_PLAYER_RESERVE_ABI,
-            functionName: 'getPlayerReserve',
-            args: [playerAddress],
-          }) as bigint;
-
-          if (contractBalance > balance) {
-            await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, contractBalance);
-            balance = contractBalance;
-          }
-        } catch (rpcErr) {
-          logger.warn('getBalance: contract check failed, returning DB balance as-is', {
-            playerAddress: ws.playerAddress,
-            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
-          });
-        }
-      }
+      // Deposits trigger an explicit sync_balance call which handles reserve
+      // sync. Never overwrite the DB balance here — doing so restores gaming
+      // losses whenever the on-chain reserve (unchanged by gameplay) exceeds
+      // the post-loss DB balance (the "bounce-back" exploit).
+      const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
 
       this.sendMessage(ws, {
         type: 'balance',

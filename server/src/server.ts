@@ -2293,28 +2293,11 @@ async function initializeServices() {
           }
         }
 
-        let balance = await dbService.getPlayerBalance(normalizedAddress);
-        const hasActive = await dbService.hasActiveGames(normalizedAddress);
-        const hasPendingDeposit = await dbService.hasPendingDeposit(normalizedAddress);
-        if (!hasActive && !hasPendingDeposit) {
-          try {
-            const contractBalance = await publicClient.readContract({
-              address: blackjackContractAddress,
-              abi: blackjackAbi,
-              functionName: 'getPlayerReserve',
-              args: [normalizedAddress as `0x${string}`],
-            }) as bigint;
-            if (contractBalance > balance) {
-              await dbService.syncPlayerBalanceWithContract(normalizedAddress, contractBalance);
-              balance = contractBalance;
-            }
-          } catch (rpcErr) {
-            logger.warn('Balance endpoint: contract read failed', {
-              address: normalizedAddress,
-              error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
-            });
-          }
-        }
+        // Return DB balance directly. Deposit syncing is handled exclusively by
+        // sync_balance (delta-based) to prevent the bounce-back exploit where
+        // gaming losses (which lower DB but never touch on-chain reserve) would
+        // be falsely treated as uncredited deposits.
+        const balance = await dbService.getPlayerBalance(normalizedAddress);
 
         return res.status(200).json({ balance: balance.toString() });
       } catch (error) {

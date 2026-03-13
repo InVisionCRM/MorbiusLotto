@@ -577,7 +577,7 @@ function AddTableDialog({
                   value={iframeUrl}
                   onChange={(e) => setIframeUrl(e.target.value)}
                   className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-                  placeholder="morbius.io/geicko?… (optional)"
+                  placeholder="scan.morbius.io/geicko?… (optional)"
                 />
               </div>
               <div>
@@ -854,7 +854,7 @@ function EditTableDialog({
                   value={iframeUrl}
                   onChange={(e) => setIframeUrl(e.target.value)}
                   className="mt-0.5 h-8 text-xs bg-slate-800 border-slate-600"
-                  placeholder="morbius.io/geicko?… (optional)"
+                  placeholder="scan.morbius.io/geicko?… (optional)"
                 />
               </div>
               <div>

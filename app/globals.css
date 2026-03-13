@@ -221,6 +221,10 @@ body {
   animation: shimmer 2s linear infinite;
 }
 
+.animate-shimmer-slow {
+  animation: shimmer 5s linear infinite;
+}
+
 /* Magic border spin animation */
 @keyframes magic-spin {
   from {

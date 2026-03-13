@@ -1896,8 +1896,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-        {/* Reserve - top center of table (desktop and mobile) */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex">
+        {/* Reserve - top left of table (desktop and mobile) */}
+        <div className="absolute top-2 left-2 z-50 pointer-events-auto flex">
           <button
             type="button"
             onClick={onOpenDepositModal}
@@ -1926,6 +1926,19 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             <i className="fas fa-chevron-down text-white/60 text-[10px] absolute right-1.5 top-1/2 transform -translate-y-1/2" />
           </button>
         </div>
+
+        {/* Change Table - top right of table */}
+        {onOpenTableThemeSelector && (
+          <div className="absolute top-2 right-2 z-50 pointer-events-auto flex">
+            <button
+              type="button"
+              onClick={onOpenTableThemeSelector}
+              className="text-cyan-300/90 hover:text-cyan-200 text-xs font-medium py-1.5 px-2.5 rounded-md border border-cyan-500/40 hover:border-cyan-400/60 bg-slate-900/80 hover:bg-slate-800/80 transition-colors"
+            >
+              Change Table
+            </button>
+          </div>
+        )}
 
       </div>
       {/* End table surface */}

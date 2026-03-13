@@ -92,14 +92,14 @@ export default function ThemeSelectionModal({
     onThemeChange('image')
     onImageSourceChange(id)
     const label = imageList.find((img) => img.id === id)?.label ?? id
-    toast.success(`Table background applied: ${label}`)
+    toast.success(`Default table set: ${label}`)
   }
 
   const handleSelectVideo = (id: string) => {
     onThemeChange('video')
     onVideoSourceChange(id)
     const label = videoList.find((v) => v.id === id)?.label ?? id
-    toast.success(`Table background applied: ${label}`)
+    toast.success(`Default table set: ${label}`)
   }
 
   if (!open || !mounted) return null
@@ -116,7 +116,10 @@ export default function ThemeSelectionModal({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-            <h2 className="text-lg font-semibold text-cyan-300">Table theme</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-cyan-300">Table theme</h2>
+              <p className="text-xs text-white/50 mt-0.5">Your choice is saved as your default table for this wallet.</p>
+            </div>
             <button
               type="button"
               onClick={onClose}

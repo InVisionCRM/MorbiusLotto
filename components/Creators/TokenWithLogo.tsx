@@ -16,7 +16,7 @@ interface TokenWithLogoProps {
 }
 
 const MORBIUS_LOGO = '/morbius/MorbiusLogo (3).png';
-const GEICKO_BASE = 'https://morbius.io/geicko?address=';
+const GEICKO_BASE = 'https://scan.morbius.io/geicko?address=';
 
 export function TokenWithLogo({ address, logoSize = 'sm', variant = 'symbol', className = '' }: TokenWithLogoProps) {
   const tokenInfo = useTokenInfo(address);

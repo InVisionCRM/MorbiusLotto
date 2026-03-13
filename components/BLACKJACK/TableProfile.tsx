@@ -5,7 +5,7 @@ import { ExternalLink, Copy } from 'lucide-react'
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 
 const SWAP_PAGE_URL = '/swap'
-const VIEW_ON_MORBIUS_BASE = 'https://morbius.io/geicko?address='
+const VIEW_ON_MORBIUS_BASE = 'https://scan.morbius.io/geicko?address='
 
 interface DexScreenerPair {
   url?: string
@@ -40,7 +40,7 @@ export interface TableProfileProps {
   ticker?: string
   /** Optional website URL (admin-configured, shown as "Website" link) */
   websiteUrl?: string
-  /** Optional iframe URL (e.g. Morbius/Geicko chart). When unset, defaults to morbius.io/geicko?address=tokenAddress when tokenAddress is present. */
+  /** Optional iframe URL (e.g. Morbius/Geicko chart). When unset, defaults to scan.morbius.io/geicko?address=tokenAddress when tokenAddress is present. */
   iframeUrl?: string
 }
 
@@ -155,7 +155,7 @@ export function TableProfile({
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-sm font-medium transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
-                View on Morbius
+                Scan. View on Morbius
               </a>
               {websiteUrlProp && (
                 <a
