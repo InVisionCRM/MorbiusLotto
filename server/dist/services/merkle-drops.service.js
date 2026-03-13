@@ -126,7 +126,7 @@ class MerkleDropsService {
         const minThreshold = BigInt(
         // The threshold is stored as plain MORBIUS units (e.g. 1000), convert to wei
         Math.floor(Number(epoch.min_holding_threshold)) * 1e18);
-        // Load blocklist
+        // Load blocklist from DB (includes ALL_DEPLOYMENTS.MD rows from migration 053)
         const { rows: blockedRows } = await this.pool.query('SELECT address FROM merkle_blocklist');
         const blocklist = new Set(blockedRows.map((r) => r.address.toLowerCase()));
         logger_1.logger.info(`[MerkleDrops] Snapshot epoch #${epoch.epoch_number}: fetching holders...`);
@@ -211,6 +211,25 @@ class MerkleDropsService {
         if (!['snapshot'].includes(epoch.status)) {
             throw new Error(`Epoch must be in 'snapshot' status to calculate rewards (current: ${epoch.status})`);
         }
+        // Guard: prevent twin-epoch double-rollup.
+        // If another epoch is already in 'calculated' or 'finalized' state, both
+        // epochs would share the same rollup pool from prior published epochs.
+        // When both get published the next epoch rolls them up together, counting
+        // the same pool twice and creating phantom MORBIUS obligations.
+        const { rows: pendingEpochs } = await this.pool.query(`SELECT id, epoch_number, status FROM merkle_epochs
+       WHERE status IN ('calculated', 'finalized') AND id != $1`, [epochId]);
+        if (pendingEpochs.length > 0) {
+            throw new Error(`Cannot calculate rewards: epoch(s) ${pendingEpochs.map((e) => `#${e.epoch_number} (${e.status})`).join(', ')} ` +
+                `are pending publication. Publish or revoke them before calculating a new epoch.`);
+        }
+        // Sync on-chain claim status so rollup only includes truly unclaimed amounts.
+        // Otherwise we roll up prior rewards that were already claimed on-chain but have claimed_at = NULL in DB.
+        try {
+            await this.syncClaimStatus();
+        }
+        catch (err) {
+            logger_1.logger.warn('[MerkleDrops] syncClaimStatus failed before calculateRewards — rollup may be inflated', err);
+        }
         const { rows: snapshots } = await this.pool.query('SELECT wallet_address, morbius_balance FROM merkle_snapshots WHERE epoch_id = $1', [epochId]);
         if (snapshots.length === 0)
             throw new Error('No snapshots found for epoch');
@@ -243,7 +262,7 @@ class MerkleDropsService {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            // Proportional share of NEW rewards per wallet
+            // Strictly proportional to morbius_balance (not equal per holder): share = (balance / totalBalance) * newReward
             const SCALE = BigInt('1000000000000000000'); // 1e18
             let distributedNew = 0n;
             const assignments = [];
@@ -264,6 +283,12 @@ class MerkleDropsService {
             }
             for (const { address, reward } of assignments) {
                 await client.query('UPDATE merkle_snapshots SET reward_amount = $1 WHERE epoch_id = $2 AND wallet_address = $3', [reward.toString(), epochId, address]);
+            }
+            // Safeguard: if every holder got the same amount, something may be wrong (e.g. equal split or identical snapshot balances)
+            const { rows: distinctCheck } = await client.query('SELECT COUNT(DISTINCT reward_amount) AS cnt FROM merkle_snapshots WHERE epoch_id = $1', [epochId]);
+            if (distinctCheck[0] && Number(distinctCheck[0].cnt) === 1) {
+                logger_1.logger.warn(`[MerkleDrops] Epoch #${epoch.epoch_number}: all ${snapshots.length} holders have the same reward_amount. ` +
+                    'Expected proportional distribution by MORBIUS balance. Check snapshot balances or recalculate.');
             }
             // Mark superseded prior snapshot rows
             if (priorSnapshotIds.length > 0) {

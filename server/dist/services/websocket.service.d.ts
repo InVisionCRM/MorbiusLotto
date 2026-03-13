@@ -11,6 +11,7 @@ export declare class WebSocketService {
     private chatMessageTimestampsByAddress;
     private heartbeatInterval;
     private chatRateLimitCleanupInterval;
+    private pokerAutoFoldInterval;
     private publicClient;
     private contractAddress;
     private tournamentService?;
@@ -51,8 +52,10 @@ export declare class WebSocketService {
     private handlePokerListTables;
     private handlePokerJoinTable;
     private handlePokerLeaveTable;
+    private handlePokerAddChips;
     private handlePokerAction;
     private handlePokerGetState;
+    private handlePokerCreateTable;
     private handleGetChatHistory;
     private handleSetDisplayName;
     private handleGetProfile;
@@ -64,6 +67,8 @@ export declare class WebSocketService {
     private broadcastToRoom;
     /** Called by admin API when a message is soft-deleted; notifies all clients in the room. */
     broadcastChatMessageDeleted(roomId: string, messageId: string): void;
+    /** Broadcast current poker table state to room (e.g. after API adds bots so UI updates). */
+    broadcastPokerTableState(tableId: string): Promise<void>;
     getConnectionCount(): number;
     getActivePlayersCount(): Promise<number>;
     private handleCheckExclusionStatus;

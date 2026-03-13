@@ -36,6 +36,16 @@ export interface PokerCurrentHand {
     minRaise: string;
     /** Amount the acting player must put in to call (0 if can check). */
     toCall: string;
+    /** ISO timestamp of when the current player's turn started (for the 30s timer). */
+    turnStartedAt: string | null;
+    /** At showdown: all players' revealed hole cards keyed by address */
+    showdownHands?: Record<string, number[]>;
+    /** At showdown: winner(s), amount each receives, and optional hand name */
+    winners?: {
+        address: string;
+        amount: string;
+        handName?: string;
+    }[];
 }
 export interface PokerTableState {
     tableId: string;
@@ -51,50 +61,29 @@ export interface PokerTableState {
 export declare class PokerGameService {
     private dbService;
     private pfService;
+    private broadcastCallback;
+    private activeTables;
     constructor(dbService: DatabaseService, pfService: ProvablyFairService);
+    /** Wire in the WebSocket broadcast so actions push state to clients. */
+    setBroadcastCallback(cb: (tableId: string) => Promise<void>): void;
     private getPool;
     private normalizeAddress;
-    listTables(): Promise<PokerTableSummary[]>;
-    getTable(tableId: string): Promise<{
-        id: string;
-        smallBlind: string;
-        bigBlind: string;
-        maxSeats: number;
-        status: string;
-    } | null>;
-    createTable(smallBlind: bigint, bigBlind: bigint, maxSeats: number): Promise<string>;
-    /**
-     * Join a table: deduct buyIn from balance, add seat with stack = buyIn.
-     */
-    joinTable(tableId: string, playerAddress: string, buyInChips: string): Promise<PokerTableState>;
-    /**
-     * Leave table: credit stack back to balance, remove seat.
-     */
-    leaveTable(tableId: string, playerAddress: string): Promise<PokerTableState | null>;
-    /**
-     * Get full table state. Hole cards only for forPlayerAddress.
-     */
-    getTableState(tableId: string, forPlayerAddress: string | null): Promise<PokerTableState>;
-    /**
-     * Player action: fold, check, call, bet, raise.
-     */
-    playerAction(tableId: string, handId: string, playerAddress: string, action: string, amount?: string): Promise<PokerTableState>;
-    private getCurrentBetToCall;
-    private getPlayerAtPosition;
-    private getMinRaise;
-    private advanceOrShowdown;
-    private firstActivePosition;
-    private nextActiveSeatPosition;
-    private nextActivePosition;
-    private haveAllActedThisStreet;
-    private getDeckForHand;
-    private runShowdown;
-    private tryStartNextHand;
     private broadcastState;
-    /**
-     * Start a new hand. Requires 2+ players with stack > 0.
-     * Deal order (provably fair): hole1 P0, hole2 P0, hole1 P1, hole2 P1, ... then flop 3, turn 1, river 1.
-     */
+    listTables(): Promise<PokerTableSummary[]>;
+    createTable(smallBlind: bigint, bigBlind: bigint, maxSeats: number): Promise<string>;
+    deleteTable(tableId: string): Promise<boolean>;
+    joinTable(tableId: string, playerAddress: string, buyInChips: string): Promise<PokerTableState>;
+    leaveTable(tableId: string, playerAddress: string): Promise<PokerTableState | null>;
+    private persistActionAfterStandUp;
+    addChips(tableId: string, playerAddress: string, amount: string): Promise<PokerTableState>;
+    getTableState(tableId: string, forPlayer: string | null): Promise<PokerTableState>;
     startHand(tableId: string): Promise<PokerTableState | null>;
+    playerAction(tableId: string, handId: string, playerAddress: string, action: string, amount?: string): Promise<PokerTableState>;
+    private persistShowdown;
+    autoFoldTimedOutTurns(): Promise<string[]>;
+    private reconstructTable;
+    private tryStartNextHand;
+    private syncSeatsFromTable;
+    private nextSeatPosition;
 }
 //# sourceMappingURL=poker-game.service.d.ts.map

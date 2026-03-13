@@ -61,5 +61,10 @@ export declare class ChainAnalyticsService {
         lottery: LotteryChainStats | null;
         bigWheel: BigWheelChainStats | null;
     }>;
+    /**
+     * Read cumulative on-chain stats for all tracked games and upsert today's snapshot row.
+     * Called hourly. Returns the number of games successfully snapshotted.
+     */
+    takeAndSaveDailySnapshots(): Promise<number>;
 }
 //# sourceMappingURL=chain-analytics.service.d.ts.map

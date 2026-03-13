@@ -34,7 +34,11 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TournamentService = exports.TOURNAMENT_CONFIG = void 0;
+const viem_1 = require("viem");
 const logger_1 = require("../utils/logger");
+function formatWei(w) {
+    return Number((0, viem_1.formatEther)(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
 const escrow_payout_1 = require("../utils/escrow-payout");
 const morbius_tournament_1 = require("../utils/morbius-tournament");
 const escrow_status_1 = require("../utils/escrow-status");
@@ -245,7 +249,7 @@ class TournamentService {
         }
         const balance = this.toBigInt(balanceResult.rows[0].balance);
         if (balance < tournament.buy_in_amount) {
-            throw new Error(`Insufficient balance for tournament buy-in. Need ${tournament.buy_in_amount.toString()}, have ${balance.toString()}`);
+            throw new Error(`Insufficient balance for tournament buy-in. Need ${formatWei(tournament.buy_in_amount)}, have ${formatWei(balance)}`);
         }
         // Use transaction for atomic buy-in
         const client = await this.pool.connect();
@@ -1405,7 +1409,7 @@ class TournamentService {
             }
             const balance = this.toBigInt(balanceResult.rows[0].balance);
             if (balance < tournament.buy_in_amount) {
-                throw new Error(`Insufficient balance for buy-in. Need ${tournament.buy_in_amount.toString()}, have ${balance.toString()}`);
+                throw new Error(`Insufficient balance for buy-in. Need ${formatWei(tournament.buy_in_amount)}, have ${formatWei(balance)}`);
             }
         }
         // Process buy-in (off-chain only; on-chain buy-in already done via contract)

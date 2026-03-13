@@ -126,7 +126,7 @@ class MerkleDropsLPService {
         const epoch = await this.getEpoch(epochId);
         if (!epoch)
             throw new Error(`LP Epoch ${epochId} not found`);
-        // Load blocklist
+        // Load blocklist from DB (includes ALL_DEPLOYMENTS.MD rows from migration 053)
         const { rows: blockedRows } = await this.pool.query('SELECT address FROM merkle_lp_blocklist');
         const blocklist = new Set(blockedRows.map((r) => r.address.toLowerCase()));
         // Load active pairs
@@ -204,6 +204,24 @@ class MerkleDropsLPService {
             throw new Error(`LP Epoch ${epochId} not found`);
         if (epoch.status !== 'snapshot') {
             throw new Error(`Epoch must be in 'snapshot' status (current: ${epoch.status})`);
+        }
+        // Guard: prevent twin-epoch double-rollup.
+        // If another epoch is already in 'calculated' or 'finalized' state, both
+        // epochs would share the same rollup pool from prior published epochs.
+        // When both get published the next epoch rolls them up together, counting
+        // the same pool twice and creating phantom MORBIUS obligations.
+        const { rows: pendingEpochs } = await this.pool.query(`SELECT id, epoch_number, status FROM merkle_lp_epochs
+       WHERE status IN ('calculated', 'finalized') AND id != $1`, [epochId]);
+        if (pendingEpochs.length > 0) {
+            throw new Error(`Cannot calculate rewards: LP epoch(s) ${pendingEpochs.map((e) => `#${e.epoch_number} (${e.status})`).join(', ')} ` +
+                `are pending publication. Publish or revoke them before calculating a new epoch.`);
+        }
+        // Sync on-chain claim status so rollup only includes truly unclaimed amounts.
+        try {
+            await this.syncClaimStatus();
+        }
+        catch (err) {
+            logger_1.logger.warn('[MerkleLP] syncClaimStatus failed before calculateRewards — rollup may be inflated', err);
         }
         const { rows: snapshots } = await this.pool.query('SELECT wallet_address, morbius_equivalent FROM merkle_lp_snapshots WHERE epoch_id = $1', [epochId]);
         if (snapshots.length === 0)

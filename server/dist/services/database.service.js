@@ -2,7 +2,17 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DatabaseService = void 0;
 const pg_1 = require("pg");
+const viem_1 = require("viem");
 const logger_1 = require("../utils/logger");
+function formatWei(wei) {
+    try {
+        const n = Number((0, viem_1.formatEther)(BigInt(wei)));
+        return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+    catch {
+        return String(wei);
+    }
+}
 class DatabaseService {
     pool;
     /**
@@ -141,6 +151,9 @@ class DatabaseService {
             failed_settlements: Number(row.failed_settlements ?? 0),
             largest_bet: this.toBigInt(row.largest_bet),
             largest_payout: this.toBigInt(row.largest_payout),
+            total_wins: Number(row.total_wins ?? 0),
+            total_losses: Number(row.total_losses ?? 0),
+            total_pushes: Number(row.total_pushes ?? 0),
         };
     }
     async connect() {
@@ -219,12 +232,25 @@ class DatabaseService {
         if (result.rows.length === 0) {
             // Either player not found or insufficient balance
             const currentBalance = await this.getPlayerBalance(walletAddress);
-            throw new Error(`Insufficient balance: have ${currentBalance.toString()}, need ${amount.toString()}`);
+            throw new Error(`Insufficient balance: have ${formatWei(currentBalance)}, need ${formatWei(amount)}`);
         }
         return BigInt(result.rows[0].balance || '0');
     }
     async addPlayerBalance(walletAddress, amount) {
         return await this.updatePlayerBalance(walletAddress, amount, 'add');
+    }
+    /** Returns null if the player has never been synced (first-time baseline needed). */
+    async getLastSyncedReserve(walletAddress) {
+        const normalized = this.normalizeAddress(walletAddress);
+        const result = await this.pool.query(`SELECT last_synced_reserve FROM players WHERE LOWER(wallet_address) = LOWER($1)`, [normalized]);
+        if (result.rows.length === 0)
+            return null;
+        const val = result.rows[0].last_synced_reserve;
+        return val === null ? null : BigInt(val);
+    }
+    async updateLastSyncedReserve(walletAddress, reserve) {
+        const normalized = this.normalizeAddress(walletAddress);
+        await this.pool.query(`UPDATE players SET last_synced_reserve = $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`, [normalized, reserve.toString()]);
     }
     /** Credit an address (e.g. fee wallet). Upserts a player row if missing. */
     async addBalanceToAddress(walletAddress, amount) {
@@ -277,7 +303,7 @@ class DatabaseService {
             if (deductResult.rows.length === 0) {
                 const current = await client.query(`SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`, [normalizedAddress]);
                 const have = current.rows[0]?.balance ?? '0';
-                throw new Error(`Insufficient balance: have ${have}, need ${amount.toString()}`);
+                throw new Error(`Insufficient balance: have ${formatWei(have)}, need ${formatWei(amount)}`);
             }
             const remainingBalance = BigInt(deductResult.rows[0].balance || '0');
             // Create pending withdrawal record (expires_at = on-chain signature deadline)
@@ -305,6 +331,182 @@ class DatabaseService {
         const result = await this.pool.query(query, [normalizedAddress, nonce.toString(), txHash ?? null]);
         return result.rows.length > 0;
     }
+    /**
+     * Record a completed hot-wallet withdrawal for history (shows in getPlayerTransactionHistory).
+     * Uses a synthetic negative nonce so it does not clash with signature-based pending withdrawals.
+     */
+    async recordHotWalletWithdrawal(walletAddress, amount, txHash) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const nonce = -BigInt(Date.now()) * 1000000n - BigInt(Math.floor(Math.random() * 1000000));
+        await this.pool.query(`INSERT INTO pending_withdrawals (nonce, wallet_address, amount, status, tx_hash)
+       VALUES ($1::NUMERIC, $2, $3::NUMERIC, 'completed', $4)`, [nonce.toString(), normalizedAddress, amount.toString(), txHash]);
+    }
+    // ============================================
+    // Hot Withdrawal Jobs (queue + confirmation)
+    // ============================================
+    /** Enqueue a hot-wallet withdrawal: deduct balance and insert job in one transaction. Returns job id. */
+    async enqueueHotWithdrawal(walletAddress, amountWei, netToUserWei, feeWei) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        return this.withTransaction(async (client) => {
+            const deductResult = await client.query(`UPDATE players SET balance = balance - $2::NUMERIC
+         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+         RETURNING id`, [normalizedAddress, amountWei.toString()]);
+            if (deductResult.rows.length === 0) {
+                const cur = await client.query(`SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`, [normalizedAddress]);
+                const have = cur.rows[0]?.balance ?? '0';
+                throw new Error(`Insufficient balance: have ${formatWei(have)}, need ${formatWei(amountWei)}`);
+            }
+            const insertResult = await client.query(`INSERT INTO hot_withdrawal_jobs (wallet_address, amount_wei, net_to_user_wei, fee_wei, status)
+         VALUES ($1, $2::NUMERIC, $3::NUMERIC, $4::NUMERIC, 'queued')
+         RETURNING id`, [normalizedAddress, amountWei.toString(), netToUserWei.toString(), feeWei.toString()]);
+            return insertResult.rows[0].id;
+        });
+    }
+    /** Claim next queued job: SELECT FOR UPDATE SKIP LOCKED and set status = 'broadcasting' in one transaction. Returns null if none. */
+    async claimNextHotWithdrawalJob() {
+        return this.withTransaction(async (client) => {
+            const result = await client.query(`SELECT id, wallet_address, amount_wei, net_to_user_wei, fee_wei, created_at
+         FROM hot_withdrawal_jobs
+         WHERE status = 'queued'
+         ORDER BY created_at ASC
+         LIMIT 1
+         FOR UPDATE SKIP LOCKED`);
+            if (result.rows.length === 0)
+                return null;
+            const row = result.rows[0];
+            await client.query(`UPDATE hot_withdrawal_jobs SET status = 'broadcasting', updated_at = NOW() WHERE id = $1`, [row.id]);
+            return row;
+        });
+    }
+    /** Update job status (and optionally tx_hash, error_message). */
+    async updateHotWithdrawalJob(jobId, updates) {
+        const sets = ['status = $2', 'updated_at = NOW()'];
+        const vals = [jobId, updates.status];
+        let i = 3;
+        if (updates.tx_hash !== undefined) {
+            sets.push(`tx_hash = $${i++}`);
+            vals.push(updates.tx_hash);
+        }
+        if (updates.error_message !== undefined) {
+            sets.push(`error_message = $${i++}`);
+            vals.push(updates.error_message);
+        }
+        await this.pool.query(`UPDATE hot_withdrawal_jobs SET ${sets.join(', ')} WHERE id = $1`, vals);
+    }
+    /** Get job by id for status API. */
+    async getHotWithdrawalJobById(jobId) {
+        const result = await this.pool.query(`SELECT id, wallet_address, amount_wei, net_to_user_wei, status, tx_hash, error_message, created_at, updated_at
+       FROM hot_withdrawal_jobs WHERE id = $1`, [jobId]);
+        if (result.rows.length === 0)
+            return null;
+        return result.rows[0];
+    }
+    /** Get the latest active (non-terminal) hot withdrawal job for a wallet. */
+    async getActiveHotWithdrawalJob(walletAddress) {
+        const normalized = this.normalizeAddress(walletAddress);
+        const result = await this.pool.query(`SELECT id, wallet_address, amount_wei, net_to_user_wei, status, tx_hash, error_message, created_at, updated_at
+       FROM hot_withdrawal_jobs
+       WHERE LOWER(wallet_address) = LOWER($1)
+         AND status IN ('queued', 'broadcasting', 'pending_confirmation')
+       ORDER BY created_at DESC LIMIT 1`, [normalized]);
+        if (result.rows.length === 0)
+            return null;
+        return result.rows[0];
+    }
+    /** List jobs in pending_confirmation for the confirmation worker. */
+    async getHotWithdrawalJobsPendingConfirmation() {
+        const result = await this.pool.query(`SELECT id, wallet_address, amount_wei, tx_hash, created_at, updated_at
+       FROM hot_withdrawal_jobs
+       WHERE status = 'pending_confirmation' AND tx_hash IS NOT NULL`);
+        return result.rows;
+    }
+    /** Refund balance for a failed hot withdrawal job. */
+    async refundHotWithdrawalJob(walletAddress, amountWei) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        await this.pool.query(`UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`, [normalizedAddress, amountWei.toString()]);
+    }
+    // ============================================
+    // Pending Deposits (reorg protection)
+    // ============================================
+    /** Insert a pending deposit (do not credit balance until confirmations). */
+    async insertPendingDeposit(walletAddress, amountWei, txHash, blockNumber, confirmationsRequired = 12) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        await this.pool.query(`INSERT INTO pending_deposits (wallet_address, amount_wei, tx_hash, block_number, confirmations_required, status)
+       VALUES ($1, $2::NUMERIC, $3, $4, $5, 'pending_confirmation')
+       ON CONFLICT (tx_hash) DO NOTHING`, [
+            normalizedAddress,
+            amountWei.toString(),
+            txHash,
+            blockNumber != null ? Number(blockNumber) : null,
+            confirmationsRequired,
+        ]);
+    }
+    /** Returns true if the player has any unconfirmed pending deposit in flight. */
+    async hasPendingDeposit(walletAddress) {
+        const normalizedAddress = this.normalizeAddress(walletAddress);
+        const result = await this.pool.query(`SELECT 1 FROM pending_deposits WHERE LOWER(wallet_address) = LOWER($1) AND status = 'pending_confirmation' LIMIT 1`, [normalizedAddress]);
+        return result.rows.length > 0;
+    }
+    /** Get pending deposits that need confirmation check. */
+    async getPendingDepositsForConfirmation() {
+        const result = await this.pool.query(`SELECT id, wallet_address, amount_wei, tx_hash, block_number, confirmations_required
+       FROM pending_deposits
+       WHERE status = 'pending_confirmation'`);
+        return result.rows;
+    }
+    /** Mark pending deposit as credited and credit players.balance. */
+    async creditPendingDeposit(jobId) {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            const row = await client.query(`SELECT wallet_address, amount_wei, tx_hash, block_number
+         FROM pending_deposits
+         WHERE id = $1 AND status = 'pending_confirmation'
+         FOR UPDATE`, [jobId]);
+            if (row.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return false;
+            }
+            const { wallet_address, amount_wei, tx_hash, block_number } = row.rows[0];
+            await client.query(`UPDATE players
+         SET balance = balance + $2::NUMERIC,
+             -- Advance last_synced_reserve by the deposit amount so that a
+             -- subsequent sync_balance call doesn't see the same delta and
+             -- double-credit the deposit.  Only update when already baselined
+             -- (IS NOT NULL); if still NULL the next sync_balance call will
+             -- baseline without crediting, which is correct.
+             last_synced_reserve = CASE
+               WHEN last_synced_reserve IS NOT NULL
+               THEN last_synced_reserve + $2::NUMERIC
+               ELSE NULL
+             END
+         WHERE LOWER(wallet_address) = LOWER($1)`, [wallet_address, amount_wei]);
+            await client.query(`INSERT INTO player_deposits (wallet_address, amount, tx_hash, block_number)
+         VALUES ($1, $2::NUMERIC, $3, $4)
+         ON CONFLICT (tx_hash) DO NOTHING`, [wallet_address, amount_wei, tx_hash, block_number ?? null]);
+            await client.query(`UPDATE pending_deposits SET status = 'credited', updated_at = NOW() WHERE id = $1`, [jobId]);
+            await client.query('COMMIT');
+            return true;
+        }
+        catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        }
+        finally {
+            client.release();
+        }
+    }
+    /** Update pending deposit block_number (e.g. after fetching from chain). */
+    async updatePendingDepositBlockNumber(jobId, blockNumber) {
+        await this.pool.query(`UPDATE pending_deposits SET block_number = $2, updated_at = NOW() WHERE id = $1`, [jobId, Number(blockNumber)]);
+    }
+    /** Get a credited pending deposit by tx_hash (for admin shortfall correction). */
+    async getCreditedPendingDepositByTxHash(txHash) {
+        const result = await this.pool.query(`SELECT wallet_address, amount_wei FROM pending_deposits WHERE tx_hash = $1 AND status = 'credited'`, [txHash]);
+        if (result.rows.length === 0)
+            return null;
+        return result.rows[0];
+    }
     /** Get stored Blackjack platform totals (deposit/withdraw). Used by chain-analytics for derived totals. */
     async getBlackjackPlatformTotals() {
         const result = await this.pool.query(`SELECT total_deposited, total_withdrawn, last_scanned_block FROM blackjack_platform_totals WHERE id = 1`);
@@ -326,6 +528,18 @@ class DatabaseService {
         if (amount <= 0n)
             return;
         await this.pool.query(`UPDATE blackjack_platform_totals SET total_withdrawn = total_withdrawn + $1::NUMERIC, updated_at = NOW() WHERE id = 1`, [amount.toString()]);
+    }
+    /** Blackjack deposits and withdrawals since a given time (from player_deposits + pending_withdrawals). */
+    async getBlackjackDepositsWithdrawalsSince(since) {
+        const sinceIso = since.toISOString();
+        const [depResult, witResult] = await Promise.all([
+            this.pool.query(`SELECT COALESCE(SUM(amount), 0)::TEXT AS sum FROM player_deposits WHERE created_at >= $1`, [sinceIso]),
+            this.pool.query(`SELECT COALESCE(SUM(amount), 0)::TEXT AS sum FROM pending_withdrawals WHERE created_at >= $1`, [sinceIso]),
+        ]);
+        return {
+            deposited: depResult.rows[0]?.sum ?? '0',
+            withdrawn: witResult.rows[0]?.sum ?? '0',
+        };
     }
     // ============================================
     // Instant Lottery (indexed plays for leaderboard + player stats)
@@ -1920,6 +2134,52 @@ class DatabaseService {
     async deleteBlackjackTable(id) {
         const r = await this.pool.query('DELETE FROM blackjack_tables WHERE id = $1', [id]);
         return (r.rowCount ?? 0) > 0;
+    }
+    // ── Contract daily snapshots ────────────────────────────────────────────────
+    /** Upsert a snapshot for today. Called hourly by the snapshot scheduler. */
+    async saveContractDailySnapshot(game, totalWagered, totalPayouts, contractReserve) {
+        const today = new Date().toISOString().slice(0, 10);
+        await this.pool.query(`INSERT INTO contract_daily_snapshots (snapshot_date, game, total_wagered, total_payouts, contract_reserve)
+       VALUES ($1, $2, $3::NUMERIC, $4::NUMERIC, $5::NUMERIC)
+       ON CONFLICT (snapshot_date, game) DO UPDATE SET
+         total_wagered    = EXCLUDED.total_wagered,
+         total_payouts    = EXCLUDED.total_payouts,
+         contract_reserve = EXCLUDED.contract_reserve,
+         captured_at      = NOW()`, [today, game, totalWagered.toString(), totalPayouts.toString(), contractReserve.toString()]);
+    }
+    /** Return snapshots for the last N days, oldest first. */
+    async getContractDailySnapshots(days = 7) {
+        const result = await this.pool.query(`SELECT snapshot_date::TEXT, game,
+              total_wagered::TEXT, total_payouts::TEXT, contract_reserve::TEXT
+       FROM contract_daily_snapshots
+       WHERE snapshot_date >= CURRENT_DATE - ($1 - 1) * INTERVAL '1 day'
+       ORDER BY snapshot_date ASC, game ASC`, [days]);
+        return result.rows;
+    }
+    /** Upsert one hourly snapshot (current hour bucket). Called by snapshot scheduler. */
+    async saveContractHourlySnapshot(game, totalWagered, totalPayouts, contractReserve) {
+        await this.pool.query(`INSERT INTO contract_hourly_snapshots (snapshot_hour, game, total_wagered, total_payouts, contract_reserve)
+       VALUES (date_trunc('hour', NOW()), $1, $2::NUMERIC, $3::NUMERIC, $4::NUMERIC)
+       ON CONFLICT (snapshot_hour, game) DO UPDATE SET
+         total_wagered    = EXCLUDED.total_wagered,
+         total_payouts    = EXCLUDED.total_payouts,
+         contract_reserve = EXCLUDED.contract_reserve,
+         captured_at      = NOW()`, [game, totalWagered.toString(), totalPayouts.toString(), contractReserve.toString()]);
+    }
+    /** Prune hourly snapshots older than keepHours. */
+    async pruneContractHourlySnapshots(keepHours = 48) {
+        const result = await this.pool.query(`DELETE FROM contract_hourly_snapshots
+       WHERE snapshot_hour < NOW() - make_interval(hours => $1::int)`, [keepHours]);
+        return result.rowCount ?? 0;
+    }
+    /** Return hourly snapshots for the last N hours, oldest first. */
+    async getContractHourlySnapshots(hours = 24) {
+        const result = await this.pool.query(`SELECT snapshot_hour::TEXT, game,
+              total_wagered::TEXT, total_payouts::TEXT, contract_reserve::TEXT
+       FROM contract_hourly_snapshots
+       WHERE snapshot_hour >= NOW() - make_interval(hours => $1::int)
+       ORDER BY snapshot_hour ASC, game ASC`, [hours]);
+        return result.rows;
     }
 }
 exports.DatabaseService = DatabaseService;

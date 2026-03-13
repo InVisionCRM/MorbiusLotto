@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BIGWHEEL_GET_GLOBAL_STATS_ABI = exports.INSTANT_LOTTERY_STATS_ABI = exports.LOTTERY_STATS_ABI = exports.KENO_GET_GLOBAL_STATS_ABI = exports.PLINKO_GET_GLOBAL_STATS_ABI = exports.BLACKJACK_LEGACY_ADDRESS_7 = exports.BLACKJACK_LEGACY_ADDRESS_6 = exports.BLACKJACK_LEGACY_ADDRESS_5 = exports.BLACKJACK_LEGACY_ADDRESS_4 = exports.BLACKJACK_LEGACY_ADDRESS_3 = exports.BLACKJACK_LEGACY_ADDRESS_2 = exports.BLACKJACK_LEGACY_ADDRESS = exports.BLACKJACK_ADDRESS = exports.BIGWHEEL_ADDRESS = exports.LOTTERY_INSTANT_ADDRESS = exports.KENO_ADDRESS = exports.PLINKO_ADDRESS = exports.MORBIUS_TOKEN_ADDRESS = void 0;
+exports.BIGWHEEL_GET_GLOBAL_STATS_ABI = exports.BLACKJACK_STATS_ABI = exports.INSTANT_LOTTERY_STATS_ABI = exports.LOTTERY_STATS_ABI = exports.KENO_GET_CONTRACT_RESERVE_ABI = exports.KENO_GET_GLOBAL_STATS_ABI = exports.PLINKO_GET_GLOBAL_STATS_ABI = exports.BLACKJACK_LEGACY_ADDRESS_7 = exports.BLACKJACK_LEGACY_ADDRESS_6 = exports.BLACKJACK_LEGACY_ADDRESS_5 = exports.BLACKJACK_LEGACY_ADDRESS_4 = exports.BLACKJACK_LEGACY_ADDRESS_3 = exports.BLACKJACK_LEGACY_ADDRESS_2 = exports.BLACKJACK_LEGACY_ADDRESS = exports.BLACKJACK_ADDRESS = exports.BIGWHEEL_ADDRESS = exports.LOTTERY_INSTANT_ADDRESS = exports.KENO_ADDRESS = exports.PLINKO_ADDRESS = exports.MORBIUS_TOKEN_ADDRESS = void 0;
 exports.getAllBlackjackContracts = getAllBlackjackContracts;
 /**
  * Contract addresses and ABIs for platform analytics (Plinko, Keno, Lottery, BigWheel, Blackjack).
@@ -60,10 +60,23 @@ function getAllBlackjackContracts() {
 exports.PLINKO_GET_GLOBAL_STATS_ABI = PLINKO_ABI;
 /** Full CryptoKeno ABI from contracts/abi/CryptoKeno.json. */
 exports.KENO_GET_GLOBAL_STATS_ABI = KENO_ABI;
+/** Minimal ABI: getContractReserve() -> uint256 */
+exports.KENO_GET_CONTRACT_RESERVE_ABI = [
+    { inputs: [], name: 'getContractReserve', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+];
 /** Full Lottery 6-of-55 V2 ABI from contracts/abi/lottery6of55-v2.json. */
 exports.LOTTERY_STATS_ABI = LOTTERY_ABI;
 /** Instant Lottery 6-of-55 ABI (totalPlays, totalWagered, totalPayouts). */
 exports.INSTANT_LOTTERY_STATS_ABI = instant_lottery_1.instantLotteryAbi;
+/** Minimal Blackjack stats ABI for snapshot reads (fee totals, off-chain payouts, reserves). */
+exports.BLACKJACK_STATS_ABI = [
+    { inputs: [], name: 'totalBurnFeesCollected', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+    { inputs: [], name: 'totalDistributionFeesCollected', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+    { inputs: [], name: 'totalLpDistributionFeesCollected', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+    { inputs: [], name: 'totalPlatformFeesCollected', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+    { inputs: [], name: 'totalOffChainPayouts', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+    { inputs: [], name: 'totalReserves', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+];
 /** Minimal ABI: getGlobalStats() -> (spins, volume, payouts, contractBalance, contractReserveBalance) */
 exports.BIGWHEEL_GET_GLOBAL_STATS_ABI = [
     {

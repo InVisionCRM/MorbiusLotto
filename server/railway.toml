@@ -4,7 +4,7 @@
 
 [build]
 builder = "railpack"
-buildCommand = "npm install --ignore-scripts && npm run build"
+buildCommand = "npm install --ignore-scripts && (cd node_modules/@chevtek/poker-engine && node ../../typescript/bin/tsc --project tsconfig.json || true) && npm run build"
 
 [deploy]
 startCommand = "npm start"

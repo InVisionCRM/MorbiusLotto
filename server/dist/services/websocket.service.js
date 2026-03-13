@@ -61,8 +61,9 @@ function getTournamentIdFromRoom(room) {
     return room.slice('tournament:'.length);
 }
 // When false, unauthenticated clients fall back to trusting the query-param address (V1 behavior).
-// Set to "true" in env once all clients support EIP-712 auth.
 const REQUIRE_WS_AUTH = process.env.REQUIRE_WS_AUTH === 'true';
+// When true, never send auth_challenge — always trust query-param address (stops sign prompts for testing).
+const DISABLE_WS_AUTH = process.env.DISABLE_WS_AUTH === 'true';
 const CHAT_MAX_LENGTH = 500;
 const CHAT_RATE_LIMIT_MS = 2000; // min 2s between messages per connection
 const CHAT_RECENT_MESSAGES_LIMIT = 50;
@@ -88,6 +89,7 @@ class WebSocketService {
     chatMessageTimestampsByAddress = new Map(); // per-address rate limit
     heartbeatInterval;
     chatRateLimitCleanupInterval;
+    pokerAutoFoldInterval = null;
     publicClient;
     contractAddress;
     tournamentService;
@@ -103,7 +105,7 @@ class WebSocketService {
         this.publicClient = (0, chain_client_1.getPublicClient)();
         this.contractAddress = contracts_1.BLACKJACK_ADDRESS;
         console.log('[WebSocketService] Using BLACKJACK_ADDRESS:', this.contractAddress);
-        console.log('[WebSocketService] REQUIRE_WS_AUTH:', REQUIRE_WS_AUTH);
+        console.log('[WebSocketService] REQUIRE_WS_AUTH:', REQUIRE_WS_AUTH, 'DISABLE_WS_AUTH:', DISABLE_WS_AUTH);
         this.wss.on('connection', this.handleConnection.bind(this));
         // Heartbeat to keep connections alive
         this.heartbeatInterval = setInterval(() => {
@@ -120,6 +122,18 @@ class WebSocketService {
         this.chatRateLimitCleanupInterval = setInterval(() => {
             this.cleanupChatRateLimitMap();
         }, CHAT_PER_ADDRESS_CLEANUP_MS);
+        // Auto-fold timed-out poker turns (30s timer enforcement)
+        // broadcastState is handled internally by PokerGameService via setBroadcastCallback
+        if (this.pokerGameService) {
+            this.pokerAutoFoldInterval = setInterval(async () => {
+                try {
+                    await this.pokerGameService.autoFoldTimedOutTurns();
+                }
+                catch (err) {
+                    logger_1.logger.error('Poker auto-fold watchdog error', err);
+                }
+            }, 5000);
+        }
         logger_1.logger.info('WebSocket service initialized');
     }
     /** Prune addresses with no timestamps in the current window to avoid unbounded map growth. */
@@ -233,7 +247,8 @@ class WebSocketService {
             logger_1.logger.error('WebSocket error', { connectionId: ws.connectionId, error });
         });
         this.clients.set(connectionId, ws);
-        if (REQUIRE_WS_AUTH) {
+        const sendAuthChallenge = REQUIRE_WS_AUTH && !DISABLE_WS_AUTH;
+        if (sendAuthChallenge) {
             // Strict mode: generate auth challenge, client must sign to proceed
             const authNonce = crypto_1.default.randomBytes(32).toString('hex');
             ws.authNonce = authNonce;
@@ -244,15 +259,12 @@ class WebSocketService {
             });
         }
         else {
-            // Grace period: trust query-param address (V1 behavior) but still offer auth
-            const authNonce = crypto_1.default.randomBytes(32).toString('hex');
-            ws.authNonce = authNonce;
-            console.log('[WS Auth] Grace period mode: claimedAddress=', claimedAddress, 'connectionId=', connectionId);
+            // No challenge: trust query-param address (DISABLE_WS_AUTH or REQUIRE_WS_AUTH=false)
+            console.log('[WS Auth] No challenge:', DISABLE_WS_AUTH ? 'DISABLE_WS_AUTH' : 'REQUIRE_WS_AUTH=false', 'claimedAddress=', claimedAddress, 'connectionId=', connectionId);
             if (claimedAddress) {
-                // Auto-authenticate with the query-param address (legacy support)
                 ws.playerAddress = claimedAddress;
                 ws.isAuthenticated = true;
-                console.log('[WS Auth] Legacy auto-auth for', claimedAddress);
+                console.log('[WS Auth] Auto-auth for', claimedAddress);
                 try {
                     const player = await this.dbService.getOrCreatePlayer(claimedAddress);
                     await this.dbService.addActiveConnection(player.id, connectionId);
@@ -265,11 +277,10 @@ class WebSocketService {
             else {
                 logger_1.logger.warn('WebSocket connection without player address', { connectionId });
             }
-            // Still send auth_challenge so new clients can upgrade to EIP-712 auth
-            console.log('[WS Auth] Sending auth_challenge (upgrade offer)', { connectionId });
+            // Send connection_established so client connects without any auth prompt
             this.sendMessage(ws, {
-                type: 'auth_challenge',
-                payload: { connectionId, nonce: authNonce, claimedAddress }
+                type: 'connection_established',
+                payload: { connectionId, playerAddress: claimedAddress ?? undefined }
             });
         }
     }
@@ -494,6 +505,11 @@ class WebSocketService {
                         return;
                     await this.handlePokerLeaveTable(ws, message);
                     break;
+                case 'poker_add_chips':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerAddChips(ws, message);
+                    break;
                 case 'poker_action':
                     if (!this.requireAuth(ws, message))
                         return;
@@ -504,13 +520,26 @@ class WebSocketService {
                         return;
                     await this.handlePokerGetState(ws, message);
                     break;
+                case 'poker_create_table':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerCreateTable(ws, message);
+                    break;
                 default:
                     this.sendError(ws, 'Unknown message type', message.requestId);
             }
         }
         catch (error) {
             logger_1.logger.error('Error handling WebSocket message:', error);
-            this.sendError(ws, 'Invalid message format', undefined);
+            let requestId;
+            try {
+                const parsed = JSON.parse(data.toString());
+                requestId = parsed?.requestId;
+            }
+            catch {
+                // ignore
+            }
+            this.sendError(ws, error?.message || 'Invalid message format', requestId);
         }
     }
     /**
@@ -521,8 +550,8 @@ class WebSocketService {
         if (ws.isAuthenticated) {
             return true;
         }
-        // In grace period, having a playerAddress (from query param) is enough
-        if (!REQUIRE_WS_AUTH && ws.playerAddress) {
+        // No challenge mode or grace period: trust query-param address
+        if ((DISABLE_WS_AUTH || !REQUIRE_WS_AUTH) && ws.playerAddress) {
             return true;
         }
         this.sendError(ws, 'Not authenticated. Please sign the auth challenge first.', message.requestId);
@@ -683,7 +712,8 @@ class WebSocketService {
             try {
                 const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
                 if (balance < totalStake) {
-                    return this.sendError(ws, `Insufficient balance. You have ${balance.toString()}, but need ${totalStake.toString()} (main + Perfect Pairs)`, message.requestId);
+                    const fmt = (n) => Number((0, viem_1.formatEther)(n)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                    return this.sendError(ws, `Insufficient balance. You have ${fmt(balance)}, but need ${fmt(totalStake)} (main + Perfect Pairs)`, message.requestId);
                 }
             }
             catch (error) {
@@ -858,18 +888,23 @@ class WebSocketService {
             await this.resolvePendingWithdrawals(ws.playerAddress);
             // Normalize address (checksum) to avoid viem encodeFunctionData issues
             const playerAddress = (0, viem_1.getAddress)(ws.playerAddress);
+            // Delta-based deposit sync: we track the last on-chain reserve value we
+            // saw at sync time (last_synced_reserve). A new deposit means the reserve
+            // has grown since then — we add only that delta to the DB balance.
+            // This prevents the "bounce-back" bug where gaming losses (which lower
+            // DB balance but never touch the on-chain reserve) were mistakenly
+            // treated as uncredited deposits.
             const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
-            const hasActive = await this.dbService.hasActiveGames(ws.playerAddress);
-            // Read contract reserve, retrying once if the RPC returns a stale value (i.e. same as DB,
-            // which may happen right after a deposit if the node hasn't caught up yet).
+            const lastSyncedReserve = await this.dbService.getLastSyncedReserve(ws.playerAddress);
+            // Read contract reserve, retrying once if the RPC returns a stale value.
             let contractBalance = await this.publicClient.readContract({
                 address: this.contractAddress,
                 abi: GET_PLAYER_RESERVE_ABI,
                 functionName: 'getPlayerReserve',
                 args: [playerAddress],
             });
-            if (!hasActive && contractBalance <= currentDbBalance) {
-                // Possibly stale — wait 1s and retry once
+            if (lastSyncedReserve !== null && contractBalance <= lastSyncedReserve) {
+                // Possibly stale node — wait 1s and retry once
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 contractBalance = await this.publicClient.readContract({
                     address: this.contractAddress,
@@ -878,20 +913,40 @@ class WebSocketService {
                     args: [playerAddress],
                 });
             }
-            // Only raise DB balance to match contract if player has NO active games.
-            // During gameplay, bets are deducted off-chain in DB while the on-chain reserve
-            // stays unchanged. Using max(contract, db) here would overwrite the bet deduction
-            // and restore the pre-bet balance (the "bounce-back" bug).
-            const newBalance = (!hasActive && contractBalance > currentDbBalance) ? contractBalance : currentDbBalance;
-            if (newBalance !== currentDbBalance) {
-                await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, newBalance);
+            let newBalance = currentDbBalance;
+            if (lastSyncedReserve === null) {
+                // First sync ever (migration just ran, or brand-new player):
+                // baseline without crediting so we don't double-credit existing balance.
+                await this.dbService.updateLastSyncedReserve(ws.playerAddress, contractBalance);
+                logger_1.logger.debug('Balance sync: baselined last_synced_reserve', {
+                    playerAddress: ws.playerAddress,
+                    contractBalance: contractBalance.toString(),
+                });
             }
+            else if (contractBalance > lastSyncedReserve) {
+                // Reserve grew — a real deposit occurred. Credit the delta only.
+                const depositDelta = contractBalance - lastSyncedReserve;
+                newBalance = currentDbBalance + depositDelta;
+                await this.dbService.addPlayerBalance(ws.playerAddress, depositDelta);
+                await this.dbService.updateLastSyncedReserve(ws.playerAddress, contractBalance);
+                logger_1.logger.info('Balance sync: deposit detected', {
+                    playerAddress: ws.playerAddress,
+                    depositDelta: depositDelta.toString(),
+                    newBalance: newBalance.toString(),
+                });
+            }
+            else if (contractBalance < lastSyncedReserve) {
+                // Reserve shrank (on-chain withdrawal confirmed) — update snapshot so
+                // the next deposit delta is computed correctly.
+                await this.dbService.updateLastSyncedReserve(ws.playerAddress, contractBalance);
+            }
+            // contractBalance === lastSyncedReserve → no change needed.
             logger_1.logger.debug('Balance synced', {
                 playerAddress: ws.playerAddress,
                 contractBalance: contractBalance.toString(),
+                lastSyncedReserve: lastSyncedReserve?.toString() ?? 'null',
                 previousDbBalance: currentDbBalance.toString(),
                 newBalance: newBalance.toString(),
-                hasActiveGames: hasActive,
             });
             this.sendMessage(ws, {
                 type: 'balance_synced',
@@ -915,35 +970,11 @@ class WebSocketService {
             // CRITICAL: Before reading balance, resolve any pending withdrawals that
             // completed on-chain but weren't confirmed to the server.
             await this.resolvePendingWithdrawals(ws.playerAddress);
-            let balance = await this.dbService.getPlayerBalance(ws.playerAddress);
-            // Only compare with on-chain reserve if the player has NO active games.
-            // During gameplay, bets are deducted off-chain in DB. The on-chain reserve
-            // never changes during play, so comparing would overwrite legitimate bet
-            // deductions and restore the pre-bet balance (the "bounce-back" bug).
-            // Deposits already trigger an explicit sync_balance call, so skipping the
-            // contract check here does not miss new deposits.
-            const hasActive = await this.dbService.hasActiveGames(ws.playerAddress);
-            if (!hasActive) {
-                try {
-                    const playerAddress = (0, viem_1.getAddress)(ws.playerAddress);
-                    const contractBalance = await this.publicClient.readContract({
-                        address: this.contractAddress,
-                        abi: GET_PLAYER_RESERVE_ABI,
-                        functionName: 'getPlayerReserve',
-                        args: [playerAddress],
-                    });
-                    if (contractBalance > balance) {
-                        await this.dbService.syncPlayerBalanceWithContract(ws.playerAddress, contractBalance);
-                        balance = contractBalance;
-                    }
-                }
-                catch (rpcErr) {
-                    logger_1.logger.warn('getBalance: contract check failed, returning DB balance as-is', {
-                        playerAddress: ws.playerAddress,
-                        error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
-                    });
-                }
-            }
+            // Deposits trigger an explicit sync_balance call which handles reserve
+            // sync. Never overwrite the DB balance here — doing so restores gaming
+            // losses whenever the on-chain reserve (unchanged by gameplay) exceeds
+            // the post-loss DB balance (the "bounce-back" exploit).
+            const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
             this.sendMessage(ws, {
                 type: 'balance',
                 payload: {
@@ -1123,6 +1154,30 @@ class WebSocketService {
             this.sendError(ws, error.message || 'Failed to leave table', message.requestId);
         }
     }
+    async handlePokerAddChips(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { tableId, amount } = payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            if (!amount || typeof amount !== 'string') {
+                return this.sendError(ws, 'amount required', message.requestId);
+            }
+            const state = await this.pokerGameService.addChips(tableId, ws.playerAddress, amount);
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+            const roomId = `poker:table:${tableId}`;
+            const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+            this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: broadcastState });
+        }
+        catch (error) {
+            logger_1.logger.error('Error adding chips to poker table:', error);
+            this.sendError(ws, error.message || 'Failed to add chips', message.requestId);
+        }
+    }
     async handlePokerAction(ws, message) {
         try {
             if (!this.pokerGameService || !ws.playerAddress) {
@@ -1166,6 +1221,31 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error getting poker state:', error);
             this.sendError(ws, error.message || 'Failed to get state', message.requestId);
+        }
+    }
+    async handlePokerCreateTable(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const smallBlindStr = payload?.smallBlind != null ? String(payload.smallBlind) : undefined;
+            const bigBlindStr = payload?.bigBlind != null ? String(payload.bigBlind) : undefined;
+            if (!smallBlindStr || !bigBlindStr) {
+                return this.sendError(ws, 'smallBlind and bigBlind required', message.requestId);
+            }
+            const smallBlind = BigInt(smallBlindStr);
+            const bigBlind = BigInt(bigBlindStr);
+            if (smallBlind <= 0n || bigBlind <= 0n || bigBlind < smallBlind) {
+                return this.sendError(ws, 'Invalid blinds: must be positive and bigBlind >= smallBlind', message.requestId);
+            }
+            const maxSeats = Math.min(10, Math.max(2, Number(payload?.maxSeats) || 6));
+            const tableId = await this.pokerGameService.createTable(smallBlind, bigBlind, maxSeats);
+            this.sendMessage(ws, { type: 'poker_create_table', payload: { tableId }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error creating poker table:', error);
+            this.sendError(ws, error.message || 'Failed to create table', message.requestId);
         }
     }
     async handleGetChatHistory(ws, message) {
@@ -1442,6 +1522,18 @@ class WebSocketService {
             type: 'chat_message_deleted',
             payload: { roomId, messageId }
         });
+    }
+    /** Broadcast current poker table state to room (e.g. after API adds bots so UI updates). */
+    async broadcastPokerTableState(tableId) {
+        if (!this.pokerGameService)
+            return;
+        try {
+            const state = await this.pokerGameService.getTableState(tableId, null);
+            this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: state });
+        }
+        catch (err) {
+            logger_1.logger.error('broadcastPokerTableState failed', { tableId, error: err });
+        }
     }
     // Get connection count
     getConnectionCount() {
@@ -2606,6 +2698,9 @@ class WebSocketService {
         }
         if (this.chatRateLimitCleanupInterval) {
             clearInterval(this.chatRateLimitCleanupInterval);
+        }
+        if (this.pokerAutoFoldInterval) {
+            clearInterval(this.pokerAutoFoldInterval);
         }
         this.wss.clients.forEach((client) => {
             client.close(1000, 'Server shutdown');

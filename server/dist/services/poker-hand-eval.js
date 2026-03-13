@@ -5,6 +5,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bestHand = bestHand;
+exports.handRankToName = handRankToName;
 exports.compareHands = compareHands;
 exports.winners = winners;
 function rankOf(cardIndex) {
@@ -113,6 +114,21 @@ function bestHand(cardIndices) {
             best = candidate;
     }
     return best;
+}
+/** Human-readable hand name for UI. */
+function handRankToName(rank) {
+    const names = {
+        [0 /* HandRank.HighCard */]: 'High Card',
+        [1 /* HandRank.Pair */]: 'Pair',
+        [2 /* HandRank.TwoPair */]: 'Two Pair',
+        [3 /* HandRank.Trips */]: 'Three of a Kind',
+        [4 /* HandRank.Straight */]: 'Straight',
+        [5 /* HandRank.Flush */]: 'Flush',
+        [6 /* HandRank.FullHouse */]: 'Full House',
+        [7 /* HandRank.Quads */]: 'Four of a Kind',
+        [8 /* HandRank.StraightFlush */]: 'Straight Flush',
+    };
+    return names[rank] ?? 'Hand';
 }
 /**
  * Compare two ranked hands. Returns positive if a > b, negative if a < b, 0 if tie.

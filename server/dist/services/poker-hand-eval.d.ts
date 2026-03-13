@@ -23,6 +23,8 @@ export interface RankedHand {
  * Best 5-card hand from 5 to 7 card indices (0-51).
  */
 export declare function bestHand(cardIndices: number[]): RankedHand;
+/** Human-readable hand name for UI. */
+export declare function handRankToName(rank: HandRank): string;
 /**
  * Compare two ranked hands. Returns positive if a > b, negative if a < b, 0 if tie.
  */

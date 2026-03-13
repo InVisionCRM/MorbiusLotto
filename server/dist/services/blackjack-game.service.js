@@ -1,7 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BlackjackGameService = void 0;
+const viem_1 = require("viem");
 const logger_1 = require("../utils/logger");
+function formatWei(w) {
+    return Number((0, viem_1.formatEther)(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
 /**
  * Simple per-key mutex using Promise chaining.
  * Ensures only one async operation runs at a time for a given key.
@@ -516,7 +520,7 @@ class BlackjackGameService {
             const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
             const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
             if (currentBalance < handToSplit.betAmount) {
-                throw new Error(`Insufficient balance to split. Need ${handToSplit.betAmount.toString()}, have ${currentBalance.toString()}`);
+                throw new Error(`Insufficient balance to split. Need ${formatWei(handToSplit.betAmount)}, have ${formatWei(currentBalance)}`);
             }
             await this.dbService.deductPlayerBalance(playerAddress, handToSplit.betAmount);
             await this.dbService.updateSessionStats(game.session_id, handToSplit.betAmount, 0n, false);
@@ -643,7 +647,7 @@ class BlackjackGameService {
             const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
             const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
             if (currentBalance < originalBet) {
-                throw new Error(`Insufficient balance to double down. Need ${originalBet.toString()}, have ${currentBalance.toString()}`);
+                throw new Error(`Insufficient balance to double down. Need ${formatWei(originalBet)}, have ${formatWei(currentBalance)}`);
             }
             currentHand.betAmount *= 2n;
             const card = deck[deckPosition++];

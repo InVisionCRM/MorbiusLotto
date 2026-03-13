@@ -124,6 +124,9 @@ export interface GlobalAnalytics {
     failed_settlements: number;
     largest_bet: bigint;
     largest_payout: bigint;
+    total_wins: number;
+    total_losses: number;
+    total_pushes: number;
 }
 export interface ChatMessage {
     id: string;
@@ -174,6 +177,9 @@ export declare class DatabaseService {
     updatePlayerBalance(walletAddress: string, amount: bigint, operation: 'add' | 'subtract' | 'set'): Promise<bigint>;
     deductPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
     addPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
+    /** Returns null if the player has never been synced (first-time baseline needed). */
+    getLastSyncedReserve(walletAddress: string): Promise<bigint | null>;
+    updateLastSyncedReserve(walletAddress: string, reserve: bigint): Promise<void>;
     /** Credit an address (e.g. fee wallet). Upserts a player row if missing. */
     addBalanceToAddress(walletAddress: string, amount: bigint): Promise<void>;
     getActivePendingWithdrawal(walletAddress: string): Promise<{
@@ -196,6 +202,85 @@ export declare class DatabaseService {
      * Prevents the expiry cron from refunding the amount (double-credit). Idempotent: safe to call if already completed.
      */
     markPendingWithdrawalCompleted(walletAddress: string, nonce: bigint, txHash?: string): Promise<boolean>;
+    /**
+     * Record a completed hot-wallet withdrawal for history (shows in getPlayerTransactionHistory).
+     * Uses a synthetic negative nonce so it does not clash with signature-based pending withdrawals.
+     */
+    recordHotWalletWithdrawal(walletAddress: string, amount: bigint, txHash: string): Promise<void>;
+    /** Enqueue a hot-wallet withdrawal: deduct balance and insert job in one transaction. Returns job id. */
+    enqueueHotWithdrawal(walletAddress: string, amountWei: bigint, netToUserWei: bigint, feeWei: bigint): Promise<string>;
+    /** Claim next queued job: SELECT FOR UPDATE SKIP LOCKED and set status = 'broadcasting' in one transaction. Returns null if none. */
+    claimNextHotWithdrawalJob(): Promise<{
+        id: string;
+        wallet_address: string;
+        amount_wei: string;
+        net_to_user_wei: string;
+        fee_wei: string;
+        created_at: Date;
+    } | null>;
+    /** Update job status (and optionally tx_hash, error_message). */
+    updateHotWithdrawalJob(jobId: string, updates: {
+        status: string;
+        tx_hash?: string | null;
+        error_message?: string | null;
+    }): Promise<void>;
+    /** Get job by id for status API. */
+    getHotWithdrawalJobById(jobId: string): Promise<{
+        id: string;
+        wallet_address: string;
+        amount_wei: string;
+        net_to_user_wei: string;
+        status: string;
+        tx_hash: string | null;
+        error_message: string | null;
+        created_at: Date;
+        updated_at: Date;
+    } | null>;
+    /** Get the latest active (non-terminal) hot withdrawal job for a wallet. */
+    getActiveHotWithdrawalJob(walletAddress: string): Promise<{
+        id: string;
+        wallet_address: string;
+        amount_wei: string;
+        net_to_user_wei: string;
+        status: string;
+        tx_hash: string | null;
+        error_message: string | null;
+        created_at: Date;
+        updated_at: Date;
+    } | null>;
+    /** List jobs in pending_confirmation for the confirmation worker. */
+    getHotWithdrawalJobsPendingConfirmation(): Promise<Array<{
+        id: string;
+        wallet_address: string;
+        amount_wei: string;
+        tx_hash: string;
+        created_at: Date;
+        updated_at: Date;
+    }>>;
+    /** Refund balance for a failed hot withdrawal job. */
+    refundHotWithdrawalJob(walletAddress: string, amountWei: bigint): Promise<void>;
+    /** Insert a pending deposit (do not credit balance until confirmations). */
+    insertPendingDeposit(walletAddress: string, amountWei: bigint, txHash: string, blockNumber: bigint | null, confirmationsRequired?: number): Promise<void>;
+    /** Returns true if the player has any unconfirmed pending deposit in flight. */
+    hasPendingDeposit(walletAddress: string): Promise<boolean>;
+    /** Get pending deposits that need confirmation check. */
+    getPendingDepositsForConfirmation(): Promise<Array<{
+        id: string;
+        wallet_address: string;
+        amount_wei: string;
+        tx_hash: string;
+        block_number: number | null;
+        confirmations_required: number;
+    }>>;
+    /** Mark pending deposit as credited and credit players.balance. */
+    creditPendingDeposit(jobId: string): Promise<boolean>;
+    /** Update pending deposit block_number (e.g. after fetching from chain). */
+    updatePendingDepositBlockNumber(jobId: string, blockNumber: bigint): Promise<void>;
+    /** Get a credited pending deposit by tx_hash (for admin shortfall correction). */
+    getCreditedPendingDepositByTxHash(txHash: string): Promise<{
+        wallet_address: string;
+        amount_wei: string;
+    } | null>;
     /** Get stored Blackjack platform totals (deposit/withdraw). Used by chain-analytics for derived totals. */
     getBlackjackPlatformTotals(): Promise<{
         totalDeposited: bigint;
@@ -206,6 +291,11 @@ export declare class DatabaseService {
     updateBlackjackPlatformTotals(totalDeposited: bigint, totalWithdrawn: bigint, lastScannedBlock: bigint | null): Promise<void>;
     /** Add amount to stored total_withdrawn when a pending withdrawal is created. */
     addToBlackjackWithdrawnTotal(amount: bigint): Promise<void>;
+    /** Blackjack deposits and withdrawals since a given time (from player_deposits + pending_withdrawals). */
+    getBlackjackDepositsWithdrawalsSince(since: Date): Promise<{
+        deposited: string;
+        withdrawn: string;
+    }>;
     getInstantLotteryScanState(): Promise<{
         lastScannedBlock: bigint | null;
     } | null>;
@@ -447,5 +537,27 @@ export declare class DatabaseService {
     createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow>;
     updateBlackjackTable(id: string, updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'website_url' | 'sort_order' | 'enabled'>>): Promise<BlackjackTableRow | null>;
     deleteBlackjackTable(id: string): Promise<boolean>;
+    /** Upsert a snapshot for today. Called hourly by the snapshot scheduler. */
+    saveContractDailySnapshot(game: string, totalWagered: bigint, totalPayouts: bigint, contractReserve: bigint): Promise<void>;
+    /** Return snapshots for the last N days, oldest first. */
+    getContractDailySnapshots(days?: number): Promise<Array<{
+        snapshot_date: string;
+        game: string;
+        total_wagered: string;
+        total_payouts: string;
+        contract_reserve: string;
+    }>>;
+    /** Upsert one hourly snapshot (current hour bucket). Called by snapshot scheduler. */
+    saveContractHourlySnapshot(game: string, totalWagered: bigint, totalPayouts: bigint, contractReserve: bigint): Promise<void>;
+    /** Prune hourly snapshots older than keepHours. */
+    pruneContractHourlySnapshots(keepHours?: number): Promise<number>;
+    /** Return hourly snapshots for the last N hours, oldest first. */
+    getContractHourlySnapshots(hours?: number): Promise<Array<{
+        snapshot_hour: string;
+        game: string;
+        total_wagered: string;
+        total_payouts: string;
+        contract_reserve: string;
+    }>>;
 }
 //# sourceMappingURL=database.service.d.ts.map

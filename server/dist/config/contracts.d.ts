@@ -23,10 +23,84 @@ export declare function getAllBlackjackContracts(): Array<{
 export declare const PLINKO_GET_GLOBAL_STATS_ABI: readonly unknown[];
 /** Full CryptoKeno ABI from contracts/abi/CryptoKeno.json. */
 export declare const KENO_GET_GLOBAL_STATS_ABI: readonly unknown[];
+/** Minimal ABI: getContractReserve() -> uint256 */
+export declare const KENO_GET_CONTRACT_RESERVE_ABI: readonly [{
+    readonly inputs: readonly [];
+    readonly name: "getContractReserve";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}];
 /** Full Lottery 6-of-55 V2 ABI from contracts/abi/lottery6of55-v2.json. */
 export declare const LOTTERY_STATS_ABI: readonly unknown[];
 /** Instant Lottery 6-of-55 ABI (totalPlays, totalWagered, totalPayouts). */
 export declare const INSTANT_LOTTERY_STATS_ABI: readonly unknown[];
+/** Minimal Blackjack stats ABI for snapshot reads (fee totals, off-chain payouts, reserves). */
+export declare const BLACKJACK_STATS_ABI: readonly [{
+    readonly inputs: readonly [];
+    readonly name: "totalBurnFeesCollected";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [];
+    readonly name: "totalDistributionFeesCollected";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [];
+    readonly name: "totalLpDistributionFeesCollected";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [];
+    readonly name: "totalPlatformFeesCollected";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [];
+    readonly name: "totalOffChainPayouts";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [];
+    readonly name: "totalReserves";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}];
 /** Minimal ABI: getGlobalStats() -> (spins, volume, payouts, contractBalance, contractReserveBalance) */
 export declare const BIGWHEEL_GET_GLOBAL_STATS_ABI: readonly [{
     readonly inputs: readonly [];
