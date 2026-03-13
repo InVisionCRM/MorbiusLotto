@@ -24,13 +24,13 @@ function formatChips(wei: string): string {
   }
 }
 
-const POT_ANCHOR = { fx: 0.50, fy: 0.46 };
+const POT_ANCHOR = { fx: 0.50, fy: 0.47 };
 
 // Compute evenly-spaced seat positions around the table oval for any seat count.
 // Seat 0 is always bottom-center (current player); seats go clockwise.
 function computeSeatAnchors(n: number): Array<{ fx: number; fy: number }> {
-  const cx = 0.50, cy = 0.44;
-  const rx = 0.41, ry = 0.37;
+  const cx = 0.50, cy = 0.45;
+  const rx = 0.44, ry = 0.36;
   return Array.from({ length: n }, (_, i) => {
     const theta = Math.PI / 2 - (i / n) * 2 * Math.PI;
     return {
@@ -107,49 +107,75 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   return (
     <div ref={tableRef} className="absolute inset-0" style={{ overflow: 'visible' }}>
 
-      {/* CSS poker table — outer drop shadow */}
+      {/* CSS poker table — padding-based rings so every ring is equal pixel thickness all around */}
       <div
         className="absolute pointer-events-none"
         style={{
-          left: '3%', top: '3%', width: '94%', height: '92%',
-          borderRadius: '50%',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.9), 0 8px 32px rgba(0,0,0,0.7)',
+          left: '3%', top: '5%', width: '94%', height: '88%',
+          borderRadius: '9999px',
+          background: '#07090f',
+          padding: '7px',
+          display: 'flex',
+          boxShadow: '0 32px 100px rgba(0,0,0,0.95), 0 10px 40px rgba(0,0,0,0.8)',
         }}
       >
-        {/* Wood rim */}
+        {/* Outer gold trim — 8px ring */}
         <div style={{
-          position: 'absolute', inset: 0,
-          borderRadius: '50%',
-          background: 'radial-gradient(ellipse at 50% 30%, #6b3a1f 0%, #3d1f0a 55%, #1e0e04 100%)',
-          boxShadow: 'inset 0 4px 12px rgba(255,200,120,0.12), inset 0 -6px 18px rgba(0,0,0,0.6)',
-        }} />
-        {/* Rail cushion (inner ring) */}
-        <div style={{
-          position: 'absolute', inset: '5%',
-          borderRadius: '50%',
-          background: 'radial-gradient(ellipse at 50% 30%, #7c2d12 0%, #450e00 60%, #2a0800 100%)',
-          boxShadow: 'inset 0 3px 10px rgba(255,180,80,0.1), inset 0 -4px 14px rgba(0,0,0,0.7), 0 0 0 2px rgba(0,0,0,0.4)',
-        }} />
-        {/* Felt surface */}
-        <div style={{
-          position: 'absolute', inset: '12%',
-          borderRadius: '50%',
-          background: 'radial-gradient(ellipse at 50% 38%, #1a5c2a 0%, #0f3d1a 45%, #082610 80%, #041509 100%)',
-          boxShadow: 'inset 0 6px 30px rgba(0,0,0,0.5), inset 0 -4px 20px rgba(0,0,0,0.4), inset 0 0 60px rgba(0,0,0,0.25)',
-        }} />
-        {/* Felt sheen highlight */}
-        <div style={{
-          position: 'absolute', inset: '12%',
-          borderRadius: '50%',
-          background: 'radial-gradient(ellipse at 50% 20%, rgba(255,255,255,0.06) 0%, transparent 55%)',
-          pointerEvents: 'none',
-        }} />
+          flex: 1, borderRadius: '9999px', display: 'flex', padding: '8px',
+          background: 'linear-gradient(170deg, #d4a82a 0%, #8a6010 30%, #c89828 50%, #8a6010 70%, #d4a82a 100%)',
+          boxShadow: 'inset 0 1px 4px rgba(255,230,120,0.35), inset 0 -1px 4px rgba(0,0,0,0.5)',
+        }}>
+          {/* Dark wood/leather cushion — 20px ring */}
+          <div style={{
+            flex: 1, borderRadius: '9999px', display: 'flex', padding: '20px',
+            background: 'linear-gradient(180deg, #1c1508 0%, #0e0c04 50%, #181304 100%)',
+            boxShadow: 'inset 0 4px 16px rgba(0,0,0,0.85), inset 0 -2px 8px rgba(0,0,0,0.6)',
+          }}>
+            {/* Inner gold trim — 6px ring */}
+            <div style={{
+              flex: 1, borderRadius: '9999px', display: 'flex', padding: '6px',
+              background: 'linear-gradient(170deg, #b08820 0%, #6a4c0c 30%, #a07818 50%, #6a4c0c 70%, #b08820 100%)',
+              boxShadow: 'inset 0 1px 3px rgba(255,210,80,0.3)',
+            }}>
+              {/* Navy felt surface */}
+              <div style={{
+                flex: 1, borderRadius: '9999px', position: 'relative', overflow: 'hidden',
+                background: 'radial-gradient(ellipse at 50% 35%, #1f2e54 0%, #131e3a 45%, #0c1428 75%, #080e1e 100%)',
+                boxShadow: 'inset 0 8px 40px rgba(0,0,0,0.55), inset 0 -4px 20px rgba(0,0,0,0.4)',
+                outline: '1px dashed rgba(255,255,255,0.08)',
+                outlineOffset: '-10px',
+              }}>
+                {/* Felt sheen */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'radial-gradient(ellipse at 50% 18%, rgba(255,255,255,0.05) 0%, transparent 55%)',
+                  pointerEvents: 'none',
+                }} />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Dealer button holder bump — top center */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          left: '50%', top: 'calc(5% + 4px)',
+          transform: 'translateX(-50%)',
+          width: 44, height: 24,
+          zIndex: 5,
+          borderRadius: '5px 5px 7px 7px',
+          background: 'linear-gradient(180deg, #261a06 0%, #160f03 60%, #0c0902 100%)',
+          boxShadow: '0 3px 10px rgba(0,0,0,0.75), inset 0 1px 2px rgba(200,160,50,0.15)',
+          border: '1px solid rgba(160,120,30,0.3)',
+        }}
+      />
 
       {/* Community board — center of felt */}
       <div
         className="absolute flex items-center justify-center"
-        style={{ left: '20%', top: '37%', width: '60%', height: '24%', zIndex: 10 }}
+        style={{ left: '20%', top: '38%', width: '60%', height: '22%', zIndex: 10 }}
       >
         {hand ? (
           <PokerBoard communityCards={hand.communityCards} pot={hand.pot} />

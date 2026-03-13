@@ -481,9 +481,17 @@ export default function PokerTablePage() {
           )}
 
           {/* Table — bottom padding so current player/cards overlay open center on mobile, above bar on desktop */}
+          {/* maxWidth clamps width relative to available height so the oval stays proportional on wide monitors */}
           <div
             className={`flex-1 relative ${state && mySeat ? 'pb-[100px] sm:pb-[200px]' : ''}`}
-            style={{ minHeight: 0, overflow: 'visible' }}
+            style={{
+              minHeight: 0,
+              overflow: 'visible',
+              maxWidth: 'min(100vw, calc((100dvh - 120px) * 2.4))',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+              width: '100%',
+            }}
           >
             {state ? (
               <PokerTable
