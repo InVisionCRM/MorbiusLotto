@@ -654,7 +654,7 @@ export default function BlackjackPage() {
       console.error('[Balance] Failed to fetch balance:', error);
       throw error;
     }
-  }, [wsClient, wsConnected, address, offChainBalance, playerReserve]);
+  }, [wsClient, wsConnected]);
 
   // Sync balance with contract after deposit/withdraw
   const syncBalance = useCallback(async () => {
@@ -677,7 +677,7 @@ export default function BlackjackPage() {
       console.error('Failed to sync balance:', error);
       throw error;
     }
-  }, [wsClient, wsConnected, refetchPlayerReserve, offChainBalance, playerReserve, address]);
+  }, [wsClient, wsConnected, refetchPlayerReserve]);
 
   // Win notification state
   const [showWinNotification, setShowWinNotification] = useState(false);
@@ -1005,23 +1005,15 @@ export default function BlackjackPage() {
     fetchBalanceFromApi().catch(() => {});
   }, [address, fetchBalanceFromApi]);
 
-  // Fetch balance when WebSocket connects, and auto-sync if on-chain > DB (only on initial connection, not during active play)
+  // On WebSocket connection: sync balance once per connection (not on every wagmi poll).
+  // syncBalance is delta-based on the server — safe to call on reconnect; it only
+  // credits genuine new deposits and never restores gaming losses.
   useEffect(() => {
     const connectionKey = `${address}-${wsConnected}`;
-    
-    if (wsConnected && wsClient && address && playerReserve !== undefined && hasCheckedInitialSync.current !== connectionKey) {
+
+    if (wsConnected && wsClient && address && hasCheckedInitialSync.current !== connectionKey) {
       hasCheckedInitialSync.current = connectionKey;
-      // Store the on-chain balance at connection time (playerReserve may be unknown from contract read)
-      const onChainBalanceAtConnection: bigint = typeof playerReserve === 'bigint' ? playerReserve : BigInt(0);
-      
-      // Sync with contract on every connection. The server-side sync validates the
-      // DB balance against the on-chain reserve and resets stale balances (e.g. after
-      // a contract upgrade). This must happen before any getBalance call so the player
-      // never sees or plays with phantom funds.
       if (!currentGameRef.current) {
-        console.log('[Balance] Syncing on connection', {
-          onChain: onChainBalanceAtConnection.toString()
-        });
         syncBalance().catch((error) => {
           console.error('[Balance] Sync failed on connection, falling back to fetch:', error);
           fetchBalance().catch(() => {});
@@ -1032,7 +1024,7 @@ export default function BlackjackPage() {
         });
       }
     }
-  }, [wsConnected, wsClient, address, playerReserve, fetchBalance, syncBalance]);
+  }, [wsConnected, wsClient, address, fetchBalance, syncBalance]);
 
   // Clear profile when wallet changes; fetch when WebSocket connects
   useEffect(() => {
@@ -2015,7 +2007,10 @@ export default function BlackjackPage() {
 
     // Refresh reserve display only after dealer hand is fully revealed (preserves immersion)
     fetchBalance().catch(() => {});
-  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, fetchBalance, address, tournament]);
+    // Refresh game history lists so Recent Games / Recent Plays update immediately
+    queryClient.invalidateQueries({ queryKey: ['playerGames'] });
+    queryClient.invalidateQueries({ queryKey: ['blackjackRecentGamesGlobal'] });
+  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, fetchBalance, address, tournament, queryClient]);
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {

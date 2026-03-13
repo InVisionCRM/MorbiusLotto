@@ -6,7 +6,6 @@ import { Hand, GameState, Action, GameResult, Card } from '@/app/BLACKJACK/types
 import PlayingCard from './PlayingCard';
 import { SystemTime } from '@/components/ui/system-time';
 import BettingPanel from './BettingPanel';
-import { NumberTicker } from '@/components/ui/number-ticker';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
 
 // Background music playlist moved to page.tsx to avoid duplicate audio instances
@@ -1910,11 +1909,9 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             }}
           >
             <div className="flex items-center gap-1">
-              <NumberTicker
-                value={Math.floor(Number(reserveBalance) / 1e18)}
-                className="text-white/80 font-bold whitespace-nowrap text-sm"
-                animateOnChange={true}
-              />
+              <span className="text-white/80 font-bold whitespace-nowrap text-sm tabular-nums">
+                {Math.floor(Number(reserveBalance) / 1e18).toLocaleString()}
+              </span>
               <Image
                 src="/morbius/MorbiusLogo (3).png"
                 alt="Morbius Logo"
