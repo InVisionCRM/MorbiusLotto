@@ -24,21 +24,21 @@ function formatChips(wei: string): string {
   }
 }
 
-// 10-seat oval positions as fractions of table container (seat 0 raised so player tag stays above action bar)
-const SEAT_ANCHORS = [
-  { fx: 0.50, fy: 0.78 }, // 0 — bottom center (current player), raised so badge is visible above controls
-  { fx: 0.72, fy: 0.83 }, // 1
-  { fx: 0.89, fy: 0.63 }, // 2
-  { fx: 0.89, fy: 0.36 }, // 3
-  { fx: 0.72, fy: 0.13 }, // 4
-  { fx: 0.50, fy: 0.06 }, // 5
-  { fx: 0.28, fy: 0.13 }, // 6
-  { fx: 0.11, fy: 0.36 }, // 7
-  { fx: 0.11, fy: 0.63 }, // 8
-  { fx: 0.28, fy: 0.83 }, // 9
-];
+const POT_ANCHOR = { fx: 0.50, fy: 0.46 };
 
-const POT_ANCHOR = { fx: 0.50, fy: 0.50 };
+// Compute evenly-spaced seat positions around the table oval for any seat count.
+// Seat 0 is always bottom-center (current player); seats go clockwise.
+function computeSeatAnchors(n: number): Array<{ fx: number; fy: number }> {
+  const cx = 0.50, cy = 0.44;
+  const rx = 0.41, ry = 0.37;
+  return Array.from({ length: n }, (_, i) => {
+    const theta = Math.PI / 2 - (i / n) * 2 * Math.PI;
+    return {
+      fx: parseFloat((cx + rx * Math.cos(theta)).toFixed(4)),
+      fy: parseFloat((cy + ry * Math.sin(theta)).toFixed(4)),
+    };
+  });
+}
 
 export interface PokerTableProps {
   state: TableState;
@@ -65,6 +65,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
   const hand = state.currentHand;
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
+  const seatAnchors = computeSeatAnchors(state.seats.length);
   const actingPosition = hand?.actingPosition ?? null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
   const winnerSeatIndices = isShowdownWithWinners
@@ -73,7 +74,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const winnerDisplaySlots = winnerSeatIndices.map(
     (idx) => (mySeatIndex >= 0 ? (idx - mySeatIndex + state.seats.length) % state.seats.length : idx)
   );
-  const firstWinnerAnchor = winnerDisplaySlots.length > 0 ? SEAT_ANCHORS[winnerDisplaySlots[0]] : null;
+  const firstWinnerAnchor = winnerDisplaySlots.length > 0 ? seatAnchors[winnerDisplaySlots[0]] : null;
   const firstWinner = isShowdownWithWinners ? hand!.winners![0] : null;
   const firstWinnerAddr = firstWinner?.address ?? null;
   const isCurrentPlayerWinner = firstWinnerAddr && currentPlayerAddress && firstWinnerAddr === currentPlayerAddress.toLowerCase();
@@ -162,12 +163,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         )}
       </div>
 
-      {/* Winner announcement — centered on table, community cards + details */}
+      {/* Winner announcement — centered on screen */}
       <AnimatePresence>
         {isShowdownWithWinners && firstWinnerAddr && hand && (
           <motion.div
             key="winner-panel"
-            className="absolute z-40 flex items-center justify-center pointer-events-none"
+            className="fixed z-50 flex items-center justify-center pointer-events-none"
             style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
             initial={{ opacity: 0, scale: 0.92, y: -12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -269,18 +270,23 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       {/* Chip stacks — between each seat and pot (hidden at showdown so only sliding pot shows) */}
       {!isShowdownWithWinners && (
       <AnimatePresence>
-        {SEAT_ANCHORS.map((anchor, displaySlot) => {
+        {/* Iterate over seat count only — iterating SEAT_ANCHORS (10) causes ghost chips via % wrap-around */}
+        {Array.from({ length: state.seats.length }, (_, displaySlot) => {
+          const anchor = seatAnchors[displaySlot];
+          if (!anchor) return null;
           const actualIdx = mySeatIndex >= 0
             ? (mySeatIndex + displaySlot) % state.seats.length
             : displaySlot;
-          if (actualIdx >= state.seats.length) return null;
           const seat = state.seats[actualIdx];
           const hasBet = (() => { try { return BigInt(seat.currentBet || '0') > 0n; } catch { return false; } })();
           if (!hasBet) return null;
 
-          const frac = displaySlot === 0 ? 0.57 : 0.28;
-          const cfx = anchor.fx + (POT_ANCHOR.fx - anchor.fx) * frac;
-          const cfy = anchor.fy + (POT_ANCHOR.fy - anchor.fy) * frac;
+          const frac = displaySlot === 0 ? 0.45 : 0.28;
+          let cfx = anchor.fx + (POT_ANCHOR.fx - anchor.fx) * frac;
+          let cfy = anchor.fy + (POT_ANCHOR.fy - anchor.fy) * frac;
+
+          // Offset bottom player's chips to the right so they don't overlap cards
+          if (displaySlot === 0) cfx += 0.10;
 
           return (
             <motion.div
@@ -309,7 +315,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         const displaySlot = mySeatIndex >= 0
           ? (idx - mySeatIndex + state.seats.length) % state.seats.length
           : idx;
-        const anchor = SEAT_ANCHORS[displaySlot];
+        const anchor = seatAnchors[displaySlot];
         if (!anchor) return null;
         return (
           <div

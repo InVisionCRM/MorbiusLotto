@@ -195,6 +195,10 @@ export default function BlackjackPage() {
   const { imageOptions, videoOptions, getThemeInfo, getTableProfile } = useBlackjackTables();
   const [theme, setTheme] = useState<BlackjackThemeKind>('image');
   const [imageSource, setImageSource] = useState<string>(DEFAULT_BLACKJACK_IMAGE_ID);
+  // True once the initial load effect has finished writing prefs to state — prevents
+  // the persist effect from overwriting localStorage with a temporary/default value
+  // before the player's saved custom table ID has been validated and applied.
+  const prefLoadedRef = useRef(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const { playSound } = useAudio(soundEnabled);
   const [videoSource, setVideoSource] = useState<string>('glowingTable');
@@ -261,11 +265,14 @@ export default function BlackjackPage() {
   const validImageIds = useMemo(() => new Set(imageOptions.map((x) => x.id)), [imageOptions]);
   const validVideoIds = useMemo(() => new Set(videoOptions.map((x) => x.id)), [videoOptions]);
 
-  // Load table background: fetch server default, then apply per-wallet localStorage override if present
+  // Load table background: fetch server default, then apply per-wallet localStorage override if present.
+  // Depends on validImageIds/validVideoIds so it re-runs once API tables load and can validate UUID-based
+  // custom tables that weren't in the static list on first render.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     let cancelled = false;
     const key = address ? `${TABLE_PREFS_KEY}_${address.toLowerCase()}` : null;
+    prefLoadedRef.current = false;
     (async () => {
       const defaultRes = await fetch('/api/blackjack/default-table').catch(() => null);
       const apiDefault: { themeKind: 'image' | 'video'; tableId: string } =
@@ -292,6 +299,7 @@ export default function BlackjackPage() {
       if (!validImageIds.has(imageToUse)) imageToUse = DEFAULT_BLACKJACK_IMAGE_ID;
       if (!validVideoIds.has(videoToUse)) videoToUse = 'glowingTable';
       if (cancelled) return;
+      prefLoadedRef.current = true;
       setTheme(themeToUse);
       setImageSource(imageToUse);
       setVideoSource(videoToUse);
@@ -299,9 +307,11 @@ export default function BlackjackPage() {
     return () => { cancelled = true; };
   }, [address, validImageIds, validVideoIds]);
 
-  // Persist table background preference when it changes
+  // Persist table background preference when it changes.
+  // Guard on prefLoadedRef so we don't overwrite localStorage with a temporary
+  // default value before the load effect has finished validating the saved UUID.
   useEffect(() => {
-    if (!address || typeof window === 'undefined') return;
+    if (!address || typeof window === 'undefined' || !prefLoadedRef.current) return;
     const key = `${TABLE_PREFS_KEY}_${address.toLowerCase()}`;
     try {
       localStorage.setItem(

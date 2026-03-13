@@ -86,7 +86,10 @@ export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
           />
         ))}
       </div>
-      <span style={{ color: '#fbbf24', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+      <span style={{
+        color: '#fbbf24', fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+        background: 'rgba(0,0,0,0.80)', padding: '1px 5px', borderRadius: 3,
+      }}>
         {formatChips(weiAmount)}
       </span>
     </div>
