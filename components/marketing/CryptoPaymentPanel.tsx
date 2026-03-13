@@ -5,7 +5,7 @@ import { Copy, Check, ChevronRight, AlertCircle, Loader2, MessagesSquare } from 
 import { WPLS_TOKEN_ADDRESS } from '@/lib/contracts'
 
 // ── Configure your payment wallet here ──────────────────────────────────────
-export const PAYMENT_WALLET = '0x0000000000000000000000000000000000000000' // TODO: replace
+export const PAYMENT_WALLET = '0xEdEe8515897281CcF27999a121A90d76E3Cde016'
 // ────────────────────────────────────────────────────────────────────────────
 
 interface DexPair {
