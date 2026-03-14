@@ -887,7 +887,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         style={{
           zIndex: 1,
           background:
-            'linear-gradient(145deg, rgba(0,0,0,0.45), rgba(0,0,0,0.25))',
+            'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))',
         }}
       />
 
