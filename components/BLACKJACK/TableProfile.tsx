@@ -25,6 +25,8 @@ interface DexScreenerTokenResponse {
 }
 
 export interface TableProfileProps {
+  /** Card title (e.g. table name). When set, used as the main heading; ticker is shown under it. */
+  name?: string
   /** Token contract address. When absent, no DexScreener or Morbius scan is used; only description, logo, ticker, website and optional iframe are shown. */
   tokenAddress?: string
   /** Optional token symbol/name override when API hasn't loaded */
@@ -35,7 +37,7 @@ export interface TableProfileProps {
   buyLink?: string
   /** Optional logo URL (overrides DexScreener when set) */
   logoUrl?: string
-  /** Optional ticker/symbol override (overrides DexScreener when set) */
+  /** Optional ticker/symbol override (overrides DexScreener when set); shown as subtitle under the card title */
   ticker?: string
   /** Optional website URL (admin-configured, shown as "Website" link) */
   websiteUrl?: string
@@ -44,6 +46,7 @@ export interface TableProfileProps {
 }
 
 export function TableProfile({
+  name: nameProp,
   tokenAddress,
   tokenSymbol,
   description,
@@ -92,7 +95,8 @@ export function TableProfile({
     (p) => p.baseToken?.address?.toLowerCase() === normalizedAddress
   )
   const logoUrl = logoUrlProp ?? tokenPairs[0]?.info?.imageUrl
-  const name = tickerProp ?? tokenSymbol ?? (hasToken ? tokenPairs[0]?.baseToken?.name ?? 'Token' : 'Table')
+  const derivedName = tickerProp ?? tokenSymbol ?? (hasToken ? tokenPairs[0]?.baseToken?.name ?? 'Token' : 'Table')
+  const name = nameProp?.trim() || derivedName
   const symbol = tickerProp ?? (hasToken ? tokenPairs[0]?.baseToken?.symbol : null) ?? tokenSymbol ?? '—'
   const socials = hasToken ? (tokenPairs[0]?.info?.socials ?? []) : []
   const websites = hasToken ? (tokenPairs[0]?.info?.websites ?? []) : []

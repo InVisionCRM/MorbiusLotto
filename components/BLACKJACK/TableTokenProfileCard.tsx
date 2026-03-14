@@ -69,6 +69,7 @@ export function TableTokenProfileCard({
         </div>
         <div className="flex-1 min-h-0 overflow-auto p-2">
           <TableProfile
+            name={profile?.name ?? undefined}
             tokenAddress={profile?.token_contract_address ?? undefined}
             description={profile?.description ?? undefined}
             logoUrl={profile?.logo_url ?? undefined}

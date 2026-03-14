@@ -21,6 +21,8 @@ export interface TableOption {
 }
 
 export interface TableProfileData {
+  /** Table display name (e.g. "High Roller") — used as card title; ticker remains subtitle */
+  name?: string | null;
   description?: string | null;
   token_contract_address?: string | null;
   logo_url?: string | null;
@@ -117,6 +119,7 @@ export function useBlackjackTables() {
       const row = options.find((x) => x.id === id);
       if (!row) return null;
       return {
+        name: row.label ?? null,
         description: row.description ?? null,
         token_contract_address: row.token_contract_address ?? null,
         logo_url: row.logo_url ?? null,
