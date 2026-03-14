@@ -65,15 +65,16 @@ export interface BlackjackRecentGamesProps {
   title?: string
 }
 
+const INITIAL_DISPLAY = 50
 const PAGE_SIZE = 25
 
-/** Recent blackjack games for the connected player. Shows 25, then "Load more" for next 25. */
+/** Recent blackjack games for the connected player. Shows 50 initially, then "Load more" for next 25. */
 export function BlackjackRecentGames({
   compact = true,
   title = 'Recent Games',
 }: BlackjackRecentGamesProps) {
   const { address } = useAccount()
-  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
+  const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY)
   const { data: games = [], isLoading, error } = usePlayerGames(100, 0)
   const displayGames = games.slice(0, displayCount)
   const hasMore = displayCount < games.length
@@ -83,7 +84,7 @@ export function BlackjackRecentGames({
       <div className="px-3 py-2 border-b border-white/10">
         <h3 className="text-cyan-300 font-semibold text-sm">{title}</h3>
       </div>
-      <div className="max-h-64 overflow-y-auto">
+      <div className="max-h-[420px] overflow-y-auto">
         {!address ? (
           <div className="p-4 text-center text-white/50 text-sm">Connect wallet to see your recent games.</div>
         ) : error ? (

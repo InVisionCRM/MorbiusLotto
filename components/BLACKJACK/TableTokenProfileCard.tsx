@@ -44,7 +44,7 @@ export function TableTokenProfileCard({
 
   return (
     <div
-      className="min-h-[280px] lg:min-h-[340px] rounded-xl p-[2px] min-w-0 animate-shimmer-slow"
+      className="min-h-[420px] lg:min-h-[520px] rounded-xl p-[2px] min-w-0 animate-shimmer-slow"
       style={GOLD_BORDER_STYLE}
     >
       <div

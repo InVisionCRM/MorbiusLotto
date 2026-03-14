@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react'
 import { ExternalLink, Copy } from 'lucide-react'
-import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 
 const SWAP_PAGE_URL = '/swap'
 const VIEW_ON_MORBIUS_BASE = 'https://scan.morbius.io/geicko?address='
@@ -26,7 +25,7 @@ interface DexScreenerTokenResponse {
 }
 
 export interface TableProfileProps {
-  /** Token contract address (default: MORBIUS) */
+  /** Token contract address. When absent, no DexScreener or Morbius scan is used; only description, logo, ticker, website and optional iframe are shown. */
   tokenAddress?: string
   /** Optional token symbol/name override when API hasn't loaded */
   tokenSymbol?: string
@@ -40,12 +39,12 @@ export interface TableProfileProps {
   ticker?: string
   /** Optional website URL (admin-configured, shown as "Website" link) */
   websiteUrl?: string
-  /** Optional iframe URL (e.g. Morbius/Geicko chart). When unset, defaults to scan.morbius.io/geicko?address=tokenAddress when tokenAddress is present. */
+  /** Optional iframe URL (e.g. table website embed or custom chart). When set, this is used. When unset and tokenAddress is present, defaults to scan.morbius.io/geicko for that token. When no token, only this custom iframe is shown if provided. */
   iframeUrl?: string
 }
 
 export function TableProfile({
-  tokenAddress = MORBIUS_TOKEN_ADDRESS,
+  tokenAddress,
   tokenSymbol,
   description,
   buyLink = SWAP_PAGE_URL,
@@ -55,12 +54,19 @@ export function TableProfile({
   iframeUrl: iframeUrlProp,
 }: TableProfileProps) {
   const [data, setData] = useState<DexScreenerTokenResponse | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!!tokenAddress)
   const [error, setError] = useState<string | null>(null)
 
+  const hasToken = Boolean(tokenAddress?.trim())
   const normalizedAddress = tokenAddress?.toLowerCase()
 
   useEffect(() => {
+    if (!hasToken) {
+      setLoading(false)
+      setError(null)
+      setData(null)
+      return
+    }
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -79,20 +85,19 @@ export function TableProfile({
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [tokenAddress])
+  }, [tokenAddress, hasToken])
 
   const pairs = data?.pairs ?? []
   const tokenPairs = pairs.filter(
     (p) => p.baseToken?.address?.toLowerCase() === normalizedAddress
   )
   const logoUrl = logoUrlProp ?? tokenPairs[0]?.info?.imageUrl
-  // Prefer table-specific ticker/name over DexScreener so Token Profile updates when user changes table
-  const name = tickerProp ?? tokenSymbol ?? tokenPairs[0]?.baseToken?.name ?? 'Token'
-  const symbol = tickerProp ?? tokenPairs[0]?.baseToken?.symbol ?? tokenSymbol ?? '—'
-  const socials = tokenPairs[0]?.info?.socials ?? []
-  const websites = tokenPairs[0]?.info?.websites ?? []
-  const morbiusUrl = `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress)}`
-  const iframeSrc = iframeUrlProp?.trim() || (tokenAddress ? `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress)}` : '')
+  const name = tickerProp ?? tokenSymbol ?? (hasToken ? tokenPairs[0]?.baseToken?.name ?? 'Token' : 'Table')
+  const symbol = tickerProp ?? (hasToken ? tokenPairs[0]?.baseToken?.symbol : null) ?? tokenSymbol ?? '—'
+  const socials = hasToken ? (tokenPairs[0]?.info?.socials ?? []) : []
+  const websites = hasToken ? (tokenPairs[0]?.info?.websites ?? []) : []
+  const morbiusUrl = hasToken ? `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress!)}` : ''
+  const iframeSrc = (iframeUrlProp?.trim() || (hasToken ? morbiusUrl : '')) || ''
 
   const panelStyle = {
     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
@@ -131,7 +136,7 @@ export function TableProfile({
             {description && (
               <p className="text-gray-400 text-sm max-w-md">{description}</p>
             )}
-            {tokenAddress && (
+            {hasToken && tokenAddress && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-slate-500 text-xs">Contract</span>
                 <span className="font-mono text-xs text-slate-300 truncate max-w-[200px]" title={tokenAddress}>
@@ -148,15 +153,17 @@ export function TableProfile({
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2">
-              <a
-                href={morbiusUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-sm font-medium transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Scan. View on Morbius
-              </a>
+              {hasToken && morbiusUrl && (
+                <a
+                  href={morbiusUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-sm font-medium transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Scan. View on Morbius
+                </a>
+              )}
               {websiteUrlProp && (
                 <a
                   href={websiteUrlProp}
@@ -192,7 +199,7 @@ export function TableProfile({
                   <ExternalLink className="w-3 h-3 opacity-70" />
                 </a>
               ))}
-              {error && (
+              {hasToken && error && (
                 <span className="text-red-400/80 text-xs">Token data unavailable</span>
               )}
             </div>
@@ -200,7 +207,7 @@ export function TableProfile({
               <div className="w-full rounded-lg overflow-hidden border border-cyan-500/30 bg-slate-900/80">
                 <iframe
                   src={iframeSrc}
-                  title="MORBIUS token chart"
+                  title={hasToken && !iframeUrlProp?.trim() ? 'Token chart' : 'Embed'}
                   className="w-full aspect-video min-h-[180px] border-0"
                   sandbox="allow-scripts allow-same-origin"
                 />
