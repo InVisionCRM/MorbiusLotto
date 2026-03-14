@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { Hand, GameState, Action, GameResult, Card } from '@/app/BLACKJACK/types';
 import PlayingCard from './PlayingCard';
-import { SystemTime } from '@/components/ui/system-time';
 import BettingPanel from './BettingPanel';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
 
@@ -937,11 +936,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           </div>
         </div>
       )}
-
-      {/* System Time Display (top-center) — hidden on mobile, shown in GlobalMainNav collapsed bar */}
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 sm:top-4 z-20 flex flex-col items-center gap-0.5 sm:gap-1 pointer-events-auto hidden md:flex">
-        <SystemTime className="!static pointer-events-none" />
-      </div>
 
       {/* Blackjack Celebration Video */}
       {showBlackjackVideo && gameResult === 'blackjack' && (

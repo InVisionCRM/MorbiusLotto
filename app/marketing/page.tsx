@@ -1,4 +1,4 @@
-'use client'
+ƒ'use client'
 
 import { useState } from 'react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
