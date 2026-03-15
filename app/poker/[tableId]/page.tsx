@@ -436,7 +436,9 @@ export default function PokerTablePage() {
     if (mySeatIndex >= 0 && la.position === mySeatIndex) return;
 
     const opponentStack = state?.seats[la.position]?.stack ?? '1';
-    const isAllIn = BigInt(opponentStack) === 0n && (la.action === 'bet' || la.action === 'raise' || la.action === 'call');
+    const stackStr = String(opponentStack);
+    const stackBig = BigInt(stackStr.includes('e') ? Math.round(Number(stackStr)).toString() : stackStr);
+    const isAllIn = stackBig === 0n && (la.action === 'bet' || la.action === 'raise' || la.action === 'call');
 
     if (la.action === 'fold') {
       new Audio(ps('OpponentFold.wav')).play().catch(() => {});
