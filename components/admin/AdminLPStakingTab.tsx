@@ -1620,47 +1620,43 @@ export default function AdminLPStakingTab() {
           )}
 
           {discoveredPairs !== null && (
-            <div className="rounded-lg border border-violet-700/30 bg-violet-950/10 p-3 space-y-2">
+            <div className="rounded border border-violet-700/30 bg-violet-950/10 p-2 space-y-1">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] uppercase tracking-wider text-violet-400 font-semibold">
+                <p className="text-[9px] uppercase tracking-wider text-violet-400 font-semibold">
                   DexScreener Results — {discoveredPairs.length === 0 ? 'No new pairs found' : `${discoveredPairs.length} new pair${discoveredPairs.length !== 1 ? 's' : ''} discovered`}
                 </p>
-                <button onClick={() => setDiscoveredPairs(null)} className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors">dismiss</button>
+                <button onClick={() => setDiscoveredPairs(null)} className="text-[9px] text-slate-500 hover:text-slate-300 transition-colors">dismiss</button>
               </div>
               {discoveredPairs.length > 0 && (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-32 overflow-y-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="border-violet-700/30 hover:bg-transparent">
-                        <TableHead className="text-[10px] uppercase tracking-wider text-slate-400 h-7 px-3">Label</TableHead>
-                        <TableHead className="text-[10px] uppercase tracking-wider text-slate-400 h-7 px-3">DEX</TableHead>
-                        <TableHead className="text-[10px] uppercase tracking-wider text-slate-400 h-7 px-3">Address</TableHead>
-                        <TableHead className="text-[10px] uppercase tracking-wider text-slate-400 h-7 px-3 text-right">Liquidity</TableHead>
-                        <TableHead className="text-[10px] uppercase tracking-wider text-slate-400 h-7 px-3 text-right">Add</TableHead>
+                        <TableHead className="text-[9px] uppercase tracking-wider text-slate-400 h-5 px-2">Pair</TableHead>
+                        <TableHead className="text-[9px] uppercase tracking-wider text-slate-400 h-5 px-2">DEX</TableHead>
+                        <TableHead className="text-[9px] uppercase tracking-wider text-slate-400 h-5 px-2">Address</TableHead>
+                        <TableHead className="text-[9px] uppercase tracking-wider text-slate-400 h-5 px-2 text-right">Add</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {discoveredPairs.map((dp) => (
                         <TableRow key={dp.pairAddress} className="border-violet-700/20 hover:bg-violet-900/10">
-                          <TableCell className="py-1.5 px-3 text-[11px] text-white/80 font-medium">{dp.label}</TableCell>
-                          <TableCell className="py-1.5 px-3 text-[11px] text-slate-400">{dp.dexName}</TableCell>
-                          <TableCell className="py-1.5 px-3">
+                          <TableCell className="py-0.5 px-2 text-[9px] text-white/80 font-medium">{dp.label}</TableCell>
+                          <TableCell className="py-0.5 px-2 text-[9px] text-slate-400">{dp.dexName}</TableCell>
+                          <TableCell className="py-0.5 px-2">
                             <a href={`https://scan.pulsechain.com/address/${dp.pairAddress}`} target="_blank" rel="noopener noreferrer"
-                              className="text-[11px] font-mono text-blue-400/70 hover:text-blue-300 flex items-center gap-1">
+                              className="text-[9px] font-mono text-blue-400/70 hover:text-blue-300 flex items-center gap-0.5">
                               {shortAddr(dp.pairAddress)}
-                              <ExternalLink className="w-2.5 h-2.5" />
+                              <ExternalLink className="w-2 h-2" />
                             </a>
                           </TableCell>
-                          <TableCell className="py-1.5 px-3 text-right text-[11px] text-slate-400">
-                            {dp.liquidity != null ? `$${dp.liquidity.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
-                          </TableCell>
-                          <TableCell className="py-1.5 px-3 text-right">
+                          <TableCell className="py-0.5 px-2 text-right">
                             <button
                               onClick={async () => { setAddingDiscovered(dp.pairAddress); await addPair(dp.pairAddress, dp.label, dp.dexName); }}
                               disabled={addingDiscovered === dp.pairAddress || addingPair}
-                              className="text-[10px] px-2 py-0.5 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-200 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 ml-auto"
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-200 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-0.5 ml-auto"
                             >
-                              {addingDiscovered === dp.pairAddress ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Plus className="w-2.5 h-2.5" />}
+                              {addingDiscovered === dp.pairAddress ? <Loader2 className="w-2 h-2 animate-spin" /> : <Plus className="w-2 h-2" />}
                               Add
                             </button>
                           </TableCell>
@@ -1682,7 +1678,7 @@ export default function AdminLPStakingTab() {
               <input type="text" placeholder="Label (e.g. MORBIUS/HEX)" value={newPairLabel} onChange={(e) => setNewPairLabel(e.target.value)}
                 className="flex-1 min-w-[140px] text-[11px] bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500" />
               <select value={newPairDex} onChange={(e) => setNewPairDex(e.target.value)}
-                className="text-[11px] bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500">
+                className="text-[9px] bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-white focus:outline-none focus:border-blue-500 min-h-0">
                 <option>PulseX V1</option>
                 <option>PulseX V2</option>
                 <option>9mm</option>

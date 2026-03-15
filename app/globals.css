@@ -453,5 +453,13 @@ body {
   font-family: "Noto Sans Mono", monospace;
 }
 
+/* Grandstander - poker QuickChat phrases and picker */
+.font-grandstander {
+  font-family: "Grandstander", cursive;
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-style: normal;
+}
+
 /* RainbowKit Modal Fix - No longer needed since transform moved to wrapper */
 /* Modals render to body, which is now untransformed, so they center correctly */

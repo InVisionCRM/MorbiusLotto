@@ -47,9 +47,19 @@ export interface PokerTableProps {
   timeLeft?: number;
   /** Chat bubble text to show above each seat (key = seat index). Cleared after ~5s by parent. */
   chatBubbleBySeatIndex?: Record<number, string>;
+  /** Called when current player clicks re-up (+). Opens deposit/re-up modal when provided. */
+  onReUpClick?: () => void;
+  /** Called when current player clicks the hamburger menu button on the nametag. */
+  onMenuClick?: () => void;
+  /** Per-seat quick reaction (emoji or phrase) to show above seat; key = seat index. */
+  reactionBySeatIndex?: Record<number, { type: 'emoji' | 'phrase'; value: string }>;
+  /** Called when current player selects an emoji reaction (broadcast to table). */
+  onEmojiReaction?: (emoji: string) => void;
+  /** Called when current player selects a phrase reaction (broadcast to table). */
+  onPhraseReaction?: (phrase: string) => void;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, onEmojiReaction, onPhraseReaction }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [, setDims] = useState({ w: 640, h: 500 });
 
@@ -101,6 +111,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           : null,
       timeLeft: actingPosition === idx ? timeLeft : undefined,
       chatBubble: chatBubbleBySeatIndex?.[idx] ?? null,
+      onReUpClick,
+      onMenuClick,
+      overlayEmoji: reactionBySeatIndex?.[idx]?.type === 'emoji' ? reactionBySeatIndex[idx].value : null,
+      overlayPhrase: reactionBySeatIndex?.[idx]?.type === 'phrase' ? reactionBySeatIndex[idx].value : null,
+      onEmojiReaction: onEmojiReaction,
+      onPhraseReaction: onPhraseReaction,
     };
   };
 
@@ -189,13 +205,13 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         )}
       </div>
 
-      {/* Winner announcement — centered on screen */}
+      {/* Winner announcement — centered on table */}
       <AnimatePresence>
         {isShowdownWithWinners && firstWinnerAddr && hand && (
           <motion.div
             key="winner-panel"
-            className="fixed z-50 flex items-center justify-center pointer-events-none"
-            style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+            className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none"
+            style={{ left: 0, right: 0, top: 0, bottom: 0 }}
             initial={{ opacity: 0, scale: 0.92, y: -12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96 }}

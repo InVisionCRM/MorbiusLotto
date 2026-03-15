@@ -1,26 +1,42 @@
 'use client';
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { formatEther } from 'viem';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Menu, MessageCircle, Plus } from 'lucide-react';
+import { FloatingDock } from '@/components/ui/floating-dock';
+import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
+import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
 
 /** 9 emotion emojis for quick reaction above player head */
 const EMOTION_EMOJIS = ['😀', '😢', '😡', '😂', '🥳', '😎', '😍', '🤔', '🙏'];
 const LONG_PRESS_MS = 500;
 const EMOJI_OVERLAY_DURATION_MS = 2000;
+const PHRASE_OVERLAY_DURATION_MS = 2000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function formatChips(wei: string): string {
+/** Normalize stack value (may come from JSON as number, showing as 1.26E+21) to string wei for BigInt. */
+function weiToString(wei: string | number): string {
+  if (typeof wei === 'number') {
+    if (!Number.isFinite(wei) || wei < 0) return '0';
+    return wei.toFixed(0);
+  }
+  return String(wei).trim() || '0';
+}
+
+function formatChips(wei: string | number): string {
   try {
-    const num = Number(formatEther(BigInt(wei)));
+    const weiStr = weiToString(wei);
+    const num = Number(formatEther(BigInt(weiStr)));
+    if (!Number.isFinite(num) || num < 0) return '0';
     return Number.isInteger(num)
       ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
       : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   } catch {
-    return wei;
+    return typeof wei === 'number' ? wei.toFixed(0) : String(wei);
   }
 }
 
@@ -203,11 +219,23 @@ export interface PokerSeatProps {
   maxTime?: number;
   /** Chat message to show above this seat for a few seconds (table chat bubble). */
   chatBubble?: string | null;
+  /** When set, current player sees a + (re-up) button that calls this. */
+  onReUpClick?: () => void;
+  /** When set, current player sees a hamburger menu button on the right that calls this. */
+  onMenuClick?: () => void;
+  /** Emoji to show above this seat (from broadcast; overrides local when set). */
+  overlayEmoji?: string | null;
+  /** Phrase to show above this seat (from broadcast; overrides local when set). */
+  overlayPhrase?: string | null;
+  /** When set, current player's emoji selection is sent to table (public). */
+  onEmojiReaction?: (emoji: string) => void;
+  /** When set, current player's phrase selection is sent to table (public). */
+  onPhraseReaction?: (phrase: string) => void;
 }
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft, maxTime = 30, chatBubble }: PokerSeatProps) {
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, onEmojiReaction, onPhraseReaction }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -231,12 +259,19 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
     return () => ro.disconnect();
   }, []);
 
-  // Quick menu + emoji (current player only): long-press badge → menu → 9 emojis → show above head 2s
+  // Quick menu + emoji + QuickChat (current player only): long-press badge → menu → emoji or QuickChat → show above head 2s
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [quickChatPickerOpen, setQuickChatPickerOpen] = useState(false);
+  const [editQuickChatOpen, setEditQuickChatOpen] = useState(false);
   const [overlayEmoji, setOverlayEmoji] = useState<string | null>(null);
+  const [overlayPhrase, setOverlayPhrase] = useState<string | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const phraseOverlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
+  const quickMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases();
 
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -252,6 +287,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
       longPressTimerRef.current = null;
       setQuickMenuOpen(true);
       setEmojiPickerOpen(false);
+      setQuickChatPickerOpen(false);
     }, LONG_PRESS_MS);
   }, [isCurrentPlayer, clearLongPress]);
 
@@ -263,29 +299,79 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
     if (!isCurrentPlayer) return;
     setQuickMenuOpen(true);
     setEmojiPickerOpen(false);
+    setQuickChatPickerOpen(false);
   }, [isCurrentPlayer]);
 
   const handleEmojiSelect = useCallback((emoji: string) => {
-    setOverlayEmoji(emoji);
     setEmojiPickerOpen(false);
     setQuickMenuOpen(false);
+    if (onEmojiReaction) {
+      onEmojiReaction(emoji);
+      return;
+    }
+    setOverlayEmoji(emoji);
     if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
     overlayTimeoutRef.current = setTimeout(() => {
       setOverlayEmoji(null);
       overlayTimeoutRef.current = null;
     }, EMOJI_OVERLAY_DURATION_MS);
-  }, []);
+  }, [onEmojiReaction]);
+
+  const handleQuickChatSelect = useCallback((phrase: string) => {
+    setQuickChatPickerOpen(false);
+    setQuickMenuOpen(false);
+    if (onPhraseReaction) {
+      onPhraseReaction(phrase);
+      return;
+    }
+    setOverlayPhrase(phrase);
+    if (phraseOverlayTimeoutRef.current) clearTimeout(phraseOverlayTimeoutRef.current);
+    phraseOverlayTimeoutRef.current = setTimeout(() => {
+      setOverlayPhrase(null);
+      phraseOverlayTimeoutRef.current = null;
+    }, PHRASE_OVERLAY_DURATION_MS);
+  }, [onPhraseReaction]);
+
+  const emojiDockItems = useMemo(
+    () =>
+      EMOTION_EMOJIS.map((emoji) => ({
+        title: emoji,
+        icon: <span className="text-4xl">{emoji}</span>,
+        onClick: () => handleEmojiSelect(emoji),
+      })),
+    [handleEmojiSelect],
+  );
 
   useEffect(() => () => {
     clearLongPress();
     if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
+    if (phraseOverlayTimeoutRef.current) clearTimeout(phraseOverlayTimeoutRef.current);
   }, [clearLongPress]);
+
+  // Close menu when clicking outside (backdrop is clipped by seat transform, so use document click)
+  useEffect(() => {
+    const isOpen = quickMenuOpen || emojiPickerOpen || quickChatPickerOpen;
+    if (!isOpen || !isCurrentPlayer) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (menuContainerRef.current?.contains(target) || quickMenuButtonRef.current?.contains(target)) return;
+      setQuickMenuOpen(false);
+      setEmojiPickerOpen(false);
+      setQuickChatPickerOpen(false);
+    };
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  }, [isCurrentPlayer, quickMenuOpen, emojiPickerOpen, quickChatPickerOpen]);
 
   // Resolve active action for color-coded label
   const activeAction =
     lastAction && lastAction.action !== 'blind' ? lastAction.action :
     isFolded ? 'fold' : null;
   const actionStyle = activeAction ? getActionStyle(activeAction) : null;
+
+  /** Display overlay from props (broadcast) when set, else local state (demo/fallback). */
+  const displayEmoji = propsOverlayEmoji != null && propsOverlayEmoji !== '' ? propsOverlayEmoji : overlayEmoji;
+  const displayPhrase = propsOverlayPhrase != null && propsOverlayPhrase !== '' ? propsOverlayPhrase : overlayPhrase;
 
   /* ── Empty seat ── */
   if (empty) {
@@ -343,18 +429,35 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
         )}
       </AnimatePresence>
 
-      {/* Quick-reaction emoji overlay — above head, xl on min / 3xl on max, 2s */}
+      {/* Quick-reaction emoji overlay — above head, 2s (from broadcast or local) */}
       <AnimatePresence>
-        {overlayEmoji && (
+        {displayEmoji && (
           <motion.div
-            key={overlayEmoji}
-            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 text-xl lg:text-3xl"
+            key={displayEmoji}
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 text-3xl lg:text-5xl"
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ type: 'spring', stiffness: 400, damping: 24 }}
           >
-            {overlayEmoji}
+            {displayEmoji}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* QuickChat phrase overlay — above head, 2s (from broadcast or local) */}
+      <AnimatePresence>
+        {displayPhrase && (
+          <motion.div
+            key={displayPhrase}
+            className="font-grandstander absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 text-lg lg:text-xl max-w-[min(180px,50vw)] text-center px-2"
+            style={{ color: 'var(--poker-text)' }}
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+          >
+            {displayPhrase}
           </motion.div>
         )}
       </AnimatePresence>
@@ -436,98 +539,155 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           </div>
         )}
 
-        {/* Backdrop to close quick menu / emoji picker when clicking outside */}
+        {/* Backdrop to close quick menu / emoji picker / QuickChat picker when clicking outside */}
         <AnimatePresence>
-          {isCurrentPlayer && (quickMenuOpen || emojiPickerOpen) && (
+          {isCurrentPlayer && (quickMenuOpen || emojiPickerOpen || quickChatPickerOpen) && (
             <motion.div
               className="fixed inset-0 z-[45]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              onClick={() => { setQuickMenuOpen(false); setEmojiPickerOpen(false); }}
+              onClick={() => {
+                setQuickMenuOpen(false);
+                setEmojiPickerOpen(false);
+                setQuickChatPickerOpen(false);
+              }}
               aria-hidden
             />
           )}
         </AnimatePresence>
 
-        {/* Quick menu (long-press on badge when current player) */}
-        <AnimatePresence>
-          {isCurrentPlayer && quickMenuOpen && !emojiPickerOpen && (
-            <motion.div
-              className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 z-50"
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            >
-              <div
-                className="rounded-lg overflow-hidden min-w-[120px]"
-                style={{
-                  background: 'rgba(10,10,10,0.96)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-                }}
+        {/* Quick menu, emoji picker, QuickChat picker — wrapper ref for outside-click close */}
+        <div
+          ref={menuContainerRef}
+          className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 z-50 w-max min-w-[120px]"
+        >
+          {/* Quick menu (long-press on badge when current player) */}
+          <AnimatePresence>
+            {isCurrentPlayer && quickMenuOpen && !emojiPickerOpen && !quickChatPickerOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 28 }}
               >
-                <button
-                  type="button"
-                  onClick={() => { setQuickMenuOpen(false); setEmojiPickerOpen(true); }}
-                  className="w-full px-4 py-2.5 text-sm font-medium text-left hover:bg-white/10 transition-colors flex items-center gap-2"
-                  style={{ color: 'var(--poker-text)' }}
+                <div
+                  className="rounded-lg overflow-hidden min-w-[120px]"
+                  style={{
+                    background: 'rgba(10,10,10,0.96)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+                  }}
                 >
-                  <span className="text-lg">😀</span>
-                  Emoji
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* 9 emotion emojis picker */}
-        <AnimatePresence>
-          {isCurrentPlayer && emojiPickerOpen && (
-            <motion.div
-              className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 z-50"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            >
-              <div
-                className="rounded-xl p-2 grid grid-cols-3 gap-1.5"
-                style={{
-                  background: 'rgba(10,10,10,0.96)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-                }}
-              >
-                {EMOTION_EMOJIS.map((emoji) => (
                   <button
-                    key={emoji}
                     type="button"
-                    onClick={() => handleEmojiSelect(emoji)}
-                    className="w-12 h-12 lg:w-14 lg:h-14 flex items-center justify-center text-2xl lg:text-3xl rounded-lg hover:bg-white/15 active:scale-95 transition-all"
-                    aria-label={`React with ${emoji}`}
+                    onClick={() => { setQuickMenuOpen(false); setEmojiPickerOpen(true); }}
+                    className="w-full px-4 py-2.5 text-sm font-medium text-left hover:bg-white/10 transition-colors flex items-center gap-2"
+                    style={{ color: 'var(--poker-text)' }}
+                    aria-label="Emoji"
                   >
-                    {emoji}
+                    <span className="text-lg">😀</span>
+                    Emoji
                   </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  <button
+                    type="button"
+                    onClick={() => { setQuickMenuOpen(false); setQuickChatPickerOpen(true); }}
+                    className="font-grandstander w-full px-4 py-2.5 text-sm font-medium text-left hover:bg-white/10 transition-colors flex items-center gap-2"
+                    style={{ color: 'var(--poker-text)' }}
+                    aria-label="QuickChat"
+                  >
+                    <span className="text-lg">💬</span>
+                    QuickChat
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* 9 emotion emojis picker — floating dock */}
+          <AnimatePresence>
+            {isCurrentPlayer && emojiPickerOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              >
+                <FloatingDock
+                  items={emojiDockItems}
+                  desktopClassName="!bg-[rgba(10,10,10,0.96)] !border !border-white/10 !shadow-[0_4px_20px_rgba(0,0,0,0.6)] !rounded-xl !px-3 !pb-2.5 !h-16 [&_.rounded-full]:!bg-transparent [&_button]:!bg-transparent [&_a]:!bg-transparent"
+                  mobileClassName="[&_button]:!bg-transparent [&_.rounded-full]:!bg-transparent"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* QuickChat phrase picker — current phrases + Edit QuickChat */}
+          <AnimatePresence>
+            {isCurrentPlayer && quickChatPickerOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              >
+                <div
+                  className="rounded-xl overflow-hidden max-h-[min(280px,60vh)] overflow-y-auto min-w-[160px] max-w-[220px]"
+                  style={{
+                    background: 'rgba(10,10,10,0.96)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+                  }}
+                >
+                  {quickChatPhrases.map((phrase) => (
+                    <button
+                      key={phrase}
+                      type="button"
+                      onClick={() => handleQuickChatSelect(phrase)}
+                      className="font-grandstander w-full px-3 py-2 text-sm text-center hover:bg-white/10 transition-colors truncate"
+                      style={{ color: 'var(--poker-text)' }}
+                    >
+                      {phrase}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickChatPickerOpen(false);
+                      setEditQuickChatOpen(true);
+                    }}
+                    className="font-grandstander w-full px-3 py-2.5 text-sm font-medium text-center hover:bg-white/10 transition-colors flex items-center gap-2 border-t border-white/10"
+                    style={{ color: 'var(--poker-text)' }}
+                    aria-label="Edit QuickChat"
+                  >
+                    <span className="text-cyan-400">✎</span>
+                    Edit QuickChat
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <EditQuickChatModal
+          open={editQuickChatOpen}
+          onClose={() => setEditQuickChatOpen(false)}
+          selectedPhrases={quickChatPhrases}
+          onSave={setQuickChatPhrases}
+        />
 
         <div
           ref={badgeRef}
           role={isCurrentPlayer ? 'button' : undefined}
           aria-label={isCurrentPlayer ? 'Press and hold or right-click for quick menu' : undefined}
-          title={isCurrentPlayer ? 'Hold or right-click for emoji menu' : undefined}
+          title={isCurrentPlayer ? 'Hold or right-click for quick menu' : undefined}
           onPointerDown={isCurrentPlayer ? handleBadgePointerDown : undefined}
           onPointerUp={isCurrentPlayer ? handleBadgePointerUp : undefined}
           onPointerLeave={isCurrentPlayer ? handleBadgePointerLeave : undefined}
           onPointerCancel={isCurrentPlayer ? handleBadgePointerCancel : undefined}
           onContextMenu={isCurrentPlayer ? handleBadgeContextMenu : undefined}
-          className="flex flex-col items-stretch overflow-hidden"
+          className="relative flex flex-col items-stretch overflow-hidden"
           style={{
             background: 'rgba(0,0,0,0.88)',
             border: `1px solid ${
@@ -536,13 +696,63 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
                                 'rgba(255,255,255,0.12)'
             }`,
             borderRadius: 6,
-            minWidth: isCurrentPlayer ? 98 : 88,
+            minWidth: isCurrentPlayer ? 138 : 88,
             boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
             ...(isCurrentPlayer ? { cursor: 'pointer' } : {}),
           }}
         >
-          {/* Name + stack */}
-          <div className="px-2.5 py-1.5 sm:px-2 sm:py-1 text-center">
+          {/* Hamburger, Re-up (+), Quick menu (chat) — left of nametag, vertically centered (current player only) */}
+          {isCurrentPlayer && (
+            <div className="absolute left-0.5 top-1/2 z-10 flex -translate-y-1/2 flex-row items-center gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMenuClick?.();
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-xs opacity-90 hover:opacity-100 hover:bg-white/15 transition-all"
+                style={{ color: 'var(--poker-text)' }}
+                aria-label="Menu"
+                title="Menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              {onReUpClick && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReUpClick();
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-xs opacity-90 hover:opacity-100 hover:bg-white/15 transition-all"
+                  style={{ color: 'var(--poker-text)' }}
+                  aria-label="Re-up"
+                  title="Re-up"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+              )}
+              <button
+                ref={quickMenuButtonRef}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuickMenuOpen(true);
+                  setEmojiPickerOpen(false);
+                  setQuickChatPickerOpen(false);
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-xs opacity-90 hover:opacity-100 hover:bg-white/15 transition-all"
+                style={{ color: 'var(--poker-text)' }}
+                aria-label="Open quick menu"
+                title="Quick menu"
+              >
+                <MessageCircle className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+
+          {/* Name + stack — extra left padding when current player so content clears the buttons */}
+          <div className={`py-1.5 sm:py-1 text-center ${isCurrentPlayer ? 'pl-[7rem] pr-2.5 sm:pl-[7rem] sm:pr-2' : 'px-2.5 sm:px-2'}`}>
             <div
               className="font-bold truncate leading-tight"
               style={{
@@ -554,13 +764,21 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
               {displayName}
             </div>
             <div
-              className="font-bold tabular-nums leading-tight"
+              className="font-bold tabular-nums leading-tight flex items-center justify-center gap-1"
               style={{
                 color: '#fbbf24',
                 fontSize: isCurrentPlayer ? 'clamp(11px, 2.2vw, 13px)' : 'clamp(12px, 2.5vw, 14px)',
               }}
             >
-              ${formatChips(seat.stack)}
+              {formatChips(seat.stack)}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/morbius/MorbiusLogo%20(3).png"
+                alt=""
+                aria-hidden
+                className="shrink-0"
+                style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }}
+              />
             </div>
           </div>
 

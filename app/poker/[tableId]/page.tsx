@@ -15,10 +15,12 @@ import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
 import { PokerTable } from '@/components/poker/PokerTable';
 import { PokerActions } from '@/components/poker/PokerActions';
 import { PokerDepositModal } from '@/components/poker/PokerDepositModal';
+import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { toast } from 'sonner';
 
 const POKER_CHAT_BUBBLE_DURATION_MS = 5000;
+const POKER_QUICK_REACTION_DURATION_MS = 2000;
 
 export default function PokerTablePage() {
   const params = useParams();
@@ -36,10 +38,14 @@ export default function PokerTablePage() {
   const [error, setError] = useState<string | null>(null);
   const [disconnected, setDisconnected] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showStatsModal, setShowStatsModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   /** Chat bubbles above seats: id, senderAddress (lowercase), text, expiresAt. Cleared after 5s. */
   const [seatBubbles, setSeatBubbles] = useState<Array<{ id: string; senderAddress: string; text: string; expiresAt: number }>>([]);
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const reactionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  /** Per-seat quick reaction (emoji or phrase) shown above seat; cleared after 2s. */
+  const [reactionBySeatIndex, setReactionBySeatIndex] = useState<Record<number, { type: 'emoji' | 'phrase'; value: string }>>({});
   const clientRef = useRef<BlackjackWebSocketClient | null>(null);
   // Monotonic counter to discard out-of-order pokerGetState responses.
   const fetchSeqRef = useRef(0);
@@ -142,6 +148,10 @@ export default function PokerTablePage() {
       const sender = payload.senderAddress?.trim()?.toLowerCase();
       if (!sender || !payload.text?.trim()) return;
 
+      if (sender !== normalizedAddress) {
+        new Audio(ps('ChatMessage.mp3')).play().catch(() => {});
+      }
+
       const id = payload.id || `chat-${Date.now()}-${sender}`;
       const expiresAt = Date.now() + POKER_CHAT_BUBBLE_DURATION_MS;
 
@@ -165,6 +175,43 @@ export default function PokerTablePage() {
       bubbleTimeoutsRef.current.clear();
     };
   }, [pokerChatRoomId]);
+
+  // Quick reactions (emoji/phrase) — broadcast to table, show above seat for 2s
+  useEffect(() => {
+    const client = clientRef.current;
+    if (!client || !tableId) return;
+
+    const onQuickReaction = (payload: { tableId?: string; seatIndex?: number; type?: 'emoji' | 'phrase'; value?: string }) => {
+      if (payload.tableId !== tableId || payload.seatIndex == null || (payload.type !== 'emoji' && payload.type !== 'phrase')) return;
+      const seatIndex = payload.seatIndex;
+      const value = typeof payload.value === 'string' ? payload.value.trim() : '';
+      if (!value) return;
+
+      if (reactionTimeoutsRef.current.has(seatIndex)) {
+        clearTimeout(reactionTimeoutsRef.current.get(seatIndex)!);
+        reactionTimeoutsRef.current.delete(seatIndex);
+      }
+
+      setReactionBySeatIndex((prev) => ({ ...prev, [seatIndex]: { type: payload.type!, value } }));
+
+      const t = setTimeout(() => {
+        setReactionBySeatIndex((prev) => {
+          const next = { ...prev };
+          delete next[seatIndex];
+          return next;
+        });
+        reactionTimeoutsRef.current.delete(seatIndex);
+      }, POKER_QUICK_REACTION_DURATION_MS);
+      reactionTimeoutsRef.current.set(seatIndex, t);
+    };
+
+    client.on('poker_quick_reaction', onQuickReaction);
+    return () => {
+      client.off('poker_quick_reaction', onQuickReaction);
+      reactionTimeoutsRef.current.forEach((t) => clearTimeout(t));
+      reactionTimeoutsRef.current.clear();
+    };
+  }, [tableId]);
 
   // Heartbeat: detect disconnect/reconnect and re-sync state
   useEffect(() => {
@@ -304,6 +351,46 @@ export default function PokerTablePage() {
 
   const hand = state?.currentHand;
   const mySeatIndex = state ? state.seats.findIndex((s) => s.playerAddress === normalizedAddress) : -1;
+
+  const onEmojiReaction = useCallback(
+    (emoji: string) => {
+      const client = clientRef.current;
+      if (!client?.isConnected() || !tableId || mySeatIndex < 0) return;
+      client.sendPokerQuickReaction(tableId, 'emoji', emoji);
+      setReactionBySeatIndex((prev) => ({ ...prev, [mySeatIndex]: { type: 'emoji', value: emoji } }));
+      if (reactionTimeoutsRef.current.has(mySeatIndex)) clearTimeout(reactionTimeoutsRef.current.get(mySeatIndex)!);
+      const t = setTimeout(() => {
+        setReactionBySeatIndex((prev) => {
+          const next = { ...prev };
+          delete next[mySeatIndex];
+          return next;
+        });
+        reactionTimeoutsRef.current.delete(mySeatIndex);
+      }, POKER_QUICK_REACTION_DURATION_MS);
+      reactionTimeoutsRef.current.set(mySeatIndex, t);
+    },
+    [tableId, mySeatIndex],
+  );
+
+  const onPhraseReaction = useCallback(
+    (phrase: string) => {
+      const client = clientRef.current;
+      if (!client?.isConnected() || !tableId || mySeatIndex < 0) return;
+      client.sendPokerQuickReaction(tableId, 'phrase', phrase);
+      setReactionBySeatIndex((prev) => ({ ...prev, [mySeatIndex]: { type: 'phrase', value: phrase } }));
+      if (reactionTimeoutsRef.current.has(mySeatIndex)) clearTimeout(reactionTimeoutsRef.current.get(mySeatIndex)!);
+      const t = setTimeout(() => {
+        setReactionBySeatIndex((prev) => {
+          const next = { ...prev };
+          delete next[mySeatIndex];
+          return next;
+        });
+        reactionTimeoutsRef.current.delete(mySeatIndex);
+      }, POKER_QUICK_REACTION_DURATION_MS);
+      reactionTimeoutsRef.current.set(mySeatIndex, t);
+    },
+    [tableId, mySeatIndex],
+  );
   const mySeat = mySeatIndex >= 0 && state ? state.seats[mySeatIndex] : null;
   const canAct =
     !!hand &&
@@ -315,14 +402,84 @@ export default function PokerTablePage() {
   const canCheck = hand?.toCall === '0' || hand?.toCall === '';
   const callAmount = hand?.toCall ?? '0';
 
+  const ps = (file: string) => `/Poker/Poker%20Sounds/${file}`;
+
   // ── Your turn sound ───────────────────────────────────────────────────────
   const prevCanActRef = useRef(false);
   useEffect(() => {
     if (canAct && !prevCanActRef.current) {
-      new Audio('/sounds/peghit.mp3').play().catch(() => {});
+      new Audio(ps('PlayerTurn.mp3')).play().catch(() => {});
     }
     prevCanActRef.current = !!canAct;
   }, [canAct]);
+
+  // ── Cards dealing sound (new hand) ────────────────────────────────────────
+  const prevHandIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const handId = hand?.handId ?? null;
+    if (handId && handId !== prevHandIdRef.current) {
+      new Audio(ps('CardsDealing.wav')).play().catch(() => {});
+    }
+    prevHandIdRef.current = handId;
+  }, [hand?.handId]);
+
+  // ── Opponent action sounds ────────────────────────────────────────────────
+  const prevLastActionKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const la = hand?.lastAction;
+    if (!la) return;
+    const key = `${hand?.handId}:${la.position}:${la.action}:${la.amount}`;
+    if (key === prevLastActionKeyRef.current) return;
+    prevLastActionKeyRef.current = key;
+
+    // Only play for opponent actions
+    if (mySeatIndex >= 0 && la.position === mySeatIndex) return;
+
+    const opponentStack = state?.seats[la.position]?.stack ?? '1';
+    const isAllIn = BigInt(opponentStack) === 0n && (la.action === 'bet' || la.action === 'raise' || la.action === 'call');
+
+    if (la.action === 'fold') {
+      new Audio(ps('OpponentFold.wav')).play().catch(() => {});
+    } else if (isAllIn) {
+      new Audio(ps('OpponentAllin.mp3')).play().catch(() => {});
+    } else if (la.action === 'call' || la.action === 'raise' || la.action === 'bet') {
+      new Audio(ps('OpponentCall-Raise.wav')).play().catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hand?.lastAction, hand?.handId]);
+
+  // ── Player wins sound ─────────────────────────────────────────────────────
+  const prevWinnerKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (hand?.street !== 'showdown' || !hand.winners?.length) return;
+    const key = `${hand.handId}:${hand.winners.map(w => w.address).join(',')}`;
+    if (key === prevWinnerKeyRef.current) return;
+    prevWinnerKeyRef.current = key;
+    if (hand.winners.some(w => w.address === normalizedAddress)) {
+      new Audio(ps('PlayerWins.mp3')).play().catch(() => {});
+    }
+  }, [hand?.street, hand?.winners, hand?.handId, normalizedAddress]);
+
+  // ── Opponent join / leave sounds ──────────────────────────────────────────
+  const prevSeatAddrsRef = useRef<(string | null)[]>([]);
+  useEffect(() => {
+    if (!state) return;
+    const current = state.seats.map(s => s.playerAddress ?? null);
+    const prev = prevSeatAddrsRef.current;
+    if (prev.length > 0) {
+      for (let i = 0; i < current.length; i++) {
+        const wasOpponent = prev[i] && prev[i] !== normalizedAddress;
+        const isOpponent  = current[i] && current[i] !== normalizedAddress;
+        if (!wasOpponent && isOpponent) {
+          new Audio(ps('OpponentJoined.mp3')).play().catch(() => {});
+        } else if (wasOpponent && !isOpponent) {
+          new Audio(ps('OpponentLeft.mp3')).play().catch(() => {});
+        }
+      }
+    }
+    prevSeatAddrsRef.current = current;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.seats]);
 
   // ── Turn timer countdown ──────────────────────────────────────────────────
   const [timeLeft, setTimeLeft] = useState<number>(30);
@@ -428,6 +585,21 @@ export default function PokerTablePage() {
               </span>
             )}
             <div className="flex items-center gap-1.5 shrink-0">
+              {normalizedAddress && (
+                <button
+                  type="button"
+                  onClick={() => setShowStatsModal(true)}
+                  className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
+                  style={{
+                    background: 'rgba(255,255,255,0.07)',
+                    color: 'rgba(255,255,255,0.75)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                  }}
+                >
+                  Stats
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowChat((v) => !v)}
@@ -440,19 +612,6 @@ export default function PokerTablePage() {
                 }}
               >
                 Chat
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowDepositModal(true)}
-                className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
-                style={{
-                  background: 'rgba(255,255,255,0.07)',
-                  color: 'rgba(255,255,255,0.75)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-                }}
-              >
-                {mySeat ? 'Re-up' : 'Balance'}
               </button>
               <button
                 type="button"
@@ -500,6 +659,10 @@ export default function PokerTablePage() {
                 onLeave={handleLeave}
                 timeLeft={timeLeft}
                 chatBubbleBySeatIndex={chatBubbleBySeatIndex}
+                reactionBySeatIndex={reactionBySeatIndex}
+                onEmojiReaction={mySeatIndex >= 0 ? onEmojiReaction : undefined}
+                onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
+                onReUpClick={mySeat ? () => setShowDepositModal(true) : undefined}
               />
             ) : !error ? (
               <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
@@ -596,6 +759,11 @@ export default function PokerTablePage() {
           tableId={mySeat ? tableId : undefined}
           currentStack={mySeat?.stack}
           onReupSuccess={(s) => { if (s) setState(s); }}
+        />
+        <PokerStatsModal
+          isOpen={showStatsModal}
+          onClose={() => setShowStatsModal(false)}
+          playerAddress={normalizedAddress}
         />
       </PokerThemeProvider>
     </GlobalMainNav>

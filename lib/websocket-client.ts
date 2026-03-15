@@ -511,6 +511,7 @@ export class BlackjackWebSocketClient {
           'room_joined',
           'poker_table_state',
           'poker_table_list',
+          'poker_quick_reaction',
         ]);
         if (!knownEventTypes.has(message.type)) {
           logger.warn('Unhandled message type:', message.type);
@@ -661,6 +662,14 @@ export class BlackjackWebSocketClient {
   /** Create a new table. Auth required. Returns the new table id. */
   async pokerCreateTable(smallBlind: string, bigBlind: string, maxSeats: number = 6): Promise<{ tableId: string }> {
     return this.sendRequest('poker_create_table', { smallBlind, bigBlind, maxSeats });
+  }
+
+  /**
+   * Send a quick reaction (emoji or phrase) to the table. Server broadcasts to all players at the table.
+   * Must be seated. Use on('poker_quick_reaction', handler) to receive; payload is { tableId, seatIndex, type: 'emoji'|'phrase', value: string }.
+   */
+  sendPokerQuickReaction(tableId: string, type: 'emoji' | 'phrase', value: string): void {
+    this.send({ type: 'poker_quick_reaction', payload: { tableId, type, value } });
   }
 
   // === Chat API (main + per-game rooms) ===

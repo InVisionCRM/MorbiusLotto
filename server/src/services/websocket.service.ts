@@ -581,6 +581,11 @@ export class WebSocketService {
           await this.handlePokerCreateTable(ws, message);
           break;
 
+        case 'poker_quick_reaction':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handlePokerQuickReaction(ws, message);
+          break;
+
         default:
           this.sendError(ws, 'Unknown message type', message.requestId);
       }
@@ -1325,6 +1330,41 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error getting poker state:', error);
       this.sendError(ws, (error as Error).message || 'Failed to get state', message.requestId);
+    }
+  }
+
+  private async handlePokerQuickReaction(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerGameService || !ws.playerAddress) {
+        return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+      }
+      const payload = message.payload as { tableId?: string; type?: string; value?: string };
+      const { tableId, type, value } = payload ?? {};
+      if (!tableId || typeof tableId !== 'string') {
+        return this.sendError(ws, 'tableId required', message.requestId);
+      }
+      if (type !== 'emoji' && type !== 'phrase') {
+        return this.sendError(ws, 'type must be emoji or phrase', message.requestId);
+      }
+      const val = typeof value === 'string' ? value.trim() : '';
+      if (!val || val.length > 200) {
+        return this.sendError(ws, 'value required (max 200 chars)', message.requestId);
+      }
+      const state = await this.pokerGameService.getTableState(tableId, null);
+      const seatIndex = state.seats.findIndex(
+        (s) => s.playerAddress && s.playerAddress.toLowerCase() === ws.playerAddress!.toLowerCase()
+      );
+      if (seatIndex < 0) {
+        return this.sendError(ws, 'Not seated at this table', message.requestId);
+      }
+      const roomId = `poker:table:${tableId}`;
+      this.broadcastToRoom(roomId, {
+        type: 'poker_quick_reaction',
+        payload: { tableId, seatIndex, type, value: val },
+      });
+    } catch (error) {
+      logger.error('Error handling poker quick reaction:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to send reaction', message.requestId);
     }
   }
 

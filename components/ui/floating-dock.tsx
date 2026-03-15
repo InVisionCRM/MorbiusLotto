@@ -11,12 +11,21 @@ import {
 
 import { useRef, useState } from "react";
 
+/** Dock item: either a link (href) or an action (onClick). */
+export type FloatingDockItem =
+  | { title: string; icon: React.ReactNode; href: string }
+  | { title: string; icon: React.ReactNode; onClick: () => void };
+
+function isLinkItem(item: FloatingDockItem): item is { title: string; icon: React.ReactNode; href: string } {
+  return "href" in item;
+}
+
 export const FloatingDock = ({
   items,
   desktopClassName,
   mobileClassName,
 }: {
-  items: { title: string; icon: React.ReactNode; href: string }[];
+  items: FloatingDockItem[];
   desktopClassName?: string;
   mobileClassName?: string;
 }) => {
@@ -32,10 +41,11 @@ const FloatingDockMobile = ({
   items,
   className,
 }: {
-  items: { title: string; icon: React.ReactNode; href: string }[];
+  items: FloatingDockItem[];
   className?: string;
 }) => {
   const [open, setOpen] = useState(false);
+  const baseClass = "flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 dark:bg-neutral-900";
   return (
     <div className={cn("relative block md:hidden", className)}>
       <AnimatePresence>
@@ -61,13 +71,19 @@ const FloatingDockMobile = ({
                 }}
                 transition={{ delay: (items.length - 1 - idx) * 0.05 }}
               >
-                <a
-                  href={item.href}
-                  key={item.title}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 dark:bg-neutral-900"
-                >
-                  <div className="h-4 w-4">{item.icon}</div>
-                </a>
+                {isLinkItem(item) ? (
+                  <a href={item.href} className={baseClass}>
+                    <div className="h-4 w-4">{item.icon}</div>
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { item.onClick(); setOpen(false); }}
+                    className={baseClass}
+                  >
+                    <div className="h-4 w-4">{item.icon}</div>
+                  </button>
+                )}
               </motion.div>
             ))}
           </motion.div>
@@ -87,7 +103,7 @@ const FloatingDockDesktop = ({
   items,
   className,
 }: {
-  items: { title: string; icon: React.ReactNode; href: string }[];
+  items: FloatingDockItem[];
   className?: string;
 }) => {
   let mouseX = useMotionValue(Infinity);
@@ -101,7 +117,7 @@ const FloatingDockDesktop = ({
       )}
     >
       {items.map((item) => (
-        <IconContainer mouseX={mouseX} key={item.title} {...item} />
+        <IconContainer mouseX={mouseX} key={item.title} item={item} />
       ))}
     </motion.div>
   );
@@ -109,15 +125,12 @@ const FloatingDockDesktop = ({
 
 function IconContainer({
   mouseX,
-  title,
-  icon,
-  href,
+  item,
 }: {
   mouseX: MotionValue;
-  title: string;
-  icon: React.ReactNode;
-  href: string;
+  item: FloatingDockItem;
 }) {
+  const { title, icon } = item;
   let ref = useRef<HTMLDivElement>(null);
 
   let distance = useTransform(mouseX, (val) => {
@@ -160,34 +173,40 @@ function IconContainer({
 
   const [hovered, setHovered] = useState(false);
 
-  return (
-    <a href={href}>
+  const content = (
+    <motion.div
+      ref={ref}
+      style={{ width, height }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="relative flex aspect-square items-center justify-center rounded-full bg-gray-200 dark:bg-neutral-800"
+    >
+      <AnimatePresence>
+        {hovered && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 2, x: "-50%" }}
+            className="absolute -top-8 left-1/2 w-fit rounded-md border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs whitespace-pre text-neutral-700 dark:border-neutral-900 dark:bg-neutral-800 dark:text-white"
+          >
+            {title}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <motion.div
-        ref={ref}
-        style={{ width, height }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        className="relative flex aspect-square items-center justify-center rounded-full bg-gray-200 dark:bg-neutral-800"
+        style={{ width: widthIcon, height: heightIcon }}
+        className="flex items-center justify-center"
       >
-        <AnimatePresence>
-          {hovered && (
-            <motion.div
-              initial={{ opacity: 0, y: 10, x: "-50%" }}
-              animate={{ opacity: 1, y: 0, x: "-50%" }}
-              exit={{ opacity: 0, y: 2, x: "-50%" }}
-              className="absolute -top-8 left-1/2 w-fit rounded-md border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs whitespace-pre text-neutral-700 dark:border-neutral-900 dark:bg-neutral-800 dark:text-white"
-            >
-              {title}
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <motion.div
-          style={{ width: widthIcon, height: heightIcon }}
-          className="flex items-center justify-center"
-        >
-          {icon}
-        </motion.div>
+        {icon}
       </motion.div>
-    </a>
+    </motion.div>
+  );
+
+  return isLinkItem(item) ? (
+    <a href={item.href}>{content}</a>
+  ) : (
+    <button type="button" onClick={item.onClick} className="cursor-pointer border-0 bg-transparent p-0">
+      {content}
+    </button>
   );
 }
