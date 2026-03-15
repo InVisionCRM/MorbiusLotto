@@ -848,6 +848,8 @@ export class PokerGameService {
       [tableId]
     );
     const bb = Number(tableRow.rows[0].big_blind);
+    /** Effective amount for bet/raise (clamped to stack); used for DB record. */
+    let effectiveActionAmount: number | null = null;
 
     switch (action) {
       case 'fold':
@@ -860,12 +862,20 @@ export class PokerGameService {
         actor.callAction();
         break;
       case 'bet': {
-        const amt = Number(amount ?? '0');
+        let amt = Number(amount ?? '0');
+        if (!Number.isFinite(amt) || amt < 0) amt = 0;
+        amt = Math.min(amt, actor.stackSize);
+        if (amt === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
+        effectiveActionAmount = amt;
         actor.betAction(amt);
         break;
       }
       case 'raise': {
-        const amt = Number(amount ?? '0');
+        let amt = Number(amount ?? '0');
+        if (!Number.isFinite(amt) || amt < 0) amt = 0;
+        amt = Math.min(amt, actor.stackSize);
+        if (amt === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
+        effectiveActionAmount = amt;
         actor.raiseAction(amt);
         break;
       }
@@ -885,8 +895,10 @@ export class PokerGameService {
     );
     const nextOrder = Number(orderResult.rows[0].next_order);
 
-    // Record action
-    const actionAmount = (action === 'fold' || action === 'check') ? 0 : Number(amount ?? '0');
+    // Record action (use effective clamped amount for bet/raise)
+    const actionAmount = effectiveActionAmount !== null
+      ? effectiveActionAmount
+      : (action === 'fold' || action === 'check' ? 0 : Number(amount ?? '0'));
     await pool.query(
       `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
        VALUES ($1, $2, $3, $4, $5::NUMERIC, $6)`,
@@ -947,12 +959,17 @@ export class PokerGameService {
     // Chevtek already credited stackSize in showdown(). We sync those values to DB.
     await this.syncSeatsFromTable(pool, tableId, table);
 
-    // Build winners list from table.pots
+    // Build winners list from table.pots, explicitly skipping folded players.
+    // chevtek's gatherBets() has an early-return when bettingPlayers.length <= 1
+    // (e.g. everyone checked the river) that skips removing folded players from
+    // pot.eligiblePlayers, so findWinners() can incorrectly include them.
     const winnerAmounts = new Map<string, number>();
     for (const pot of table.pots) {
       if (!pot.winners || pot.winners.length === 0) continue;
-      const share = pot.amount / pot.winners.length;
-      for (const w of pot.winners) {
+      const nonFoldedWinners = pot.winners.filter((w: any) => !w.folded);
+      if (nonFoldedWinners.length === 0) continue;
+      const share = pot.amount / nonFoldedWinners.length;
+      for (const w of nonFoldedWinners) {
         winnerAmounts.set(w.id, (winnerAmounts.get(w.id) ?? 0) + share);
       }
     }
