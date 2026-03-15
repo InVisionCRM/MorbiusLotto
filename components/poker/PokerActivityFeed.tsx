@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { formatEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/use-chat';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
@@ -63,10 +64,9 @@ function shortAddr(addr: string): string {
   return `…${addr.slice(-4).toUpperCase()}`;
 }
 
-function fmtWei(wei: string): string {
+function fmtWei(wei: string | number): string {
   try {
-    const s = wei.toLowerCase().includes('e') ? Math.round(Number(wei)).toFixed(0) : wei;
-    const n = Number(formatEther(BigInt(s)));
+    const n = Number(formatEther(toBigIntSafe(wei)));
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
     return Number.isInteger(n) ? n.toString() : n.toFixed(2);

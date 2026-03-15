@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 
 export interface PlinkoChainStats {
   totalDrops: bigint;
@@ -66,7 +67,7 @@ export interface PlatformAnalytics {
 }
 
 function parsePlatformResponse(data: any): PlatformAnalytics {
-  const toBigInt = (v: unknown) => BigInt(String(v ?? 0));
+  const toBigInt = (v: unknown) => toBigIntSafe(v ?? 0);
   return {
     blackjack: data.blackjack ?? {},
     plinko: data.plinko

@@ -47,6 +47,7 @@ import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { usePendingWithdrawal } from '@/hooks/use-pending-withdrawal';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
 import { useTokenApproval } from '@/hooks/use-token-approval';
@@ -1437,16 +1438,6 @@ export default function BlackjackPage() {
       return createCard(n, suitFor(idx), hidden);
     };
 
-    const toBigIntSafe = (v: any) => {
-      try {
-        if (typeof v === 'bigint') return v;
-        if (v === null || v === undefined) return BigInt(0);
-        return BigInt(String(v));
-      } catch {
-        return BigInt(0);
-      }
-    };
-
     const totalBetAmount = toBigIntSafe(serverGameState.totalBetAmount ?? serverGameState.betAmount);
     const totalPayout = toBigIntSafe(serverGameState.totalPayout ?? serverGameState.payout);
 
@@ -1735,16 +1726,6 @@ export default function BlackjackPage() {
           return createCard(n, suitFor(idx), hidden);
         };
 
-        const toBigIntSafe = (v: any) => {
-          try {
-            if (typeof v === 'bigint') return v;
-            if (v === null || v === undefined) return BigInt(0);
-            return BigInt(String(v));
-          } catch {
-            return BigInt(0);
-          }
-        };
-        
         const rawHands = Array.isArray(serverGameState.playerHands) ? serverGameState.playerHands : [];
         if (rawHands.length > 0) {
           const playerHands: Hand[] = rawHands.map((h: any, handIdx: number) => {

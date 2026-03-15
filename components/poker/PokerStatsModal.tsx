@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 import {
   Activity,
   BarChart3,
@@ -27,14 +28,14 @@ import {
   type PokerPlayerStats as PokerStatsType,
 } from '@/hooks/use-poker-stats';
 
-function formatChips(wei: string): string {
+function formatChips(wei: string | number): string {
   try {
-    const num = Number(formatEther(BigInt(wei)));
+    const num = Number(formatEther(toBigIntSafe(wei)));
     return Number.isInteger(num)
       ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
       : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   } catch {
-    return wei;
+    return String(wei);
   }
 }
 
@@ -89,8 +90,8 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
         return sorted.sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime());
       case 'profit': {
         return sorted.sort((a, b) => {
-          const aProfit = Number(BigInt(a.myWon) - BigInt(a.myContributed));
-          const bProfit = Number(BigInt(b.myWon) - BigInt(b.myContributed));
+          const aProfit = Number(toBigIntSafe(a.myWon) - toBigIntSafe(a.myContributed));
+          const bProfit = Number(toBigIntSafe(b.myWon) - toBigIntSafe(b.myContributed));
           return bProfit - aProfit;
         });
       }
@@ -113,7 +114,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
   };
 
   const getProfitColor = (profitLoss: string) => {
-    const n = Number(BigInt(profitLoss));
+    const n = Number(toBigIntSafe(profitLoss));
     if (n > 0) return 'text-green-400';
     if (n < 0) return 'text-red-400';
     return 'text-yellow-400';
@@ -141,8 +142,8 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
         },
         {
           title: 'Profit / Loss',
-          value: `${Number(BigInt(s.profit_loss)) >= 0 ? '+' : ''}${formatChips(s.profit_loss)}`,
-          icon: Number(BigInt(s.profit_loss)) >= 0 ? TrendingUp : TrendingDown,
+          value: `${Number(toBigIntSafe(s.profit_loss)) >= 0 ? '+' : ''}${formatChips(s.profit_loss)}`,
+          icon: Number(toBigIntSafe(s.profit_loss)) >= 0 ? TrendingUp : TrendingDown,
           subtitle: `${s.roi >= 0 ? '+' : ''}${Math.round(s.roi)}% ROI`,
           color: getProfitColor(s.profit_loss),
         },
@@ -275,7 +276,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                       </Card>
                     ))}
                   </div>
-                  {s && (Number(BigInt(s.biggest_pot_won)) > 0 || Number(BigInt(s.biggest_loss)) > 0) && (
+                  {s && (Number(toBigIntSafe(s.biggest_pot_won)) > 0 || Number(toBigIntSafe(s.biggest_loss)) > 0) && (
                     <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
                       <CardHeader>
                         <CardTitle className="text-white flex items-center gap-2 text-base">
@@ -345,7 +346,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                     <div className="divide-y divide-gray-700/60">
                       <AnimatePresence>
                         {sortedHands.map((entry) => {
-                          const profit = BigInt(entry.myWon) - BigInt(entry.myContributed);
+                          const profit = toBigIntSafe(entry.myWon) - toBigIntSafe(entry.myContributed);
                           const isExpanded = expandedHandId === entry.id;
                           return (
                             <motion.div

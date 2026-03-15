@@ -1,10 +1,11 @@
 import { Pool } from 'pg';
 import { formatEther } from 'viem';
 import { logger } from '../utils/logger';
+import { toBigIntSafe } from '../utils/safe-bigint';
 
-function formatWei(wei: bigint | string): string {
+function formatWei(wei: bigint | string | number): string {
   try {
-    const n = Number(formatEther(BigInt(wei)));
+    const n = Number(formatEther(toBigIntSafe(wei)));
     return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   } catch {
     return String(wei);
@@ -210,10 +211,7 @@ export class DatabaseService {
   }
 
   private toBigInt(value: unknown): bigint {
-    if (typeof value === 'bigint') return value;
-    if (value === null || value === undefined) return 0n;
-    // pg returns NUMERIC/INT8 as string by default
-    return BigInt(String(value));
+    return toBigIntSafe(value);
   }
 
   private normalizePlayer(row: any): Player {

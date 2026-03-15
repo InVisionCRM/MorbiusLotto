@@ -5,6 +5,7 @@ import { BlackjackGameService, GameState, CreateGameRequest, PlayerActionRequest
 import { TournamentService, TournamentState, LeaderboardEntry, TOURNAMENT_CONFIG } from './tournament.service';
 import { PokerGameService, PokerTableState } from './poker-game.service';
 import { logger } from '../utils/logger';
+import { toBigIntSafe } from '../utils/safe-bigint';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { createPublicClient, http, verifyTypedData, getAddress, formatEther } from 'viem';
@@ -746,30 +747,10 @@ export class WebSocketService {
 
       const payload = message.payload as any;
       
-      // Convert betAmount from string to bigint if needed
-      let betAmount: bigint;
-      try {
-        if (typeof payload.betAmount === 'string') {
-          betAmount = BigInt(payload.betAmount);
-        } else if (typeof payload.betAmount === 'bigint') {
-          betAmount = payload.betAmount;
-        } else {
-          betAmount = BigInt(payload.betAmount || '0');
-        }
-      } catch (error) {
-        logger.error('Invalid betAmount format', { payload, error });
-        return this.sendError(ws, 'Invalid bet amount format', message.requestId);
-      }
-
-      let perfectPairsBetAmount: bigint = 0n;
-      try {
-        if (payload.perfectPairsBetAmount != null && payload.perfectPairsBetAmount !== '') {
-          perfectPairsBetAmount = typeof payload.perfectPairsBetAmount === 'string'
-            ? BigInt(payload.perfectPairsBetAmount) : BigInt(payload.perfectPairsBetAmount);
-        }
-      } catch {
-        perfectPairsBetAmount = 0n;
-      }
+      const betAmount = toBigIntSafe(payload.betAmount ?? 0);
+      const perfectPairsBetAmount = payload.perfectPairsBetAmount != null && payload.perfectPairsBetAmount !== ''
+        ? toBigIntSafe(payload.perfectPairsBetAmount)
+        : 0n;
       if (perfectPairsBetAmount < 0n) perfectPairsBetAmount = 0n;
       const PP_MAX_BET = 10_000n * 10n ** 18n; // 10,000 MORBIUS
       if (perfectPairsBetAmount > PP_MAX_BET) {
@@ -1379,8 +1360,8 @@ export class WebSocketService {
       if (!smallBlindStr || !bigBlindStr) {
         return this.sendError(ws, 'smallBlind and bigBlind required', message.requestId);
       }
-      const smallBlind = BigInt(smallBlindStr);
-      const bigBlind = BigInt(bigBlindStr);
+      const smallBlind = toBigIntSafe(smallBlindStr);
+      const bigBlind = toBigIntSafe(bigBlindStr);
       if (smallBlind <= 0n || bigBlind <= 0n || bigBlind < smallBlind) {
         return this.sendError(ws, 'Invalid blinds: must be positive and bigBlind >= smallBlind', message.requestId);
       }
@@ -2349,11 +2330,8 @@ export class WebSocketService {
         onChainTournamentId?: number | bigint | null;
       };
 
-      // Convert buyInAmount string to bigint
-      let buyInAmount: bigint;
-      try {
-        buyInAmount = BigInt(payload.buyInAmount);
-      } catch {
+      const buyInAmount = toBigIntSafe(payload.buyInAmount);
+      if (buyInAmount <= 0n) {
         return this.sendError(ws, 'Invalid buy-in amount', message.requestId);
       }
 

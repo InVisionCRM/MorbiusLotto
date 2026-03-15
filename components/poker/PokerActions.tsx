@@ -2,11 +2,12 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 
 type Amount = bigint;
 
-function parsePropWei(s: string): Amount {
-  try { return BigInt(s); } catch { return 0n; }
+function parsePropWei(s: string | number): Amount {
+  return toBigIntSafe(s);
 }
 
 function safeParseAmount(input: string): Amount | null {

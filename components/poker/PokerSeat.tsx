@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { formatEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,21 +19,9 @@ const PHRASE_OVERLAY_DURATION_MS = 2000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/** Normalize stack value (may come from JSON as number, showing as 1.26E+21) to string wei for BigInt. */
-function weiToString(wei: string | number): string {
-  if (typeof wei === 'number') {
-    if (!Number.isFinite(wei) || wei < 0) return '0';
-    return wei.toFixed(0);
-  }
-  const s = String(wei).trim() || '0';
-  if (s.toLowerCase().includes('e')) return Math.round(Number(s)).toFixed(0);
-  return s;
-}
-
 function formatChips(wei: string | number): string {
   try {
-    const weiStr = weiToString(wei);
-    const num = Number(formatEther(BigInt(weiStr)));
+    const num = Number(formatEther(toBigIntSafe(wei)));
     if (!Number.isFinite(num) || num < 0) return '0';
     return Number.isInteger(num)
       ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
@@ -76,7 +65,7 @@ const CHIP_SRCS = [
 
 export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
   let amount = 0;
-  try { amount = Number(formatEther(BigInt(weiAmount))); } catch {}
+  try { amount = Number(formatEther(toBigIntSafe(weiAmount))); } catch {}
   if (amount <= 0) return null;
 
   const count   = Math.min(5, Math.max(1, Math.ceil(Math.log10(Math.max(amount + 1, 2)))));

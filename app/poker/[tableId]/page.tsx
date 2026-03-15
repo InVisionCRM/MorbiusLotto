@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
@@ -435,8 +436,7 @@ export default function PokerTablePage() {
     if (mySeatIndex >= 0 && la.position === mySeatIndex) return;
 
     const opponentStack = state?.seats[la.position]?.stack ?? '1';
-    const stackStr = String(opponentStack);
-    const stackBig = BigInt(stackStr.includes('e') ? Math.round(Number(stackStr)).toString() : stackStr);
+    const stackBig = toBigIntSafe(opponentStack);
     const isAllIn = stackBig === 0n && (la.action === 'bet' || la.action === 'raise' || la.action === 'call');
 
     if (la.action === 'fold') {
@@ -522,11 +522,11 @@ export default function PokerTablePage() {
   const themeVars = getPokerThemeVars(pokerTheme);
   const cyberpunk = pokerTheme === 'cyberpunk';
 
-  const fmtChips = (wei: string) => {
+  const fmtChips = (wei: string | number) => {
     try {
-      const n = Number(formatEther(BigInt(wei)));
+      const n = Number(formatEther(toBigIntSafe(wei)));
       return Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    } catch { return wei; }
+    } catch { return String(wei); }
   };
 
   const sharedActions = state && mySeat && (

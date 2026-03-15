@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useAccount } from 'wagmi'
 import { formatEther } from 'viem'
+import { toBigIntSafe } from '@/lib/safe-bigint'
 import { usePlayerGames, type PlayerGameRow } from '@/hooks/use-blackjack-stats'
 
 const panelStyle = {
@@ -22,8 +23,8 @@ function formatTime(isoOrMs: string | number): string {
 }
 
 function ResultRow({ r, compact }: { r: PlayerGameRow; compact?: boolean }) {
-  const bet = BigInt(r.total_bet_amount ?? 0)
-  const payout = BigInt(r.total_payout ?? 0)
+  const bet = toBigIntSafe(r.total_bet_amount ?? 0)
+  const payout = toBigIntSafe(r.total_payout ?? 0)
   const profit = payout - bet
   const win = profit > 0n
   const resultLabel = r.result === 'blackjack' ? 'BJ' : r.result ?? '—'

@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { formatEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
@@ -13,14 +14,14 @@ function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-function formatChips(wei: string): string {
+function formatChips(wei: string | number): string {
   try {
-    const num = Number(formatEther(BigInt(wei)));
+    const num = Number(formatEther(toBigIntSafe(wei)));
     return Number.isInteger(num)
       ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
       : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   } catch {
-    return wei;
+    return String(wei);
   }
 }
 
@@ -320,7 +321,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             ? (mySeatIndex + displaySlot) % state.seats.length
             : displaySlot;
           const seat = state.seats[actualIdx];
-          const hasBet = (() => { try { return BigInt(seat.currentBet || '0') > 0n; } catch { return false; } })();
+          const hasBet = toBigIntSafe(seat.currentBet ?? 0) > 0n;
           if (!hasBet) return null;
 
           const frac = displaySlot === 0 ? 0.45 : 0.28;

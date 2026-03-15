@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import { formatEther } from 'viem';
 import { logger } from '../utils/logger';
+import { toBigIntSafe } from '../utils/safe-bigint';
 
 function formatWei(w: bigint): string {
   return Number(formatEther(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -264,9 +265,7 @@ export class TournamentService {
   }
 
   private toBigInt(value: unknown): bigint {
-    if (typeof value === 'bigint') return value;
-    if (value === null || value === undefined) return 0n;
-    return BigInt(String(value));
+    return toBigIntSafe(value);
   }
 
   private normalizeAddress(address: string): string {
