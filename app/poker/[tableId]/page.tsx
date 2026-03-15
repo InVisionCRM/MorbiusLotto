@@ -16,7 +16,7 @@ import { PokerTable } from '@/components/poker/PokerTable';
 import { PokerActions } from '@/components/poker/PokerActions';
 import { PokerDepositModal } from '@/components/poker/PokerDepositModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
-import { ChatPanel } from '@/components/chat/ChatPanel';
+import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 import { toast } from 'sonner';
 
 const POKER_CHAT_BUBBLE_DURATION_MS = 5000;
@@ -39,7 +39,6 @@ export default function PokerTablePage() {
   const [disconnected, setDisconnected] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
-  const [showChat, setShowChat] = useState(false);
   /** Chat bubbles above seats: id, senderAddress (lowercase), text, expiresAt. Cleared after 5s. */
   const [seatBubbles, setSeatBubbles] = useState<Array<{ id: string; senderAddress: string; text: string; expiresAt: number }>>([]);
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -606,19 +605,6 @@ export default function PokerTablePage() {
               )}
               <button
                 type="button"
-                onClick={() => setShowChat((v) => !v)}
-                className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
-                style={{
-                  background: showChat ? 'rgba(34, 211, 238, 0.2)' : 'rgba(255,255,255,0.07)',
-                  color: showChat ? 'var(--poker-accent)' : 'rgba(255,255,255,0.75)',
-                  border: `1px solid ${showChat ? 'rgba(34, 211, 238, 0.4)' : 'rgba(255,255,255,0.1)'}`,
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-                }}
-              >
-                Chat
-              </button>
-              <button
-                type="button"
                 onClick={handleLeave}
                 className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97]"
                 style={{
@@ -687,72 +673,16 @@ export default function PokerTablePage() {
             </div>
           )}
 
-          {/* Table chat drawer — normal font, compact input + tappable Send; click backdrop to close */}
-          <AnimatePresence>
-            {showChat && wsClient && pokerChatRoomId && (
-              <>
-                <motion.div
-                  className="fixed inset-0 z-[39] bg-black/30"
-                  aria-hidden
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  onClick={() => setShowChat(false)}
-                />
-                <motion.div
-                  className="fixed left-0 right-0 bottom-0 z-40 flex flex-col font-sans normal-case"
-                  style={{
-                    maxHeight: 'min(50vh, 340px)',
-                    paddingLeft: 'env(safe-area-inset-left, 0px)',
-                    paddingRight: 'env(safe-area-inset-right, 0px)',
-                    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-                    background: 'rgba(10,10,10,0.98)',
-                    borderTop: '1px solid rgba(255,255,255,0.07)',
-                    boxShadow: '0 -4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)',
-                  }}
-                  initial={{ y: '100%' }}
-                  animate={{ y: 0 }}
-                  exit={{ y: '100%' }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 36 }}
-                >
-                  <div
-                    className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/[0.07]"
-                    style={{
-                      background: 'rgba(0,0,0,0.3)',
-                      color: 'var(--poker-text)',
-                    }}
-                  >
-                    <span className="text-sm font-medium">Table chat</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowChat(false)}
-                      className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-white/10 touch-manipulation"
-                      style={{ color: 'var(--poker-text-muted)' }}
-                      aria-label="Close chat"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white/95" style={{ minHeight: 100 }}>
-                    <ChatPanel
-                      key={pokerChatRoomId}
-                      roomId={pokerChatRoomId}
-                      title=""
-                      wsClient={wsClient}
-                      wsConnected={wsConnected}
-                      collapsible={false}
-                      fillHeight
-                      compact
-                      className="flex-1 min-h-0 rounded-none border-0 shadow-none"
-                    />
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
+          {/* Activity feed — always-on, bottom-left desktop / left-drawer mobile */}
+          {wsClient && pokerChatRoomId && (
+            <PokerActivityFeed
+              wsClient={wsClient}
+              wsConnected={wsConnected}
+              roomId={pokerChatRoomId}
+              tableId={tableId}
+              state={state}
+            />
+          )}
         </div>
 
         <PokerDepositModal
