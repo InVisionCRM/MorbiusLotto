@@ -446,6 +446,8 @@ export default function PokerTablePage() {
       new Audio(ps('OpponentAllin.mp3')).play().catch(() => {});
     } else if (la.action === 'call' || la.action === 'raise' || la.action === 'bet') {
       new Audio(ps('OpponentCall-Raise.wav')).play().catch(() => {});
+    } else if (la.action === 'check') {
+      new Audio(ps('OpponentChecks.mp3')).play().catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hand?.lastAction, hand?.handId]);
