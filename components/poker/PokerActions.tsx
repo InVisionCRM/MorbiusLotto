@@ -105,8 +105,8 @@ export function PokerActions({
     if (!hasValidAmount || clamped == null) return;
     const isAllIn = clamped === stackAmt;
     playSound(isAllIn
-      ? '/Poker/PokerSounds/PlayerAll-In.wav'
-      : '/Poker/PokerSounds/PlayerClickConfirmation.mp3'
+      ? '/POKER/PokerSounds/PlayerAll-In.wav'
+      : '/POKER/PokerSounds/PlayerClickConfirmation.mp3'
     );
     if (isFacingBet) onRaise(clamped.toString());
     else             onBet(clamped.toString());
@@ -131,12 +131,12 @@ export function PokerActions({
   const secondaryLabel = canCheck ? 'Check' : `Call ${formatAmount(callAmt)}`;
 
   const handleFoldWithSound = () => {
-    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+    playSound('/POKER/PokerSounds/PlayerClickConfirmation.mp3');
     onFold();
   };
 
   const handleSecondary = () => {
-    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+    playSound('/POKER/PokerSounds/PlayerClickConfirmation.mp3');
     if (canCheck) onCheck();
     else onCall();
   };

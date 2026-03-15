@@ -402,7 +402,7 @@ export default function PokerTablePage() {
   const canCheck = hand?.toCall === '0' || hand?.toCall === '';
   const callAmount = hand?.toCall ?? '0';
 
-  const ps = (file: string) => `/Poker/PokerSounds/${file}`;
+  const ps = (file: string) => `/POKER/PokerSounds/${file}`;
 
   // ── Your turn sound ───────────────────────────────────────────────────────
   const prevCanActRef = useRef(false);
