@@ -748,7 +748,7 @@ export class WebSocketService {
       const payload = message.payload as any;
       
       const betAmount = toBigIntSafe(payload.betAmount ?? 0);
-      const perfectPairsBetAmount = payload.perfectPairsBetAmount != null && payload.perfectPairsBetAmount !== ''
+      let perfectPairsBetAmount = payload.perfectPairsBetAmount != null && payload.perfectPairsBetAmount !== ''
         ? toBigIntSafe(payload.perfectPairsBetAmount)
         : 0n;
       if (perfectPairsBetAmount < 0n) perfectPairsBetAmount = 0n;
