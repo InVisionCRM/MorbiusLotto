@@ -24,7 +24,9 @@ function weiToString(wei: string | number): string {
     if (!Number.isFinite(wei) || wei < 0) return '0';
     return wei.toFixed(0);
   }
-  return String(wei).trim() || '0';
+  const s = String(wei).trim() || '0';
+  if (s.toLowerCase().includes('e')) return Math.round(Number(s)).toFixed(0);
+  return s;
 }
 
 function formatChips(wei: string | number): string {
