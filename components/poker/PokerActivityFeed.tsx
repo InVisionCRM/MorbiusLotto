@@ -35,7 +35,17 @@ type ReactionEntry = {
   ts: number;
 };
 type DividerEntry = { kind: 'divider'; id: string; ts: number };
-type Entry = ChatEntry | ActionEntry | ReactionEntry | DividerEntry;
+type ShowdownEntry = {
+  kind: 'showdown';
+  id: string;
+  winnerAddr: string;
+  amount: string;
+  handName?: string;        // undefined = fold win (don't reveal cards)
+  communityCards?: number[];
+  holeCards?: number[];
+  ts: number;
+};
+type Entry = ChatEntry | ActionEntry | ReactionEntry | DividerEntry | ShowdownEntry;
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -78,6 +88,22 @@ function seatLabel(seatIndex: number, state: PokerTableState | null): string {
   return seat?.playerAddress ? shortAddr(seat.playerAddress) : `S${seatIndex + 1}`;
 }
 
+const CARD_RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const CARD_SUITS = ['H','D','C','S'];
+
+function TinyCard({ idx }: { idx: number }) {
+  const rank = CARD_RANKS[idx % 13];
+  const suit = CARD_SUITS[Math.floor(idx / 13)];
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`/BlackJack/Cards/PNG/${rank}${suit}.png`}
+      alt={`${rank}${suit}`}
+      style={{ width: 16, height: 22, objectFit: 'cover', borderRadius: 2, display: 'inline-block' }}
+    />
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export interface PokerActivityFeedProps {
@@ -102,6 +128,7 @@ export function PokerActivityFeed({
   const seenMsgIdsRef = useRef<Set<string>>(new Set());
   const lastActionKeyRef = useRef<string | null>(null);
   const lastHandIdRef = useRef<string | null>(null);
+  const lastShowdownHandRef = useRef<string | null>(null);
 
   // ── Sync chat messages into unified feed ──────────────────────────────────
   useEffect(() => {
@@ -189,6 +216,33 @@ export function PokerActivityFeed({
     return () => wsClient.off('poker_quick_reaction', handler);
   }, [wsClient, tableId]);
 
+  // ── Track showdown results ────────────────────────────────────────────────
+  useEffect(() => {
+    const hand = state?.currentHand;
+    if (!hand || hand.street !== 'showdown' || !hand.winners?.length) return;
+    if (hand.handId === lastShowdownHandRef.current) return;
+    lastShowdownHandRef.current = hand.handId;
+
+    const winner = hand.winners[0];
+    // No handName = won by everyone else folding — don't reveal hole cards
+    const isFoldWin = !winner.handName;
+
+    setEntries((prev) => [
+      ...prev,
+      {
+        kind: 'showdown',
+        id: `showdown-${hand.handId}`,
+        winnerAddr: winner.address,
+        amount: winner.amount,
+        handName: winner.handName,
+        communityCards: isFoldWin ? undefined : [...(hand.communityCards ?? [])],
+        holeCards: isFoldWin ? undefined : [...(hand.showdownHands?.[winner.address] ?? [])],
+        ts: Date.now(),
+      } satisfies ShowdownEntry,
+    ].slice(-MAX_ENTRIES));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.currentHand?.street, state?.currentHand?.handId, state?.currentHand?.winners]);
+
   // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (listRef.current && !collapsed) {
@@ -222,6 +276,49 @@ export function PokerActivityFeed({
             New Hand
           </span>
           <div className="flex-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.07)' }} />
+        </div>
+      );
+    }
+    if (entry.kind === 'showdown') {
+      const name = shortAddr(entry.winnerAddr);
+      const amt = fmtWei(entry.amount);
+      return (
+        <div
+          key={entry.id}
+          className="mx-1.5 my-1 px-2 py-1.5 rounded"
+          style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}
+        >
+          {/* Winner line */}
+          <div className="flex items-center gap-1 text-[11px]">
+            <span style={{ color: 'rgba(34,197,94,0.9)' }}>🏆</span>
+            <span className="font-mono" style={{ color: 'rgba(255,255,255,0.7)' }}>{name}</span>
+            <span style={{ color: 'rgba(34,197,94,0.9)' }}>won</span>
+            {amt && <span className="font-semibold" style={{ color: 'rgba(34,197,94,0.9)' }}>{amt}</span>}
+          </div>
+          {/* Cards — only shown for real showdown, not fold wins */}
+          {entry.communityCards && entry.communityCards.length > 0 && (
+            <div className="mt-1.5 flex flex-col gap-1">
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-[9px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.25)' }}>Board</span>
+                <div className="flex gap-0.5">
+                  {entry.communityCards.map((c, i) => <TinyCard key={i} idx={c} />)}
+                </div>
+              </div>
+              {entry.holeCards && entry.holeCards.length >= 2 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[9px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.25)' }}>Hand</span>
+                  <div className="flex gap-0.5">
+                    {entry.holeCards.map((c, i) => <TinyCard key={i} idx={c} />)}
+                  </div>
+                  {entry.handName && (
+                    <span className="text-[10px] italic" style={{ color: 'rgba(251,191,36,0.85)' }}>
+                      {entry.handName}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       );
     }
