@@ -8,6 +8,8 @@ import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
 import { CardDisplay } from './CardDisplay';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
+import { PokerTournamentHUD } from './tournament/PokerTournamentHUD';
+import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 
 function shortAddr(addr: string): string {
   if (!addr || addr.length < 10) return addr;
@@ -58,9 +60,14 @@ export interface PokerTableProps {
   onEmojiReaction?: (emoji: string) => void;
   /** Called when current player selects a phrase reaction (broadcast to table). */
   onPhraseReaction?: (phrase: string) => void;
+  /** When set, renders the tournament HUD overlay in the top-left corner. */
+  tournamentHUD?: {
+    state: PokerTournamentState;
+    myAddress: string;
+  };
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, onEmojiReaction, onPhraseReaction }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, onEmojiReaction, onPhraseReaction, tournamentHUD }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [, setDims] = useState({ w: 640, h: 500 });
 
@@ -123,6 +130,14 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
   return (
     <div ref={tableRef} className="absolute inset-0" style={{ overflow: 'visible' }}>
+
+      {/* Tournament HUD overlay */}
+      {tournamentHUD && (
+        <PokerTournamentHUD
+          state={tournamentHUD.state}
+          myAddress={tournamentHUD.myAddress}
+        />
+      )}
 
       {/* CSS poker table — padding-based rings so every ring is equal pixel thickness all around */}
       <div

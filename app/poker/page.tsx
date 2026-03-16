@@ -15,6 +15,7 @@ import { FloatingPokerChips } from '@/components/home/FloatingPokerChips';
 import { Theme } from '@/lib/theme';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { isAdminWallet } from '@/lib/admin';
+import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 
 /** Format a wei string to human-readable chips (e.g. "10000000000000000000" -> "10") */
 function formatChips(wei: string): string {
@@ -136,6 +137,8 @@ export default function PokerLobbyPage() {
   const [tablePlayers, setTablePlayers] = useState<{ tableId: string; seats: PokerSeatState[] } | null>(null);
   const [tablePlayersLoading, setTablePlayersLoading] = useState(false);
   const [removingTableId, setRemovingTableId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'cash' | 'tournaments'>('cash');
+  const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
 
   const clientRef = React.useRef<BlackjackWebSocketClient | null>(null);
   const isAdmin = isAdminWallet(address);
@@ -196,7 +199,10 @@ export default function PokerLobbyPage() {
       return;
     }
 
-    const client = new BlackjackWebSocketClient(wsUrl);
+    // Authenticated when wallet is connected so tournament join/create/events all work
+    const client = address
+      ? new BlackjackWebSocketClient(wsUrl, address.toLowerCase(), signTypedDataAsync as any)
+      : new BlackjackWebSocketClient(wsUrl);
     clientRef.current = client;
 
     // Listen for broadcast table list updates
@@ -206,7 +212,10 @@ export default function PokerLobbyPage() {
 
     client
       .connect()
-      .then(() => client.pokerListTables())
+      .then(() => {
+        setWsClient(client);
+        return client.pokerListTables();
+      })
       .then((res) => {
         setTables(res.tables ?? []);
         setError(null);
@@ -229,8 +238,9 @@ export default function PokerLobbyPage() {
       clearInterval(interval);
       client.disconnect();
       clientRef.current = null;
+      setWsClient(null);
     };
-  }, []);
+  }, [address, signTypedDataAsync]);
 
   useEffect(() => {
     if (!address || !getApiUrlOptional()) {
@@ -244,15 +254,6 @@ export default function PokerLobbyPage() {
       .then((data) => (data?.balance != null ? setBalance(String(data.balance)) : setBalance(null)))
       .catch(() => setBalance(null));
   }, [address]);
-
-  /** Create a short-lived authenticated WS client for mutations (create table only). Join is done on table page to avoid duplicate auth. */
-  const makeAuthClient = async () => {
-    const wsUrl = getWebSocketUrlOptional();
-    if (!wsUrl || !address) return null;
-    const client = new BlackjackWebSocketClient(wsUrl, address.toLowerCase(), signTypedDataAsync as any);
-    await client.connect();
-    return client;
-  };
 
   /** Navigate to table page with join params; table page will connect once and call pokerJoinTable. */
   const handleJoin = () => {
@@ -271,7 +272,7 @@ export default function PokerLobbyPage() {
   };
 
   const handleCreateTable = async () => {
-    if (!createModal || !address) return;
+    if (!createModal || !address || !wsClient) return;
     setCreating(true);
     setError(null);
     try {
@@ -283,10 +284,7 @@ export default function PokerLobbyPage() {
         try { return parseEther(createModal.bigBlind.trim().replace(/,/g, '') || '0').toString(); }
         catch { return createModal.bigBlind; }
       })();
-      const client = await makeAuthClient();
-      if (!client) return;
-      const { tableId } = await client.pokerCreateTable(sbWei, bbWei, createModal.maxSeats);
-      client.disconnect();
+      const { tableId } = await wsClient.pokerCreateTable(sbWei, bbWei, createModal.maxSeats);
       setCreateModal(null);
       // Navigate with join params so the table page seats the creator automatically
       let buyInWei: string;
@@ -361,14 +359,50 @@ export default function PokerLobbyPage() {
           </div>
           <p className="text-slate-400 mb-4 sm:mb-6 text-xs sm:text-base">Multiplayer no-limit Hold&apos;em. Join a table and play.</p>
 
-          {loading && <p className="text-slate-400">Loading tables...</p>}
-          {error && <p className="text-red-400 mb-4">{error}</p>}
-          {!loading && tables.length === 0 && !error && (
+          {/* Tab switcher */}
+          <div className="flex gap-1 mb-4 sm:mb-6 bg-slate-900/50 rounded-xl p-1 w-fit">
+            <button
+              type="button"
+              onClick={() => setActiveTab('cash')}
+              className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                activeTab === 'cash'
+                  ? 'bg-cyan-500/20 text-cyan-400 shadow'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Cash Games
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('tournaments')}
+              className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                activeTab === 'tournaments'
+                  ? 'bg-yellow-500/20 text-yellow-400 shadow'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Tournaments
+            </button>
+          </div>
+
+          {/* Tournament Lobby */}
+          {activeTab === 'tournaments' && (
+            <PokerTournamentLobby
+              wsClient={wsClient}
+              myAddress={address?.toLowerCase()}
+              onGoToTable={(tableId, tournamentId) => {
+                router.push(`/poker/${tableId}?tournament=${tournamentId}`);
+              }}
+            />
+          )}
+
+          {activeTab === 'cash' && error && <p className="text-red-400 mb-4">{error}</p>}
+          {activeTab === 'cash' && !loading && tables.length === 0 && !error && (
             <p className="text-slate-400">
               No tables available. {isConnected ? 'Click "Create table" above to start one.' : 'Connect your wallet to create a table.'}
             </p>
           )}
-          {!loading && tables.length > 0 && (
+          {activeTab === 'cash' && !loading && tables.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               {tables.map((t) => {
                 const isPlaying = t.status === 'playing';

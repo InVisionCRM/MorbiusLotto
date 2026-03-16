@@ -11,9 +11,13 @@
     "simulate:blackjack": "ts-node src/scripts/simulate-blackjack-house-edge.ts",
     "tournament:bot": "ts-node src/scripts/tournament-bot-flow.ts",
     "tournament:bot:freeroll": "TOURNAMENT_BOT_MODE=freeroll ts-node src/scripts/tournament-bot-flow.ts",
-    "poker:bot": "ts-node src/scripts/poker-bot.ts"
+    "poker:bot": "ts-node src/scripts/poker-bot.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@chevtek/poker-engine": "^1.1.2",
     "@neondatabase/serverless": "^0.7.2",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
@@ -28,18 +32,20 @@
     "viem": "^1.19.9",
     "winston": "^3.11.0",
     "ws": "^8.14.2",
-    "zod": "^3.22.4",
-    "@chevtek/poker-engine": "^1.1.2"
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/cors": "^2.8.16",
     "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
     "@types/multer": "^2.0.0",
     "@types/node": "^20.10.0",
     "@types/pg": "^8.10.9",
     "@types/uuid": "^9.0.7",
     "@types/ws": "^8.5.9",
+    "jest": "^29.7.0",
     "nodemon": "^3.0.2",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.1",
     "typescript": "^5.3.3"
   }

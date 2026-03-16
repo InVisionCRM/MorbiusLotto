@@ -112,6 +112,7 @@ function totalPot(table: Table): number {
 
 export class PokerGameService {
   private broadcastCallback: ((tableId: string) => Promise<void>) | null = null;
+  private postHandCallback: ((tableId: string, handNumber: number) => Promise<void>) | null = null;
   private activeTables: Map<string, Table> = new Map();
 
   constructor(
@@ -122,6 +123,11 @@ export class PokerGameService {
   /** Wire in the WebSocket broadcast so actions push state to clients. */
   setBroadcastCallback(cb: (tableId: string) => Promise<void>): void {
     this.broadcastCallback = cb;
+  }
+
+  /** Register a callback fired after every showdown (used by PokerTournamentService to sync chips). */
+  setPostHandCallback(cb: (tableId: string, handNumber: number) => Promise<void>): void {
+    this.postHandCallback = cb;
   }
 
   private getPool(): Pool {
@@ -149,7 +155,7 @@ export class PokerGameService {
               COUNT(s.id) FILTER (WHERE s.player_address IS NOT NULL) AS seated_count
        FROM poker_tables t
        LEFT JOIN poker_seats s ON s.table_id = t.id
-       WHERE t.status IN ('waiting', 'playing')
+       WHERE t.status IN ('waiting', 'playing') AND (t.tournament_mode IS NULL OR t.tournament_mode = FALSE)
        GROUP BY t.id ORDER BY t.created_at ASC`
     );
     return result.rows.map((r: any) => ({
@@ -1057,6 +1063,17 @@ export class PokerGameService {
       [handId, JSON.stringify(communityInts2), JSON.stringify({ winners: resultWinners })]
     );
     await pool.query('UPDATE poker_tables SET status = $2 WHERE id = $1', [tableId, 'waiting']);
+
+    // Fire tournament post-hand hook (awaited so eliminations complete before tryStartNextHand)
+    if (this.postHandCallback) {
+      const handRow = await pool.query('SELECT hand_number FROM poker_hands WHERE id = $1', [handId]);
+      const handNumber = Number(handRow.rows[0]?.hand_number ?? 0);
+      try {
+        await this.postHandCallback(tableId, handNumber);
+      } catch (err) {
+        logger.error('Post-hand tournament callback error', { tableId, err });
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1394,5 +1411,94 @@ export class PokerGameService {
       if (sortedPositions.includes(pos)) return pos;
     }
     return fromPosition;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tournament-mode seat management (no real balance deduction/credit)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Seat a player at a tournament table with virtual chips.
+   * Unlike joinTable, this does NOT deduct from players.balance.
+   * The buy-in was already collected by PokerTournamentService.
+   * Does NOT auto-start a hand — the tournament service controls timing.
+   */
+  async joinTableTournament(tableId: string, playerAddress: string, startingChips: number): Promise<void> {
+    const normalized = this.normalizeAddress(playerAddress);
+    const pool = this.getPool();
+
+    const tableResult = await pool.query(
+      'SELECT id, max_seats, tournament_mode FROM poker_tables WHERE id = $1',
+      [tableId]
+    );
+    if (tableResult.rows.length === 0) throw new Error('Table not found');
+    if (!tableResult.rows[0].tournament_mode) throw new Error('Table is not in tournament mode');
+
+    const maxSeats = Number(tableResult.rows[0].max_seats) || 6;
+
+    const existing = await pool.query(
+      'SELECT id FROM poker_seats WHERE table_id = $1 AND player_address = $2',
+      [tableId, normalized]
+    );
+    if (existing.rows.length > 0) throw new Error('Already seated at this table');
+
+    const seatCount = await pool.query(
+      'SELECT COUNT(*) AS c FROM poker_seats WHERE table_id = $1',
+      [tableId]
+    );
+    if (Number(seatCount.rows[0].c) >= maxSeats) throw new Error('Table is full');
+
+    const positions = await pool.query('SELECT position FROM poker_seats WHERE table_id = $1', [tableId]);
+    const used = new Set(positions.rows.map((r: any) => r.position));
+    let seatPosition = 0;
+    while (used.has(seatPosition)) seatPosition++;
+
+    await pool.query(
+      `INSERT INTO poker_seats (table_id, position, player_address, stack, status)
+       VALUES ($1, $2, $3, $4::NUMERIC, 'active')`,
+      [tableId, seatPosition, normalized, startingChips.toString()]
+    );
+
+    logger.info('Poker tournament join (virtual chips)', { tableId, playerAddress: normalized, startingChips, position: seatPosition });
+  }
+
+  /**
+   * Remove a player from a tournament table without crediting their stack back.
+   * Used by PokerTournamentService when a player is eliminated.
+   */
+  async leaveTableTournament(tableId: string, playerAddress: string): Promise<void> {
+    const normalized = this.normalizeAddress(playerAddress);
+    const pool = this.getPool();
+
+    const activeHandResult = await pool.query(
+      `SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1`,
+      [tableId]
+    );
+
+    const activeTable = this.activeTables.get(tableId);
+    if (activeHandResult.rows.length > 0 && activeTable) {
+      try {
+        activeTable.standUp(normalized);
+        const handId = activeHandResult.rows[0].id;
+        await this.persistActionAfterStandUp(pool, tableId, handId, normalized, activeTable);
+      } catch (err) {
+        logger.warn('standUp error on leaveTableTournament', { tableId, playerAddress: normalized, err });
+      }
+    }
+
+    await pool.query('DELETE FROM poker_seats WHERE table_id = $1 AND player_address = $2', [tableId, normalized]);
+    // No balance credit — tournament chips are virtual
+    logger.info('Poker tournament leave (no balance credit)', { tableId, playerAddress: normalized });
+  }
+
+  /**
+   * Delete a tournament table without crediting player stacks back.
+   * Used by PokerTournamentService after prize distribution.
+   */
+  async deleteTableTournament(tableId: string): Promise<void> {
+    const pool = this.getPool();
+    this.activeTables.delete(tableId);
+    await pool.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);
+    logger.info('Poker tournament table deleted (no balance credit)', { tableId });
   }
 }

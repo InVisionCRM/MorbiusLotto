@@ -14,6 +14,7 @@ import { FreerollSchedulerService } from './services/freeroll-scheduler.service'
 import { TournamentSchedulerService } from './services/tournament-scheduler.service';
 import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
+import { PokerTournamentService } from './services/poker-tournament.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { InstantLotteryService } from './services/instant-lottery.service';
 import { MerkleDropsService } from './services/merkle-drops.service';
@@ -270,6 +271,15 @@ async function initializeServices() {
 
     // Wire broadcast so bot actions (which bypass the WS handler) still push state to clients
     pokerGameService.setBroadcastCallback((tableId) => wsService.broadcastPokerTableState(tableId));
+
+    // Initialize poker tournament service and wire into WebSocket + post-hand callback
+    const pokerTournamentService = new PokerTournamentService(
+      dbService.getPool(), tournamentService, pokerGameService
+    );
+    wsService.setPokerTournamentService(pokerTournamentService);
+    pokerGameService.setPostHandCallback(
+      (tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber)
+    );
 
     // Freeroll scheduler (polls pending scheduled events: start, end)
     freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);

@@ -4,6 +4,7 @@ import { DatabaseService } from './database.service';
 import { BlackjackGameService, GameState, CreateGameRequest, PlayerActionRequest, TournamentGameState } from './blackjack-game.service';
 import { TournamentService, TournamentState, LeaderboardEntry, TOURNAMENT_CONFIG } from './tournament.service';
 import { PokerGameService, PokerTableState } from './poker-game.service';
+import { PokerTournamentService } from './poker-tournament.service';
 import { logger } from '../utils/logger';
 import { toBigIntSafe } from '../utils/safe-bigint';
 import { v4 as uuidv4 } from 'uuid';
@@ -123,6 +124,7 @@ export class WebSocketService {
   private contractAddress: `0x${string}`;
   private tournamentService?: TournamentService;
   private pokerGameService: PokerGameService | null = null;
+  private pokerTournamentService: PokerTournamentService | null = null;
   private betLimitsCache: { minBet: bigint; maxBet: bigint; cachedAt: number } | null = null;
 
   constructor(
@@ -176,6 +178,15 @@ export class WebSocketService {
     }
 
     logger.info('WebSocket service initialized');
+  }
+
+  /** Wire in the PokerTournamentService after construction. */
+  setPokerTournamentService(service: PokerTournamentService): void {
+    this.pokerTournamentService = service;
+    // Wire broadcast so the tournament service can push WS events
+    service.setBroadcastCallback((room, message) => {
+      this.broadcastToRoom(room, message as any);
+    });
   }
 
   /** Prune addresses with no timestamps in the current window to avoid unbounded map growth. */
@@ -585,6 +596,30 @@ export class WebSocketService {
         case 'poker_quick_reaction':
           if (!this.requireAuth(ws, message)) return;
           await this.handlePokerQuickReaction(ws, message);
+          break;
+
+        // Poker Tournaments
+        case 'poker_tournament_list':
+          await this.handlePokerTournamentList(ws, message);
+          break;
+
+        case 'poker_tournament_create':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handlePokerTournamentCreate(ws, message);
+          break;
+
+        case 'poker_tournament_join':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handlePokerTournamentJoin(ws, message);
+          break;
+
+        case 'poker_tournament_get_state':
+          await this.handlePokerTournamentGetState(ws, message);
+          break;
+
+        case 'poker_tournament_cancel':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handlePokerTournamentCancel(ws, message);
           break;
 
         default:
@@ -1678,6 +1713,115 @@ export class WebSocketService {
       this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: state });
     } catch (err) {
       logger.error('broadcastPokerTableState failed', { tableId, error: err });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Poker Tournament handlers
+  // ---------------------------------------------------------------------------
+
+  private async handlePokerTournamentList(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerTournamentService) {
+        return this.sendError(ws, 'Poker tournaments not available', message.requestId);
+      }
+      const tournaments = await this.pokerTournamentService.listPokerTournaments();
+      this.sendMessage(ws, { type: 'poker_tournament_list', payload: { tournaments }, requestId: message.requestId });
+    } catch (error) {
+      logger.error('Error listing poker tournaments:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to list tournaments', message.requestId);
+    }
+  }
+
+  private async handlePokerTournamentCreate(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerTournamentService || !ws.playerAddress) {
+        return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
+      }
+      const p = message.payload as {
+        name?: string;
+        buyInAmount?: string;
+        prizeDistributionType?: string;
+        config?: unknown;
+        isPrivate?: boolean;
+        pinCode?: string;
+      };
+      if (!p.name) return this.sendError(ws, 'name required', message.requestId);
+      if (!p.buyInAmount) return this.sendError(ws, 'buyInAmount required', message.requestId);
+      if (!p.prizeDistributionType) return this.sendError(ws, 'prizeDistributionType required', message.requestId);
+      if (!p.config) return this.sendError(ws, 'config required', message.requestId);
+
+      const result = await this.pokerTournamentService.createPokerTournament({
+        creatorAddress:       ws.playerAddress,
+        name:                 p.name,
+        buyInAmount:          BigInt(p.buyInAmount),
+        prizeDistributionType: p.prizeDistributionType,
+        config:               p.config as any,
+        isPrivate:            p.isPrivate ?? false,
+        pinCode:              p.pinCode ?? null,
+      });
+      this.sendMessage(ws, { type: 'poker_tournament_created', payload: result, requestId: message.requestId });
+    } catch (error) {
+      logger.error('Error creating poker tournament:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to create tournament', message.requestId);
+    }
+  }
+
+  private async handlePokerTournamentJoin(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerTournamentService || !ws.playerAddress) {
+        return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
+      }
+      const { tournamentId, pinCode } = message.payload as { tournamentId?: string; pinCode?: string };
+      if (!tournamentId) return this.sendError(ws, 'tournamentId required', message.requestId);
+
+      const result = await this.pokerTournamentService.joinPokerTournament(
+        tournamentId, ws.playerAddress, pinCode
+      );
+
+      // Add client to the tournament room
+      const roomId = `poker_tournament:${tournamentId}`;
+      if (ws.connectionId) {
+        if (!this.roomToClients.has(roomId)) this.roomToClients.set(roomId, new Set());
+        this.roomToClients.get(roomId)!.add(ws.connectionId);
+      }
+
+      this.sendMessage(ws, { type: 'poker_tournament_joined', payload: result, requestId: message.requestId });
+    } catch (error) {
+      logger.error('Error joining poker tournament:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to join tournament', message.requestId);
+    }
+  }
+
+  private async handlePokerTournamentGetState(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerTournamentService) {
+        return this.sendError(ws, 'Poker tournaments not available', message.requestId);
+      }
+      const { tournamentId } = message.payload as { tournamentId?: string };
+      if (!tournamentId) return this.sendError(ws, 'tournamentId required', message.requestId);
+
+      const state = await this.pokerTournamentService.getTournamentState(tournamentId);
+      this.sendMessage(ws, { type: 'poker_tournament_state', payload: state, requestId: message.requestId });
+    } catch (error) {
+      logger.error('Error getting poker tournament state:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to get tournament state', message.requestId);
+    }
+  }
+
+  private async handlePokerTournamentCancel(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerTournamentService || !ws.playerAddress) {
+        return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
+      }
+      const { tournamentId } = message.payload as { tournamentId?: string };
+      if (!tournamentId) return this.sendError(ws, 'tournamentId required', message.requestId);
+
+      await this.pokerTournamentService.cancelPokerTournament(tournamentId, ws.playerAddress);
+      this.sendMessage(ws, { type: 'poker_tournament_cancelled', payload: { tournamentId }, requestId: message.requestId });
+    } catch (error) {
+      logger.error('Error cancelling poker tournament:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to cancel tournament', message.requestId);
     }
   }
 
