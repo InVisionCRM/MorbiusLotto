@@ -206,9 +206,7 @@ export class PokerGameService {
     const buyIn = BigInt(buyInChips);
     if (buyIn <= 0n) throw new Error('Buy-in must be positive');
 
-    let position: number;
-
-    await this.dbService.withTransaction(async (client) => {
+    const position = await this.dbService.withTransaction(async (client) => {
       // Lock the player row first — serializes concurrent join attempts by the same wallet
       const playerLock = await client.query(
         `SELECT id FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
@@ -249,14 +247,15 @@ export class PokerGameService {
         [tableId]
       );
       const used = new Set(positions.rows.map((r: any) => r.position));
-      position = 0;
-      while (used.has(position)) position++;
+      let seatPosition = 0;
+      while (used.has(seatPosition)) seatPosition++;
 
       await client.query(
         `INSERT INTO poker_seats (table_id, position, player_address, stack, status)
          VALUES ($1, $2, $3, $4::NUMERIC, 'active')`,
-        [tableId, position, normalized, buyIn.toString()]
+        [tableId, seatPosition, normalized, buyIn.toString()]
       );
+      return seatPosition;
     });
 
     // Sync in-memory table if it exists
