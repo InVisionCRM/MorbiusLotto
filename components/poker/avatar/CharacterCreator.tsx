@@ -22,6 +22,8 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   necklace: 'None',
   mouthAccessory: 'None',
   backgroundImage: '',
+  faceShape: 'Square',
+  customPattern: '',
 };
 
 const tabs = [

@@ -112,6 +112,8 @@ export interface AvatarConfig {
   necklace: string;
   mouthAccessory: string;
   backgroundImage: string;
+  faceShape: string;
+  customPattern: string;
 }
 
 export interface PokerSeatState {

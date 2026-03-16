@@ -34,6 +34,8 @@ function normalizeAvatarConfig(c: unknown): AvatarConfig {
       necklace: typeof o.necklace === 'string' ? o.necklace : DEFAULT_AVATAR_CONFIG.necklace,
       mouthAccessory: typeof o.mouthAccessory === 'string' ? o.mouthAccessory : DEFAULT_AVATAR_CONFIG.mouthAccessory,
       backgroundImage: typeof o.backgroundImage === 'string' ? o.backgroundImage : DEFAULT_AVATAR_CONFIG.backgroundImage,
+      faceShape: typeof o.faceShape === 'string' ? o.faceShape : DEFAULT_AVATAR_CONFIG.faceShape,
+      customPattern: typeof o.customPattern === 'string' ? o.customPattern : DEFAULT_AVATAR_CONFIG.customPattern,
     };
   }
   return DEFAULT_AVATAR_CONFIG;
