@@ -15,12 +15,18 @@ export default function AvatarPreview({
   emotion: propEmotion = 'neutral',
   glassesAnimationKey = 0,
   compact = false,
+  trackMouse = false,
+  forceAsleep = false,
   className,
 }: {
   config: AvatarConfig;
   emotion?: Emotion;
   glassesAnimationKey?: number;
   compact?: boolean;
+  /** Enable mouse eye-tracking (for current player at poker table). */
+  trackMouse?: boolean;
+  /** Force sleep state externally (e.g. sitting-out players). */
+  forceAsleep?: boolean;
   className?: string;
 }) {
   const [idleEmotion, setIdleEmotion] = useState<Emotion | null>(null);
@@ -31,11 +37,11 @@ export default function AvatarPreview({
   const mouseX = useSpring(useMotionValue(0), { damping: 20, stiffness: 150 });
   const mouseY = useSpring(useMotionValue(0), { damping: 20, stiffness: 150 });
 
-  const emotion = isAsleep ? 'sleepy' : (idleEmotion || propEmotion);
+  const emotion = (isAsleep || forceAsleep) ? 'sleepy' : (idleEmotion || propEmotion);
 
-  // Mouse tracking + idle/sleep — only for full-size avatars
+  // Mouse tracking + idle/sleep — for full-size avatars, or when trackMouse is explicitly set
   useEffect(() => {
-    if (compact) return;
+    if (compact && !trackMouse) return;
     lastActivityRef.current = Date.now();
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -142,7 +148,7 @@ export default function AvatarPreview({
   const mouthVariants = {
     neutral: { scaleY: 1, scaleX: 1, y: 0 }, happy: { scaleY: 1.2, scaleX: 1.2, y: -0.5 },
     sad: { scaleY: -1, scaleX: 1, y: 1 }, angry: { scaleY: 0.6, scaleX: 0.9, y: 0 },
-    surprised: { scaleY: 2, scaleX: 0.6, y: 1 }, wink: { scaleY: 1, scaleX: 1.1, y: -0.5, x: 0.5 },
+    surprised: { scaleY: 1, scaleX: 1, y: 0 }, wink: { scaleY: 1, scaleX: 1.1, y: -0.5, x: 0.5 },
     dance: { scaleX: [1, 1.3, 1] as number[], transition: { repeat: Infinity, duration: 0.5 } },
     flex: { scaleX: 0.8, scaleY: 0.5 }, jump: { scaleY: 1.5 }, spin: { scale: 1 },
     think: { scaleX: 0.5, scaleY: 0.5, x: -1 }, love: { scale: 1.5, y: -0.5 },
@@ -274,10 +280,10 @@ export default function AvatarPreview({
         return <rect x={x} y="11" width="3" height="1" fill="rgba(0,0,0,0.6)" />;
       }
       switch (eyeShape) {
-        case 'Round': return <g><rect x={x} y="11" width="2" height="2" fill="white" /><motion.rect x={x + 0.5} y="11.5" width="1" height="1" fill={eyeColor} style={compact ? {} : { x: mouseX, y: mouseY }} /></g>;
-        case 'Almond': return <g><rect x={x} y="11" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="11" width="1" height="1" fill={eyeColor} style={compact ? {} : { x: mouseX, y: mouseY }} /></g>;
-        case 'Narrow': return <g><rect x={x} y="12" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="12" width="1" height="1" fill={eyeColor} style={compact ? {} : { x: mouseX, y: mouseY }} /></g>;
-        case 'Wide': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><motion.rect x={x + 0.5} y="11" width="2" height="2" fill={eyeColor} style={compact ? {} : { x: mouseX, y: mouseY }} /></g>;
+        case 'Round': return <g><rect x={x} y="11" width="2" height="2" fill="white" /><motion.rect x={x + 0.5} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Almond': return <g><rect x={x} y="11" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="11" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Narrow': return <g><rect x={x} y="12" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="12" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Wide': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><motion.rect x={x + 0.5} y="11" width="2" height="2" fill={eyeColor} style={(!compact || trackMouse) ? { x: mouseX, y: mouseY } : {}} /></g>;
         default: return null;
       }
     };
@@ -316,6 +322,10 @@ export default function AvatarPreview({
   };
 
   const renderLips = () => {
+    if (emotion === 'surprised') {
+      // Open-mouth O shape: 4×4 dark block
+      return <rect x="10" y="15" width="4" height="4" fill="rgba(0,0,0,0.75)" />;
+    }
     switch (lipShape) {
       case 'Thin':  return <rect x="10" y="16" width="4" height="1" fill="rgba(0,0,0,0.4)" />;
       case 'Full':  return <rect x="10" y="16" width="4" height="2" fill="rgba(180,50,50,0.7)" />;
@@ -380,10 +390,26 @@ export default function AvatarPreview({
   // ── emotion particle effects (full-size only) ─────────────────────────────
 
   const renderEmotionEffects = () => {
-    if (compact) return null;
+    // Allow sleepy Z's even in compact mode so sitting-out players are clearly indicated
+    if (compact && emotion !== 'sleepy') return null;
     switch (emotion) {
       case 'sad':
-        return <g>{[0, 1].map(i => (<motion.rect key={i} animate={{ y: [0, 4], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.7 }} x={i === 0 ? 8 : 15} y="13" width="1" height="1" fill="#3b82f6" />))}</g>;
+        return (
+          <g>
+            {/* Left eye tears */}
+            {[0, 1, 2].map(i => (
+              <motion.rect key={`lt${i}`} x="8" y="13" width="1" height="1" fill="#60a5fa"
+                animate={{ y: [13, 18], opacity: [0, 1, 0] }}
+                transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.4, ease: 'easeIn' }} />
+            ))}
+            {/* Right eye tears */}
+            {[0, 1, 2].map(i => (
+              <motion.rect key={`rt${i}`} x="15" y="13" width="1" height="1" fill="#60a5fa"
+                animate={{ y: [13, 18], opacity: [0, 1, 0] }}
+                transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.4 + 0.2, ease: 'easeIn' }} />
+            ))}
+          </g>
+        );
       case 'love':
         return <g>{[0, 1, 2].map(i => (<motion.rect key={i} x={8 + i * 3} y="5" width="2" height="2" fill="#ef4444" initial={{ scale: 0, opacity: 0 }} animate={{ scale: [0, 1, 0], y: [0, -5], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 2, delay: i * 0.6 }} />))}</g>;
       case 'money':
@@ -463,6 +489,11 @@ export default function AvatarPreview({
           )}
         </defs>
 
+        {/* Background — outside all animation wrappers, always static */}
+        {config.backgroundImage && (
+          <image href={config.backgroundImage} x="0" y="0" width="24" height="24" preserveAspectRatio="xMidYMid slice" />
+        )}
+
         {/* Breathing idle animation wrapper */}
         <motion.g
           animate={{ scaleY: [1, 1.01, 1], y: [0, -0.1, 0], rotate: [0, 0.5, -0.5, 0] }}
@@ -470,9 +501,6 @@ export default function AvatarPreview({
           style={{ transformOrigin: '12px 24px' }}
         >
           <motion.g animate={emotion} variants={bodyVariants} style={{ transformOrigin: '12px 24px' }}>
-            {config.backgroundImage && (
-              <image href={config.backgroundImage} x="0" y="0" width="24" height="24" preserveAspectRatio="xMidYMid slice" />
-            )}
 
             {/* Shirt + neck */}
             <rect x="4" y="20" width="16" height="4" fill={config.shirtColor || '#3f3f46'} />

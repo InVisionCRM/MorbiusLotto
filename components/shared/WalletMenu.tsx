@@ -5,6 +5,8 @@ import { motion } from 'motion/react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useProfile } from '@/hooks/use-player-profile'
+import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
+import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator'
 
 export interface WalletMenuProps {
   /** When provided, shows Deposit/Withdraw button that calls this */
@@ -45,7 +47,7 @@ export function WalletMenu({
 }: WalletMenuProps) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
-  const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook } = useProfile()
+  const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook, avatarConfig } = useProfile()
   const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false)
@@ -104,14 +106,12 @@ export function WalletMenu({
             style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))' } : undefined}
             aria-label={isWalletDropdownOpen ? 'Close wallet menu' : 'Open wallet menu'}
           >
-            <div
-              className={`rounded-full bg-slate-700 border border-cyan-500/30 overflow-hidden flex-shrink-0 flex items-center justify-center ${variant === 'sidebar' ? 'w-5 h-5' : 'w-7 h-7'}`}
-            >
-              {effectiveProfileImageUrl ? (
-                <img src={effectiveProfileImageUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className={`text-xs ${variant === 'sidebar' ? 'text-white/70' : 'text-gray-400'}`}>?</span>
-              )}
+            <div className={`rounded-full overflow-hidden flex-shrink-0 ${variant === 'sidebar' ? 'w-5 h-5' : 'w-7 h-7'}`}>
+              <AvatarPreview
+                config={avatarConfig ?? DEFAULT_AVATAR_CONFIG}
+                compact
+                className="w-full h-full"
+              />
             </div>
             {variant === 'sidebar' ? (
               <>

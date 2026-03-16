@@ -8,6 +8,7 @@ import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, MessageCircle, Plus } from 'lucide-react';
 import AvatarPreview, { type Emotion } from './avatar/AvatarPreview';
+import { DEFAULT_AVATAR_CONFIG } from './avatar/CharacterCreator';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
@@ -196,12 +197,17 @@ function TimerRingSVG({ w, h, timeLeft, maxTime }: { w: number; h: number; timeL
 
 // ── Avatar animation dock items ────────────────────────────────────────────
 
-const AVATAR_ANIMATIONS: { title: string; emotion: Emotion; icon: string }[] = [
-  { title: 'Happy',     emotion: 'happy',     icon: '😊' },
-  { title: 'Wink',      emotion: 'wink',      icon: '😉' },
-  { title: 'Surprised', emotion: 'surprised', icon: '😲' },
-  { title: 'Angry',     emotion: 'angry',     icon: '😡' },
-  { title: 'Sad',       emotion: 'sad',       icon: '😢' },
+const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
+  { title: 'Happy',     emotion: 'happy'     },
+  { title: 'Wink',      emotion: 'wink'      },
+  { title: 'Surprised', emotion: 'surprised' },
+  { title: 'Angry',     emotion: 'angry'     },
+  { title: 'Sad',       emotion: 'sad'       },
+  { title: 'Dance',     emotion: 'dance'     },
+  { title: 'Love',      emotion: 'love'      },
+  { title: 'Money',     emotion: 'money'     },
+  { title: 'Cool',      emotion: 'cool'      },
+  { title: 'Jackpot',   emotion: 'jackpot'   },
 ];
 
 // ── PokerSeat ─────────────────────────────────────────────────────────────
@@ -339,15 +345,6 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
     }, emotion === 'wink' ? 1200 : LOCAL_EMOTION_DURATION_MS);
   }, [onAnimationReaction]);
 
-  const animationDockItems = useMemo(
-    () =>
-      AVATAR_ANIMATIONS.map(({ title, emotion, icon }) => ({
-        title,
-        icon: <span className="text-2xl">{icon}</span>,
-        onClick: () => handleAnimationSelect(emotion),
-      })),
-    [handleAnimationSelect],
-  );
 
   const handleEmojiSelect = useCallback((emoji: string) => {
     setEmojiPickerOpen(false);
@@ -513,7 +510,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
       {/* ── Avatar + Cards row ── */}
       <div className="relative flex items-center">
 
-        {/* Animation picker dock — above avatar, current player only */}
+        {/* Animation picker — above avatar, current player only */}
         <AnimatePresence>
           {isCurrentPlayer && animationPickerOpen && (
             <motion.div
@@ -523,11 +520,32 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
               exit={{ opacity: 0, scale: 0.9, y: 4 }}
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
             >
-              <FloatingDock
-                items={animationDockItems}
-                desktopClassName="!bg-[rgba(10,10,10,0.96)] !border !border-cyan-500/30 !shadow-[0_4px_20px_rgba(0,0,0,0.6)] !rounded-xl !px-3 !pb-2.5 !h-16 [&_.rounded-full]:!bg-transparent [&_button]:!bg-transparent [&_a]:!bg-transparent"
-                mobileClassName="[&_button]:!bg-transparent [&_.rounded-full]:!bg-transparent"
-              />
+              <div
+                className="grid grid-cols-5 gap-1.5 p-2 rounded-xl"
+                style={{
+                  background: 'rgba(10,10,10,0.97)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+                }}
+              >
+                {AVATAR_ANIMATIONS.map(({ title, emotion }) => (
+                  <button
+                    key={emotion}
+                    type="button"
+                    onClick={() => handleAnimationSelect(emotion)}
+                    className="flex flex-col items-center gap-0.5 p-1 rounded-lg hover:bg-white/10 transition-colors"
+                    title={title}
+                  >
+                    <AvatarPreview
+                      config={seat.avatarConfig ?? DEFAULT_AVATAR_CONFIG}
+                      emotion={emotion}
+                      compact
+                      className="w-10 h-10"
+                    />
+                    <span className="text-[9px] text-zinc-400 leading-none">{title}</span>
+                  </button>
+                ))}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -539,6 +557,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           style={{
             width: 88,
             height: 88,
+            marginTop: 15,
             border: isActing
               ? '2px solid transparent'
               : isCurrentPlayer
@@ -558,6 +577,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
               config={seat.avatarConfig}
               emotion={activeEmotion}
               compact
+              trackMouse={isCurrentPlayer}
+              forceAsleep={seat.status === 'sitting_out'}
               className="w-full h-full"
             />
           ) : (
@@ -797,12 +818,57 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           onSave={setQuickChatPhrases}
         />
 
+        {/* Buttons row (current player only) — sits between cards row and badge */}
+        {isCurrentPlayer && (
+          <div className="flex flex-row items-center justify-center gap-1 mt-1">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMenuClick?.(); }}
+              className="flex h-7 w-7 items-center justify-center rounded-md opacity-80 hover:opacity-100 hover:bg-white/15 transition-all"
+              style={{ color: 'var(--poker-text)' }}
+              aria-label="Menu"
+              title="Menu"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+            {onReUpClick && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onReUpClick(); }}
+                className="flex h-7 w-7 items-center justify-center rounded-md opacity-80 hover:opacity-100 hover:bg-white/15 transition-all"
+                style={{ color: 'var(--poker-text)' }}
+                aria-label="Re-up"
+                title="Re-up"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              ref={quickMenuButtonRef}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setQuickMenuOpen(true);
+                setEmojiPickerOpen(false);
+                setQuickChatPickerOpen(false);
+                setAnimationPickerOpen(false);
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-md opacity-80 hover:opacity-100 hover:bg-white/15 transition-all"
+              style={{ color: 'var(--poker-text)' }}
+              aria-label="Open quick menu"
+              title="Quick menu"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {/* Badge */}
         <div
           ref={badgeRef}
           role={isCurrentPlayer ? 'button' : undefined}
-          aria-label={isCurrentPlayer ? 'Press and hold or right-click for quick menu' : undefined}
-          title={isCurrentPlayer ? 'Hold or right-click for quick menu' : undefined}
+          aria-label={isCurrentPlayer ? 'Right-click for quick menu' : undefined}
+          title={isCurrentPlayer ? 'Right-click for quick menu' : undefined}
           onPointerDown={isCurrentPlayer ? handleBadgePointerDown : undefined}
           onPointerUp={isCurrentPlayer ? handleBadgePointerUp : undefined}
           onPointerLeave={isCurrentPlayer ? handleBadgePointerLeave : undefined}
@@ -817,71 +883,20 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
                                 'rgba(255,255,255,0.12)'
             }`,
             borderRadius: 6,
-            minWidth: isCurrentPlayer ? 138 : 88,
+            minWidth: 88,
             boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
             ...(isCurrentPlayer ? { cursor: 'pointer' } : {}),
           }}
         >
-          {/* Hamburger, Re-up, Quick menu buttons (current player only) */}
-          {isCurrentPlayer && (
-            <div className="absolute left-0.5 top-1/2 z-10 flex -translate-y-1/2 flex-row items-center gap-1">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMenuClick?.();
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-xs opacity-90 hover:opacity-100 hover:bg-white/15 transition-all"
-                style={{ color: 'var(--poker-text)' }}
-                aria-label="Menu"
-                title="Menu"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-              {onReUpClick && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onReUpClick();
-                  }}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-xs opacity-90 hover:opacity-100 hover:bg-white/15 transition-all"
-                  style={{ color: 'var(--poker-text)' }}
-                  aria-label="Re-up"
-                  title="Re-up"
-                >
-                  <Plus className="h-5 w-5" />
-                </button>
-              )}
-              <button
-                ref={quickMenuButtonRef}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setQuickMenuOpen(true);
-                  setEmojiPickerOpen(false);
-                  setQuickChatPickerOpen(false);
-                  setAnimationPickerOpen(false);
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-xs opacity-90 hover:opacity-100 hover:bg-white/15 transition-all"
-                style={{ color: 'var(--poker-text)' }}
-                aria-label="Open quick menu"
-                title="Quick menu"
-              >
-                <MessageCircle className="h-5 w-5" />
-              </button>
-            </div>
-          )}
-
           {/* Name + stack */}
-          <div className={`py-1.5 sm:py-1 flex items-center justify-center gap-1.5 ${isCurrentPlayer ? 'pl-[7rem] pr-2.5 sm:pl-[7rem] sm:pr-2' : 'px-2.5 sm:px-2'}`}>
+          <div className="py-1.5 sm:py-1 flex items-center justify-center gap-1.5 px-2.5 sm:px-2">
             <div className="flex flex-col items-center min-w-0 text-center">
               <div
                 className="font-bold truncate leading-tight w-full"
                 style={{
                   color: isCurrentPlayer ? '#fde68a' : '#e2e8f0',
-                  fontSize: isCurrentPlayer ? 'clamp(11px, 2vw, 13px)' : 'clamp(12px, 2.5vw, 14px)',
-                  maxWidth: isCurrentPlayer ? 96 : 110,
+                  fontSize: 'clamp(11px, 2vw, 13px)',
+                  maxWidth: 96,
                 }}
               >
                 {displayName}
@@ -890,7 +905,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
                 className="font-bold tabular-nums leading-tight flex items-center justify-center gap-1"
                 style={{
                   color: '#fbbf24',
-                  fontSize: isCurrentPlayer ? 'clamp(11px, 2.2vw, 13px)' : 'clamp(12px, 2.5vw, 14px)',
+                  fontSize: 'clamp(11px, 2.2vw, 13px)',
                 }}
               >
                 {formatChips(seat.stack)}

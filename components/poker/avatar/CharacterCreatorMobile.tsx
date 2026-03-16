@@ -35,7 +35,7 @@ const ShirtColors = [
 ];
 
 const HairStyles = ['Bald', 'Short', 'Buzz', 'Fade', 'Long Straight', 'Long Wavy', 'Ponytail', 'Curly', 'Spiky', 'Bob', 'Mohawk', 'Dreadlocks', 'Afro', 'Mullet', 'Pigtails', 'Messy'];
-const FaceShapes = ['Square', 'Round', 'Oval', 'Heart', 'Diamond', 'Triangle', 'Inverted Triangle', 'Long', 'Wide', 'Slim'];
+const FaceShapes = ['Square', 'Round', 'Oval', 'Heart', 'Diamond'];
 const EyeShapes = ['Round', 'Almond', 'Narrow', 'Wide'];
 const NoseShapes = ['Small', 'Wide', 'Pointy', 'Button'];
 const LipShapes = ['Thin', 'Full', 'Smile', 'Smirk', 'Pout'];

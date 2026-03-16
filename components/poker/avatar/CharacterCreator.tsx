@@ -73,8 +73,9 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
   };
 
   const handleDealWithIt = () => {
-    setConfig({ ...config, accessory: 'Sunglasses' });
-    setGlassesAnimationKey(prev => prev + 1);
+    const isOn = config.accessory === 'Sunglasses';
+    setConfig({ ...config, accessory: isOn ? 'None' : 'Sunglasses' });
+    if (!isOn) setGlassesAnimationKey(prev => prev + 1);
   };
 
   return (
@@ -142,7 +143,7 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
           <div className={`text-center w-full ${compact ? 'mt-2 md:mt-3' : 'mt-8'}`}>
             <button
               onClick={handleDealWithIt}
-              className={`mx-auto flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg font-medium transition-colors shadow-sm border border-zinc-700 hover:border-zinc-600 touch-manipulation min-h-[44px] ${compact ? 'mb-2 md:mb-3 px-3 py-2 text-xs' : 'mb-6 px-4 py-2 rounded-xl'}`}
+              className={`mx-auto flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors shadow-sm border touch-manipulation min-h-[44px] ${compact ? 'mb-2 md:mb-3 px-3 py-2 text-xs' : 'mb-6 px-4 py-2 rounded-xl'} ${config.accessory === 'Sunglasses' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 hover:border-zinc-600'}`}
             >
               <Glasses size={compact ? 12 : 16} />
               Shades
