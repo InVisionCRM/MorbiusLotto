@@ -206,7 +206,7 @@ export class PokerGameService {
     const buyIn = BigInt(buyInChips);
     if (buyIn <= 0n) throw new Error('Buy-in must be positive');
 
-    let position: number;
+    let position = 0;
 
     await this.dbService.withTransaction(async (client) => {
       // Lock the player row first — serializes concurrent join attempts by the same wallet
