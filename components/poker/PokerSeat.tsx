@@ -532,15 +532,15 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           ref={avatarRef}
           className="relative shrink-0 rounded-full overflow-hidden"
           style={{
-            width: 52,
-            height: 52,
+            width: 88,
+            height: 88,
             border: isActing
               ? '2px solid transparent'
               : isCurrentPlayer
                 ? '2px solid rgba(251,191,36,0.6)'
                 : '2px solid rgba(255,255,255,0.18)',
             background: 'rgba(0,0,0,0.6)',
-            zIndex: 2,
+            zIndex: 4,
             cursor: isCurrentPlayer ? 'pointer' : 'default',
             flexShrink: 0,
             boxShadow: isCurrentPlayer ? '0 0 0 1px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.6)',
@@ -560,7 +560,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
               className="w-full h-full flex items-center justify-center font-bold"
               style={{
                 color: isCurrentPlayer ? '#fde68a' : '#e2e8f0',
-                fontSize: 20,
+                fontSize: 32,
                 background: 'linear-gradient(135deg, rgba(30,30,50,1), rgba(10,10,20,1))',
               }}
             >
@@ -578,11 +578,11 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           <div
             className="relative"
             style={{
-              marginLeft: -10,
-              zIndex: 3,
+              marginLeft: -22,
+              zIndex: 2,
               ...(showMyCards
-                ? { width: 'clamp(76px, 20vw, 110px)', height: 'clamp(92px, 24vw, 124px)' }
-                : { width: 'clamp(48px, 14vw, 58px)',  height: 'clamp(58px, 16vw, 72px)' }),
+                ? { width: 'clamp(58px, 15vw, 80px)', height: 'clamp(70px, 18vw, 96px)' }
+                : { width: 'clamp(36px, 10vw, 46px)', height: 'clamp(44px, 12vw, 56px)' }),
             }}
           >
             {[0, 1].map((ci) => (
@@ -612,7 +612,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
             )}
           </div>
         ) : (
-          <div style={{ marginLeft: 6, width: 16, height: 52 }} aria-hidden />
+          <div style={{ marginLeft: 6, width: 16, height: 88 }} aria-hidden />
         )}
       </div>
 
