@@ -66,10 +66,16 @@ function TournamentCard({
   t,
   myAddress,
   onJoin,
+  onCancel,
+  isJoining,
+  isCancelling,
 }: {
   t: PokerTournamentSummary;
   myAddress?: string;
   onJoin: (tournamentId: string, pinCode?: string) => void;
+  onCancel: (tournamentId: string) => void;
+  isJoining?: boolean;
+  isCancelling?: boolean;
 }) {
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
@@ -138,7 +144,16 @@ function TournamentCard({
         <div className="mt-3 flex items-center gap-2 rounded-lg bg-green-500/10 border border-green-500/30 px-3 py-2">
           <span className="text-green-400 text-xs font-semibold">✓ Registered</span>
           {isScheduled && countdown && (
-            <span className="text-white/40 text-xs ml-auto">Starts in {countdown}</span>
+            <span className="text-white/40 text-xs ml-1">Starts in {countdown}</span>
+          )}
+          {t.status === 'registration' && t.creatorAddress?.toLowerCase() === myAddress?.toLowerCase() && (
+            <button
+              onClick={() => onCancel(t.tournamentId)}
+              disabled={isCancelling}
+              className="ml-auto text-[11px] text-red-400/70 hover:text-red-400 disabled:opacity-40 border border-red-500/20 hover:border-red-500/40 rounded px-2 py-0.5 transition-colors"
+            >
+              {isCancelling ? 'Cancelling…' : 'Cancel'}
+            </button>
           )}
         </div>
       )}
@@ -165,9 +180,10 @@ function TournamentCard({
           ) : (
             <button
               onClick={() => onJoin(t.tournamentId)}
-              className="w-full rounded-lg bg-yellow-500 hover:bg-yellow-400 text-black font-semibold text-sm py-2 transition-colors"
+              disabled={isJoining}
+              className="w-full rounded-lg bg-yellow-500 hover:bg-yellow-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-semibold text-sm py-2 transition-colors"
             >
-              {isScheduled ? 'Register' : 'Join Tournament'}
+              {isJoining ? 'Joining…' : isScheduled ? 'Register' : 'Join Tournament'}
             </button>
           )}
         </div>
@@ -370,8 +386,10 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
   const [showCreate, setShowCreate] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const { openTournaments, isLoadingTournaments, refreshTournaments, createTournament, joinTournament, myTableId, myTournamentId } =
+  const { openTournaments, isLoadingTournaments, refreshTournaments, createTournament, joinTournament, cancelTournament, myTableId, myTournamentId } =
     usePokerTournament({
       wsClient,
       onTournamentStarted: (tournamentId, tableId) => {
@@ -380,6 +398,8 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
     });
 
   const handleJoin = async (tournamentId: string, pinCode?: string) => {
+    if (joiningId) return;
+    setJoiningId(tournamentId);
     setJoinError(null);
     setJoinSuccess(null);
     try {
@@ -392,6 +412,8 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       }
     } catch (err) {
       setJoinError((err as Error).message ?? 'Failed to join');
+    } finally {
+      setJoiningId(null);
     }
   };
 
@@ -402,6 +424,20 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       refreshTournaments();
     } catch (err) {
       setJoinError((err as Error).message ?? 'Failed to create');
+    }
+  };
+
+  const handleCancel = async (tournamentId: string) => {
+    if (cancellingId) return;
+    setCancellingId(tournamentId);
+    setJoinError(null);
+    try {
+      await cancelTournament(tournamentId);
+      await refreshTournaments();
+    } catch (err) {
+      setJoinError((err as Error).message ?? 'Failed to cancel');
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -470,6 +506,9 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
               t={t}
               myAddress={myAddress}
               onJoin={handleJoin}
+              onCancel={handleCancel}
+              isJoining={joiningId === t.tournamentId}
+              isCancelling={cancellingId === t.tournamentId}
             />
           ))}
         </div>

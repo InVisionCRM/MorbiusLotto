@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import AvatarPreview, { type Emotion } from './AvatarPreview';
 import AvatarControls from './AvatarControls';
+import CharacterCreatorMobile from './CharacterCreatorMobile';
 import { motion } from 'framer-motion';
 import { Palette, Scissors, Eye, Smile, Sparkles, Shirt, Image as ImageIcon, Glasses } from 'lucide-react';
 
@@ -76,6 +77,18 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
 
   return (
     <div className="flex flex-col w-full min-h-0 flex-1">
+      {/* Mobile-only layout */}
+      <div className="md:hidden flex flex-col h-full">
+        <CharacterCreatorMobile
+          config={config}
+          onChange={setConfig}
+          displayName={displayName}
+          onDisplayNameChange={onDisplayNameChange}
+        />
+      </div>
+
+      {/* Desktop layout */}
+      <div className="hidden md:flex flex-col w-full min-h-0 flex-1">
       {/* Tabs: 44px min touch target, horizontal scroll on mobile */}
       <div className={`w-full border-b border-zinc-800 bg-zinc-900/80 overflow-x-auto overflow-y-hidden scrollbar-hide shrink-0 ${compact ? 'p-2' : 'p-4'}`}>
         <div className="flex space-x-1.5 max-w-full md:justify-center min-h-[44px] items-center">
@@ -151,6 +164,7 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
           <AvatarControls config={config} onChange={setConfig} activeTab={activeTab} compact={compact} />
         </div>
       </div>
+      </div> {/* end desktop wrapper */}
     </div>
   );
 }

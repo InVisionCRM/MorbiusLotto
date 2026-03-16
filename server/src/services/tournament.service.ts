@@ -610,6 +610,7 @@ export class TournamentService {
       WHERE LOWER(te.player_address) = LOWER($1)
         AND t.status = 'active'
         AND te.status = 'playing'
+        AND (t.game_type IS NULL OR t.game_type = 'blackjack')
       ORDER BY te.bought_in_at DESC
       LIMIT 1
     `;
@@ -2061,6 +2062,7 @@ export class TournamentService {
       LEFT JOIN tournament_leaderboard tl ON tl.entry_id = te.id
       WHERE LOWER(te.player_address) = LOWER($1)
         AND t.status = 'active'
+        AND (t.game_type IS NULL OR t.game_type = 'blackjack')
       ORDER BY te.bought_in_at DESC
       LIMIT 1
     `;
