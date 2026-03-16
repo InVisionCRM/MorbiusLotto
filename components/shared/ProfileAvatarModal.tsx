@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
-import { useAccount, useSignMessage } from 'wagmi';
+import { useAccount } from 'wagmi';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import CharacterCreator, { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
@@ -45,7 +45,6 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
   const wsClient = wsClientProp ?? profileWs?.wsClient ?? null;
   const { openConnectModal } = useConnectModal();
   const { address } = useAccount();
-  const { signMessageAsync } = useSignMessage();
 
   const [displayName, setDisplayName] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
@@ -111,18 +110,15 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         setError('Connect your wallet to save');
         return;
       }
-      const message = JSON.stringify({
-        intent: 'MORBlotto profile update',
-        timestamp: Date.now(),
-        displayName: name,
-        profileImageUrl: profileImageUrl ?? null,
-        avatarConfig: config,
-      });
-      const signature = await signMessageAsync({ message });
       const res = await fetch('/api/player/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, message, signature }),
+        body: JSON.stringify({
+          address,
+          displayName: name,
+          profileImageUrl: profileImageUrl ?? null,
+          avatarConfig: config,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
