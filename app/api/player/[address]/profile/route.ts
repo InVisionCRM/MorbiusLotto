@@ -41,6 +41,7 @@ export async function GET(
     return NextResponse.json({
       displayName: data.displayName ?? null,
       profileImageUrl: data.profileImageUrl ?? null,
+      avatarConfig: data.avatarConfig ?? null,
     });
   } catch (error) {
     console.error('Error fetching player profile:', error);
