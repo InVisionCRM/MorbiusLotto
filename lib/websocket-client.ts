@@ -425,8 +425,10 @@ export class BlackjackWebSocketClient {
         return;
       }
 
-      // Set timeout (poker_get_state can be slow on cold DB / many players)
-      const timeoutMs = type === 'poker_get_state' ? 60000 : 30000;
+      // Set timeout (poker_get_state and tournament join can be slow on cold DB / many players)
+      const timeoutMs = type === 'poker_get_state' ? 60000
+        : type === 'poker_tournament_join' ? 60000
+        : 30000;
       const timeout = setTimeout(() => {
         this.requestPromises.delete(requestId);
         logger.error('Request timeout', { type, requestId, payload });

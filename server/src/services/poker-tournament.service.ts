@@ -251,14 +251,24 @@ export class PokerTournamentService {
         throw new Error('Incorrect PIN code');
       }
 
-      // Check if player already joined
+      // Check if player already joined — return success with existing entry so client can recover from timeout/retry
       const existing = await client.query(
         `SELECT id FROM tournament_entries
          WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)
            AND status NOT IN ('busted', 'completed')`,
         [tournamentId, normalized]
       );
-      if (existing.rows.length > 0) throw new Error('Already registered for this tournament');
+      if (existing.rows.length > 0) {
+        await client.query('COMMIT');
+        const entryId = existing.rows[0].id;
+        const tableResult = await this.pool.query(
+          'SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1',
+          [tournamentId]
+        );
+        const tableId = tableResult.rows[0]?.id ?? null;
+        logger.info('Player already registered for poker tournament, returning existing entry', { tournamentId, playerAddress: normalized, entryId, tableId });
+        return { entryId, autoStarted: !!tableId, tableId };
+      }
 
       // Check if full
       const countRow = await client.query(
