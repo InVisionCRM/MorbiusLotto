@@ -87,6 +87,13 @@ export interface CreatePokerTournamentParams {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Tournament uses integer chip counts; multiply by this to store in wei units (same as cash game). */
+const CHIP_SCALE = BigInt('1000000000000000000'); // 10^18
+
+// ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 
@@ -378,12 +385,17 @@ export class PokerTournamentService {
 
     const firstLevel = this.computeBlindLevel(config.blindSchedule, 1);
 
+    // Scale chip counts to wei units so the poker UI (which uses formatEther) displays them correctly
+    const sbWei  = (BigInt(firstLevel.smallBlind) * CHIP_SCALE).toString();
+    const bbWei  = (BigInt(firstLevel.bigBlind)   * CHIP_SCALE).toString();
+    const stackWei = (BigInt(config.startingStack) * CHIP_SCALE).toString();
+
     // Create dedicated tournament poker table
     const tableRow = await this.pool.query(
       `INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, tournament_id, tournament_mode)
        VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE)
        RETURNING id`,
-      [firstLevel.smallBlind.toString(), firstLevel.bigBlind.toString(), config.maxPlayers, tournamentId]
+      [sbWei, bbWei, config.maxPlayers, tournamentId]
     );
     const tableId = tableRow.rows[0].id;
 
@@ -395,9 +407,9 @@ export class PokerTournamentService {
       [tournamentId]
     );
 
-    // Seat all players with virtual chips
+    // Seat all players with virtual chips (scaled to wei)
     for (const entry of entries.rows) {
-      await this.pokerGameService.joinTableTournament(tableId, entry.player_address, config.startingStack);
+      await this.pokerGameService.joinTableTournament(tableId, entry.player_address, stackWei);
 
       // Record in bridge table
       await this.pool.query(
@@ -462,9 +474,11 @@ export class PokerTournamentService {
     );
 
     // Sync chips for each player and collect busted players
+    // Stacks are stored in wei; convert to chip units for tournament_entries (which track integer chips)
     const bustedAddresses: string[] = [];
     for (const seat of seats.rows) {
-      const stack = Number(seat.stack ?? 0);
+      const stackWei = toBigIntSafe(seat.stack ?? 0);
+      const stackChips = Number(stackWei / CHIP_SCALE);
       const addr = seat.player_address as string;
 
       await this.pool.query(
@@ -473,10 +487,10 @@ export class PokerTournamentService {
              highest_chip_count = GREATEST(highest_chip_count, $1),
              hands_played = hands_played + 1
          WHERE tournament_id = $2 AND LOWER(player_address) = LOWER($3) AND status = 'playing'`,
-        [stack, tournamentId, addr]
+        [stackChips, tournamentId, addr]
       );
 
-      if (stack === 0) bustedAddresses.push(addr);
+      if (stackWei === 0n) bustedAddresses.push(addr);
     }
 
     // Get bridge table entries for busted players to know their entry IDs
@@ -523,12 +537,15 @@ export class PokerTournamentService {
     }
 
     // Advance blind level if needed
+    // Stored blinds are in wei (chip * 10^18); convert back to chip units for level comparison
     const newLevel = this.computeBlindLevel(config.blindSchedule, handNumber);
-    const currentSB = Number(tableRow.rows[0].small_blind);
-    if (newLevel.smallBlind !== currentSB) {
+    const currentSBChips = Math.round(Number(toBigIntSafe(tableRow.rows[0].small_blind) / CHIP_SCALE));
+    if (newLevel.smallBlind !== currentSBChips) {
+      const newSBWei = (BigInt(newLevel.smallBlind) * CHIP_SCALE).toString();
+      const newBBWei = (BigInt(newLevel.bigBlind)   * CHIP_SCALE).toString();
       await this.pool.query(
         `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
-        [tableId, newLevel.smallBlind.toString(), newLevel.bigBlind.toString()]
+        [tableId, newSBWei, newBBWei]
       );
       this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
         tournamentId,

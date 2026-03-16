@@ -1423,7 +1423,7 @@ export class PokerGameService {
    * The buy-in was already collected by PokerTournamentService.
    * Does NOT auto-start a hand — the tournament service controls timing.
    */
-  async joinTableTournament(tableId: string, playerAddress: string, startingChips: number): Promise<void> {
+  async joinTableTournament(tableId: string, playerAddress: string, startingChips: number | string): Promise<void> {
     const normalized = this.normalizeAddress(playerAddress);
     const pool = this.getPool();
 

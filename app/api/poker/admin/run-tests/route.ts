@@ -5,36 +5,36 @@ import path from 'path';
 // All 9 test suites — name must match the describe() block exactly
 const SUITES: Record<string, string> = {
   'all':                     '',
-  'create':                  '1 — createPokerTournament',
-  'join':                    '2 — joinPokerTournament',
-  'auto-start':              '3 — auto-start',
-  'blind-level':             '4 — computeBlindLevel',
-  'chip-sync':               '5 — syncAfterHand chip sync',
-  'elimination':             '6 — player elimination',
-  'prizes':                  '7 — prize distribution',
-  'e2e':                     '8 — full 2-player E2E',
-  'regression':              '9 — regression',
+  'create':                  '1 - createPokerTournament',
+  'join':                    '2 - joinPokerTournament',
+  'auto-start':              '3 - auto-start',
+  'blind-level':             '4 - computeBlindLevel',
+  'chip-sync':               '5 - syncAfterHand chip sync',
+  'elimination':             '6 - player elimination',
+  'prizes':                  '7 - prize distribution',
+  'e2e':                     '8 - full 2-player E2E',
+  'regression':              '9 - regression',
 };
 
 export async function POST(req: NextRequest) {
   const { suite = 'all' } = await req.json().catch(() => ({}));
 
   const serverDir = path.resolve(process.cwd(), 'server');
+  const jestBin = path.join(serverDir, 'node_modules', '.bin', 'jest');
   const pattern = SUITES[suite];
 
-  const args = ['run', 'test', '--'];
+  // Run jest binary directly — avoids npm arg-parsing issues with special characters
+  const args: string[] = ['--forceExit', '--no-coverage', '--colors'];
   if (pattern) args.push('--testNamePattern', pattern);
-  // Always run with forceExit so it doesn't hang; colors off for clean output
-  args.push('--forceExit', '--no-coverage', '--colors');
 
   return new Promise<NextResponse>((resolve) => {
     const chunks: string[] = [];
     let timedOut = false;
 
-    const proc = spawn('npm', args, {
+    const proc = spawn(jestBin, args, {
       cwd: serverDir,
-      env: { ...process.env },
-      shell: true,
+      env: { ...process.env, PATH: process.env.PATH },
+      shell: false,
     });
 
     const timeout = setTimeout(() => {

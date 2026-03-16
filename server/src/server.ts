@@ -278,6 +278,7 @@ async function initializeServices() {
     );
     wsService.setPokerTournamentService(pokerTournamentService);
     tournamentService.setPokerTournamentService(pokerTournamentService);
+    pokerTournamentService.setBroadcastCallback((room, msg) => wsService.broadcastToRoom(room, msg as any));
     pokerGameService.setPostHandCallback(
       (tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber)
     );

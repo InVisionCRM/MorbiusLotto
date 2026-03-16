@@ -210,6 +210,13 @@ export default function PokerLobbyPage() {
       setTables(payload.tables ?? []);
     });
 
+    // Navigate to tournament table when tournament starts (regardless of active tab)
+    client.on('poker_tournament_started', (payload: { tournamentId: string; tableId: string }) => {
+      if (payload?.tableId && payload?.tournamentId) {
+        router.push(`/poker/${payload.tableId}?tournament=${payload.tournamentId}`);
+      }
+    });
+
     client
       .connect()
       .then(() => {

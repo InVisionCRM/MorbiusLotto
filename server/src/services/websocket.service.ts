@@ -1725,7 +1725,7 @@ export class WebSocketService {
   }
 
   // Broadcast to all clients in a chat room
-  private broadcastToRoom(roomId: string, message: WebSocketMessage) {
+  public broadcastToRoom(roomId: string, message: WebSocketMessage) {
     const connectionIds = this.roomToClients.get(roomId);
     if (!connectionIds) return;
     connectionIds.forEach((connectionId) => {
@@ -1821,18 +1821,30 @@ export class WebSocketService {
       const { tournamentId, pinCode } = message.payload as { tournamentId?: string; pinCode?: string };
       if (!tournamentId) return this.sendError(ws, 'tournamentId required', message.requestId);
 
-      const result = await this.pokerTournamentService.joinPokerTournament(
-        tournamentId, ws.playerAddress, pinCode
-      );
+      let result: { autoStarted: boolean; tableId: string | null; entryId: string } | null = null;
+      try {
+        result = await this.pokerTournamentService.joinPokerTournament(
+          tournamentId, ws.playerAddress, pinCode
+        );
+      } catch (joinErr) {
+        const msg = (joinErr as Error).message ?? '';
+        // If already registered, just re-subscribe to the room without error
+        if (msg.toLowerCase().includes('already registered')) {
+          logger.info('Player already registered — re-subscribing to tournament room', { tournamentId, player: ws.playerAddress });
+          // fall through to room subscription below with null result
+        } else {
+          throw joinErr;
+        }
+      }
 
-      // Add client to the tournament room
+      // Always add client to the tournament room (handles reconnects)
       const roomId = `poker_tournament:${tournamentId}`;
       if (ws.connectionId) {
         if (!this.roomToClients.has(roomId)) this.roomToClients.set(roomId, new Set());
         this.roomToClients.get(roomId)!.add(ws.connectionId);
       }
 
-      this.sendMessage(ws, { type: 'poker_tournament_joined', payload: result, requestId: message.requestId });
+      this.sendMessage(ws, { type: 'poker_tournament_joined', payload: result ?? { autoStarted: false, tableId: null, alreadyRegistered: true }, requestId: message.requestId });
     } catch (error) {
       logger.error('Error joining poker tournament:', error);
       this.sendError(ws, (error as Error).message || 'Failed to join tournament', message.requestId);

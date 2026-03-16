@@ -47,6 +47,7 @@ export default function PokerTablePage() {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   /** Chat bubbles above seats: id, senderAddress (lowercase), text, expiresAt. Cleared after 5s. */
   const [seatBubbles, setSeatBubbles] = useState<Array<{ id: string; senderAddress: string; text: string; expiresAt: number }>>([]);
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -357,6 +358,7 @@ export default function PokerTablePage() {
 
   const handleLeave = useCallback(() => {
     if (!clientRef.current) return;
+    setShowLeaveConfirm(false);
     clientRef.current
       .pokerLeaveTable(tableId)
       .then(() => {
@@ -366,6 +368,10 @@ export default function PokerTablePage() {
       })
       .catch((err) => toast.error((err as Error).message));
   }, [tableId, router]);
+
+  const handleLeaveClick = useCallback(() => {
+    setShowLeaveConfirm(true);
+  }, []);
 
   // Map chat bubbles to seat index (latest bubble per seat)
   const chatBubbleBySeatIndex = useMemo(() => {
@@ -651,7 +657,7 @@ export default function PokerTablePage() {
               )}
               <button
                 type="button"
-                onClick={handleLeave}
+                onClick={handleLeaveClick}
                 className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97]"
                 style={{
                   background: 'linear-gradient(180deg, #8b1a1a 0%, #6b1111 100%)',
@@ -692,7 +698,7 @@ export default function PokerTablePage() {
               <PokerTable
                 state={state}
                 currentPlayerAddress={normalizedAddress}
-                onLeave={handleLeave}
+                onLeave={handleLeaveClick}
                 timeLeft={timeLeft}
                 chatBubbleBySeatIndex={chatBubbleBySeatIndex}
                 reactionBySeatIndex={reactionBySeatIndex}
@@ -748,6 +754,44 @@ export default function PokerTablePage() {
           onClose={() => setShowStatsModal(false)}
           playerAddress={normalizedAddress}
         />
+        {/* Leave table confirmation (non-tournament): shows leaving amount and asks to confirm */}
+        {showLeaveConfirm && mySeat && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div
+              className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden p-5"
+              style={{ boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}
+            >
+              <p className="text-slate-200 text-sm mb-1">Leaving amount</p>
+              <p className="text-cyan-400 font-semibold tabular-nums text-lg mb-4">{fmtChips(mySeat.stack ?? '0')} chips</p>
+              <p className="text-slate-300 text-sm mb-5">Are you sure you want to leave?</p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowLeaveConfirm(false)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:brightness-110"
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'rgba(255,255,255,0.9)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLeave}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all hover:brightness-110"
+                  style={{
+                    background: 'linear-gradient(180deg, #8b1a1a 0%, #6b1111 100%)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                  }}
+                >
+                  Leave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <ProfileAvatarModal
           open={showAvatarModal}
           onClose={() => setShowAvatarModal(false)}

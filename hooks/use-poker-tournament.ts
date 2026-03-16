@@ -240,7 +240,24 @@ export function usePokerTournament({
     setIsLoading(true);
     try {
       const response = await wsClient.sendRequest('poker_tournament_list', {});
-      setOpenTournaments(response?.tournaments ?? []);
+      const tournaments: PokerTournamentSummary[] = response?.tournaments ?? [];
+      setOpenTournaments(tournaments);
+
+      // Restore active tournament state from list (handles page refresh)
+      const active = tournaments.find((t) => t.isRegistered && t.status === 'active' && t.tableId);
+      if (active) {
+        setMyTournamentId((prev) => prev ?? active.tournamentId);
+        setMyTableId((prev) => prev ?? active.tableId);
+        setMyEntryStatus('playing');
+      }
+
+      // Re-subscribe to registered tournament rooms so we receive started/cancelled events
+      for (const t of tournaments) {
+        if (t.isRegistered && t.status === 'registration') {
+          wsClient.sendRequest('poker_tournament_join', { tournamentId: t.tournamentId })
+            .catch(() => {}); // silently ignore — server handles already-registered case
+        }
+      }
     } catch (err) {
       setError((err as Error).message ?? 'Failed to load tournaments');
     } finally {

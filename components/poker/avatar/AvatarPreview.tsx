@@ -323,8 +323,8 @@ export default function AvatarPreview({
 
   const renderLips = () => {
     if (emotion === 'surprised') {
-      // Open-mouth O shape: 4×4 dark block
-      return <rect x="10" y="15" width="4" height="4" fill="rgba(0,0,0,0.75)" />;
+      // Open-mouth O shape: 2×2 dark block
+      return <rect x="11" y="16" width="2" height="2" fill="rgba(0,0,0,0.75)" />;
     }
     switch (lipShape) {
       case 'Thin':  return <rect x="10" y="16" width="4" height="1" fill="rgba(0,0,0,0.4)" />;
@@ -533,14 +533,14 @@ export default function AvatarPreview({
             {emotion === 'angry' && <g mask="url(#faceMask)">{renderFaceShape('url(#angryGradient)')}</g>}
             {emotion === 'sick'  && <g mask="url(#faceMask)">{renderFaceShape('url(#sickGradient)')}</g>}
 
-            {/* Emotion particle effects */}
-            {renderEmotionEffects()}
-
             {/* Hair front + hat */}
             <motion.g animate={{ y: offsets.head.y }}>
               {renderHairFront()}
               {renderHat()}
             </motion.g>
+
+            {/* Emotion particle effects — after hair/hat so they always render on top */}
+            {renderEmotionEffects()}
 
             {/* Face features with offsets */}
             <motion.g animate={{ x: offsets.eyes.x, y: offsets.eyes.y }}>

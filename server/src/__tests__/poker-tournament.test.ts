@@ -112,7 +112,7 @@ async function createTestTournament(overrides?: Partial<PokerTournamentConfig>):
 // Suite 1: createPokerTournament
 // ---------------------------------------------------------------------------
 
-describe('1 — createPokerTournament', () => {
+describe('1 - createPokerTournament', () => {
   it('creates tournament with game_type=poker and status=registration', async () => {
     const tournamentId = await createTestTournament();
 
@@ -174,7 +174,7 @@ describe('1 — createPokerTournament', () => {
 // Suite 2: joinPokerTournament — registration phase
 // ---------------------------------------------------------------------------
 
-describe('2 — joinPokerTournament', () => {
+describe('2 - joinPokerTournament', () => {
   let tournamentId: string;
 
   beforeEach(async () => {
@@ -210,37 +210,34 @@ describe('2 — joinPokerTournament', () => {
     expect(poolAfter - poolBefore).toBe(TEST_BUY_IN);
   });
 
-  it('rejects duplicate join from same player', async () => {
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    await expect(
-      pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1)
-    ).rejects.toThrow('Already registered');
+  it('returns existing entry on duplicate join (idempotent for reconnect)', async () => {
+    const first = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
+    const second = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
+    // Should succeed and return the same entryId
+    expect(second.entryId).toBe(first.entryId);
+    // Balance should only be deducted once
+    const balance = await getTestBalance(PLAYER_1);
+    const expected = BigInt(TEST_BALANCE) - TEST_BUY_IN;
+    expect(balance).toBe(expected);
   });
 
   it('rejects join when tournament is full', async () => {
-    // maxPlayers is 3 for SMALL_CONFIG
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    // Tournament auto-started at 2 players (minPlayers=2) — status becomes 'active'
-    // Try joining a DIFFERENT tournament that has maxPlayers=2
-    const tightId = await createTestTournament({ minPlayers: 3, maxPlayers: 2 });
-    // maxPlayers:2 < minPlayers:3 is invalid — so create a valid tight one
-    const tightId2Id = await (async () => {
-      const { tournamentId: id } = await pokerTournamentService.createPokerTournament({
-        creatorAddress:        PLAYER_1,
-        name:                  'Tight SNG',
-        buyInAmount:           TEST_BUY_IN,
-        prizeDistributionType: 'winner_takes_all',
-        config:                { ...SMALL_CONFIG, minPlayers: 2, maxPlayers: 2 },
-      });
-      createdTournamentIds.push(id);
-      return id;
-    })();
-    await pokerTournamentService.joinPokerTournament(tightId2Id, PLAYER_1);
-    // Second join auto-starts the tournament (minPlayers=2 reached)
-    // Third player should be rejected
+    // Create a 2-max tournament, fill it, then try a 3rd join
+    const { tournamentId: tightId } = await pokerTournamentService.createPokerTournament({
+      creatorAddress:        PLAYER_1,
+      name:                  'Tight SNG',
+      buyInAmount:           TEST_BUY_IN,
+      prizeDistributionType: 'winner_takes_all',
+      config:                { ...SMALL_CONFIG, minPlayers: 2, maxPlayers: 2 },
+    });
+    createdTournamentIds.push(tightId);
+
+    await pokerTournamentService.joinPokerTournament(tightId, PLAYER_1);
+    // Second join auto-starts (minPlayers=2 reached)
+    await pokerTournamentService.joinPokerTournament(tightId, PLAYER_2);
+    // Third join should be rejected (tournament already active / full)
     await expect(
-      pokerTournamentService.joinPokerTournament(tightId2Id, PLAYER_3)
+      pokerTournamentService.joinPokerTournament(tightId, PLAYER_3)
     ).rejects.toThrow();
   });
 
@@ -268,7 +265,7 @@ describe('2 — joinPokerTournament', () => {
 // Suite 3: Auto-start when minPlayers reached
 // ---------------------------------------------------------------------------
 
-describe('3 — auto-start', () => {
+describe('3 - auto-start', () => {
   let tournamentId: string;
 
   beforeEach(async () => {
@@ -328,9 +325,18 @@ describe('3 — auto-start', () => {
       createdPokerTableIds.push(tableId);
       const seats = await testPool.query('SELECT player_address, stack FROM poker_seats WHERE table_id = $1', [tableId]);
       expect(seats.rows).toHaveLength(2);
+      const CHIP_SCALE = BigInt('1000000000000000000');
+      const totalStarting = BigInt(SMALL_CONFIG.startingStack) * BigInt(seats.rows.length) * CHIP_SCALE;
+      // Total chips are conserved (blinds just moved chips between players/pot)
+      // Each seat stack must be <= startingStack and > 0 (game in progress)
       for (const seat of seats.rows) {
-        expect(Number(seat.stack)).toBe(5000);
+        const stackChips = BigInt(seat.stack) / CHIP_SCALE;
+        expect(stackChips).toBeGreaterThan(BigInt(0));
+        expect(stackChips).toBeLessThanOrEqual(BigInt(SMALL_CONFIG.startingStack));
       }
+      const totalActual = seats.rows.reduce((acc: bigint, s: { stack: string }) => acc + BigInt(s.stack), BigInt(0));
+      // Total in seats ≤ totalStarting (pot holds the rest)
+      expect(totalActual).toBeLessThanOrEqual(totalStarting);
     }
   });
 
@@ -353,7 +359,7 @@ describe('3 — auto-start', () => {
 // Suite 4: computeBlindLevel (pure, no DB)
 // ---------------------------------------------------------------------------
 
-describe('4 — computeBlindLevel', () => {
+describe('4 - computeBlindLevel', () => {
   const schedule: BlindLevel[] = [
     { level: 1, smallBlind: 25,  bigBlind: 50,  handsPerLevel: 10 },
     { level: 2, smallBlind: 50,  bigBlind: 100, handsPerLevel: 10 },
@@ -400,7 +406,7 @@ describe('4 — computeBlindLevel', () => {
 // Suite 5: syncAfterHand — chip sync
 // ---------------------------------------------------------------------------
 
-describe('5 — syncAfterHand chip sync', () => {
+describe('5 - syncAfterHand chip sync', () => {
   it('updates tournament_entries.chips_remaining from poker_seats.stack', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2 });
     await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
@@ -408,14 +414,15 @@ describe('5 — syncAfterHand chip sync', () => {
     if (!tableId) return;
     createdPokerTableIds.push(tableId);
 
-    // Manually set stacks to simulate a hand outcome
+    // Manually set stacks to simulate a hand outcome (stacks stored in wei units)
+    const CHIP_SCALE = BigInt('1000000000000000000');
     await testPool.query(
-      `UPDATE poker_seats SET stack = 3000 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
-      [tableId, PLAYER_1]
+      `UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_1, (BigInt(3000) * CHIP_SCALE).toString()]
     );
     await testPool.query(
-      `UPDATE poker_seats SET stack = 7000 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
-      [tableId, PLAYER_2]
+      `UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_2, (BigInt(7000) * CHIP_SCALE).toString()]
     );
 
     await pokerTournamentService.syncAfterHand(tableId, 1);
@@ -453,7 +460,7 @@ describe('5 — syncAfterHand chip sync', () => {
 // Suite 6: Player elimination at 0 chips
 // ---------------------------------------------------------------------------
 
-describe('6 — player elimination', () => {
+describe('6 - player elimination', () => {
   it('marks entry as busted and removes seat when stack hits 0', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2 });
     await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
@@ -529,7 +536,7 @@ describe('6 — player elimination', () => {
 // Suite 7: Prize distribution
 // ---------------------------------------------------------------------------
 
-describe('7 — prize distribution', () => {
+describe('7 - prize distribution', () => {
   it('credits winner balance after completeTournament (winner_takes_all)', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2 });
     await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
@@ -570,7 +577,7 @@ describe('7 — prize distribution', () => {
 // Suite 8: Full 2-player E2E flow
 // ---------------------------------------------------------------------------
 
-describe('8 — full 2-player E2E', () => {
+describe('8 - full 2-player E2E', () => {
   it('completes a full SNG: create → join × 2 → auto-start → bust → prizes', async () => {
     // 1. Create tournament (maxPlayers=2 so it auto-starts on 2nd join)
     const { tournamentId } = await pokerTournamentService.createPokerTournament({
@@ -643,7 +650,7 @@ describe('8 — full 2-player E2E', () => {
 // Suite 9: Regression — existing systems unaffected
 // ---------------------------------------------------------------------------
 
-describe('9 — regression', () => {
+describe('9 - regression', () => {
   it('blackjack createTournament still defaults to game_type=blackjack', async () => {
     const result = await tournamentService.createTournament({
       creatorAddress:        PLAYER_1,
