@@ -147,19 +147,19 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         onClick={onClose}
       >
         <motion.div
-          className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col"
+          className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-none sm:rounded-2xl shadow-2xl max-w-4xl w-full h-[100dvh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col"
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-4 py-2.5 border-b border-white/10 flex items-center justify-between flex-shrink-0">
+          <div className="px-4 py-3 sm:py-2.5 border-b border-white/10 flex items-center justify-between flex-shrink-0">
             <h2 className="text-lg font-bold text-white">Edit profile & avatar</h2>
             <button
               type="button"
               onClick={onClose}
-              className="text-white/70 hover:text-white p-1 rounded"
+              className="text-white/70 hover:text-white p-2 -m-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center touch-manipulation"
               aria-label="Close"
             >
               <span className="text-2xl leading-none">&times;</span>
@@ -170,7 +170,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
             <div className="flex-1 flex items-center justify-center p-12 text-white/70">Loading profile...</div>
           ) : (
             <>
-              <div className="flex-1 min-h-0 overflow-hidden flex flex-col" style={{ maxHeight: 'calc(85vh - 140px)' }}>
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
                 <CharacterCreator
                   config={config}
                   onChange={setConfig}
@@ -184,11 +184,11 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                 <div className="px-4 py-1.5 text-red-400 text-sm flex-shrink-0">{error}</div>
               )}
 
-              <div className="px-4 py-2.5 border-t border-white/10 flex justify-end gap-2 flex-shrink-0">
+              <div className="px-4 py-3 sm:py-2.5 border-t border-white/10 flex justify-end gap-2 flex-shrink-0">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-lg font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+                  className="px-4 py-3 sm:py-2 min-h-[44px] rounded-lg font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors touch-manipulation"
                 >
                   Cancel
                 </button>
@@ -196,7 +196,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                   type="button"
                   onClick={canSave ? handleSave : () => openConnectModal?.()}
                   disabled={saving}
-                  className="px-4 py-2 rounded-lg font-medium bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-50 transition-colors"
+                  className="px-4 py-3 sm:py-2 min-h-[44px] rounded-lg font-medium bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-50 transition-colors touch-manipulation"
                 >
                   {saving ? 'Saving...' : !canSave ? 'Connect wallet to save' : 'Save'}
                 </button>

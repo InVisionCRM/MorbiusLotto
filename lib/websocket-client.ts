@@ -535,6 +535,7 @@ export class BlackjackWebSocketClient {
           'poker_table_state',
           'poker_table_list',
           'poker_quick_reaction',
+          'poker_avatar_emotion',
         ]);
         if (!knownEventTypes.has(message.type)) {
           logger.warn('Unhandled message type:', message.type);
@@ -693,6 +694,14 @@ export class BlackjackWebSocketClient {
    */
   sendPokerQuickReaction(tableId: string, type: 'emoji' | 'phrase', value: string): void {
     this.send({ type: 'poker_quick_reaction', payload: { tableId, type, value } });
+  }
+
+  /**
+   * Broadcast avatar emotion to the table so all players see it.
+   * Emotion must be one of: happy, sad, angry, surprised, wink.
+   */
+  sendPokerAvatarEmotion(tableId: string, emotion: string): void {
+    this.send({ type: 'poker_avatar_emotion', payload: { tableId, emotion } });
   }
 
   // === Chat API (main + per-game rooms) ===

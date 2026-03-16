@@ -71,6 +71,7 @@ export interface PokerTournamentSummary {
   createdAt: string;
   creatorAddress: string | null;
   prizeDistributionType: string;
+  scheduledStartAt: string | null;
 }
 
 export interface CreatePokerTournamentParams {
@@ -81,6 +82,7 @@ export interface CreatePokerTournamentParams {
   config: PokerTournamentConfig;
   isPrivate?: boolean;
   pinCode?: string | null;
+  scheduledStartAt?: Date | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -178,13 +180,13 @@ export class PokerTournamentService {
         max_players, rebuy_config, table_theme, is_private, pin_code,
         prize_distribution_type, prize_percentages, prize_pool,
         creator_fee_percent, platform_fee_percent, status,
-        game_type, poker_config
+        game_type, poker_config, scheduled_start_at
       ) VALUES (
         $1, $2, $3::NUMERIC, $4, 999, $5,
         $6, $7::JSONB, $8::JSONB, $9, $10,
         $11, $12::JSONB, '0',
         2, 3, 'registration',
-        'poker', $13::JSONB
+        'poker', $13::JSONB, $14
       ) RETURNING id`,
       [
         params.name.trim(),
@@ -200,11 +202,25 @@ export class PokerTournamentService {
         params.prizeDistributionType,
         JSON.stringify(prizePercentages),
         JSON.stringify(config),
+        params.scheduledStartAt ?? null,
       ]
     );
 
     const tournamentId = result.rows[0].id;
-    logger.info('Poker tournament created', { tournamentId, name: params.name, creator: normalizedCreator });
+
+    // If a future start time was provided, queue the scheduled event for FreerollSchedulerService
+    if (params.scheduledStartAt && params.scheduledStartAt > new Date()) {
+      await this.pool.query(
+        `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
+         VALUES ($1, 'poker_start', $2, 'pending')`,
+        [tournamentId, params.scheduledStartAt.toISOString()]
+      );
+    }
+
+    logger.info('Poker tournament created', {
+      tournamentId, name: params.name, creator: normalizedCreator,
+      scheduledStartAt: params.scheduledStartAt ?? 'SNG (auto-start)',
+    });
 
     return { tournamentId };
   }
@@ -231,7 +247,7 @@ export class PokerTournamentService {
 
       // Lock the tournament row to serialize concurrent joins
       const tRow = await client.query(
-        `SELECT t.*, t.poker_config
+        `SELECT t.*, t.poker_config, t.scheduled_start_at
          FROM tournaments t
          WHERE t.id = $1 AND t.game_type = 'poker'
          FOR UPDATE`,
@@ -311,7 +327,10 @@ export class PokerTournamentService {
       const entryId = entryRow.rows[0].id;
 
       const newRegistered = registered + 1;
-      const shouldAutoStart = newRegistered >= config.minPlayers;
+      // Only auto-start SNGs (no scheduled time) or if scheduled time has already passed
+      const scheduledStart = tournament.scheduled_start_at ? new Date(tournament.scheduled_start_at) : null;
+      const isScheduledInFuture = scheduledStart && scheduledStart > new Date();
+      const shouldAutoStart = !isScheduledInFuture && newRegistered >= config.minPlayers;
 
       if (shouldAutoStart) {
         await client.query(
@@ -664,6 +683,7 @@ export class PokerTournamentService {
       createdAt:           r.created_at?.toISOString() ?? '',
       creatorAddress:      r.creator_address ?? null,
       prizeDistributionType: r.prize_distribution_type ?? 'winner_takes_all',
+      scheduledStartAt:    r.scheduled_start_at ? new Date(r.scheduled_start_at).toISOString() : null,
     }));
   }
 

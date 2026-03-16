@@ -56,10 +56,14 @@ export interface PokerTableProps {
   onMenuClick?: () => void;
   /** Per-seat quick reaction (emoji or phrase) to show above seat; key = seat index. */
   reactionBySeatIndex?: Record<number, { type: 'emoji' | 'phrase'; value: string }>;
+  /** Per-seat avatar emotion broadcast to table (so all players see the same animation). */
+  broadcastEmotionBySeatIndex?: Record<number, import('@/components/poker/avatar/AvatarPreview').Emotion>;
   /** Called when current player selects an emoji reaction (broadcast to table). */
   onEmojiReaction?: (emoji: string) => void;
   /** Called when current player selects a phrase reaction (broadcast to table). */
   onPhraseReaction?: (phrase: string) => void;
+  /** Called when current player selects an avatar emotion (broadcast to table). */
+  onAnimationReaction?: (emotion: import('@/components/poker/avatar/AvatarPreview').Emotion) => void;
   /** When set, renders the tournament HUD overlay in the top-left corner. */
   tournamentHUD?: {
     state: PokerTournamentState;
@@ -67,7 +71,7 @@ export interface PokerTableProps {
   };
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, onEmojiReaction, onPhraseReaction, tournamentHUD }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onEmojiReaction, onPhraseReaction, onAnimationReaction, tournamentHUD }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [, setDims] = useState({ w: 640, h: 500 });
 
@@ -123,8 +127,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onMenuClick,
       overlayEmoji: reactionBySeatIndex?.[idx]?.type === 'emoji' ? reactionBySeatIndex[idx].value : null,
       overlayPhrase: reactionBySeatIndex?.[idx]?.type === 'phrase' ? reactionBySeatIndex[idx].value : null,
+      overlayEmotion: broadcastEmotionBySeatIndex?.[idx] ?? null,
       onEmojiReaction: onEmojiReaction,
       onPhraseReaction: onPhraseReaction,
+      onAnimationReaction: onAnimationReaction,
     };
   };
 

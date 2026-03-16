@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { formatEther } from 'viem';
 import {
   usePokerTournament,
@@ -32,6 +32,33 @@ function formatMorbius(wei: string | bigint): string {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function useCountdown(targetIso: string | null): string | null {
+  const [display, setDisplay] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!targetIso) { setDisplay(null); return; }
+    const update = () => {
+      const diff = new Date(targetIso).getTime() - Date.now();
+      if (diff <= 0) { setDisplay('Starting now'); return; }
+      const h = Math.floor(diff / 3_600_000);
+      const m = Math.floor((diff % 3_600_000) / 60_000);
+      const s = Math.floor((diff % 60_000) / 1_000);
+      if (h > 0) setDisplay(`${h}h ${m}m`);
+      else if (m > 0) setDisplay(`${m}m ${s}s`);
+      else setDisplay(`${s}s`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [targetIso]);
+
+  return display;
+}
+
+// ---------------------------------------------------------------------------
 // TournamentCard
 // ---------------------------------------------------------------------------
 
@@ -51,6 +78,8 @@ function TournamentCard({
   const spots = t.maxPlayers - t.registeredCount;
   const isFull = spots <= 0;
   const isActive = t.status === 'active';
+  const isScheduled = !!t.scheduledStartAt && new Date(t.scheduledStartAt) > new Date();
+  const countdown = useCountdown(isScheduled ? t.scheduledStartAt : null);
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/8 transition-colors p-4">
@@ -91,8 +120,18 @@ function TournamentCard({
       </div>
 
       <div className="mt-3 text-[11px] text-white/40">
-        Start: {t.minPlayers} players · Stack: {t.startingStack.toLocaleString()} chips
+        {isScheduled
+          ? `Scheduled · Stack: ${t.startingStack.toLocaleString()} chips`
+          : `SNG · Start: ${t.minPlayers} players · Stack: ${t.startingStack.toLocaleString()} chips`
+        }
       </div>
+
+      {isScheduled && countdown && (
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <span className="text-[10px] text-white/40 uppercase tracking-wide">Starts in</span>
+          <span className="text-xs font-bold text-cyan-400 tabular-nums">{countdown}</span>
+        </div>
+      )}
 
       {!isActive && !isFull && (
         <div className="mt-3">
@@ -148,6 +187,7 @@ function CreateModal({ onClose, onCreate }: {
   const [maxPlayers, setMaxPlayers] = useState('6');
   const [isPrivate, setIsPrivate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scheduledStart, setScheduledStart] = useState(''); // ISO datetime-local string
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -164,6 +204,7 @@ function CreateModal({ onClose, onCreate }: {
           maxPlayers:    Math.max(parseInt(minPlayers) || 2, parseInt(maxPlayers) || 6),
         },
         isPrivate,
+        scheduledStartAt: scheduledStart ? new Date(scheduledStart).toISOString() : null,
       });
       onClose();
     } finally {
@@ -251,6 +292,19 @@ function CreateModal({ onClose, onCreate }: {
               <option value="top_5">Top 5</option>
               <option value="top_10">Top 10</option>
             </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-white/50 uppercase tracking-wide block mb-1">
+              Scheduled Start <span className="normal-case text-white/30">(leave blank for SNG auto-start)</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={scheduledStart}
+              min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+              onChange={(e) => setScheduledStart(e.target.value)}
+              className="w-full rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:outline-none focus:border-white/30 [color-scheme:dark]"
+            />
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">

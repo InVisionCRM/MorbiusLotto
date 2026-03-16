@@ -259,9 +259,15 @@ export interface PrizeDistribution {
 
 export class TournamentService {
   private pool: Pool;
+  // Set after construction to avoid circular dependency
+  private pokerTournamentService: { activateTournament(tournamentId: string): Promise<string> } | null = null;
 
   constructor(pool: Pool) {
     this.pool = pool;
+  }
+
+  setPokerTournamentService(service: { activateTournament(tournamentId: string): Promise<string> }): void {
+    this.pokerTournamentService = service;
   }
 
   private toBigInt(value: unknown): bigint {
@@ -2124,6 +2130,13 @@ export class TournamentService {
           break;
         case 'reentry_close':
           // No-op: reentry window is time-based; closing is implicit
+          break;
+        case 'poker_start':
+          if (!this.pokerTournamentService) {
+            logger.warn('executeScheduledEvent: poker_start fired but pokerTournamentService not set — retrying next poll');
+            return; // Leave pending so next poll retries
+          }
+          await this.pokerTournamentService.activateTournament(tournamentId);
           break;
         default:
           logger.warn('executeScheduledEvent: unknown event_type %s', eventType);

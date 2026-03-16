@@ -59,6 +59,7 @@ export interface PokerTournamentSummary {
   createdAt: string;
   creatorAddress: string | null;
   prizeDistributionType: string;
+  scheduledStartAt: string | null;
 }
 
 export interface CreatePokerTournamentParams {
@@ -68,6 +69,7 @@ export interface CreatePokerTournamentParams {
   config: PokerTournamentConfig;
   isPrivate?: boolean;
   pinCode?: string;
+  scheduledStartAt?: string | null;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [

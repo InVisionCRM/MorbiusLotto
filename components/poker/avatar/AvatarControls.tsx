@@ -40,11 +40,11 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
   };
 
   const renderColorGrid = (colors: string[], activeColor: string, key: keyof AvatarConfig) => (
-    <div className={`grid grid-cols-6 sm:grid-cols-7 ${compact ? 'gap-1.5' : 'gap-3'}`}>
+    <div className={`grid grid-cols-6 sm:grid-cols-7 ${compact ? 'gap-2' : 'gap-3'}`}>
       {colors.map(c => (
         <button
           key={c}
-          className={`rounded-full shadow-sm transition-transform hover:scale-110 focus:outline-none overflow-hidden flex items-center justify-center ${compact ? 'w-7 h-7 ring-offset-1 ring-offset-zinc-900' : 'w-10 h-10 ring-offset-2 ring-offset-zinc-900'} ${activeColor === c ? 'ring-2 ring-indigo-500 scale-110' : 'ring-1 ring-white/10'}`}
+          className={`rounded-full shadow-sm transition-transform hover:scale-110 focus:outline-none overflow-hidden flex items-center justify-center touch-manipulation ${compact ? 'min-w-[44px] min-h-[44px] w-11 h-11 ring-offset-1 ring-offset-zinc-900' : 'w-10 h-10 ring-offset-2 ring-offset-zinc-900'} ${activeColor === c ? 'ring-2 ring-indigo-500 scale-110' : 'ring-1 ring-white/10'}`}
           onClick={() => update(key, c)}
           aria-label={`Select color ${c}`}
         >
@@ -57,11 +57,11 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
   );
 
   const renderShapeGrid = (shapes: string[], activeShape: string, key: keyof AvatarConfig) => (
-    <div className={`grid grid-cols-2 sm:grid-cols-3 ${compact ? 'gap-1.5' : 'gap-3'}`}>
+    <div className={`grid grid-cols-2 sm:grid-cols-3 ${compact ? 'gap-2' : 'gap-3'}`}>
       {shapes.map(s => (
         <button
           key={s}
-          className={`rounded-lg font-medium transition-all ${compact ? 'py-1.5 px-2 text-xs' : 'py-3 px-4 rounded-xl text-sm'} ${activeShape === s ? 'bg-indigo-600 text-white shadow-md' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'}`}
+          className={`rounded-lg font-medium transition-all touch-manipulation min-h-[44px] ${compact ? 'py-2.5 px-3 text-xs' : 'py-3 px-4 rounded-xl text-sm'} ${activeShape === s ? 'bg-indigo-600 text-white shadow-md' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'}`}
           onClick={() => update(key, s)}
         >
           {s}
@@ -173,7 +173,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
                   {Flags.map(f => (
                     <button
                       key={f}
-                      className={`py-1.5 rounded-lg transition-all flex items-center justify-center ${compact ? 'text-xl' : 'text-3xl py-2 rounded-xl'} ${config.flag === f ? 'bg-indigo-600/20 ring-2 ring-indigo-500 scale-110' : 'bg-zinc-800/50 hover:bg-zinc-700 hover:scale-110'}`}
+                      className={`rounded-lg transition-all flex items-center justify-center touch-manipulation ${compact ? 'text-xl min-h-[44px] min-w-[44px] py-1.5' : 'text-3xl py-2 rounded-xl'} ${config.flag === f ? 'bg-indigo-600/20 ring-2 ring-indigo-500 scale-110' : 'bg-zinc-800/50 hover:bg-zinc-700 hover:scale-110'}`}
                       onClick={() => update('flag', f)}
                     >
                       {f}

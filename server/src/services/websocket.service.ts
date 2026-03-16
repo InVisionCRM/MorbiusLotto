@@ -598,6 +598,11 @@ export class WebSocketService {
           await this.handlePokerQuickReaction(ws, message);
           break;
 
+        case 'poker_avatar_emotion':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handlePokerAvatarEmotion(ws, message);
+          break;
+
         // Poker Tournaments
         case 'poker_tournament_list':
           await this.handlePokerTournamentList(ws, message);
@@ -1384,6 +1389,40 @@ export class WebSocketService {
     }
   }
 
+  private static readonly POKER_AVATAR_EMOTIONS = new Set<string>(['happy', 'sad', 'angry', 'surprised', 'wink']);
+
+  private async handlePokerAvatarEmotion(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerGameService || !ws.playerAddress) {
+        return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+      }
+      const payload = message.payload as { tableId?: string; emotion?: string };
+      const { tableId, emotion } = payload ?? {};
+      if (!tableId || typeof tableId !== 'string') {
+        return this.sendError(ws, 'tableId required', message.requestId);
+      }
+      const emo = typeof emotion === 'string' ? emotion.toLowerCase().trim() : '';
+      if (!WebSocketService.POKER_AVATAR_EMOTIONS.has(emo)) {
+        return this.sendError(ws, 'emotion must be one of: happy, sad, angry, surprised, wink', message.requestId);
+      }
+      const state = await this.pokerGameService.getTableState(tableId, null);
+      const seatIndex = state.seats.findIndex(
+        (s) => s.playerAddress && s.playerAddress.toLowerCase() === ws.playerAddress!.toLowerCase()
+      );
+      if (seatIndex < 0) {
+        return this.sendError(ws, 'Not seated at this table', message.requestId);
+      }
+      const roomId = `poker:table:${tableId}`;
+      this.broadcastToRoom(roomId, {
+        type: 'poker_avatar_emotion',
+        payload: { tableId, seatIndex, emotion: emo },
+      });
+    } catch (error) {
+      logger.error('Error handling poker avatar emotion:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to send avatar emotion', message.requestId);
+    }
+  }
+
   private async handlePokerCreateTable(ws: WebSocketClient, message: WebSocketMessage) {
     try {
       if (!this.pokerGameService || !ws.playerAddress) {
@@ -1745,11 +1784,17 @@ export class WebSocketService {
         config?: unknown;
         isPrivate?: boolean;
         pinCode?: string;
+        scheduledStartAt?: string;
       };
       if (!p.name) return this.sendError(ws, 'name required', message.requestId);
       if (!p.buyInAmount) return this.sendError(ws, 'buyInAmount required', message.requestId);
       if (!p.prizeDistributionType) return this.sendError(ws, 'prizeDistributionType required', message.requestId);
       if (!p.config) return this.sendError(ws, 'config required', message.requestId);
+
+      const scheduledStartAt = p.scheduledStartAt ? new Date(p.scheduledStartAt) : null;
+      if (scheduledStartAt && isNaN(scheduledStartAt.getTime())) {
+        return this.sendError(ws, 'Invalid scheduledStartAt date', message.requestId);
+      }
 
       const result = await this.pokerTournamentService.createPokerTournament({
         creatorAddress:       ws.playerAddress,
@@ -1759,6 +1804,7 @@ export class WebSocketService {
         config:               p.config as any,
         isPrivate:            p.isPrivate ?? false,
         pinCode:              p.pinCode ?? null,
+        scheduledStartAt,
       });
       this.sendMessage(ws, { type: 'poker_tournament_created', payload: result, requestId: message.requestId });
     } catch (error) {

@@ -14,6 +14,7 @@ import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
 import { PokerTable } from '@/components/poker/PokerTable';
+import type { Emotion } from '@/components/poker/avatar/AvatarPreview';
 import { PokerActions } from '@/components/poker/PokerActions';
 import { PokerDepositModal } from '@/components/poker/PokerDepositModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
@@ -25,6 +26,8 @@ import { toast } from 'sonner';
 
 const POKER_CHAT_BUBBLE_DURATION_MS = 5000;
 const POKER_QUICK_REACTION_DURATION_MS = 2000;
+const POKER_AVATAR_EMOTION_DURATION_MS = 3000;
+const POKER_AVATAR_EMOTION_WINK_MS = 1200;
 
 export default function PokerTablePage() {
   const params = useParams();
@@ -50,8 +53,10 @@ export default function PokerTablePage() {
   const reactionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   /** Per-seat quick reaction (emoji or phrase) shown above seat; cleared after 2s. */
   const [reactionBySeatIndex, setReactionBySeatIndex] = useState<Record<number, { type: 'emoji' | 'phrase'; value: string }>>({});
+  const reactionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const [broadcastEmotionBySeatIndex, setBroadcastEmotionBySeatIndex] = useState<Record<number, Emotion>>({});
+  const emotionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const clientRef = useRef<BlackjackWebSocketClient | null>(null);
-  // Monotonic counter to discard out-of-order pokerGetState responses.
   const fetchSeqRef = useRef(0);
 
   const normalizedAddress = address?.toLowerCase() ?? null;
@@ -214,10 +219,34 @@ export default function PokerTablePage() {
     };
 
     client.on('poker_quick_reaction', onQuickReaction);
+
+    const onAvatarEmotion = (payload: { tableId?: string; seatIndex?: number; emotion?: string }) => {
+      if (payload.tableId !== tableId || payload.seatIndex == null || !payload.emotion) return;
+      const emotion = payload.emotion as Emotion;
+      const duration = emotion === 'wink' ? POKER_AVATAR_EMOTION_WINK_MS : POKER_AVATAR_EMOTION_DURATION_MS;
+      setBroadcastEmotionBySeatIndex((prev) => ({ ...prev, [payload.seatIndex!]: emotion }));
+      if (emotionTimeoutsRef.current.has(payload.seatIndex)) {
+        clearTimeout(emotionTimeoutsRef.current.get(payload.seatIndex)!);
+      }
+      const t = setTimeout(() => {
+        setBroadcastEmotionBySeatIndex((prev) => {
+          const next = { ...prev };
+          delete next[payload.seatIndex!];
+          return next;
+        });
+        emotionTimeoutsRef.current.delete(payload.seatIndex!);
+      }, duration);
+      emotionTimeoutsRef.current.set(payload.seatIndex, t);
+    };
+    client.on('poker_avatar_emotion', onAvatarEmotion);
+
     return () => {
       client.off('poker_quick_reaction', onQuickReaction);
+      client.off('poker_avatar_emotion', onAvatarEmotion);
       reactionTimeoutsRef.current.forEach((t) => clearTimeout(t));
       reactionTimeoutsRef.current.clear();
+      emotionTimeoutsRef.current.forEach((t) => clearTimeout(t));
+      emotionTimeoutsRef.current.clear();
     };
   }, [tableId]);
 
@@ -399,6 +428,16 @@ export default function PokerTablePage() {
     },
     [tableId, mySeatIndex],
   );
+
+  const onAnimationReaction = useCallback(
+    (emotion: Emotion) => {
+      const client = clientRef.current;
+      if (!client?.isConnected() || !tableId || mySeatIndex < 0) return;
+      client.sendPokerAvatarEmotion(tableId, emotion);
+    },
+    [tableId, mySeatIndex],
+  );
+
   const mySeat = mySeatIndex >= 0 && state ? state.seats[mySeatIndex] : null;
   const canAct =
     !!hand &&
@@ -658,8 +697,10 @@ export default function PokerTablePage() {
                 timeLeft={timeLeft}
                 chatBubbleBySeatIndex={chatBubbleBySeatIndex}
                 reactionBySeatIndex={reactionBySeatIndex}
+                broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
                 onEmojiReaction={mySeatIndex >= 0 ? onEmojiReaction : undefined}
                 onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
+                onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}
                 onReUpClick={mySeat ? () => setShowDepositModal(true) : undefined}
                 onMenuClick={mySeat ? () => setShowAvatarModal(true) : undefined}
               />

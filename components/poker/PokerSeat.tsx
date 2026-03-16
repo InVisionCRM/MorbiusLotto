@@ -220,13 +220,17 @@ export interface PokerSeatProps {
   onMenuClick?: () => void;
   overlayEmoji?: string | null;
   overlayPhrase?: string | null;
+  /** Avatar emotion broadcast from server (visible to all players). */
+  overlayEmotion?: Emotion | null;
   onEmojiReaction?: (emoji: string) => void;
   onPhraseReaction?: (phrase: string) => void;
+  /** Called when current player selects an avatar emotion (broadcast to table). */
+  onAnimationReaction?: (emotion: Emotion) => void;
 }
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, onEmojiReaction, onPhraseReaction }: PokerSeatProps) {
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onEmojiReaction, onPhraseReaction, onAnimationReaction }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -275,8 +279,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
   const localEmotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const avatarRef = useRef<HTMLDivElement | null>(null);
 
-  // Active emotion: local override takes priority over action-driven emotion
-  const activeEmotion: Emotion = localEmotion ?? avatarEmotion;
+  // Active emotion: broadcast (from server) > local (just clicked) > action-driven (fold/raise etc.)
+  const activeEmotion: Emotion = propsOverlayEmotion ?? localEmotion ?? avatarEmotion;
 
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -327,12 +331,13 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
 
   const handleAnimationSelect = useCallback((emotion: Emotion) => {
     setAnimationPickerOpen(false);
+    onAnimationReaction?.(emotion);
     setLocalEmotion(emotion);
     if (localEmotionTimerRef.current) clearTimeout(localEmotionTimerRef.current);
     localEmotionTimerRef.current = setTimeout(() => {
       setLocalEmotion(null);
     }, emotion === 'wink' ? 1200 : LOCAL_EMOTION_DURATION_MS);
-  }, []);
+  }, [onAnimationReaction]);
 
   const animationDockItems = useMemo(
     () =>

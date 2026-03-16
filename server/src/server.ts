@@ -277,6 +277,7 @@ async function initializeServices() {
       dbService.getPool(), tournamentService, pokerGameService
     );
     wsService.setPokerTournamentService(pokerTournamentService);
+    tournamentService.setPokerTournamentService(pokerTournamentService);
     pokerGameService.setPostHandCallback(
       (tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber)
     );

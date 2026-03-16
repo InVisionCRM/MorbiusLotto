@@ -57,10 +57,10 @@ export default function PixelBackgroundUploader({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-center w-full">
-        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-zinc-700 border-dashed rounded-xl cursor-pointer bg-zinc-800/50 hover:bg-zinc-700 transition-colors">
-          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+        <label className="flex flex-col items-center justify-center w-full min-h-[120px] py-6 border-2 border-zinc-700 border-dashed rounded-xl cursor-pointer bg-zinc-800/50 hover:bg-zinc-700 transition-colors touch-manipulation">
+          <div className="flex flex-col items-center justify-center">
             <Upload className="w-8 h-8 mb-3 text-zinc-400" />
-            <p className="mb-2 text-sm text-zinc-400"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+            <p className="mb-2 text-sm text-zinc-400"><span className="font-semibold">Tap to upload</span> or drag and drop</p>
             <p className="text-xs text-zinc-500">PNG, JPG or WEBP</p>
           </div>
           <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
@@ -77,8 +77,9 @@ export default function PixelBackgroundUploader({
                 onImageChange('');
                 if (fileInputRef.current) fileInputRef.current.value = '';
               }}
-              className="text-red-400 hover:text-red-300 p-1 rounded-md hover:bg-red-400/10 transition-colors"
+              className="text-red-400 hover:text-red-300 p-2 -m-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md hover:bg-red-400/10 transition-colors touch-manipulation"
               title="Remove background"
+              aria-label="Remove background"
             >
               <Trash2 className="w-4 h-4" />
             </button>
