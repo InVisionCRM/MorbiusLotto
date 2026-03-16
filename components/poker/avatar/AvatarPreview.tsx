@@ -639,11 +639,6 @@ export default function AvatarPreview({
         </motion.g>
         {renderHat()}
       </svg>
-      {!compact && (
-        <div className="absolute bottom-4 right-4 text-4xl drop-shadow-lg bg-zinc-900/40 rounded-lg w-12 h-12 flex items-center justify-center backdrop-blur-sm border border-white/10">
-          {config.flag}
-        </div>
-      )}
     </div>
   );
 }

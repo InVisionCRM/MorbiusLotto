@@ -32,7 +32,6 @@ const Accessories = ['None', 'Glasses', 'Sunglasses', 'Aviators', 'Wayfarers', '
 const Hats = ['None', 'Cap', 'Beanie', 'Top Hat', 'Cowboy', 'Crown', 'Bandana'];
 const Necklaces = ['None', 'Gold Chain', 'Silver Chain', 'Pearl', 'Pendant'];
 const MouthAccessories = ['None', 'Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'];
-const Flags = ['🇺🇸', '🇬🇧', '🇨🇦', '🇫🇷', '🇩🇪', '🇯🇵', '🇧🇷', '🇦🇺', '🇮🇳', '🇰🇷', '🇨🇳', '🇲🇽', '🇮🇹', '🇪🇸', '🇿🇦', '🇳🇬', '🇦🇷', '🇸🇪', '🇳🇱', '🇨🇭', '🌍'];
 
 export default function AvatarControls({ config, onChange, activeTab, compact = false }: { config: AvatarConfig; onChange: (c: AvatarConfig) => void; activeTab: string; compact?: boolean }) {
   const update = (key: keyof AvatarConfig, value: string) => {
@@ -166,22 +165,6 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
               </section>
             )}
 
-            {activeTab === 'flag' && (
-              <section>
-                <h3 className={`font-semibold text-zinc-400 uppercase tracking-wider ${compact ? 'text-xs mb-2' : 'text-sm mb-4'}`}>National Flag</h3>
-                <div className={`grid grid-cols-5 sm:grid-cols-7 ${compact ? 'gap-1.5' : 'gap-3'}`}>
-                  {Flags.map(f => (
-                    <button
-                      key={f}
-                      className={`rounded-lg transition-all flex items-center justify-center touch-manipulation ${compact ? 'text-xl min-h-[44px] min-w-[44px] py-1.5' : 'text-3xl py-2 rounded-xl'} ${config.flag === f ? 'bg-indigo-600/20 ring-2 ring-indigo-500 scale-110' : 'bg-zinc-800/50 hover:bg-zinc-700 hover:scale-110'}`}
-                      onClick={() => update('flag', f)}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
           </motion.div>
         </AnimatePresence>
       </div>

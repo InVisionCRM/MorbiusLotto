@@ -1184,6 +1184,51 @@ async function initializeServices() {
       }
     });
 
+    // Admin: all poker tables (including tournament tables hidden from public lobby)
+    app.get('/api/admin/poker/tables', async (req, res) => {
+      try {
+        const result = await dbService.getPool().query(
+          `SELECT pt.id, pt.small_blind, pt.big_blind, pt.max_seats, pt.status,
+                  pt.tournament_mode, pt.tournament_id, pt.hand_number,
+                  COUNT(ps.id) AS seated_count
+           FROM poker_tables pt
+           LEFT JOIN poker_seats ps ON ps.table_id = pt.id
+           GROUP BY pt.id
+           ORDER BY pt.created_at DESC
+           LIMIT 100`
+        );
+        res.json({ tables: result.rows });
+      } catch (error) {
+        logger.error('Error fetching all poker tables:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Admin: all poker tournaments (all statuses)
+    app.get('/api/admin/poker/tournaments', async (req, res) => {
+      try {
+        const result = await dbService.getPool().query(
+          `SELECT t.id AS tournament_id, t.name, t.status, t.buy_in_amount,
+                  t.prize_pool, t.min_players, t.max_players, t.starting_chips,
+                  t.scheduled_start_at, t.created_at, t.creator_address,
+                  t.prize_distribution_type,
+                  COUNT(te.id) FILTER (WHERE te.status = 'playing') AS active_players,
+                  COUNT(te.id) AS total_entries,
+                  (SELECT pt.id FROM poker_tables pt WHERE pt.tournament_id = t.id LIMIT 1) AS table_id
+           FROM tournaments t
+           LEFT JOIN tournament_entries te ON te.tournament_id = t.id
+           WHERE t.game_type = 'poker'
+           GROUP BY t.id
+           ORDER BY t.created_at DESC
+           LIMIT 100`
+        );
+        res.json({ tournaments: result.rows });
+      } catch (error) {
+        logger.error('Error fetching poker tournaments:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves for current + all legacy)
     // MORBIUS in contract = MORBIUS_TOKEN.balanceOf(gameContract) for each game (canonical addresses in config/contracts.ts).
     app.get('/api/admin/health', async (req, res) => {

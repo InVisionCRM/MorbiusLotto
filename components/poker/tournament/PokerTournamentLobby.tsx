@@ -133,7 +133,18 @@ function TournamentCard({
         </div>
       )}
 
-      {!isActive && !isFull && (
+      {/* Already registered */}
+      {t.isRegistered && !isActive && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg bg-green-500/10 border border-green-500/30 px-3 py-2">
+          <span className="text-green-400 text-xs font-semibold">✓ Registered</span>
+          {isScheduled && countdown && (
+            <span className="text-white/40 text-xs ml-auto">Starts in {countdown}</span>
+          )}
+        </div>
+      )}
+
+      {/* Join button — only show if not registered, not active, not full */}
+      {!t.isRegistered && !isActive && !isFull && (
         <div className="mt-3">
           {showPin ? (
             <div className="flex gap-2">
@@ -156,15 +167,21 @@ function TournamentCard({
               onClick={() => onJoin(t.tournamentId)}
               className="w-full rounded-lg bg-yellow-500 hover:bg-yellow-400 text-black font-semibold text-sm py-2 transition-colors"
             >
-              Join Tournament
+              {isScheduled ? 'Register' : 'Join Tournament'}
             </button>
           )}
         </div>
       )}
 
-      {isActive && (
+      {isActive && !t.isRegistered && (
         <div className="mt-3 text-center text-xs text-white/30 py-1">
           Tournament in progress
+        </div>
+      )}
+
+      {isActive && t.isRegistered && (
+        <div className="mt-3 text-center text-xs text-green-400/60 py-1">
+          You are playing in this tournament
         </div>
       )}
     </div>
@@ -352,6 +369,7 @@ interface PokerTournamentLobbyProps {
 export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: PokerTournamentLobbyProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
 
   const { openTournaments, isLoadingTournaments, refreshTournaments, createTournament, joinTournament, myTableId, myTournamentId } =
     usePokerTournament({
@@ -363,10 +381,14 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
 
   const handleJoin = async (tournamentId: string, pinCode?: string) => {
     setJoinError(null);
+    setJoinSuccess(null);
     try {
       const result = await joinTournament(tournamentId, pinCode);
       if (result?.autoStarted && result.tableId) {
         onGoToTable?.(result.tableId, tournamentId);
+      } else if (result && !result.autoStarted) {
+        setJoinSuccess("You're registered! Your seat will be assigned automatically when the tournament starts.");
+        await refreshTournaments();
       }
     } catch (err) {
       setJoinError((err as Error).message ?? 'Failed to join');
@@ -408,6 +430,14 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       {joinError && (
         <div className="rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-2">
           {joinError}
+        </div>
+      )}
+
+      {/* Registration success */}
+      {joinSuccess && (
+        <div className="rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm px-4 py-2 flex items-start justify-between gap-2">
+          <span>{joinSuccess}</span>
+          <button onClick={() => setJoinSuccess(null)} className="text-green-400/60 hover:text-green-400 shrink-0 text-base leading-none">×</button>
         </div>
       )}
 

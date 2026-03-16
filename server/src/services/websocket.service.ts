@@ -1764,7 +1764,7 @@ export class WebSocketService {
       if (!this.pokerTournamentService) {
         return this.sendError(ws, 'Poker tournaments not available', message.requestId);
       }
-      const tournaments = await this.pokerTournamentService.listPokerTournaments();
+      const tournaments = await this.pokerTournamentService.listPokerTournaments(ws.playerAddress ?? undefined);
       this.sendMessage(ws, { type: 'poker_tournament_list', payload: { tournaments }, requestId: message.requestId });
     } catch (error) {
       logger.error('Error listing poker tournaments:', error);

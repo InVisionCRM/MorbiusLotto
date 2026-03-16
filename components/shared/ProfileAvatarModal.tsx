@@ -29,7 +29,6 @@ function normalizeAvatarConfig(c: unknown): AvatarConfig {
       noseShape: typeof o.noseShape === 'string' ? o.noseShape : DEFAULT_AVATAR_CONFIG.noseShape,
       lipShape: typeof o.lipShape === 'string' ? o.lipShape : DEFAULT_AVATAR_CONFIG.lipShape,
       accessory: typeof o.accessory === 'string' ? o.accessory : DEFAULT_AVATAR_CONFIG.accessory,
-      flag: typeof o.flag === 'string' ? o.flag : DEFAULT_AVATAR_CONFIG.flag,
       shirtColor: typeof o.shirtColor === 'string' ? o.shirtColor : DEFAULT_AVATAR_CONFIG.shirtColor,
       hat: typeof o.hat === 'string' ? o.hat : DEFAULT_AVATAR_CONFIG.hat,
       necklace: typeof o.necklace === 'string' ? o.necklace : DEFAULT_AVATAR_CONFIG.necklace,

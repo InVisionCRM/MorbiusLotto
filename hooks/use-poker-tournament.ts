@@ -60,6 +60,7 @@ export interface PokerTournamentSummary {
   creatorAddress: string | null;
   prizeDistributionType: string;
   scheduledStartAt: string | null;
+  isRegistered: boolean;
 }
 
 export interface CreatePokerTournamentParams {

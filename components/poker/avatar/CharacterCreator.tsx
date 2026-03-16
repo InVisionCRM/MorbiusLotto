@@ -5,7 +5,7 @@ import type { AvatarConfig } from '@/lib/websocket-client';
 import AvatarPreview, { type Emotion } from './AvatarPreview';
 import AvatarControls from './AvatarControls';
 import { motion } from 'framer-motion';
-import { Palette, Scissors, Eye, Smile, Sparkles, Flag, Shirt, Image as ImageIcon, Glasses } from 'lucide-react';
+import { Palette, Scissors, Eye, Smile, Sparkles, Shirt, Image as ImageIcon, Glasses } from 'lucide-react';
 
 export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   skinColor: '#F1C27D',
@@ -16,7 +16,6 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   noseShape: 'Small',
   lipShape: 'Smile',
   accessory: 'None',
-  flag: '🇺🇸',
   shirtColor: '#3f3f46',
   hat: 'None',
   necklace: 'None',
@@ -32,7 +31,6 @@ const tabs = [
   { id: 'face', label: 'Face', icon: Smile },
   { id: 'clothes', label: 'Clothes', icon: Shirt },
   { id: 'acc', label: 'Extras', icon: Sparkles },
-  { id: 'flag', label: 'Flag', icon: Flag },
 ];
 
 type CharacterCreatorProps = {
@@ -108,8 +106,9 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row flex-1 min-h-0">
-        {/* Left: avatar + name + Shades + emotions */}
+      {/* On mobile: flex-col-reverse so options appear directly under tabs. On md: avatar left, controls right. */}
+      <div className="flex flex-col-reverse md:flex-row flex-1 min-h-0">
+        {/* Left (desktop) / Bottom (mobile): avatar + name + Shades + emotions */}
         <div className={`w-full md:w-2/5 bg-zinc-800/50 flex flex-col items-center justify-center relative border-b md:border-b-0 md:border-r border-zinc-800 shrink-0 ${compact ? 'p-3' : 'p-8'}`}>
           {displayName !== undefined && onDisplayNameChange ? (
             <input
@@ -147,7 +146,8 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
             </div>
           </div>
         </div>
-        <div className={`w-full md:w-3/5 flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${compact ? 'p-3' : 'p-6 sm:p-8'}`}>
+        {/* Options panel: on mobile min-h so it never collapses; directly under tabs with flex-col-reverse */}
+        <div className={`w-full md:w-3/5 flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${compact ? 'p-3 min-h-[220px] md:min-h-0' : 'p-6 sm:p-8'}`}>
           <AvatarControls config={config} onChange={setConfig} activeTab={activeTab} compact={compact} />
         </div>
       </div>

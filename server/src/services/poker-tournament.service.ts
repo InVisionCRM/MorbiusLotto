@@ -72,6 +72,7 @@ export interface PokerTournamentSummary {
   creatorAddress: string | null;
   prizeDistributionType: string;
   scheduledStartAt: string | null;
+  isRegistered: boolean;
 }
 
 export interface CreatePokerTournamentParams {
@@ -665,25 +666,39 @@ export class PokerTournamentService {
   // Read methods
   // ---------------------------------------------------------------------------
 
-  async listPokerTournaments(): Promise<PokerTournamentSummary[]> {
+  async listPokerTournaments(playerAddress?: string): Promise<PokerTournamentSummary[]> {
+    const normalized = playerAddress ? this.normalizeAddress(playerAddress) : null;
+
     const result = await this.pool.query(
-      `SELECT * FROM poker_tournament_registrations ORDER BY created_at DESC`
+      `SELECT r.*,
+         CASE WHEN $1::text IS NOT NULL AND EXISTS (
+           SELECT 1 FROM tournament_entries te
+           WHERE te.tournament_id = r.tournament_id
+             AND LOWER(te.player_address) = $1::text
+             AND te.status NOT IN ('busted', 'completed')
+         ) THEN TRUE ELSE FALSE END AS is_registered
+       FROM poker_tournament_registrations r
+       ORDER BY
+         CASE WHEN r.scheduled_start_at IS NOT NULL THEN r.scheduled_start_at ELSE r.created_at END ASC`,
+      [normalized]
     );
+
     return result.rows.map((r) => ({
-      tournamentId:        r.tournament_id,
-      name:                r.name,
-      status:              r.status,
-      buyInAmount:         r.buy_in_amount?.toString() ?? '0',
-      startingStack:       Number(r.starting_chips ?? 5000),
-      registeredCount:     Number(r.registered_count ?? 0),
-      maxPlayers:          Number(r.max_players ?? 6),
-      minPlayers:          Number(r.min_players ?? 2),
-      prizePool:           r.prize_pool?.toString() ?? '0',
-      tableId:             r.table_id ?? null,
-      createdAt:           r.created_at?.toISOString() ?? '',
-      creatorAddress:      r.creator_address ?? null,
+      tournamentId:          r.tournament_id,
+      name:                  r.name,
+      status:                r.status,
+      buyInAmount:           r.buy_in_amount?.toString() ?? '0',
+      startingStack:         Number(r.starting_chips ?? 5000),
+      registeredCount:       Number(r.registered_count ?? 0),
+      maxPlayers:            Number(r.max_players ?? 6),
+      minPlayers:            Number(r.min_players ?? 2),
+      prizePool:             r.prize_pool?.toString() ?? '0',
+      tableId:               r.table_id ?? null,
+      createdAt:             r.created_at?.toISOString() ?? '',
+      creatorAddress:        r.creator_address ?? null,
       prizeDistributionType: r.prize_distribution_type ?? 'winner_takes_all',
-      scheduledStartAt:    r.scheduled_start_at ? new Date(r.scheduled_start_at).toISOString() : null,
+      scheduledStartAt:      r.scheduled_start_at ? new Date(r.scheduled_start_at).toISOString() : null,
+      isRegistered:          r.is_registered === true,
     }));
   }
 
