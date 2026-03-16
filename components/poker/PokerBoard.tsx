@@ -8,6 +8,8 @@ import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from
 export interface PokerBoardProps {
   communityCards: number[];
   pot: string;
+  /** At showdown: 5 card indices that form the winning hand (for cyan highlight) */
+  winningCardIndices?: number[];
   /** When true, wrap the pot in an element with data-tutorial-target="pot" for tutorial spotlight */
   dataTutorialTargetPot?: boolean;
 }
@@ -38,7 +40,7 @@ function AnimatedPotValue({ pot }: { pot: string }) {
   );
 }
 
-export function PokerBoard({ communityCards, pot, dataTutorialTargetPot }: PokerBoardProps) {
+export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutorialTargetPot }: PokerBoardProps) {
   const potNum = useMemo(() => parsePotNum(pot), [pot]);
 
   const potInner = (
@@ -80,6 +82,7 @@ export function PokerBoard({ communityCards, pot, dataTutorialTargetPot }: Poker
                 key={communityCards[i]}
                 cardIndex={communityCards[i]}
                 dealDelay={i * 0.07}
+                isWinningCard={winningCardIndices?.includes(communityCards[i])}
               />
             ) : (
               <CardDisplay key={`empty-${i}`} cardIndex={undefined} />

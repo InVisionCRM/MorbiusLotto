@@ -28,6 +28,8 @@ export interface CardDisplayProps {
   small?: boolean;
   /** Show card back (for opponent hole cards) */
   faceDown?: boolean;
+  /** At showdown: highlight this card as part of the winning hand (cyan border) */
+  isWinningCard?: boolean;
   className?: string;
   /** Stagger delay in seconds for deal animation */
   dealDelay?: number;
@@ -49,7 +51,7 @@ const dealVariants = {
   }),
 };
 
-export function CardDisplay({ cardIndex, small, faceDown, className = '', dealDelay = 0 }: CardDisplayProps) {
+export function CardDisplay({ cardIndex, small, faceDown, isWinningCard, className = '', dealDelay = 0 }: CardDisplayProps) {
   const sizeClasses = small
     ? 'w-10 h-14 sm:w-11 sm:h-[62px] md:w-12 md:h-[68px] lg:w-14 lg:h-20 xl:w-16 xl:h-[88px]'
     : 'w-14 h-20 sm:w-16 sm:h-24 lg:w-[72px] lg:h-[100px] xl:w-20 xl:h-28';
@@ -107,8 +109,13 @@ export function CardDisplay({ cardIndex, small, faceDown, className = '', dealDe
           initial="hidden"
           animate="visible"
           custom={dealDelay}
-          className={`relative ${sizeClasses} overflow-hidden bg-white`}
-          style={{ boxShadow: cardShadow, transformStyle: 'preserve-3d' }}
+          className={`relative ${sizeClasses} overflow-hidden bg-white rounded-md`}
+          style={{
+            boxShadow: isWinningCard
+              ? `${cardShadow}, 0 0 0 2px rgba(34, 211, 238, 0.85), 0 0 14px rgba(34, 211, 238, 0.4)`
+              : cardShadow,
+            transformStyle: 'preserve-3d',
+          }}
         >
           <Image
             src={getCardImagePath(cardIndex!)}
@@ -119,6 +126,14 @@ export function CardDisplay({ cardIndex, small, faceDown, className = '', dealDe
             priority
           />
           <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: innerGlow }} />
+          {isWinningCard && (
+            <div
+              className="absolute inset-0 pointer-events-none rounded-md"
+              style={{
+                boxShadow: 'inset 0 0 0 1px rgba(34, 211, 238, 0.35)',
+              }}
+            />
+          )}
         </motion.div>
       )}
     </div>

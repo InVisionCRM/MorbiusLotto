@@ -191,6 +191,11 @@ const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
   { title: 'Money',     emotion: 'money'     },
   { title: 'Cool',      emotion: 'cool'      },
   { title: 'Jackpot',   emotion: 'jackpot'   },
+  { title: 'Slouch',    emotion: 'slouch'    },
+  { title: 'Yawn',      emotion: 'yawn'      },
+  { title: 'Bored',     emotion: 'bored'     },
+  { title: 'Nod',       emotion: 'nod'       },
+  { title: 'Shrug',     emotion: 'shrug'     },
 ];
 
 // ── PokerSeat ─────────────────────────────────────────────────────────────
@@ -201,6 +206,8 @@ export interface PokerSeatProps {
   holeCards?: number[];
   isCurrentPlayer?: boolean;
   showCardBacks?: boolean;
+  /** At showdown: 5 card indices that form this seat's winning hand (for cyan highlight on hole cards) */
+  winningCardIndices?: number[];
   lastAction?: { action: string; amount: string } | null;
   timeLeft?: number;
   maxTime?: number;
@@ -219,7 +226,7 @@ export interface PokerSeatProps {
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onEmojiReaction, onPhraseReaction, onAnimationReaction }: PokerSeatProps) {
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onEmojiReaction, onPhraseReaction, onAnimationReaction }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -479,15 +486,15 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
         )}
       </AnimatePresence>
 
-      {/* ── Cards — centered fan above avatar ── */}
+      {/* ── Cards — peek out from behind avatar ── */}
       {hasCards && (
         <div
           className="relative flex-shrink-0"
           style={{
             width: showMyCards ? 'clamp(120px, 30vw, 160px)' : 'clamp(84px, 21vw, 110px)',
             height: showMyCards ? 'clamp(72px, 18vw, 96px)' : 'clamp(50px, 12vw, 66px)',
-            marginBottom: -20,
-            zIndex: 3,
+            marginBottom: -55,
+            zIndex: 0,
           }}
         >
           {[0, 1].map((ci) => (
@@ -501,12 +508,16 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
                   : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', [ci === 0 ? 'left' : 'right']: 'clamp(4px, 1vw, 8px)' }),
                 transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
                 transformOrigin: 'bottom center',
-                zIndex: ci + 1,
                 filter: isFolded ? 'grayscale(1) opacity(0.5)' : undefined,
               }}
             >
               {showMyCards
-                ? <CardDisplay cardIndex={holeCards![ci]} />
+                ? (
+                    <CardDisplay
+                      cardIndex={holeCards![ci]}
+                      isWinningCard={winningCardIndices?.includes(holeCards![ci])}
+                    />
+                  )
                 : <CardDisplay cardIndex={null} small faceDown />}
             </div>
           ))}
@@ -521,7 +532,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
       )}
 
       {/* ── Avatar with circular timer + role badges + animation picker ── */}
-      <div className="relative flex-shrink-0">
+      <div className="relative flex-shrink-0" style={{ zIndex: 1 }}>
 
         {/* Animation picker — above avatar, current player only */}
         <AnimatePresence>
@@ -565,7 +576,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
 
         {/* Circular timer ring around avatar */}
         {isActing && timeLeft != null && (
-          <CircularTimerRing size={88} timeLeft={timeLeft} maxTime={maxTime} />
+          <CircularTimerRing size={100} timeLeft={timeLeft} maxTime={maxTime} />
         )}
 
         {/* Avatar circle */}
@@ -573,8 +584,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           ref={avatarRef}
           className="relative rounded-full overflow-hidden"
           style={{
-            width: 88,
-            height: 88,
+            width: 100,
+            height: 100,
             border: isActing
               ? '2px solid transparent'
               : isCurrentPlayer

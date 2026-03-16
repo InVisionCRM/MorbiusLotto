@@ -145,8 +145,8 @@ export interface PokerCurrentHand {
   turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by lowercase address */
   showdownHands?: Record<string, number[]>;
-  /** At showdown: winner(s), amount each receives, and optional hand name */
-  winners?: { address: string; amount: string; handName?: string }[];
+  /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
+  winners?: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[];
 }
 
 export interface PokerTableState {

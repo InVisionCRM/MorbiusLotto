@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { Table, Card, CardRank, CardSuit, BettingRound } from '@chevtek/poker-engine';
+import { bestHand } from './poker-hand-eval';
 import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { logger } from '../utils/logger';
@@ -47,8 +48,8 @@ export interface PokerCurrentHand {
   turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by address */
   showdownHands?: Record<string, number[]>;
-  /** At showdown: winner(s), amount each receives, and optional hand name */
-  winners?: { address: string; amount: string; handName?: string }[];
+  /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
+  winners?: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[];
 }
 
 export interface PokerTableState {
@@ -687,6 +688,7 @@ export class PokerGameService {
                 address: (w.address || '').toLowerCase(),
                 amount: String(w.amount ?? '0'),
                 handName: w.handName,
+                winningCardIndices: Array.isArray(w.winningCardIndices) ? w.winningCardIndices : undefined,
               }));
             }
           } catch {
@@ -1007,7 +1009,7 @@ export class PokerGameService {
   private async persistShowdown(pool: Pool, tableId: string, handId: string, table: Table): Promise<void> {
     // Credit stacks from chevtek's showdown calculation
     // table.winners is the overall winner list; table.pots[].winners has per-pot winners
-    const resultWinners: { address: string; amount: string; handName?: string }[] = [];
+    const resultWinners: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[] = [];
 
     // We need to know how much each player won — compute by comparing pre/post stacks.
     // Chevtek already credited stackSize in showdown(). We sync those values to DB.
@@ -1044,14 +1046,16 @@ export class PokerGameService {
       const holeCards = holeCardsByAddr.get(addr) ?? [];
       const allCards = [...holeCards, ...communityInts];
       let handName: string | undefined;
+      let winningCardIndices: number[] | undefined;
       if (allCards.length >= 5) {
-        // Use chevtek's pokersolver hand description
+        const ranked = bestHand(allCards);
+        winningCardIndices = ranked.cards;
         const livePlayer = table.players.find((p) => p?.id === addr);
         if (livePlayer?.hand) {
           handName = livePlayer.hand.descr ?? undefined;
         }
       }
-      resultWinners.push({ address: addr, amount: Math.round(amount).toString(), handName });
+      resultWinners.push({ address: addr, amount: Math.round(amount).toString(), handName, winningCardIndices });
     }
 
     const communityInts2 = table.communityCards.map(cardToInt);

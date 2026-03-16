@@ -8,7 +8,8 @@ export type Emotion =
   | 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'wink'
   | 'dance' | 'flex' | 'jump' | 'spin' | 'think' | 'love' | 'money'
   | 'sick' | 'cool' | 'sleepy' | 'shock' | 'ghost' | 'ninja' | 'king'
-  | 'poker' | 'jackpot' | 'chips' | 'cards' | 'dice';
+  | 'poker' | 'jackpot' | 'chips' | 'cards' | 'dice'
+  | 'slouch' | 'yawn' | 'bored' | 'nod' | 'shrug';
 
 export default function AvatarPreview({
   config,
@@ -80,10 +81,15 @@ export default function AvatarPreview({
         setIdleEmotion(null);
       }
       if (!isAsleep && propEmotion === 'neutral' && !idleEmotion && Math.random() > 0.8) {
-        const actions: Emotion[] = ['wink', 'surprised', 'think', 'happy'];
+        const actions: Emotion[] = ['wink', 'surprised', 'think', 'happy', 'slouch', 'yawn', 'bored', 'nod', 'shrug'];
         const action = actions[Math.floor(Math.random() * actions.length)];
         setIdleEmotion(action);
-        setTimeout(() => setIdleEmotion(null), 1000 + Math.random() * 1000);
+        const duration =
+          action === 'yawn' ? 3500 :
+          action === 'bored' || action === 'slouch' ? 4500 :
+          action === 'nod' || action === 'shrug' ? 2500 :
+          1000 + Math.random() * 1000;
+        setTimeout(() => setIdleEmotion(null), duration);
       }
     }, 2000);
 
@@ -108,6 +114,8 @@ export default function AvatarPreview({
     shock: { scaleY: 1.5, scaleX: 1.2 }, ghost: { scaleY: 0.8, opacity: 0.6 },
     ninja: { scaleY: 0.2, y: 0.2 }, king: { scaleY: 1.1 }, poker: { scaleY: 0.6, y: 0.2 },
     jackpot: { scaleY: 0.3, y: 0 }, chips: { scaleY: 1 }, cards: { scaleY: 1 }, dice: { scaleY: 1.2 },
+    slouch: { scaleY: 0.2, y: 0.5 }, yawn: { scaleY: 0.05, y: 0.5 }, bored: { scaleY: 0.3, y: 0.3 },
+    nod: { scaleY: 1 }, shrug: { scaleY: 1.1, y: -0.5 },
   };
 
   const rightEyeVariants = {
@@ -119,6 +127,8 @@ export default function AvatarPreview({
     shock: { scaleY: 1.5, scaleX: 1.2 }, ghost: { scaleY: 0.8, opacity: 0.6 },
     ninja: { scaleY: 0.2, y: 0.2 }, king: { scaleY: 1.1 }, poker: { scaleY: 0.6, y: 0.2 },
     jackpot: { scaleY: 0.3, y: 0 }, chips: { scaleY: 1 }, cards: { scaleY: 1 }, dice: { scaleY: 1.2 },
+    slouch: { scaleY: 0.2, y: 0.5 }, yawn: { scaleY: 0.05, y: 0.5 }, bored: { scaleY: 0.3, y: 0.3 },
+    nod: { scaleY: 1 }, shrug: { scaleY: 1.1, y: -0.5 },
   };
 
   const eyebrowLeftVariants = {
@@ -131,6 +141,8 @@ export default function AvatarPreview({
     shock: { y: -2, rotate: -20 }, ghost: { y: -1, opacity: 0.5 }, ninja: { y: 1, rotate: 20 },
     king: { y: -1, rotate: 0 }, poker: { y: 0.5, rotate: 0 }, jackpot: { y: -1.5, rotate: 0 },
     chips: { y: -0.5, rotate: 0 }, cards: { y: -0.5, rotate: 0 }, dice: { y: -1, rotate: 0 },
+    slouch: { y: 0.5, rotate: -8 }, yawn: { y: -1.5, rotate: 0 }, bored: { y: 0.5, rotate: -5 },
+    nod: { y: [0, 1, 0] as number[], transition: { repeat: Infinity, duration: 2 } }, shrug: { y: -1.5, rotate: 5 },
   };
 
   const eyebrowRightVariants = {
@@ -143,6 +155,8 @@ export default function AvatarPreview({
     shock: { y: -2, rotate: 20 }, ghost: { y: -1, opacity: 0.5 }, ninja: { y: 1, rotate: -20 },
     king: { y: -1, rotate: 0 }, poker: { y: 0.5, rotate: 0 }, jackpot: { y: -1.5, rotate: 0 },
     chips: { y: -0.5, rotate: 0 }, cards: { y: -0.5, rotate: 0 }, dice: { y: -1, rotate: 0 },
+    slouch: { y: 0.5, rotate: 8 }, yawn: { y: -1.5, rotate: 0 }, bored: { y: 0.5, rotate: 5 },
+    nod: { y: [0, 1, 0] as number[], transition: { repeat: Infinity, duration: 2 } }, shrug: { y: -1.5, rotate: -5 },
   };
 
   const mouthVariants = {
@@ -158,6 +172,10 @@ export default function AvatarPreview({
     ninja: { scaleX: 0.1, scaleY: 0.1 }, king: { scaleX: 1.2, scaleY: 0.8 },
     poker: { scaleX: 0.8, scaleY: 0.2 }, jackpot: { scaleX: 1.5, scaleY: 1.2, y: -1 },
     chips: { scaleX: 1, scaleY: 1 }, cards: { scaleX: 1, scaleY: 1 }, dice: { scaleX: 1.2, scaleY: 1.2 },
+    slouch: { scaleX: 0.7, scaleY: 0.4, y: 0.5 }, yawn: { scaleX: 1, scaleY: 1, y: 0 },
+    bored: { scaleX: 0.6, scaleY: 0.4, y: 0.3 },
+    nod: { scaleY: [1, 0.8, 1] as number[], transition: { repeat: Infinity, duration: 2 } },
+    shrug: { scaleX: 0.8, y: 0.5 },
   };
 
   const faceGroupVariants = {
@@ -173,6 +191,11 @@ export default function AvatarPreview({
     ghost: { y: -2, opacity: 0.7 }, ninja: { y: 1, x: 1 }, king: { y: -0.5 },
     poker: { y: 0, x: 0 }, jackpot: { y: -1, scale: 1.1 },
     chips: { y: 0 }, cards: { y: 0 }, dice: { y: -0.5 },
+    slouch: { y: [0, 1.5, 0] as number[], transition: { repeat: Infinity, duration: 4.5, ease: 'easeInOut' as const } },
+    yawn: { y: -0.5, rotate: -3 },
+    bored: { rotate: [0, -7, 0, 7, 0] as number[], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
+    nod: { y: [0, 2.5, 0, 1.5, 0] as number[], transition: { repeat: Infinity, duration: 2 } },
+    shrug: { y: -1.5 },
   };
 
   const bodyVariants = {
@@ -190,6 +213,11 @@ export default function AvatarPreview({
     ninja: { x: [0, 20, -20, 0] as number[], transition: { duration: 0.5 } },
     king: { scale: 1.02 }, poker: { y: 0 }, jackpot: { y: [0, -2, 0] as number[], transition: { repeat: Infinity, duration: 0.5 } },
     chips: { y: 0 }, cards: { y: 0 }, dice: { rotate: [0, 5, -5, 0] as number[], transition: { repeat: Infinity, duration: 1 } },
+    slouch: { y: [0, 7, 0] as number[], opacity: [1, 0.3, 1], transition: { repeat: Infinity, duration: 4.5, ease: 'easeInOut' as const } },
+    yawn: { scaleY: [1, 1.06, 1] as number[], y: 0, transition: { repeat: Infinity, duration: 3 } },
+    bored: { rotate: [0, -2, 0, 2, 0] as number[], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
+    nod: { y: [0, -0.5, 0, -0.3, 0] as number[], transition: { repeat: Infinity, duration: 2 } },
+    shrug: { y: [0, -4, -4, 0] as number[], transition: { times: [0, 0.3, 0.5, 1], repeat: Infinity, duration: 2.5 } },
   };
 
   // ── face shape ─────────────────────────────────────────────────────────────
@@ -326,6 +354,10 @@ export default function AvatarPreview({
       // Open-mouth O shape: 2×2 dark block
       return <rect x="11" y="16" width="2" height="2" fill="rgba(0,0,0,0.75)" />;
     }
+    if (emotion === 'yawn') {
+      // Wide open yawn mouth
+      return <rect x="9" y="15" width="6" height="3" fill="rgba(0,0,0,0.75)" />;
+    }
     switch (lipShape) {
       case 'Thin':  return <rect x="10" y="16" width="4" height="1" fill="rgba(0,0,0,0.4)" />;
       case 'Full':  return <rect x="10" y="16" width="4" height="2" fill="rgba(180,50,50,0.7)" />;
@@ -414,8 +446,25 @@ export default function AvatarPreview({
         return <g>{[0, 1, 2].map(i => (<motion.rect key={i} x={8 + i * 3} y="5" width="2" height="2" fill="#ef4444" initial={{ scale: 0, opacity: 0 }} animate={{ scale: [0, 1, 0], y: [0, -5], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 2, delay: i * 0.6 }} />))}</g>;
       case 'money':
         return <g>{[0, 1, 2, 3, 4].map(i => (<motion.text key={i} x={4 + i * 4} y="-5" fontSize="4" fill="#22c55e" animate={{ y: [0, 30], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 2, delay: i * 0.4 }}>$</motion.text>))}</g>;
-      case 'sleepy':
-        return <g>{[0, 1, 2].map(i => (<motion.text key={i} x="18" y="10" fontSize="4" fill="#3b82f6" animate={{ x: [18, 22], y: [10, 4], scale: [0.5, 1.2], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 3, delay: i * 1 }}>Z</motion.text>))}</g>;
+      case 'sleepy': {
+        const zDefs = [
+          { x: 15.5, y: 8, tx: 18, ty: 3, size: 2.5, delay: 0 },
+          { x: 17,   y: 7, tx: 20, ty: 2, size: 3.8, delay: 1.2 },
+          { x: 14,   y: 9, tx: 16.5, ty: 3.5, size: 2, delay: 2.4 },
+        ];
+        return (
+          <g>
+            {zDefs.map((z, i) => (
+              <motion.text
+                key={i} x={z.x} y={z.y} fontSize={z.size}
+                fill="#60a5fa" fontWeight="bold"
+                animate={{ x: [z.x, z.tx], y: [z.y, z.ty], opacity: [0, 1, 1, 0], scale: [0.4, 0.8, 1.2, 1.5] }}
+                transition={{ repeat: Infinity, duration: 3.5, delay: z.delay, ease: 'easeOut' }}
+              >Z</motion.text>
+            ))}
+          </g>
+        );
+      }
       case 'shock':
         return <motion.rect x="11" y="2" width="2" height="4" fill="#eab308" animate={{ opacity: [0, 1, 0], scaleY: [0.5, 1.5, 0.5] }} transition={{ repeat: Infinity, duration: 0.2 }} style={{ transformOrigin: '12px 4px' }} />;
       case 'jackpot':
