@@ -53,7 +53,6 @@ export default function PokerTablePage() {
   const reactionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   /** Per-seat quick reaction (emoji or phrase) shown above seat; cleared after 2s. */
   const [reactionBySeatIndex, setReactionBySeatIndex] = useState<Record<number, { type: 'emoji' | 'phrase'; value: string }>>({});
-  const reactionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const [broadcastEmotionBySeatIndex, setBroadcastEmotionBySeatIndex] = useState<Record<number, Emotion>>({});
   const emotionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const clientRef = useRef<BlackjackWebSocketClient | null>(null);

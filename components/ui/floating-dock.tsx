@@ -9,7 +9,7 @@ import {
   useTransform,
 } from "motion/react";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 /** Dock item: either a link (href) or an action (onClick). */
 export type FloatingDockItem =
@@ -37,6 +37,8 @@ export const FloatingDock = ({
   );
 };
 
+const OPEN_DEBOUNCE_MS = 400;
+
 const FloatingDockMobile = ({
   items,
   className,
@@ -45,14 +47,37 @@ const FloatingDockMobile = ({
   className?: string;
 }) => {
   const [open, setOpen] = useState(false);
+  const openedAtRef = useRef<number>(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleToggle = () => {
+    if (open) {
+      if (Date.now() - openedAtRef.current < OPEN_DEBOUNCE_MS) return;
+      setOpen(false);
+    } else {
+      openedAtRef.current = Date.now();
+      setOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (containerRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [open]);
+
   const baseClass = "flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 dark:bg-neutral-900";
   return (
-    <div className={cn("relative block md:hidden", className)}>
+    <div ref={containerRef} className={cn("relative block md:hidden", className)}>
       <AnimatePresence>
         {open && (
           <motion.div
             layoutId="nav"
-            className="absolute inset-x-0 bottom-full mb-2 flex flex-col gap-2"
+            className="absolute inset-x-0 bottom-full mb-2 flex flex-col gap-2 z-50"
           >
             {items.map((item, idx) => (
               <motion.div
@@ -90,8 +115,11 @@ const FloatingDockMobile = ({
         )}
       </AnimatePresence>
       <button
-        onClick={() => setOpen(!open)}
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 dark:bg-neutral-800"
+        type="button"
+        onClick={handleToggle}
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 dark:bg-neutral-800 touch-manipulation"
+        aria-expanded={open}
+        aria-haspopup="true"
       >
         <IconLayoutNavbarCollapse className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />
       </button>
