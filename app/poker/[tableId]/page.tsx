@@ -17,7 +17,10 @@ import { PokerTable } from '@/components/poker/PokerTable';
 import { PokerActions } from '@/components/poker/PokerActions';
 import { PokerDepositModal } from '@/components/poker/PokerDepositModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
+import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
+import { useProfileWs } from '@/contexts/profile-ws-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 const POKER_CHAT_BUBBLE_DURATION_MS = 5000;
@@ -40,6 +43,7 @@ export default function PokerTablePage() {
   const [disconnected, setDisconnected] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
   /** Chat bubbles above seats: id, senderAddress (lowercase), text, expiresAt. Cleared after 5s. */
   const [seatBubbles, setSeatBubbles] = useState<Array<{ id: string; senderAddress: string; text: string; expiresAt: number }>>([]);
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -51,6 +55,8 @@ export default function PokerTablePage() {
   const fetchSeqRef = useRef(0);
 
   const normalizedAddress = address?.toLowerCase() ?? null;
+  const profileWs = useProfileWs();
+  const queryClient = useQueryClient();
 
   // Fetch personalized state and apply it only if no newer fetch has started.
   const fetchLatestState = useCallback(() => {
@@ -72,6 +78,7 @@ export default function PokerTablePage() {
     const client = new BlackjackWebSocketClient(wsUrl, normalizedAddress ?? undefined, signTypedDataAsync as any);
     clientRef.current = client;
     setWsClient(client);
+    profileWs?.setWsClient(client);
 
     client.on('poker_table_state', (payload: PokerTableState) => {
       if (payload.tableId !== tableId) return;
@@ -128,6 +135,7 @@ export default function PokerTablePage() {
       clientRef.current = null;
       setWsClient(null);
       setWsConnected(false);
+      profileWs?.setWsClient(null);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId, normalizedAddress, signTypedDataAsync]);
@@ -653,6 +661,7 @@ export default function PokerTablePage() {
                 onEmojiReaction={mySeatIndex >= 0 ? onEmojiReaction : undefined}
                 onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
                 onReUpClick={mySeat ? () => setShowDepositModal(true) : undefined}
+                onMenuClick={mySeat ? () => setShowAvatarModal(true) : undefined}
               />
             ) : !error ? (
               <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
@@ -698,6 +707,15 @@ export default function PokerTablePage() {
           isOpen={showStatsModal}
           onClose={() => setShowStatsModal(false)}
           playerAddress={normalizedAddress}
+        />
+        <ProfileAvatarModal
+          open={showAvatarModal}
+          onClose={() => setShowAvatarModal(false)}
+          wsClient={wsClient}
+          onSave={() => {
+            fetchLatestState();
+            queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
+          }}
         />
       </PokerThemeProvider>
     </GlobalMainNav>

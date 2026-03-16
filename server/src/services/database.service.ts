@@ -2016,18 +2016,28 @@ export class DatabaseService {
     return result.rows[0]?.display_name ?? null;
   }
 
-  async getProfile(walletAddress: string): Promise<{ displayName: string; profileImageUrl: string | null } | null> {
+  async getProfile(walletAddress: string): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null } | null> {
     const normalized = this.normalizeAddress(walletAddress);
-    const query = `SELECT display_name, profile_image_url FROM chat_display_names WHERE wallet_address = $1`;
+    const query = `SELECT display_name, profile_image_url, avatar_config FROM chat_display_names WHERE wallet_address = $1`;
     const result = await this.pool.query(query, [normalized]);
     const row = result.rows[0];
     if (!row) return null;
-    return { displayName: row.display_name, profileImageUrl: row.profile_image_url ?? null };
+    const avatarConfig = row.avatar_config != null && typeof row.avatar_config === 'object' ? (row.avatar_config as Record<string, unknown>) : null;
+    return { displayName: row.display_name, profileImageUrl: row.profile_image_url ?? null, avatarConfig };
   }
 
-  async setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null): Promise<void> {
+  async setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null, avatarConfig?: Record<string, unknown> | null): Promise<void> {
     const normalized = this.normalizeAddress(walletAddress);
-    if (profileImageUrl === undefined) {
+    if (avatarConfig !== undefined) {
+      const query = `
+        INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (wallet_address)
+        DO UPDATE SET display_name = $2, updated_at = NOW(), profile_image_url = $3, avatar_config = $4
+      `;
+      const profileImg = profileImageUrl !== undefined ? profileImageUrl : null;
+      await this.pool.query(query, [normalized, displayName, profileImg, avatarConfig != null ? JSON.stringify(avatarConfig) : null]);
+    } else if (profileImageUrl === undefined) {
       const query = `
         INSERT INTO chat_display_names (wallet_address, display_name)
         VALUES ($1, $2)
@@ -2054,6 +2064,23 @@ export class DatabaseService {
     const map = new Map<string, string>();
     for (const row of result.rows) {
       map.set(row.wallet_address, row.display_name);
+    }
+    return map;
+  }
+
+  async getProfiles(walletAddresses: string[]): Promise<Map<string, { displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null }>> {
+    if (walletAddresses.length === 0) return new Map();
+    const normalized = [...new Set(walletAddresses.map(a => this.normalizeAddress(a)))];
+    const query = `SELECT wallet_address, display_name, profile_image_url, avatar_config FROM chat_display_names WHERE wallet_address = ANY($1)`;
+    const result = await this.pool.query(query, [normalized]);
+    const map = new Map<string, { displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null }>();
+    for (const row of result.rows) {
+      const avatarConfig = row.avatar_config != null && typeof row.avatar_config === 'object' ? (row.avatar_config as Record<string, unknown>) : null;
+      map.set(row.wallet_address, {
+        displayName: row.display_name,
+        profileImageUrl: row.profile_image_url ?? null,
+        avatarConfig,
+      });
     }
     return map;
   }

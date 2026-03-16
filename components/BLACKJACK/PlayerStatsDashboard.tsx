@@ -1,8 +1,10 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
+import { useAccount } from 'wagmi'
 import { motion } from 'framer-motion'
 import { usePlayerProfileGames, useProfileForAddress } from '@/hooks/use-player-profile'
+import { isAdminWallet } from '@/lib/admin'
 import {
   TrendingUp,
   TrendingDown,
@@ -36,6 +38,7 @@ import { Progress } from '@/components/ui/progress'
 import { GameHistory } from '@/components/BLACKJACK/GameHistory'
 import { CreatorDashboard } from '@/components/Creators/CreatorDashboard'
 import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView'
+import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client'
 import type { GameHistoryEntry } from '@/components/BLACKJACK/GameHistory'
 
@@ -69,9 +72,11 @@ interface PlayerStatsDashboardProps {
 }
 
 export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient, reserveBalance }: PlayerStatsDashboardProps) {
+  const { address: connectedAddress } = useAccount()
+  const isAdmin = isAdminWallet(connectedAddress)
   const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'creator' | 'audit'>('stats')
   const [addressCopied, setAddressCopied] = useState(false)
-  const { displayName, profileImageUrl } = useProfileForAddress(playerAddress ?? null)
+  const { displayName, profileImageUrl, avatarConfig } = useProfileForAddress(playerAddress ?? null)
 
   if (isLoading) {
     return (
@@ -305,13 +310,17 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
       {/* Address: avatar if present, full address, copy — no box */}
       {playerAddress && (
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-          {profileImageUrl && (
+          {avatarConfig ? (
+            <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded overflow-hidden bg-black/30">
+              <AvatarPreview config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
+            </div>
+          ) : profileImageUrl ? (
             <img
               src={profileImageUrl}
               alt=""
               className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0"
             />
-          )}
+          ) : null}
           {displayName && (
             <span className="text-sm font-medium text-white shrink-0">{displayName}</span>
           )}
@@ -617,6 +626,7 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
               games={games ?? []}
               gamesLoading={gamesLoading}
               actualBalance={reserveBalance}
+              showEventsColumn={isAdmin}
             />
           </CardContent>
         </Card>

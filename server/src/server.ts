@@ -22,7 +22,7 @@ import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
-import { createWalletClient, http, decodeEventLog } from 'viem';
+import { createWalletClient, http, decodeEventLog, verifyMessage, getAddress } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
@@ -60,15 +60,7 @@ function refreshBjTotalsBackground(chainAnalytics: ChainAnalyticsService) {
     .finally(() => { _bjTotalsRefreshing = false; });
 }
 
-const ADMIN_WALLETS: string[] = (process.env.ADMIN_WALLETS || '')
-  .split(',')
-  .map((a) => a.trim().toLowerCase())
-  .filter(Boolean);
-
-function isAdminWallet(addr: string | undefined): boolean {
-  if (!addr) return false;
-  return ADMIN_WALLETS.includes(addr.toLowerCase());
-}
+const ADMIN_SECRET = process.env.AP;
 
 const app = express();
 const server = createServer(app);
@@ -176,11 +168,15 @@ const uploadMulter = multer({
   },
 });
 
-// Admin API: require x-admin-wallet header and that it's in ADMIN_WALLETS
+// Admin API: require x-admin-secret header matching AP env var
 app.use('/api/admin', (req, res, next) => {
-  const wallet = (req.headers['x-admin-wallet'] as string)?.trim();
-  if (!wallet || !isAdminWallet(wallet)) {
-    res.status(403).json({ error: 'Forbidden', message: 'Admin wallet required' });
+  if (!ADMIN_SECRET) {
+    res.status(503).json({ error: 'Admin access not configured on server' });
+    return;
+  }
+  const secret = (req.headers['x-admin-secret'] as string)?.trim();
+  if (!secret || secret !== ADMIN_SECRET) {
+    res.status(403).json({ error: 'Forbidden' });
     return;
   }
   next();
@@ -328,9 +324,58 @@ async function initializeServices() {
       try {
         const { address } = req.params;
         const profile = await dbService.getProfile(address);
-        sendJson(res, profile ?? { displayName: null, profileImageUrl: null });
+        sendJson(res, profile ?? { displayName: null, profileImageUrl: null, avatarConfig: null });
       } catch (error) {
         logger.error('Error fetching player profile:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Update own profile (display name, profile image URL, avatar config). Requires signed message.
+    const PROFILE_UPDATE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+    app.post('/api/player/profile', express.json(), async (req, res) => {
+      try {
+        const { address, message, signature } = req.body ?? {};
+        if (!address || typeof message !== 'string' || !signature) {
+          return res.status(400).json({ error: 'address, message, and signature required' });
+        }
+        const normalizedAddress = getAddress(address);
+        const valid = await verifyMessage({
+          address: normalizedAddress,
+          message,
+          signature: signature as `0x${string}`,
+        });
+        if (!valid) {
+          return res.status(401).json({ error: 'Invalid signature' });
+        }
+        let payload: { intent?: string; timestamp?: number; displayName?: string; profileImageUrl?: string | null; avatarConfig?: Record<string, unknown> | null };
+        try {
+          payload = JSON.parse(message);
+        } catch {
+          return res.status(400).json({ error: 'Invalid message JSON' });
+        }
+        if (payload.intent !== 'MORBlotto profile update' || typeof payload.timestamp !== 'number') {
+          return res.status(400).json({ error: 'Invalid message intent or timestamp' });
+        }
+        const age = Date.now() - payload.timestamp;
+        if (age < 0 || age > PROFILE_UPDATE_MAX_AGE_MS) {
+          return res.status(400).json({ error: 'Message expired or invalid timestamp' });
+        }
+        const displayName = typeof payload.displayName === 'string' ? payload.displayName.trim() : '';
+        if (displayName.length < 3 || displayName.length > 32) {
+          return res.status(400).json({ error: 'Display name must be 3–32 characters' });
+        }
+        const profileImageUrl = payload.profileImageUrl !== undefined
+          ? (typeof payload.profileImageUrl === 'string' ? payload.profileImageUrl : null)
+          : undefined;
+        const avatarConfig = payload.avatarConfig !== undefined
+          ? (payload.avatarConfig !== null && typeof payload.avatarConfig === 'object' ? payload.avatarConfig as Record<string, unknown> : null)
+          : undefined;
+        await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig);
+        const profile = await dbService.getProfile(normalizedAddress);
+        sendJson(res, profile ?? { displayName: null, profileImageUrl: null, avatarConfig: null });
+      } catch (error) {
+        logger.error('Error updating player profile:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });

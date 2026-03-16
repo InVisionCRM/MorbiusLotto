@@ -116,11 +116,15 @@ interface PlayerAuditViewProps {
   games: GameRecord[];
   gamesLoading: boolean;
   actualBalance?: bigint;
+  /** When true, show the Events column (tx hash / game id). Admin-only. */
+  showEventsColumn?: boolean;
 }
 
 const PAGE_SIZE = 50;
 
-export function PlayerAuditView({ playerAddress, games, gamesLoading, actualBalance }: PlayerAuditViewProps) {
+const PULSE_SCAN_TX = 'https://scan.pulsechain.com/tx/';
+
+export function PlayerAuditView({ playerAddress, games, gamesLoading, actualBalance, showEventsColumn }: PlayerAuditViewProps) {
   const serverUrl = getBlackjackServerUrl();
   const [txRecords, setTxRecords] = useState<TxRecord[]>([]);
   const [txLoading, setTxLoading] = useState(false);
@@ -448,6 +452,9 @@ export function PlayerAuditView({ playerAddress, games, gamesLoading, actualBala
                   <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Net</th>
                   <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">{balanceLabel}</th>
                   <th className="text-left px-3 py-2 text-gray-400 font-medium">Flags</th>
+                  {showEventsColumn && (
+                    <th className="text-left px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Events</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -522,6 +529,27 @@ export function PlayerAuditView({ playerAddress, games, gamesLoading, actualBala
                           <span className="text-gray-600">—</span>
                         )}
                       </td>
+                      {showEventsColumn && (
+                        <td className="px-3 py-2 text-[11px] text-gray-400 font-mono space-y-0.5">
+                          {ev.txHash && (
+                            <a
+                              href={`${PULSE_SCAN_TX}${ev.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-cyan-400 hover:underline block truncate max-w-[120px]"
+                              title={ev.txHash}
+                            >
+                              {ev.txHash.slice(0, 10)}…
+                            </a>
+                          )}
+                          {ev.gameId && (
+                            <span className="text-gray-500 block" title={ev.gameId}>
+                              {ev.gameId.length > 12 ? `${ev.gameId.slice(0, 12)}…` : ev.gameId}
+                            </span>
+                          )}
+                          {!ev.txHash && !ev.gameId && <span className="text-gray-600">—</span>}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

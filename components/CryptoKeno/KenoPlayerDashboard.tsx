@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
 import { useProfileForAddress } from '@/hooks/use-player-profile'
 import { useKenoPlayerStats } from '@/hooks/use-keno-results'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
@@ -63,7 +64,7 @@ export function KenoPlayerDashboard({ playerAddress }: KenoPlayerDashboardProps)
   const [activeTab, setActiveTab] = useState<'stats' | 'history'>('stats')
   const [addressCopied, setAddressCopied] = useState(false)
   const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'profit'>('newest')
-  const { displayName, profileImageUrl } = useProfileForAddress(playerAddress)
+  const { displayName, profileImageUrl, avatarConfig } = useProfileForAddress(playerAddress)
 
   const handleCopyAddress = () => {
     if (!playerAddress) return
@@ -188,13 +189,17 @@ export function KenoPlayerDashboard({ playerAddress }: KenoPlayerDashboardProps)
     <div className="space-y-6">
       {playerAddress && (
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-          {profileImageUrl && (
+          {avatarConfig ? (
+            <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded overflow-hidden bg-black/30">
+              <AvatarPreview config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
+            </div>
+          ) : profileImageUrl ? (
             <img
               src={profileImageUrl}
               alt=""
               className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0"
             />
-          )}
+          ) : null}
           {displayName && (
             <span className="text-sm font-medium text-white shrink-0">{displayName}</span>
           )}

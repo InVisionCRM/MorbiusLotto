@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { useAccount } from 'wagmi';
 import { createPublicClient, http, formatUnits } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { PLINKO_ADDRESS } from '@/lib/contracts';
 import { PLINKO_ABI } from '@/abi/plinko';
 import { usePlayerReserveForAddress } from '@/hooks/use-blackjack-contract';
 import { usePlayerProfileGames } from '@/hooks/use-player-profile';
+import { isAdminWallet } from '@/lib/admin';
 import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView';
 
 function MorbiusIcon({ size = 16 }: { size?: number }) {
@@ -76,6 +78,8 @@ function formatAddress(address: string): string {
 }
 
 export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsModalProps) {
+  const { address: connectedAddress } = useAccount();
+  const isAdmin = isAdminWallet(connectedAddress);
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [plinkoStats, setPlinkoStats] = useState<PlinkoStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -401,6 +405,7 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
                   games={games}
                   gamesLoading={gamesLoading}
                   actualBalance={reserveBalance ?? undefined}
+                  showEventsColumn={isAdmin}
                 />
               )}
             </div>

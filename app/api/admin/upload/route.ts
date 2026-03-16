@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       const res = await fetch(`${backendUrl}/api/admin/upload`, {
         method: 'POST',
         headers: {
-          'x-admin-wallet': wallet,
+          'x-admin-secret': process.env.AP ?? '',
           'content-type': contentType,
         },
         body,

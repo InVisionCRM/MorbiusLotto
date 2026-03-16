@@ -97,6 +97,24 @@ export interface PokerTableSummary {
   emptySeats: number;
 }
 
+/** Pixel-avatar config for poker table display (skin, hair, eyes, etc.). */
+export interface AvatarConfig {
+  skinColor: string;
+  hairStyle: string;
+  hairColor: string;
+  eyeShape: string;
+  eyeColor: string;
+  noseShape: string;
+  lipShape: string;
+  accessory: string;
+  flag: string;
+  shirtColor: string;
+  hat: string;
+  necklace: string;
+  mouthAccessory: string;
+  backgroundImage: string;
+}
+
 export interface PokerSeatState {
   position: number;
   playerAddress: string | null;
@@ -108,6 +126,9 @@ export interface PokerSeatState {
   isActing: boolean;
   folded: boolean;
   currentBet: string;
+  displayName?: string | null;
+  profileImageUrl?: string | null;
+  avatarConfig?: AvatarConfig | null;
 }
 
 export interface PokerCurrentHand {
@@ -693,17 +714,19 @@ export class BlackjackWebSocketClient {
   /**
    * Set your display name and optional profile image for chat/nav (3–32 chars for name).
    * Requires connected wallet. Use on('display_name_set', handler) for the response.
+   * Optionally pass profileImageUrl and/or avatarConfig; get_profile and display_name_set responses include avatarConfig.
    */
-  async setDisplayName(displayName: string, profileImageUrl?: string | null): Promise<{ displayName: string; profileImageUrl: string | null }> {
-    const payload: { displayName: string; profileImageUrl?: string | null } = { displayName };
+  async setDisplayName(displayName: string, profileImageUrl?: string | null, avatarConfig?: AvatarConfig | null): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: AvatarConfig | null }> {
+    const payload: { displayName: string; profileImageUrl?: string | null; avatarConfig?: AvatarConfig | null } = { displayName };
     if (profileImageUrl !== undefined) payload.profileImageUrl = profileImageUrl;
+    if (avatarConfig !== undefined) payload.avatarConfig = avatarConfig;
     return this.sendRequest('set_display_name', payload);
   }
 
   /**
-   * Get current profile (display name and profile image URL) for the connected wallet.
+   * Get current profile (display name, profile image URL, avatar config) for the connected wallet.
    */
-  async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null }> {
+  async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null; avatarConfig: AvatarConfig | null }> {
     return this.sendRequest('get_profile', {});
   }
 

@@ -1420,7 +1420,7 @@ export class WebSocketService {
         return this.sendError(ws, 'Wallet required to set display name', message.requestId);
       }
 
-      const payload = message.payload as { displayName?: string; profileImageUrl?: string | null };
+      const payload = message.payload as { displayName?: string; profileImageUrl?: string | null; avatarConfig?: Record<string, unknown> | null };
       const raw = payload?.displayName;
       if (raw === undefined || raw === null || typeof raw !== 'string') {
         return this.sendError(ws, 'displayName required', message.requestId);
@@ -1444,14 +1444,18 @@ export class WebSocketService {
       const profileImageUrl = payload.profileImageUrl !== undefined
         ? (typeof payload.profileImageUrl === 'string' ? payload.profileImageUrl : null)
         : undefined;
-      await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl);
+      const avatarConfig = payload.avatarConfig !== undefined
+        ? (payload.avatarConfig !== null && typeof payload.avatarConfig === 'object' ? payload.avatarConfig : null)
+        : undefined;
+      await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl, avatarConfig);
       const profile = await this.dbService.getProfile(ws.playerAddress);
 
       this.sendMessage(ws, {
         type: 'display_name_set',
         payload: {
           displayName,
-          profileImageUrl: profile?.profileImageUrl ?? null
+          profileImageUrl: profile?.profileImageUrl ?? null,
+          avatarConfig: profile?.avatarConfig ?? null
         },
         requestId: message.requestId
       });
@@ -1470,8 +1474,8 @@ export class WebSocketService {
       this.sendMessage(ws, {
         type: 'profile',
         payload: profile
-          ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl }
-          : { displayName: null, profileImageUrl: null },
+          ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl, avatarConfig: profile.avatarConfig }
+          : { displayName: null, profileImageUrl: null, avatarConfig: null },
         requestId: message.requestId
       });
     } catch (error) {

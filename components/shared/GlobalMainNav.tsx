@@ -28,6 +28,8 @@ import HowToPlayModal from '@/components/PLINKO/HowToPlayModal';
 import SwapModal from '@/components/PLINKO/SwapModal';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal';
 import { ReportModal } from '@/components/shared/ReportModal';
+import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal';
+import { useQueryClient } from '@tanstack/react-query';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
 
@@ -195,6 +197,7 @@ function NavContent(props: {
   isAuthenticated?: boolean;
   onSignOut?: () => void;
   onOpenReport: () => void;
+  onOpenProfileModal?: () => void;
 }) {
   const { open } = useSidebar();
   const {
@@ -235,6 +238,7 @@ function NavContent(props: {
     isAuthenticated,
     onSignOut,
     onOpenReport,
+    onOpenProfileModal,
   } = props;
 
   const navItem = (label: string, icon: string, active?: boolean) =>
@@ -363,6 +367,7 @@ function NavContent(props: {
             <SidebarButton label="Player Dashboard" icon={<i className="fas fa-chart-pie w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenPlayerProfile()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           )}
 
+          <SidebarButton label="Profile" icon={<i className="fas fa-user-edit w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenProfileModal?.()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Claim Morbius', href: '/staking', icon: <i className="fas fa-gift w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
         </div>
 
@@ -527,6 +532,8 @@ export default function GlobalMainNav({
   const [internalThemeModalOpen, setInternalThemeModalOpen] = useState(false);
   const [howToPlayOpen, setHowToPlayOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
+  const [profileAvatarModalOpen, setProfileAvatarModalOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const isThemeModalControlled = onThemeModalOpenChange !== undefined;
   const themeModalOpen = isThemeModalControlled ? (themeModalOpenProp ?? false) : internalThemeModalOpen;
@@ -594,6 +601,7 @@ export default function GlobalMainNav({
             isAuthenticated={isAuthenticated}
             onSignOut={onSignOut}
             onOpenReport={() => setReportOpen(true)}
+            onOpenProfileModal={() => setProfileAvatarModalOpen(true)}
           />
         </SidebarBody>
         <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0" style={gameLocked ? { position: 'relative', zIndex: 100002 } : undefined}>{children}</div>
@@ -628,6 +636,11 @@ export default function GlobalMainNav({
         isOpen={reportOpen}
         onClose={() => setReportOpen(false)}
         balance={reserveBalance}
+      />
+      <ProfileAvatarModal
+        open={profileAvatarModalOpen}
+        onClose={() => setProfileAvatarModalOpen(false)}
+        onSave={() => queryClient.invalidateQueries({ queryKey: ['playerProfile'] })}
       />
     </Sidebar>
   );

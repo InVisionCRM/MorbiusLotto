@@ -7,6 +7,7 @@ import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, MessageCircle, Plus } from 'lucide-react';
+import AvatarPreview, { type Emotion } from './avatar/AvatarPreview';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
@@ -235,7 +236,18 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
   const isActing  = !!seat.isActing && !empty && !seat.folded;
   const isFolded  = !!seat.folded && !empty;
 
-  const displayName = empty ? 'Open' : (isCurrentPlayer ? 'You' : shortAddr(seat.playerAddress!));
+  const displayName = empty
+    ? 'Open'
+    : (isCurrentPlayer ? 'You' : (seat.displayName?.trim() || shortAddr(seat.playerAddress!)));
+
+  const avatarEmotion: Emotion = useMemo(() => {
+    if (!lastAction) return 'neutral';
+    const a = lastAction.action?.toLowerCase();
+    if (a === 'fold') return 'sad';
+    if (a === 'check' || a === 'call') return 'neutral';
+    if (a === 'bet' || a === 'raise' || a === 'all-in' || a === 'allin') return 'angry';
+    return 'neutral';
+  }, [lastAction]);
 
   // Measure badge for timer ring
   const badgeRef = useRef<HTMLDivElement>(null);
@@ -742,34 +754,41 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
             </div>
           )}
 
-          {/* Name + stack — extra left padding when current player so content clears the buttons */}
-          <div className={`py-1.5 sm:py-1 text-center ${isCurrentPlayer ? 'pl-[7rem] pr-2.5 sm:pl-[7rem] sm:pr-2' : 'px-2.5 sm:px-2'}`}>
-            <div
-              className="font-bold truncate leading-tight"
-              style={{
-                color: isCurrentPlayer ? '#fde68a' : '#e2e8f0',
-                fontSize: isCurrentPlayer ? 'clamp(11px, 2vw, 13px)' : 'clamp(12px, 2.5vw, 14px)',
-                maxWidth: isCurrentPlayer ? 96 : 110,
-              }}
-            >
-              {displayName}
-            </div>
-            <div
-              className="font-bold tabular-nums leading-tight flex items-center justify-center gap-1"
-              style={{
-                color: '#fbbf24',
-                fontSize: isCurrentPlayer ? 'clamp(11px, 2.2vw, 13px)' : 'clamp(12px, 2.5vw, 14px)',
-              }}
-            >
-              {formatChips(seat.stack)}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/morbius/MorbiusLogo%20(3).png"
-                alt=""
-                aria-hidden
-                className="shrink-0"
-                style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }}
-              />
+          {/* Avatar (when config present) + Name + stack — extra left padding when current player so content clears the buttons */}
+          <div className={`py-1.5 sm:py-1 flex items-center justify-center gap-1.5 ${isCurrentPlayer ? 'pl-[7rem] pr-2.5 sm:pl-[7rem] sm:pr-2' : 'px-2.5 sm:px-2'}`}>
+            {seat.avatarConfig && (
+              <div className="shrink-0 flex items-center justify-center">
+                <AvatarPreview config={seat.avatarConfig} emotion={avatarEmotion} compact className="w-10 h-10" />
+              </div>
+            )}
+            <div className="flex flex-col items-center min-w-0 text-center">
+              <div
+                className="font-bold truncate leading-tight w-full"
+                style={{
+                  color: isCurrentPlayer ? '#fde68a' : '#e2e8f0',
+                  fontSize: isCurrentPlayer ? 'clamp(11px, 2vw, 13px)' : 'clamp(12px, 2.5vw, 14px)',
+                  maxWidth: isCurrentPlayer ? 96 : 110,
+                }}
+              >
+                {displayName}
+              </div>
+              <div
+                className="font-bold tabular-nums leading-tight flex items-center justify-center gap-1"
+                style={{
+                  color: '#fbbf24',
+                  fontSize: isCurrentPlayer ? 'clamp(11px, 2.2vw, 13px)' : 'clamp(12px, 2.5vw, 14px)',
+                }}
+              >
+                {formatChips(seat.stack)}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/morbius/MorbiusLogo%20(3).png"
+                  alt=""
+                  aria-hidden
+                  className="shrink-0"
+                  style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }}
+                />
+              </div>
             </div>
           </div>
 

@@ -28,6 +28,9 @@ export interface PokerSeatState {
   isActing: boolean;
   folded: boolean;
   currentBet: string;
+  displayName?: string | null;
+  profileImageUrl?: string | null;
+  avatarConfig?: Record<string, unknown> | null;
 }
 
 export interface PokerCurrentHand {
@@ -203,42 +206,58 @@ export class PokerGameService {
     const buyIn = BigInt(buyInChips);
     if (buyIn <= 0n) throw new Error('Buy-in must be positive');
 
-    const pool = this.getPool();
-    const tableResult = await pool.query(
-      'SELECT id, small_blind, big_blind, max_seats FROM poker_tables WHERE id = $1',
-      [tableId]
-    );
-    if (tableResult.rows.length === 0) throw new Error('Table not found');
-    const tbl = tableResult.rows[0];
-    const maxSeats = Number(tbl.max_seats) || 6;
+    let position: number;
 
-    const existing = await pool.query(
-      'SELECT id FROM poker_seats WHERE table_id = $1 AND player_address = $2',
-      [tableId, normalized]
-    );
-    if (existing.rows.length > 0) throw new Error('Already seated at this table');
+    await this.dbService.withTransaction(async (client) => {
+      // Lock the player row first — serializes concurrent join attempts by the same wallet
+      const playerLock = await client.query(
+        `SELECT id FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
+        [normalized]
+      );
+      if (playerLock.rows.length === 0) throw new Error('Player not found');
 
-    const seatCount = await pool.query(
-      'SELECT COUNT(*) AS c FROM poker_seats WHERE table_id = $1',
-      [tableId]
-    );
-    if (Number(seatCount.rows[0].c) >= maxSeats) throw new Error('Table is full');
+      const tableResult = await client.query(
+        'SELECT id, small_blind, big_blind, max_seats FROM poker_tables WHERE id = $1',
+        [tableId]
+      );
+      if (tableResult.rows.length === 0) throw new Error('Table not found');
+      const maxSeats = Number(tableResult.rows[0].max_seats) || 6;
 
-    await this.dbService.deductPlayerBalance(playerAddress, buyIn);
+      const existing = await client.query(
+        'SELECT id FROM poker_seats WHERE table_id = $1 AND player_address = $2',
+        [tableId, normalized]
+      );
+      if (existing.rows.length > 0) throw new Error('Already seated at this table');
 
-    const positions = await pool.query(
-      'SELECT position FROM poker_seats WHERE table_id = $1',
-      [tableId]
-    );
-    const used = new Set(positions.rows.map((r: any) => r.position));
-    let position = 0;
-    while (used.has(position)) position++;
+      const seatCount = await client.query(
+        'SELECT COUNT(*) AS c FROM poker_seats WHERE table_id = $1',
+        [tableId]
+      );
+      if (Number(seatCount.rows[0].c) >= maxSeats) throw new Error('Table is full');
 
-    await pool.query(
-      `INSERT INTO poker_seats (table_id, position, player_address, stack, status)
-       VALUES ($1, $2, $3, $4::NUMERIC, 'active')`,
-      [tableId, position, normalized, buyIn.toString()]
-    );
+      // Deduct balance atomically within the same transaction
+      const deductResult = await client.query(
+        `UPDATE players SET balance = balance - $2::NUMERIC
+         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+         RETURNING balance`,
+        [normalized, buyIn.toString()]
+      );
+      if (deductResult.rows.length === 0) throw new Error('Insufficient balance');
+
+      const positions = await client.query(
+        'SELECT position FROM poker_seats WHERE table_id = $1',
+        [tableId]
+      );
+      const used = new Set(positions.rows.map((r: any) => r.position));
+      position = 0;
+      while (used.has(position)) position++;
+
+      await client.query(
+        `INSERT INTO poker_seats (table_id, position, player_address, stack, status)
+         VALUES ($1, $2, $3, $4::NUMERIC, 'active')`,
+        [tableId, position, normalized, buyIn.toString()]
+      );
+    });
 
     // Sync in-memory table if it exists
     const activeTable = this.activeTables.get(tableId);
@@ -257,14 +276,14 @@ export class PokerGameService {
     logger.info('Poker join', { tableId, playerAddress: normalized, buyIn: buyIn.toString(), position });
 
     // Auto-start if 2+ players ready
-    const pool2 = this.getPool();
-    const seatsResult = await pool2.query(
+    const pool = this.getPool();
+    const seatsResult = await pool.query(
       'SELECT stack FROM poker_seats WHERE table_id = $1',
       [tableId]
     );
     const withStack = seatsResult.rows.filter((r: any) => BigInt(r.stack ?? '0') > 0n);
     if (withStack.length >= 2) {
-      const activeHand = await pool2.query(
+      const activeHand = await pool.query(
         'SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1',
         [tableId]
       );
@@ -375,21 +394,36 @@ export class PokerGameService {
 
   async addChips(tableId: string, playerAddress: string, amount: string): Promise<PokerTableState> {
     const normalized = this.normalizeAddress(playerAddress);
-    const pool = this.getPool();
     const chips = BigInt(amount);
     if (chips <= 0n) throw new Error('Amount must be positive');
 
-    const seatResult = await pool.query(
-      'SELECT id FROM poker_seats WHERE table_id = $1 AND player_address = $2',
-      [tableId, normalized]
-    );
-    if (seatResult.rows.length === 0) throw new Error('Not seated at this table');
+    await this.dbService.withTransaction(async (client) => {
+      // Lock the player row to serialize concurrent addChips calls
+      const playerLock = await client.query(
+        `SELECT id FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
+        [normalized]
+      );
+      if (playerLock.rows.length === 0) throw new Error('Player not found');
 
-    await this.dbService.deductPlayerBalance(playerAddress, chips);
-    await pool.query(
-      'UPDATE poker_seats SET stack = stack + $3::NUMERIC WHERE table_id = $1 AND player_address = $2',
-      [tableId, normalized, chips.toString()]
-    );
+      const seatResult = await client.query(
+        'SELECT id FROM poker_seats WHERE table_id = $1 AND player_address = $2',
+        [tableId, normalized]
+      );
+      if (seatResult.rows.length === 0) throw new Error('Not seated at this table');
+
+      const deductResult = await client.query(
+        `UPDATE players SET balance = balance - $2::NUMERIC
+         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+         RETURNING balance`,
+        [normalized, chips.toString()]
+      );
+      if (deductResult.rows.length === 0) throw new Error('Insufficient balance');
+
+      await client.query(
+        'UPDATE poker_seats SET stack = stack + $3::NUMERIC WHERE table_id = $1 AND player_address = $2',
+        [tableId, normalized, chips.toString()]
+      );
+    });
 
     logger.info('Poker add chips', { tableId, playerAddress: normalized, amount: chips.toString() });
     return this.getTableState(tableId, normalized);
@@ -456,6 +490,21 @@ export class PokerGameService {
         folded: false,
         currentBet,
       });
+    }
+
+    const seatAddresses = seats.map((s) => s.playerAddress).filter((a): a is string => !!a);
+    if (seatAddresses.length > 0) {
+      const profiles = await this.dbService.getProfiles(seatAddresses);
+      for (const seat of seats) {
+        if (!seat.playerAddress) continue;
+        const normalized = this.normalizeAddress(seat.playerAddress);
+        const profile = profiles.get(normalized);
+        if (profile) {
+          seat.displayName = profile.displayName;
+          seat.profileImageUrl = profile.profileImageUrl;
+          seat.avatarConfig = profile.avatarConfig;
+        }
+      }
     }
 
     let currentHand: PokerCurrentHand | null = null;

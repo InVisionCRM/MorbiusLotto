@@ -60,6 +60,10 @@ async function proxy(
     if (key.toLowerCase() === 'host' || key.toLowerCase() === 'connection') return;
     headers.set(key, value);
   });
+  // Inject shared secret from server-side env — never exposed to the browser
+  if (process.env.AP) {
+    headers.set('x-admin-secret', process.env.AP);
+  }
 
   try {
     const body = method !== 'GET' && method !== 'DELETE' ? await request.text() : undefined;

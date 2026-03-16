@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
 import { formatEther } from 'viem'
+import type { AvatarConfig } from '@/lib/websocket-client'
 
 export interface PlayerProfileStats {
   total_games: number
@@ -31,6 +32,7 @@ export interface PlayerProfileGame {
 export interface DisplayProfile {
   displayName: string | null
   profileImageUrl: string | null
+  avatarConfig: AvatarConfig | null
 }
 
 /**
@@ -42,13 +44,14 @@ export function useProfile() {
   const query = useQuery<DisplayProfile>({
     queryKey: ['playerProfile', address],
     queryFn: async () => {
-      if (!address) return { displayName: null, profileImageUrl: null }
+      if (!address) return { displayName: null, profileImageUrl: null, avatarConfig: null }
       const res = await fetch(`/api/player/${address}/profile`)
-      if (!res.ok) return { displayName: null, profileImageUrl: null }
+      if (!res.ok) return { displayName: null, profileImageUrl: null, avatarConfig: null }
       const data = await res.json()
       return {
         displayName: data.displayName ?? null,
         profileImageUrl: data.profileImageUrl ?? null,
+        avatarConfig: data.avatarConfig && typeof data.avatarConfig === 'object' ? (data.avatarConfig as AvatarConfig) : null,
       }
     },
     enabled: !!address,
@@ -57,6 +60,7 @@ export function useProfile() {
   return {
     profileDisplayName: query.data?.displayName ?? null,
     profileImageUrl: query.data?.profileImageUrl ?? null,
+    avatarConfig: query.data?.avatarConfig ?? null,
     isLoading: query.isLoading,
   }
 }
@@ -69,13 +73,14 @@ export function useProfileForAddress(address: string | null) {
   const query = useQuery<DisplayProfile>({
     queryKey: ['playerProfile', address],
     queryFn: async () => {
-      if (!address) return { displayName: null, profileImageUrl: null }
+      if (!address) return { displayName: null, profileImageUrl: null, avatarConfig: null }
       const res = await fetch(`/api/player/${address}/profile`)
-      if (!res.ok) return { displayName: null, profileImageUrl: null }
+      if (!res.ok) return { displayName: null, profileImageUrl: null, avatarConfig: null }
       const data = await res.json()
       return {
         displayName: data.displayName ?? null,
         profileImageUrl: data.profileImageUrl ?? null,
+        avatarConfig: data.avatarConfig && typeof data.avatarConfig === 'object' ? (data.avatarConfig as AvatarConfig) : null,
       }
     },
     enabled: !!address,
@@ -84,6 +89,7 @@ export function useProfileForAddress(address: string | null) {
   return {
     displayName: query.data?.displayName ?? null,
     profileImageUrl: query.data?.profileImageUrl ?? null,
+    avatarConfig: query.data?.avatarConfig ?? null,
     isLoading: query.isLoading,
   }
 }

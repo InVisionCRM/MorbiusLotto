@@ -26,6 +26,7 @@ import {
   Legend,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
 import {
   Table,
   TableBody,
@@ -68,7 +69,7 @@ export function LotteryPlayerDashboard({
   const [activeTab, setActiveTab] = useState<'stats' | 'history'>('stats')
   const [addressCopied, setAddressCopied] = useState(false)
   const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'profit'>('newest')
-  const { displayName, profileImageUrl } = useProfileForAddress(playerAddress)
+  const { displayName, profileImageUrl, avatarConfig } = useProfileForAddress(playerAddress)
 
   const handleCopyAddress = () => {
     if (!playerAddress) return
@@ -191,13 +192,17 @@ export function LotteryPlayerDashboard({
       {/* Address row */}
       {playerAddress && (
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-          {profileImageUrl && (
+          {avatarConfig ? (
+            <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded overflow-hidden bg-black/30">
+              <AvatarPreview config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
+            </div>
+          ) : profileImageUrl ? (
             <img
               src={profileImageUrl}
               alt=""
               className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0"
             />
-          )}
+          ) : null}
           {displayName && (
             <span className="text-sm font-medium text-white shrink-0">{displayName}</span>
           )}
