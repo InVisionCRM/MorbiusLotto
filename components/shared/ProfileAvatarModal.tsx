@@ -141,21 +141,21 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-start sm:items-center justify-center sm:p-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
       >
         <motion.div
-          className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-none sm:rounded-2xl shadow-2xl max-w-4xl w-full h-[100dvh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col"
+          className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-none sm:rounded-2xl shadow-2xl max-w-4xl w-full mt-14 h-[calc(100dvh-3.5rem)] sm:mt-0 sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col"
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-4 py-3 sm:py-2.5 border-b border-white/10 flex items-center justify-between flex-shrink-0">
+          <div className="hidden sm:flex px-4 py-2.5 border-b border-white/10 items-center justify-between flex-shrink-0">
             <h2 className="text-lg font-bold text-white">Edit profile & avatar</h2>
             <button
               type="button"

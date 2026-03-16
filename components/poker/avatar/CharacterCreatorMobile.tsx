@@ -1,11 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import AvatarPreview from './AvatarPreview';
 import PixelBackgroundUploader from './PixelBackgroundUploader';
+import {
+  Drawer, DrawerContent, DrawerHeader, DrawerTitle,
+} from '@/components/ui/drawer';
 
-// ── data ──────────────────────────────────────────────────────────────────────
+// ── data ──────────────────────────────────────────────────────────────────
 
 const SkinColors = [
   '#FFF5EE', '#FFE4E1', '#FFDAB9', '#FFCDB2', '#FFB4A2', '#FFDBAC', '#F1C27D', '#E0AC69', '#C68642',
@@ -33,7 +36,6 @@ const ShirtColors = [
   '#be185d', '#ffffff', '#9ca3af', '#3f3f46', '#000000',
   'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
 ];
-
 const HairStyles = ['Bald', 'Short', 'Buzz', 'Fade', 'Long Straight', 'Long Wavy', 'Ponytail', 'Curly', 'Spiky', 'Bob', 'Mohawk', 'Dreadlocks', 'Afro', 'Mullet', 'Pigtails', 'Messy'];
 const FaceShapes = ['Square', 'Round', 'Oval', 'Heart', 'Diamond'];
 const EyeShapes = ['Round', 'Almond', 'Narrow', 'Wide'];
@@ -44,7 +46,36 @@ const Hats = ['None', 'Cap', 'Beanie', 'Top Hat', 'Cowboy', 'Crown', 'Bandana'];
 const Necklaces = ['None', 'Gold Chain', 'Silver Chain', 'Pearl', 'Pendant'];
 const MouthAccessories = ['None', 'Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'];
 
-// ── component ─────────────────────────────────────────────────────────────────
+// ── category config ────────────────────────────────────────────────────────
+
+type CatType = 'color' | 'shape' | 'bg';
+
+interface Category {
+  id: string;
+  label: string;
+  short: string;
+  field?: keyof AvatarConfig;
+  type: CatType;
+}
+
+const CATS: Category[] = [
+  { id: 'skin',  label: 'Skin Tone',       short: 'SKIN',  field: 'skinColor',      type: 'color' },
+  { id: 'face',  label: 'Face Shape',       short: 'FACE',  field: 'faceShape',      type: 'shape' },
+  { id: 'hair',  label: 'Hair Style',       short: 'HAIR',  field: 'hairStyle',      type: 'shape' },
+  { id: 'hairc', label: 'Hair Color',       short: 'H.CLR', field: 'hairColor',      type: 'color' },
+  { id: 'eyes',  label: 'Eye Shape',        short: 'EYES',  field: 'eyeShape',       type: 'shape' },
+  { id: 'eyec',  label: 'Eye Color',        short: 'E.CLR', field: 'eyeColor',       type: 'color' },
+  { id: 'nose',  label: 'Nose',             short: 'NOSE',  field: 'noseShape',      type: 'shape' },
+  { id: 'lips',  label: 'Lips',             short: 'LIPS',  field: 'lipShape',       type: 'shape' },
+  { id: 'mouth', label: 'Mouth',            short: 'MOUTH', field: 'mouthAccessory', type: 'shape' },
+  { id: 'shirt', label: 'Shirt Color',      short: 'SHIRT', field: 'shirtColor',     type: 'color' },
+  { id: 'glass', label: 'Glasses & Extras', short: 'GLASS', field: 'accessory',      type: 'shape' },
+  { id: 'hat',   label: 'Hat',              short: 'HAT',   field: 'hat',            type: 'shape' },
+  { id: 'neck',  label: 'Necklace',         short: 'NECK',  field: 'necklace',       type: 'shape' },
+  { id: 'bg',    label: 'Background',       short: 'BG',    field: 'backgroundImage', type: 'bg'   },
+];
+
+// ── component ──────────────────────────────────────────────────────────────
 
 type Props = {
   config: AvatarConfig;
@@ -54,175 +85,176 @@ type Props = {
 };
 
 export default function CharacterCreatorMobile({ config, onChange, displayName, onDisplayNameChange }: Props) {
+  const [activeId, setActiveId] = useState('skin');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const activeCat = CATS.find(c => c.id === activeId)!;
+
   const update = (key: keyof AvatarConfig, value: string) => onChange({ ...config, [key]: value });
 
-  const skinColors  = config.customPattern ? ['url(#custom)', ...SkinColors]  : SkinColors;
-  const hairColors  = config.customPattern ? ['url(#custom)', ...HairColors]  : HairColors;
-  const shirtColors = config.customPattern ? ['url(#custom)', ...ShirtColors] : ShirtColors;
-  const accessories = config.customPattern ? ['Voxel Glasses', ...Accessories] : Accessories;
-  const necklaces   = config.customPattern ? ['Voxel Chain', ...Necklaces]    : Necklaces;
+  const getOptions = (cat: Category): string[] => {
+    const hasCust = !!config.customPattern;
+    switch (cat.id) {
+      case 'skin':  return hasCust ? ['url(#custom)', ...SkinColors]    : SkinColors;
+      case 'hairc': return hasCust ? ['url(#custom)', ...HairColors]    : HairColors;
+      case 'shirt': return hasCust ? ['url(#custom)', ...ShirtColors]   : ShirtColors;
+      case 'glass': return hasCust ? ['Voxel Glasses', ...Accessories]  : Accessories;
+      case 'neck':  return hasCust ? ['Voxel Chain', ...Necklaces]      : Necklaces;
+      case 'face':  return FaceShapes;
+      case 'hair':  return HairStyles;
+      case 'eyes':  return EyeShapes;
+      case 'eyec':  return EyeColors;
+      case 'nose':  return NoseShapes;
+      case 'lips':  return LipShapes;
+      case 'mouth': return MouthAccessories;
+      case 'hat':   return Hats;
+      default:      return [];
+    }
+  };
 
-  // ── render helpers ─────────────────────────────────────────────────────────
+  const handleRandom = () => {
+    if (!activeCat.field || activeCat.type === 'bg') return;
+    const opts = getOptions(activeCat);
+    if (!opts.length) return;
+    update(activeCat.field, opts[Math.floor(Math.random() * opts.length)]);
+  };
 
-  const Label = ({ children }: { children: React.ReactNode }) => (
-    <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2 px-4">
-      {children}
-    </p>
-  );
-
-  const Divider = () => <div className="h-px bg-zinc-800/70 mx-4 my-1" />;
-
-  const ColorStrip = ({ colors, active, field }: { colors: string[]; active: string; field: keyof AvatarConfig }) => (
-    <div className="flex gap-2.5 overflow-x-auto scrollbar-hide px-4 pb-1">
-      {colors.map(c => (
-        <button
-          key={c}
-          onClick={() => update(field, c)}
-          aria-label={`Select ${c}`}
-          className={`w-11 h-11 flex-shrink-0 rounded-full overflow-hidden touch-manipulation transition-transform
-            ${active === c
-              ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-zinc-900 scale-110'
-              : 'ring-1 ring-white/10 active:scale-95'}`}
-        >
-          <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
-            <rect width="100" height="100" fill={c} />
-          </svg>
-        </button>
-      ))}
-    </div>
-  );
-
-  const PillStrip = ({ options, active, field }: { options: string[]; active: string; field: keyof AvatarConfig }) => (
-    <div className="flex gap-2 overflow-x-auto scrollbar-hide px-4 pb-1">
-      {options.map(s => (
-        <button
-          key={s}
-          onClick={() => update(field, s)}
-          className={`flex-shrink-0 px-4 h-11 rounded-xl text-sm font-medium touch-manipulation transition-colors whitespace-nowrap
-            ${active === s
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40'
-              : 'bg-zinc-800 text-zinc-300 active:bg-zinc-700'}`}
-        >
-          {s}
-        </button>
-      ))}
-    </div>
-  );
-
-  const Section = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="py-3">
-      <Label>{label}</Label>
-      {children}
-    </div>
-  );
+  const currentVal = activeCat.field ? (config[activeCat.field] as string ?? '') : '';
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 min-h-0">
+    <div className="flex h-full bg-zinc-900 overflow-hidden">
 
-      {/* ── Compact header: avatar + name ─────────────────────────── */}
-      <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-zinc-800">
-        <AvatarPreview config={config} compact className="w-10 h-10 flex-shrink-0" />
-        {displayName !== undefined && onDisplayNameChange ? (
+      {/* ── Left vertical tab sidebar ──────────────────────────────── */}
+      <div className="w-[52px] flex-shrink-0 flex flex-col overflow-y-auto scrollbar-hide border-r border-zinc-800 bg-zinc-950">
+        {CATS.map(cat => (
+          <button
+            key={cat.id}
+            onClick={() => { setActiveId(cat.id); setDrawerOpen(false); }}
+            className={`flex-shrink-0 h-12 w-full flex items-center justify-center text-[8px] font-bold tracking-wider transition-colors touch-manipulation ${
+              activeId === cat.id
+                ? 'bg-indigo-600 text-white'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+            }`}
+          >
+            {cat.short}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Right panel ────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4 py-4 min-w-0">
+
+        {/* Name input */}
+        {displayName !== undefined && onDisplayNameChange && (
           <input
             type="text"
             value={displayName}
             onChange={e => onDisplayNameChange(e.target.value)}
             placeholder="Display name"
             maxLength={32}
-            className="flex-1 text-sm font-semibold text-zinc-100 bg-transparent border-b border-zinc-700 focus:border-cyan-500 focus:outline-none placeholder:text-zinc-600 py-1 touch-manipulation"
+            className="w-full max-w-[220px] text-sm font-semibold text-zinc-100 bg-transparent border-b border-zinc-700 focus:border-cyan-500 focus:outline-none placeholder:text-zinc-600 py-1 text-center touch-manipulation"
           />
-        ) : (
-          <span className="text-sm font-semibold text-zinc-100">Player Profile</span>
         )}
-      </div>
 
-      {/* ── Scrollable feature list ───────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+        {/* Avatar — large and prominent */}
+        <AvatarPreview config={config} className="w-40 h-40" />
 
-        <Section label="Skin Tone">
-          <ColorStrip colors={skinColors} active={config.skinColor} field="skinColor" />
-        </Section>
-        <Divider />
+        {/* Active category controls */}
+        <div className="flex flex-col items-center gap-3 w-full max-w-[260px]">
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest">
+            {activeCat.label}
+          </p>
 
-        <Section label="Face Shape">
-          <PillStrip options={FaceShapes} active={config.faceShape} field="faceShape" />
-        </Section>
-        <Divider />
-
-        <Section label="Hair Style">
-          <PillStrip options={HairStyles} active={config.hairStyle} field="hairStyle" />
-        </Section>
-        <Divider />
-
-        <Section label="Hair Color">
-          <ColorStrip colors={hairColors} active={config.hairColor} field="hairColor" />
-        </Section>
-        <Divider />
-
-        <Section label="Eye Shape">
-          <PillStrip options={EyeShapes} active={config.eyeShape} field="eyeShape" />
-        </Section>
-        <Divider />
-
-        <Section label="Eye Color">
-          <ColorStrip colors={EyeColors} active={config.eyeColor} field="eyeColor" />
-        </Section>
-        <Divider />
-
-        <Section label="Nose">
-          <PillStrip options={NoseShapes} active={config.noseShape} field="noseShape" />
-        </Section>
-        <Divider />
-
-        <Section label="Lips">
-          <PillStrip options={LipShapes} active={config.lipShape} field="lipShape" />
-        </Section>
-        <Divider />
-
-        <Section label="Mouth Accessory">
-          <PillStrip options={MouthAccessories} active={config.mouthAccessory} field="mouthAccessory" />
-        </Section>
-        <Divider />
-
-        <Section label="Shirt Color">
-          <ColorStrip colors={shirtColors} active={config.shirtColor} field="shirtColor" />
-        </Section>
-        <Divider />
-
-        <Section label="Glasses & Earrings">
-          <PillStrip options={accessories} active={config.accessory} field="accessory" />
-        </Section>
-        <Divider />
-
-        <Section label="Hat">
-          <PillStrip options={Hats} active={config.hat} field="hat" />
-        </Section>
-        <Divider />
-
-        <Section label="Necklace">
-          <PillStrip options={necklaces} active={config.necklace} field="necklace" />
-        </Section>
-        <Divider />
-
-        <Section label="Custom Background (Voxelizer)">
-          <div className="px-4">
+          {activeCat.type === 'bg' ? (
             <PixelBackgroundUploader
               currentImage={config.backgroundImage}
               onImageChange={url => onChange({
                 ...config,
                 backgroundImage: url,
                 customPattern: url,
-                skinColor: url ? 'url(#custom)' : config.skinColor,
-                hairColor: url ? 'url(#custom)' : config.hairColor,
+                skinColor:  url ? 'url(#custom)' : config.skinColor,
+                hairColor:  url ? 'url(#custom)' : config.hairColor,
                 shirtColor: url ? 'url(#custom)' : config.shirtColor,
               })}
             />
-          </div>
-        </Section>
-
-        {/* bottom breathing room */}
-        <div className="h-4" />
+          ) : (
+            <div className="flex gap-2.5 w-full">
+              <button
+                type="button"
+                onClick={handleRandom}
+                className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-100 text-sm font-medium touch-manipulation transition-colors"
+              >
+                🎲 Random
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-400 text-white text-sm font-medium touch-manipulation transition-colors"
+              >
+                View All
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* ── Drawer — full selection ─────────────────────────────────── */}
+      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DrawerContent className="bg-zinc-900 border-zinc-800 max-h-[72vh]">
+          <DrawerHeader className="pb-3 pt-1">
+            <DrawerTitle className="text-zinc-100 text-center text-base">
+              {activeCat.label}
+            </DrawerTitle>
+          </DrawerHeader>
+
+          <div className="px-4 pb-8 overflow-y-auto">
+
+            {/* Color grid */}
+            {activeCat.type === 'color' && activeCat.field && (
+              <div className="grid grid-cols-6 gap-3">
+                {getOptions(activeCat).map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => { update(activeCat.field!, c); setDrawerOpen(false); }}
+                    aria-label={`Select ${c}`}
+                    className={`w-12 h-12 rounded-full overflow-hidden touch-manipulation transition-transform ${
+                      currentVal === c
+                        ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-zinc-900 scale-110'
+                        : 'ring-1 ring-white/10 active:scale-95'
+                    }`}
+                  >
+                    <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
+                      <rect width="100" height="100" fill={c} />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Shape / style grid */}
+            {activeCat.type === 'shape' && activeCat.field && (
+              <div className="grid grid-cols-3 gap-2">
+                {getOptions(activeCat).map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => { update(activeCat.field!, s); setDrawerOpen(false); }}
+                    className={`h-11 rounded-xl text-sm font-medium touch-manipulation transition-colors whitespace-nowrap ${
+                      currentVal === s
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40'
+                        : 'bg-zinc-800 text-zinc-300 active:bg-zinc-700'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
