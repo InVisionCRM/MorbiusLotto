@@ -17,6 +17,7 @@ const EMOTION_EMOJIS = ['😀', '😢', '😡', '😂', '🥳', '😎', '😍', 
 const LONG_PRESS_MS = 500;
 const EMOJI_OVERLAY_DURATION_MS = 2000;
 const PHRASE_OVERLAY_DURATION_MS = 2000;
+const LOCAL_EMOTION_DURATION_MS = 3000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -140,19 +141,16 @@ function TimerRingSVG({ w, h, timeLeft, maxTime }: { w: number; h: number; timeL
   const pad = 3;
   const W   = w + pad * 2;
   const H   = h + pad * 2;
-  const r   = 8; // slightly larger than badge border-radius 5
+  const r   = 8;
 
-  // Perimeter of the rounded rectangle
   const perimeter = 2 * (W - 2 * r) + 2 * (H - 2 * r) + 2 * Math.PI * r;
 
   const progress   = Math.max(0, Math.min(1, timeLeft / maxTime));
   const visibleLen = progress * perimeter;
 
-  // Green (hsl 120) → yellow (60) → red (0)
   const hue   = progress * 120;
   const color = `hsl(${hue}, 90%, 52%)`;
 
-  // Clockwise rounded-rect path starting from top-left corner
   const path = [
     `M ${r},0`,
     `H ${W - r}`,
@@ -179,9 +177,7 @@ function TimerRingSVG({ w, h, timeLeft, maxTime }: { w: number; h: number; timeL
         overflow: 'visible',
       }}
     >
-      {/* Dim track */}
       <path d={path} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={2} />
-      {/* Animated progress ring */}
       <path
         d={path}
         fill="none"
@@ -198,6 +194,16 @@ function TimerRingSVG({ w, h, timeLeft, maxTime }: { w: number; h: number; timeL
   );
 }
 
+// ── Avatar animation dock items ────────────────────────────────────────────
+
+const AVATAR_ANIMATIONS: { title: string; emotion: Emotion; icon: string }[] = [
+  { title: 'Happy',     emotion: 'happy',     icon: '😊' },
+  { title: 'Wink',      emotion: 'wink',      icon: '😉' },
+  { title: 'Surprised', emotion: 'surprised', icon: '😲' },
+  { title: 'Angry',     emotion: 'angry',     icon: '😡' },
+  { title: 'Sad',       emotion: 'sad',       icon: '😢' },
+];
+
 // ── PokerSeat ─────────────────────────────────────────────────────────────
 
 export interface PokerSeatProps {
@@ -209,19 +215,12 @@ export interface PokerSeatProps {
   lastAction?: { action: string; amount: string } | null;
   timeLeft?: number;
   maxTime?: number;
-  /** Chat message to show above this seat for a few seconds (table chat bubble). */
   chatBubble?: string | null;
-  /** When set, current player sees a + (re-up) button that calls this. */
   onReUpClick?: () => void;
-  /** When set, current player sees a hamburger menu button on the right that calls this. */
   onMenuClick?: () => void;
-  /** Emoji to show above this seat (from broadcast; overrides local when set). */
   overlayEmoji?: string | null;
-  /** Phrase to show above this seat (from broadcast; overrides local when set). */
   overlayPhrase?: string | null;
-  /** When set, current player's emoji selection is sent to table (public). */
   onEmojiReaction?: (emoji: string) => void;
-  /** When set, current player's phrase selection is sent to table (public). */
   onPhraseReaction?: (phrase: string) => void;
 }
 
@@ -262,13 +261,23 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
     return () => ro.disconnect();
   }, []);
 
-  // Quick menu + emoji + QuickChat (current player only): long-press badge → menu → emoji or QuickChat → show above head 2s
+  // Quick menu + emoji + QuickChat (current player only)
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [quickChatPickerOpen, setQuickChatPickerOpen] = useState(false);
   const [editQuickChatOpen, setEditQuickChatOpen] = useState(false);
   const [overlayEmoji, setOverlayEmoji] = useState<string | null>(null);
   const [overlayPhrase, setOverlayPhrase] = useState<string | null>(null);
+
+  // Avatar animation picker (current player only)
+  const [animationPickerOpen, setAnimationPickerOpen] = useState(false);
+  const [localEmotion, setLocalEmotion] = useState<Emotion | null>(null);
+  const localEmotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avatarRef = useRef<HTMLDivElement | null>(null);
+
+  // Active emotion: local override takes priority over action-driven emotion
+  const activeEmotion: Emotion = localEmotion ?? avatarEmotion;
+
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phraseOverlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -291,6 +300,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
       setQuickMenuOpen(true);
       setEmojiPickerOpen(false);
       setQuickChatPickerOpen(false);
+      setAnimationPickerOpen(false);
     }, LONG_PRESS_MS);
   }, [isCurrentPlayer, clearLongPress]);
 
@@ -303,7 +313,36 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
     setQuickMenuOpen(true);
     setEmojiPickerOpen(false);
     setQuickChatPickerOpen(false);
+    setAnimationPickerOpen(false);
   }, [isCurrentPlayer]);
+
+  const handleAvatarClick = useCallback((e: React.MouseEvent) => {
+    if (!isCurrentPlayer) return;
+    e.stopPropagation();
+    setAnimationPickerOpen(prev => !prev);
+    setQuickMenuOpen(false);
+    setEmojiPickerOpen(false);
+    setQuickChatPickerOpen(false);
+  }, [isCurrentPlayer]);
+
+  const handleAnimationSelect = useCallback((emotion: Emotion) => {
+    setAnimationPickerOpen(false);
+    setLocalEmotion(emotion);
+    if (localEmotionTimerRef.current) clearTimeout(localEmotionTimerRef.current);
+    localEmotionTimerRef.current = setTimeout(() => {
+      setLocalEmotion(null);
+    }, emotion === 'wink' ? 1200 : LOCAL_EMOTION_DURATION_MS);
+  }, []);
+
+  const animationDockItems = useMemo(
+    () =>
+      AVATAR_ANIMATIONS.map(({ title, emotion, icon }) => ({
+        title,
+        icon: <span className="text-2xl">{icon}</span>,
+        onClick: () => handleAnimationSelect(emotion),
+      })),
+    [handleAnimationSelect],
+  );
 
   const handleEmojiSelect = useCallback((emoji: string) => {
     setEmojiPickerOpen(false);
@@ -349,30 +388,34 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
     clearLongPress();
     if (overlayTimeoutRef.current) clearTimeout(overlayTimeoutRef.current);
     if (phraseOverlayTimeoutRef.current) clearTimeout(phraseOverlayTimeoutRef.current);
+    if (localEmotionTimerRef.current) clearTimeout(localEmotionTimerRef.current);
   }, [clearLongPress]);
 
-  // Close menu when clicking outside (backdrop is clipped by seat transform, so use document click)
+  // Close menus when clicking outside
   useEffect(() => {
-    const isOpen = quickMenuOpen || emojiPickerOpen || quickChatPickerOpen;
+    const isOpen = quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || animationPickerOpen;
     if (!isOpen || !isCurrentPlayer) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (menuContainerRef.current?.contains(target) || quickMenuButtonRef.current?.contains(target)) return;
+      if (
+        menuContainerRef.current?.contains(target) ||
+        quickMenuButtonRef.current?.contains(target) ||
+        avatarRef.current?.contains(target)
+      ) return;
       setQuickMenuOpen(false);
       setEmojiPickerOpen(false);
       setQuickChatPickerOpen(false);
+      setAnimationPickerOpen(false);
     };
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
-  }, [isCurrentPlayer, quickMenuOpen, emojiPickerOpen, quickChatPickerOpen]);
+  }, [isCurrentPlayer, quickMenuOpen, emojiPickerOpen, quickChatPickerOpen, animationPickerOpen]);
 
-  // Resolve active action for color-coded label
   const activeAction =
     lastAction && lastAction.action !== 'blind' ? lastAction.action :
     isFolded ? 'fold' : null;
   const actionStyle = activeAction ? getActionStyle(activeAction) : null;
 
-  /** Display overlay from props (broadcast) when set, else local state (demo/fallback). */
   const displayEmoji = propsOverlayEmoji != null && propsOverlayEmoji !== '' ? propsOverlayEmoji : overlayEmoji;
   const displayPhrase = propsOverlayPhrase != null && propsOverlayPhrase !== '' ? propsOverlayPhrase : overlayPhrase;
 
@@ -396,16 +439,13 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
       className={`poker-seat relative flex flex-col items-center gap-0.5 select-none transition-opacity ${isFolded ? 'opacity-50' : 'opacity-100'}`}
       aria-label={`Seat ${displayName}`}
     >
-      {/* Table chat bubble — above seat, 5s then cleared by parent */}
+      {/* Table chat bubble */}
       <AnimatePresence>
         {chatBubble && chatBubble.trim() && (
           <motion.div
             key={chatBubble}
             className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-30"
-            style={{
-              maxWidth: 'min(160px, 42vw)',
-              minWidth: 48,
-            }}
+            style={{ maxWidth: 'min(160px, 42vw)', minWidth: 48 }}
             initial={{ opacity: 0, scale: 0.85, y: 4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 2 }}
@@ -432,7 +472,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
         )}
       </AnimatePresence>
 
-      {/* Quick-reaction emoji overlay — above head, 2s (from broadcast or local) */}
+      {/* Emoji overlay */}
       <AnimatePresence>
         {displayEmoji && (
           <motion.div
@@ -448,7 +488,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
         )}
       </AnimatePresence>
 
-      {/* QuickChat phrase overlay — above head, 2s (from broadcast or local) */}
+      {/* QuickChat phrase overlay */}
       <AnimatePresence>
         {displayPhrase && (
           <motion.div
@@ -465,45 +505,116 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
         )}
       </AnimatePresence>
 
-      {/* Fanned hole cards */}
-      {hasCards ? (
+      {/* ── Avatar + Cards row ── */}
+      <div className="relative flex items-center">
+
+        {/* Animation picker dock — above avatar, current player only */}
+        <AnimatePresence>
+          {isCurrentPlayer && animationPickerOpen && (
+            <motion.div
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50"
+              initial={{ opacity: 0, scale: 0.9, y: 4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 4 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            >
+              <FloatingDock
+                items={animationDockItems}
+                desktopClassName="!bg-[rgba(10,10,10,0.96)] !border !border-cyan-500/30 !shadow-[0_4px_20px_rgba(0,0,0,0.6)] !rounded-xl !px-3 !pb-2.5 !h-16 [&_.rounded-full]:!bg-transparent [&_button]:!bg-transparent [&_a]:!bg-transparent"
+                mobileClassName="[&_button]:!bg-transparent [&_.rounded-full]:!bg-transparent"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Large avatar circle */}
         <div
-          className="relative"
-          style={
-            showMyCards
-              ? { width: 'clamp(76px, 20vw, 110px)', height: 'clamp(92px, 24vw, 124px)' }
-              : { width: 'clamp(48px, 14vw, 58px)',  height: 'clamp(58px, 16vw, 72px)' }
-          }
+          ref={avatarRef}
+          className="relative shrink-0 rounded-full overflow-hidden"
+          style={{
+            width: 52,
+            height: 52,
+            border: isActing
+              ? '2px solid transparent'
+              : isCurrentPlayer
+                ? '2px solid rgba(251,191,36,0.6)'
+                : '2px solid rgba(255,255,255,0.18)',
+            background: 'rgba(0,0,0,0.6)',
+            zIndex: 2,
+            cursor: isCurrentPlayer ? 'pointer' : 'default',
+            flexShrink: 0,
+            boxShadow: isCurrentPlayer ? '0 0 0 1px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.6)',
+          }}
+          onClick={isCurrentPlayer ? handleAvatarClick : undefined}
+          title={isCurrentPlayer ? 'Click to animate' : undefined}
         >
-          {[0, 1].map((ci) => (
+          {seat.avatarConfig ? (
+            <AvatarPreview
+              config={seat.avatarConfig}
+              emotion={activeEmotion}
+              compact
+              className="w-full h-full"
+            />
+          ) : (
             <div
-              key={ci}
-              className="absolute"
+              className="w-full h-full flex items-center justify-center font-bold"
               style={{
-                bottom: 0,
-                [ci === 0 ? 'left' : 'right']: 0,
-                zIndex: ci + 1,
-                transform: `rotate(${ci === 0 ? -10 : 10}deg)`,
-                transformOrigin: 'bottom center',
-                filter: isFolded ? 'grayscale(1) opacity(0.5)' : undefined,
+                color: isCurrentPlayer ? '#fde68a' : '#e2e8f0',
+                fontSize: 20,
+                background: 'linear-gradient(135deg, rgba(30,30,50,1), rgba(10,10,20,1))',
               }}
             >
-              {showMyCards
-                ? <CardDisplay cardIndex={holeCards![ci]} />
-                : <CardDisplay cardIndex={null} small faceDown />}
+              {(seat.displayName?.trim() || seat.playerAddress?.slice(-2) || '?')[0].toUpperCase()}
             </div>
-          ))}
-          {isActing && (
-            <div
-              className="pointer-events-none absolute -inset-2 rounded-full blur-md opacity-50 animate-pulse"
-              style={{ background: 'radial-gradient(circle, var(--poker-accent-muted), transparent 70%)' }}
-              aria-hidden
-            />
+          )}
+          {/* Hover hint for current player */}
+          {isCurrentPlayer && (
+            <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors rounded-full pointer-events-none" />
           )}
         </div>
-      ) : (
-        <div style={{ width: 38, height: 48 }} aria-hidden />
-      )}
+
+        {/* Hole cards — overlap right of avatar */}
+        {hasCards ? (
+          <div
+            className="relative"
+            style={{
+              marginLeft: -10,
+              zIndex: 3,
+              ...(showMyCards
+                ? { width: 'clamp(76px, 20vw, 110px)', height: 'clamp(92px, 24vw, 124px)' }
+                : { width: 'clamp(48px, 14vw, 58px)',  height: 'clamp(58px, 16vw, 72px)' }),
+            }}
+          >
+            {[0, 1].map((ci) => (
+              <div
+                key={ci}
+                className="absolute"
+                style={{
+                  bottom: 0,
+                  [ci === 0 ? 'left' : 'right']: 0,
+                  zIndex: ci + 1,
+                  transform: `rotate(${ci === 0 ? -10 : 10}deg)`,
+                  transformOrigin: 'bottom center',
+                  filter: isFolded ? 'grayscale(1) opacity(0.5)' : undefined,
+                }}
+              >
+                {showMyCards
+                  ? <CardDisplay cardIndex={holeCards![ci]} />
+                  : <CardDisplay cardIndex={null} small faceDown />}
+              </div>
+            ))}
+            {isActing && (
+              <div
+                className="pointer-events-none absolute -inset-2 rounded-full blur-md opacity-50 animate-pulse"
+                style={{ background: 'radial-gradient(circle, var(--poker-accent-muted), transparent 70%)' }}
+                aria-hidden
+              />
+            )}
+          </div>
+        ) : (
+          <div style={{ marginLeft: 6, width: 16, height: 52 }} aria-hidden />
+        )}
+      </div>
 
       {/* "Your Turn" banner */}
       <AnimatePresence>
@@ -525,15 +636,15 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
         )}
       </AnimatePresence>
 
-      {/* ── Player badge ── */}
+      {/* ── Player badge (name + chips) ── */}
       <div style={{ position: 'relative', display: 'inline-block' }}>
 
-        {/* Timer ring — wraps badge perimeter */}
+        {/* Timer ring */}
         {isActing && timeLeft != null && (
           <TimerRingSVG w={badgeSize.w} h={badgeSize.h} timeLeft={timeLeft} maxTime={maxTime} />
         )}
 
-        {/* Role tokens — top-right corner overhang */}
+        {/* Role tokens — top-right corner */}
         {(seat.isDealer || seat.isSmallBlind || seat.isBigBlind) && (
           <div style={{ position: 'absolute', top: -10, right: -10, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
             {seat.isDealer     && <RoleToken label="D"  />}
@@ -542,9 +653,9 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           </div>
         )}
 
-        {/* Backdrop to close quick menu / emoji picker / QuickChat picker when clicking outside */}
+        {/* Backdrop to close all menus */}
         <AnimatePresence>
-          {isCurrentPlayer && (quickMenuOpen || emojiPickerOpen || quickChatPickerOpen) && (
+          {isCurrentPlayer && (quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || animationPickerOpen) && (
             <motion.div
               className="fixed inset-0 z-[45]"
               initial={{ opacity: 0 }}
@@ -555,18 +666,19 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
                 setQuickMenuOpen(false);
                 setEmojiPickerOpen(false);
                 setQuickChatPickerOpen(false);
+                setAnimationPickerOpen(false);
               }}
               aria-hidden
             />
           )}
         </AnimatePresence>
 
-        {/* Quick menu, emoji picker, QuickChat picker — wrapper ref for outside-click close */}
+        {/* Quick menu / emoji / quickchat container */}
         <div
           ref={menuContainerRef}
           className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 z-50 w-max min-w-[120px]"
         >
-          {/* Quick menu (long-press on badge when current player) */}
+          {/* Quick menu */}
           <AnimatePresence>
             {isCurrentPlayer && quickMenuOpen && !emojiPickerOpen && !quickChatPickerOpen && (
               <motion.div
@@ -608,7 +720,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
             )}
           </AnimatePresence>
 
-          {/* 9 emotion emojis picker — floating dock */}
+          {/* Emoji picker */}
           <AnimatePresence>
             {isCurrentPlayer && emojiPickerOpen && (
               <motion.div
@@ -626,7 +738,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
             )}
           </AnimatePresence>
 
-          {/* QuickChat phrase picker — current phrases + Edit QuickChat */}
+          {/* QuickChat picker */}
           <AnimatePresence>
             {isCurrentPlayer && quickChatPickerOpen && (
               <motion.div
@@ -680,6 +792,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
           onSave={setQuickChatPhrases}
         />
 
+        {/* Badge */}
         <div
           ref={badgeRef}
           role={isCurrentPlayer ? 'button' : undefined}
@@ -704,7 +817,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
             ...(isCurrentPlayer ? { cursor: 'pointer' } : {}),
           }}
         >
-          {/* Hamburger, Re-up (+), Quick menu (chat) — left of nametag, vertically centered (current player only) */}
+          {/* Hamburger, Re-up, Quick menu buttons (current player only) */}
           {isCurrentPlayer && (
             <div className="absolute left-0.5 top-1/2 z-10 flex -translate-y-1/2 flex-row items-center gap-1">
               <button
@@ -743,6 +856,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
                   setQuickMenuOpen(true);
                   setEmojiPickerOpen(false);
                   setQuickChatPickerOpen(false);
+                  setAnimationPickerOpen(false);
                 }}
                 className="flex h-8 w-8 items-center justify-center rounded-md text-xs opacity-90 hover:opacity-100 hover:bg-white/15 transition-all"
                 style={{ color: 'var(--poker-text)' }}
@@ -754,13 +868,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, las
             </div>
           )}
 
-          {/* Avatar (when config present) + Name + stack — extra left padding when current player so content clears the buttons */}
+          {/* Name + stack */}
           <div className={`py-1.5 sm:py-1 flex items-center justify-center gap-1.5 ${isCurrentPlayer ? 'pl-[7rem] pr-2.5 sm:pl-[7rem] sm:pr-2' : 'px-2.5 sm:px-2'}`}>
-            {seat.avatarConfig && (
-              <div className="shrink-0 flex items-center justify-center">
-                <AvatarPreview config={seat.avatarConfig} emotion={avatarEmotion} compact className="w-10 h-10" />
-              </div>
-            )}
             <div className="flex flex-col items-center min-w-0 text-center">
               <div
                 className="font-bold truncate leading-tight w-full"
