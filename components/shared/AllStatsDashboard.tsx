@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react'
 import { formatEther } from 'viem'
-import { BarChart3, History, TrendingUp, TrendingDown, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
+import { BarChart3, History, TrendingUp, TrendingDown, ArrowDownCircle, ArrowUpCircle, Download, Calendar } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -56,6 +56,27 @@ export type UnifiedHistoryRow = {
   createdAt: string
 }
 
+function downloadCsvRows(rows: UnifiedHistoryRow[], address: string, label: string) {
+  const header = 'timestamp,game,wager,payout,profit,amount,tx_hash'
+  const lines = rows.map((r) => [
+    r.createdAt,
+    r.gameLabel,
+    r.wager != null ? formatEther(r.wager) : '',
+    r.payout != null ? formatEther(r.payout) : '',
+    r.profit != null ? formatEther(r.profit >= 0n ? r.profit : -r.profit) + (r.profit < 0n ? ' (loss)' : '') : '',
+    r.amount != null ? formatEther(r.amount) : '',
+    r.txHash ?? '',
+  ].join(','))
+  const csv = [header, ...lines].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${label}_${address.slice(-8)}_${Date.now()}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 interface AllStatsDashboardProps {
   playerAddress: string
 }
@@ -69,8 +90,8 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
   const lotteryStats = useLotteryPlayerStats(lotteryAddress)
   const kenoStats = useKenoPlayerStats(lotteryAddress)
   const plinkoStats = usePlinkoPlayerStats(lotteryAddress)
-  const { results: lotteryResults } = useInstantLotteryResults({ playerAddress: lotteryAddress, limit: 100 })
-  const { data: bjGames } = usePlayerProfileGames(address, 100)
+  const { results: lotteryResults } = useInstantLotteryResults({ playerAddress: lotteryAddress, limit: 25000 })
+  const { data: bjGames } = usePlayerProfileGames(address, 25000)
 
   const { totalClaimable: merkleClaimable, claimableEpochs } = useMerkleClaims()
   const totalClaimed = useMemo(
@@ -86,7 +107,7 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
     queryKey: ['playerTransactions', addr],
     queryFn: async () => {
       if (!apiUrl) return []
-      const res = await fetch(`${apiUrl}/api/players/${addr}/transactions?limit=100`)
+      const res = await fetch(`${apiUrl}/api/players/${addr}/transactions?limit=25000`)
       if (!res.ok) return []
       return res.json() as Promise<Array<{ type: 'deposit' | 'withdrawal'; amount: string; tx_hash: string | null; created_at: string }>>
     },
@@ -194,7 +215,7 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
     })
 
     rows.sort((a, b) => b.sortKey - a.sortKey)
-    return rows.slice(0, 150)
+    return rows
   }, [bjGames, lotteryResults, kenoStats?.results, plinkoStats?.results, txHistory])
 
   const cumulativeChartData = useMemo(() => {
@@ -236,6 +257,15 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
   }, [combinedHistory, aggregated.totalWagered, aggregated.totalWon, aggregated.totalGames])
 
   const [activeTab, setActiveTab] = useState<'stats' | 'history'>('stats')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+
+  const filteredHistory = useMemo(() => {
+    if (!dateFrom && !dateTo) return combinedHistory
+    const from = dateFrom ? new Date(dateFrom).getTime() : 0
+    const to = dateTo ? new Date(dateTo + 'T23:59:59').getTime() : Infinity
+    return combinedHistory.filter((r) => r.sortKey >= from && r.sortKey <= to)
+  }, [combinedHistory, dateFrom, dateTo])
 
   const isLoading =
     (bjStats === undefined && address) ||
@@ -423,10 +453,51 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
       {activeTab === 'history' && (
         <Card className="overflow-hidden" style={PANEL_STYLE}>
           <CardHeader>
-            <CardTitle className="text-lg text-white flex items-center gap-2">
-              <History className="w-5 h-5 text-cyan-400" />
-              Combined history (all games + deposits & withdrawals)
-            </CardTitle>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <CardTitle className="text-lg text-white flex items-center gap-2">
+                <History className="w-5 h-5 text-cyan-400" />
+                Combined history (all games + deposits & withdrawals)
+              </CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-black/20 border border-white/10 rounded-lg px-2 py-1">
+                  <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="bg-transparent text-xs text-gray-300 outline-none w-32"
+                    placeholder="From"
+                  />
+                </div>
+                <span className="text-gray-500 text-xs">–</span>
+                <div className="flex items-center gap-1.5 bg-black/20 border border-white/10 rounded-lg px-2 py-1">
+                  <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="bg-transparent text-xs text-gray-300 outline-none w-32"
+                    placeholder="To"
+                  />
+                </div>
+                {(dateFrom || dateTo) && (
+                  <button
+                    onClick={() => { setDateFrom(''); setDateTo('') }}
+                    className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded-lg bg-black/20 border border-white/10"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  onClick={() => downloadCsvRows(filteredHistory, playerAddress, dateFrom || dateTo ? 'history_filtered' : 'history_full')}
+                  disabled={filteredHistory.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600/20 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-600/30 transition-colors disabled:opacity-40 text-xs font-medium"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {dateFrom || dateTo ? `Export filtered (${filteredHistory.length})` : `Export full CSV (${combinedHistory.length})`}
+                </button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="rounded-lg border border-white/10 overflow-hidden">
@@ -442,14 +513,14 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {combinedHistory.length === 0 ? (
+                  {filteredHistory.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-white/50 text-center py-8">
-                        No history yet.
+                        {dateFrom || dateTo ? 'No history in the selected date range.' : 'No history yet.'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    combinedHistory.map((row, i) => (
+                    filteredHistory.map((row, i) => (
                       <TableRow key={`${row.type}-${row.sortKey}-${i}`} className="border-white/10">
                         <TableCell className="text-white/90 text-sm">
                           {row.createdAt

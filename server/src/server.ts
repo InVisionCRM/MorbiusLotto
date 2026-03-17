@@ -271,6 +271,8 @@ async function initializeServices() {
 
     // Wire broadcast so bot actions (which bypass the WS handler) still push state to clients
     pokerGameService.setBroadcastCallback((tableId) => wsService.broadcastPokerTableState(tableId));
+    // Wire notifications for AFK kick/sit-out events
+    pokerGameService.setNotifyCallback((room, type, payload) => wsService.broadcastToRoom(room, { type, payload }));
 
     // Initialize poker tournament service and wire into WebSocket + post-hand callback
     const pokerTournamentService = new PokerTournamentService(
@@ -346,7 +348,7 @@ async function initializeServices() {
     // Update profile by address (display name, profile image URL, avatar config). No signature required.
     app.post('/api/player/profile', express.json(), async (req, res) => {
       try {
-        const { address, displayName: rawDisplayName, profileImageUrl: rawProfileImageUrl, avatarConfig: rawAvatarConfig } = req.body ?? {};
+        const { address, displayName: rawDisplayName, profileImageUrl: rawProfileImageUrl, avatarConfig: rawAvatarConfig, bio: rawBio, xHandle: rawXHandle, tgHandle: rawTgHandle } = req.body ?? {};
         if (!address || typeof address !== 'string') {
           return res.status(400).json({ error: 'address required' });
         }
@@ -361,11 +363,98 @@ async function initializeServices() {
         const avatarConfig = rawAvatarConfig !== undefined
           ? (rawAvatarConfig !== null && typeof rawAvatarConfig === 'object' ? rawAvatarConfig as Record<string, unknown> : null)
           : undefined;
-        await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig);
+        const bio     = rawBio     !== undefined ? (typeof rawBio     === 'string' ? rawBio.trim().slice(0, 200) || null     : null) : undefined;
+        const xHandle = rawXHandle !== undefined ? (typeof rawXHandle === 'string' ? rawXHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
+        const tgHandle = rawTgHandle !== undefined ? (typeof rawTgHandle === 'string' ? rawTgHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
+        await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle);
         const profile = await dbService.getProfile(normalizedAddress);
         sendJson(res, profile ?? { displayName: null, profileImageUrl: null, avatarConfig: null });
       } catch (error) {
         logger.error('Error updating player profile:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // ── Follow system ─────────────────────────────────────────────────────────
+
+    // Follow a player (body: { follower: string })
+    app.post('/api/player/:address/follow', express.json(), async (req, res) => {
+      try {
+        const following = req.params.address;
+        const { follower } = req.body ?? {};
+        if (!follower || typeof follower !== 'string') return res.status(400).json({ error: 'follower address required' });
+        if (follower.toLowerCase() === following.toLowerCase()) return res.status(400).json({ error: 'Cannot follow yourself' });
+        await dbService.followPlayer(follower, following);
+        const counts = await dbService.getFollowCounts(following);
+        sendJson(res, { success: true, ...counts });
+      } catch (error) {
+        logger.error('Error following player:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Unfollow a player (body: { follower: string })
+    app.delete('/api/player/:address/follow', express.json(), async (req, res) => {
+      try {
+        const following = req.params.address;
+        const { follower } = req.body ?? {};
+        if (!follower || typeof follower !== 'string') return res.status(400).json({ error: 'follower address required' });
+        await dbService.unfollowPlayer(follower, following);
+        const counts = await dbService.getFollowCounts(following);
+        sendJson(res, { success: true, ...counts });
+      } catch (error) {
+        logger.error('Error unfollowing player:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Check follow status (?follower=address)
+    app.get('/api/player/:address/is-following', async (req, res) => {
+      try {
+        const following = req.params.address;
+        const follower = req.query.follower as string;
+        if (!follower) return res.status(400).json({ error: 'follower query param required' });
+        const isFollowing = await dbService.isFollowing(follower, following);
+        sendJson(res, { isFollowing });
+      } catch (error) {
+        logger.error('Error checking follow status:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Get follow counts for a player
+    app.get('/api/player/:address/follow-counts', async (req, res) => {
+      try {
+        const counts = await dbService.getFollowCounts(req.params.address);
+        sendJson(res, counts);
+      } catch (error) {
+        logger.error('Error fetching follow counts:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Get followers of a player
+    app.get('/api/player/:address/followers', async (req, res) => {
+      try {
+        const limit  = Math.min(100, parseInt(req.query.limit  as string) || 50);
+        const offset = parseInt(req.query.offset as string) || 0;
+        const followers = await dbService.getFollowers(req.params.address, limit, offset);
+        sendJson(res, followers);
+      } catch (error) {
+        logger.error('Error fetching followers:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Get who a player is following
+    app.get('/api/player/:address/following', async (req, res) => {
+      try {
+        const limit  = Math.min(100, parseInt(req.query.limit  as string) || 50);
+        const offset = parseInt(req.query.offset as string) || 0;
+        const following = await dbService.getFollowing(req.params.address, limit, offset);
+        sendJson(res, following);
+      } catch (error) {
+        logger.error('Error fetching following:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });

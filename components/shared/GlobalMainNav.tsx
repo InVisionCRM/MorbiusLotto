@@ -29,6 +29,7 @@ import SwapModal from '@/components/PLINKO/SwapModal';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal';
 import { ReportModal } from '@/components/shared/ReportModal';
 import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal';
+import ProfileSettingsModal from '@/components/shared/ProfileSettingsModal';
 import { useQueryClient } from '@tanstack/react-query';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
@@ -370,7 +371,8 @@ function NavContent(props: {
             <SidebarButton label="Player Dashboard" icon={<i className="fas fa-chart-pie w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenPlayerProfile()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           )}
 
-          <SidebarButton label="Profile" icon={<i className="fas fa-user-edit w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenProfileModal?.()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label="Profile" icon={<i className="fas fa-user-edit w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenProfileSettings ? onOpenProfileSettings() : onOpenProfileModal?.()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label="Avatar" icon={<i className="fas fa-user-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenProfileModal?.()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Claim Morbius', href: '/staking', icon: <i className="fas fa-gift w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
         </div>
 
@@ -527,17 +529,31 @@ export default function GlobalMainNav({
   const { gameLocked } = useGameLock();
   const page = useNavPage(pageProp);
   const { address, isConnected } = useAccount();
-  const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook } = useProfile();
+  const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook, bio: bioFromHook, xHandle: xHandleFromHook, tgHandle: tgHandleFromHook } = useProfile();
   const [responsibleGamingOpen, setResponsibleGamingOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const effectiveOnOpenResponsibleGaming = onOpenResponsibleGaming ?? (() => setResponsibleGamingOpen(true));
-  const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook;
-  const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook;
+  const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [internalThemeModalOpen, setInternalThemeModalOpen] = useState(false);
   const [howToPlayOpen, setHowToPlayOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [profileAvatarModalOpen, setProfileAvatarModalOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  const effectiveOnOpenResponsibleGaming = onOpenResponsibleGaming ?? (() => setResponsibleGamingOpen(true));
+  const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook;
+  const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook;
+
+  const handleInternalSaveProfile = async (name: string, img: string | null, bio: string | null, x: string | null, tg: string | null) => {
+    if (!address) return;
+    const res = await fetch('/api/player/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress: address, displayName: name, profileImageUrl: img, bio, xHandle: x, tgHandle: tg }),
+    });
+    if (!res.ok) throw new Error('Failed to save profile');
+    queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
+  };
+  const effectiveOnOpenProfileSettings = onOpenProfileSettings ?? (() => setProfileSettingsOpen(true));
 
   const isThemeModalControlled = onThemeModalOpenChange !== undefined;
   const themeModalOpen = isThemeModalControlled ? (themeModalOpenProp ?? false) : internalThemeModalOpen;
@@ -555,7 +571,7 @@ export default function GlobalMainNav({
         onOpenDepositModal={onOpenDepositModal}
         profileDisplayName={effectiveProfileDisplayName}
         profileImageUrl={effectiveProfileImageUrl}
-        onOpenProfileSettings={onOpenProfileSettings}
+        onOpenProfileSettings={effectiveOnOpenProfileSettings}
         dropdownPlacement="below"
         variant="default"
         className="shrink-0"
@@ -579,7 +595,7 @@ export default function GlobalMainNav({
             onSoundChange={onSoundChange}
             profileDisplayName={effectiveProfileDisplayName}
             profileImageUrl={effectiveProfileImageUrl}
-            onOpenProfileSettings={onOpenProfileSettings}
+            onOpenProfileSettings={effectiveOnOpenProfileSettings}
             musicTrackName={musicTrackName}
             isMusicPlaying={isMusicPlaying}
             onToggleMusic={onToggleMusic}
@@ -646,6 +662,18 @@ export default function GlobalMainNav({
         onClose={() => setProfileAvatarModalOpen(false)}
         onSave={() => queryClient.invalidateQueries({ queryKey: ['playerProfile'] })}
       />
+      {!onOpenProfileSettings && (
+        <ProfileSettingsModal
+          open={profileSettingsOpen}
+          onClose={() => setProfileSettingsOpen(false)}
+          displayName={effectiveProfileDisplayName ?? ''}
+          profileImageUrl={effectiveProfileImageUrl}
+          bio={bioFromHook}
+          xHandle={xHandleFromHook}
+          tgHandle={tgHandleFromHook}
+          onSave={handleInternalSaveProfile}
+        />
+      )}
     </Sidebar>
   );
 }

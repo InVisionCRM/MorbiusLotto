@@ -728,17 +728,20 @@ export class BlackjackWebSocketClient {
    * Requires connected wallet. Use on('display_name_set', handler) for the response.
    * Optionally pass profileImageUrl and/or avatarConfig; get_profile and display_name_set responses include avatarConfig.
    */
-  async setDisplayName(displayName: string, profileImageUrl?: string | null, avatarConfig?: AvatarConfig | null): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: AvatarConfig | null }> {
-    const payload: { displayName: string; profileImageUrl?: string | null; avatarConfig?: AvatarConfig | null } = { displayName };
+  async setDisplayName(displayName: string, profileImageUrl?: string | null, avatarConfig?: AvatarConfig | null, bio?: string | null, xHandle?: string | null, tgHandle?: string | null): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: AvatarConfig | null; bio: string | null; xHandle: string | null; tgHandle: string | null }> {
+    const payload: Record<string, unknown> = { displayName };
     if (profileImageUrl !== undefined) payload.profileImageUrl = profileImageUrl;
     if (avatarConfig !== undefined) payload.avatarConfig = avatarConfig;
+    if (bio !== undefined) payload.bio = bio;
+    if (xHandle !== undefined) payload.xHandle = xHandle;
+    if (tgHandle !== undefined) payload.tgHandle = tgHandle;
     return this.sendRequest('set_display_name', payload);
   }
 
   /**
-   * Get current profile (display name, profile image URL, avatar config) for the connected wallet.
+   * Get current profile (display name, profile image URL, avatar config, bio, social handles) for the connected wallet.
    */
-  async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null; avatarConfig: AvatarConfig | null }> {
+  async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null; avatarConfig: AvatarConfig | null; bio: string | null; xHandle: string | null; tgHandle: string | null }> {
     return this.sendRequest('get_profile', {});
   }
 

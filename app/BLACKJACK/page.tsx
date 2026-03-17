@@ -2509,9 +2509,9 @@ export default function BlackjackPage() {
           openProfileSettings({
             displayName: profileDisplayName ?? '',
             profileImageUrl,
-            onSave: async (displayName, profileImageUrl) => {
+            onSave: async (displayName, profileImageUrl, bio, xHandle, tgHandle) => {
               if (!wsClient) return;
-              const res = await wsClient.setDisplayName(displayName, profileImageUrl);
+              const res = await wsClient.setDisplayName(displayName, profileImageUrl, undefined, bio, xHandle, tgHandle);
               setProfileDisplayName(res.displayName);
               setProfileImageUrl(res.profileImageUrl);
               if (address) {

@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 
 const DISPLAY_NAME_MIN = 3
 const DISPLAY_NAME_MAX = 32
+const BIO_MAX = 200
 const AVATAR_MAX_PX = 256
 const AVATAR_JPEG_QUALITY = 0.85
 
@@ -64,7 +65,10 @@ export interface ProfileSettingsModalProps {
   onClose: () => void
   displayName: string
   profileImageUrl: string | null
-  onSave: (displayName: string, profileImageUrl: string | null) => Promise<void>
+  bio?: string | null
+  xHandle?: string | null
+  tgHandle?: string | null
+  onSave: (displayName: string, profileImageUrl: string | null, bio: string | null, xHandle: string | null, tgHandle: string | null) => Promise<void>
 }
 
 export default function ProfileSettingsModal({
@@ -72,10 +76,16 @@ export default function ProfileSettingsModal({
   onClose,
   displayName: initialDisplayName,
   profileImageUrl: initialProfileImageUrl,
+  bio: initialBio = null,
+  xHandle: initialXHandle = null,
+  tgHandle: initialTgHandle = null,
   onSave,
 }: ProfileSettingsModalProps) {
   const [displayName, setDisplayName] = useState(initialDisplayName)
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(initialProfileImageUrl)
+  const [bio, setBio] = useState(initialBio ?? '')
+  const [xHandle, setXHandle] = useState(initialXHandle ?? '')
+  const [tgHandle, setTgHandle] = useState(initialTgHandle ?? '')
   const [saving, setSaving] = useState(false)
   const [mounted, setMounted] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -86,8 +96,11 @@ export default function ProfileSettingsModal({
     if (open) {
       setDisplayName(initialDisplayName)
       setProfileImageUrl(initialProfileImageUrl)
+      setBio(initialBio ?? '')
+      setXHandle(initialXHandle ?? '')
+      setTgHandle(initialTgHandle ?? '')
     }
-  }, [open, initialDisplayName, initialProfileImageUrl])
+  }, [open, initialDisplayName, initialProfileImageUrl, initialBio, initialXHandle, initialTgHandle])
 
   const sanitizeName = (raw: string): string => {
     return raw.replace(/[^\w\s-]/gi, '').replace(/\s+/g, ' ').trim().slice(0, DISPLAY_NAME_MAX)
@@ -126,7 +139,13 @@ export default function ProfileSettingsModal({
     }
     setSaving(true)
     try {
-      await onSave(name, profileImageUrl)
+      await onSave(
+        name,
+        profileImageUrl,
+        bio.trim().slice(0, BIO_MAX) || null,
+        xHandle.trim().replace(/^@/, '').slice(0, 50) || null,
+        tgHandle.trim().replace(/^@/, '').slice(0, 50) || null,
+      )
       toast.success('Profile updated.')
       onClose()
     } catch (err) {
@@ -201,6 +220,50 @@ export default function ProfileSettingsModal({
                 >
                   Upload image
                 </button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Bio <span className="text-gray-500 font-normal">({bio.length}/{BIO_MAX})</span>
+            </label>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX))}
+              placeholder="A short bio about yourself…"
+              rows={3}
+              className="w-full rounded-lg bg-slate-800/80 border border-cyan-500/30 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-1.5">
+                <span style={{ fontSize: 13 }}>𝕏</span> X / Twitter
+              </label>
+              <div className="flex items-center rounded-lg overflow-hidden bg-slate-800/80 border border-cyan-500/30 focus-within:ring-2 focus-within:ring-cyan-500/50">
+                <span className="px-2 text-gray-500 text-sm select-none">@</span>
+                <input
+                  type="text"
+                  value={xHandle}
+                  onChange={(e) => setXHandle(e.target.value.replace(/^@/, '').slice(0, 50))}
+                  placeholder="handle"
+                  className="flex-1 bg-transparent py-2 pr-3 text-white placeholder-gray-500 focus:outline-none text-sm min-w-0"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-1.5">
+                <span style={{ fontSize: 13 }}>✈️</span> Telegram
+              </label>
+              <div className="flex items-center rounded-lg overflow-hidden bg-slate-800/80 border border-cyan-500/30 focus-within:ring-2 focus-within:ring-cyan-500/50">
+                <span className="px-2 text-gray-500 text-sm select-none">@</span>
+                <input
+                  type="text"
+                  value={tgHandle}
+                  onChange={(e) => setTgHandle(e.target.value.replace(/^@/, '').slice(0, 50))}
+                  placeholder="username"
+                  className="flex-1 bg-transparent py-2 pr-3 text-white placeholder-gray-500 focus:outline-none text-sm min-w-0"
+                />
               </div>
             </div>
           </div>

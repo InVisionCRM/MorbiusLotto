@@ -1501,7 +1501,7 @@ export class WebSocketService {
         return this.sendError(ws, 'Wallet required to set display name', message.requestId);
       }
 
-      const payload = message.payload as { displayName?: string; profileImageUrl?: string | null; avatarConfig?: Record<string, unknown> | null };
+      const payload = message.payload as { displayName?: string; profileImageUrl?: string | null; avatarConfig?: Record<string, unknown> | null; bio?: string | null; xHandle?: string | null; tgHandle?: string | null };
       const raw = payload?.displayName;
       if (raw === undefined || raw === null || typeof raw !== 'string') {
         return this.sendError(ws, 'displayName required', message.requestId);
@@ -1528,7 +1528,10 @@ export class WebSocketService {
       const avatarConfig = payload.avatarConfig !== undefined
         ? (payload.avatarConfig !== null && typeof payload.avatarConfig === 'object' ? payload.avatarConfig : null)
         : undefined;
-      await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl, avatarConfig);
+      const bio      = payload.bio      !== undefined ? (typeof payload.bio      === 'string' ? payload.bio.trim().slice(0, 200) || null      : null) : undefined;
+      const xHandle  = payload.xHandle  !== undefined ? (typeof payload.xHandle  === 'string' ? payload.xHandle.trim().replace(/^@/, '').slice(0, 50) || null  : null) : undefined;
+      const tgHandle = payload.tgHandle !== undefined ? (typeof payload.tgHandle === 'string' ? payload.tgHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
+      await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle);
       const profile = await this.dbService.getProfile(ws.playerAddress);
 
       this.sendMessage(ws, {
@@ -1536,7 +1539,10 @@ export class WebSocketService {
         payload: {
           displayName,
           profileImageUrl: profile?.profileImageUrl ?? null,
-          avatarConfig: profile?.avatarConfig ?? null
+          avatarConfig: profile?.avatarConfig ?? null,
+          bio: profile?.bio ?? null,
+          xHandle: profile?.xHandle ?? null,
+          tgHandle: profile?.tgHandle ?? null,
         },
         requestId: message.requestId
       });
@@ -1555,8 +1561,8 @@ export class WebSocketService {
       this.sendMessage(ws, {
         type: 'profile',
         payload: profile
-          ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl, avatarConfig: profile.avatarConfig }
-          : { displayName: null, profileImageUrl: null, avatarConfig: null },
+          ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl, avatarConfig: profile.avatarConfig, bio: profile.bio, xHandle: profile.xHandle, tgHandle: profile.tgHandle }
+          : { displayName: null, profileImageUrl: null, avatarConfig: null, bio: null, xHandle: null, tgHandle: null },
         requestId: message.requestId
       });
     } catch (error) {

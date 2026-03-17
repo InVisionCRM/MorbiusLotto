@@ -556,30 +556,34 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
             >
               <div
-                className="grid grid-cols-4 gap-2 p-3 rounded-2xl"
+                className="rounded-2xl p-3 max-h-[70vh] overflow-y-auto overflow-x-hidden"
                 style={{
                   background: 'rgba(10,10,10,0.97)',
                   border: '1px solid rgba(255,255,255,0.12)',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
-                  width: 280,
+                  width: 320,
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'rgba(255,255,255,0.2) transparent',
                 }}
               >
-                {AVATAR_ANIMATIONS.map(({ title, emotion }) => (
-                  <button
-                    key={emotion}
-                    type="button"
-                    onClick={() => handleAnimationSelect(emotion)}
-                    className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors"
-                  >
-                    <AvatarPreview
-                      config={seat.avatarConfig ?? DEFAULT_AVATAR_CONFIG}
-                      emotion={emotion}
-                      compact
-                      className="w-14 h-14"
-                    />
-                    <span className="text-[10px] font-medium text-zinc-300 leading-none">{title}</span>
-                  </button>
-                ))}
+                <div className="grid grid-cols-6 gap-2">
+                  {AVATAR_ANIMATIONS.map(({ title, emotion }) => (
+                    <button
+                      key={emotion}
+                      type="button"
+                      onClick={() => handleAnimationSelect(emotion)}
+                      className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors"
+                    >
+                      <AvatarPreview
+                        config={seat.avatarConfig ?? DEFAULT_AVATAR_CONFIG}
+                        emotion={emotion}
+                        compact
+                        className="w-14 h-14"
+                      />
+                      <span className="text-[10px] font-medium text-zinc-300 leading-none">{title}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </motion.div>
           )}

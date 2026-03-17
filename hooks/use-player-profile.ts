@@ -33,6 +33,9 @@ export interface DisplayProfile {
   displayName: string | null
   profileImageUrl: string | null
   avatarConfig: AvatarConfig | null
+  bio: string | null
+  xHandle: string | null
+  tgHandle: string | null
 }
 
 /**
@@ -52,6 +55,9 @@ export function useProfile() {
         displayName: data.displayName ?? null,
         profileImageUrl: data.profileImageUrl ?? null,
         avatarConfig: data.avatarConfig && typeof data.avatarConfig === 'object' ? (data.avatarConfig as AvatarConfig) : null,
+        bio: data.bio ?? null,
+        xHandle: data.xHandle ?? null,
+        tgHandle: data.tgHandle ?? null,
       }
     },
     enabled: !!address,
@@ -61,6 +67,9 @@ export function useProfile() {
     profileDisplayName: query.data?.displayName ?? null,
     profileImageUrl: query.data?.profileImageUrl ?? null,
     avatarConfig: query.data?.avatarConfig ?? null,
+    bio: query.data?.bio ?? null,
+    xHandle: query.data?.xHandle ?? null,
+    tgHandle: query.data?.tgHandle ?? null,
     isLoading: query.isLoading,
   }
 }
@@ -81,6 +90,9 @@ export function useProfileForAddress(address: string | null) {
         displayName: data.displayName ?? null,
         profileImageUrl: data.profileImageUrl ?? null,
         avatarConfig: data.avatarConfig && typeof data.avatarConfig === 'object' ? (data.avatarConfig as AvatarConfig) : null,
+        bio: data.bio ?? null,
+        xHandle: data.xHandle ?? null,
+        tgHandle: data.tgHandle ?? null,
       }
     },
     enabled: !!address,
@@ -90,6 +102,9 @@ export function useProfileForAddress(address: string | null) {
     displayName: query.data?.displayName ?? null,
     profileImageUrl: query.data?.profileImageUrl ?? null,
     avatarConfig: query.data?.avatarConfig ?? null,
+    bio: query.data?.bio ?? null,
+    xHandle: query.data?.xHandle ?? null,
+    tgHandle: query.data?.tgHandle ?? null,
     isLoading: query.isLoading,
   }
 }

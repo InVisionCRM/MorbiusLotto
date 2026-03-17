@@ -114,6 +114,7 @@ function totalPot(table: Table): number {
 export class PokerGameService {
   private broadcastCallback: ((tableId: string) => Promise<void>) | null = null;
   private postHandCallback: ((tableId: string, handNumber: number) => Promise<void>) | null = null;
+  private notifyCallback: ((room: string, type: string, payload: any) => void) | null = null;
   private activeTables: Map<string, Table> = new Map();
 
   constructor(
@@ -124,6 +125,11 @@ export class PokerGameService {
   /** Wire in the WebSocket broadcast so actions push state to clients. */
   setBroadcastCallback(cb: (tableId: string) => Promise<void>): void {
     this.broadcastCallback = cb;
+  }
+
+  /** Register a callback for push notifications (e.g. player kicked, sitting out). */
+  setNotifyCallback(cb: (room: string, type: string, payload: any) => void): void {
+    this.notifyCallback = cb;
   }
 
   /** Register a callback fired after every showdown (used by PokerTournamentService to sync chips). */
@@ -939,6 +945,13 @@ export class PokerGameService {
         throw new Error('Invalid action');
     }
 
+    // Reset AFK timeout counter (and un-sit if sitting_out) on voluntary action
+    await pool.query(
+      `UPDATE poker_seats SET consecutive_timeouts = 0, status = 'active'
+       WHERE table_id = $1 AND player_address = $2`,
+      [tableId, normalized]
+    );
+
     // Determine what happened after the action
     const newStreet = chevtekStreetToPoker(table.currentRound, !!table.winners);
     const isShowdown = !table.currentRound && !!table.winners;
@@ -1152,6 +1165,52 @@ export class PokerGameService {
 
         folded.push(actingAddr);
         logger.info('Auto-folded timed-out turn', { handId: row.hand_id, player: actingAddr });
+
+        // Track consecutive timeouts and auto-kick/sit-out AFK players
+        try {
+          const tableInfoResult = await pool.query(
+            'SELECT tournament_mode FROM poker_tables WHERE id = $1',
+            [row.table_id]
+          );
+          const isTournament = tableInfoResult.rows[0]?.tournament_mode ?? false;
+
+          const timeoutResult = await pool.query(
+            `UPDATE poker_seats
+             SET consecutive_timeouts = consecutive_timeouts + 1
+             WHERE table_id = $1 AND player_address = $2
+             RETURNING consecutive_timeouts`,
+            [row.table_id, actingAddr]
+          );
+          const consecutiveTimeouts = Number(timeoutResult.rows[0]?.consecutive_timeouts ?? 0);
+
+          if (consecutiveTimeouts >= 6) {
+            if (isTournament) {
+              // Sit them out — they bleed blinds and bust naturally (no kick; they paid a buy-in)
+              await pool.query(
+                `UPDATE poker_seats SET status = 'sitting_out', consecutive_timeouts = 0
+                 WHERE table_id = $1 AND player_address = $2`,
+                [row.table_id, actingAddr]
+              );
+              this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_sitting_out', {
+                tableId: row.table_id,
+                playerAddress: actingAddr,
+                reason: 'afk',
+              });
+              logger.info('Tournament AFK player marked sitting_out', { tableId: row.table_id, player: actingAddr });
+            } else {
+              // Cash game — kick and return stack
+              await this.leaveTable(row.table_id, actingAddr);
+              this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_kicked', {
+                tableId: row.table_id,
+                playerAddress: actingAddr,
+                reason: 'afk',
+              });
+              logger.info('Cash game AFK player kicked', { tableId: row.table_id, player: actingAddr });
+            }
+          }
+        } catch (kickErr) {
+          logger.error('Error handling AFK kick/sitout', { handId: row.hand_id, player: actingAddr, error: kickErr });
+        }
       } catch (err) {
         logger.error('Error auto-folding timed-out turn', { handId: row.hand_id, error: err });
       }

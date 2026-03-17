@@ -354,8 +354,11 @@ export function ChatPanel({
                       openProfileSettings({
                         displayName: p.displayName ?? '',
                         profileImageUrl: p.profileImageUrl,
-                        onSave: async (name, img) => {
-                          await setDisplayName(name, img);
+                        bio: (p as any).bio ?? null,
+                        xHandle: (p as any).xHandle ?? null,
+                        tgHandle: (p as any).tgHandle ?? null,
+                        onSave: async (name, img, bio, xHandle, tgHandle) => {
+                          await setDisplayName(name, img, bio, xHandle, tgHandle);
                         },
                       });
                     } catch {

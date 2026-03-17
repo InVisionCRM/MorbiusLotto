@@ -4,8 +4,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
-import { X, Copy, Check, ExternalLink, UserPlus, Gift } from 'lucide-react';
+import { X, Copy, Check, ExternalLink, UserPlus, UserCheck, Gift } from 'lucide-react';
 import { usePokerPlayerStats } from '@/hooks/use-poker-stats';
+import { useIsFollowing, useFollowMutation, useFollowCounts } from '@/hooks/use-follow';
+import { useProfileForAddress } from '@/hooks/use-player-profile';
+import { useAccount } from 'wagmi';
 import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
 import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
 import type { AvatarConfig } from '@/components/poker/avatar/CharacterCreator';
@@ -36,7 +39,14 @@ export function PokerOpponentProfileCard({
   onClose,
   onViewFullProfile,
 }: PokerOpponentProfileCardProps) {
+  const { address: myAddress } = useAccount();
+  const myAddr = myAddress?.toLowerCase() ?? null;
+
   const { data: stats, isLoading } = usePokerPlayerStats(address);
+  const { bio, xHandle, tgHandle } = useProfileForAddress(address);
+  const { data: counts } = useFollowCounts(address);
+  const { data: isFollowing, isLoading: followLoading } = useIsFollowing(myAddr, address);
+  const { follow, unfollow } = useFollowMutation(myAddr, address);
   const [copied, setCopied] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -56,13 +66,15 @@ export function PokerOpponentProfileCard({
   const shortAddr = `${address.slice(0, 6)}…${address.slice(-4)}`;
   const name = displayName?.trim() || shortAddr;
 
-  const statRows = stats
-    ? [
-        { label: 'Win Rate', value: `${Math.round(stats.win_rate)}%`, color: stats.win_rate >= 50 ? '#4ade80' : stats.win_rate >= 35 ? '#facc15' : '#f87171' },
-        { label: 'Hands Played', value: stats.total_hands.toLocaleString(), color: '#94a3b8' },
-        { label: 'Biggest Pot', value: formatChips(stats.biggest_pot_won), color: '#fbbf24' },
-      ]
-    : [];
+  const statRows = [
+    ...(stats ? [
+      { label: 'Win Rate',     value: `${Math.round(stats.win_rate)}%`,      color: stats.win_rate >= 50 ? '#4ade80' : stats.win_rate >= 35 ? '#facc15' : '#f87171' },
+      { label: 'Hands Played', value: stats.total_hands.toLocaleString(),    color: '#94a3b8' },
+      { label: 'Biggest Pot',  value: formatChips(stats.biggest_pot_won),    color: '#fbbf24' },
+    ] : []),
+    { label: 'Followers',    value: (counts?.followerCount  ?? '—').toLocaleString(), color: '#c4b5fd' },
+    { label: 'Following',    value: (counts?.followingCount ?? '—').toLocaleString(), color: '#c4b5fd' },
+  ];
 
   return (
     <>
@@ -185,6 +197,45 @@ export function PokerOpponentProfileCard({
             )}
           </div>
 
+          {/* Bio + social handles */}
+          {(bio || xHandle || tgHandle) && (
+            <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+              {bio && (
+                <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(203,213,225,0.85)' }}>
+                  {bio}
+                </p>
+              )}
+              {(xHandle || tgHandle) && (
+                <div className="flex flex-wrap gap-2">
+                  {xHandle && (
+                    <a
+                      href={`https://x.com/${xHandle}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs rounded-md px-2 py-1 transition-opacity hover:opacity-80"
+                      style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(203,213,225,0.8)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700 }}>𝕏</span>
+                      @{xHandle}
+                    </a>
+                  )}
+                  {tgHandle && (
+                    <a
+                      href={`https://t.me/${tgHandle}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs rounded-md px-2 py-1 transition-opacity hover:opacity-80"
+                      style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(203,213,225,0.8)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    >
+                      <span>✈️</span>
+                      @{tgHandle}
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="flex flex-col gap-2 p-3">
             <button
@@ -204,15 +255,18 @@ export function PokerOpponentProfileCard({
             <div className="flex gap-2">
               <button
                 type="button"
-                className="flex items-center justify-center gap-1.5 flex-1 py-2 rounded-lg font-semibold text-sm transition-all hover:brightness-110 active:scale-[0.98]"
-                style={{
-                  background: 'rgba(74,222,128,0.12)',
-                  border: '1px solid rgba(74,222,128,0.25)',
-                  color: '#4ade80',
-                }}
+                disabled={!myAddr || followLoading || follow.isPending || unfollow.isPending}
+                onClick={() => isFollowing ? unfollow.mutate() : follow.mutate()}
+                className="flex items-center justify-center gap-1.5 flex-1 py-2 rounded-lg font-semibold text-sm transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+                style={isFollowing
+                  ? { background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.35)', color: '#a5b4fc' }
+                  : { background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.25)', color: '#4ade80' }
+                }
               >
-                <UserPlus className="w-3.5 h-3.5" />
-                Follow
+                {isFollowing
+                  ? <><UserCheck className="w-3.5 h-3.5" /> Following</>
+                  : <><UserPlus  className="w-3.5 h-3.5" /> Follow</>
+                }
               </button>
 
               <button

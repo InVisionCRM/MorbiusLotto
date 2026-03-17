@@ -2016,44 +2016,74 @@ export class DatabaseService {
     return result.rows[0]?.display_name ?? null;
   }
 
-  async getProfile(walletAddress: string): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null } | null> {
+  async getProfile(walletAddress: string): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null; bio: string | null; xHandle: string | null; tgHandle: string | null } | null> {
     const normalized = this.normalizeAddress(walletAddress);
-    const query = `SELECT display_name, profile_image_url, avatar_config FROM chat_display_names WHERE wallet_address = $1`;
-    const result = await this.pool.query(query, [normalized]);
+    const result = await this.pool.query(
+      `SELECT display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle FROM chat_display_names WHERE wallet_address = $1`,
+      [normalized],
+    );
     const row = result.rows[0];
     if (!row) return null;
     const avatarConfig = row.avatar_config != null && typeof row.avatar_config === 'object' ? (row.avatar_config as Record<string, unknown>) : null;
-    return { displayName: row.display_name, profileImageUrl: row.profile_image_url ?? null, avatarConfig };
+    return {
+      displayName: row.display_name,
+      profileImageUrl: row.profile_image_url ?? null,
+      avatarConfig,
+      bio: row.bio ?? null,
+      xHandle: row.x_handle ?? null,
+      tgHandle: row.tg_handle ?? null,
+    };
   }
 
-  async setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null, avatarConfig?: Record<string, unknown> | null): Promise<void> {
+  async setDisplayName(
+    walletAddress: string,
+    displayName: string,
+    profileImageUrl?: string | null,
+    avatarConfig?: Record<string, unknown> | null,
+    bio?: string | null,
+    xHandle?: string | null,
+    tgHandle?: string | null,
+  ): Promise<void> {
     const normalized = this.normalizeAddress(walletAddress);
-    if (avatarConfig !== undefined) {
-      const query = `
-        INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (wallet_address)
-        DO UPDATE SET display_name = $2, updated_at = NOW(), profile_image_url = $3, avatar_config = $4
-      `;
-      const profileImg = profileImageUrl !== undefined ? profileImageUrl : null;
-      await this.pool.query(query, [normalized, displayName, profileImg, avatarConfig != null ? JSON.stringify(avatarConfig) : null]);
-    } else if (profileImageUrl === undefined) {
-      const query = `
-        INSERT INTO chat_display_names (wallet_address, display_name)
-        VALUES ($1, $2)
-        ON CONFLICT (wallet_address)
-        DO UPDATE SET display_name = $2, updated_at = NOW()
-      `;
-      await this.pool.query(query, [normalized, displayName]);
-    } else {
-      const query = `
-        INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (wallet_address)
-        DO UPDATE SET display_name = $2, updated_at = NOW(), profile_image_url = $3
-      `;
-      await this.pool.query(query, [normalized, displayName, profileImageUrl]);
-    }
+    // Always upsert all provided fields; NULL params fall back to COALESCE of existing value
+    // so callers that don't know a field's current value won't accidentally clear it.
+    await this.pool.query(
+      `INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (wallet_address) DO UPDATE SET
+         display_name      = $2,
+         updated_at        = NOW(),
+         profile_image_url = COALESCE($3, chat_display_names.profile_image_url),
+         avatar_config     = COALESCE($4::jsonb, chat_display_names.avatar_config),
+         bio               = COALESCE($5, chat_display_names.bio),
+         x_handle          = COALESCE($6, chat_display_names.x_handle),
+         tg_handle         = COALESCE($7, chat_display_names.tg_handle)`,
+      [
+        normalized,
+        displayName,
+        profileImageUrl ?? null,
+        avatarConfig != null ? JSON.stringify(avatarConfig) : null,
+        bio ?? null,
+        xHandle ?? null,
+        tgHandle ?? null,
+      ],
+    );
+  }
+
+  /** Explicitly update social/bio fields — allows clearing (pass empty string → stored as null). */
+  async updateProfileSocial(
+    walletAddress: string,
+    bio: string | null,
+    xHandle: string | null,
+    tgHandle: string | null,
+  ): Promise<void> {
+    const normalized = this.normalizeAddress(walletAddress);
+    await this.pool.query(
+      `UPDATE chat_display_names
+       SET bio = $2, x_handle = $3, tg_handle = $4, updated_at = NOW()
+       WHERE wallet_address = $1`,
+      [normalized, bio || null, xHandle || null, tgHandle || null],
+    );
   }
 
   async getDisplayNames(walletAddresses: string[]): Promise<Map<string, string>> {
@@ -3098,5 +3128,89 @@ export class DatabaseService {
       })),
       holeCards,
     };
+  }
+
+  // ── Follow system ──────────────────────────────────────────────────────────
+
+  async followPlayer(followerAddress: string, followingAddress: string): Promise<void> {
+    const follower  = followerAddress.toLowerCase();
+    const following = followingAddress.toLowerCase();
+    if (follower === following) throw new Error('Cannot follow yourself');
+    await this.pool.query(
+      `INSERT INTO player_follows (follower_address, following_address)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [follower, following],
+    );
+  }
+
+  async unfollowPlayer(followerAddress: string, followingAddress: string): Promise<void> {
+    await this.pool.query(
+      `DELETE FROM player_follows
+       WHERE LOWER(follower_address) = LOWER($1)
+         AND LOWER(following_address) = LOWER($2)`,
+      [followerAddress, followingAddress],
+    );
+  }
+
+  async isFollowing(followerAddress: string, followingAddress: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `SELECT 1 FROM player_follows
+       WHERE LOWER(follower_address) = LOWER($1)
+         AND LOWER(following_address) = LOWER($2)`,
+      [followerAddress, followingAddress],
+    );
+    return result.rowCount! > 0;
+  }
+
+  async getFollowCounts(address: string): Promise<{ followerCount: number; followingCount: number }> {
+    const result = await this.pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM player_follows WHERE LOWER(following_address) = LOWER($1)) AS follower_count,
+         (SELECT COUNT(*) FROM player_follows WHERE LOWER(follower_address)  = LOWER($1)) AS following_count`,
+      [address],
+    );
+    return {
+      followerCount:  Number(result.rows[0]?.follower_count  ?? 0),
+      followingCount: Number(result.rows[0]?.following_count ?? 0),
+    };
+  }
+
+  async getFollowers(address: string, limit = 50, offset = 0): Promise<Array<{ address: string; displayName: string | null; avatarConfig: Record<string, unknown> | null }>> {
+    const result = await this.pool.query(
+      `SELECT pf.follower_address AS address,
+              cdn.display_name,
+              cdn.avatar_config
+       FROM player_follows pf
+       LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(pf.follower_address)
+       WHERE LOWER(pf.following_address) = LOWER($1)
+       ORDER BY pf.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [address, limit, offset],
+    );
+    return result.rows.map((r: any) => ({
+      address:     r.address,
+      displayName: r.display_name ?? null,
+      avatarConfig: r.avatar_config ?? null,
+    }));
+  }
+
+  async getFollowing(address: string, limit = 50, offset = 0): Promise<Array<{ address: string; displayName: string | null; avatarConfig: Record<string, unknown> | null }>> {
+    const result = await this.pool.query(
+      `SELECT pf.following_address AS address,
+              cdn.display_name,
+              cdn.avatar_config
+       FROM player_follows pf
+       LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(pf.following_address)
+       WHERE LOWER(pf.follower_address) = LOWER($1)
+       ORDER BY pf.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [address, limit, offset],
+    );
+    return result.rows.map((r: any) => ({
+      address:     r.address,
+      displayName: r.display_name ?? null,
+      avatarConfig: r.avatar_config ?? null,
+    }));
   }
 }

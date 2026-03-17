@@ -42,10 +42,10 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
   );
 
   const setDisplayName = useCallback(
-    async (displayName: string, profileImageUrl?: string | null) => {
+    async (displayName: string, profileImageUrl?: string | null, bio?: string | null, xHandle?: string | null, tgHandle?: string | null) => {
       const c = externalClient ?? internalClientRef.current;
       if (!c?.isConnected()) throw new Error('Not connected');
-      return c.setDisplayName(displayName, profileImageUrl);
+      return c.setDisplayName(displayName, profileImageUrl, undefined, bio, xHandle, tgHandle);
     },
     [externalClient]
   );
