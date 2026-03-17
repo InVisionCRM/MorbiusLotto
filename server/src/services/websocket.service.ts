@@ -1389,7 +1389,14 @@ export class WebSocketService {
     }
   }
 
-  private static readonly POKER_AVATAR_EMOTIONS = new Set<string>(['happy', 'sad', 'angry', 'surprised', 'wink']);
+  private static readonly POKER_AVATAR_EMOTIONS = new Set<string>([
+    'neutral', 'happy', 'sad', 'angry', 'surprised', 'wink',
+    'dance', 'flex', 'jump', 'spin', 'think', 'love', 'money',
+    'sick', 'cool', 'sleepy', 'shock', 'ghost', 'ninja', 'king',
+    'poker', 'jackpot', 'chips', 'cards', 'dice',
+    'slouch', 'yawn', 'bored', 'nod', 'shrug',
+    'drift', 'sink', 'breathe', 'lean', 'tilt',
+  ]);
 
   private async handlePokerAvatarEmotion(ws: WebSocketClient, message: WebSocketMessage) {
     try {
@@ -1403,7 +1410,7 @@ export class WebSocketService {
       }
       const emo = typeof emotion === 'string' ? emotion.toLowerCase().trim() : '';
       if (!WebSocketService.POKER_AVATAR_EMOTIONS.has(emo)) {
-        return this.sendError(ws, 'emotion must be one of: happy, sad, angry, surprised, wink', message.requestId);
+        return this.sendError(ws, 'Invalid emotion', message.requestId);
       }
       const state = await this.pokerGameService.getTableState(tableId, null);
       const seatIndex = state.seats.findIndex(

@@ -625,7 +625,7 @@ export default function StakingPage() {
           functionName: 'stake',
           args: [mStakeWei],
           chainId: pulsechain.id,
-          maxPriorityFeePerGas: 40_000n,
+          maxPriorityFeePerGas: 200_000n,
           account: address,
           chain: pulsechain, // Fixes type error expecting "chain"
         }),
@@ -645,7 +645,7 @@ export default function StakingPage() {
           functionName: 'unstake',
           args: [amt],
           chainId: pulsechain.id,
-          maxPriorityFeePerGas: 40_000n,
+          maxPriorityFeePerGas: 200_000n,
           account: address,
           chain: pulsechain, // Fixes type error expecting "chain"
         }),
@@ -660,7 +660,7 @@ export default function StakingPage() {
       abi: morbiusStakingAbi,
       functionName: 'claim',
       chainId: pulsechain.id,
-      maxPriorityFeePerGas: 40_000n,
+      maxPriorityFeePerGas: 200_000n,
       account: address,
       chain: pulsechain, // Fixes type error expecting "chain"
     }), 'Rewards claimed')
@@ -672,7 +672,7 @@ export default function StakingPage() {
       abi: morbiusStakingAbi,
       functionName: 'updatePool',
       chainId: pulsechain.id,
-      maxPriorityFeePerGas: 40_000n,
+      maxPriorityFeePerGas: 200_000n,
       account: address,
       chain: pulsechain, // Fixes type error expecting "chain"
     }), 'Pool updated')
@@ -731,7 +731,7 @@ export default function StakingPage() {
           functionName: 'unstake',
           args: [amt],
           chainId: pulsechain.id,
-          maxPriorityFeePerGas: 40_000n,
+          maxPriorityFeePerGas: 200_000n,
           account: address,
           chain: pulsechain, // Fixes potential type error expecting "chain"
         }),
@@ -755,7 +755,7 @@ export default function StakingPage() {
       functionName: 'updatePool',
       args: [],
       chainId: pulsechain.id,
-      maxPriorityFeePerGas: 40_000n,
+      maxPriorityFeePerGas: 200_000n,
       account: address,
       chain: pulsechain,
     }), 'Pool updated')

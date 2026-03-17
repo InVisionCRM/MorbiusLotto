@@ -112,10 +112,12 @@ export interface PokerActivityFeedProps {
   roomId: string;
   tableId: string;
   state: PokerTableState | null;
+  /** When true, desktop panel is in-flow (no fixed) so it can sit in a grid column */
+  embedInLayout?: boolean;
 }
 
 export function PokerActivityFeed({
-  wsClient, wsConnected, roomId, tableId, state,
+  wsClient, wsConnected, roomId, tableId, state, embedInLayout = false,
 }: PokerActivityFeedProps) {
   const { messages, sendMessage, connected } = useChat(roomId, { wsClient, wsConnected });
 
@@ -446,20 +448,28 @@ export function PokerActivityFeed({
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const desktopPanelStyle = {
+    background: 'rgba(6,8,12,0.88)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+    backdropFilter: 'blur(10px)',
+    transition: 'height 0.2s ease',
+  };
+
   return (
     <>
-      {/* Desktop: persistent bottom-left panel */}
+      {/* Desktop: persistent panel — fixed (legacy) or in-flow when embedInLayout */}
       <div
-        className="hidden md:flex fixed bottom-4 left-4 z-30 flex-col rounded-lg overflow-hidden"
-        style={{
-          width: 272,
-          height: collapsed ? 32 : 320,
-          background: 'rgba(6,8,12,0.88)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(10px)',
-          transition: 'height 0.2s ease',
-        }}
+        className={
+          embedInLayout
+            ? 'hidden md:flex flex-col rounded-lg overflow-hidden h-full min-h-0 w-full'
+            : 'hidden md:flex fixed bottom-4 left-4 z-30 flex-col rounded-lg overflow-hidden'
+        }
+        style={
+          embedInLayout
+            ? { ...desktopPanelStyle, height: collapsed ? 32 : '100%' }
+            : { ...desktopPanelStyle, width: 272, height: collapsed ? 32 : 320 }
+        }
       >
         {panelContent}
       </div>

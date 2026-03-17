@@ -189,7 +189,7 @@ export function useMerkleClaimsLP(): UseMerkleClaimsLPReturn {
           functionName: 'claim',
           args,
           gas: gasLimit,
-          maxPriorityFeePerGas: 40_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
+          maxPriorityFeePerGas: 200_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
         });
         toast.success('Claim submitted! Waiting for confirmation…');
         if (publicClient) {

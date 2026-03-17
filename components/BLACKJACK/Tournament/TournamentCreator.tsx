@@ -493,7 +493,7 @@ export function TournamentCreator({
         args: [escrow, prizeAmountWeiForReview],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       });
       setApprovalTxHash(hash);
       if (publicClient && hash) {
@@ -538,7 +538,7 @@ export function TournamentCreator({
         args: [idBytes32, token, prizeAmountWeiForReview],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       });
       if (publicClient && hash) {
         try {

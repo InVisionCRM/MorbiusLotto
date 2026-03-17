@@ -241,7 +241,7 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [MERKLE_ADDR, MAX_UINT256],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: adminAddr,
       });
@@ -265,7 +265,7 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'transfer',
         args: [MERKLE_ADDR, depositWei],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: adminAddr,
       });
@@ -288,7 +288,7 @@ function OnchainActions({
         abi: merkleClaimLpAbi,
         functionName: 'setEpochRoot',
         args: [BigInt(epoch.epoch_number), epoch.merkle_root as `0x${string}`, totalWei],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: adminAddr,
       });
@@ -818,7 +818,7 @@ export default function AdminLPStakingTab() {
         abi: merkleClaimLpAbi,
         functionName: 'revokeEpoch',
         args: [BigInt(epoch.epoch_number)],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       });
       setEpochMsg(epoch.id, `Revoking on-chain… tx: ${hash.slice(0, 14)}…`);
       await publicClient!.waitForTransactionReceipt({ hash });
@@ -935,7 +935,7 @@ export default function AdminLPStakingTab() {
         abi: merkleClaimLpAbi,
         functionName: 'addOperator',
         args: [newOperatorAddr.trim() as `0x${string}`],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       });
       setOperatorMsg(`✓ Operator added — tx: ${hash.slice(0, 14)}…`);
       setNewOperatorAddr('');
@@ -955,7 +955,7 @@ export default function AdminLPStakingTab() {
         abi: merkleClaimLpAbi,
         functionName: 'removeOperator',
         args: [addr as `0x${string}`],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       });
       setOperatorMsg(`✓ Operator removed — tx: ${hash.slice(0, 14)}…`);
       setTimeout(fetchCurrentOperators, 3000);

@@ -241,7 +241,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             key="winner-banner"
             className="absolute left-1/2 pointer-events-none z-40"
             style={{
-              top: '32%',
+              top: '9%',
               transform: 'translate(-50%, -50%)',
             }}
             initial={{ opacity: 0, y: 8 }}

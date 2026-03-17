@@ -107,7 +107,7 @@ export function useApproveToken() {
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [LOTTERY_INSTANT_ADDRESS, amount || maxUint256], // Approve infinite by default
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     } as unknown as Parameters<typeof writeContract>[0])
   }
 

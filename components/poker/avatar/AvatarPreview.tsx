@@ -9,7 +9,8 @@ export type Emotion =
   | 'dance' | 'flex' | 'jump' | 'spin' | 'think' | 'love' | 'money'
   | 'sick' | 'cool' | 'sleepy' | 'shock' | 'ghost' | 'ninja' | 'king'
   | 'poker' | 'jackpot' | 'chips' | 'cards' | 'dice'
-  | 'slouch' | 'yawn' | 'bored' | 'nod' | 'shrug';
+  | 'slouch' | 'yawn' | 'bored' | 'nod' | 'shrug'
+  | 'drift' | 'sink' | 'breathe' | 'lean' | 'tilt';
 
 export default function AvatarPreview({
   config,
@@ -18,6 +19,7 @@ export default function AvatarPreview({
   compact = false,
   trackMouse = false,
   forceAsleep = false,
+  roamEyes = false,
   className,
 }: {
   config: AvatarConfig;
@@ -28,6 +30,8 @@ export default function AvatarPreview({
   trackMouse?: boolean;
   /** Force sleep state externally (e.g. sitting-out players). */
   forceAsleep?: boolean;
+  /** Randomly roam eyes (for idle non-acting players). */
+  roamEyes?: boolean;
   className?: string;
 }) {
   const [idleEmotion, setIdleEmotion] = useState<Emotion | null>(null);
@@ -81,13 +85,15 @@ export default function AvatarPreview({
         setIdleEmotion(null);
       }
       if (!isAsleep && propEmotion === 'neutral' && !idleEmotion && Math.random() > 0.8) {
-        const actions: Emotion[] = ['wink', 'surprised', 'think', 'happy', 'slouch', 'yawn', 'bored', 'nod', 'shrug'];
+        const actions: Emotion[] = ['wink', 'surprised', 'think', 'happy', 'slouch', 'yawn', 'bored', 'nod', 'shrug', 'drift', 'sink', 'breathe', 'lean', 'tilt'];
         const action = actions[Math.floor(Math.random() * actions.length)];
         setIdleEmotion(action);
         const duration =
           action === 'yawn' ? 3500 :
           action === 'bored' || action === 'slouch' ? 4500 :
           action === 'nod' || action === 'shrug' ? 2500 :
+          action === 'sink' || action === 'drift' ? 5000 :
+          action === 'breathe' || action === 'lean' || action === 'tilt' ? 4000 :
           1000 + Math.random() * 1000;
         setTimeout(() => setIdleEmotion(null), duration);
       }
@@ -100,6 +106,19 @@ export default function AvatarPreview({
       clearInterval(idleInterval);
     };
   }, [compact, isAsleep, propEmotion, idleEmotion, mouseX, mouseY]);
+
+  // Roaming eye tracking for idle non-acting players
+  useEffect(() => {
+    if (!roamEyes || forceAsleep) return;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const look = () => {
+      mouseX.set((Math.random() - 0.5) * 1.4);
+      mouseY.set((Math.random() - 0.5) * 0.8);
+      timeoutId = setTimeout(look, 1400 + Math.random() * 2800);
+    };
+    timeoutId = setTimeout(look, 600 + Math.random() * 1000);
+    return () => clearTimeout(timeoutId);
+  }, [roamEyes, forceAsleep, mouseX, mouseY]);
 
   const { skinColor, hairStyle, hairColor, eyeShape, eyeColor, noseShape, lipShape, accessory } = config;
 
@@ -116,6 +135,8 @@ export default function AvatarPreview({
     jackpot: { scaleY: 0.3, y: 0 }, chips: { scaleY: 1 }, cards: { scaleY: 1 }, dice: { scaleY: 1.2 },
     slouch: { scaleY: 0.2, y: 0.5 }, yawn: { scaleY: 0.05, y: 0.5 }, bored: { scaleY: 0.3, y: 0.3 },
     nod: { scaleY: 1 }, shrug: { scaleY: 1.1, y: -0.5 },
+    drift: { scaleY: 1, y: 0 }, sink: { scaleY: 0.2, y: 0.5 }, breathe: { scaleY: 0.9, y: 0 },
+    lean: { scaleY: 0.4, y: 0.3 }, tilt: { scaleY: 0.5, y: 0.3 },
   };
 
   const rightEyeVariants = {
@@ -129,6 +150,8 @@ export default function AvatarPreview({
     jackpot: { scaleY: 0.3, y: 0 }, chips: { scaleY: 1 }, cards: { scaleY: 1 }, dice: { scaleY: 1.2 },
     slouch: { scaleY: 0.2, y: 0.5 }, yawn: { scaleY: 0.05, y: 0.5 }, bored: { scaleY: 0.3, y: 0.3 },
     nod: { scaleY: 1 }, shrug: { scaleY: 1.1, y: -0.5 },
+    drift: { scaleY: 1, y: 0 }, sink: { scaleY: 0.2, y: 0.5 }, breathe: { scaleY: 0.9, y: 0 },
+    lean: { scaleY: 0.3, y: 0.4 }, tilt: { scaleY: 0.5, y: 0.3 },
   };
 
   const eyebrowLeftVariants = {
@@ -143,6 +166,8 @@ export default function AvatarPreview({
     chips: { y: -0.5, rotate: 0 }, cards: { y: -0.5, rotate: 0 }, dice: { y: -1, rotate: 0 },
     slouch: { y: 0.5, rotate: -8 }, yawn: { y: -1.5, rotate: 0 }, bored: { y: 0.5, rotate: -5 },
     nod: { y: [0, 1, 0] as number[], transition: { repeat: Infinity, duration: 2 } }, shrug: { y: -1.5, rotate: 5 },
+    drift: { y: 0, rotate: 0 }, sink: { y: 0.5, rotate: -5 }, breathe: { y: -0.5, rotate: 0 },
+    lean: { y: 0.3, rotate: -5 }, tilt: { y: 0.2, rotate: -8 },
   };
 
   const eyebrowRightVariants = {
@@ -157,6 +182,8 @@ export default function AvatarPreview({
     chips: { y: -0.5, rotate: 0 }, cards: { y: -0.5, rotate: 0 }, dice: { y: -1, rotate: 0 },
     slouch: { y: 0.5, rotate: 8 }, yawn: { y: -1.5, rotate: 0 }, bored: { y: 0.5, rotate: 5 },
     nod: { y: [0, 1, 0] as number[], transition: { repeat: Infinity, duration: 2 } }, shrug: { y: -1.5, rotate: -5 },
+    drift: { y: 0, rotate: 0 }, sink: { y: 0.5, rotate: 5 }, breathe: { y: -0.5, rotate: 0 },
+    lean: { y: 0.5, rotate: 10 }, tilt: { y: 0.2, rotate: 8 },
   };
 
   const mouthVariants = {
@@ -176,6 +203,9 @@ export default function AvatarPreview({
     bored: { scaleX: 0.6, scaleY: 0.4, y: 0.3 },
     nod: { scaleY: [1, 0.8, 1] as number[], transition: { repeat: Infinity, duration: 2 } },
     shrug: { scaleX: 0.8, y: 0.5 },
+    drift: { scaleX: 1, scaleY: 1, y: 0 }, sink: { scaleX: 0.6, scaleY: 0.3, y: 0.5 },
+    breathe: { scaleX: 1.1, scaleY: 0.6, y: 0 }, lean: { scaleX: 0.9, scaleY: 0.5, x: -0.5, y: 0.3 },
+    tilt: { scaleX: 0.7, scaleY: 0.5, y: 0.2 },
   };
 
   const faceGroupVariants = {
@@ -196,6 +226,11 @@ export default function AvatarPreview({
     bored: { rotate: [0, -7, 0, 7, 0] as number[], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
     nod: { y: [0, 2.5, 0, 1.5, 0] as number[], transition: { repeat: Infinity, duration: 2 } },
     shrug: { y: -1.5 },
+    drift: { x: [0, 0.5, -0.5, 0] as number[], transition: { repeat: Infinity, duration: 5, ease: 'easeInOut' as const } },
+    sink: { y: [0, 2, 0] as number[], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
+    breathe: { y: [0, -0.2, 0] as number[], transition: { repeat: Infinity, duration: 3, ease: 'easeInOut' as const } },
+    lean: { rotate: [0, 8, 0] as number[], transition: { repeat: Infinity, duration: 4, ease: 'easeInOut' as const } },
+    tilt: { rotate: [0, -6, 6, 0] as number[], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
   };
 
   const bodyVariants = {
@@ -218,6 +253,11 @@ export default function AvatarPreview({
     bored: { rotate: [0, -2, 0, 2, 0] as number[], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
     nod: { y: [0, -0.5, 0, -0.3, 0] as number[], transition: { repeat: Infinity, duration: 2 } },
     shrug: { y: [0, -4, -4, 0] as number[], transition: { times: [0, 0.3, 0.5, 1], repeat: Infinity, duration: 2.5 } },
+    drift: { x: [0, 10, -10, 0] as number[], opacity: [1, 0.85, 0.85, 1], transition: { repeat: Infinity, duration: 5, ease: 'easeInOut' as const } },
+    sink: { y: [0, 14, 0] as number[], opacity: [1, 0.1, 1], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
+    breathe: { scaleY: [1, 1.06, 1] as number[], y: [0, -0.5, 0] as number[], transition: { repeat: Infinity, duration: 3, ease: 'easeInOut' as const } },
+    lean: { rotate: [0, -18, 0] as number[], x: [0, -3, 0] as number[], transition: { repeat: Infinity, duration: 4, ease: 'easeInOut' as const } },
+    tilt: { rotate: [0, 12, -12, 0] as number[], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
   };
 
   // ── face shape ─────────────────────────────────────────────────────────────
@@ -308,10 +348,10 @@ export default function AvatarPreview({
         return <rect x={x} y="11" width="3" height="1" fill="rgba(0,0,0,0.6)" />;
       }
       switch (eyeShape) {
-        case 'Round': return <g><rect x={x} y="11" width="2" height="2" fill="white" /><motion.rect x={x + 0.5} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse) ? { x: mouseX, y: mouseY } : {}} /></g>;
-        case 'Almond': return <g><rect x={x} y="11" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="11" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse) ? { x: mouseX, y: mouseY } : {}} /></g>;
-        case 'Narrow': return <g><rect x={x} y="12" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="12" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse) ? { x: mouseX, y: mouseY } : {}} /></g>;
-        case 'Wide': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><motion.rect x={x + 0.5} y="11" width="2" height="2" fill={eyeColor} style={(!compact || trackMouse) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Round': return <g><rect x={x} y="11" width="2" height="2" fill="white" /><motion.rect x={x + 0.5} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Almond': return <g><rect x={x} y="11" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="11" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Narrow': return <g><rect x={x} y="12" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="12" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Wide': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><motion.rect x={x + 0.5} y="11" width="2" height="2" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
         default: return null;
       }
     };
@@ -448,18 +488,18 @@ export default function AvatarPreview({
         return <g>{[0, 1, 2, 3, 4].map(i => (<motion.text key={i} x={4 + i * 4} y="-5" fontSize="4" fill="#22c55e" animate={{ y: [0, 30], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 2, delay: i * 0.4 }}>$</motion.text>))}</g>;
       case 'sleepy': {
         const zDefs = [
-          { x: 15.5, y: 8, tx: 18, ty: 3, size: 2.5, delay: 0 },
-          { x: 17,   y: 7, tx: 20, ty: 2, size: 3.8, delay: 1.2 },
-          { x: 14,   y: 9, tx: 16.5, ty: 3.5, size: 2, delay: 2.4 },
+          { x: 15, y: 7,   tx: 17.5, ty: -3,  size: 2.5, delay: 0   },
+          { x: 16.5, y: 6, tx: 20,   ty: -2,  size: 3.8, delay: 1.3 },
+          { x: 13.5, y: 8, tx: 16,   ty: -0.5,size: 2,   delay: 2.6 },
         ];
         return (
           <g>
             {zDefs.map((z, i) => (
               <motion.text
                 key={i} x={z.x} y={z.y} fontSize={z.size}
-                fill="#60a5fa" fontWeight="bold"
-                animate={{ x: [z.x, z.tx], y: [z.y, z.ty], opacity: [0, 1, 1, 0], scale: [0.4, 0.8, 1.2, 1.5] }}
-                transition={{ repeat: Infinity, duration: 3.5, delay: z.delay, ease: 'easeOut' }}
+                fill="#93c5fd" fontWeight="bold"
+                animate={{ x: [z.x, z.tx], y: [z.y, z.ty], opacity: [0, 0.9, 0.9, 0], scale: [0.3, 0.7, 1.1, 1.6] }}
+                transition={{ repeat: Infinity, duration: 4, delay: z.delay, ease: 'easeOut' }}
               >Z</motion.text>
             ))}
           </g>

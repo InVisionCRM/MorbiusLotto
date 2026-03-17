@@ -664,7 +664,7 @@ const Home: React.FC = () => {
           args: [BigInt(count), Number(contractRiskLevel)],
           value: plsNeeded, // Send native PLS with transaction
           gas: 2n * (BigInt(500_000) + BigInt(count) * BigInt(150_000)), // 2x: base + per-ball gas (PulseX router + transfers)
-          maxPriorityFeePerGas: 40_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
+          maxPriorityFeePerGas: 200_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
         });
         console.log('>>> writeContractAsync returned txHash:', txHash);
       } else {
@@ -684,7 +684,7 @@ const Home: React.FC = () => {
           functionName: 'buyBallsAndDrop',
           args: [BigInt(count), wagerAmount, Number(contractRiskLevel)],
           gas: 2n * (BigInt(400_000) + BigInt(count) * BigInt(150_000)), // 2x: base + per-ball gas (transfers + loop)
-          maxPriorityFeePerGas: 40_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
+          maxPriorityFeePerGas: 200_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
         });
       }
 
@@ -887,7 +887,7 @@ const Home: React.FC = () => {
         abi: PLINKO_ABI,
         functionName: 'dropMultipleBalls',
         args: [BigInt(ballsToUpdate), Number(contractRiskLevel)],
-        maxPriorityFeePerGas: 40_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
+        maxPriorityFeePerGas: 200_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
       });
 
       // Wait for transaction confirmation with polling

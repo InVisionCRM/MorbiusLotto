@@ -346,7 +346,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'deposit',
       value: plsAmount, // Send PLS to deposit function
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     } as unknown as Parameters<typeof depositContract.writeContractAsync>[0])
   }
 
@@ -358,7 +358,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'depositMORBIUS',
       args: [amount],
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     } as unknown as Parameters<typeof depositMORBIUSContract.writeContractAsync>[0])
   }
 
@@ -370,7 +370,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'withdraw',
       args: [amount],
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     } as unknown as Parameters<typeof withdrawContract.writeContractAsync>[0])
   }
 
@@ -385,7 +385,7 @@ export function useBlackjackContract() {
       functionName: 'withdraw',
       args: [amount],
       gas: 700_000n, // 2x legacy gas for safety; avoids "Internal Transaction Awaiting" / stuck estimates
-      maxPriorityFeePerGas: 40_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
+      maxPriorityFeePerGas: 200_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
     } as unknown as Parameters<typeof withdrawContract.writeContractAsync>[0])
   }
 
@@ -405,7 +405,7 @@ export function useBlackjackContract() {
       functionName: 'withdrawWithSignature',
       args: [amount, nonce, expiryTimestamp, v, r, s],
       gas: 500_000n, // Manual gas limit — avoids estimation failures that block the tx entirely
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     } as any)
   }
 
@@ -417,7 +417,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'revealServerSeed',
       args: [serverSeed as `0x${string}`],
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     } as unknown as Parameters<typeof revealSeedContract.writeContractAsync>[0])
   }
 
@@ -429,7 +429,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'placeBet',
       args: [gameHash, betAmount],
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     } as any)
   }
 

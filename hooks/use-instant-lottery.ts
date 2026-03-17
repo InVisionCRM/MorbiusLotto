@@ -104,7 +104,7 @@ export function usePlayLottery() {
         args: [numbers, wager],
         chain: pulsechain,
         account: address!,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     },
     [writeContract, address]
@@ -127,7 +127,7 @@ export function usePlayLotteryWithPLS() {
         chain: pulsechain,
         account: address!,
         value: valueWei,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     },
     [writeContract, address]

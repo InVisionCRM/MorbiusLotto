@@ -102,7 +102,7 @@ function BuyTicketsSection({ address }: { address?: `0x${string}` }) {
         args: [LOTTERY_INSTANT_ADDRESS, amount],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to approve')
@@ -131,7 +131,7 @@ function BuyTicketsSection({ address }: { address?: `0x${string}` }) {
         args: [parsedTickets],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to buy tickets')
@@ -279,7 +279,7 @@ function BuyTicketsMultiRoundSection({ address }: { address?: `0x${string}` }) {
         args: [parsedGroups, parsedOffsets],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to buy tickets')
@@ -422,7 +422,7 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
           args: [parsedTickets, BigInt(bufferBps)],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         })
       } else {
         // Use standard version
@@ -433,7 +433,7 @@ function BuyWithWPLSSection({ address }: { address?: `0x${string}` }) {
           args: [parsedTickets],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         })
       }
     } catch (error: any) {
@@ -582,7 +582,7 @@ function ClaimWinningsSection({ address }: { address?: `0x${string}` }) {
         args: [parsedRoundId],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to claim winnings')
@@ -676,7 +676,7 @@ function FinalizeRoundSection({ address }: { address?: `0x${string}` }) {
       functionName: 'finalizeRound',
       account: address,
       chain: pulsechain,
-      maxPriorityFeePerGas: 40_000n,
+      maxPriorityFeePerGas: 200_000n,
     })
   }
 
@@ -761,7 +761,7 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
         args: [duration],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -783,7 +783,7 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
         args: [interval],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -805,7 +805,7 @@ function UpdateSettingsSection({ address }: { address?: `0x${string}` }) {
         args: [delay],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     } catch (error: any) {
       toast.error(error.message || 'Failed to update')
@@ -989,7 +989,7 @@ function InstantLotteryFundSection({ address }: { address?: `0x${string}` }) {
         args: [wei],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
       })
     } catch (e: any) {
       toast.error(e?.message ?? 'Fund failed')

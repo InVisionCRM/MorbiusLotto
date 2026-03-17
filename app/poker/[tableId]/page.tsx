@@ -721,23 +721,30 @@ export default function PokerTablePage() {
             )}
           </div>
 
-          {/* Action bar */}
-          {state && mySeat && (
-            <div className="flex-shrink-0">
-              {sharedActions}
+          {/* Bottom row: md+ 3-col grid (chat | empty | betting), mobile stacked */}
+          <div
+            className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_1fr_minmax(280px,1fr)] gap-0 min-h-0 md:min-h-[320px]"
+          >
+            {/* Col 1: activity feed — in-flow on md+, left column */}
+            <div className="min-h-0 flex flex-col order-2 md:order-1 min-w-0">
+              {wsClient && pokerChatRoomId && (
+                <PokerActivityFeed
+                  wsClient={wsClient}
+                  wsConnected={wsConnected}
+                  roomId={pokerChatRoomId}
+                  tableId={tableId}
+                  state={state}
+                  embedInLayout
+                />
+              )}
             </div>
-          )}
-
-          {/* Activity feed — always-on, bottom-left desktop / left-drawer mobile */}
-          {wsClient && pokerChatRoomId && (
-            <PokerActivityFeed
-              wsClient={wsClient}
-              wsConnected={wsConnected}
-              roomId={pokerChatRoomId}
-              tableId={tableId}
-              state={state}
-            />
-          )}
+            {/* Col 2: empty middle */}
+            <div className="hidden md:block min-w-0" />
+            {/* Col 3: betting controls — right on md+, first on mobile */}
+            <div className="order-1 md:order-2 flex-shrink-0 min-w-0">
+              {state && mySeat && sharedActions}
+            </div>
+          </div>
         </div>
 
         <PokerDepositModal

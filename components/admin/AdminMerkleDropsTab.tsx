@@ -235,7 +235,7 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [MERKLE_ADDR, MAX_UINT256],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: adminAddr,
       });
@@ -260,7 +260,7 @@ function OnchainActions({
         abi: merkleClaimMorbiusAbi,
         functionName: 'depositRewards',
         args: [depositWei],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: adminAddr,
       });
@@ -284,7 +284,7 @@ function OnchainActions({
         abi: merkleClaimMorbiusAbi,
         functionName: 'setEpochRoot',
         args: [BigInt(epoch.epoch_number), epoch.merkle_root as `0x${string}`, totalWei],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: adminAddr,
       });
@@ -478,7 +478,7 @@ function StandaloneDepositButton({ adminAddr }: { adminAddr: `0x${string}` }) {
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [MERKLE_ADDR, MAX_UINT256],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: adminAddr,
       });
@@ -500,7 +500,7 @@ function StandaloneDepositButton({ adminAddr }: { adminAddr: `0x${string}` }) {
         abi: merkleClaimMorbiusAbi,
         functionName: 'depositRewards',
         args: [parsedWei],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: adminAddr,
       });
@@ -1051,7 +1051,7 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'addOperator',
         args: [newOperatorAddr.trim() as `0x${string}`],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: address!,
       });
@@ -1074,7 +1074,7 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'removeOperator',
         args: [addr as `0x${string}`],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: address!,
       });
@@ -1099,7 +1099,7 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'revokeEpoch',
         args: [BigInt(epoch.epoch_number)],
-        maxPriorityFeePerGas: 40_000n,
+        maxPriorityFeePerGas: 200_000n,
         chain: pulsechain,
         account: address!,
       });

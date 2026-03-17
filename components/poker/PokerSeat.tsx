@@ -196,6 +196,11 @@ const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
   { title: 'Bored',     emotion: 'bored'     },
   { title: 'Nod',       emotion: 'nod'       },
   { title: 'Shrug',     emotion: 'shrug'     },
+  { title: 'Drift',     emotion: 'drift'     },
+  { title: 'Sink',      emotion: 'sink'      },
+  { title: 'Breathe',   emotion: 'breathe'   },
+  { title: 'Lean',      emotion: 'lean'      },
+  { title: 'Tilt',      emotion: 'tilt'      },
 ];
 
 // ── PokerSeat ─────────────────────────────────────────────────────────────
@@ -264,8 +269,11 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
   const localEmotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const avatarRef = useRef<HTMLDivElement | null>(null);
 
-  // Active emotion: broadcast (from server) > local (just clicked) > action-driven (fold/raise etc.)
-  const activeEmotion: Emotion = propsOverlayEmotion ?? localEmotion ?? avatarEmotion;
+  // Slouch while any menu is open
+  const hasMenuOpen = quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || animationPickerOpen;
+
+  // Active emotion: menu-open slouch > broadcast (from server) > local (just clicked) > action-driven
+  const activeEmotion: Emotion = hasMenuOpen ? 'slouch' : (propsOverlayEmotion ?? localEmotion ?? avatarEmotion);
 
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -504,8 +512,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               style={{
                 bottom: 0,
                 ...(showMyCards
-                  ? { width: 'clamp(54px, 13vw, 70px)', height: 'clamp(70px, 17vw, 90px)', [ci === 0 ? 'left' : 'right']: 'clamp(8px, 2vw, 14px)' }
-                  : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', [ci === 0 ? 'left' : 'right']: 'clamp(4px, 1vw, 8px)' }),
+                  ? { width: 'clamp(54px, 13vw, 70px)', height: 'clamp(70px, 17vw, 90px)', [ci === 0 ? 'left' : 'right']: 'clamp(1px, 0.3vw, 3px)' }
+                  : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', [ci === 0 ? 'left' : 'right']: '0px' }),
                 transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
                 transformOrigin: 'bottom center',
                 filter: isFolded ? 'grayscale(1) opacity(0.5)' : undefined,
@@ -605,6 +613,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               compact
               trackMouse={isCurrentPlayer}
               forceAsleep={seat.status === 'sitting_out'}
+              roamEyes={!isCurrentPlayer && !isActing && seat.status !== 'sitting_out'}
               className="w-full h-full"
             />
           ) : (
@@ -738,30 +747,6 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
 
         <EditQuickChatModal open={editQuickChatOpen} onClose={() => setEditQuickChatOpen(false)} selectedPhrases={quickChatPhrases} onSave={setQuickChatPhrases} />
 
-        {/* Buttons row — current player only */}
-        {isCurrentPlayer && (
-          <div className="flex flex-row items-center justify-center gap-1 mb-1">
-            <button type="button" onClick={(e) => { e.stopPropagation(); onMenuClick?.(); }}
-              className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-white/15 transition-all"
-              style={{ color: 'var(--poker-text)' }} aria-label="Menu">
-              <Menu className="h-3.5 w-3.5" />
-            </button>
-            {onReUpClick && (
-              <button type="button" onClick={(e) => { e.stopPropagation(); onReUpClick(); }}
-                className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-white/15 transition-all"
-                style={{ color: 'var(--poker-text)' }} aria-label="Re-up">
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            )}
-            <button ref={quickMenuButtonRef} type="button"
-              onClick={(e) => { e.stopPropagation(); setQuickMenuOpen(true); setEmojiPickerOpen(false); setQuickChatPickerOpen(false); setAnimationPickerOpen(false); }}
-              className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-white/15 transition-all"
-              style={{ color: 'var(--poker-text)' }} aria-label="Quick menu">
-              <MessageCircle className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-
         {/* Badge — name + chips */}
         <div
           ref={badgeRef}
@@ -804,6 +789,30 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
             )}
           </AnimatePresence>
         </div>
+
+        {/* Buttons row — current player only, below badge */}
+        {isCurrentPlayer && (
+          <div className="flex flex-row items-center justify-center gap-1 mt-1">
+            <button type="button" onClick={(e) => { e.stopPropagation(); onMenuClick?.(); }}
+              className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-white/15 transition-all"
+              style={{ color: 'var(--poker-text)', background: 'rgba(0,0,0,0.75)' }} aria-label="Menu">
+              <Menu className="h-3.5 w-3.5" />
+            </button>
+            {onReUpClick && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); onReUpClick(); }}
+                className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-white/15 transition-all"
+                style={{ color: 'var(--poker-text)', background: 'rgba(0,0,0,0.75)' }} aria-label="Re-up">
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button ref={quickMenuButtonRef} type="button"
+              onClick={(e) => { e.stopPropagation(); setQuickMenuOpen(true); setEmojiPickerOpen(false); setQuickChatPickerOpen(false); setAnimationPickerOpen(false); }}
+              className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-white/15 transition-all"
+              style={{ color: 'var(--poker-text)', background: 'rgba(0,0,0,0.75)' }} aria-label="Quick menu">
+              <MessageCircle className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

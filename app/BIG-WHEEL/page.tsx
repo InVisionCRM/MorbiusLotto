@@ -469,7 +469,7 @@ export default function BigWheelPage() {
           functionName: 'placeBetWithPLS',
           args: [betTypeEnum, betAmountWei],
           value: plsRequiredWei,
-          maxPriorityFeePerGas: 40_000n, // PulseChain tip
+          maxPriorityFeePerGas: 200_000n, // PulseChain tip
         } as any);
 
         setPendingTxHash(txHash);
@@ -524,7 +524,7 @@ export default function BigWheelPage() {
           abi: BIGWHEEL_ABI_ARRAY as any,
           functionName: 'placeBet',
           args: [betTypeEnum, betAmountWei],
-          maxPriorityFeePerGas: 40_000n, // PulseChain tip
+          maxPriorityFeePerGas: 200_000n, // PulseChain tip
         } as any);
 
         setPendingTxHash(txHash);

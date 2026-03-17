@@ -183,7 +183,7 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
           functionName: 'claim',
           args,
           gas: 2_000_000n,
-          maxPriorityFeePerGas: 40_000n,
+          maxPriorityFeePerGas: 200_000n,
           chain: pulsechain,
           account: address,
         });

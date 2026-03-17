@@ -142,7 +142,7 @@ function FundTournamentEscrowModal({
         args: [escrow, amountWei],
         account: address,
         chain: PULSECHAIN,
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       });
       if (publicClient && hash) {
         try {
@@ -172,7 +172,7 @@ function FundTournamentEscrowModal({
         args: [idBytes32, token, amountWei],
         account: address,
         chain: PULSECHAIN,
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       });
       if (publicClient && hash) {
         try {

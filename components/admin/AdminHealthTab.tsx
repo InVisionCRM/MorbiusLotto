@@ -931,7 +931,7 @@ export default function AdminHealthTab() {
           args: [game.address, MAX_UINT256],
           chain: pulsechain,
           account: address,
-          maxPriorityFeePerGas: 40_000n,
+          maxPriorityFeePerGas: 200_000n,
         } as any);
         toast.success(`${game.label}: MORBIUS approved`);
       } catch (e: unknown) {
@@ -973,7 +973,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         } else if (game.useFundContract) {
           const abi = gameKey === 'lottery' ? INSTANT_LOTTERY_6OF55_ABI : gameKey === 'plinko' ? PLINKO_ABI : KENO_ABI;
@@ -984,7 +984,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         } else {
           await writeContractAsync({
@@ -994,7 +994,7 @@ export default function AdminHealthTab() {
             args: [game.address, amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         }
         toast.success(`${game.label}: funded ${amountStr} MORBIUS`);
@@ -1036,7 +1036,7 @@ export default function AdminHealthTab() {
             functionName: 'emergencyPause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         } else if (gameKey === 'blackjack') {
           await writeContractAsync({
@@ -1045,7 +1045,7 @@ export default function AdminHealthTab() {
             functionName: 'pause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         } else {
           const abi = gameKey === 'plinko' ? PLINKO_ABI : KENO_ABI;
@@ -1055,7 +1055,7 @@ export default function AdminHealthTab() {
             functionName: 'pause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         }
         toast.success(`${game.label}: paused`);
@@ -1085,7 +1085,7 @@ export default function AdminHealthTab() {
             functionName: 'emergencyUnpause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         } else if (gameKey === 'blackjack') {
           await writeContractAsync({
@@ -1094,7 +1094,7 @@ export default function AdminHealthTab() {
             functionName: 'unpause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         } else {
           const abi = gameKey === 'plinko' ? PLINKO_ABI : KENO_ABI;
@@ -1104,7 +1104,7 @@ export default function AdminHealthTab() {
             functionName: 'unpause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         }
         toast.success(`${game.label}: unpaused`);
@@ -1150,7 +1150,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         } else if (gameKey === 'blackjack') {
           await writeContractAsync({
@@ -1160,7 +1160,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         } else {
           const abi = gameKey === 'plinko' ? PLINKO_ABI : KENO_ABI;
@@ -1171,7 +1171,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 40_000n,
+            maxPriorityFeePerGas: 200_000n,
           } as any);
         }
         toast.success(`${game.label}: withdrew ${amountStr} MORBIUS`);

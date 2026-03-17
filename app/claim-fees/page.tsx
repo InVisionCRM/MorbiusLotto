@@ -74,7 +74,7 @@ export default function ClaimFeesPage() {
         address: DISTRIBUTOR_ADDRESS,
         abi: morbiusHolderDistributorAbi,
         functionName: 'updatePool',
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       } as unknown as Parameters<typeof writeContract>[0]);
     }).catch((e) => toast.error(e instanceof Error ? e.message : 'Failed to switch chain'));
   };
@@ -89,7 +89,7 @@ export default function ClaimFeesPage() {
         address: DISTRIBUTOR_ADDRESS,
         abi: morbiusHolderDistributorAbi,
         functionName: 'claim',
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       } as unknown as Parameters<typeof writeContract>[0]);
     }).catch((e) => toast.error(e instanceof Error ? e.message : 'Failed to switch chain'));
   };

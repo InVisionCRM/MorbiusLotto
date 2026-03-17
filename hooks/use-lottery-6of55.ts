@@ -347,7 +347,7 @@ export function useBuyTickets() {
       args: [tickets as any], // Type assertion needed for wagmi
       chain: pulsechain,
       account: address!,
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     })
   }
 
@@ -376,7 +376,7 @@ export function useBuyTicketsForRounds() {
       args: [formattedGroups as any, formattedOffsets as any],
       chain: pulsechain,
       account: address!,
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     })
   }
 
@@ -402,7 +402,7 @@ export function useBuyTicketsWithWPLS(defaultExtraBufferBp: number = 2500) {
       args: [formattedTickets as any, BigInt(bufferBp)],
       chain: pulsechain,
       account: address!,
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     })
   }
 
@@ -425,7 +425,7 @@ export function useBuyTicketsWithPLS() {
       chain: pulsechain,
       account: address!,
       value: valueWei,
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     })
   }
 
@@ -452,7 +452,7 @@ export function useBuyTicketsWithPLSForRounds() {
       chain: pulsechain,
       account: address!,
       value: valueWei,
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     })
   }
 
@@ -471,7 +471,7 @@ export function useFinalizeRound() {
       functionName: 'finalizeRound',
       chain: pulsechain,
       account: address!,
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     })
   }
 
@@ -491,7 +491,7 @@ export function useClaimWinnings() {
       args: [BigInt(roundId)],
       chain: pulsechain,
       account: address!,
-      maxPriorityFeePerGas: 40_000n, // PulseChain tip
+      maxPriorityFeePerGas: 200_000n, // PulseChain tip
     })
   }
 

@@ -111,7 +111,7 @@ export function useTokenApproval({
         functionName: 'approve',
         args: [spenderAddress, amountToApprove],
         chainId: pulsechain.id,
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       })
     } catch (error) {
       console.error('Approval error:', error)

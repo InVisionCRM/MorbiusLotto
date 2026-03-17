@@ -69,7 +69,7 @@ export default function DonatePage() {
         abi: INSTANT_LOTTERY_6OF55_ABI,
         functionName: 'donateToPool',
         args: [amount],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       })
 
       toast.success('Donation transaction submitted!', {
@@ -132,7 +132,7 @@ export default function DonatePage() {
         abi: LOTTERY_6OF55_V2_ABI,
         functionName: 'donateToMegaMORBIUS',
         args: [amount],
-        maxPriorityFeePerGas: 40_000n, // PulseChain tip
+        maxPriorityFeePerGas: 200_000n, // PulseChain tip
       })
 
       toast.success('Jackpot donation transaction submitted!', {
