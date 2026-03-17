@@ -1,14 +1,17 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { useProfile } from '@/hooks/use-player-profile'
+import { useQueryClient } from '@tanstack/react-query'
+import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
+import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator'
+import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal'
 
 const DISPLAY_NAME_MIN = 3
 const DISPLAY_NAME_MAX = 32
 const BIO_MAX = 200
-const AVATAR_MAX_PX = 256
-const AVATAR_JPEG_QUALITY = 0.85
 
 const PANEL_STYLE = {
   background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.9))',
@@ -16,49 +19,6 @@ const PANEL_STYLE = {
   border: '1px solid rgba(34, 211, 238, 0.3)',
 }
 
-/** Resize and compress image to a small data URL (any input size accepted). */
-async function resizeImageToDataUrl(
-  file: File,
-  maxPx: number = AVATAR_MAX_PX,
-  quality: number = AVATAR_JPEG_QUALITY
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      const canvas = document.createElement('canvas')
-      let { width, height } = img
-      if (width > maxPx || height > maxPx) {
-        if (width > height) {
-          height = Math.round((height * maxPx) / width)
-          width = maxPx
-        } else {
-          width = Math.round((width * maxPx) / height)
-          height = maxPx
-        }
-      }
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        reject(new Error('Canvas not supported'))
-        return
-      }
-      ctx.drawImage(img, 0, 0, width, height)
-      try {
-        resolve(canvas.toDataURL('image/jpeg', quality))
-      } catch (e) {
-        reject(e)
-      }
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error('Failed to load image'))
-    }
-    img.src = url
-  })
-}
 
 export interface ProfileSettingsModalProps {
   open: boolean
@@ -88,7 +48,9 @@ export default function ProfileSettingsModal({
   const [tgHandle, setTgHandle] = useState(initialTgHandle ?? '')
   const [saving, setSaving] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false)
+  const { avatarConfig } = useProfile()
+  const queryClient = useQueryClient()
 
   useEffect(() => setMounted(true), [])
 
@@ -108,27 +70,6 @@ export default function ProfileSettingsModal({
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDisplayName(e.target.value.slice(0, DISPLAY_NAME_MAX))
-  }
-
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value.trim()
-    setProfileImageUrl(v === '' ? null : v)
-  }
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image file (PNG, JPEG, GIF, WebP).')
-      return
-    }
-    try {
-      const dataUrl = await resizeImageToDataUrl(file)
-      setProfileImageUrl(dataUrl)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to process image.')
-    }
   }
 
   const handleSave = async () => {
@@ -188,39 +129,23 @@ export default function ProfileSettingsModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Profile picture</label>
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="w-14 h-14 rounded-full bg-slate-700 border border-cyan-500/30 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                {profileImageUrl ? (
-                  <img src={profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-gray-500 text-xl">?</span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0 space-y-2">
-                <input
-                  type="url"
-                  value={profileImageUrl ?? ''}
-                  onChange={handleUrlChange}
-                  placeholder="Image URL (or upload below)"
-                  className="w-full rounded-lg bg-slate-800/80 border border-cyan-500/30 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-sm"
+            <label className="block text-sm font-medium text-gray-300 mb-2">Avatar</label>
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-cyan-500/30 bg-slate-800">
+                <AvatarPreview
+                  config={avatarConfig ?? DEFAULT_AVATAR_CONFIG}
+                  emotion="neutral"
+                  compact
+                  className="w-full h-full"
                 />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                  aria-label="Upload profile image"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-sm text-cyan-400 hover:text-cyan-300"
-                >
-                  Upload image
-                </button>
               </div>
+              <button
+                type="button"
+                onClick={() => setAvatarModalOpen(true)}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/10 transition-colors"
+              >
+                Edit Avatar
+              </button>
             </div>
           </div>
           <div>
@@ -289,5 +214,14 @@ export default function ProfileSettingsModal({
     </div>
   )
 
-  return createPortal(modal, document.body)
+  return (
+    <>
+      {createPortal(modal, document.body)}
+      <ProfileAvatarModal
+        open={avatarModalOpen}
+        onClose={() => setAvatarModalOpen(false)}
+        onSave={() => queryClient.invalidateQueries({ queryKey: ['playerProfile'] })}
+      />
+    </>
+  )
 }

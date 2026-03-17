@@ -187,20 +187,8 @@ const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
   { title: 'Angry',     emotion: 'angry'     },
   { title: 'Sad',       emotion: 'sad'       },
   { title: 'Dance',     emotion: 'dance'     },
-  { title: 'Love',      emotion: 'love'      },
-  { title: 'Money',     emotion: 'money'     },
-  { title: 'Cool',      emotion: 'cool'      },
   { title: 'Jackpot',   emotion: 'jackpot'   },
-  { title: 'Slouch',    emotion: 'slouch'    },
-  { title: 'Yawn',      emotion: 'yawn'      },
-  { title: 'Bored',     emotion: 'bored'     },
-  { title: 'Nod',       emotion: 'nod'       },
-  { title: 'Shrug',     emotion: 'shrug'     },
-  { title: 'Drift',     emotion: 'drift'     },
   { title: 'Sink',      emotion: 'sink'      },
-  { title: 'Breathe',   emotion: 'breathe'   },
-  { title: 'Lean',      emotion: 'lean'      },
-  { title: 'Tilt',      emotion: 'tilt'      },
 ];
 
 // ── PokerSeat ─────────────────────────────────────────────────────────────
