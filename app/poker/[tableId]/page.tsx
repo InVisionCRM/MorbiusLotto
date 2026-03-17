@@ -721,19 +721,17 @@ export default function PokerTablePage() {
             )}
           </div>
 
-          {/* Bottom row: md+ 3-col grid (empty | empty | betting); Activity overlays bottom-left so table keeps full height */}
-          <div
-            className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_1fr_minmax(280px,1fr)] gap-0 min-h-0"
-          >
-            {/* Col 1: empty — Activity feed is overlay (fixed) on md+, not in flow */}
-            <div className="hidden md:block min-w-0 md:order-1" />
-            {/* Col 2: empty middle */}
-            <div className="hidden md:block min-w-0 md:order-2" />
-            {/* Col 3: betting controls — right on md+, first on mobile */}
-            <div className="order-1 md:order-3 flex-shrink-0 min-w-0">
-              {state && mySeat && sharedActions}
-            </div>
-          </div>
+          {/* Betting controls — fixed overlay bottom-right on md+, in-flow below table on mobile */}
+          {state && mySeat && (
+            <>
+              <div className="flex-shrink-0 md:hidden">
+                {sharedActions}
+              </div>
+              <div className="hidden md:block fixed bottom-4 right-4 z-30" style={{ minWidth: 280 }}>
+                {sharedActions}
+              </div>
+            </>
+          )}
 
           {/* Activity feed — overlay on md+ (fixed bottom-left), drawer on mobile; does not take layout space */}
           {wsClient && pokerChatRoomId && (

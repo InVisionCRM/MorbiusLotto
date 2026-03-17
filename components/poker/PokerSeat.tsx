@@ -499,7 +499,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
         <div
           className="relative flex-shrink-0"
           style={{
-            width: showMyCards ? 'clamp(120px, 30vw, 160px)' : 'clamp(84px, 21vw, 110px)',
+            width: showMyCards ? 'clamp(84px, 20vw, 110px)' : 'clamp(58px, 14vw, 74px)',
             height: showMyCards ? 'clamp(72px, 18vw, 96px)' : 'clamp(50px, 12vw, 66px)',
             marginBottom: -55,
             zIndex: 0,
@@ -511,9 +511,10 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               className="absolute"
               style={{
                 bottom: 0,
+                zIndex: ci,
                 ...(showMyCards
-                  ? { width: 'clamp(54px, 13vw, 70px)', height: 'clamp(70px, 17vw, 90px)', [ci === 0 ? 'left' : 'right']: 'clamp(1px, 0.3vw, 3px)' }
-                  : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', [ci === 0 ? 'left' : 'right']: '0px' }),
+                  ? { width: 'clamp(54px, 13vw, 70px)', height: 'clamp(70px, 17vw, 90px)', left: ci === 0 ? '0' : 'clamp(30px, 7vw, 40px)' }
+                  : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', left: ci === 0 ? '0' : 'clamp(20px, 5vw, 26px)' }),
                 transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
                 transformOrigin: 'bottom center',
                 filter: isFolded ? 'grayscale(1) opacity(0.5)' : undefined,
