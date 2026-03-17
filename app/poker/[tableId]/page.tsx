@@ -721,23 +721,12 @@ export default function PokerTablePage() {
             )}
           </div>
 
-          {/* Bottom row: md+ 3-col grid (chat | empty | betting), mobile stacked */}
+          {/* Bottom row: md+ 3-col grid (empty | empty | betting); Activity overlays bottom-left so table keeps full height */}
           <div
-            className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_1fr_minmax(280px,1fr)] gap-0 min-h-0 md:min-h-[320px]"
+            className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_1fr_minmax(280px,1fr)] gap-0 min-h-0"
           >
-            {/* Col 1: activity feed — in-flow on md+, left column */}
-            <div className="min-h-0 flex flex-col order-2 md:order-1 min-w-0">
-              {wsClient && pokerChatRoomId && (
-                <PokerActivityFeed
-                  wsClient={wsClient}
-                  wsConnected={wsConnected}
-                  roomId={pokerChatRoomId}
-                  tableId={tableId}
-                  state={state}
-                  embedInLayout
-                />
-              )}
-            </div>
+            {/* Col 1: empty — Activity feed is overlay (fixed) on md+, not in flow */}
+            <div className="hidden md:block min-w-0 md:order-1" />
             {/* Col 2: empty middle */}
             <div className="hidden md:block min-w-0 md:order-2" />
             {/* Col 3: betting controls — right on md+, first on mobile */}
@@ -745,6 +734,17 @@ export default function PokerTablePage() {
               {state && mySeat && sharedActions}
             </div>
           </div>
+
+          {/* Activity feed — overlay on md+ (fixed bottom-left), drawer on mobile; does not take layout space */}
+          {wsClient && pokerChatRoomId && (
+            <PokerActivityFeed
+              wsClient={wsClient}
+              wsConnected={wsConnected}
+              roomId={pokerChatRoomId}
+              tableId={tableId}
+              state={state}
+            />
+          )}
         </div>
 
         <PokerDepositModal
