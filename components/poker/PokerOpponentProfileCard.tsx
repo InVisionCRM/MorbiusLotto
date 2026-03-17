@@ -1,0 +1,238 @@
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { formatEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
+import { X, Copy, Check, ExternalLink, UserPlus, Gift } from 'lucide-react';
+import { usePokerPlayerStats } from '@/hooks/use-poker-stats';
+import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
+import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
+import type { AvatarConfig } from '@/components/poker/avatar/CharacterCreator';
+
+function formatChips(wei: string | number): string {
+  try {
+    const num = Number(formatEther(toBigIntSafe(wei)));
+    return Number.isInteger(num)
+      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  } catch {
+    return String(wei);
+  }
+}
+
+export interface PokerOpponentProfileCardProps {
+  address: string;
+  displayName?: string | null;
+  avatarConfig?: AvatarConfig | null;
+  onClose: () => void;
+  onViewFullProfile: (address: string) => void;
+}
+
+export function PokerOpponentProfileCard({
+  address,
+  displayName,
+  avatarConfig,
+  onClose,
+  onViewFullProfile,
+}: PokerOpponentProfileCardProps) {
+  const { data: stats, isLoading } = usePokerPlayerStats(address);
+  const [copied, setCopied] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click or Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(address).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  const shortAddr = `${address.slice(0, 6)}…${address.slice(-4)}`;
+  const name = displayName?.trim() || shortAddr;
+
+  const statRows = stats
+    ? [
+        { label: 'Win Rate', value: `${Math.round(stats.win_rate)}%`, color: stats.win_rate >= 50 ? '#4ade80' : stats.win_rate >= 35 ? '#facc15' : '#f87171' },
+        { label: 'Hands Played', value: stats.total_hands.toLocaleString(), color: '#94a3b8' },
+        { label: 'Biggest Pot', value: formatChips(stats.biggest_pot_won), color: '#fbbf24' },
+      ]
+    : [];
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-[55]"
+        onClick={onClose}
+        aria-hidden
+      />
+
+      {/* Card */}
+      <motion.div
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${name}'s profile`}
+        className="fixed left-1/2 top-1/2 z-[56] w-72 -translate-x-1/2 -translate-y-1/2"
+        initial={{ opacity: 0, scale: 0.92, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.92, y: 8 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            background: 'linear-gradient(145deg, rgba(10,14,28,0.98), rgba(18,24,42,0.98))',
+            border: '1px solid rgba(99,179,237,0.25)',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)',
+          }}
+        >
+          {/* Header */}
+          <div
+            className="relative flex items-center gap-3 px-4 pt-4 pb-3"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            {/* Avatar */}
+            <div
+              className="shrink-0 rounded-full overflow-hidden"
+              style={{
+                width: 52,
+                height: 52,
+                border: '2px solid rgba(255,255,255,0.18)',
+                background: 'rgba(0,0,0,0.6)',
+              }}
+            >
+              {avatarConfig ? (
+                <AvatarPreview config={avatarConfig} emotion="neutral" compact className="w-full h-full" />
+              ) : (
+                <div
+                  className="w-full h-full flex items-center justify-center font-bold text-xl"
+                  style={{ background: 'linear-gradient(135deg, #1e1e32, #0a0a14)', color: '#e2e8f0' }}
+                >
+                  {name[0].toUpperCase()}
+                </div>
+              )}
+            </div>
+
+            {/* Name + address */}
+            <div className="min-w-0 flex-1">
+              <div
+                className="font-bold truncate leading-tight"
+                style={{ color: '#f1f5f9', fontSize: 15 }}
+              >
+                {name}
+              </div>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="flex items-center gap-1 mt-0.5 group"
+                title="Copy address"
+              >
+                <span
+                  className="font-mono truncate"
+                  style={{ color: 'rgba(148,163,184,0.8)', fontSize: 11 }}
+                >
+                  {shortAddr}
+                </span>
+                <span
+                  className="shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
+                  style={{ color: copied ? '#4ade80' : '#94a3b8' }}
+                >
+                  {copied
+                    ? <Check className="w-3 h-3" />
+                    : <Copy className="w-3 h-3" />}
+                </span>
+              </button>
+            </div>
+
+            {/* Close */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 p-1 rounded-lg opacity-50 hover:opacity-100 hover:bg-white/10 transition-all"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+            {isLoading ? (
+              <div className="flex flex-col gap-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-4 rounded animate-pulse" style={{ background: 'rgba(255,255,255,0.08)', width: i === 2 ? '60%' : '80%' }} />
+                ))}
+              </div>
+            ) : statRows.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {statRows.map(({ label, value, color }) => (
+                  <div key={label} className="flex items-center justify-between">
+                    <span style={{ color: 'rgba(148,163,184,0.8)', fontSize: 12 }}>{label}</span>
+                    <span className="font-bold tabular-nums" style={{ color, fontSize: 13 }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: 'rgba(148,163,184,0.6)', fontSize: 12, textAlign: 'center' }}>No stats yet</p>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-2 p-3">
+            <button
+              type="button"
+              onClick={() => { onClose(); onViewFullProfile(address); }}
+              className="flex items-center justify-center gap-2 w-full py-2 rounded-lg font-semibold text-sm transition-all hover:brightness-110 active:scale-[0.98]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(56,189,248,0.2), rgba(99,102,241,0.2))',
+                border: '1px solid rgba(56,189,248,0.3)',
+                color: '#7dd3fc',
+              }}
+            >
+              <ExternalLink className="w-4 h-4" />
+              View Full Profile
+            </button>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="flex items-center justify-center gap-1.5 flex-1 py-2 rounded-lg font-semibold text-sm transition-all hover:brightness-110 active:scale-[0.98]"
+                style={{
+                  background: 'rgba(74,222,128,0.12)',
+                  border: '1px solid rgba(74,222,128,0.25)',
+                  color: '#4ade80',
+                }}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                Follow
+              </button>
+
+              <button
+                type="button"
+                disabled
+                className="flex items-center justify-center gap-1.5 flex-1 py-2 rounded-lg font-semibold text-sm cursor-not-allowed"
+                style={{
+                  background: 'rgba(251,191,36,0.08)',
+                  border: '1px solid rgba(251,191,36,0.15)',
+                  color: 'rgba(251,191,36,0.4)',
+                }}
+                title="Coming soon"
+              >
+                <Gift className="w-3.5 h-3.5" />
+                Gift
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </>
+  );
+}

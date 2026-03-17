@@ -64,6 +64,8 @@ export interface PokerTableProps {
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
   onAnimationReaction?: (emotion: import('@/components/poker/avatar/AvatarPreview').Emotion) => void;
+  /** Called when any player clicks an opponent's avatar. */
+  onOpponentClick?: (address: string) => void;
   /** When set, renders the tournament HUD overlay in the top-left corner. */
   tournamentHUD?: {
     state: PokerTournamentState;
@@ -71,7 +73,7 @@ export interface PokerTableProps {
   };
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onEmojiReaction, onPhraseReaction, onAnimationReaction, tournamentHUD }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick, tournamentHUD }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [, setDims] = useState({ w: 640, h: 500 });
 
@@ -134,6 +136,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onEmojiReaction: onEmojiReaction,
       onPhraseReaction: onPhraseReaction,
       onAnimationReaction: onAnimationReaction,
+      onOpponentClick: onOpponentClick,
     };
   };
 

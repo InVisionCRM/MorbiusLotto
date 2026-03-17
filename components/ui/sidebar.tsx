@@ -3,8 +3,6 @@ import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconMenu2, IconX } from "@tabler/icons-react";
-import { SystemTime } from "@/components/ui/system-time";
-
 interface Links {
   label: string;
   href: string;
@@ -16,6 +14,7 @@ interface SidebarContextProps {
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   animate: boolean;
   mobileBarContent?: React.ReactNode;
+  mobileBarCenterContent?: React.ReactNode;
   disabled?: boolean;
 }
 
@@ -37,6 +36,7 @@ export const SidebarProvider = ({
   setOpen: setOpenProp,
   animate = true,
   mobileBarContent,
+  mobileBarCenterContent,
   disabled = false,
 }: {
   children: React.ReactNode;
@@ -44,6 +44,7 @@ export const SidebarProvider = ({
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
   mobileBarContent?: React.ReactNode;
+  mobileBarCenterContent?: React.ReactNode;
   disabled?: boolean;
 }) => {
   const [openState, setOpenState] = useState(false);
@@ -58,7 +59,7 @@ export const SidebarProvider = ({
     : setOpen;
 
   return (
-    <SidebarContext.Provider value={{ open: effectiveOpen, setOpen: effectiveSetOpen, animate: animate, mobileBarContent, disabled }}>
+    <SidebarContext.Provider value={{ open: effectiveOpen, setOpen: effectiveSetOpen, animate: animate, mobileBarContent, mobileBarCenterContent, disabled }}>
       {children}
     </SidebarContext.Provider>
   );
@@ -70,6 +71,7 @@ export const Sidebar = ({
   setOpen,
   animate,
   mobileBarContent,
+  mobileBarCenterContent,
   disabled,
 }: {
   children: React.ReactNode;
@@ -77,10 +79,11 @@ export const Sidebar = ({
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
   mobileBarContent?: React.ReactNode;
+  mobileBarCenterContent?: React.ReactNode;
   disabled?: boolean;
 }) => {
   return (
-    <SidebarProvider open={open} setOpen={setOpen} animate={animate} mobileBarContent={mobileBarContent} disabled={disabled}>
+    <SidebarProvider open={open} setOpen={setOpen} animate={animate} mobileBarContent={mobileBarContent} mobileBarCenterContent={mobileBarCenterContent} disabled={disabled}>
       {children}
     </SidebarProvider>
   );
@@ -128,7 +131,7 @@ export const MobileSidebar = ({
   children,
   ...props
 }: React.ComponentProps<"div">) => {
-  const { open, setOpen, mobileBarContent, disabled } = useSidebar();
+  const { open, setOpen, mobileBarContent, mobileBarCenterContent, disabled } = useSidebar();
   return (
     <>
       <div
@@ -137,9 +140,11 @@ export const MobileSidebar = ({
         )}
         {...props}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <SystemTime className="!static !top-0 !right-0 shrink-0 text-xs" showDate={false} />
+        <div className="flex items-center gap-2 min-w-0 shrink-0">
           {mobileBarContent}
+        </div>
+        <div className="flex-1 flex items-center justify-center min-w-0 p-px">
+          {mobileBarCenterContent}
         </div>
         <div className="flex justify-end z-20 shrink-0">
           <IconMenu2

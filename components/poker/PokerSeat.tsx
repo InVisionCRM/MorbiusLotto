@@ -227,11 +227,13 @@ export interface PokerSeatProps {
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
   onAnimationReaction?: (emotion: Emotion) => void;
+  /** Called when any player clicks an opponent's avatar. */
+  onOpponentClick?: (address: string) => void;
 }
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onEmojiReaction, onPhraseReaction, onAnimationReaction }: PokerSeatProps) {
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -601,11 +603,11 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 ? '2px solid rgba(251,191,36,0.6)'
                 : '2px solid rgba(255,255,255,0.18)',
             background: 'rgba(0,0,0,0.6)',
-            cursor: isCurrentPlayer ? 'pointer' : 'default',
+            cursor: (isCurrentPlayer || (!isCurrentPlayer && onOpponentClick && seat.playerAddress)) ? 'pointer' : 'default',
             boxShadow: isCurrentPlayer ? '0 0 0 1px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.6)',
           }}
-          onClick={isCurrentPlayer ? handleAvatarClick : undefined}
-          title={isCurrentPlayer ? 'Click to animate' : undefined}
+          onClick={isCurrentPlayer ? handleAvatarClick : (onOpponentClick && seat.playerAddress ? () => onOpponentClick(seat.playerAddress!) : undefined)}
+          title={isCurrentPlayer ? 'Click to animate' : (onOpponentClick && seat.playerAddress ? 'View profile' : undefined)}
         >
           {seat.avatarConfig ? (
             <AvatarPreview

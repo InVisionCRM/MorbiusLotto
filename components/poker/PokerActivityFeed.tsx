@@ -114,10 +114,12 @@ export interface PokerActivityFeedProps {
   state: PokerTableState | null;
   /** When true, desktop panel is in-flow (no fixed) so it can sit in a grid column */
   embedInLayout?: boolean;
+  /** Extra bottom offset (px) for the fixed desktop panel — use when a bottom bar is in the layout */
+  bottomOffset?: number;
 }
 
 export function PokerActivityFeed({
-  wsClient, wsConnected, roomId, tableId, state, embedInLayout = false,
+  wsClient, wsConnected, roomId, tableId, state, embedInLayout = false, bottomOffset = 0,
 }: PokerActivityFeedProps) {
   const { messages, sendMessage, connected } = useChat(roomId, { wsClient, wsConnected });
 
@@ -463,12 +465,12 @@ export function PokerActivityFeed({
         className={
           embedInLayout
             ? 'hidden md:flex flex-col rounded-lg overflow-hidden h-full min-h-0 w-full'
-            : 'hidden md:flex fixed bottom-4 left-4 z-30 flex-col rounded-lg overflow-hidden'
+            : 'hidden md:flex fixed left-4 z-30 flex-col rounded-lg overflow-hidden'
         }
         style={
           embedInLayout
             ? { ...desktopPanelStyle, height: collapsed ? 32 : '100%' }
-            : { ...desktopPanelStyle, width: 272, height: collapsed ? 32 : 320 }
+            : { ...desktopPanelStyle, width: 272, height: collapsed ? 32 : 320, bottom: `${16 + bottomOffset}px` }
         }
       >
         {panelContent}

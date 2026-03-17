@@ -20,6 +20,8 @@ import { PokerDepositModal } from '@/components/poker/PokerDepositModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
+import { PokerOpponentProfileCard } from '@/components/poker/PokerOpponentProfileCard';
+import { CardDisplay } from '@/components/poker/CardDisplay';
 import { useProfileWs } from '@/contexts/profile-ws-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -46,8 +48,10 @@ export default function PokerTablePage() {
   const [disconnected, setDisconnected] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [statsModalAddress, setStatsModalAddress] = useState<string | null>(null);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [opponentProfileAddress, setOpponentProfileAddress] = useState<string | null>(null);
   /** Chat bubbles above seats: id, senderAddress (lowercase), text, expiresAt. Cleared after 5s. */
   const [seatBubbles, setSeatBubbles] = useState<Array<{ id: string; senderAddress: string; text: string; expiresAt: number }>>([]);
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -597,14 +601,26 @@ export default function PokerTablePage() {
     />
   );
 
+  /** Mobile nav center: show hole cards when we have 2 (poker only), 1px padding to maximize space */
+  const mobileBarCenterContent = useMemo(() => {
+    const cards = state?.myHoleCards;
+    if (!cards || cards.length < 2) return null;
+    return (
+      <div className="flex items-center justify-center gap-px p-px">
+        <CardDisplay cardIndex={cards[0]} small className="!w-[37px] !h-[52px] min-w-0 shrink-0 overflow-hidden [&>*]:!w-full [&>*]:!h-full [&>*]:!min-w-0 [&>*]:!min-h-0" />
+        <CardDisplay cardIndex={cards[1]} small className="!w-[37px] !h-[52px] min-w-0 shrink-0 overflow-hidden [&>*]:!w-full [&>*]:!h-full [&>*]:!min-w-0 [&>*]:!min-h-0" />
+      </div>
+    );
+  }, [state?.myHoleCards]);
+
   return (
-    <GlobalMainNav page="home">
+    <GlobalMainNav page="home" mobileBarCenterContent={mobileBarCenterContent}>
       <PokerThemeProvider themeId={pokerTheme}>
         <div
           className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
           style={{
             ...themeVars as React.CSSProperties,
-            minHeight: '100dvh',
+            height: '100dvh',
             background: 'rgb(2 6 23)',
             color: 'var(--poker-text)',
             overflow: 'hidden',
@@ -643,7 +659,7 @@ export default function PokerTablePage() {
               {normalizedAddress && (
                 <button
                   type="button"
-                  onClick={() => setShowStatsModal(true)}
+                  onClick={() => { setStatsModalAddress(normalizedAddress); setShowStatsModal(true); }}
                   className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
                   style={{
                     background: 'rgba(255,255,255,0.07)',
@@ -681,14 +697,12 @@ export default function PokerTablePage() {
             </div>
           )}
 
-          {/* Table — bottom padding so current player/cards overlay open center on mobile, above bar on desktop */}
-          {/* maxWidth clamps width relative to available height so the oval stays proportional on wide monitors */}
+          {/* Table — fills all remaining height between nav and controls bar */}
           <div
-            className={`flex-1 relative ${state && mySeat ? 'pb-[100px] sm:pb-[200px]' : ''}`}
+            className="flex-1 relative"
             style={{
               minHeight: 0,
-              overflow: 'visible',
-              maxWidth: 'min(100vw, calc((100dvh - 120px) * 2.4))',
+              maxWidth: 'min(100vw, calc((100dvh - 160px) * 2.4))',
               marginLeft: 'auto',
               marginRight: 'auto',
               width: '100%',
@@ -708,6 +722,7 @@ export default function PokerTablePage() {
                 onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}
                 onReUpClick={mySeat ? () => setShowDepositModal(true) : undefined}
                 onMenuClick={mySeat ? () => setShowAvatarModal(true) : undefined}
+                onOpponentClick={(addr) => setOpponentProfileAddress(addr)}
               />
             ) : !error ? (
               <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
@@ -721,16 +736,11 @@ export default function PokerTablePage() {
             )}
           </div>
 
-          {/* Betting controls — fixed overlay bottom-right on md+, in-flow below table on mobile */}
+          {/* Betting controls — full-width bar pinned at bottom of the flex column */}
           {state && mySeat && (
-            <>
-              <div className="flex-shrink-0 md:hidden">
-                {sharedActions}
-              </div>
-              <div className="hidden md:block fixed bottom-4 right-4 z-30" style={{ minWidth: 280 }}>
-                {sharedActions}
-              </div>
-            </>
+            <div className="flex-shrink-0">
+              {sharedActions}
+            </div>
           )}
 
           {/* Activity feed — overlay on md+ (fixed bottom-left), drawer on mobile; does not take layout space */}
@@ -741,6 +751,7 @@ export default function PokerTablePage() {
               roomId={pokerChatRoomId}
               tableId={tableId}
               state={state}
+              bottomOffset={state && mySeat ? 108 : 0}
             />
           )}
         </div>
@@ -757,7 +768,7 @@ export default function PokerTablePage() {
         <PokerStatsModal
           isOpen={showStatsModal}
           onClose={() => setShowStatsModal(false)}
-          playerAddress={normalizedAddress}
+          playerAddress={statsModalAddress}
         />
         {/* Leave table confirmation (non-tournament): shows leaving amount and asks to confirm */}
         {showLeaveConfirm && mySeat && (
@@ -797,6 +808,25 @@ export default function PokerTablePage() {
             </div>
           </div>
         )}
+        <AnimatePresence>
+          {opponentProfileAddress && (() => {
+            const seat = state?.seats.find(s => s.playerAddress === opponentProfileAddress);
+            return (
+              <PokerOpponentProfileCard
+                key={opponentProfileAddress}
+                address={opponentProfileAddress}
+                displayName={seat?.displayName}
+                avatarConfig={seat?.avatarConfig}
+                onClose={() => setOpponentProfileAddress(null)}
+                onViewFullProfile={(addr) => {
+                  setStatsModalAddress(addr);
+                  setShowStatsModal(true);
+                }}
+              />
+            );
+          })()}
+        </AnimatePresence>
+
         <ProfileAvatarModal
           open={showAvatarModal}
           onClose={() => setShowAvatarModal(false)}

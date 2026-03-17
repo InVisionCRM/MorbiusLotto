@@ -124,6 +124,9 @@ export interface GlobalMainNavProps {
 
   /** When true, sidebar cannot be opened (e.g. during active Plinko game) */
   sidebarDisabled?: boolean;
+
+  /** Optional content for the center of the mobile nav bar (e.g. poker hole cards). Rendered only on mobile. */
+  mobileBarCenterContent?: React.ReactNode;
 }
 
 function useNavPage(pageProp?: NavPage): NavPage {
@@ -519,6 +522,7 @@ export default function GlobalMainNav({
   isAuthenticated,
   onSignOut,
   sidebarDisabled,
+  mobileBarCenterContent,
 }: GlobalMainNavProps) {
   const { gameLocked } = useGameLock();
   const page = useNavPage(pageProp);
@@ -560,7 +564,7 @@ export default function GlobalMainNav({
   );
 
   return (
-    <Sidebar mobileBarContent={mobileBarContent} disabled={sidebarDisabled || gameLocked}>
+    <Sidebar mobileBarContent={mobileBarContent} mobileBarCenterContent={mobileBarCenterContent} disabled={sidebarDisabled || gameLocked}>
       <div className="flex flex-col md:flex-row min-h-screen w-full">
         <SidebarBody className="shrink-0" style={SIDEBAR_PANEL_STYLE}>
           <NavContent
