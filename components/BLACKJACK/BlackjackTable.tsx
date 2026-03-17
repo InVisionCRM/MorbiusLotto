@@ -1143,8 +1143,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             );
           })()}
 
-          {/* Player row — pulled up 30px so cards don't overlay chip stack */}
-          <div className="flex flex-col gap-2 items-center justify-center -mt-[24px]">
+          {/* Player row — shifted down 70px from center */}
+          <div className="flex flex-col gap-2 items-center justify-center -mt-[24px]" style={{ transform: 'translateY(70px)' }}>
             <div className={`flex ${hasSplit ? 'gap-2' : 'gap-0'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
