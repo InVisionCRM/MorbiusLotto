@@ -33,13 +33,13 @@ export const metadata: Metadata = {
   description: "Morbius.io is a web3 gaming platform built on PulseChain. PulseChain is a fast and secure blockchain that is built for the future of web3.",
   icons: {
     icon: [
-      { url: '/favicon.ico/favicon.ico', sizes: 'any' },
-      { url: '/favicon.ico/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.ico/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
+      { url: '/icons/favicon.ico', sizes: 'any' },
+      { url: '/icons/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icons/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
     ],
-    apple: [{ url: '/favicon.ico/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
-  manifest: '/favicon.ico/site.webmanifest',
+  manifest: '/icons/site.webmanifest',
 };
 export default function RootLayout({
   children,
