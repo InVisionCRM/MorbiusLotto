@@ -81,11 +81,11 @@ export function BlackjackRecentGames({
   const hasMore = displayCount < games.length
 
   return (
-    <div className="rounded-xl overflow-hidden w-full max-w-xl" style={panelStyle}>
-      <div className="px-3 py-2 border-b border-white/10">
+    <div className="rounded-xl overflow-hidden w-full max-w-xl flex flex-col h-full min-h-0" style={panelStyle}>
+      <div className="px-3 py-2 border-b border-white/10 shrink-0">
         <h3 className="text-cyan-300 font-semibold text-sm">{title}</h3>
       </div>
-      <div className="max-h-[420px] overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {!address ? (
           <div className="p-4 text-center text-white/50 text-sm">Connect wallet to see your recent games.</div>
         ) : error ? (
@@ -106,7 +106,7 @@ export function BlackjackRecentGames({
         )}
       </div>
       {hasMore && displayGames.length > 0 && (
-        <div className="px-2 py-2 border-t border-white/10">
+        <div className="px-2 py-2 border-t border-white/10 shrink-0">
           <button
             type="button"
             onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
