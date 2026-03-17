@@ -739,9 +739,9 @@ export default function PokerTablePage() {
               )}
             </div>
             {/* Col 2: empty middle */}
-            <div className="hidden md:block min-w-0" />
+            <div className="hidden md:block min-w-0 md:order-2" />
             {/* Col 3: betting controls — right on md+, first on mobile */}
-            <div className="order-1 md:order-2 flex-shrink-0 min-w-0">
+            <div className="order-1 md:order-3 flex-shrink-0 min-w-0">
               {state && mySeat && sharedActions}
             </div>
           </div>
