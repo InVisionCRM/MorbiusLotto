@@ -7,6 +7,9 @@ import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog';
 import PixelBackgroundUploader from '@/components/poker/avatar/PixelBackgroundUploader';
 import GradientBuilder from '@/components/poker/avatar/GradientBuilder';
 import VoxelPainter from '@/components/poker/avatar/VoxelPainter';
+import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
+import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
+import type { AvatarConfig } from '@/lib/websocket-client';
 import { parseGradient, serializeGradient, DEFAULT_GRADIENT } from '@/lib/gradient-utils';
 
 const MORBIUS_PRICE: Record<ItemTier, number> = {
@@ -273,287 +276,206 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
     }
   };
 
+  // Build live preview config
+  const previewConfig: AvatarConfig = { ...DEFAULT_AVATAR_CONFIG, [form.field]: activeValue } as AvatarConfig;
+
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-zinc-300 hover:text-white transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
       >
-        <Plus size={14} className="text-emerald-400" />
+        <Plus size={12} className="text-emerald-400" />
         Create New Item
         <div className="ml-auto text-zinc-600">
-          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </div>
       </button>
 
       {open && (
-        <div className="border-t border-zinc-800 p-4">
-          <div className="space-y-4">
-            {/* Field type selector */}
-            <div>
-              <label className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium block mb-1.5">Applies to</label>
-              <div className="flex gap-1.5 flex-wrap">
-                {ITEM_FIELDS.map(f => (
-                  <button
-                    key={f.value}
-                    onClick={() => updateForm({ field: f.value, inputMode: 'color' })}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                      form.field === f.value
-                        ? 'bg-zinc-700 border-zinc-500 text-white'
-                        : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Color input area */}
-            {isColorField && (
-              <div className="space-y-3">
-                {/* Mode toggle */}
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => updateForm({ inputMode: 'color' })}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      !isGradientMode ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                    }`}
-                  >
-                    Flat Color
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateForm({ inputMode: 'gradient' })}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 ${
-                      isGradientMode ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                    }`}
-                  >
-                    ✦ Gradient
-                  </button>
-                </div>
-
-                {!isGradientMode ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-16 h-16 rounded-xl ring-2 ring-white/10 shadow-lg shrink-0" style={{ backgroundColor: form.hex }} />
-                    <div className="flex flex-col gap-2">
-                      <input
-                        type="color"
-                        value={form.hex}
-                        onChange={e => updateForm({ hex: e.target.value })}
-                        className="w-24 h-8 cursor-pointer bg-transparent border-0 p-0 rounded"
-                        title="Pick color"
-                      />
-                      <input
-                        type="text"
-                        value={form.hex}
-                        onChange={e => updateForm({ hex: e.target.value })}
-                        maxLength={7}
-                        className="w-24 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-xs text-center text-white font-mono focus:outline-none focus:border-zinc-400 uppercase"
-                        placeholder="#RRGGBB"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => updateForm({ hex: randomHex() })}
-                        className="w-24 flex items-center justify-center gap-1 px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-xs transition-colors"
-                      >
-                        <Shuffle size={10} /> Randomize
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
+        <div className="border-t border-zinc-800 p-3">
+          <div className="flex gap-3">
+            {/* ── Left: form controls ── */}
+            <div className="flex-1 min-w-0 space-y-2.5">
+              {/* Field type selector */}
+              <div>
+                <label className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium block mb-1">Applies to</label>
+                <div className="flex gap-1 flex-wrap">
+                  {ITEM_FIELDS.map(f => (
                     <button
-                      type="button"
-                      onClick={() => updateForm({ gradientJson: randomGradient() })}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-xs font-medium transition-colors"
-                    >
-                      <Shuffle size={11} /> Randomize Gradient
-                    </button>
-                    <GradientBuilder
-                      value={form.gradientJson}
-                      label="gradient"
-                      onApply={json => updateForm({ gradientJson: json })}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Background uploader / gradient */}
-            {isUrlField && (
-              <div className="space-y-3">
-                {form.field === 'backgroundImage' && (
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => updateForm({ bgMode: 'upload' })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        form.bgMode !== 'gradient' ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                      }`}
-                    >
-                      Upload
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateForm({ bgMode: 'gradient' })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 ${
-                        form.bgMode === 'gradient' ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                      }`}
-                    >
-                      ✦ Gradient
-                    </button>
-                  </div>
-                )}
-                {isBgGradientMode ? (
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => updateForm({ gradientJson: randomGradient() })}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-xs font-medium transition-colors"
-                    >
-                      <Shuffle size={11} /> Randomize Gradient
-                    </button>
-                    <GradientBuilder
-                      value={form.gradientJson}
-                      label="background gradient"
-                      onApply={json => updateForm({ gradientJson: json })}
-                    />
-                  </div>
-                ) : (
-                  <PixelBackgroundUploader
-                    currentImage={form.url}
-                    onImageChange={url => updateForm({ url })}
-                  />
-                )}
-              </div>
-            )}
-
-            {/* Select field options */}
-            {isSelectField && (
-              <div className="space-y-2.5">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium block">Value to unlock</label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {(fieldDef as any).options.map((opt: string) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => updateForm({ selectValue: opt, useCustom: false })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        !form.useCustom && form.selectValue === opt
-                          ? 'bg-indigo-700 border-indigo-500 text-white'
+                      key={f.value}
+                      onClick={() => updateForm({ field: f.value, inputMode: 'color' })}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${
+                        form.field === f.value
+                          ? 'bg-zinc-700 border-zinc-500 text-white'
                           : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
                       }`}
                     >
-                      {opt}
+                      {f.label}
                     </button>
                   ))}
                 </div>
-                {/* Custom value input */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateForm({ useCustom: !form.useCustom })}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors shrink-0 ${
-                      form.useCustom
-                        ? 'bg-amber-700/60 border-amber-500/60 text-amber-200'
-                        : 'border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500'
-                    }`}
-                  >
-                    Custom…
-                  </button>
-                  {form.useCustom && (
-                    <input
-                      type="text"
-                      value={form.customValue}
-                      onChange={e => updateForm({ customValue: e.target.value })}
-                      placeholder={`e.g. Diamond Chain`}
-                      autoFocus
-                      className="flex-1 bg-zinc-800 border border-amber-600/40 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500"
-                    />
+              </div>
+
+              {/* Color input area */}
+              {isColorField && (
+                <div className="space-y-2">
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => updateForm({ inputMode: 'color' })}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                        !isGradientMode ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                      }`}>Flat</button>
+                    <button type="button" onClick={() => updateForm({ inputMode: 'gradient' })}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors flex items-center gap-1 ${
+                        isGradientMode ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                      }`}>✦ Gradient</button>
+                  </div>
+
+                  {!isGradientMode ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded ring-1 ring-white/10 shrink-0" style={{ backgroundColor: form.hex }} />
+                      <input type="color" value={form.hex} onChange={e => updateForm({ hex: e.target.value })}
+                        className="w-8 h-8 cursor-pointer bg-transparent border-0 p-0 rounded" title="Pick color" />
+                      <input type="text" value={form.hex} onChange={e => updateForm({ hex: e.target.value })}
+                        maxLength={7}
+                        className="w-20 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-[10px] text-center text-white font-mono focus:outline-none focus:border-zinc-400 uppercase"
+                        placeholder="#RRGGBB" />
+                      <button type="button" onClick={() => updateForm({ hex: randomHex() })}
+                        className="flex items-center gap-0.5 px-1.5 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] transition-colors">
+                        <Shuffle size={9} /> Rnd
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <button type="button" onClick={() => updateForm({ gradientJson: randomGradient() })}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] font-medium transition-colors">
+                        <Shuffle size={9} /> Randomize
+                      </button>
+                      <GradientBuilder value={form.gradientJson} label="gradient" onApply={json => updateForm({ gradientJson: json })} />
+                    </div>
                   )}
                 </div>
-                {form.useCustom && (
-                  <p className="text-[10px] text-amber-500/70 leading-snug">
-                    Custom values only work if the avatar renderer supports them. Use for new styles you plan to add to the renderer.
-                  </p>
-                )}
-              </div>
-            )}
+              )}
 
-            {/* Core fields row */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* Display name */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Display Name</label>
-                <input
-                  type="text"
-                  value={form.displayName}
-                  onChange={e => updateForm({ displayName: e.target.value })}
-                  placeholder="e.g. Coral Skin"
-                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                />
-              </div>
+              {/* Background uploader / gradient */}
+              {isUrlField && (
+                <div className="space-y-2">
+                  {form.field === 'backgroundImage' && (
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => updateForm({ bgMode: 'upload' })}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                          form.bgMode !== 'gradient' ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                        }`}>Upload</button>
+                      <button type="button" onClick={() => updateForm({ bgMode: 'gradient' })}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors flex items-center gap-1 ${
+                          form.bgMode === 'gradient' ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                        }`}>✦ Gradient</button>
+                    </div>
+                  )}
+                  {isBgGradientMode ? (
+                    <div className="space-y-1.5">
+                      <button type="button" onClick={() => updateForm({ gradientJson: randomGradient() })}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] font-medium transition-colors">
+                        <Shuffle size={9} /> Randomize
+                      </button>
+                      <GradientBuilder value={form.gradientJson} label="bg gradient" onApply={json => updateForm({ gradientJson: json })} />
+                    </div>
+                  ) : (
+                    <PixelBackgroundUploader currentImage={form.url} onImageChange={url => updateForm({ url })} />
+                  )}
+                </div>
+              )}
 
-              {/* Item key */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Item Key</label>
-                <input
-                  type="text"
-                  value={form.itemKey}
-                  onChange={e => updateForm({ itemKey: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                  placeholder="skin_custom_ff6b6b"
-                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-white placeholder-zinc-600 font-mono focus:outline-none focus:border-zinc-500"
-                />
-              </div>
+              {/* Select field options */}
+              {isSelectField && (
+                <div className="space-y-1.5">
+                  <label className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium block">Value</label>
+                  <div className="flex gap-1 flex-wrap">
+                    {(fieldDef as any).options.map((opt: string) => (
+                      <button key={opt} type="button" onClick={() => updateForm({ selectValue: opt, useCustom: false })}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                          !form.useCustom && form.selectValue === opt
+                            ? 'bg-indigo-700 border-indigo-500 text-white'
+                            : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                        }`}>{opt}</button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" onClick={() => updateForm({ useCustom: !form.useCustom })}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors shrink-0 ${
+                        form.useCustom ? 'bg-amber-700/60 border-amber-500/60 text-amber-200' : 'border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500'
+                      }`}>Custom…</button>
+                    {form.useCustom && (
+                      <input type="text" value={form.customValue} onChange={e => updateForm({ customValue: e.target.value })}
+                        placeholder="e.g. Diamond Chain" autoFocus
+                        className="flex-1 bg-zinc-800 border border-amber-600/40 rounded px-2 py-0.5 text-[10px] text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500" />
+                    )}
+                  </div>
+                  {form.useCustom && (
+                    <p className="text-[9px] text-amber-500/70 leading-snug">Custom values only work if the avatar renderer supports them.</p>
+                  )}
+                </div>
+              )}
 
-              {/* Tier */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Tier</label>
-                <select
-                  value={form.tier}
-                  onChange={e => updateForm({ tier: e.target.value as ItemTier })}
-                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-500"
-                >
-                  {(['common', 'uncommon', 'rare', 'legendary'] as ItemTier[]).map(t => (
-                    <option key={t} value={t} className="capitalize">{t}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Auto-computed price + supply */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Price / Supply</label>
-                <div className="flex items-center gap-2 px-2.5 py-1.5 bg-zinc-800/50 border border-zinc-800 rounded-lg">
-                  <span className="text-sm font-semibold text-amber-300">{price.toLocaleString()} MORBIUS</span>
-                  <span className="text-zinc-600 text-xs">·</span>
-                  <span className="text-xs text-zinc-400">{supply} max</span>
+              {/* Core fields */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium">Name</label>
+                  <input type="text" value={form.displayName} onChange={e => updateForm({ displayName: e.target.value })}
+                    placeholder="e.g. Coral Skin"
+                    className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium">Key</label>
+                  <input type="text" value={form.itemKey} onChange={e => updateForm({ itemKey: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+                    placeholder="skin_ff6b6b"
+                    className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] text-white placeholder-zinc-600 font-mono focus:outline-none focus:border-zinc-500" />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium">Tier</label>
+                  <select value={form.tier} onChange={e => updateForm({ tier: e.target.value as ItemTier })}
+                    className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-zinc-500">
+                    {(['common', 'uncommon', 'rare', 'legendary'] as ItemTier[]).map(t => (
+                      <option key={t} value={t} className="capitalize">{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium">Price / Supply</label>
+                  <div className="flex items-center gap-1 px-2 py-1 bg-zinc-800/50 border border-zinc-800 rounded text-[10px]">
+                    <span className="font-semibold text-amber-300">{price.toLocaleString()}</span>
+                    <span className="text-zinc-600">·</span>
+                    <span className="text-zinc-400">{supply} max</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {err && (
-            <div className="mt-3 flex items-center gap-2 text-red-400 text-xs bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">
-              <AlertTriangle size={11} /> {err}
-            </div>
-          )}
-          {success && (
-            <div className="mt-3 flex items-center gap-2 text-emerald-400 text-xs bg-emerald-900/20 border border-emerald-800/40 rounded-lg px-3 py-2">
-              <Check size={11} /> {success}
-            </div>
-          )}
+              {err && (
+                <div className="flex items-center gap-1.5 text-red-400 text-[10px] bg-red-900/20 border border-red-800/40 rounded px-2 py-1.5">
+                  <AlertTriangle size={10} /> {err}
+                </div>
+              )}
+              {success && (
+                <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] bg-emerald-900/20 border border-emerald-800/40 rounded px-2 py-1.5">
+                  <Check size={10} /> {success}
+                </div>
+              )}
 
-          <div className="mt-4 flex justify-end">
-            <button
-              onClick={handleCreate}
-              disabled={busy}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
-            >
-              {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-              {busy ? 'Creating…' : 'Create Item'}
-            </button>
+              <div className="flex justify-end">
+                <button onClick={handleCreate} disabled={busy}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5">
+                  {busy ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                  {busy ? 'Creating…' : 'Create'}
+                </button>
+              </div>
+            </div>
+
+            {/* ── Right: live avatar preview ── */}
+            <div className="shrink-0 flex flex-col items-center gap-1.5 w-28">
+              <span className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium">Preview</span>
+              <AvatarPreview config={previewConfig} emotion="neutral" compact className="w-24 aspect-[6/7]" />
+              <span className="text-[9px] text-zinc-600 text-center leading-tight">{fieldDef.label}</span>
+            </div>
           </div>
         </div>
       )}
