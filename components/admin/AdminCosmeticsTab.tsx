@@ -69,6 +69,7 @@ const ITEM_FIELDS = [
   { value: 'hairColor',       label: 'Hair Color',      inputType: 'color',  options: [] },
   { value: 'hairStyle',       label: 'Hair Style',      inputType: 'select', options: ['Spiky', 'Messy', 'Pigtails', 'Mullet', 'Mohawk', 'Dreadlocks', 'Updo', 'Braids', 'Cornrows', 'Dreads Fade'] },
   { value: 'shirtColor',      label: 'Shirt Color',     inputType: 'color',  options: [] },
+  { value: 'shirtStyle',      label: 'Shirt Style',     inputType: 'select', options: ['Default','Tuxedo','Cheetah Print','Hawaiian','Pinstripe','Flannel','Denim Jacket','Leather Jacket','Varsity','Hoodie','Camo','Suit','Blazer','Kimono','Polo','Zebra Print','Leopard Print','Snake Skin','Tie-Dye','Neon Crop','Biker','Sailor','Space Suit','Grim Reaper','Golden Armor'] },
   { value: 'backgroundImage', label: 'Background',      inputType: 'url',    options: [] },
   { value: 'overlayImage',    label: 'Overlay',         inputType: 'url',    options: [] },
   { value: 'accessory',       label: 'Accessory',       inputType: 'select', options: ['Glasses', 'Aviators', 'Wayfarers', 'Round Glasses', 'Cyberpunk', 'Earrings', 'Headband'] },
@@ -89,7 +90,7 @@ function shortHash(str: string): string {
 }
 
 const FIELD_PREFIX: Partial<Record<ItemField, string>> = {
-  skinColor: 'skin', hairColor: 'hair_color', shirtColor: 'shirt_color',
+  skinColor: 'skin', hairColor: 'hair_color', shirtColor: 'shirt_color', shirtStyle: 'shirt_style',
   hairStyle: 'hair_style', accessory: 'acc', hat: 'hat', hatColor: 'hat_color',
   necklace: 'neck', mouthAccessory: 'mouth', backgroundImage: 'bg', overlayImage: 'overlay',
 };
@@ -293,53 +294,47 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
       </button>
 
       {open && (
-        <div className="border-t border-zinc-800 p-3">
-          <div className="flex gap-3">
-            {/* ── Left: form controls ── */}
-            <div className="flex-1 min-w-0 space-y-2.5">
+        <div className="border-t border-zinc-800">
+          <div className="flex min-h-0">
+
+            {/* ── Left column: live avatar preview ── */}
+            <div className="shrink-0 w-44 border-r border-zinc-800 bg-zinc-800/30 flex flex-col items-center justify-center gap-2 p-4 sticky top-0">
+              <AvatarPreview config={previewConfig} emotion="neutral" className="w-full aspect-[6/7]" />
+              <span className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium">{fieldDef.label} · live</span>
+            </div>
+
+            {/* ── Right column: controls ── */}
+            <div className="flex-1 min-w-0 p-3 space-y-3 overflow-y-auto max-h-[520px]">
+
               {/* Field type selector */}
               <div>
                 <label className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium block mb-1">Applies to</label>
                 <div className="flex gap-1 flex-wrap">
                   {ITEM_FIELDS.map(f => (
-                    <button
-                      key={f.value}
-                      onClick={() => updateForm({ field: f.value, inputMode: 'color' })}
+                    <button key={f.value} onClick={() => updateForm({ field: f.value, inputMode: 'color' })}
                       className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${
-                        form.field === f.value
-                          ? 'bg-zinc-700 border-zinc-500 text-white'
-                          : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
+                        form.field === f.value ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                      }`}>{f.label}</button>
                   ))}
                 </div>
               </div>
 
-              {/* Color input area */}
+              {/* Color input */}
               {isColorField && (
                 <div className="space-y-2">
                   <div className="flex gap-1">
                     <button type="button" onClick={() => updateForm({ inputMode: 'color' })}
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${
-                        !isGradientMode ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                      }`}>Flat</button>
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${!isGradientMode ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'}`}>Flat</button>
                     <button type="button" onClick={() => updateForm({ inputMode: 'gradient' })}
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors flex items-center gap-1 ${
-                        isGradientMode ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                      }`}>✦ Gradient</button>
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors flex items-center gap-1 ${isGradientMode ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'}`}>✦ Gradient</button>
                   </div>
-
                   {!isGradientMode ? (
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded ring-1 ring-white/10 shrink-0" style={{ backgroundColor: form.hex }} />
                       <input type="color" value={form.hex} onChange={e => updateForm({ hex: e.target.value })}
-                        className="w-8 h-8 cursor-pointer bg-transparent border-0 p-0 rounded" title="Pick color" />
-                      <input type="text" value={form.hex} onChange={e => updateForm({ hex: e.target.value })}
-                        maxLength={7}
-                        className="w-20 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-[10px] text-center text-white font-mono focus:outline-none focus:border-zinc-400 uppercase"
-                        placeholder="#RRGGBB" />
+                        className="w-8 h-8 cursor-pointer bg-transparent border-0 p-0 rounded" />
+                      <input type="text" value={form.hex} onChange={e => updateForm({ hex: e.target.value })} maxLength={7}
+                        className="w-20 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-[10px] text-center text-white font-mono focus:outline-none focus:border-zinc-400 uppercase" placeholder="#RRGGBB" />
                       <button type="button" onClick={() => updateForm({ hex: randomHex() })}
                         className="flex items-center gap-0.5 px-1.5 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] transition-colors">
                         <Shuffle size={9} /> Rnd
@@ -351,7 +346,7 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                         className="flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] font-medium transition-colors">
                         <Shuffle size={9} /> Randomize
                       </button>
-                      <GradientBuilder value={form.gradientJson} label="gradient" onApply={json => updateForm({ gradientJson: json })} />
+                      <GradientBuilder value={form.gradientJson} onApply={json => updateForm({ gradientJson: json })} />
                     </div>
                   )}
                 </div>
@@ -363,13 +358,9 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                   {form.field === 'backgroundImage' && (
                     <div className="flex gap-1">
                       <button type="button" onClick={() => updateForm({ bgMode: 'upload' })}
-                        className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${
-                          form.bgMode !== 'gradient' ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                        }`}>Upload</button>
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${form.bgMode !== 'gradient' ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'}`}>Upload</button>
                       <button type="button" onClick={() => updateForm({ bgMode: 'gradient' })}
-                        className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors flex items-center gap-1 ${
-                          form.bgMode === 'gradient' ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                        }`}>✦ Gradient</button>
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors flex items-center gap-1 ${form.bgMode === 'gradient' ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'}`}>✦ Gradient</button>
                     </div>
                   )}
                   {isBgGradientMode ? (
@@ -378,7 +369,7 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                         className="flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] font-medium transition-colors">
                         <Shuffle size={9} /> Randomize
                       </button>
-                      <GradientBuilder value={form.gradientJson} label="bg gradient" onApply={json => updateForm({ gradientJson: json })} />
+                      <GradientBuilder value={form.gradientJson} onApply={json => updateForm({ gradientJson: json })} />
                     </div>
                   ) : (
                     <PixelBackgroundUploader currentImage={form.url} onImageChange={url => updateForm({ url })} />
@@ -386,38 +377,30 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                 </div>
               )}
 
-              {/* Select field options */}
+              {/* Select options */}
               {isSelectField && (
                 <div className="space-y-1.5">
                   <label className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium block">Value</label>
                   <div className="flex gap-1 flex-wrap">
                     {(fieldDef as any).options.map((opt: string) => (
                       <button key={opt} type="button" onClick={() => updateForm({ selectValue: opt, useCustom: false })}
-                        className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${
-                          !form.useCustom && form.selectValue === opt
-                            ? 'bg-indigo-700 border-indigo-500 text-white'
-                            : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                        }`}>{opt}</button>
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${!form.useCustom && form.selectValue === opt ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'}`}>{opt}</button>
                     ))}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button type="button" onClick={() => updateForm({ useCustom: !form.useCustom })}
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors shrink-0 ${
-                        form.useCustom ? 'bg-amber-700/60 border-amber-500/60 text-amber-200' : 'border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500'
-                      }`}>Custom…</button>
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors shrink-0 ${form.useCustom ? 'bg-amber-700/60 border-amber-500/60 text-amber-200' : 'border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500'}`}>Custom…</button>
                     {form.useCustom && (
                       <input type="text" value={form.customValue} onChange={e => updateForm({ customValue: e.target.value })}
                         placeholder="e.g. Diamond Chain" autoFocus
                         className="flex-1 bg-zinc-800 border border-amber-600/40 rounded px-2 py-0.5 text-[10px] text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500" />
                     )}
                   </div>
-                  {form.useCustom && (
-                    <p className="text-[9px] text-amber-500/70 leading-snug">Custom values only work if the avatar renderer supports them.</p>
-                  )}
+                  {form.useCustom && <p className="text-[9px] text-amber-500/70 leading-snug">Custom values only work if the avatar renderer supports them.</p>}
                 </div>
               )}
 
-              {/* Core fields */}
+              {/* Name / Key / Tier / Price */}
               <div className="grid grid-cols-2 gap-1.5">
                 <div className="flex flex-col gap-0.5">
                   <label className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium">Name</label>
@@ -450,16 +433,8 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                 </div>
               </div>
 
-              {err && (
-                <div className="flex items-center gap-1.5 text-red-400 text-[10px] bg-red-900/20 border border-red-800/40 rounded px-2 py-1.5">
-                  <AlertTriangle size={10} /> {err}
-                </div>
-              )}
-              {success && (
-                <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] bg-emerald-900/20 border border-emerald-800/40 rounded px-2 py-1.5">
-                  <Check size={10} /> {success}
-                </div>
-              )}
+              {err && <div className="flex items-center gap-1.5 text-red-400 text-[10px] bg-red-900/20 border border-red-800/40 rounded px-2 py-1.5"><AlertTriangle size={10} /> {err}</div>}
+              {success && <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] bg-emerald-900/20 border border-emerald-800/40 rounded px-2 py-1.5"><Check size={10} /> {success}</div>}
 
               <div className="flex justify-end">
                 <button onClick={handleCreate} disabled={busy}
@@ -468,13 +443,6 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                   {busy ? 'Creating…' : 'Create'}
                 </button>
               </div>
-            </div>
-
-            {/* ── Right: live avatar preview ── */}
-            <div className="shrink-0 flex flex-col items-center gap-1.5 w-28">
-              <span className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium">Preview</span>
-              <AvatarPreview config={previewConfig} emotion="neutral" compact className="w-24 aspect-[6/7]" />
-              <span className="text-[9px] text-zinc-600 text-center leading-tight">{fieldDef.label}</span>
             </div>
           </div>
         </div>

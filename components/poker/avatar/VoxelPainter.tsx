@@ -21,7 +21,7 @@ const DEFAULT_CONFIG: AvatarConfig = {
   skinColor: '#F1C27D', hairStyle: 'Short', hairColor: '#2C222B',
   eyeShape: 'Round', eyeColor: '#634e34', noseShape: 'Small',
   lipShape: 'Smile', accessory: 'None', shirtColor: '#3b82f6',
-  hat: 'None', necklace: 'None', mouthAccessory: 'None',
+  hat: 'None', hatColor: '', shirtStyle: 'Default', necklace: 'None', mouthAccessory: 'None',
   backgroundImage: '', overlayImage: '', faceShape: 'Round', customPattern: '',
 };
 

@@ -6,7 +6,7 @@ import AvatarPreview, { type Emotion } from './AvatarPreview';
 import AvatarControls from './AvatarControls';
 import CharacterCreatorMobile from './CharacterCreatorMobile';
 import { motion } from 'framer-motion';
-import { Palette, Scissors, Eye, Smile, Sparkles, Shirt, Image as ImageIcon, Glasses } from 'lucide-react';
+import { Palette, Scissors, Eye, Smile, Sparkles, Shirt, Image as ImageIcon, Glasses, Shuffle } from 'lucide-react';
 
 export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   skinColor: '#F1C27D',
@@ -18,6 +18,7 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   lipShape: 'Smile',
   accessory: 'None',
   shirtColor: '#3f3f46',
+  shirtStyle: 'Default',
   hat: 'None',
   hatColor: '',
   necklace: 'None',
@@ -27,6 +28,42 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   faceShape: 'Square',
   customPattern: '',
 };
+
+function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+
+export function randomizeConfig(ownedItems?: Set<string>): AvatarConfig {
+  // Free values only (unless the player owns more)
+  const skinColors = ['#FFF5EE','#FFE4E1','#FFDAB9','#FFCDB2','#FFB4A2','#FFDBAC','#F1C27D','#E0AC69','#C68642','#8D5524','#7B4B2A','#5C3A21','#4A3B32','#3E2723','#2D221E','#1A1110'];
+  const hairStyles = ['Bald','Short','Buzz','Fade','Long Straight','Long Wavy','Ponytail','Curly','Bob'];
+  const hairColors = ['#090806','#2C222B','#71635A','#B7A69E','#D6C4C2','#CABFB1','#DCD0BA','#FFF5E1','#E6CEA8','#E5C8A8','#DEBC99','#B89778','#A56B46','#B55239','#8D4A43','#91553D','#533D32','#3B3024'];
+  const eyeShapes = ['Round','Almond','Narrow','Wide'];
+  const eyeColors = ['#634e34','#2e536f','#3d671d','#1c7847','#497665','#000000','#5c4033','#8a9a5b','#4682b4'];
+  const noseShapes = ['Small','Wide','Pointy','Button'];
+  const lipShapes = ['Thin','Full','Smile','Smirk','Pout'];
+  const faceShapes = ['Square','Round','Oval','Heart','Diamond'];
+  const shirtColors = ['#ef4444','#3b82f6','#22c55e','#ffffff','#9ca3af','#3f3f46','#000000'];
+
+  return {
+    skinColor: pick(skinColors),
+    hairStyle: pick(hairStyles),
+    hairColor: pick(hairColors),
+    eyeShape: pick(eyeShapes),
+    eyeColor: pick(eyeColors),
+    noseShape: pick(noseShapes),
+    lipShape: pick(lipShapes),
+    accessory: 'None',
+    faceShape: pick(faceShapes),
+    shirtColor: pick(shirtColors),
+    shirtStyle: 'Default',
+    hat: 'None',
+    hatColor: '',
+    necklace: 'None',
+    mouthAccessory: 'None',
+    backgroundImage: '',
+    overlayImage: '',
+    customPattern: '',
+  };
+}
 
 const tabs = [
   { id: 'skin', label: 'Skin', icon: Palette },
@@ -85,6 +122,8 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
     setConfig({ ...config, accessory: isOn ? 'None' : 'Sunglasses' });
     if (!isOn) setGlassesAnimationKey(prev => prev + 1);
   };
+
+  const handleRandomizeAll = () => setConfig(randomizeConfig(ownedItems));
 
   return (
     <div className="flex flex-col w-full min-h-0 flex-1">
@@ -149,11 +188,18 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
           ) : (
             <h1 className={`font-bold text-zinc-100 tracking-tight ${compact ? 'text-sm' : 'text-2xl mb-8'}`}>Player Profile</h1>
           )}
-          <AvatarPreview config={config} emotion={emotion} glassesAnimationKey={glassesAnimationKey} className={compact ? 'w-36 sm:w-44 aspect-[6/7]' : undefined} />
+          <AvatarPreview config={config} emotion={emotion} glassesAnimationKey={glassesAnimationKey} roamEyes className={compact ? 'w-36 sm:w-44 aspect-[6/7]' : undefined} />
 
           <div className={`w-full ${compact ? '' : 'mt-8 text-center'}`}>
             {compact ? (
               <div className="flex justify-center items-center gap-1 flex-wrap">
+                <button
+                  onClick={handleRandomizeAll}
+                  className="flex items-center justify-center gap-1 rounded-md font-medium transition-colors border touch-manipulation px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border-zinc-700"
+                >
+                  <Shuffle size={11} />
+                  Random
+                </button>
                 <button
                   onClick={handleDealWithIt}
                   className={`flex items-center justify-center gap-1 rounded-md font-medium transition-colors border touch-manipulation px-2 py-1 text-[10px] ${config.accessory === 'Sunglasses' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'}`}
@@ -173,13 +219,22 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
               </div>
             ) : (
               <>
-                <button
-                  onClick={handleDealWithIt}
-                  className={`mx-auto flex items-center justify-center gap-1.5 rounded-xl font-medium transition-colors shadow-sm border touch-manipulation min-h-[44px] mb-6 px-4 py-2 ${config.accessory === 'Sunglasses' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 hover:border-zinc-600'}`}
-                >
-                  <Glasses size={16} />
-                  Shades
-                </button>
+                <div className="flex justify-center gap-2 mb-6">
+                  <button
+                    onClick={handleRandomizeAll}
+                    className="flex items-center justify-center gap-1.5 rounded-xl font-medium transition-colors shadow-sm border touch-manipulation min-h-[44px] px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border-zinc-700 hover:border-zinc-600"
+                  >
+                    <Shuffle size={16} />
+                    Randomize All
+                  </button>
+                  <button
+                    onClick={handleDealWithIt}
+                    className={`flex items-center justify-center gap-1.5 rounded-xl font-medium transition-colors shadow-sm border touch-manipulation min-h-[44px] px-4 py-2 ${config.accessory === 'Sunglasses' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 hover:border-zinc-600'}`}
+                  >
+                    <Glasses size={16} />
+                    Shades
+                  </button>
+                </div>
                 <p className="text-sm text-zinc-400 mb-4">Test Emotions</p>
                 <div className="flex justify-center gap-1.5 flex-wrap">
                   {(['happy', 'sad', 'angry', 'surprised', 'wink'] as Emotion[]).map((emo) => (

@@ -14,7 +14,7 @@ import { CosmeticsShop } from '@/components/shared/CosmeticsShop';
 import { CosmeticsMarketplace } from '@/components/shared/CosmeticsMarketplace';
 import { ItemPurchaseSheet } from '@/components/shared/ItemPurchaseSheet';
 import { GiftItemModal } from '@/components/shared/GiftItemModal';
-import { ShoppingBag, Gift, Package, Store, Tag } from 'lucide-react';
+import { Gift, Package, Tag } from 'lucide-react';
 import { createListing } from '@/hooks/use-cosmetics';
 
 const TIER_BADGE: Record<ItemTier, string> = {
@@ -45,6 +45,7 @@ function normalizeAvatarConfig(c: unknown): AvatarConfig {
       lipShape: typeof o.lipShape === 'string' ? o.lipShape : DEFAULT_AVATAR_CONFIG.lipShape,
       accessory: typeof o.accessory === 'string' ? o.accessory : DEFAULT_AVATAR_CONFIG.accessory,
       shirtColor: typeof o.shirtColor === 'string' ? o.shirtColor : DEFAULT_AVATAR_CONFIG.shirtColor,
+      shirtStyle: typeof o.shirtStyle === 'string' ? o.shirtStyle : DEFAULT_AVATAR_CONFIG.shirtStyle,
       hat: typeof o.hat === 'string' ? o.hat : DEFAULT_AVATAR_CONFIG.hat,
       hatColor: typeof o.hatColor === 'string' ? o.hatColor : DEFAULT_AVATAR_CONFIG.hatColor,
       necklace: typeof o.necklace === 'string' ? o.necklace : DEFAULT_AVATAR_CONFIG.necklace,
@@ -221,6 +222,14 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                 )}
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setMarketOpen(true)}
+              title="Player Marketplace"
+              className="px-3 py-1.5 rounded-md text-xs font-medium bg-cyan-600 hover:bg-cyan-500 text-white transition-colors touch-manipulation shrink-0"
+            >
+              Marketplace
+            </button>
             <div className="flex-1" />
             <button
               type="button"
@@ -242,13 +251,12 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                   {ownedItemKeys.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-48 gap-3 text-zinc-500">
                       <Package size={32} className="opacity-40" />
-                      <p className="text-sm">No items yet — visit the shop to get started!</p>
+                      <p className="text-sm">No items yet — visit the marketplace to get started!</p>
                       <button
-                        onClick={() => setShopOpen(true)}
-                        className="mt-1 flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold transition-colors"
+                        onClick={() => setMarketOpen(true)}
+                        className="mt-1 flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold transition-colors"
                       >
-                        <ShoppingBag size={14} />
-                        Open Shop
+                        Marketplace
                       </button>
                     </div>
                   ) : (
@@ -329,23 +337,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
               )}
 
               <div className="px-3 py-1.5 border-t border-white/10 flex items-center gap-1 flex-shrink-0">
-                {/* Shop + Marketplace + Gift shortcuts */}
-                <button
-                  type="button"
-                  onClick={() => setShopOpen(true)}
-                  title="Cosmetics Shop"
-                  className="p-1.5 rounded-md text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 transition-colors touch-manipulation flex items-center justify-center"
-                >
-                  <ShoppingBag size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMarketOpen(true)}
-                  title="Player Marketplace"
-                  className="p-1.5 rounded-md text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10 transition-colors touch-manipulation flex items-center justify-center"
-                >
-                  <Store size={15} />
-                </button>
+                {/* Gift shortcut */}
                 {address && ownedItemKeys.length > 0 && (
                   <button
                     type="button"

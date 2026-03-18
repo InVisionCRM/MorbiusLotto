@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { motion, useMotionValue, useSpring } from 'framer-motion';
 import { resolveColorValue, angleToSvgCoords, parseGradient } from '@/lib/gradient-utils';
@@ -120,13 +120,16 @@ export default function AvatarPreview({
     return () => clearTimeout(timeoutId);
   }, [roamEyes, forceAsleep, mouseX, mouseY]);
 
+  // Unique per-instance gradient ID prefix to avoid SVG ID collisions across multiple AvatarPreviews
+  const uid = useId().replace(/:/g, '');
+
   const { skinColor, hairStyle, hairColor, eyeShape, eyeColor, noseShape, lipShape, accessory } = config;
 
   // Resolve gradient-aware fills for the three color fields
-  const skinFill  = resolveColorValue(skinColor,               'grad_skin');
-  const hairFill  = resolveColorValue(hairColor,               'grad_hair');
-  const shirtFill = resolveColorValue(config.shirtColor || '#3f3f46', 'grad_shirt');
-  const hatFill   = config.hatColor ? resolveColorValue(config.hatColor, 'grad_hat') : null;
+  const skinFill  = resolveColorValue(skinColor,               `${uid}grad_skin`);
+  const hairFill  = resolveColorValue(hairColor,               `${uid}grad_hair`);
+  const shirtFill = resolveColorValue(config.shirtColor || '#3f3f46', `${uid}grad_shirt`);
+  const hatFill   = config.hatColor ? resolveColorValue(config.hatColor, `${uid}grad_hat`) : null;
   const bgGradDef = config.backgroundImage?.startsWith('{') ? parseGradient(config.backgroundImage) : null;
 
   // ── emotion variants ───────────────────────────────────────────────────────
@@ -439,6 +442,438 @@ export default function AvatarPreview({
     }
   };
 
+  const renderShirtBody = () => {
+    const c = shirtFill.fill;
+    const style = config.shirtStyle || 'Default';
+    switch (style) {
+      case 'Tuxedo': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#1a1a1a" />
+          {/* white shirt center */}
+          <rect x="10" y="20" width="4" height="8" fill="#f0f0f0" />
+          {/* lapels */}
+          <rect x="8" y="20" width="2" height="5" fill="#1a1a1a" />
+          <rect x="14" y="20" width="2" height="5" fill="#1a1a1a" />
+          <rect x="9" y="20" width="1" height="3" fill="#f0f0f0" />
+          <rect x="14" y="20" width="1" height="3" fill="#f0f0f0" />
+          {/* bow tie */}
+          <rect x="10" y="21" width="4" height="1" fill="#1a0030" />
+          <rect x="11" y="20" width="2" height="3" fill="#1a0030" />
+          {/* pocket square */}
+          <rect x="5" y="21" width="2" height="2" fill="#f0f0f0" />
+          {/* buttons */}
+          <rect x="11" y="24" width="2" height="1" fill="#ccc" />
+        </g>
+      );
+      case 'Cheetah Print': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#d4882a" />
+          {/* spots */}
+          <rect x="5" y="21" width="2" height="1" fill="#3d2000" /><rect x="5" y="22" width="1" height="1" fill="#3d2000" />
+          <rect x="9" y="20" width="1" height="2" fill="#3d2000" /><rect x="10" y="20" width="1" height="1" fill="#3d2000" />
+          <rect x="14" y="22" width="2" height="1" fill="#3d2000" /><rect x="15" y="23" width="1" height="1" fill="#3d2000" />
+          <rect x="7" y="24" width="2" height="1" fill="#3d2000" /><rect x="8" y="25" width="1" height="1" fill="#3d2000" />
+          <rect x="12" y="25" width="2" height="1" fill="#3d2000" /><rect x="11" y="26" width="1" height="1" fill="#3d2000" />
+          <rect x="17" y="21" width="1" height="2" fill="#3d2000" /><rect x="18" y="22" width="1" height="1" fill="#3d2000" />
+          <rect x="5" y="26" width="2" height="1" fill="#3d2000" />
+        </g>
+      );
+      case 'Hawaiian': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill={c} />
+          {/* flower dots */}
+          <rect x="6" y="21" width="1" height="1" fill="#ff6b6b" /><rect x="5" y="22" width="1" height="1" fill="#ff6b6b" /><rect x="7" y="22" width="1" height="1" fill="#ff6b6b" /><rect x="6" y="23" width="1" height="1" fill="#ff6b6b" />
+          <rect x="14" y="22" width="1" height="1" fill="#ffd93d" /><rect x="13" y="23" width="1" height="1" fill="#ffd93d" /><rect x="15" y="23" width="1" height="1" fill="#ffd93d" /><rect x="14" y="24" width="1" height="1" fill="#ffd93d" />
+          <rect x="9" y="25" width="1" height="1" fill="#6bcb77" /><rect x="8" y="26" width="1" height="1" fill="#6bcb77" /><rect x="10" y="26" width="1" height="1" fill="#6bcb77" />
+          <rect x="17" y="24" width="1" height="1" fill="#ff6b6b" /><rect x="16" y="25" width="1" height="1" fill="#ff6b6b" /><rect x="18" y="25" width="1" height="1" fill="#ff6b6b" />
+        </g>
+      );
+      case 'Pinstripe': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#1e2030" />
+          {/* vertical pinstripes */}
+          <rect x="6" y="20" width="1" height="8" fill="rgba(255,255,255,0.18)" />
+          <rect x="9" y="20" width="1" height="8" fill="rgba(255,255,255,0.18)" />
+          <rect x="12" y="20" width="1" height="8" fill="rgba(255,255,255,0.18)" />
+          <rect x="15" y="20" width="1" height="8" fill="rgba(255,255,255,0.18)" />
+          <rect x="18" y="20" width="1" height="8" fill="rgba(255,255,255,0.18)" />
+        </g>
+      );
+      case 'Flannel': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill={c} />
+          {/* horizontal plaid lines */}
+          <rect x="4" y="22" width="16" height="1" fill="rgba(255,255,255,0.22)" />
+          <rect x="4" y="25" width="16" height="1" fill="rgba(255,255,255,0.22)" />
+          {/* vertical plaid lines */}
+          <rect x="7" y="20" width="1" height="8" fill="rgba(0,0,0,0.2)" />
+          <rect x="11" y="20" width="1" height="8" fill="rgba(0,0,0,0.2)" />
+          <rect x="15" y="20" width="1" height="8" fill="rgba(0,0,0,0.2)" />
+          {/* cross intersections highlight */}
+          <rect x="7" y="22" width="1" height="1" fill="rgba(255,255,255,0.3)" />
+          <rect x="11" y="22" width="1" height="1" fill="rgba(255,255,255,0.3)" />
+          <rect x="15" y="22" width="1" height="1" fill="rgba(255,255,255,0.3)" />
+          <rect x="7" y="25" width="1" height="1" fill="rgba(255,255,255,0.3)" />
+          <rect x="11" y="25" width="1" height="1" fill="rgba(255,255,255,0.3)" />
+        </g>
+      );
+      case 'Denim Jacket': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#4a6fa5" />
+          {/* darker collar area */}
+          <rect x="4" y="20" width="16" height="2" fill="#3a5f95" />
+          {/* center seam */}
+          <rect x="11" y="20" width="2" height="8" fill="#3a5f95" />
+          {/* chest pockets */}
+          <rect x="5" y="22" width="3" height="2" fill="#3a5f95" />
+          <rect x="16" y="22" width="3" height="2" fill="#3a5f95" />
+          {/* stitching lines */}
+          <rect x="5" y="25" width="14" height="1" fill="rgba(255,255,255,0.15)" />
+          {/* buttons */}
+          <rect x="11" y="23" width="2" height="1" fill="#6080b0" />
+          <rect x="11" y="26" width="2" height="1" fill="#6080b0" />
+        </g>
+      );
+      case 'Leather Jacket': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#1a1a1a" />
+          {/* collar/lapels */}
+          <rect x="4" y="20" width="4" height="4" fill="#222" />
+          <rect x="16" y="20" width="4" height="4" fill="#222" />
+          <rect x="6" y="20" width="2" height="5" fill="#2d2d2d" />
+          <rect x="16" y="20" width="2" height="5" fill="#2d2d2d" />
+          {/* zipper */}
+          <rect x="11" y="20" width="2" height="8" fill="#444" />
+          <rect x="11" y="20" width="2" height="1" fill="#888" />
+          <rect x="11" y="23" width="2" height="1" fill="#888" />
+          {/* shine */}
+          <rect x="4" y="20" width="1" height="8" fill="rgba(255,255,255,0.08)" />
+          <rect x="19" y="20" width="1" height="8" fill="rgba(255,255,255,0.08)" />
+        </g>
+      );
+      case 'Varsity': return (
+        <g>
+          {/* body */}
+          <rect x="4" y="20" width="16" height="8" fill={c} />
+          {/* sleeves (sides) in contrasting white */}
+          <rect x="4" y="20" width="3" height="8" fill="#f0f0f0" />
+          <rect x="17" y="20" width="3" height="8" fill="#f0f0f0" />
+          {/* collar */}
+          <rect x="4" y="20" width="16" height="2" fill="#f0f0f0" />
+          {/* stripes on sleeves */}
+          <rect x="4" y="23" width="3" height="1" fill={c} />
+          <rect x="17" y="23" width="3" height="1" fill={c} />
+          {/* letter M on chest */}
+          <rect x="10" y="22" width="1" height="3" fill="#f0f0f0" />
+          <rect x="13" y="22" width="1" height="3" fill="#f0f0f0" />
+          <rect x="11" y="22" width="2" height="1" fill="#f0f0f0" />
+        </g>
+      );
+      case 'Hoodie': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill={c} />
+          {/* hood/collar V-shape */}
+          <rect x="9" y="20" width="6" height="1" fill="rgba(0,0,0,0.2)" />
+          <rect x="10" y="21" width="4" height="1" fill="rgba(0,0,0,0.2)" />
+          {/* front pocket */}
+          <rect x="7" y="24" width="10" height="3" fill="rgba(0,0,0,0.15)" />
+          <rect x="11" y="24" width="2" height="3" fill="rgba(0,0,0,0.1)" />
+          {/* drawstrings */}
+          <rect x="10" y="20" width="1" height="2" fill="rgba(0,0,0,0.3)" />
+          <rect x="13" y="20" width="1" height="2" fill="rgba(0,0,0,0.3)" />
+        </g>
+      );
+      case 'Camo': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#4a5e35" />
+          {/* camo blotches */}
+          <rect x="4" y="20" width="3" height="2" fill="#3a4a28" />
+          <rect x="9" y="21" width="4" height="2" fill="#6b7c45" />
+          <rect x="15" y="20" width="3" height="3" fill="#3a4a28" />
+          <rect x="5" y="23" width="2" height="2" fill="#6b7c45" />
+          <rect x="8" y="24" width="3" height="2" fill="#3a4a28" />
+          <rect x="13" y="23" width="4" height="2" fill="#6b7c45" />
+          <rect x="4" y="25" width="4" height="3" fill="#3a4a28" />
+          <rect x="11" y="26" width="3" height="2" fill="#6b7c45" />
+          <rect x="17" y="24" width="3" height="4" fill="#3a4a28" />
+          <rect x="7" y="26" width="2" height="2" fill="#4a5e35" />
+        </g>
+      );
+      case 'Suit': return (
+        <g>
+          {/* dark grey suit */}
+          <rect x="4" y="20" width="16" height="8" fill="#2d2d3a" />
+          {/* white shirt center */}
+          <rect x="10" y="20" width="4" height="8" fill="#f5f5f5" />
+          {/* lapels */}
+          <rect x="8" y="20" width="3" height="5" fill="#2d2d3a" />
+          <rect x="13" y="20" width="3" height="5" fill="#2d2d3a" />
+          <rect x="9" y="20" width="1" height="4" fill="#f5f5f5" />
+          <rect x="14" y="20" width="1" height="4" fill="#f5f5f5" />
+          {/* tie */}
+          <rect x="11" y="21" width="2" height="6" fill="#8b0000" />
+          <rect x="11" y="21" width="2" height="1" fill="#a00000" />
+          {/* button */}
+          <rect x="11" y="24" width="2" height="1" fill="#ddd" />
+        </g>
+      );
+      case 'Blazer': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill={c} />
+          {/* white shirt peek */}
+          <rect x="10" y="20" width="4" height="8" fill="#f5f5f5" />
+          {/* lapels */}
+          <rect x="7" y="20" width="4" height="5" fill={c} />
+          <rect x="13" y="20" width="4" height="5" fill={c} />
+          <rect x="9" y="20" width="1" height="4" fill="#f5f5f5" />
+          <rect x="14" y="20" width="1" height="4" fill="#f5f5f5" />
+          {/* pocket square */}
+          <rect x="5" y="21" width="2" height="2" fill="#f5f5f5" />
+          {/* button */}
+          <rect x="11" y="24" width="2" height="1" fill="rgba(255,255,255,0.4)" />
+        </g>
+      );
+      case 'Kimono': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill={c} />
+          {/* wide diagonal collar */}
+          <rect x="4" y="20" width="5" height="8" fill="rgba(0,0,0,0.2)" />
+          <rect x="15" y="20" width="5" height="8" fill="rgba(0,0,0,0.2)" />
+          <rect x="4" y="20" width="16" height="2" fill="rgba(255,255,255,0.15)" />
+          {/* decorative border at bottom */}
+          <rect x="4" y="26" width="16" height="2" fill="rgba(255,255,255,0.2)" />
+          {/* decorative pattern on border */}
+          <rect x="5" y="26" width="1" height="2" fill="rgba(0,0,0,0.2)" />
+          <rect x="8" y="26" width="1" height="2" fill="rgba(0,0,0,0.2)" />
+          <rect x="11" y="26" width="1" height="2" fill="rgba(0,0,0,0.2)" />
+          <rect x="14" y="26" width="1" height="2" fill="rgba(0,0,0,0.2)" />
+          <rect x="17" y="26" width="1" height="2" fill="rgba(0,0,0,0.2)" />
+          {/* sash */}
+          <rect x="9" y="23" width="6" height="2" fill="rgba(255,255,200,0.4)" />
+        </g>
+      );
+      case 'Polo': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill={c} />
+          {/* collar */}
+          <rect x="8" y="20" width="8" height="2" fill="rgba(255,255,255,0.25)" />
+          <rect x="9" y="19" width="6" height="2" fill={c} />
+          {/* button placket */}
+          <rect x="11" y="20" width="2" height="4" fill="rgba(0,0,0,0.15)" />
+          <rect x="11" y="21" width="2" height="1" fill="rgba(255,255,255,0.4)" />
+          <rect x="11" y="23" width="2" height="1" fill="rgba(255,255,255,0.4)" />
+          {/* side stripe */}
+          <rect x="4" y="20" width="1" height="8" fill="rgba(255,255,255,0.2)" />
+          <rect x="19" y="20" width="1" height="8" fill="rgba(255,255,255,0.2)" />
+        </g>
+      );
+      case 'Zebra Print': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#f5f5f5" />
+          {/* diagonal black stripes */}
+          <rect x="4" y="20" width="2" height="8" fill="#111" />
+          <rect x="7" y="20" width="2" height="8" fill="#111" />
+          <rect x="11" y="20" width="2" height="8" fill="#111" />
+          <rect x="15" y="20" width="2" height="8" fill="#111" />
+          <rect x="19" y="20" width="1" height="8" fill="#111" />
+        </g>
+      );
+      case 'Leopard Print': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#c8922a" />
+          {/* rosette spots */}
+          <rect x="5" y="21" width="3" height="2" fill="#8b5e0a" opacity="0.7" />
+          <rect x="6" y="20" width="1" height="1" fill="#8b5e0a" opacity="0.7" />
+          <rect x="6" y="23" width="1" height="1" fill="#8b5e0a" opacity="0.7" />
+          <rect x="11" y="22" width="3" height="2" fill="#8b5e0a" opacity="0.7" />
+          <rect x="12" y="21" width="1" height="1" fill="#8b5e0a" opacity="0.7" />
+          <rect x="12" y="24" width="1" height="1" fill="#8b5e0a" opacity="0.7" />
+          <rect x="16" y="20" width="3" height="2" fill="#8b5e0a" opacity="0.7" />
+          <rect x="17" y="22" width="1" height="1" fill="#8b5e0a" opacity="0.7" />
+          <rect x="8" y="25" width="3" height="2" fill="#8b5e0a" opacity="0.7" />
+          <rect x="9" y="24" width="1" height="1" fill="#8b5e0a" opacity="0.7" />
+          <rect x="14" y="25" width="2" height="2" fill="#8b5e0a" opacity="0.7" />
+        </g>
+      );
+      case 'Snake Skin': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#4a7a3a" />
+          {/* scale diamond pattern */}
+          <rect x="4" y="20" width="2" height="2" fill="#3a6a2a" />
+          <rect x="7" y="20" width="2" height="2" fill="#3a6a2a" />
+          <rect x="10" y="20" width="2" height="2" fill="#3a6a2a" />
+          <rect x="13" y="20" width="2" height="2" fill="#3a6a2a" />
+          <rect x="16" y="20" width="2" height="2" fill="#3a6a2a" />
+          <rect x="5" y="22" width="2" height="2" fill="#3a6a2a" />
+          <rect x="8" y="22" width="2" height="2" fill="#3a6a2a" />
+          <rect x="11" y="22" width="2" height="2" fill="#3a6a2a" />
+          <rect x="14" y="22" width="2" height="2" fill="#3a6a2a" />
+          <rect x="17" y="22" width="2" height="2" fill="#3a6a2a" />
+          <rect x="4" y="24" width="2" height="2" fill="#3a6a2a" />
+          <rect x="7" y="24" width="2" height="2" fill="#3a6a2a" />
+          <rect x="10" y="24" width="2" height="2" fill="#3a6a2a" />
+          <rect x="13" y="24" width="2" height="2" fill="#3a6a2a" />
+          <rect x="16" y="24" width="2" height="2" fill="#3a6a2a" />
+          <rect x="5" y="26" width="2" height="2" fill="#3a6a2a" />
+          <rect x="8" y="26" width="2" height="2" fill="#3a6a2a" />
+          <rect x="11" y="26" width="2" height="2" fill="#3a6a2a" />
+          <rect x="14" y="26" width="2" height="2" fill="#3a6a2a" />
+          <rect x="17" y="26" width="2" height="2" fill="#3a6a2a" />
+          {/* scale highlight dots */}
+          <rect x="5" y="20" width="1" height="1" fill="rgba(255,255,255,0.2)" />
+          <rect x="8" y="20" width="1" height="1" fill="rgba(255,255,255,0.2)" />
+          <rect x="11" y="20" width="1" height="1" fill="rgba(255,255,255,0.2)" />
+        </g>
+      );
+      case 'Tie-Dye': return (
+        <g>
+          {/* concentric rings from center */}
+          <rect x="4" y="20" width="16" height="8" fill="#ff6b6b" />
+          <rect x="5" y="21" width="14" height="6" fill="#ffd93d" />
+          <rect x="6" y="22" width="12" height="4" fill="#6bcb77" />
+          <rect x="7" y="23" width="10" height="2" fill="#4d96ff" />
+          <rect x="9" y="23" width="6" height="1" fill="#c77dff" />
+          <rect x="11" y="23" width="2" height="1" fill="#ff6b6b" />
+          {/* swirl dots */}
+          <rect x="4" y="24" width="1" height="1" fill="#6bcb77" />
+          <rect x="19" y="22" width="1" height="1" fill="#4d96ff" />
+          <rect x="5" y="27" width="1" height="1" fill="#ffd93d" />
+          <rect x="18" y="26" width="1" height="1" fill="#ff6b6b" />
+        </g>
+      );
+      case 'Neon Crop': return (
+        <g>
+          {/* cropped at y=24 (shorter shirt) */}
+          <rect x="4" y="20" width="16" height="5" fill={c} />
+          {/* neon glow edge */}
+          <rect x="4" y="24" width="16" height="1" fill="rgba(255,255,255,0.5)" />
+          {/* horizontal stripe detail */}
+          <rect x="4" y="22" width="16" height="1" fill="rgba(255,255,255,0.2)" />
+          {/* no lower body (crop) */}
+          <rect x="4" y="25" width="16" height="3" fill="rgba(0,0,0,0)" />
+        </g>
+      );
+      case 'Biker': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#111" />
+          {/* open collar V */}
+          <rect x="9" y="20" width="6" height="3" fill="#222" />
+          <rect x="10" y="20" width="4" height="5" fill="#111" />
+          {/* studs along shoulders */}
+          <rect x="4" y="20" width="1" height="1" fill="#aaa" />
+          <rect x="6" y="20" width="1" height="1" fill="#aaa" />
+          <rect x="8" y="20" width="1" height="1" fill="#aaa" />
+          <rect x="15" y="20" width="1" height="1" fill="#aaa" />
+          <rect x="17" y="20" width="1" height="1" fill="#aaa" />
+          <rect x="19" y="20" width="1" height="1" fill="#aaa" />
+          {/* patch outline */}
+          <rect x="5" y="22" width="5" height="4" fill="#222" />
+          <rect x="5" y="22" width="5" height="1" fill="#555" />
+          <rect x="5" y="25" width="5" height="1" fill="#555" />
+          {/* zipper */}
+          <rect x="11" y="20" width="2" height="6" fill="#333" />
+          <rect x="11" y="22" width="2" height="1" fill="#777" />
+        </g>
+      );
+      case 'Sailor': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#f5f5f5" />
+          {/* navy blue stripes */}
+          <rect x="4" y="21" width="16" height="1" fill="#1e3a6e" />
+          <rect x="4" y="23" width="16" height="1" fill="#1e3a6e" />
+          <rect x="4" y="25" width="16" height="1" fill="#1e3a6e" />
+          <rect x="4" y="27" width="16" height="1" fill="#1e3a6e" />
+          {/* sailor collar */}
+          <rect x="4" y="20" width="6" height="4" fill="#1e3a6e" />
+          <rect x="14" y="20" width="6" height="4" fill="#1e3a6e" />
+          <rect x="4" y="20" width="16" height="2" fill="#1e3a6e" />
+          {/* anchor emblem */}
+          <rect x="11" y="25" width="2" height="3" fill="#1e3a6e" />
+          <rect x="10" y="25" width="4" height="1" fill="#1e3a6e" />
+          <rect x="10" y="27" width="1" height="1" fill="#1e3a6e" />
+          <rect x="13" y="27" width="1" height="1" fill="#1e3a6e" />
+        </g>
+      );
+      case 'Space Suit': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#c8c8d4" />
+          {/* suit panels */}
+          <rect x="4" y="20" width="16" height="2" fill="#a0a0b0" />
+          <rect x="4" y="26" width="16" height="2" fill="#a0a0b0" />
+          {/* tech panel left */}
+          <rect x="5" y="22" width="4" height="4" fill="#888898" />
+          <rect x="5" y="22" width="4" height="1" fill="#6a6a7a" />
+          <rect x="6" y="23" width="1" height="1" fill="#44f" opacity="0.6" />
+          <rect x="8" y="23" width="1" height="1" fill="#f44" opacity="0.6" />
+          <rect x="6" y="24" width="3" height="1" fill="#6a6a7a" />
+          {/* center seal */}
+          <rect x="10" y="22" width="4" height="4" fill="#8898b0" />
+          <rect x="11" y="23" width="2" height="2" fill="#aabbcc" />
+          {/* right panel */}
+          <rect x="15" y="22" width="4" height="4" fill="#888898" />
+          <rect x="15" y="23" width="4" height="1" fill="#6a6a7a" />
+          {/* side stripes */}
+          <rect x="4" y="20" width="1" height="8" fill="#8888a0" />
+          <rect x="19" y="20" width="1" height="8" fill="#8888a0" />
+        </g>
+      );
+      case 'Grim Reaper': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#111118" />
+          {/* dark purple inner lining */}
+          <rect x="7" y="20" width="10" height="8" fill="#1a0030" />
+          {/* robe folds */}
+          <rect x="7" y="20" width="2" height="8" fill="#0d001a" />
+          <rect x="15" y="20" width="2" height="8" fill="#0d001a" />
+          <rect x="11" y="20" width="2" height="8" fill="#0d001a" />
+          {/* skull emblem */}
+          <rect x="10" y="22" width="4" height="3" fill="#ddd" />
+          <rect x="10" y="21" width="4" height="1" fill="#ddd" />
+          <rect x="10" y="25" width="1" height="1" fill="#ddd" />
+          <rect x="13" y="25" width="1" height="1" fill="#ddd" />
+          <rect x="11" y="25" width="2" height="1" fill="#111118" />
+          {/* skull eyes */}
+          <rect x="10" y="22" width="1" height="1" fill="#111118" />
+          <rect x="13" y="22" width="1" height="1" fill="#111118" />
+          {/* glow trim */}
+          <rect x="4" y="27" width="16" height="1" fill="#4b0082" opacity="0.6" />
+        </g>
+      );
+      case 'Golden Armor': return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill="#b8860b" />
+          {/* chest plate */}
+          <rect x="6" y="20" width="12" height="8" fill="#daa520" />
+          {/* plate segments */}
+          <rect x="6" y="23" width="12" height="1" fill="#b8860b" />
+          <rect x="6" y="26" width="12" height="1" fill="#b8860b" />
+          {/* vertical center line */}
+          <rect x="11" y="20" width="2" height="8" fill="#b8860b" />
+          {/* shoulder pauldrons */}
+          <rect x="4" y="20" width="3" height="4" fill="#daa520" />
+          <rect x="17" y="20" width="3" height="4" fill="#daa520" />
+          <rect x="4" y="23" width="3" height="1" fill="#b8860b" />
+          <rect x="17" y="23" width="3" height="1" fill="#b8860b" />
+          {/* metallic shine */}
+          <rect x="7" y="20" width="2" height="3" fill="#ffd700" opacity="0.5" />
+          <rect x="13" y="20" width="2" height="3" fill="#ffd700" opacity="0.5" />
+          <rect x="4" y="20" width="1" height="8" fill="rgba(255,215,0,0.3)" />
+          {/* gem on chest */}
+          <rect x="11" y="21" width="2" height="2" fill="#00bcd4" />
+        </g>
+      );
+      default: return (
+        <g>
+          <rect x="4" y="20" width="16" height="8" fill={c} />
+          <rect x="9" y="20" width="6" height="1" fill="rgba(0,0,0,0.2)" />
+          <rect x="10" y="21" width="4" height="1" fill="rgba(0,0,0,0.2)" />
+          <rect x="4" y="24" width="16" height="1" fill="rgba(0,0,0,0.12)" />
+          <rect x="11" y="22" width="2" height="5" fill="rgba(0,0,0,0.08)" />
+        </g>
+      );
+    }
+  };
+
   const renderNecklace = () => {
     switch (config.necklace) {
       case 'Gold Chain': return <g fill="#fbbf24"><rect x="9" y="19" width="6" height="1" /><rect x="10" y="20" width="4" height="1" /></g>;
@@ -473,13 +908,13 @@ export default function AvatarPreview({
             {/* Left eye tears */}
             {[0, 1, 2].map(i => (
               <motion.rect key={`lt${i}`} x="8" y="13" width="1" height="1" fill="#60a5fa"
-                animate={{ y: [13, 18], opacity: [0, 1, 0] }}
+                animate={{ y: [0, 5], opacity: [0, 1, 0] }}
                 transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.4, ease: 'easeIn' }} />
             ))}
             {/* Right eye tears */}
             {[0, 1, 2].map(i => (
               <motion.rect key={`rt${i}`} x="15" y="13" width="1" height="1" fill="#60a5fa"
-                animate={{ y: [13, 18], opacity: [0, 1, 0] }}
+                animate={{ y: [0, 5], opacity: [0, 1, 0] }}
                 transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.4 + 0.2, ease: 'easeIn' }} />
             ))}
           </g>
@@ -577,37 +1012,37 @@ export default function AvatarPreview({
               <image href={config.customPattern} x="0" y="0" width="8" height="8" preserveAspectRatio="xMidYMid slice" />
             </pattern>
           )}
-          {/* Dynamic gradient defs for skin / hair / shirt */}
+          {/* Dynamic gradient defs — IDs are instance-unique to avoid collisions */}
           {skinFill.gradientDef && (
-            <linearGradient id="grad_skin" {...angleToSvgCoords(skinFill.gradientDef.angle)}>
+            <linearGradient id={`${uid}grad_skin`} {...angleToSvgCoords(skinFill.gradientDef.angle)}>
               {skinFill.gradientDef.stops.map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
             </linearGradient>
           )}
           {hairFill.gradientDef && (
-            <linearGradient id="grad_hair" {...angleToSvgCoords(hairFill.gradientDef.angle)}>
+            <linearGradient id={`${uid}grad_hair`} {...angleToSvgCoords(hairFill.gradientDef.angle)}>
               {hairFill.gradientDef.stops.map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
             </linearGradient>
           )}
           {shirtFill.gradientDef && (
-            <linearGradient id="grad_shirt" {...angleToSvgCoords(shirtFill.gradientDef.angle)}>
+            <linearGradient id={`${uid}grad_shirt`} {...angleToSvgCoords(shirtFill.gradientDef.angle)}>
               {shirtFill.gradientDef.stops.map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
             </linearGradient>
           )}
           {hatFill?.gradientDef && (
-            <linearGradient id="grad_hat" {...angleToSvgCoords(hatFill.gradientDef.angle)}>
+            <linearGradient id={`${uid}grad_hat`} {...angleToSvgCoords(hatFill.gradientDef.angle)}>
               {hatFill.gradientDef.stops.map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
             </linearGradient>
           )}
           {bgGradDef && (
-            <linearGradient id="grad_bg" {...angleToSvgCoords(bgGradDef.angle)}>
+            <linearGradient id={`${uid}grad_bg`} {...angleToSvgCoords(bgGradDef.angle)}>
               {bgGradDef.stops.map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
@@ -618,7 +1053,7 @@ export default function AvatarPreview({
         {/* Background — outside all animation wrappers, always static */}
         {config.backgroundImage && (
           bgGradDef
-            ? <rect x="0" y="0" width="24" height="28" fill="url(#grad_bg)" />
+            ? <rect x="0" y="0" width="24" height="28" fill={`url(#${uid}grad_bg)`} />
             : <image href={config.backgroundImage} x="0" y="0" width="24" height="28" preserveAspectRatio="xMidYMid slice" />
         )}
 
@@ -630,14 +1065,8 @@ export default function AvatarPreview({
         >
           <motion.g animate={emotion} variants={bodyVariants} style={{ transformOrigin: '12px 24px' }}>
 
-            {/* Shirt + neck */}
-            <rect x="4" y="20" width="16" height="8" fill={shirtFill.fill} />
-            {/* Neckline shadow */}
-            <rect x="9" y="20" width="6" height="1" fill="rgba(0,0,0,0.2)" />
-            <rect x="10" y="21" width="4" height="1" fill="rgba(0,0,0,0.2)" />
-            {/* Shirt lower body detail */}
-            <rect x="4" y="24" width="16" height="1" fill="rgba(0,0,0,0.12)" />
-            <rect x="11" y="22" width="2" height="5" fill="rgba(0,0,0,0.08)" />
+            {/* Shirt */}
+            {renderShirtBody()}
             <rect x="10" y="18" width="4" height="2" fill={skinFill.fill} />
             <rect x="10" y="18" width="4" height="1" fill="rgba(0,0,0,0.15)" />
 

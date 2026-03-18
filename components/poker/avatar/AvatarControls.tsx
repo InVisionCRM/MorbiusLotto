@@ -17,6 +17,12 @@ const HairColors = [
   'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
 ];
 const EyeColors = ['#634e34', '#2e536f', '#3d671d', '#1c7847', '#497665', '#000000', '#5c4033', '#8a9a5b', '#4682b4', '#8B5CF6', '#F43F5E'];
+const ShirtStyles = [
+  'Default', 'Tuxedo', 'Cheetah Print', 'Hawaiian', 'Pinstripe', 'Flannel',
+  'Denim Jacket', 'Leather Jacket', 'Varsity', 'Hoodie', 'Camo', 'Suit',
+  'Blazer', 'Kimono', 'Polo', 'Zebra Print', 'Leopard Print', 'Snake Skin',
+  'Tie-Dye', 'Neon Crop', 'Biker', 'Sailor', 'Space Suit', 'Grim Reaper', 'Golden Armor',
+];
 const ShirtColors = [
   '#ef4444', '#b91c1c', '#7f1d1d', '#f97316', '#c2410c',
   '#eab308', '#a16207', '#22c55e', '#15803d', '#14532d',
@@ -193,10 +199,16 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             )}
 
             {activeTab === 'clothes' && (
-              <section>
-                <SectionLabel>Shirt Color</SectionLabel>
-                {renderColorGrid(ShirtColors, config.shirtColor, 'shirtColor')}
-              </section>
+              <>
+                <section>
+                  <SectionLabel>Shirt Color</SectionLabel>
+                  {renderColorGrid(ShirtColors, config.shirtColor, 'shirtColor')}
+                </section>
+                <section>
+                  <SectionLabel>Shirt Style</SectionLabel>
+                  {renderShapeGrid(ShirtStyles, config.shirtStyle || 'Default', 'shirtStyle')}
+                </section>
+              </>
             )}
 
             {activeTab === 'acc' && (

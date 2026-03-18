@@ -19,6 +19,7 @@ export type AvatarField =
   | 'necklace'
   | 'mouthAccessory'
   | 'shirtColor'
+  | 'shirtStyle'
   | 'backgroundImage'
   | 'overlayImage'
   | 'customPattern'; // non-empty customPattern requires feature_custom_bg
@@ -67,6 +68,7 @@ export const FREE_VALUES: Record<AvatarField, Set<string>> = {
   shirtColor: new Set([
     '#ef4444', '#3b82f6', '#22c55e', '#ffffff', '#9ca3af', '#3f3f46', '#000000',
   ]),
+  shirtStyle: new Set(['Default']), // all pattern styles require ownership
   backgroundImage: new Set(['']), // empty string = free; any URL requires ownership of a background item
   overlayImage:    new Set(['']), // empty string = free; any data URL requires ownership of an overlay item
   customPattern:   new Set(['']), // legacy field — no longer gated

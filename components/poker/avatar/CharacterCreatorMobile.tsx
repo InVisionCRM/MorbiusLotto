@@ -3,11 +3,9 @@
 import React, { useState } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import AvatarPreview from './AvatarPreview';
+import { randomizeConfig } from './CharacterCreator';
 import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
-import {
-  Drawer, DrawerContent, DrawerHeader, DrawerTitle,
-} from '@/components/ui/drawer';
-import { Lock } from 'lucide-react';
+import { Lock, Shuffle } from 'lucide-react';
 import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
 
 // ── data ──────────────────────────────────────────────────────────────────
@@ -91,7 +89,6 @@ type Props = {
 
 export default function CharacterCreatorMobile({ config, onChange, displayName, onDisplayNameChange, ownedItems, isAdmin = false, onLockedItemClick }: Props) {
   const [activeId, setActiveId] = useState('skin');
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const activeCat = CATS.find(c => c.id === activeId)!;
 
@@ -123,6 +120,8 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
     update(activeCat.field, opts[Math.floor(Math.random() * opts.length)]);
   };
 
+  const handleRandomizeAll = () => onChange(randomizeConfig(ownedItems));
+
   const currentVal = activeCat.field ? (config[activeCat.field] as string ?? '') : '';
 
   const isLocked = (field: AvatarField, value: string): boolean => {
@@ -136,12 +135,12 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
     <div className="flex h-full bg-zinc-900 overflow-hidden">
 
       {/* ── Left vertical tab sidebar ──────────────────────────────── */}
-      <div className="w-[52px] flex-shrink-0 flex flex-col overflow-y-auto scrollbar-hide border-r border-zinc-800 bg-zinc-950">
+      <div className="w-[72px] min-w-[72px] flex-shrink-0 flex flex-col overflow-y-auto scrollbar-hide border-r border-zinc-800 bg-zinc-950">
         {CATS.map(cat => (
           <button
             key={cat.id}
-            onClick={() => { setActiveId(cat.id); setDrawerOpen(false); }}
-            className={`flex-shrink-0 h-12 w-full flex items-center justify-center text-[8px] font-bold tracking-wider transition-colors touch-manipulation ${
+            onClick={() => setActiveId(cat.id)}
+            className={`flex-shrink-0 min-h-10 py-2 w-full flex items-center justify-center text-[9px] font-bold tracking-wider transition-colors touch-manipulation ${
               activeId === cat.id
                 ? 'bg-indigo-600 text-white'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
@@ -152,10 +151,9 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
         ))}
       </div>
 
-      {/* ── Right panel ────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4 py-4 min-w-0">
-
-        {/* Name input */}
+      {/* ── Right panel: name + avatar at top, all variations inline below ── */}
+      <div className="flex-1 flex flex-col items-center min-w-0 overflow-y-auto pt-3 pb-4 px-3 gap-3">
+        {/* Name input — top */}
         {displayName !== undefined && onDisplayNameChange && (
           <input
             type="text"
@@ -163,158 +161,144 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
             onChange={e => onDisplayNameChange(e.target.value)}
             placeholder="Display name"
             maxLength={32}
-            className="w-full max-w-[220px] text-sm font-semibold text-zinc-100 bg-transparent border-b border-zinc-700 focus:border-cyan-500 focus:outline-none placeholder:text-zinc-600 py-1 text-center touch-manipulation"
+            className="w-full max-w-[220px] text-sm font-semibold text-zinc-100 bg-transparent border-b border-zinc-700 focus:border-cyan-500 focus:outline-none placeholder:text-zinc-600 py-1 text-center touch-manipulation flex-shrink-0"
           />
         )}
 
-        {/* Avatar — large and prominent */}
-        <AvatarPreview config={config} className="w-40 aspect-[6/7]" />
+        {/* Avatar — right under name */}
+        <AvatarPreview config={config} roamEyes className="w-36 aspect-[6/7] flex-shrink-0" />
 
-        {/* Active category controls */}
-        <div className="flex flex-col items-center gap-3 w-full max-w-[260px]">
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest">
-            {activeCat.label}
-          </p>
+        {/* Randomize All */}
+        <button
+          type="button"
+          onClick={handleRandomizeAll}
+          className="flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-emerald-400 text-xs font-medium touch-manipulation transition-colors border border-zinc-700 flex-shrink-0"
+        >
+          <Shuffle size={13} />
+          Randomize All
+        </button>
 
-          {activeCat.type === 'bg' ? (
-            (() => {
-              const bgItems = ITEM_CATALOG.filter(i => i.unlocks.some(u => u.field === 'backgroundImage'));
-              if (bgItems.length === 0) {
-                return <p className="text-[11px] text-zinc-500 text-center py-4">No backgrounds yet — added via the admin item builder.</p>;
-              }
-              return (
-                <div className="grid grid-cols-3 gap-1.5 w-full">
-                  <button
-                    type="button"
-                    onClick={() => update('backgroundImage', '')}
-                    className={`aspect-square rounded-lg border-2 flex items-center justify-center text-[10px] font-medium transition-colors ${
-                      !config.backgroundImage ? 'border-white/60 text-white' : 'border-zinc-700 text-zinc-500'
-                    }`}
-                  >
-                    None
-                  </button>
-                  {bgItems.map(bgItem => {
-                    const val = bgItem.unlocks.find(u => u.field === 'backgroundImage')?.value ?? '';
-                    const owned = isAdmin || (ownedItems?.has(bgItem.itemKey) ?? false);
-                    const selected = config.backgroundImage === val;
-                    return (
-                      <button
-                        key={bgItem.itemKey}
-                        type="button"
-                        onClick={() => owned ? update('backgroundImage', val) : onLockedItemClick?.(bgItem.itemKey)}
-                        className={`aspect-square rounded-lg border-2 overflow-hidden relative ${selected ? 'border-white/80' : owned ? 'border-zinc-700' : 'border-zinc-800'}`}
-                        title={bgItem.displayName}
-                      >
-                        <img src={val} alt={bgItem.displayName} className="w-full h-full object-cover" />
-                        {!owned && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Lock size={12} className="text-yellow-400" /></div>}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })()
-          ) : (
-            <div className="flex gap-2.5 w-full">
+        {/* Category label + all variations inline */}
+        <div className="w-full max-w-[280px] flex flex-col gap-2 flex-shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest">
+              {activeCat.label}
+            </p>
+            {activeCat.type !== 'bg' && activeCat.field && (
               <button
                 type="button"
                 onClick={handleRandom}
-                className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-100 text-sm font-medium touch-manipulation transition-colors"
+                className="text-[10px] font-medium text-zinc-500 hover:text-zinc-300 touch-manipulation"
               >
                 🎲 Random
               </button>
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-400 text-white text-sm font-medium touch-manipulation transition-colors"
-              >
-                View All
-              </button>
+            )}
+          </div>
+
+          {/* Backgrounds */}
+          {activeCat.type === 'bg' && (() => {
+            const bgItems = ITEM_CATALOG.filter(i => i.unlocks.some(u => u.field === 'backgroundImage'));
+            if (bgItems.length === 0) {
+              return <p className="text-[11px] text-zinc-500 text-center py-4">No backgrounds yet.</p>;
+            }
+            return (
+              <div className="grid grid-cols-3 gap-1.5 w-full">
+                <button
+                  type="button"
+                  onClick={() => update('backgroundImage', '')}
+                  className={`aspect-square rounded-lg border-2 flex items-center justify-center text-[10px] font-medium transition-colors ${
+                    !config.backgroundImage ? 'border-white/60 text-white' : 'border-zinc-700 text-zinc-500'
+                  }`}
+                >
+                  None
+                </button>
+                {bgItems.map(bgItem => {
+                  const val = bgItem.unlocks.find(u => u.field === 'backgroundImage')?.value ?? '';
+                  const owned = isAdmin || (ownedItems?.has(bgItem.itemKey) ?? false);
+                  const selected = config.backgroundImage === val;
+                  return (
+                    <button
+                      key={bgItem.itemKey}
+                      type="button"
+                      onClick={() => owned ? update('backgroundImage', val) : onLockedItemClick?.(bgItem.itemKey)}
+                      className={`aspect-square rounded-lg border-2 overflow-hidden relative ${selected ? 'border-white/80' : owned ? 'border-zinc-700' : 'border-zinc-800'}`}
+                      title={bgItem.displayName}
+                    >
+                      <img src={val} alt={bgItem.displayName} className="w-full h-full object-cover" />
+                      {!owned && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Lock size={12} className="text-yellow-400" /></div>}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* Color grid — inline */}
+          {activeCat.type === 'color' && activeCat.field && (
+            <div className="grid grid-cols-6 gap-2 w-full">
+              {getOptions(activeCat).map(c => {
+                const locked = isLocked(activeCat.field as AvatarField, c);
+                const lockedKey = locked ? (getItemKeyForValue(activeCat.field as AvatarField, c) ?? undefined) : undefined;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      if (locked && lockedKey) onLockedItemClick?.(lockedKey);
+                      else update(activeCat.field!, c);
+                    }}
+                    aria-label={`Select ${c}${locked ? ' (locked)' : ''}`}
+                    className={`relative w-10 h-10 rounded-full overflow-hidden touch-manipulation transition-transform ${
+                      currentVal === c
+                        ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-zinc-900 scale-105'
+                        : locked ? 'ring-1 ring-yellow-500/40 active:scale-95' : 'ring-1 ring-white/10 active:scale-95'
+                    }`}
+                  >
+                    <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
+                      <rect width="100" height="100" fill={c} />
+                    </svg>
+                    {locked && (
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/55 pointer-events-none">
+                        <Lock size={10} className="text-yellow-400" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Shape grid — inline */}
+          {activeCat.type === 'shape' && activeCat.field && (
+            <div className="grid grid-cols-3 gap-1.5 w-full">
+              {getOptions(activeCat).map(s => {
+                const locked = isLocked(activeCat.field as AvatarField, s);
+                const lockedKey = locked ? (getItemKeyForValue(activeCat.field as AvatarField, s) ?? undefined) : undefined;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      if (locked && lockedKey) onLockedItemClick?.(lockedKey);
+                      else update(activeCat.field!, s);
+                    }}
+                    className={`min-h-10 py-2 rounded-xl text-xs font-medium touch-manipulation transition-colors whitespace-nowrap ${
+                      currentVal === s
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40'
+                        : locked ? 'bg-zinc-800 text-yellow-400/80 border border-yellow-500/20 active:bg-zinc-700' : 'bg-zinc-800 text-zinc-300 active:bg-zinc-700'
+                    }`}
+                  >
+                    <span className="flex items-center justify-center gap-1">
+                      {locked && <Lock size={8} className="shrink-0" />}
+                      {s}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
-
-      {/* ── Drawer — full selection ─────────────────────────────────── */}
-      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DrawerContent className="bg-zinc-900 border-zinc-800 max-h-[72vh]">
-          <DrawerHeader className="pb-3 pt-1">
-            <DrawerTitle className="text-zinc-100 text-center text-base">
-              {activeCat.label}
-            </DrawerTitle>
-          </DrawerHeader>
-
-          <div className="px-4 pb-8 overflow-y-auto">
-
-            {/* Color grid */}
-            {activeCat.type === 'color' && activeCat.field && (
-              <div className="grid grid-cols-6 gap-3">
-                {getOptions(activeCat).map(c => {
-                  const locked = isLocked(activeCat.field as AvatarField, c);
-                  const lockedKey = locked ? (getItemKeyForValue(activeCat.field as AvatarField, c) ?? undefined) : undefined;
-                  return (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => {
-                        update(activeCat.field!, c);
-                        if (locked && lockedKey) { setDrawerOpen(false); onLockedItemClick?.(lockedKey); }
-                        else setDrawerOpen(false);
-                      }}
-                      aria-label={`Select ${c}${locked ? ' (locked)' : ''}`}
-                      className={`relative w-12 h-12 rounded-full overflow-hidden touch-manipulation transition-transform ${
-                        currentVal === c
-                          ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-zinc-900 scale-110'
-                          : locked ? 'ring-1 ring-yellow-500/40 active:scale-95' : 'ring-1 ring-white/10 active:scale-95'
-                      }`}
-                    >
-                      <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
-                        <rect width="100" height="100" fill={c} />
-                      </svg>
-                      {locked && (
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/55 pointer-events-none">
-                          <Lock size={12} className="text-yellow-400" />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Shape / style grid */}
-            {activeCat.type === 'shape' && activeCat.field && (
-              <div className="grid grid-cols-3 gap-2">
-                {getOptions(activeCat).map(s => {
-                  const locked = isLocked(activeCat.field as AvatarField, s);
-                  const lockedKey = locked ? (getItemKeyForValue(activeCat.field as AvatarField, s) ?? undefined) : undefined;
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => {
-                        update(activeCat.field!, s);
-                        if (locked && lockedKey) { setDrawerOpen(false); onLockedItemClick?.(lockedKey); }
-                        else setDrawerOpen(false);
-                      }}
-                      className={`h-11 rounded-xl text-sm font-medium touch-manipulation transition-colors whitespace-nowrap ${
-                        currentVal === s
-                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40'
-                          : locked ? 'bg-zinc-800 text-yellow-400/80 border border-yellow-500/20 active:bg-zinc-700' : 'bg-zinc-800 text-zinc-300 active:bg-zinc-700'
-                      }`}
-                    >
-                      <span className="flex items-center justify-center gap-1">
-                        {locked && <Lock size={9} className="shrink-0" />}
-                        {s}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-          </div>
-        </DrawerContent>
-      </Drawer>
     </div>
   );
 }

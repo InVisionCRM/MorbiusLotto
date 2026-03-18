@@ -108,6 +108,7 @@ export interface AvatarConfig {
   lipShape: string;
   accessory: string;
   shirtColor: string;
+  shirtStyle: string;
   hat: string;
   hatColor: string;
   necklace: string;
