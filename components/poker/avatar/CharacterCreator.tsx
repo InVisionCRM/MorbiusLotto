@@ -29,12 +29,12 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
 
 const tabs = [
   { id: 'skin', label: 'Skin', icon: Palette },
-  { id: 'bg', label: 'Token Avatar', icon: ImageIcon },
   { id: 'hair', label: 'Hair', icon: Scissors },
   { id: 'eyes', label: 'Eyes', icon: Eye },
   { id: 'face', label: 'Face', icon: Smile },
   { id: 'clothes', label: 'Clothes', icon: Shirt },
   { id: 'acc', label: 'Extras', icon: Sparkles },
+  { id: 'bg', label: 'Backgrounds', icon: ImageIcon },
 ];
 
 type CharacterCreatorProps = {
@@ -148,7 +148,7 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
           ) : (
             <h1 className={`font-bold text-zinc-100 tracking-tight ${compact ? 'text-base sm:text-lg mb-2 md:mb-3' : 'text-2xl mb-8'}`}>Player Profile</h1>
           )}
-          <AvatarPreview config={config} emotion={emotion} glassesAnimationKey={glassesAnimationKey} className={compact ? 'w-20 h-20 sm:w-28 sm:h-28' : undefined} />
+          <AvatarPreview config={config} emotion={emotion} glassesAnimationKey={glassesAnimationKey} className={compact ? 'w-20 sm:w-28 aspect-[6/7]' : undefined} />
 
           <div className={`text-center w-full ${compact ? 'mt-2 md:mt-3' : 'mt-8'}`}>
             <button

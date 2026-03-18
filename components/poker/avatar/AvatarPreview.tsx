@@ -364,7 +364,7 @@ export default function AvatarPreview({
 
     return (
       <g>
-        <motion.rect animate={emotion} variants={eyebrowLeftVariants} style={{ transformOrigin: '8.5px 9.5px' }} x="7" y="9" width="3" height="1" fill={hairFill.fill} />
+        <motion.rect animate={emotion} variants={eyebrowLeftVariants} style={{ transformOrigin: '9.5px 9.5px' }} x="8" y="9" width="3" height="1" fill={hairFill.fill} />
         <motion.rect animate={emotion} variants={eyebrowRightVariants} style={{ transformOrigin: '15.5px 9.5px' }} x="14" y="9" width="3" height="1" fill={hairFill.fill} />
         {/* Auto-blink wrapper */}
         <motion.g
@@ -372,8 +372,8 @@ export default function AvatarPreview({
           transition={{ duration: 4, repeat: Infinity, times: [0, 0.9, 0.95, 1], ease: 'easeInOut' }}
           style={{ transformOrigin: '12px 11.5px' }}
         >
-          <motion.g animate={emotion} variants={eyeVariants} style={{ transformOrigin: '8.5px 11.5px' }}>
-            {renderEye(7)}
+          <motion.g animate={emotion} variants={eyeVariants} style={{ transformOrigin: '9.5px 11.5px' }}>
+            {renderEye(8)}
           </motion.g>
           <motion.g animate={emotion} variants={rightEyeVariants} style={{ transformOrigin: '15.5px 11.5px' }}>
             {renderEye(14)}
@@ -533,7 +533,7 @@ export default function AvatarPreview({
 
   // ── size ───────────────────────────────────────────────────────────────────
 
-  const sizeClass = compact ? 'w-10 h-10' : 'w-64 h-64';
+  const sizeClass = compact ? 'w-10 aspect-[6/7]' : 'w-64 aspect-[6/7]';
 
   return (
     <div
@@ -542,7 +542,7 @@ export default function AvatarPreview({
     >
       <svg
         ref={svgRef}
-        viewBox="0 0 24 24"
+        viewBox="0 0 24 28"
         className="w-full h-full absolute top-0 left-0"
         shapeRendering="crispEdges"
       >
@@ -608,21 +608,25 @@ export default function AvatarPreview({
 
         {/* Background — outside all animation wrappers, always static */}
         {config.backgroundImage && (
-          <image href={config.backgroundImage} x="0" y="0" width="24" height="24" preserveAspectRatio="xMidYMid slice" />
+          <image href={config.backgroundImage} x="0" y="0" width="24" height="28" preserveAspectRatio="xMidYMid slice" />
         )}
 
         {/* Breathing idle animation wrapper */}
         <motion.g
           animate={{ scaleY: [1, 1.01, 1], y: [0, -0.1, 0], rotate: [0, 0.5, -0.5, 0] }}
           transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          style={{ transformOrigin: '12px 24px' }}
+          style={{ transformOrigin: '12px 28px' }}
         >
           <motion.g animate={emotion} variants={bodyVariants} style={{ transformOrigin: '12px 24px' }}>
 
             {/* Shirt + neck */}
-            <rect x="4" y="20" width="16" height="4" fill={shirtFill.fill} />
+            <rect x="4" y="20" width="16" height="8" fill={shirtFill.fill} />
+            {/* Neckline shadow */}
             <rect x="9" y="20" width="6" height="1" fill="rgba(0,0,0,0.2)" />
             <rect x="10" y="21" width="4" height="1" fill="rgba(0,0,0,0.2)" />
+            {/* Shirt lower body detail */}
+            <rect x="4" y="24" width="16" height="1" fill="rgba(0,0,0,0.12)" />
+            <rect x="11" y="22" width="2" height="5" fill="rgba(0,0,0,0.08)" />
             <rect x="10" y="18" width="4" height="2" fill={skinFill.fill} />
             <rect x="10" y="18" width="4" height="1" fill="rgba(0,0,0,0.15)" />
 
@@ -635,12 +639,12 @@ export default function AvatarPreview({
 
             {/* Ears */}
             <motion.g animate={{ x: -offsets.ears.x, y: offsets.ears.y }}>
-              <rect x="4" y="11" width="2" height="3" fill={skinFill.fill} />
-              <rect x="4" y="12" width="2" height="1" fill="rgba(0,0,0,0.1)" />
+              <rect x="4" y="11" width="4" height="3" fill={skinFill.fill} />
+              <rect x="4" y="12" width="4" height="1" fill="rgba(0,0,0,0.1)" />
             </motion.g>
             <motion.g animate={{ x: offsets.ears.x, y: offsets.ears.y }}>
-              <rect x="18" y="11" width="2" height="3" fill={skinFill.fill} />
-              <rect x="18" y="12" width="2" height="1" fill="rgba(0,0,0,0.1)" />
+              <rect x="16" y="11" width="4" height="3" fill={skinFill.fill} />
+              <rect x="16" y="12" width="4" height="1" fill="rgba(0,0,0,0.1)" />
             </motion.g>
 
             {/* Face shape */}
@@ -698,7 +702,7 @@ export default function AvatarPreview({
         {config.overlayImage && (
           <image
             href={config.overlayImage}
-            x="0" y="0" width="24" height="24"
+            x="0" y="0" width="24" height="28"
             preserveAspectRatio="xMidYMid meet"
             style={{ imageRendering: 'pixelated' }}
           />

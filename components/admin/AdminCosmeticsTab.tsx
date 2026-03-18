@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { Package, Search, Pencil, Check, X, Loader2, AlertTriangle, RefreshCw, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Package, Search, Pencil, Check, X, Loader2, AlertTriangle, RefreshCw, Plus, ChevronDown, ChevronUp, Shuffle } from 'lucide-react';
 import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog';
 import PixelBackgroundUploader from '@/components/poker/avatar/PixelBackgroundUploader';
 import GradientBuilder from '@/components/poker/avatar/GradientBuilder';
@@ -64,12 +64,14 @@ interface EditState {
 const ITEM_FIELDS = [
   { value: 'skinColor',       label: 'Skin Color',      inputType: 'color',  options: [] },
   { value: 'hairColor',       label: 'Hair Color',      inputType: 'color',  options: [] },
+  { value: 'hairStyle',       label: 'Hair Style',      inputType: 'select', options: ['Spiky', 'Messy', 'Pigtails', 'Mullet', 'Mohawk', 'Dreadlocks', 'Updo', 'Braids', 'Cornrows', 'Dreads Fade'] },
   { value: 'shirtColor',      label: 'Shirt Color',     inputType: 'color',  options: [] },
   { value: 'backgroundImage', label: 'Background',      inputType: 'url',    options: [] },
+  { value: 'overlayImage',    label: 'Overlay',         inputType: 'url',    options: [] },
   { value: 'accessory',       label: 'Accessory',       inputType: 'select', options: ['Glasses', 'Aviators', 'Wayfarers', 'Round Glasses', 'Cyberpunk', 'Earrings', 'Headband'] },
   { value: 'hat',             label: 'Hat',             inputType: 'select', options: ['Top Hat', 'Cowboy', 'Crown', 'Bandana'] },
   { value: 'necklace',        label: 'Necklace',        inputType: 'select', options: ['Gold Chain', 'Silver Chain', 'Pearl', 'Pendant'] },
-  { value: 'mouthAccessory',  label: 'Mouth Accessory', inputType: 'select', options: ['Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'] },
+  { value: 'mouthAccessory',  label: 'Mouth',           inputType: 'select', options: ['Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'] },
 ] as const;
 
 type ItemField = typeof ITEM_FIELDS[number]['value'];
@@ -82,19 +84,52 @@ function shortHash(str: string): string {
   return h.toString(36);
 }
 
+const FIELD_PREFIX: Partial<Record<ItemField, string>> = {
+  skinColor: 'skin', hairColor: 'hair_color', shirtColor: 'shirt_color',
+  hairStyle: 'hair_style', accessory: 'acc', hat: 'hat',
+  necklace: 'neck', mouthAccessory: 'mouth', backgroundImage: 'bg', overlayImage: 'overlay',
+};
+
 function toItemKey(field: ItemField, value: string) {
-  if (field === 'backgroundImage') {
-    if (value.startsWith('data:') || value.startsWith('{')) return `bg_${shortHash(value)}`;
-    const slug = value.split('/').pop()?.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 24) ?? 'bg';
-    return `bg_${slug}`;
+  const prefix = FIELD_PREFIX[field] ?? field;
+  if (field === 'backgroundImage' || field === 'overlayImage') {
+    if (value.startsWith('data:') || value.startsWith('{')) return `${prefix}_${shortHash(value)}`;
+    const slug = value.split('/').pop()?.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 24) ?? prefix;
+    return `${prefix}_${slug}`;
   }
-  if (field === 'accessory' || field === 'hat' || field === 'necklace' || field === 'mouthAccessory') {
-    return `${field}_${value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
+  if (field === 'hairStyle' || field === 'accessory' || field === 'hat' || field === 'necklace' || field === 'mouthAccessory') {
+    return `${prefix}_${value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
   }
   // Color fields — could be hex or gradient JSON
-  if (value.startsWith('{')) return `${field === 'skinColor' ? 'skin' : field === 'hairColor' ? 'hair_color' : 'shirt_color'}_grad_${shortHash(value)}`;
-  const prefix = field === 'skinColor' ? 'skin' : field === 'hairColor' ? 'hair_color' : 'shirt_color';
+  if (value.startsWith('{')) return `${prefix}_grad_${shortHash(value)}`;
   return `${prefix}_custom_${value.replace('#', '').toLowerCase()}`;
+}
+
+// ─── Randomizer helpers ────────────────────────────────────────────────────────
+
+function randomHex(): string {
+  const h = Math.floor(Math.random() * 360);
+  const s = 50 + Math.floor(Math.random() * 40);
+  const l = 35 + Math.floor(Math.random() * 40);
+  // hsl to hex
+  const a = s * Math.min(l, 100 - l) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color / 100).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function randomGradient(): string {
+  const angle = Math.floor(Math.random() * 360);
+  const numStops = 2 + (Math.random() > 0.6 ? 1 : 0);
+  const stops = Array.from({ length: numStops }, (_, i) => ({
+    color: randomHex(),
+    offset: numStops === 2 ? i : i / (numStops - 1),
+    opacity: 1,
+  }));
+  return serializeGradient({ type: 'linearGradient', angle, stops });
 }
 
 // ─── Builder panel ─────────────────────────────────────────────────────────────
@@ -102,10 +137,12 @@ function toItemKey(field: ItemField, value: string) {
 interface BuilderState {
   field: ItemField;
   inputMode: 'color' | 'gradient'; // only applies to color fields
-  hex: string;         // used for flat color mode
+  hex: string;          // used for flat color mode
   gradientJson: string; // used for gradient mode (serialized GradientDef)
-  url: string;         // used for backgroundImage field
-  selectValue: string; // used for select fields
+  url: string;          // used for backgroundImage / overlayImage fields
+  selectValue: string;  // used for select fields (preset option)
+  customValue: string;  // used for select fields (custom typed value)
+  useCustom: boolean;   // whether to use customValue instead of selectValue
   displayName: string;
   itemKey: string;
   tier: ItemTier;
@@ -124,6 +161,8 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
     gradientJson: serializeGradient(DEFAULT_GRADIENT),
     url: '',
     selectValue: '',
+    customValue: '',
+    useCustom: false,
     displayName: '',
     itemKey: '',
     tier: 'common',
@@ -135,10 +174,11 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
   const isColorField = fieldDef.inputType === 'color';
   const isGradientMode = isColorField && form.inputMode === 'gradient';
 
+  const activeSelectValue = form.useCustom ? form.customValue : form.selectValue;
   const activeValue = isUrlField
     ? form.url
     : isSelectField
-    ? form.selectValue
+    ? activeSelectValue
     : isGradientMode
     ? form.gradientJson
     : form.hex;
@@ -148,22 +188,27 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
       const next = { ...prev, ...patch };
       // Auto-regenerate itemKey when field or value changes (unless manually edited)
       if (patch.field !== undefined || patch.hex !== undefined || patch.url !== undefined ||
-          patch.gradientJson !== undefined || patch.selectValue !== undefined || patch.inputMode !== undefined) {
+          patch.gradientJson !== undefined || patch.selectValue !== undefined ||
+          patch.customValue !== undefined || patch.useCustom !== undefined || patch.inputMode !== undefined) {
         const prevDef = ITEM_FIELDS.find(f => f.value === prev.field)!;
         const prevValue = prevDef.inputType === 'url' ? prev.url
-          : prevDef.inputType === 'select' ? prev.selectValue
+          : prevDef.inputType === 'select' ? (prev.useCustom ? prev.customValue : prev.selectValue)
           : prev.inputMode === 'gradient' ? prev.gradientJson : prev.hex;
         const nextDef = ITEM_FIELDS.find(f => f.value === next.field)!;
         const nextValue = nextDef.inputType === 'url' ? next.url
-          : nextDef.inputType === 'select' ? next.selectValue
+          : nextDef.inputType === 'select' ? (next.useCustom ? next.customValue : next.selectValue)
           : next.inputMode === 'gradient' ? next.gradientJson : next.hex;
         const oldAutoKey = toItemKey(prev.field, prevValue);
         if (prev.itemKey === oldAutoKey || prev.itemKey === '') {
           next.itemKey = toItemKey(next.field, nextValue);
         }
-        // Reset selectValue when switching to a select field
-        if (patch.field !== undefined && nextDef.inputType === 'select' && next.selectValue === '') {
-          next.selectValue = (nextDef as any).options[0] ?? '';
+        // Reset when switching to a new select field
+        if (patch.field !== undefined && nextDef.inputType === 'select') {
+          next.useCustom = false;
+          next.customValue = '';
+          if (next.selectValue === '') {
+            next.selectValue = (nextDef as any).options[0] ?? '';
+          }
           next.itemKey = toItemKey(next.field, next.selectValue);
         }
       }
@@ -182,7 +227,7 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
     if (isUrlField) {
       if (!form.url.startsWith('http') && !form.url.startsWith('data:image/')) { setErr('Upload an image first'); return; }
     } else if (isSelectField) {
-      if (!form.selectValue) { setErr('Select a value'); return; }
+      if (!activeSelectValue.trim()) { setErr('Select a value or enter a custom one'); return; }
     } else if (isGradientMode) {
       if (!parseGradient(form.gradientJson)) { setErr('Invalid gradient'); return; }
     } else {
@@ -208,7 +253,7 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
       const data = await res.json();
       if (!res.ok) { setErr(data.error ?? 'Create failed'); return; }
       setSuccess(`"${form.displayName}" created!`);
-      setForm({ field: 'skinColor', inputMode: 'color', hex: '#FF6B6B', gradientJson: serializeGradient(DEFAULT_GRADIENT), url: '', selectValue: '', displayName: '', itemKey: '', tier: 'common' });
+      setForm({ field: 'skinColor', inputMode: 'color', hex: '#FF6B6B', gradientJson: serializeGradient(DEFAULT_GRADIENT), url: '', selectValue: '', customValue: '', useCustom: false, displayName: '', itemKey: '', tier: 'common' });
       onCreated();
     } catch {
       setErr('Network error');
@@ -297,14 +342,30 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                         className="w-24 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-xs text-center text-white font-mono focus:outline-none focus:border-zinc-400 uppercase"
                         placeholder="#RRGGBB"
                       />
+                      <button
+                        type="button"
+                        onClick={() => updateForm({ hex: randomHex() })}
+                        className="w-24 flex items-center justify-center gap-1 px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-xs transition-colors"
+                      >
+                        <Shuffle size={10} /> Randomize
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <GradientBuilder
-                    value={form.gradientJson}
-                    label="gradient"
-                    onApply={json => updateForm({ gradientJson: json })}
-                  />
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => updateForm({ gradientJson: randomGradient() })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-xs font-medium transition-colors"
+                    >
+                      <Shuffle size={11} /> Randomize Gradient
+                    </button>
+                    <GradientBuilder
+                      value={form.gradientJson}
+                      label="gradient"
+                      onApply={json => updateForm({ gradientJson: json })}
+                    />
+                  </div>
                 )}
               </div>
             )}
@@ -317,18 +378,18 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
               />
             )}
 
-            {/* Select field dropdown */}
+            {/* Select field options */}
             {isSelectField && (
-              <div>
-                <label className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium block mb-1.5">Value to unlock</label>
+              <div className="space-y-2.5">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium block">Value to unlock</label>
                 <div className="flex gap-1.5 flex-wrap">
                   {(fieldDef as any).options.map((opt: string) => (
                     <button
                       key={opt}
                       type="button"
-                      onClick={() => updateForm({ selectValue: opt })}
+                      onClick={() => updateForm({ selectValue: opt, useCustom: false })}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        form.selectValue === opt
+                        !form.useCustom && form.selectValue === opt
                           ? 'bg-indigo-700 border-indigo-500 text-white'
                           : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
                       }`}
@@ -337,6 +398,35 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                     </button>
                   ))}
                 </div>
+                {/* Custom value input */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateForm({ useCustom: !form.useCustom })}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors shrink-0 ${
+                      form.useCustom
+                        ? 'bg-amber-700/60 border-amber-500/60 text-amber-200'
+                        : 'border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500'
+                    }`}
+                  >
+                    Custom…
+                  </button>
+                  {form.useCustom && (
+                    <input
+                      type="text"
+                      value={form.customValue}
+                      onChange={e => updateForm({ customValue: e.target.value })}
+                      placeholder={`e.g. Diamond Chain`}
+                      autoFocus
+                      className="flex-1 bg-zinc-800 border border-amber-600/40 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500"
+                    />
+                  )}
+                </div>
+                {form.useCustom && (
+                  <p className="text-[10px] text-amber-500/70 leading-snug">
+                    Custom values only work if the avatar renderer supports them. Use for new styles you plan to add to the renderer.
+                  </p>
+                )}
               </div>
             )}
 

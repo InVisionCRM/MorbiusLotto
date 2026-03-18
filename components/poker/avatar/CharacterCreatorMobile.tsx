@@ -168,7 +168,7 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
         )}
 
         {/* Avatar — large and prominent */}
-        <AvatarPreview config={config} className="w-40 h-40" />
+        <AvatarPreview config={config} className="w-40 aspect-[6/7]" />
 
         {/* Active category controls */}
         <div className="flex flex-col items-center gap-3 w-full max-w-[260px]">

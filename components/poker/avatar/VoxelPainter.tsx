@@ -9,8 +9,9 @@ import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GRID = 24; // matches AvatarPreview viewBox="0 0 24 24"
-const CELL = 20; // px per cell in the painter
+const GRID = 24;   // viewBox width
+const GRID_H = 28; // viewBox height (taller to show full shirt)
+const CELL = 20;   // px per cell in the painter
 
 const MORBIUS_PRICE: Record<ItemTier, number> = {
   common: 1_000, uncommon: 10_000, rare: 25_000, legendary: 100_000,
@@ -38,16 +39,16 @@ type SaveTarget = 'overlayImage' | 'backgroundImage';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function emptyGrid(): Grid {
-  return Array.from({ length: GRID }, () => Array(GRID).fill(null));
+  return Array.from({ length: GRID_H }, () => Array(GRID).fill(null));
 }
 
 function gridToDataUrl(grid: Grid): string {
   const canvas = document.createElement('canvas');
   canvas.width = GRID;
-  canvas.height = GRID;
+  canvas.height = GRID_H;
   const ctx = canvas.getContext('2d')!;
-  ctx.clearRect(0, 0, GRID, GRID);
-  for (let y = 0; y < GRID; y++) {
+  ctx.clearRect(0, 0, GRID, GRID_H);
+  for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID; x++) {
       const color = grid[y][x];
       if (color && color !== '#00000000') {
@@ -109,7 +110,7 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
     const rect = gridRef.current.getBoundingClientRect();
     const x = Math.floor((e.clientX - rect.left) / CELL);
     const y = Math.floor((e.clientY - rect.top) / CELL);
-    if (x < 0 || x >= GRID || y < 0 || y >= GRID) return null;
+    if (x < 0 || x >= GRID || y < 0 || y >= GRID_H) return null;
     return [x, y];
   };
 
@@ -193,7 +194,7 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
       >
         <span className="text-lg leading-none">🎨</span>
         Voxel Painter
-        <span className="text-[10px] text-zinc-500 font-normal">— draw directly on a {GRID}×{GRID} avatar grid</span>
+        <span className="text-[10px] text-zinc-500 font-normal">— draw directly on a {GRID}×{GRID_H} avatar grid</span>
         <div className="ml-auto text-zinc-600">
           {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </div>
@@ -210,7 +211,7 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
                 className="relative select-none"
                 style={{
                   width: GRID * CELL,
-                  height: GRID * CELL,
+                  height: GRID_H * CELL,
                   cursor: eraser ? 'cell' : 'crosshair',
                   touchAction: 'none',
                 }}
@@ -245,9 +246,9 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
 
                 {/* Painted pixels */}
                 <svg
-                  viewBox={`0 0 ${GRID} ${GRID}`}
+                  viewBox={`0 0 ${GRID} ${GRID_H}`}
                   width={GRID * CELL}
-                  height={GRID * CELL}
+                  height={GRID_H * CELL}
                   className="absolute inset-0"
                   shapeRendering="crispEdges"
                   style={{ zIndex: 1 }}
@@ -261,17 +262,19 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
 
                 {/* Grid lines */}
                 <svg
-                  viewBox={`0 0 ${GRID} ${GRID}`}
+                  viewBox={`0 0 ${GRID} ${GRID_H}`}
                   width={GRID * CELL}
-                  height={GRID * CELL}
+                  height={GRID_H * CELL}
                   className="absolute inset-0 pointer-events-none"
                   style={{ zIndex: 2 }}
                 >
+                  {/* Vertical lines */}
                   {Array.from({ length: GRID + 1 }, (_, i) => (
-                    <React.Fragment key={i}>
-                      <line x1={i} y1={0} x2={i} y2={GRID} stroke="rgba(255,255,255,0.06)" strokeWidth="0.04" />
-                      <line x1={0} y1={i} x2={GRID} y2={i} stroke="rgba(255,255,255,0.06)" strokeWidth="0.04" />
-                    </React.Fragment>
+                    <line key={`v${i}`} x1={i} y1={0} x2={i} y2={GRID_H} stroke="rgba(255,255,255,0.06)" strokeWidth="0.04" />
+                  ))}
+                  {/* Horizontal lines */}
+                  {Array.from({ length: GRID_H + 1 }, (_, i) => (
+                    <line key={`h${i}`} x1={0} y1={i} x2={GRID} y2={i} stroke="rgba(255,255,255,0.06)" strokeWidth="0.04" />
                   ))}
                 </svg>
               </div>

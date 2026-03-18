@@ -1,13 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
-import { Lock, Sparkles } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
-import { parseGradient, angleToSvgCoords } from '@/lib/gradient-utils';
-import GradientBuilder from './GradientBuilder';
 
 const SkinColors = [
   '#FFF5EE', '#FFE4E1', '#FFDAB9', '#FFCDB2', '#FFB4A2', '#FFDBAC', '#F1C27D', '#E0AC69', '#C68642', '#8D5524', '#7B4B2A', '#5C3A21', '#4A3B32', '#3E2723', '#2D221E', '#1A1110', '#E5989B', '#B5838D', '#6D6875', '#4A4E69', '#22223B',
@@ -48,25 +46,8 @@ type AvatarControlsProps = {
   onLockedItemClick?: (itemKey: string) => void;
 };
 
-/** Render a color swatch — handles hex, url(#pattern), and gradient JSON. */
-function ColorSwatch({ value, size }: { value: string; size: number }) {
-  const grad = parseGradient(value);
-  if (grad) {
-    const id = `swatch_${Math.abs(value.slice(0, 32).split('').reduce((h, c) => Math.imul(31, h) + c.charCodeAt(0) | 0, 0))}`;
-    const coords = angleToSvgCoords(grad.angle);
-    return (
-      <svg viewBox="0 0 100 100" width={size} height={size} style={{ imageRendering: 'pixelated', borderRadius: '50%' }}>
-        <defs>
-          <linearGradient id={id} {...coords}>
-            {grad.stops.map((s, i) => (
-              <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
-            ))}
-          </linearGradient>
-        </defs>
-        <rect width="100" height="100" fill={`url(#${id})`} />
-      </svg>
-    );
-  }
+/** Render a color swatch — handles hex and url(#pattern) values. */
+function ColorSwatch({ value }: { value: string }) {
   return (
     <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
       <rect width="100" height="100" fill={value} />
@@ -76,10 +57,6 @@ function ColorSwatch({ value, size }: { value: string; size: number }) {
 
 export default function AvatarControls({ config, onChange, activeTab, compact = false, ownedItems, isAdmin = false, onLockedItemClick }: AvatarControlsProps) {
   const update = (key: keyof AvatarConfig, value: string) => onChange({ ...config, [key]: value });
-
-  // Track which color fields have the gradient panel open
-  const [gradientOpen, setGradientOpen] = useState<Record<string, boolean>>({});
-  const toggleGradient = (field: string) => setGradientOpen(prev => ({ ...prev, [field]: !prev[field] }));
 
   const bgItems = ITEM_CATALOG.filter(i => i.unlocks.some(u => u.field === 'backgroundImage'));
 
@@ -94,29 +71,6 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
   const SectionLabel = ({ children }: { children: React.ReactNode }) => (
     <h3 className={`font-semibold text-zinc-400 uppercase tracking-wider ${compact ? 'text-xs mb-2' : 'text-sm mb-4'}`}>{children}</h3>
   );
-
-  /** Gradient toggle button shown above color grids that support gradients. */
-  const GradientToggle = ({ field, currentValue, label }: { field: AvatarField; currentValue: string; label: string }) => {
-    const isGradientActive = !!parseGradient(currentValue);
-    const isOpen = !!gradientOpen[field];
-    return (
-      <button
-        type="button"
-        onClick={() => toggleGradient(field)}
-        className={`mb-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-          isOpen || isGradientActive
-            ? 'bg-indigo-600/30 border border-indigo-500/50 text-indigo-300'
-            : 'bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-        }`}
-      >
-        <Sparkles size={11} />
-        {isGradientActive && !isOpen ? 'Edit Gradient' : isOpen ? 'Close Gradient' : 'Custom Gradient'}
-        {isGradientActive && !isOpen && (
-          <ColorSwatch value={currentValue} size={14} />
-        )}
-      </button>
-    );
-  };
 
   const renderColorGrid = (colors: string[], activeColor: string, field: AvatarField) => (
     <div className={`grid grid-cols-6 sm:grid-cols-7 ${compact ? 'gap-2' : 'gap-3'}`}>
@@ -134,7 +88,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             }}
             aria-label={`Select color ${c}${locked ? ' (locked)' : ''}`}
           >
-            <ColorSwatch value={c} size={100} />
+            <ColorSwatch value={c} />
             {locked && (
               <span className="absolute inset-0 flex items-center justify-center bg-black/55 pointer-events-none">
                 <Lock size={compact ? 10 : 12} className="text-yellow-400" />
@@ -172,33 +126,6 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
     </div>
   );
 
-  /** Renders the gradient builder panel with animation. */
-  const renderGradientPanel = (field: AvatarField, currentValue: string, label: string) => (
-    <AnimatePresence>
-      {gradientOpen[field] && (
-        <motion.div
-          key={`grad-${field}`}
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.2 }}
-          className="overflow-hidden"
-        >
-          <div className="pt-2 pb-1">
-            <GradientBuilder
-              value={currentValue}
-              label={label}
-              onApply={serialized => {
-                update(field, serialized);
-                setGradientOpen(prev => ({ ...prev, [field]: false }));
-              }}
-            />
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
@@ -214,9 +141,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             {activeTab === 'skin' && (
               <section>
                 <SectionLabel>Skin Tone</SectionLabel>
-                <GradientToggle field="skinColor" currentValue={config.skinColor} label="Skin Gradient" />
-                {renderGradientPanel('skinColor', config.skinColor, 'Skin Gradient')}
-                {!gradientOpen['skinColor'] && renderColorGrid(SkinColors, config.skinColor, 'skinColor')}
+                {renderColorGrid(SkinColors, config.skinColor, 'skinColor')}
               </section>
             )}
 
@@ -228,9 +153,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
                 </section>
                 <section>
                   <SectionLabel>Hair Color</SectionLabel>
-                  <GradientToggle field="hairColor" currentValue={config.hairColor} label="Hair Gradient" />
-                  {renderGradientPanel('hairColor', config.hairColor, 'Hair Gradient')}
-                  {!gradientOpen['hairColor'] && renderColorGrid(HairColors, config.hairColor, 'hairColor')}
+                  {renderColorGrid(HairColors, config.hairColor, 'hairColor')}
                 </section>
               </>
             )}
@@ -272,9 +195,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             {activeTab === 'clothes' && (
               <section>
                 <SectionLabel>Shirt Color</SectionLabel>
-                <GradientToggle field="shirtColor" currentValue={config.shirtColor} label="Shirt Gradient" />
-                {renderGradientPanel('shirtColor', config.shirtColor, 'Shirt Gradient')}
-                {!gradientOpen['shirtColor'] && renderColorGrid(ShirtColors, config.shirtColor, 'shirtColor')}
+                {renderColorGrid(ShirtColors, config.shirtColor, 'shirtColor')}
               </section>
             )}
 
