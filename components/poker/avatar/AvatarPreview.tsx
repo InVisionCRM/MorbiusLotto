@@ -10,7 +10,7 @@ export type Emotion =
   | 'dance' | 'flex' | 'jump' | 'spin' | 'think' | 'love' | 'money'
   | 'sick' | 'cool' | 'sleepy' | 'shock' | 'ghost' | 'ninja' | 'king'
   | 'poker' | 'jackpot' | 'chips' | 'cards' | 'dice'
-  | 'slouch' | 'yawn' | 'bored' | 'nod' | 'shrug'
+  | 'slouch' | 'bored' | 'nod' | 'shrug'
   | 'drift' | 'sink' | 'breathe' | 'lean' | 'tilt';
 
 export default function AvatarPreview({
@@ -86,11 +86,10 @@ export default function AvatarPreview({
         setIdleEmotion(null);
       }
       if (!isAsleep && propEmotion === 'neutral' && !idleEmotion && Math.random() > 0.8) {
-        const actions: Emotion[] = ['wink', 'surprised', 'think', 'happy', 'slouch', 'yawn', 'bored', 'nod', 'shrug', 'drift', 'sink', 'breathe', 'lean', 'tilt'];
+        const actions: Emotion[] = ['wink', 'surprised', 'think', 'happy', 'slouch', 'bored', 'nod', 'shrug', 'drift', 'sink', 'breathe', 'lean', 'tilt'];
         const action = actions[Math.floor(Math.random() * actions.length)];
         setIdleEmotion(action);
         const duration =
-          action === 'yawn' ? 3500 :
           action === 'bored' || action === 'slouch' ? 4500 :
           action === 'nod' || action === 'shrug' ? 2500 :
           action === 'sink' || action === 'drift' ? 5000 :
@@ -139,7 +138,7 @@ export default function AvatarPreview({
     shock: { scaleY: 1.5, scaleX: 1.2 }, ghost: { scaleY: 0.8, opacity: 0.6 },
     ninja: { scaleY: 0.2, y: 0.2 }, king: { scaleY: 1.1 }, poker: { scaleY: 0.6, y: 0.2 },
     jackpot: { scaleY: 0.3, y: 0 }, chips: { scaleY: 1 }, cards: { scaleY: 1 }, dice: { scaleY: 1.2 },
-    slouch: { scaleY: 0.2, y: 0.5 }, yawn: { scaleY: 0.05, y: 0.5 }, bored: { scaleY: 0.3, y: 0.3 },
+    slouch: { scaleY: 0.2, y: 0.5 }, bored: { scaleY: 0.3, y: 0.3 },
     nod: { scaleY: 1 }, shrug: { scaleY: 1.1, y: -0.5 },
     drift: { scaleY: 1, y: 0 }, sink: { scaleY: 0.2, y: 0.5 }, breathe: { scaleY: 0.9, y: 0 },
     lean: { scaleY: 0.4, y: 0.3 }, tilt: { scaleY: 0.5, y: 0.3 },
@@ -154,7 +153,7 @@ export default function AvatarPreview({
     shock: { scaleY: 1.5, scaleX: 1.2 }, ghost: { scaleY: 0.8, opacity: 0.6 },
     ninja: { scaleY: 0.2, y: 0.2 }, king: { scaleY: 1.1 }, poker: { scaleY: 0.6, y: 0.2 },
     jackpot: { scaleY: 0.3, y: 0 }, chips: { scaleY: 1 }, cards: { scaleY: 1 }, dice: { scaleY: 1.2 },
-    slouch: { scaleY: 0.2, y: 0.5 }, yawn: { scaleY: 0.05, y: 0.5 }, bored: { scaleY: 0.3, y: 0.3 },
+    slouch: { scaleY: 0.2, y: 0.5 }, bored: { scaleY: 0.3, y: 0.3 },
     nod: { scaleY: 1 }, shrug: { scaleY: 1.1, y: -0.5 },
     drift: { scaleY: 1, y: 0 }, sink: { scaleY: 0.2, y: 0.5 }, breathe: { scaleY: 0.9, y: 0 },
     lean: { scaleY: 0.3, y: 0.4 }, tilt: { scaleY: 0.5, y: 0.3 },
@@ -170,7 +169,7 @@ export default function AvatarPreview({
     shock: { y: -2, rotate: -20 }, ghost: { y: -1, opacity: 0.5 }, ninja: { y: 1, rotate: 20 },
     king: { y: -1, rotate: 0 }, poker: { y: 0.5, rotate: 0 }, jackpot: { y: -1.5, rotate: 0 },
     chips: { y: -0.5, rotate: 0 }, cards: { y: -0.5, rotate: 0 }, dice: { y: -1, rotate: 0 },
-    slouch: { y: 0.5, rotate: -8 }, yawn: { y: -1.5, rotate: 0 }, bored: { y: 0.5, rotate: -5 },
+    slouch: { y: 0.5, rotate: -8 }, bored: { y: 0.5, rotate: -5 },
     nod: { y: [0, 1, 0] as number[], transition: { repeat: Infinity, duration: 2 } }, shrug: { y: -1.5, rotate: 5 },
     drift: { y: 0, rotate: 0 }, sink: { y: 0.5, rotate: -5 }, breathe: { y: -0.5, rotate: 0 },
     lean: { y: 0.3, rotate: -5 }, tilt: { y: 0.2, rotate: -8 },
@@ -186,7 +185,7 @@ export default function AvatarPreview({
     shock: { y: -2, rotate: 20 }, ghost: { y: -1, opacity: 0.5 }, ninja: { y: 1, rotate: -20 },
     king: { y: -1, rotate: 0 }, poker: { y: 0.5, rotate: 0 }, jackpot: { y: -1.5, rotate: 0 },
     chips: { y: -0.5, rotate: 0 }, cards: { y: -0.5, rotate: 0 }, dice: { y: -1, rotate: 0 },
-    slouch: { y: 0.5, rotate: 8 }, yawn: { y: -1.5, rotate: 0 }, bored: { y: 0.5, rotate: 5 },
+    slouch: { y: 0.5, rotate: 8 }, bored: { y: 0.5, rotate: 5 },
     nod: { y: [0, 1, 0] as number[], transition: { repeat: Infinity, duration: 2 } }, shrug: { y: -1.5, rotate: -5 },
     drift: { y: 0, rotate: 0 }, sink: { y: 0.5, rotate: 5 }, breathe: { y: -0.5, rotate: 0 },
     lean: { y: 0.5, rotate: 10 }, tilt: { y: 0.2, rotate: 8 },
@@ -205,7 +204,7 @@ export default function AvatarPreview({
     ninja: { scaleX: 0.1, scaleY: 0.1 }, king: { scaleX: 1.2, scaleY: 0.8 },
     poker: { scaleX: 0.8, scaleY: 0.2 }, jackpot: { scaleX: 1.5, scaleY: 1.2, y: -1 },
     chips: { scaleX: 1, scaleY: 1 }, cards: { scaleX: 1, scaleY: 1 }, dice: { scaleX: 1.2, scaleY: 1.2 },
-    slouch: { scaleX: 0.7, scaleY: 0.4, y: 0.5 }, yawn: { scaleX: 1, scaleY: 1, y: 0 },
+    slouch: { scaleX: 0.7, scaleY: 0.4, y: 0.5 },
     bored: { scaleX: 0.6, scaleY: 0.4, y: 0.3 },
     nod: { scaleY: [1, 0.8, 1] as number[], transition: { repeat: Infinity, duration: 2 } },
     shrug: { scaleX: 0.8, y: 0.5 },
@@ -228,7 +227,6 @@ export default function AvatarPreview({
     poker: { y: 0, x: 0 }, jackpot: { y: -1, scale: 1.1 },
     chips: { y: 0 }, cards: { y: 0 }, dice: { y: -0.5 },
     slouch: { y: [0, 1.5, 0] as number[], transition: { repeat: Infinity, duration: 4.5, ease: 'easeInOut' as const } },
-    yawn: { y: -0.5, rotate: -3 },
     bored: { rotate: [0, -7, 0, 7, 0] as number[], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
     nod: { y: [0, 2.5, 0, 1.5, 0] as number[], transition: { repeat: Infinity, duration: 2 } },
     shrug: { y: -1.5 },
@@ -255,7 +253,6 @@ export default function AvatarPreview({
     king: { scale: 1.02 }, poker: { y: 0 }, jackpot: { y: [0, -2, 0] as number[], transition: { repeat: Infinity, duration: 0.5 } },
     chips: { y: 0 }, cards: { y: 0 }, dice: { rotate: [0, 5, -5, 0] as number[], transition: { repeat: Infinity, duration: 1 } },
     slouch: { y: [0, 7, 0] as number[], opacity: [1, 0.3, 1], transition: { repeat: Infinity, duration: 4.5, ease: 'easeInOut' as const } },
-    yawn: { scaleY: [1, 1.06, 1] as number[], y: 0, transition: { repeat: Infinity, duration: 3 } },
     bored: { rotate: [0, -2, 0, 2, 0] as number[], transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' as const } },
     nod: { y: [0, -0.5, 0, -0.3, 0] as number[], transition: { repeat: Infinity, duration: 2 } },
     shrug: { y: [0, -4, -4, 0] as number[], transition: { times: [0, 0.3, 0.5, 1], repeat: Infinity, duration: 2.5 } },
@@ -399,10 +396,6 @@ export default function AvatarPreview({
     if (emotion === 'surprised') {
       // Open-mouth O shape: 2×2 dark block
       return <rect x="11" y="16" width="2" height="2" fill="rgba(0,0,0,0.75)" />;
-    }
-    if (emotion === 'yawn') {
-      // Wide open yawn mouth
-      return <rect x="9" y="15" width="6" height="3" fill="rgba(0,0,0,0.75)" />;
     }
     switch (lipShape) {
       case 'Thin':  return <rect x="10" y="16" width="4" height="1" fill="rgba(0,0,0,0.4)" />;

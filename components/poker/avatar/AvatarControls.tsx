@@ -69,11 +69,11 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
   };
 
   const SectionLabel = ({ children }: { children: React.ReactNode }) => (
-    <h3 className={`font-semibold text-zinc-400 uppercase tracking-wider ${compact ? 'text-xs mb-2' : 'text-sm mb-4'}`}>{children}</h3>
+    <h3 className={`font-semibold text-zinc-400 uppercase tracking-widest ${compact ? 'text-[10px] mb-1.5' : 'text-sm mb-4'}`}>{children}</h3>
   );
 
   const renderColorGrid = (colors: string[], activeColor: string, field: AvatarField) => (
-    <div className={`grid grid-cols-6 sm:grid-cols-7 ${compact ? 'gap-2' : 'gap-3'}`}>
+    <div className={`grid ${compact ? 'grid-cols-8 sm:grid-cols-10 gap-1.5' : 'grid-cols-6 sm:grid-cols-7 gap-3'}`}>
       {colors.map(c => {
         const locked = isLocked(field, c);
         const isActive = activeColor === c;
@@ -81,7 +81,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
         return (
           <button
             key={c}
-            className={`relative rounded-full shadow-sm transition-transform hover:scale-110 focus:outline-none overflow-hidden flex items-center justify-center touch-manipulation ${compact ? 'min-w-[44px] min-h-[44px] w-11 h-11 ring-offset-1 ring-offset-zinc-900' : 'w-10 h-10 ring-offset-2 ring-offset-zinc-900'} ${isActive ? 'ring-2 ring-indigo-500 scale-110' : locked ? 'ring-1 ring-yellow-500/40' : 'ring-1 ring-white/10'}`}
+            className={`relative rounded-full shadow-sm transition-transform hover:scale-110 focus:outline-none overflow-hidden flex items-center justify-center touch-manipulation ${compact ? 'w-7 h-7 ring-offset-1 ring-offset-zinc-900' : 'w-10 h-10 ring-offset-2 ring-offset-zinc-900'} ${isActive ? 'ring-2 ring-indigo-500 scale-110' : locked ? 'ring-1 ring-yellow-500/40' : 'ring-1 ring-white/10'}`}
             onClick={() => {
               update(field, c);
               if (locked && itemKey) onLockedItemClick?.(itemKey);
@@ -91,7 +91,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             <ColorSwatch value={c} />
             {locked && (
               <span className="absolute inset-0 flex items-center justify-center bg-black/55 pointer-events-none">
-                <Lock size={compact ? 10 : 12} className="text-yellow-400" />
+                <Lock size={8} className="text-yellow-400" />
               </span>
             )}
           </button>
@@ -101,7 +101,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
   );
 
   const renderShapeGrid = (shapes: string[], activeShape: string, field: AvatarField) => (
-    <div className={`grid grid-cols-2 sm:grid-cols-3 ${compact ? 'gap-2' : 'gap-3'}`}>
+    <div className={`grid ${compact ? 'grid-cols-3 sm:grid-cols-4 gap-1.5' : 'grid-cols-2 sm:grid-cols-3 gap-3'}`}>
       {shapes.map(s => {
         const locked = isLocked(field, s);
         const isActive = activeShape === s;
@@ -109,15 +109,15 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
         return (
           <button
             key={s}
-            className={`relative rounded-lg font-medium transition-all touch-manipulation min-h-[44px] ${compact ? 'py-2.5 px-3 text-xs' : 'py-3 px-4 rounded-xl text-sm'} ${isActive ? 'bg-indigo-600 text-white shadow-md' : locked ? 'bg-zinc-800 text-yellow-400/80 hover:bg-zinc-700 hover:text-yellow-300 border border-yellow-500/20' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'}`}
+            className={`relative rounded-md font-medium transition-all touch-manipulation ${compact ? 'py-1 px-2 text-[11px]' : 'py-3 px-4 rounded-xl text-sm min-h-[44px]'} ${isActive ? 'bg-indigo-600 text-white shadow-md' : locked ? 'bg-zinc-800 text-yellow-400/80 hover:bg-zinc-700 hover:text-yellow-300 border border-yellow-500/20' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'}`}
             onClick={() => {
               update(field, s);
               if (locked && itemKey) onLockedItemClick?.(itemKey);
             }}
             aria-label={`${s}${locked ? ' (locked)' : ''}`}
           >
-            <span className="flex items-center justify-center gap-1.5">
-              {locked && <Lock size={10} className="shrink-0" />}
+            <span className="flex items-center justify-center gap-1">
+              {locked && <Lock size={9} className="shrink-0" />}
               {s}
             </span>
           </button>
@@ -128,7 +128,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -136,7 +136,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className={compact ? 'space-y-4' : 'space-y-8'}
+            className={compact ? 'space-y-3' : 'space-y-8'}
           >
             {activeTab === 'skin' && (
               <section>
@@ -266,9 +266,9 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
       </div>
 
       {ownedItems && !isAdmin && (
-        <div className="mt-3 flex items-center gap-1.5 text-[10px] text-zinc-500 shrink-0">
-          <Lock size={9} className="text-yellow-400/70" />
-          <span className="text-yellow-400/70">Locked</span>
+        <div className="mt-2 flex items-center gap-1 text-[9px] text-zinc-600 shrink-0">
+          <Lock size={8} className="text-yellow-400/60" />
+          <span className="text-yellow-400/60">Locked</span>
           <span>— preview freely, purchase or receive as a gift to save</span>
         </div>
       )}

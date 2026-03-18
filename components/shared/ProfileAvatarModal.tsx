@@ -291,8 +291,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                   )}
                 </div>
               ) : (
-              <>
-              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
+              <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
                 <CharacterCreator
                   config={config}
                   onChange={setConfig}
@@ -303,53 +302,64 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                   isAdmin={adminBypass}
                   onLockedItemClick={setPurchaseSheetKey}
                 />
+                <AnimatePresence>
+                  {purchaseSheetKey && (
+                    <motion.div
+                      className="absolute bottom-0 left-0 right-0 z-10 shadow-2xl"
+                      initial={{ y: '100%' }}
+                      animate={{ y: 0 }}
+                      exit={{ y: '100%' }}
+                      transition={{ type: 'spring', damping: 35, stiffness: 400 }}
+                    >
+                      <ItemPurchaseSheet
+                        itemKey={purchaseSheetKey}
+                        onClose={() => setPurchaseSheetKey(null)}
+                        onPurchased={() => { refreshInventory(); setPurchaseSheetKey(null); }}
+                        buyerAddress={address}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-              <ItemPurchaseSheet
-                itemKey={purchaseSheetKey}
-                onClose={() => setPurchaseSheetKey(null)}
-                onPurchased={() => { refreshInventory(); setPurchaseSheetKey(null); }}
-                buyerAddress={address}
-              />
-              </>
               )}
 
               {error && (
                 <div className="px-4 py-1.5 text-red-400 text-sm flex-shrink-0">{error}</div>
               )}
 
-              <div className="px-4 py-3 sm:py-2.5 border-t border-white/10 flex items-center gap-2 flex-shrink-0">
+              <div className="px-3 py-1.5 border-t border-white/10 flex items-center gap-1 flex-shrink-0">
                 {/* Shop + Marketplace + Gift shortcuts */}
                 <button
                   type="button"
                   onClick={() => setShopOpen(true)}
                   title="Cosmetics Shop"
-                  className="p-2.5 min-h-[44px] min-w-[44px] rounded-lg text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 transition-colors touch-manipulation flex items-center justify-center"
+                  className="p-1.5 rounded-md text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 transition-colors touch-manipulation flex items-center justify-center"
                 >
-                  <ShoppingBag size={18} />
+                  <ShoppingBag size={15} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setMarketOpen(true)}
                   title="Player Marketplace"
-                  className="p-2.5 min-h-[44px] min-w-[44px] rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10 transition-colors touch-manipulation flex items-center justify-center"
+                  className="p-1.5 rounded-md text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10 transition-colors touch-manipulation flex items-center justify-center"
                 >
-                  <Store size={18} />
+                  <Store size={15} />
                 </button>
                 {address && ownedItemKeys.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setGiftOpen(true)}
                     title="Gift an item"
-                    className="p-2.5 min-h-[44px] min-w-[44px] rounded-lg text-pink-400 hover:text-pink-300 hover:bg-pink-400/10 transition-colors touch-manipulation flex items-center justify-center"
+                    className="p-1.5 rounded-md text-pink-400 hover:text-pink-300 hover:bg-pink-400/10 transition-colors touch-manipulation flex items-center justify-center"
                   >
-                    <Gift size={18} />
+                    <Gift size={15} />
                   </button>
                 )}
                 <div className="flex-1" />
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-3 sm:py-2 min-h-[44px] rounded-lg font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors touch-manipulation"
+                  className="px-3 py-1.5 rounded-md text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors touch-manipulation"
                 >
                   Cancel
                 </button>
@@ -357,9 +367,9 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                   type="button"
                   onClick={canSave ? handleSave : () => openConnectModal?.()}
                   disabled={saving}
-                  className="px-4 py-3 sm:py-2 min-h-[44px] rounded-lg font-medium bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-50 transition-colors touch-manipulation"
+                  className="px-3 py-1.5 rounded-md text-sm font-medium bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-50 transition-colors touch-manipulation"
                 >
-                  {saving ? 'Saving...' : !canSave ? 'Connect wallet to save' : 'Save'}
+                  {saving ? 'Saving...' : !canSave ? 'Connect wallet' : 'Save'}
                 </button>
               </div>
             </>
