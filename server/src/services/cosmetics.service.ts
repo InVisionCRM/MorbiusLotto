@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { parseEther } from 'viem';
 import { getPublicClient } from '../utils/chain-client';
-import { ITEM_CATALOG, type CosmeticItem } from '../../../lib/cosmetics-catalog';
+import { ITEM_CATALOG, type CosmeticItem } from '../lib/cosmetics-catalog';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

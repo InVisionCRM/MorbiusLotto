@@ -20,7 +20,7 @@ import { InstantLotteryService } from './services/instant-lottery.service';
 import { MerkleDropsService } from './services/merkle-drops.service';
 import { MerkleDropsLPService } from './services/merkle-lp-drops.service';
 import { CosmeticsService } from './services/cosmetics.service';
-import { isAdminWallet, getLockedFields, ITEM_CATALOG } from '../../lib/cosmetics-catalog';
+import { isAdminWallet, getLockedFields, ITEM_CATALOG } from './lib/cosmetics-catalog';
 import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
