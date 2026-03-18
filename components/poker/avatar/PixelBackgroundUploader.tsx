@@ -12,6 +12,7 @@ export default function PixelBackgroundUploader({
 }) {
   const [resolution, setResolution] = useState(32);
   const [originalSrc, setOriginalSrc] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processImage = (src: string, res: number) => {
@@ -29,7 +30,9 @@ export default function PixelBackgroundUploader({
       const startY = (img.height - size) / 2;
 
       ctx.drawImage(img, startX, startY, size, size, 0, 0, res, res);
-      onImageChange(canvas.toDataURL('image/png'));
+      const dataUrl = canvas.toDataURL('image/png');
+      setPreview(dataUrl);
+      onImageChange(dataUrl);
     };
     img.src = src;
   };
@@ -54,49 +57,68 @@ export default function PixelBackgroundUploader({
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-center w-full">
-        <label className="flex flex-col items-center justify-center w-full min-h-[120px] py-6 border-2 border-zinc-700 border-dashed rounded-xl cursor-pointer bg-zinc-800/50 hover:bg-zinc-700 transition-colors touch-manipulation">
-          <div className="flex flex-col items-center justify-center">
-            <Upload className="w-8 h-8 mb-3 text-zinc-400" />
-            <p className="mb-2 text-sm text-zinc-400"><span className="font-semibold">Tap to upload</span> or drag and drop</p>
-            <p className="text-xs text-zinc-500">PNG, JPG or WEBP</p>
-          </div>
-          <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-        </label>
-      </div>
+  const displayImage = preview ?? currentImage ?? null;
 
-      {(originalSrc || currentImage) && (
-        <div className="space-y-4 bg-zinc-800/30 p-4 rounded-xl border border-zinc-700/50">
-          <div className="flex justify-between items-center">
-            <label className="text-sm font-medium text-zinc-300">Pixelation Level</label>
-            <button
-              onClick={() => {
-                setOriginalSrc(null);
-                onImageChange('');
-                if (fileInputRef.current) fileInputRef.current.value = '';
-              }}
-              className="text-red-400 hover:text-red-300 p-2 -m-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md hover:bg-red-400/10 transition-colors touch-manipulation"
-              title="Remove background"
-              aria-label="Remove background"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+  return (
+    <div className="space-y-3">
+      {/* Upload zone — shrinks once an image is loaded */}
+      <label className={`flex flex-col items-center justify-center w-full border-2 border-zinc-700 border-dashed rounded-xl cursor-pointer bg-zinc-800/50 hover:bg-zinc-700 transition-colors touch-manipulation ${displayImage ? 'py-3 min-h-0' : 'py-6 min-h-[120px]'}`}>
+        <div className="flex items-center gap-2">
+          <Upload className="w-4 h-4 text-zinc-400" />
+          <p className="text-sm text-zinc-400">
+            {displayImage ? 'Replace image' : <><span className="font-semibold">Tap to upload</span> or drag and drop</>}
+          </p>
+        </div>
+        {!displayImage && <p className="text-xs text-zinc-500 mt-1">PNG, JPG or WEBP</p>}
+        <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+      </label>
+
+      {displayImage && (
+        <div className="bg-zinc-800/30 rounded-xl border border-zinc-700/50 overflow-hidden">
+          {/* Preview */}
+          <div className="flex items-center justify-center p-3 bg-zinc-900/60">
+            <img
+              src={displayImage}
+              alt="Background preview"
+              className="w-32 h-32 rounded-lg object-cover"
+              style={{ imageRendering: 'pixelated' }}
+            />
           </div>
-          <input
-            type="range"
-            min="12"
-            max="128"
-            step="4"
-            value={resolution}
-            onChange={handleResolutionChange}
-            disabled={!originalSrc}
-            className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 disabled:opacity-50"
-          />
-          <div className="flex justify-between text-xs text-zinc-500">
-            <span>Chunky (8-bit)</span>
-            <span>Smooth (HD)</span>
+
+          {/* Controls */}
+          <div className="px-4 pb-4 pt-3 space-y-2">
+            <div className="flex justify-between items-center">
+              <label className="text-sm font-medium text-zinc-300">
+                Pixelation — <span className="text-zinc-400 font-mono text-xs">{resolution}px</span>
+              </label>
+              <button
+                onClick={() => {
+                  setOriginalSrc(null);
+                  setPreview(null);
+                  onImageChange('');
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                className="text-red-400 hover:text-red-300 p-2 -m-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md hover:bg-red-400/10 transition-colors touch-manipulation"
+                title="Remove background"
+                aria-label="Remove background"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+            <input
+              type="range"
+              min="12"
+              max="128"
+              step="4"
+              value={resolution}
+              onChange={handleResolutionChange}
+              disabled={!originalSrc}
+              className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 disabled:opacity-50"
+            />
+            <div className="flex justify-between text-xs text-zinc-500">
+              <span>Chunky (8-bit)</span>
+              <span>Smooth (HD)</span>
+            </div>
           </div>
         </div>
       )}

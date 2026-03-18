@@ -217,11 +217,15 @@ export interface PokerSeatProps {
   onAnimationReaction?: (emotion: Emotion) => void;
   /** Called when any player clicks an opponent's avatar. */
   onOpponentClick?: (address: string) => void;
+  /** When provided with setQuickChatPhrases and onOpenEditQuickChat, QuickChat uses this state and Edit QuickChat is opened by parent (e.g. header Settings). */
+  quickChatPhrases?: string[];
+  setQuickChatPhrases?: (phrases: string[]) => void;
+  onOpenEditQuickChat?: () => void;
 }
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick }: PokerSeatProps) {
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -270,7 +274,10 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
   const phraseOverlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const quickMenuButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases();
+  const [internalQuickChatPhrases, setInternalQuickChatPhrases] = useQuickChatPhrases();
+  const useSharedQuickChat = propsQuickChatPhrases != null && propsSetQuickChatPhrases != null && onOpenEditQuickChat != null;
+  const quickChatPhrases = useSharedQuickChat ? propsQuickChatPhrases : internalQuickChatPhrases;
+  const setQuickChatPhrases = useSharedQuickChat ? propsSetQuickChatPhrases : setInternalQuickChatPhrases;
 
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -729,7 +736,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                       className="font-grandstander w-full px-3 py-2 text-sm text-center hover:bg-white/10 transition-colors truncate"
                       style={{ color: 'var(--poker-text)' }}>{phrase}</button>
                   ))}
-                  <button type="button" onClick={() => { setQuickChatPickerOpen(false); setEditQuickChatOpen(true); }}
+                  <button type="button" onClick={() => { setQuickChatPickerOpen(false); useSharedQuickChat ? onOpenEditQuickChat?.() : setEditQuickChatOpen(true); }}
                     className="font-grandstander w-full px-3 py-2.5 text-sm font-medium text-center hover:bg-white/10 transition-colors flex items-center gap-2 border-t border-white/10"
                     style={{ color: 'var(--poker-text)' }}>
                     <span className="text-cyan-400">✎</span> Edit QuickChat
@@ -740,7 +747,9 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
           </AnimatePresence>
         </div>
 
-        <EditQuickChatModal open={editQuickChatOpen} onClose={() => setEditQuickChatOpen(false)} selectedPhrases={quickChatPhrases} onSave={setQuickChatPhrases} />
+        {!useSharedQuickChat && (
+          <EditQuickChatModal open={editQuickChatOpen} onClose={() => setEditQuickChatOpen(false)} selectedPhrases={quickChatPhrases} onSave={setQuickChatPhrases} />
+        )}
 
         {/* Badge — name + chips */}
         <div

@@ -22,6 +22,10 @@ import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 import { PokerOpponentProfileCard } from '@/components/poker/PokerOpponentProfileCard';
 import { CardDisplay } from '@/components/poker/CardDisplay';
+import { PokerSoundsSettingsModal } from '@/components/poker/PokerSoundsSettingsModal';
+import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
+import { usePokerSounds } from '@/hooks/use-poker-sounds';
+import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { useProfileWs } from '@/contexts/profile-ws-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -459,12 +463,17 @@ export default function PokerTablePage() {
   const callAmount = hand?.toCall ?? '0';
 
   const ps = (file: string) => `/POKER/PokerSounds/${file}`;
+  const sounds = usePokerSounds();
+  const [showSoundsModal, setShowSoundsModal] = useState(false);
+  const [showEditQuickChatModal, setShowEditQuickChatModal] = useState(false);
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases();
 
   // ── Your turn sound ───────────────────────────────────────────────────────
   const prevCanActRef = useRef(false);
   useEffect(() => {
     if (canAct && !prevCanActRef.current) {
-      new Audio(ps('PlayerTurn.mp3')).play().catch(() => {});
+      sounds.play('player_turn', ps('PlayerTurn.mp3'));
     }
     prevCanActRef.current = !!canAct;
   }, [canAct]);
@@ -474,7 +483,7 @@ export default function PokerTablePage() {
   useEffect(() => {
     const handId = hand?.handId ?? null;
     if (handId && handId !== prevHandIdRef.current) {
-      new Audio(ps('CardsDealing.wav')).play().catch(() => {});
+      sounds.play('cards_dealing', ps('CardsDealing.wav'));
     }
     prevHandIdRef.current = handId;
   }, [hand?.handId]);
@@ -496,13 +505,13 @@ export default function PokerTablePage() {
     const isAllIn = stackBig === 0n && (la.action === 'bet' || la.action === 'raise' || la.action === 'call');
 
     if (la.action === 'fold') {
-      new Audio(ps('OpponentFold.wav')).play().catch(() => {});
+      sounds.play('opponent_fold', ps('OpponentFold.wav'));
     } else if (isAllIn) {
-      new Audio(ps('OpponentAllin.mp3')).play().catch(() => {});
+      sounds.play('opponent_allin', ps('OpponentAllin.mp3'));
     } else if (la.action === 'call' || la.action === 'raise' || la.action === 'bet') {
-      new Audio(ps('OpponentCall-Raise.wav')).play().catch(() => {});
+      sounds.play('opponent_call_raise', ps('OpponentCall-Raise.wav'));
     } else if (la.action === 'check') {
-      new Audio(ps('OpponentChecks.mp3')).play().catch(() => {});
+      sounds.play('opponent_checks', ps('OpponentChecks.mp3'));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hand?.lastAction, hand?.handId]);
@@ -515,7 +524,7 @@ export default function PokerTablePage() {
     if (key === prevWinnerKeyRef.current) return;
     prevWinnerKeyRef.current = key;
     if (hand.winners.some(w => w.address === normalizedAddress)) {
-      new Audio(ps('PlayerWins.mp3')).play().catch(() => {});
+      sounds.play('win', ps('PlayerWins.mp3'));
     }
   }, [hand?.street, hand?.winners, hand?.handId, normalizedAddress]);
 
@@ -530,9 +539,9 @@ export default function PokerTablePage() {
         const wasOpponent = prev[i] && prev[i] !== normalizedAddress;
         const isOpponent  = current[i] && current[i] !== normalizedAddress;
         if (!wasOpponent && isOpponent) {
-          new Audio(ps('OpponentJoined.mp3')).play().catch(() => {});
+          sounds.play('opponent_joined', ps('OpponentJoined.mp3'));
         } else if (wasOpponent && !isOpponent) {
-          new Audio(ps('OpponentLeft.mp3')).play().catch(() => {});
+          sounds.play('opponent_left', ps('OpponentLeft.mp3'));
         }
       }
     }
@@ -655,7 +664,55 @@ export default function PokerTablePage() {
                 {fmtChips(state.smallBlind)}/{fmtChips(state.bigBlind)} · {state.seats.filter(s => s.playerAddress).length}/{state.maxSeats} seats
               </span>
             )}
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 relative">
+              <button
+                type="button"
+                onClick={() => setSettingsMenuOpen((o) => !o)}
+                className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
+                style={{
+                  background: 'rgba(255,255,255,0.07)',
+                  color: 'rgba(255,255,255,0.75)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                }}
+                aria-expanded={settingsMenuOpen}
+                aria-haspopup="true"
+              >
+                Settings
+              </button>
+              {settingsMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    aria-hidden
+                    onClick={() => setSettingsMenuOpen(false)}
+                  />
+                  <div
+                    className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border border-white/10 overflow-hidden"
+                    style={{
+                      background: 'rgba(10,10,10,0.98)',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => { setShowSoundsModal(true); setSettingsMenuOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10"
+                      style={{ color: 'rgba(255,255,255,0.9)' }}
+                    >
+                      Sounds
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowEditQuickChatModal(true); setSettingsMenuOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                      style={{ color: 'rgba(255,255,255,0.9)' }}
+                    >
+                      Edit QuickChat
+                    </button>
+                  </div>
+                </>
+              )}
               {normalizedAddress && (
                 <button
                   type="button"
@@ -723,6 +780,9 @@ export default function PokerTablePage() {
                 onReUpClick={mySeat ? () => setShowDepositModal(true) : undefined}
                 onMenuClick={mySeat ? () => setShowAvatarModal(true) : undefined}
                 onOpponentClick={(addr) => setOpponentProfileAddress(addr)}
+                quickChatPhrases={quickChatPhrases}
+                setQuickChatPhrases={setQuickChatPhrases}
+                onOpenEditQuickChat={() => setShowEditQuickChatModal(true)}
               />
             ) : !error ? (
               <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
@@ -776,6 +836,16 @@ export default function PokerTablePage() {
           isOpen={showStatsModal}
           onClose={() => setShowStatsModal(false)}
           playerAddress={statsModalAddress}
+        />
+        <PokerSoundsSettingsModal
+          isOpen={showSoundsModal}
+          onClose={() => setShowSoundsModal(false)}
+        />
+        <EditQuickChatModal
+          open={showEditQuickChatModal}
+          onClose={() => setShowEditQuickChatModal(false)}
+          selectedPhrases={quickChatPhrases}
+          onSave={setQuickChatPhrases}
         />
         {/* Leave table confirmation (non-tournament): shows leaving amount and asks to confirm */}
         {showLeaveConfirm && mySeat && (

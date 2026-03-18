@@ -11,7 +11,7 @@ import { useProfileForAddress } from '@/hooks/use-player-profile';
 import { useAccount } from 'wagmi';
 import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
 import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
-import type { AvatarConfig } from '@/components/poker/avatar/CharacterCreator';
+import type { AvatarConfig } from '@/lib/websocket-client';
 
 function formatChips(wei: string | number): string {
   try {

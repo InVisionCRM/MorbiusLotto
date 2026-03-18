@@ -112,6 +112,7 @@ export interface AvatarConfig {
   necklace: string;
   mouthAccessory: string;
   backgroundImage: string;
+  overlayImage: string;
   faceShape: string;
   customPattern: string;
 }

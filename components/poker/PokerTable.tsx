@@ -71,9 +71,14 @@ export interface PokerTableProps {
     state: PokerTournamentState;
     myAddress: string;
   };
+  /** QuickChat phrase list (from useQuickChatPhrases). When provided with setQuickChatPhrases and onOpenEditQuickChat, Edit QuickChat can be opened from header Settings. */
+  quickChatPhrases?: string[];
+  setQuickChatPhrases?: (phrases: string[]) => void;
+  /** Called when user wants to open Edit QuickChat (e.g. from seat picker or header Settings). */
+  onOpenEditQuickChat?: () => void;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick, tournamentHUD }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [, setDims] = useState({ w: 640, h: 500 });
 
@@ -137,6 +142,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onPhraseReaction: onPhraseReaction,
       onAnimationReaction: onAnimationReaction,
       onOpponentClick: onOpponentClick,
+      quickChatPhrases,
+      setQuickChatPhrases,
+      onOpenEditQuickChat,
     };
   };
 

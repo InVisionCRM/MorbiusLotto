@@ -8,8 +8,9 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon, Flag, Gift, Droplets, Megaphone } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon, Flag, Gift, Droplets, Megaphone, Package } from 'lucide-react';
 import AdminTablesTab from '@/components/admin/AdminTablesTab';
+import AdminCosmeticsTab from '@/components/admin/AdminCosmeticsTab';
 import AdminAdvertisingTab from '@/components/admin/AdminAdvertisingTab';
 import AdminHealthTab from '@/components/admin/AdminHealthTab';
 import AdminMetricsTab from '@/components/admin/AdminMetricsTab';
@@ -49,7 +50,7 @@ export default function AdminPage() {
       <div className="min-h-screen bg-slate-950 text-white pt-4 md:pt-2">
         <main className="container mx-auto px-3 py-3 max-w-6xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="h-8 w-full grid grid-cols-8 sm:grid-cols-12 bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs">
+          <TabsList className="h-auto w-full flex flex-wrap bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs gap-0.5">
             <TabsTrigger value="tables" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <LayoutGrid className="w-3 h-3 mr-1 hidden sm:inline" /> Tables
             </TabsTrigger>
@@ -85,6 +86,9 @@ export default function AdminPage() {
             </TabsTrigger>
             <TabsTrigger value="advertising" className="rounded data-[state=active]:bg-amber-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <Megaphone className="w-3 h-3 mr-1 hidden sm:inline" /> Ads
+            </TabsTrigger>
+            <TabsTrigger value="cosmetics" className="rounded data-[state=active]:bg-purple-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
+              <Package className="w-3 h-3 mr-1 hidden sm:inline" /> Items
             </TabsTrigger>
           </TabsList>
 
@@ -134,6 +138,10 @@ export default function AdminPage() {
 
           <TabsContent value="advertising" className="mt-3 focus-visible:outline-none">
             <AdminAdvertisingTab />
+          </TabsContent>
+
+          <TabsContent value="cosmetics" className="mt-3 focus-visible:outline-none">
+            <AdminCosmeticsTab />
           </TabsContent>
         </Tabs>
         </main>

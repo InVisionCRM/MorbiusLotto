@@ -1,4 +1,8 @@
 // Contract addresses on PulseChain mainnet
+
+/** Treasury wallet that receives cosmetics shop payments (PLS + MORBIUS). */
+export const SHOP_TREASURY_ADDRESS = '0x41682815B05fE6b54a6C0f8813bB99423EE0309D' as const
+
 export const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1' as const
 export const WPLS_TOKEN_ADDRESS = '0xA1077a294dDE1B09bB078844df40758a5D0f9a27' as const
 export const HEX_TOKEN_ADDRESS = '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39' as const

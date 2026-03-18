@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { motion, useMotionValue, useSpring } from 'framer-motion';
+import { resolveColorValue, angleToSvgCoords } from '@/lib/gradient-utils';
 
 export type Emotion =
   | 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'wink'
@@ -121,6 +122,11 @@ export default function AvatarPreview({
   }, [roamEyes, forceAsleep, mouseX, mouseY]);
 
   const { skinColor, hairStyle, hairColor, eyeShape, eyeColor, noseShape, lipShape, accessory } = config;
+
+  // Resolve gradient-aware fills for the three color fields
+  const skinFill  = resolveColorValue(skinColor,               'grad_skin');
+  const hairFill  = resolveColorValue(hairColor,               'grad_hair');
+  const shirtFill = resolveColorValue(config.shirtColor || '#3f3f46', 'grad_shirt');
 
   // ── emotion variants ───────────────────────────────────────────────────────
 
@@ -307,33 +313,33 @@ export default function AvatarPreview({
 
   const renderHairBack = () => {
     switch (hairStyle) {
-      case 'Long Straight': return <rect x="4" y="8" width="16" height="12" fill={hairColor} />;
-      case 'Long Wavy': return <g fill={hairColor}><rect x="4" y="8" width="16" height="12" /><rect x="3" y="10" width="1" height="2" /><rect x="3" y="14" width="1" height="2" /><rect x="3" y="18" width="1" height="2" /><rect x="20" y="10" width="1" height="2" /><rect x="20" y="14" width="1" height="2" /><rect x="20" y="18" width="1" height="2" /></g>;
-      case 'Bob': return <rect x="4" y="8" width="16" height="7" fill={hairColor} />;
-      case 'Ponytail': return <g fill={hairColor}><rect x="18" y="9" width="4" height="3" /><rect x="22" y="10" width="1" height="1" /></g>;
-      case 'Dreadlocks': return <g fill={hairColor}><rect x="3" y="8" width="2" height="10" /><rect x="19" y="8" width="2" height="10" /><rect x="5" y="8" width="2" height="12" /><rect x="17" y="8" width="2" height="12" /></g>;
-      case 'Afro': return <g fill={hairColor}><rect x="2" y="4" width="20" height="12" rx="4" /></g>;
-      case 'Mullet': return <rect x="4" y="12" width="16" height="6" fill={hairColor} />;
-      case 'Pigtails': return <g fill={hairColor}><rect x="2" y="9" width="3" height="6" /><rect x="19" y="9" width="3" height="6" /></g>;
+      case 'Long Straight': return <rect x="4" y="8" width="16" height="12" fill={hairFill.fill} />;
+      case 'Long Wavy': return <g fill={hairFill.fill}><rect x="4" y="8" width="16" height="12" /><rect x="3" y="10" width="1" height="2" /><rect x="3" y="14" width="1" height="2" /><rect x="3" y="18" width="1" height="2" /><rect x="20" y="10" width="1" height="2" /><rect x="20" y="14" width="1" height="2" /><rect x="20" y="18" width="1" height="2" /></g>;
+      case 'Bob': return <rect x="4" y="8" width="16" height="7" fill={hairFill.fill} />;
+      case 'Ponytail': return <g fill={hairFill.fill}><rect x="18" y="9" width="4" height="3" /><rect x="22" y="10" width="1" height="1" /></g>;
+      case 'Dreadlocks': return <g fill={hairFill.fill}><rect x="3" y="8" width="2" height="10" /><rect x="19" y="8" width="2" height="10" /><rect x="5" y="8" width="2" height="12" /><rect x="17" y="8" width="2" height="12" /></g>;
+      case 'Afro': return <g fill={hairFill.fill}><rect x="2" y="4" width="20" height="12" rx="4" /></g>;
+      case 'Mullet': return <rect x="4" y="12" width="16" height="6" fill={hairFill.fill} />;
+      case 'Pigtails': return <g fill={hairFill.fill}><rect x="2" y="9" width="3" height="6" /><rect x="19" y="9" width="3" height="6" /></g>;
       default: return null;
     }
   };
 
   const renderHairFront = () => {
     switch (hairStyle) {
-      case 'Short': return <g fill={hairColor}><rect x="5" y="6" width="14" height="2" /><rect x="5" y="8" width="1" height="2" /><rect x="18" y="8" width="1" height="2" /></g>;
-      case 'Buzz': return <rect x="6" y="7" width="12" height="1" fill={hairColor} opacity="0.8" />;
-      case 'Curly': return <g fill={hairColor}><rect x="4" y="5" width="16" height="3" /><rect x="3" y="6" width="18" height="3" /><rect x="4" y="9" width="2" height="2" /><rect x="18" y="9" width="2" height="2" /></g>;
-      case 'Spiky': return <g fill={hairColor}><rect x="5" y="6" width="14" height="2" /><rect x="6" y="4" width="1" height="2" /><rect x="9" y="3" width="1" height="3" /><rect x="12" y="4" width="1" height="2" /><rect x="15" y="3" width="1" height="3" /><rect x="17" y="5" width="1" height="1" /></g>;
-      case 'Fade': return <g><rect x="6" y="6" width="12" height="2" fill={hairColor} /><rect x="5" y="8" width="1" height="3" fill={skinColor} opacity="0.5" /><rect x="18" y="8" width="1" height="3" fill={skinColor} opacity="0.5" /></g>;
-      case 'Mohawk': return <g fill={hairColor}><rect x="10" y="2" width="4" height="6" /><rect x="11" y="1" width="2" height="1" /></g>;
-      case 'Dreadlocks': return <g fill={hairColor}><rect x="5" y="5" width="14" height="3" /><rect x="4" y="8" width="2" height="4" /><rect x="18" y="8" width="2" height="4" /><rect x="6" y="8" width="2" height="2" /><rect x="16" y="8" width="2" height="2" /></g>;
-      case 'Afro': return <g fill={hairColor}><rect x="4" y="4" width="16" height="4" /><rect x="3" y="5" width="18" height="4" /></g>;
-      case 'Mullet': return <g fill={hairColor}><rect x="5" y="6" width="14" height="2" /><rect x="5" y="8" width="1" height="2" /><rect x="18" y="8" width="1" height="2" /></g>;
-      case 'Pigtails': return <g fill={hairColor}><rect x="5" y="6" width="14" height="2" /><rect x="4" y="8" width="2" height="2" /><rect x="18" y="8" width="2" height="2" /></g>;
-      case 'Messy': return <g fill={hairColor}><rect x="4" y="5" width="16" height="3" /><rect x="5" y="4" width="4" height="1" /><rect x="12" y="3" width="3" height="2" /><rect x="17" y="4" width="2" height="2" /><rect x="3" y="7" width="2" height="3" /><rect x="19" y="6" width="2" height="4" /><rect x="6" y="8" width="1" height="2" /><rect x="17" y="8" width="1" height="2" /></g>;
+      case 'Short': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="5" y="8" width="1" height="2" /><rect x="18" y="8" width="1" height="2" /></g>;
+      case 'Buzz': return <rect x="6" y="7" width="12" height="1" fill={hairFill.fill} opacity="0.8" />;
+      case 'Curly': return <g fill={hairFill.fill}><rect x="4" y="5" width="16" height="3" /><rect x="3" y="6" width="18" height="3" /><rect x="4" y="9" width="2" height="2" /><rect x="18" y="9" width="2" height="2" /></g>;
+      case 'Spiky': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="6" y="4" width="1" height="2" /><rect x="9" y="3" width="1" height="3" /><rect x="12" y="4" width="1" height="2" /><rect x="15" y="3" width="1" height="3" /><rect x="17" y="5" width="1" height="1" /></g>;
+      case 'Fade': return <g><rect x="6" y="6" width="12" height="2" fill={hairFill.fill} /><rect x="5" y="8" width="1" height="3" fill={skinFill.fill} opacity="0.5" /><rect x="18" y="8" width="1" height="3" fill={skinFill.fill} opacity="0.5" /></g>;
+      case 'Mohawk': return <g fill={hairFill.fill}><rect x="10" y="2" width="4" height="6" /><rect x="11" y="1" width="2" height="1" /></g>;
+      case 'Dreadlocks': return <g fill={hairFill.fill}><rect x="5" y="5" width="14" height="3" /><rect x="4" y="8" width="2" height="4" /><rect x="18" y="8" width="2" height="4" /><rect x="6" y="8" width="2" height="2" /><rect x="16" y="8" width="2" height="2" /></g>;
+      case 'Afro': return <g fill={hairFill.fill}><rect x="4" y="4" width="16" height="4" /><rect x="3" y="5" width="18" height="4" /></g>;
+      case 'Mullet': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="5" y="8" width="1" height="2" /><rect x="18" y="8" width="1" height="2" /></g>;
+      case 'Pigtails': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="4" y="8" width="2" height="2" /><rect x="18" y="8" width="2" height="2" /></g>;
+      case 'Messy': return <g fill={hairFill.fill}><rect x="4" y="5" width="16" height="3" /><rect x="5" y="4" width="4" height="1" /><rect x="12" y="3" width="3" height="2" /><rect x="17" y="4" width="2" height="2" /><rect x="3" y="7" width="2" height="3" /><rect x="19" y="6" width="2" height="4" /><rect x="6" y="8" width="1" height="2" /><rect x="17" y="8" width="1" height="2" /></g>;
       case 'Ponytail': case 'Long Straight': case 'Long Wavy': case 'Bob':
-        return <g fill={hairColor}><rect x="5" y="6" width="14" height="2" /><rect x="5" y="8" width="2" height="3" /><rect x="17" y="8" width="2" height="3" /></g>;
+        return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="5" y="8" width="2" height="3" /><rect x="17" y="8" width="2" height="3" /></g>;
       case 'Bald': default: return null;
     }
   };
@@ -358,8 +364,8 @@ export default function AvatarPreview({
 
     return (
       <g>
-        <motion.rect animate={emotion} variants={eyebrowLeftVariants} style={{ transformOrigin: '8.5px 9.5px' }} x="7" y="9" width="3" height="1" fill={hairColor} />
-        <motion.rect animate={emotion} variants={eyebrowRightVariants} style={{ transformOrigin: '15.5px 9.5px' }} x="14" y="9" width="3" height="1" fill={hairColor} />
+        <motion.rect animate={emotion} variants={eyebrowLeftVariants} style={{ transformOrigin: '8.5px 9.5px' }} x="7" y="9" width="3" height="1" fill={hairFill.fill} />
+        <motion.rect animate={emotion} variants={eyebrowRightVariants} style={{ transformOrigin: '15.5px 9.5px' }} x="14" y="9" width="3" height="1" fill={hairFill.fill} />
         {/* Auto-blink wrapper */}
         <motion.g
           animate={{ scaleY: [1, 1, 0.1, 1] }}
@@ -576,6 +582,28 @@ export default function AvatarPreview({
               <image href={config.customPattern} x="0" y="0" width="8" height="8" preserveAspectRatio="xMidYMid slice" />
             </pattern>
           )}
+          {/* Dynamic gradient defs for skin / hair / shirt */}
+          {skinFill.gradientDef && (
+            <linearGradient id="grad_skin" {...angleToSvgCoords(skinFill.gradientDef.angle)}>
+              {skinFill.gradientDef.stops.map((s, i) => (
+                <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
+              ))}
+            </linearGradient>
+          )}
+          {hairFill.gradientDef && (
+            <linearGradient id="grad_hair" {...angleToSvgCoords(hairFill.gradientDef.angle)}>
+              {hairFill.gradientDef.stops.map((s, i) => (
+                <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
+              ))}
+            </linearGradient>
+          )}
+          {shirtFill.gradientDef && (
+            <linearGradient id="grad_shirt" {...angleToSvgCoords(shirtFill.gradientDef.angle)}>
+              {shirtFill.gradientDef.stops.map((s, i) => (
+                <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
+              ))}
+            </linearGradient>
+          )}
         </defs>
 
         {/* Background — outside all animation wrappers, always static */}
@@ -592,10 +620,10 @@ export default function AvatarPreview({
           <motion.g animate={emotion} variants={bodyVariants} style={{ transformOrigin: '12px 24px' }}>
 
             {/* Shirt + neck */}
-            <rect x="4" y="20" width="16" height="4" fill={config.shirtColor || '#3f3f46'} />
+            <rect x="4" y="20" width="16" height="4" fill={shirtFill.fill} />
             <rect x="9" y="20" width="6" height="1" fill="rgba(0,0,0,0.2)" />
             <rect x="10" y="21" width="4" height="1" fill="rgba(0,0,0,0.2)" />
-            <rect x="10" y="18" width="4" height="2" fill={skinColor} />
+            <rect x="10" y="18" width="4" height="2" fill={skinFill.fill} />
             <rect x="10" y="18" width="4" height="1" fill="rgba(0,0,0,0.15)" />
 
             {renderNecklace()}
@@ -607,11 +635,11 @@ export default function AvatarPreview({
 
             {/* Ears */}
             <motion.g animate={{ x: -offsets.ears.x, y: offsets.ears.y }}>
-              <rect x="4" y="11" width="2" height="3" fill={skinColor} />
+              <rect x="4" y="11" width="2" height="3" fill={skinFill.fill} />
               <rect x="4" y="12" width="2" height="1" fill="rgba(0,0,0,0.1)" />
             </motion.g>
             <motion.g animate={{ x: offsets.ears.x, y: offsets.ears.y }}>
-              <rect x="18" y="11" width="2" height="3" fill={skinColor} />
+              <rect x="18" y="11" width="2" height="3" fill={skinFill.fill} />
               <rect x="18" y="12" width="2" height="1" fill="rgba(0,0,0,0.1)" />
             </motion.g>
 
@@ -665,6 +693,16 @@ export default function AvatarPreview({
             </motion.g>
           </motion.g>
         </motion.g>
+
+        {/* Overlay — voxel-painted layer on top of everything, no animation */}
+        {config.overlayImage && (
+          <image
+            href={config.overlayImage}
+            x="0" y="0" width="24" height="24"
+            preserveAspectRatio="xMidYMid meet"
+            style={{ imageRendering: 'pixelated' }}
+          />
+        )}
       </svg>
     </div>
   );

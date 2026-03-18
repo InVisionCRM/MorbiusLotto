@@ -1,9 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import PixelBackgroundUploader from './PixelBackgroundUploader';
+import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
+import { Lock, Sparkles } from 'lucide-react';
+import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
+import { parseGradient, angleToSvgCoords } from '@/lib/gradient-utils';
+import GradientBuilder from './GradientBuilder';
 
 const SkinColors = [
   '#FFF5EE', '#FFE4E1', '#FFDAB9', '#FFCDB2', '#FFB4A2', '#FFDBAC', '#F1C27D', '#E0AC69', '#C68642', '#8D5524', '#7B4B2A', '#5C3A21', '#4A3B32', '#3E2723', '#2D221E', '#1A1110', '#E5989B', '#B5838D', '#6D6875', '#4A4E69', '#22223B',
@@ -34,48 +38,165 @@ const Hats = ['None', 'Cap', 'Beanie', 'Top Hat', 'Cowboy', 'Crown', 'Bandana'];
 const Necklaces = ['None', 'Gold Chain', 'Silver Chain', 'Pearl', 'Pendant'];
 const MouthAccessories = ['None', 'Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'];
 
-export default function AvatarControls({ config, onChange, activeTab, compact = false }: { config: AvatarConfig; onChange: (c: AvatarConfig) => void; activeTab: string; compact?: boolean }) {
+type AvatarControlsProps = {
+  config: AvatarConfig;
+  onChange: (c: AvatarConfig) => void;
+  activeTab: string;
+  compact?: boolean;
+  ownedItems?: Set<string>;
+  isAdmin?: boolean;
+  onLockedItemClick?: (itemKey: string) => void;
+};
+
+/** Render a color swatch — handles hex, url(#pattern), and gradient JSON. */
+function ColorSwatch({ value, size }: { value: string; size: number }) {
+  const grad = parseGradient(value);
+  if (grad) {
+    const id = `swatch_${Math.abs(value.slice(0, 32).split('').reduce((h, c) => Math.imul(31, h) + c.charCodeAt(0) | 0, 0))}`;
+    const coords = angleToSvgCoords(grad.angle);
+    return (
+      <svg viewBox="0 0 100 100" width={size} height={size} style={{ imageRendering: 'pixelated', borderRadius: '50%' }}>
+        <defs>
+          <linearGradient id={id} {...coords}>
+            {grad.stops.map((s, i) => (
+              <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
+            ))}
+          </linearGradient>
+        </defs>
+        <rect width="100" height="100" fill={`url(#${id})`} />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
+      <rect width="100" height="100" fill={value} />
+    </svg>
+  );
+}
+
+export default function AvatarControls({ config, onChange, activeTab, compact = false, ownedItems, isAdmin = false, onLockedItemClick }: AvatarControlsProps) {
   const update = (key: keyof AvatarConfig, value: string) => onChange({ ...config, [key]: value });
 
-  const skinColors   = config.customPattern ? ['url(#custom)', ...SkinColors]  : SkinColors;
-  const hairColors   = config.customPattern ? ['url(#custom)', ...HairColors]  : HairColors;
-  const shirtColors  = config.customPattern ? ['url(#custom)', ...ShirtColors] : ShirtColors;
-  const accessories  = config.customPattern ? ['Voxel Glasses', ...Accessories] : Accessories;
-  const necklaces    = config.customPattern ? ['Voxel Chain', ...Necklaces]    : Necklaces;
+  // Track which color fields have the gradient panel open
+  const [gradientOpen, setGradientOpen] = useState<Record<string, boolean>>({});
+  const toggleGradient = (field: string) => setGradientOpen(prev => ({ ...prev, [field]: !prev[field] }));
 
-  const renderColorGrid = (colors: string[], activeColor: string, key: keyof AvatarConfig) => (
-    <div className={`grid grid-cols-6 sm:grid-cols-7 ${compact ? 'gap-2' : 'gap-3'}`}>
-      {colors.map(c => (
-        <button
-          key={c}
-          className={`rounded-full shadow-sm transition-transform hover:scale-110 focus:outline-none overflow-hidden flex items-center justify-center touch-manipulation ${compact ? 'min-w-[44px] min-h-[44px] w-11 h-11 ring-offset-1 ring-offset-zinc-900' : 'w-10 h-10 ring-offset-2 ring-offset-zinc-900'} ${activeColor === c ? 'ring-2 ring-indigo-500 scale-110' : 'ring-1 ring-white/10'}`}
-          onClick={() => update(key, c)}
-          aria-label={`Select color ${c}`}
-        >
-          <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
-            <rect width="100" height="100" fill={c} />
-          </svg>
-        </button>
-      ))}
-    </div>
-  );
+  const bgItems = ITEM_CATALOG.filter(i => i.unlocks.some(u => u.field === 'backgroundImage'));
 
-  const renderShapeGrid = (shapes: string[], activeShape: string, key: keyof AvatarConfig) => (
-    <div className={`grid grid-cols-2 sm:grid-cols-3 ${compact ? 'gap-2' : 'gap-3'}`}>
-      {shapes.map(s => (
-        <button
-          key={s}
-          className={`rounded-lg font-medium transition-all touch-manipulation min-h-[44px] ${compact ? 'py-2.5 px-3 text-xs' : 'py-3 px-4 rounded-xl text-sm'} ${activeShape === s ? 'bg-indigo-600 text-white shadow-md' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'}`}
-          onClick={() => update(key, s)}
-        >
-          {s}
-        </button>
-      ))}
-    </div>
-  );
+  const isLocked = (field: AvatarField, value: string): boolean => {
+    if (isAdmin) return false;
+    if (!ownedItems) return false;
+    const itemKey = getItemKeyForValue(field, value);
+    if (!itemKey) return false;
+    return !ownedItems.has(itemKey);
+  };
 
   const SectionLabel = ({ children }: { children: React.ReactNode }) => (
     <h3 className={`font-semibold text-zinc-400 uppercase tracking-wider ${compact ? 'text-xs mb-2' : 'text-sm mb-4'}`}>{children}</h3>
+  );
+
+  /** Gradient toggle button shown above color grids that support gradients. */
+  const GradientToggle = ({ field, currentValue, label }: { field: AvatarField; currentValue: string; label: string }) => {
+    const isGradientActive = !!parseGradient(currentValue);
+    const isOpen = !!gradientOpen[field];
+    return (
+      <button
+        type="button"
+        onClick={() => toggleGradient(field)}
+        className={`mb-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+          isOpen || isGradientActive
+            ? 'bg-indigo-600/30 border border-indigo-500/50 text-indigo-300'
+            : 'bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+        }`}
+      >
+        <Sparkles size={11} />
+        {isGradientActive && !isOpen ? 'Edit Gradient' : isOpen ? 'Close Gradient' : 'Custom Gradient'}
+        {isGradientActive && !isOpen && (
+          <ColorSwatch value={currentValue} size={14} />
+        )}
+      </button>
+    );
+  };
+
+  const renderColorGrid = (colors: string[], activeColor: string, field: AvatarField) => (
+    <div className={`grid grid-cols-6 sm:grid-cols-7 ${compact ? 'gap-2' : 'gap-3'}`}>
+      {colors.map(c => {
+        const locked = isLocked(field, c);
+        const isActive = activeColor === c;
+        const itemKey = locked ? (getItemKeyForValue(field, c) ?? undefined) : undefined;
+        return (
+          <button
+            key={c}
+            className={`relative rounded-full shadow-sm transition-transform hover:scale-110 focus:outline-none overflow-hidden flex items-center justify-center touch-manipulation ${compact ? 'min-w-[44px] min-h-[44px] w-11 h-11 ring-offset-1 ring-offset-zinc-900' : 'w-10 h-10 ring-offset-2 ring-offset-zinc-900'} ${isActive ? 'ring-2 ring-indigo-500 scale-110' : locked ? 'ring-1 ring-yellow-500/40' : 'ring-1 ring-white/10'}`}
+            onClick={() => {
+              update(field, c);
+              if (locked && itemKey) onLockedItemClick?.(itemKey);
+            }}
+            aria-label={`Select color ${c}${locked ? ' (locked)' : ''}`}
+          >
+            <ColorSwatch value={c} size={100} />
+            {locked && (
+              <span className="absolute inset-0 flex items-center justify-center bg-black/55 pointer-events-none">
+                <Lock size={compact ? 10 : 12} className="text-yellow-400" />
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderShapeGrid = (shapes: string[], activeShape: string, field: AvatarField) => (
+    <div className={`grid grid-cols-2 sm:grid-cols-3 ${compact ? 'gap-2' : 'gap-3'}`}>
+      {shapes.map(s => {
+        const locked = isLocked(field, s);
+        const isActive = activeShape === s;
+        const itemKey = locked ? (getItemKeyForValue(field, s) ?? undefined) : undefined;
+        return (
+          <button
+            key={s}
+            className={`relative rounded-lg font-medium transition-all touch-manipulation min-h-[44px] ${compact ? 'py-2.5 px-3 text-xs' : 'py-3 px-4 rounded-xl text-sm'} ${isActive ? 'bg-indigo-600 text-white shadow-md' : locked ? 'bg-zinc-800 text-yellow-400/80 hover:bg-zinc-700 hover:text-yellow-300 border border-yellow-500/20' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'}`}
+            onClick={() => {
+              update(field, s);
+              if (locked && itemKey) onLockedItemClick?.(itemKey);
+            }}
+            aria-label={`${s}${locked ? ' (locked)' : ''}`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              {locked && <Lock size={10} className="shrink-0" />}
+              {s}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  /** Renders the gradient builder panel with animation. */
+  const renderGradientPanel = (field: AvatarField, currentValue: string, label: string) => (
+    <AnimatePresence>
+      {gradientOpen[field] && (
+        <motion.div
+          key={`grad-${field}`}
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.2 }}
+          className="overflow-hidden"
+        >
+          <div className="pt-2 pb-1">
+            <GradientBuilder
+              value={currentValue}
+              label={label}
+              onApply={serialized => {
+                update(field, serialized);
+                setGradientOpen(prev => ({ ...prev, [field]: false }));
+              }}
+            />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 
   return (
@@ -93,7 +214,9 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             {activeTab === 'skin' && (
               <section>
                 <SectionLabel>Skin Tone</SectionLabel>
-                {renderColorGrid(skinColors, config.skinColor, 'skinColor')}
+                <GradientToggle field="skinColor" currentValue={config.skinColor} label="Skin Gradient" />
+                {renderGradientPanel('skinColor', config.skinColor, 'Skin Gradient')}
+                {!gradientOpen['skinColor'] && renderColorGrid(SkinColors, config.skinColor, 'skinColor')}
               </section>
             )}
 
@@ -105,7 +228,9 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
                 </section>
                 <section>
                   <SectionLabel>Hair Color</SectionLabel>
-                  {renderColorGrid(hairColors, config.hairColor, 'hairColor')}
+                  <GradientToggle field="hairColor" currentValue={config.hairColor} label="Hair Gradient" />
+                  {renderGradientPanel('hairColor', config.hairColor, 'Hair Gradient')}
+                  {!gradientOpen['hairColor'] && renderColorGrid(HairColors, config.hairColor, 'hairColor')}
                 </section>
               </>
             )}
@@ -147,7 +272,9 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             {activeTab === 'clothes' && (
               <section>
                 <SectionLabel>Shirt Color</SectionLabel>
-                {renderColorGrid(shirtColors, config.shirtColor, 'shirtColor')}
+                <GradientToggle field="shirtColor" currentValue={config.shirtColor} label="Shirt Gradient" />
+                {renderGradientPanel('shirtColor', config.shirtColor, 'Shirt Gradient')}
+                {!gradientOpen['shirtColor'] && renderColorGrid(ShirtColors, config.shirtColor, 'shirtColor')}
               </section>
             )}
 
@@ -155,7 +282,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
               <>
                 <section>
                   <SectionLabel>Glasses & Earrings</SectionLabel>
-                  {renderShapeGrid(accessories, config.accessory, 'accessory')}
+                  {renderShapeGrid(Accessories, config.accessory, 'accessory')}
                 </section>
                 <section>
                   <SectionLabel>Hats</SectionLabel>
@@ -163,32 +290,67 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
                 </section>
                 <section>
                   <SectionLabel>Necklaces</SectionLabel>
-                  {renderShapeGrid(necklaces, config.necklace, 'necklace')}
+                  {renderShapeGrid(Necklaces, config.necklace, 'necklace')}
                 </section>
               </>
             )}
 
             {activeTab === 'bg' && (
               <section>
-                <SectionLabel>Custom Background (Voxelizer)</SectionLabel>
-                <PixelBackgroundUploader
-                  currentImage={config.backgroundImage}
-                  onImageChange={(dataUrl) => {
-                    onChange({
-                      ...config,
-                      backgroundImage: dataUrl,
-                      customPattern: dataUrl,
-                      skinColor: dataUrl ? 'url(#custom)' : config.skinColor,
-                      hairColor: dataUrl ? 'url(#custom)' : config.hairColor,
-                      shirtColor: dataUrl ? 'url(#custom)' : config.shirtColor,
-                    });
-                  }}
-                />
+                {bgItems.length === 0 ? (
+                  <p className="text-xs text-zinc-500 text-center py-8">No background items in the catalog yet — add them via the admin item builder.</p>
+                ) : (
+                  <>
+                    <SectionLabel>Backgrounds</SectionLabel>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => update('backgroundImage', '')}
+                        className={`aspect-square rounded-lg border-2 flex items-center justify-center text-[10px] font-medium transition-colors ${
+                          !config.backgroundImage ? 'border-white/60 text-white' : 'border-zinc-700 text-zinc-500 hover:border-zinc-500'
+                        }`}
+                      >
+                        None
+                      </button>
+                      {bgItems.map(bgItem => {
+                        const val = bgItem.unlocks.find(u => u.field === 'backgroundImage')?.value ?? '';
+                        const owned = isAdmin || (ownedItems?.has(bgItem.itemKey) ?? false);
+                        const selected = config.backgroundImage === val;
+                        return (
+                          <button
+                            key={bgItem.itemKey}
+                            type="button"
+                            onClick={() => owned ? update('backgroundImage', val) : onLockedItemClick?.(bgItem.itemKey)}
+                            className={`aspect-square rounded-lg border-2 overflow-hidden relative transition-colors ${
+                              selected ? 'border-white/80' : owned ? 'border-zinc-700 hover:border-zinc-400' : 'border-zinc-800'
+                            }`}
+                            title={bgItem.displayName}
+                          >
+                            <img src={val} alt={bgItem.displayName} className="w-full h-full object-cover" />
+                            {!owned && (
+                              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                <Lock size={14} className="text-yellow-400" />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </section>
             )}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {ownedItems && !isAdmin && (
+        <div className="mt-3 flex items-center gap-1.5 text-[10px] text-zinc-500 shrink-0">
+          <Lock size={9} className="text-yellow-400/70" />
+          <span className="text-yellow-400/70">Locked</span>
+          <span>— preview freely, purchase or receive as a gift to save</span>
+        </div>
+      )}
     </div>
   );
 }

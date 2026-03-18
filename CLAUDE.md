@@ -57,6 +57,8 @@ cd contracts && npx hardhat test
 
 **PulseChain / Solidity**: PLS behaves exactly like ETH. `msg.value` is in beats (= wei). No wrappers needed. Unmodified Ethereum contracts deploy and run without changes.
 
+**Currency**: The in-game currency ticker is **MORBIUS** — never abbreviate as MRB. Display as "MORBIUS" in all UI labels and code comments.
+
 **PulseChain APIs**:
 - Token search: `api.scan.pulsechain.com/api/v2/search?q=`
 - Token details: `api.scan.pulsechain.com/api/v2/tokens/{address}`

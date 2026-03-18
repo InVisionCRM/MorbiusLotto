@@ -22,6 +22,7 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   necklace: 'None',
   mouthAccessory: 'None',
   backgroundImage: '',
+  overlayImage: '',
   faceShape: 'Square',
   customPattern: '',
 };
@@ -47,9 +48,15 @@ type CharacterCreatorProps = {
   onDisplayNameChange?: (value: string) => void;
   /** Tighter layout for modals (smaller avatar, tabs, and controls). */
   compact?: boolean;
+  /** Item keys the player owns — passed through to AvatarControls for lock indicators. */
+  ownedItems?: Set<string>;
+  /** Admin wallets bypass all cosmetics locks. */
+  isAdmin?: boolean;
+  /** Called when user clicks a locked item — opens the purchase sheet in the parent. */
+  onLockedItemClick?: (itemKey: string) => void;
 };
 
-export default function CharacterCreator({ config: controlledConfig, onChange, initialConfig, displayName, onDisplayNameChange, compact = false }: CharacterCreatorProps) {
+export default function CharacterCreator({ config: controlledConfig, onChange, initialConfig, displayName, onDisplayNameChange, compact = false, ownedItems, isAdmin = false, onLockedItemClick }: CharacterCreatorProps) {
   const [internalConfig, setInternalConfig] = useState<AvatarConfig>(initialConfig ?? DEFAULT_AVATAR_CONFIG);
   const config = controlledConfig ?? internalConfig;
   const setConfig = onChange ?? setInternalConfig;
@@ -87,6 +94,9 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
           onChange={setConfig}
           displayName={displayName}
           onDisplayNameChange={onDisplayNameChange}
+          ownedItems={ownedItems}
+          isAdmin={isAdmin}
+          onLockedItemClick={onLockedItemClick}
         />
       </div>
 
@@ -164,7 +174,7 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
         </div>
         {/* Options panel: on mobile min-h so it never collapses; directly under tabs with flex-col-reverse */}
         <div className={`w-full md:w-3/5 flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${compact ? 'p-3 min-h-[220px] md:min-h-0' : 'p-6 sm:p-8'}`}>
-          <AvatarControls config={config} onChange={setConfig} activeTab={activeTab} compact={compact} />
+          <AvatarControls config={config} onChange={setConfig} activeTab={activeTab} compact={compact} ownedItems={ownedItems} isAdmin={isAdmin} onLockedItemClick={onLockedItemClick} />
         </div>
       </div>
       </div> {/* end desktop wrapper */}

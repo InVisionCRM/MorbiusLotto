@@ -136,7 +136,7 @@ export const MobileSidebar = ({
     <>
       <div
         className={cn(
-          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between gap-2 bg-slate-950/40 border-b border-white/10 w-full"
+          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between gap-2 bg-slate-950/70 border-b border-white/10 w-full"
         )}
         {...props}
       >
@@ -174,18 +174,28 @@ export const MobileSidebar = ({
                   ease: "easeInOut",
                 }}
                 className={cn(
-                  "fixed left-0 top-0 bottom-0 w-1/2 min-w-[160px] max-w-[220px] pl-3 pr-2 py-4 z-[99999] flex flex-col justify-between overflow-y-auto",
+                  "fixed left-0 top-0 bottom-0 w-1/2 min-w-[160px] max-w-[220px] z-[99999] flex flex-col overflow-hidden",
                   className
                 )}
                 style={style}
               >
+                {/* Dedicated close row: above content so X is never covered by back link. Safe area so X isn't in status bar. */}
                 <div
-                  className="absolute right-2 top-3 z-50 text-white/80 hover:text-white cursor-pointer p-1"
-                  onClick={() => setOpen(!open)}
+                  className="shrink-0 flex items-center justify-end pr-1 min-h-12 pl-3"
+                  style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
                 >
-                  <IconX className="w-5 h-5" />
+                  <button
+                    type="button"
+                    onClick={() => setOpen(!open)}
+                    className="flex items-center justify-center w-10 h-10 -mr-1 text-white/80 hover:text-white cursor-pointer touch-manipulation"
+                    aria-label="Close menu"
+                  >
+                    <IconX className="w-6 h-6" />
+                  </button>
                 </div>
-                {children}
+                <div className="flex-1 min-h-0 overflow-y-auto pl-3 pr-2 pb-4 flex flex-col">
+                  {children}
+                </div>
               </motion.div>
             </>
           )}

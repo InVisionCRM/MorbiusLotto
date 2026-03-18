@@ -3,10 +3,12 @@
 import React, { useState } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import AvatarPreview from './AvatarPreview';
-import PixelBackgroundUploader from './PixelBackgroundUploader';
+import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
 import {
   Drawer, DrawerContent, DrawerHeader, DrawerTitle,
 } from '@/components/ui/drawer';
+import { Lock } from 'lucide-react';
+import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
 
 // ── data ──────────────────────────────────────────────────────────────────
 
@@ -82,9 +84,12 @@ type Props = {
   onChange: (c: AvatarConfig) => void;
   displayName?: string;
   onDisplayNameChange?: (v: string) => void;
+  ownedItems?: Set<string>;
+  isAdmin?: boolean;
+  onLockedItemClick?: (itemKey: string) => void;
 };
 
-export default function CharacterCreatorMobile({ config, onChange, displayName, onDisplayNameChange }: Props) {
+export default function CharacterCreatorMobile({ config, onChange, displayName, onDisplayNameChange, ownedItems, isAdmin = false, onLockedItemClick }: Props) {
   const [activeId, setActiveId] = useState('skin');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -93,13 +98,12 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
   const update = (key: keyof AvatarConfig, value: string) => onChange({ ...config, [key]: value });
 
   const getOptions = (cat: Category): string[] => {
-    const hasCust = !!config.customPattern;
     switch (cat.id) {
-      case 'skin':  return hasCust ? ['url(#custom)', ...SkinColors]    : SkinColors;
-      case 'hairc': return hasCust ? ['url(#custom)', ...HairColors]    : HairColors;
-      case 'shirt': return hasCust ? ['url(#custom)', ...ShirtColors]   : ShirtColors;
-      case 'glass': return hasCust ? ['Voxel Glasses', ...Accessories]  : Accessories;
-      case 'neck':  return hasCust ? ['Voxel Chain', ...Necklaces]      : Necklaces;
+      case 'skin':  return SkinColors;
+      case 'hairc': return HairColors;
+      case 'shirt': return ShirtColors;
+      case 'glass': return Accessories;
+      case 'neck':  return Necklaces;
       case 'face':  return FaceShapes;
       case 'hair':  return HairStyles;
       case 'eyes':  return EyeShapes;
@@ -120,6 +124,13 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
   };
 
   const currentVal = activeCat.field ? (config[activeCat.field] as string ?? '') : '';
+
+  const isLocked = (field: AvatarField, value: string): boolean => {
+    if (isAdmin || !ownedItems) return false;
+    const itemKey = getItemKeyForValue(field, value);
+    if (!itemKey) return false;
+    return !ownedItems.has(itemKey);
+  };
 
   return (
     <div className="flex h-full bg-zinc-900 overflow-hidden">
@@ -166,17 +177,42 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
           </p>
 
           {activeCat.type === 'bg' ? (
-            <PixelBackgroundUploader
-              currentImage={config.backgroundImage}
-              onImageChange={url => onChange({
-                ...config,
-                backgroundImage: url,
-                customPattern: url,
-                skinColor:  url ? 'url(#custom)' : config.skinColor,
-                hairColor:  url ? 'url(#custom)' : config.hairColor,
-                shirtColor: url ? 'url(#custom)' : config.shirtColor,
-              })}
-            />
+            (() => {
+              const bgItems = ITEM_CATALOG.filter(i => i.unlocks.some(u => u.field === 'backgroundImage'));
+              if (bgItems.length === 0) {
+                return <p className="text-[11px] text-zinc-500 text-center py-4">No backgrounds yet — added via the admin item builder.</p>;
+              }
+              return (
+                <div className="grid grid-cols-3 gap-1.5 w-full">
+                  <button
+                    type="button"
+                    onClick={() => update('backgroundImage', '')}
+                    className={`aspect-square rounded-lg border-2 flex items-center justify-center text-[10px] font-medium transition-colors ${
+                      !config.backgroundImage ? 'border-white/60 text-white' : 'border-zinc-700 text-zinc-500'
+                    }`}
+                  >
+                    None
+                  </button>
+                  {bgItems.map(bgItem => {
+                    const val = bgItem.unlocks.find(u => u.field === 'backgroundImage')?.value ?? '';
+                    const owned = isAdmin || (ownedItems?.has(bgItem.itemKey) ?? false);
+                    const selected = config.backgroundImage === val;
+                    return (
+                      <button
+                        key={bgItem.itemKey}
+                        type="button"
+                        onClick={() => owned ? update('backgroundImage', val) : onLockedItemClick?.(bgItem.itemKey)}
+                        className={`aspect-square rounded-lg border-2 overflow-hidden relative ${selected ? 'border-white/80' : owned ? 'border-zinc-700' : 'border-zinc-800'}`}
+                        title={bgItem.displayName}
+                      >
+                        <img src={val} alt={bgItem.displayName} className="w-full h-full object-cover" />
+                        {!owned && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Lock size={12} className="text-yellow-400" /></div>}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()
           ) : (
             <div className="flex gap-2.5 w-full">
               <button
@@ -212,43 +248,67 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
             {/* Color grid */}
             {activeCat.type === 'color' && activeCat.field && (
               <div className="grid grid-cols-6 gap-3">
-                {getOptions(activeCat).map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => { update(activeCat.field!, c); setDrawerOpen(false); }}
-                    aria-label={`Select ${c}`}
-                    className={`w-12 h-12 rounded-full overflow-hidden touch-manipulation transition-transform ${
-                      currentVal === c
-                        ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-zinc-900 scale-110'
-                        : 'ring-1 ring-white/10 active:scale-95'
-                    }`}
-                  >
-                    <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
-                      <rect width="100" height="100" fill={c} />
-                    </svg>
-                  </button>
-                ))}
+                {getOptions(activeCat).map(c => {
+                  const locked = isLocked(activeCat.field as AvatarField, c);
+                  const lockedKey = locked ? (getItemKeyForValue(activeCat.field as AvatarField, c) ?? undefined) : undefined;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => {
+                        update(activeCat.field!, c);
+                        if (locked && lockedKey) { setDrawerOpen(false); onLockedItemClick?.(lockedKey); }
+                        else setDrawerOpen(false);
+                      }}
+                      aria-label={`Select ${c}${locked ? ' (locked)' : ''}`}
+                      className={`relative w-12 h-12 rounded-full overflow-hidden touch-manipulation transition-transform ${
+                        currentVal === c
+                          ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-zinc-900 scale-110'
+                          : locked ? 'ring-1 ring-yellow-500/40 active:scale-95' : 'ring-1 ring-white/10 active:scale-95'
+                      }`}
+                    >
+                      <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
+                        <rect width="100" height="100" fill={c} />
+                      </svg>
+                      {locked && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/55 pointer-events-none">
+                          <Lock size={12} className="text-yellow-400" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
             {/* Shape / style grid */}
             {activeCat.type === 'shape' && activeCat.field && (
               <div className="grid grid-cols-3 gap-2">
-                {getOptions(activeCat).map(s => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => { update(activeCat.field!, s); setDrawerOpen(false); }}
-                    className={`h-11 rounded-xl text-sm font-medium touch-manipulation transition-colors whitespace-nowrap ${
-                      currentVal === s
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40'
-                        : 'bg-zinc-800 text-zinc-300 active:bg-zinc-700'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
+                {getOptions(activeCat).map(s => {
+                  const locked = isLocked(activeCat.field as AvatarField, s);
+                  const lockedKey = locked ? (getItemKeyForValue(activeCat.field as AvatarField, s) ?? undefined) : undefined;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        update(activeCat.field!, s);
+                        if (locked && lockedKey) { setDrawerOpen(false); onLockedItemClick?.(lockedKey); }
+                        else setDrawerOpen(false);
+                      }}
+                      className={`h-11 rounded-xl text-sm font-medium touch-manipulation transition-colors whitespace-nowrap ${
+                        currentVal === s
+                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40'
+                          : locked ? 'bg-zinc-800 text-yellow-400/80 border border-yellow-500/20 active:bg-zinc-700' : 'bg-zinc-800 text-zinc-300 active:bg-zinc-700'
+                      }`}
+                    >
+                      <span className="flex items-center justify-center gap-1">
+                        {locked && <Lock size={9} className="shrink-0" />}
+                        {s}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
 

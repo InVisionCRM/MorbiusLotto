@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
+import { usePokerSounds } from '@/hooks/use-poker-sounds';
 
 type Amount = bigint;
 
@@ -65,6 +66,7 @@ export function PokerActions({
   onBet,
   onRaise,
 }: PokerActionsProps) {
+  const { play } = usePokerSounds();
   const minRaiseAmt = useMemo(() => parsePropWei(minRaise), [minRaise]);
   const stackAmt    = useMemo(() => parsePropWei(stack),    [stack]);
   const callAmt     = useMemo(() => parsePropWei(callAmount),[callAmount]);
@@ -99,15 +101,17 @@ export function PokerActions({
   ];
 
   // ── Sound helpers ──────────────────────────────────────────────────────────
-  const playSound = (src: string) => { new Audio(src).play().catch(() => {}); };
+  const playSound = (key: 'raise' | 'call' | 'player_allin', src: string) => { play(key, src); };
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handlePrimary = () => {
     if (!hasValidAmount || clamped == null) return;
     const isAllIn = clamped === stackAmt;
-    playSound(isAllIn
-      ? '/POKER/PokerSounds/PlayerAll-In.wav'
-      : '/POKER/PokerSounds/PlayerClickConfirmation.mp3'
+    playSound(
+      isAllIn ? 'player_allin' : (isFacingBet ? 'raise' : 'call'),
+      isAllIn
+        ? '/POKER/PokerSounds/PlayerAll-In.wav'
+        : '/POKER/PokerSounds/PlayerClickConfirmation.mp3'
     );
     if (isFacingBet) onRaise(clamped.toString());
     else             onBet(clamped.toString());
@@ -132,12 +136,12 @@ export function PokerActions({
   const secondaryLabel = canCheck ? 'Check' : `Call ${formatAmount(callAmt)}`;
 
   const handleFoldWithSound = () => {
-    playSound('/POKER/PokerSounds/PlayerClickConfirmation.mp3');
+    playSound('call', '/POKER/PokerSounds/PlayerClickConfirmation.mp3');
     onFold();
   };
 
   const handleSecondary = () => {
-    playSound('/POKER/PokerSounds/PlayerClickConfirmation.mp3');
+    playSound('call', '/POKER/PokerSounds/PlayerClickConfirmation.mp3');
     if (canCheck) onCheck();
     else onCall();
   };

@@ -3,8 +3,12 @@
 import React, { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Gift } from 'lucide-react'
+import { useAccount } from 'wagmi'
 import { usePlayerProfileStats } from '@/hooks/use-player-profile'
 import { usePlayerReserveForAddress } from '@/hooks/use-blackjack-contract'
+import { useInventory } from '@/hooks/use-cosmetics'
+import { GiftItemModal } from '@/components/shared/GiftItemModal'
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard'
 import { useLotteryPlayerStats, useInstantLotteryResults } from '@/hooks/use-instant-lottery'
 import { LotteryPlayerDashboard } from '@/components/lottery/LotteryPlayerDashboard'
@@ -32,6 +36,11 @@ interface PlayerProfileModalProps {
 
 export function PlayerProfileModal({ isOpen, onClose, address, game = 'all' }: PlayerProfileModalProps) {
   const [selectedGame, setSelectedGame] = useState<PlayerProfileGame>(game)
+  const [giftOpen, setGiftOpen] = useState(false)
+
+  const { address: myAddress } = useAccount()
+  const { ownedSet, items: ownedItemKeys, refresh: refreshInventory } = useInventory(myAddress)
+  const isOwnProfile = myAddress?.toLowerCase() === address?.toLowerCase()
 
   // Sync selected game when modal opens or game prop changes (e.g. open from Plinko page)
   useEffect(() => {
@@ -78,20 +87,35 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all' }: P
   const isLoading = isLottery ? lotteryStats.isLoading : statsLoading
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto bg-gradient-to-b from-gray-900 to-black border-cyan-500/30">
         <DialogHeader className="flex flex-row items-center justify-between gap-4">
           <DialogTitle className="text-xl font-bold text-white">
             Player Dashboard
           </DialogTitle>
-          <Button
-            variant="outline"
-            size="lg"
-            className="text-xl font-semibold text-white border-white/50 hover:bg-white/10 hover:text-white shrink-0 px-6"
-            onClick={onClose}
-          >
-            Close
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Gift button — only show when viewing someone else's profile and you own items */}
+            {!isOwnProfile && myAddress && ownedItemKeys.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-pink-400 border-pink-500/40 hover:bg-pink-500/10 hover:text-pink-300 gap-1.5"
+                onClick={() => setGiftOpen(true)}
+              >
+                <Gift size={14} />
+                Gift Item
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="lg"
+              className="text-xl font-semibold text-white border-white/50 hover:bg-white/10 hover:text-white px-6"
+              onClick={onClose}
+            >
+              Close
+            </Button>
+          </div>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
@@ -150,5 +174,18 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all' }: P
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Gift item to this player */}
+    {myAddress && address && (
+      <GiftItemModal
+        open={giftOpen}
+        onClose={() => setGiftOpen(false)}
+        fromAddress={myAddress}
+        toAddress={address}
+        ownedItems={ownedSet}
+        onGifted={() => refreshInventory()}
+      />
+    )}
+  </>
   )
 }
