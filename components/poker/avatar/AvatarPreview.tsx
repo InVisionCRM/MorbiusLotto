@@ -361,7 +361,7 @@ export default function AvatarPreview({
 
     return (
       <g>
-        <motion.rect animate={emotion} variants={eyebrowLeftVariants} style={{ transformOrigin: '9.5px 9.5px' }} x="8" y="9" width="3" height="1" fill={hairFill.fill} />
+        <motion.rect animate={emotion} variants={eyebrowLeftVariants} style={{ transformOrigin: '8.5px 9.5px' }} x="7" y="9" width="3" height="1" fill={hairFill.fill} />
         <motion.rect animate={emotion} variants={eyebrowRightVariants} style={{ transformOrigin: '15.5px 9.5px' }} x="14" y="9" width="3" height="1" fill={hairFill.fill} />
         {/* Auto-blink wrapper */}
         <motion.g
@@ -369,8 +369,8 @@ export default function AvatarPreview({
           transition={{ duration: 4, repeat: Infinity, times: [0, 0.9, 0.95, 1], ease: 'easeInOut' }}
           style={{ transformOrigin: '12px 11.5px' }}
         >
-          <motion.g animate={emotion} variants={eyeVariants} style={{ transformOrigin: '9.5px 11.5px' }}>
-            {renderEye(8)}
+          <motion.g animate={emotion} variants={eyeVariants} style={{ transformOrigin: '8.5px 11.5px' }}>
+            {renderEye(7)}
           </motion.g>
           <motion.g animate={emotion} variants={rightEyeVariants} style={{ transformOrigin: '15.5px 11.5px' }}>
             {renderEye(14)}
@@ -531,13 +531,12 @@ export default function AvatarPreview({
   return (
     <div
       className={`relative overflow-hidden flex items-end justify-center ${sizeClass} ${className ?? ''}`}
-      style={{ imageRendering: 'pixelated' }}
     >
       <svg
         ref={svgRef}
         viewBox="0 0 24 28"
         className="w-full h-full absolute top-0 left-0"
-        shapeRendering="crispEdges"
+        shapeRendering="geometricPrecision"
       >
         <defs>
           <pattern id="tiger" patternUnits="userSpaceOnUse" width="4" height="4">
@@ -697,7 +696,6 @@ export default function AvatarPreview({
             href={config.overlayImage}
             x="0" y="0" width="24" height="28"
             preserveAspectRatio="xMidYMid meet"
-            style={{ imageRendering: 'pixelated' }}
           />
         )}
       </svg>

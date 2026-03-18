@@ -647,6 +647,28 @@ async function initializeServices() {
       }
     });
 
+    // POST /api/cosmetics/market/update-price — update listing price
+    // Body: { sellerAddress, listingId, newPrice }
+    app.post('/api/cosmetics/market/update-price', express.json(), async (req, res) => {
+      try {
+        const { sellerAddress, listingId, newPrice } = req.body ?? {};
+        if (!sellerAddress || !listingId || !newPrice) {
+          return res.status(400).json({ error: 'sellerAddress, listingId, and newPrice required' });
+        }
+        const p = Number(newPrice);
+        if (!Number.isFinite(p) || p <= 0) {
+          return res.status(400).json({ error: 'newPrice must be a positive number' });
+        }
+        const result = await cosmeticsService.updateListingPrice(sellerAddress, parseInt(listingId, 10), p);
+        if (result === 'not_found') return res.status(404).json({ error: 'Listing not found or already sold/cancelled' });
+        if (result === 'not_yours')  return res.status(403).json({ error: 'Not your listing' });
+        res.json({ success: true });
+      } catch (error) {
+        logger.error('Error updating listing price:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // POST /api/cosmetics/market/buy — buy a marketplace listing
     // Body: { buyerAddress, listingId, txHash }
     app.post('/api/cosmetics/market/buy', express.json(), async (req, res) => {

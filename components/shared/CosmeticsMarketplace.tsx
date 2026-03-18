@@ -2,12 +2,12 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Tag, Store, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { X, Tag, Store, Loader2, CheckCircle2, AlertTriangle, Pencil, Check } from 'lucide-react';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import { parseEther } from 'viem';
 import { toast } from 'sonner';
 import { ITEM_CATALOG, type ItemTier } from '@/lib/cosmetics-catalog';
-import { useMarketListings, buyListing, createListing, cancelListing, type MarketListing } from '@/hooks/use-cosmetics';
+import { useMarketListings, buyListing, createListing, cancelListing, updateListingPrice, type MarketListing } from '@/hooks/use-cosmetics';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 
 const ERC20_TRANSFER_ABI = [
@@ -242,6 +242,8 @@ export function CosmeticsMarketplace({ open, onClose, ownedItems, onPurchased }:
   const [showMine, setShowMine] = useState(false);
   const [buyTarget, setBuyTarget] = useState<MarketListing | null>(null);
   const [listTarget, setListTarget] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingPrice, setEditingPrice] = useState('');
 
   const filtered = useMemo(() => {
     return listings.filter(l => {
@@ -350,20 +352,69 @@ export function CosmeticsMarketplace({ open, onClose, ownedItems, onPurchased }:
                         </p>
                       </div>
                       {isOwn ? (
-                        <button
-                          onClick={async () => {
-                            try {
-                              await cancelListing(listing.sellerAddress, listing.id);
-                              toast.success('Listing cancelled');
-                              refresh();
-                            } catch (e) {
-                              toast.error(e instanceof Error ? e.message : 'Failed to cancel');
-                            }
-                          }}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-700 hover:bg-zinc-600 text-zinc-300 transition-colors shrink-0"
-                        >
-                          Cancel
-                        </button>
+                        editingId === listing.id ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <input
+                              type="number"
+                              min="1"
+                              value={editingPrice}
+                              onChange={e => setEditingPrice(e.target.value)}
+                              className="w-24 bg-zinc-800 border border-zinc-600 rounded-md px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500"
+                              placeholder="New price"
+                              autoFocus
+                            />
+                            <button
+                              onClick={async () => {
+                                const p = parseInt(editingPrice, 10);
+                                if (!p || p <= 0) return;
+                                try {
+                                  await updateListingPrice(listing.sellerAddress, listing.id, p);
+                                  toast.success('Price updated');
+                                  setEditingId(null);
+                                  refresh();
+                                } catch (e) {
+                                  toast.error(e instanceof Error ? e.message : 'Failed to update');
+                                }
+                              }}
+                              disabled={!editingPrice || parseInt(editingPrice) <= 0}
+                              className="p-1.5 rounded-md bg-cyan-600 hover:bg-cyan-500 text-white transition-colors disabled:opacity-40"
+                              title="Save price"
+                            >
+                              <Check size={12} />
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="p-1.5 rounded-md bg-zinc-700 hover:bg-zinc-600 text-zinc-300 transition-colors"
+                              title="Cancel edit"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => { setEditingId(listing.id); setEditingPrice(String(listing.priceMorbius)); }}
+                              className="p-1.5 rounded-md text-xs font-medium bg-zinc-700 hover:bg-zinc-600 text-zinc-300 transition-colors"
+                              title="Edit price"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await cancelListing(listing.sellerAddress, listing.id);
+                                  toast.success('Listing cancelled');
+                                  refresh();
+                                } catch (e) {
+                                  toast.error(e instanceof Error ? e.message : 'Failed to cancel');
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-zinc-700 hover:bg-zinc-600 text-zinc-300 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )
                       ) : alreadyOwned ? (
                         <span className="px-2 py-1.5 rounded-lg text-xs font-medium text-zinc-500 bg-zinc-800 shrink-0">Owned</span>
                       ) : (

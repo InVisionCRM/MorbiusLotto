@@ -183,6 +183,17 @@ export async function createListing(sellerAddress: string, itemKey: string, pric
   if (!res.ok) throw new Error(data.error ?? 'Listing failed');
 }
 
+/** Update the price of an active marketplace listing. */
+export async function updateListingPrice(sellerAddress: string, listingId: number, newPrice: number): Promise<void> {
+  const res = await fetch('/api/cosmetics/market/update-price', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sellerAddress, listingId, newPrice }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? 'Update failed');
+}
+
 /** Cancel an active marketplace listing. */
 export async function cancelListing(sellerAddress: string, listingId: number): Promise<void> {
   const res = await fetch('/api/cosmetics/market/cancel', {

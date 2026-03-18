@@ -469,6 +469,26 @@ export class CosmeticsService {
     return 'ok';
   }
 
+  /** Update the price of an active listing. Only the seller can update. */
+  async updateListingPrice(
+    sellerAddress: string,
+    listingId: number,
+    newPrice: number,
+  ): Promise<'ok' | 'not_found' | 'not_yours'> {
+    const { rows } = await this.pool.query<{ seller_address: string; status: string }>(
+      `SELECT seller_address, status FROM market_listings WHERE id = $1`,
+      [listingId],
+    );
+    if (rows.length === 0 || rows[0].status !== 'active') return 'not_found';
+    if (rows[0].seller_address !== sellerAddress.toLowerCase()) return 'not_yours';
+
+    await this.pool.query(
+      `UPDATE market_listings SET price_morbius = $1 WHERE id = $2`,
+      [newPrice, listingId],
+    );
+    return 'ok';
+  }
+
   /**
    * Buy a marketplace listing.
    * Verifies on-chain: buyer sent priceMorbius Morbius tokens directly to seller.
