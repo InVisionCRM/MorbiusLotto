@@ -109,6 +109,7 @@ export interface AvatarConfig {
   accessory: string;
   shirtColor: string;
   hat: string;
+  hatColor: string;
   necklace: string;
   mouthAccessory: string;
   backgroundImage: string;

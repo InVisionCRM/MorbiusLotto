@@ -242,8 +242,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
     if (!lastAction) return 'neutral';
     const a = lastAction.action?.toLowerCase();
     if (a === 'fold') return 'sad';
-    if (a === 'check' || a === 'call') return 'neutral';
-    if (a === 'bet' || a === 'raise' || a === 'all-in' || a === 'allin') return 'angry';
+    if (a === 'all-in' || a === 'allin') return 'angry';
     return 'neutral';
   }, [lastAction]);
 
@@ -262,6 +261,24 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
   const [localEmotion, setLocalEmotion] = useState<Emotion | null>(null);
   const localEmotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const avatarRef = useRef<HTMLDivElement | null>(null);
+
+  // Mouse idle detection — after 5s of no movement, current player's eyes roam
+  const [mouseIdle, setMouseIdle] = useState(false);
+  const mouseIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!isCurrentPlayer) return;
+    const resetTimer = () => {
+      setMouseIdle(false);
+      if (mouseIdleTimerRef.current) clearTimeout(mouseIdleTimerRef.current);
+      mouseIdleTimerRef.current = setTimeout(() => setMouseIdle(true), 5000);
+    };
+    resetTimer();
+    window.addEventListener('mousemove', resetTimer);
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      if (mouseIdleTimerRef.current) clearTimeout(mouseIdleTimerRef.current);
+    };
+  }, [isCurrentPlayer]);
 
   // Slouch while any menu is open
   const hasMenuOpen = quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || animationPickerOpen;
@@ -613,9 +630,9 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               config={seat.avatarConfig}
               emotion={activeEmotion}
               compact
-              trackMouse={isCurrentPlayer}
+              trackMouse={isCurrentPlayer && !mouseIdle}
               forceAsleep={seat.status === 'sitting_out'}
-              roamEyes={!isCurrentPlayer && !isActing && seat.status !== 'sitting_out'}
+              roamEyes={(isCurrentPlayer && mouseIdle) || (!isCurrentPlayer && !isActing && seat.status !== 'sitting_out')}
               className="w-full h-full"
             />
           ) : (

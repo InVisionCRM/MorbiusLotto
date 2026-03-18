@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { motion, useMotionValue, useSpring } from 'framer-motion';
-import { resolveColorValue, angleToSvgCoords } from '@/lib/gradient-utils';
+import { resolveColorValue, angleToSvgCoords, parseGradient } from '@/lib/gradient-utils';
 
 export type Emotion =
   | 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'wink'
@@ -126,6 +126,8 @@ export default function AvatarPreview({
   const skinFill  = resolveColorValue(skinColor,               'grad_skin');
   const hairFill  = resolveColorValue(hairColor,               'grad_hair');
   const shirtFill = resolveColorValue(config.shirtColor || '#3f3f46', 'grad_shirt');
+  const hatFill   = config.hatColor ? resolveColorValue(config.hatColor, 'grad_hat') : null;
+  const bgGradDef = config.backgroundImage?.startsWith('{') ? parseGradient(config.backgroundImage) : null;
 
   // ── emotion variants ───────────────────────────────────────────────────────
 
@@ -425,13 +427,14 @@ export default function AvatarPreview({
   };
 
   const renderHat = () => {
+    const hc = hatFill?.fill ?? null;
     switch (config.hat) {
-      case 'Cap': return <g><rect x="6" y="4" width="12" height="4" fill="#ef4444" /><rect x="6" y="7" width="16" height="1" fill="#ef4444" /></g>;
-      case 'Beanie': return <g><rect x="5" y="4" width="14" height="5" rx="2" fill="#3b82f6" /><rect x="5" y="8" width="14" height="2" fill="#2563eb" /></g>;
-      case 'Top Hat': return <g><rect x="7" y="0" width="10" height="8" fill="#111" /><rect x="4" y="8" width="16" height="1" fill="#111" /><rect x="7" y="6" width="10" height="2" fill="#dc2626" /></g>;
-      case 'Cowboy': return <g><rect x="7" y="2" width="10" height="5" fill="#78350f" /><rect x="3" y="7" width="18" height="2" fill="#78350f" /></g>;
-      case 'Crown': return <g fill="#fbbf24"><rect x="5" y="4" width="14" height="4" /><rect x="5" y="2" width="2" height="2" /><rect x="11" y="2" width="2" height="2" /><rect x="17" y="2" width="2" height="2" /></g>;
-      case 'Bandana': return <g fill="#ef4444"><rect x="5" y="6" width="14" height="3" /><rect x="18" y="7" width="2" height="4" /></g>;
+      case 'Cap': return <g><rect x="6" y="4" width="12" height="4" fill={hc ?? '#ef4444'} /><rect x="6" y="7" width="16" height="1" fill={hc ?? '#ef4444'} /></g>;
+      case 'Beanie': return <g><rect x="5" y="4" width="14" height="5" rx="2" fill={hc ?? '#3b82f6'} /><rect x="5" y="8" width="14" height="2" fill={hc ?? '#2563eb'} /></g>;
+      case 'Top Hat': return <g><rect x="7" y="0" width="10" height="8" fill={hc ?? '#111'} /><rect x="4" y="8" width="16" height="1" fill={hc ?? '#111'} /><rect x="7" y="6" width="10" height="2" fill={hc ? 'rgba(0,0,0,0.35)' : '#dc2626'} /></g>;
+      case 'Cowboy': return <g><rect x="7" y="2" width="10" height="5" fill={hc ?? '#78350f'} /><rect x="3" y="7" width="18" height="2" fill={hc ?? '#78350f'} /></g>;
+      case 'Crown': return <g fill={hc ?? '#fbbf24'}><rect x="5" y="4" width="14" height="4" /><rect x="5" y="2" width="2" height="2" /><rect x="11" y="2" width="2" height="2" /><rect x="17" y="2" width="2" height="2" /></g>;
+      case 'Bandana': return <g fill={hc ?? '#ef4444'}><rect x="5" y="6" width="14" height="3" /><rect x="18" y="7" width="2" height="4" /></g>;
       default: return null;
     }
   };
@@ -461,8 +464,8 @@ export default function AvatarPreview({
   // ── emotion particle effects (full-size only) ─────────────────────────────
 
   const renderEmotionEffects = () => {
-    // Allow sleepy Z's even in compact mode so sitting-out players are clearly indicated
-    if (compact && emotion !== 'sleepy') return null;
+    // In compact mode, allow key emotional effects through; suppress heavy/decorative ones
+    if (compact && !['sleepy', 'sad', 'love', 'money', 'shock', 'jackpot'].includes(emotion)) return null;
     switch (emotion) {
       case 'sad':
         return (
@@ -596,11 +599,27 @@ export default function AvatarPreview({
               ))}
             </linearGradient>
           )}
+          {hatFill?.gradientDef && (
+            <linearGradient id="grad_hat" {...angleToSvgCoords(hatFill.gradientDef.angle)}>
+              {hatFill.gradientDef.stops.map((s, i) => (
+                <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
+              ))}
+            </linearGradient>
+          )}
+          {bgGradDef && (
+            <linearGradient id="grad_bg" {...angleToSvgCoords(bgGradDef.angle)}>
+              {bgGradDef.stops.map((s, i) => (
+                <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
+              ))}
+            </linearGradient>
+          )}
         </defs>
 
         {/* Background — outside all animation wrappers, always static */}
         {config.backgroundImage && (
-          <image href={config.backgroundImage} x="0" y="0" width="24" height="28" preserveAspectRatio="xMidYMid slice" />
+          bgGradDef
+            ? <rect x="0" y="0" width="24" height="28" fill="url(#grad_bg)" />
+            : <image href={config.backgroundImage} x="0" y="0" width="24" height="28" preserveAspectRatio="xMidYMid slice" />
         )}
 
         {/* Breathing idle animation wrapper */}
@@ -626,7 +645,7 @@ export default function AvatarPreview({
 
             {/* Hair back */}
             <motion.g animate={{ y: offsets.head.y }}>
-              {renderHairBack()}
+              {config.hat === 'None' && renderHairBack()}
             </motion.g>
 
             {/* Ears */}
@@ -648,7 +667,7 @@ export default function AvatarPreview({
 
             {/* Hair front + hat */}
             <motion.g animate={{ y: offsets.head.y }}>
-              {renderHairFront()}
+              {config.hat === 'None' && renderHairFront()}
               {renderHat()}
             </motion.g>
 

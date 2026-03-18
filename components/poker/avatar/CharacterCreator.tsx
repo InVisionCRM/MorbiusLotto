@@ -19,6 +19,7 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   accessory: 'None',
   shirtColor: '#3f3f46',
   hat: 'None',
+  hatColor: '',
   necklace: 'None',
   mouthAccessory: 'None',
   backgroundImage: '',

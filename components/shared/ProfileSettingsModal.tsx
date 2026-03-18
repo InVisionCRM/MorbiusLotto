@@ -107,97 +107,97 @@ export default function ProfileSettingsModal({
       aria-labelledby="profile-settings-title"
     >
       <div
-        className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+        className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-xl shadow-2xl max-w-sm w-full overflow-hidden"
         style={PANEL_STYLE}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3">
-          <h2 id="profile-settings-title" className="text-lg font-bold text-white">
+        <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-3 py-2">
+          <h2 id="profile-settings-title" className="text-sm font-semibold text-white">
             Profile settings
           </h2>
         </div>
-        <div className="p-4 space-y-4">
+        <div className="p-3 space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Display name</label>
+            <label className="block text-xs font-medium text-gray-300 mb-1">Display name</label>
             <input
               type="text"
               value={displayName}
               onChange={handleNameChange}
               placeholder="3–32 characters"
               maxLength={DISPLAY_NAME_MAX}
-              className="w-full rounded-lg bg-slate-800/80 border border-cyan-500/30 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full rounded-lg bg-slate-800/80 border border-cyan-500/30 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Avatar</label>
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-cyan-500/30 bg-slate-800">
-                <AvatarPreview
-                  config={avatarConfig ?? DEFAULT_AVATAR_CONFIG}
-                  emotion="neutral"
-                  compact
-                  className="w-full h-full"
-                />
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-cyan-500/30 bg-slate-800 shrink-0">
+              <AvatarPreview
+                config={avatarConfig ?? DEFAULT_AVATAR_CONFIG}
+                emotion="neutral"
+                compact
+                className="w-full h-full"
+              />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-300 mb-1">Avatar</p>
               <button
                 type="button"
                 onClick={() => setAvatarModalOpen(true)}
-                className="px-4 py-1.5 rounded-lg text-sm font-medium text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/10 transition-colors"
+                className="px-3 py-1 rounded-lg text-xs font-medium text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/10 transition-colors"
               >
                 Edit Avatar
               </button>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-xs font-medium text-gray-300 mb-1">
               Bio <span className="text-gray-500 font-normal">({bio.length}/{BIO_MAX})</span>
             </label>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX))}
               placeholder="A short bio about yourself…"
-              rows={3}
-              className="w-full rounded-lg bg-slate-800/80 border border-cyan-500/30 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none text-sm"
+              rows={2}
+              className="w-full rounded-lg bg-slate-800/80 border border-cyan-500/30 px-3 py-1.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none text-xs"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-1.5">
-                <span style={{ fontSize: 13 }}>𝕏</span> X / Twitter
+              <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center gap-1">
+                <span style={{ fontSize: 11 }}>𝕏</span> X / Twitter
               </label>
               <div className="flex items-center rounded-lg overflow-hidden bg-slate-800/80 border border-cyan-500/30 focus-within:ring-2 focus-within:ring-cyan-500/50">
-                <span className="px-2 text-gray-500 text-sm select-none">@</span>
+                <span className="px-2 text-gray-500 text-xs select-none">@</span>
                 <input
                   type="text"
                   value={xHandle}
                   onChange={(e) => setXHandle(e.target.value.replace(/^@/, '').slice(0, 50))}
                   placeholder="handle"
-                  className="flex-1 bg-transparent py-2 pr-3 text-white placeholder-gray-500 focus:outline-none text-sm min-w-0"
+                  className="flex-1 bg-transparent py-1.5 pr-2 text-white placeholder-gray-500 focus:outline-none text-xs min-w-0"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-1.5">
-                <span style={{ fontSize: 13 }}>✈️</span> Telegram
+              <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center gap-1">
+                <span style={{ fontSize: 11 }}>✈️</span> Telegram
               </label>
               <div className="flex items-center rounded-lg overflow-hidden bg-slate-800/80 border border-cyan-500/30 focus-within:ring-2 focus-within:ring-cyan-500/50">
-                <span className="px-2 text-gray-500 text-sm select-none">@</span>
+                <span className="px-2 text-gray-500 text-xs select-none">@</span>
                 <input
                   type="text"
                   value={tgHandle}
                   onChange={(e) => setTgHandle(e.target.value.replace(/^@/, '').slice(0, 50))}
                   placeholder="username"
-                  className="flex-1 bg-transparent py-2 pr-3 text-white placeholder-gray-500 focus:outline-none text-sm min-w-0"
+                  className="flex-1 bg-transparent py-1.5 pr-2 text-white placeholder-gray-500 focus:outline-none text-xs min-w-0"
                 />
               </div>
             </div>
           </div>
         </div>
-        <div className="px-4 pb-4 flex justify-end gap-2">
+        <div className="px-3 pb-3 flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-slate-700 text-gray-300 hover:bg-slate-600"
+            className="px-3 py-1.5 rounded-lg text-xs bg-slate-700 text-gray-300 hover:bg-slate-600"
           >
             Cancel
           </button>
@@ -205,7 +205,7 @@ export default function ProfileSettingsModal({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium disabled:opacity-50"
+            className="px-3 py-1.5 rounded-lg text-xs bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>

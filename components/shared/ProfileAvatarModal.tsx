@@ -46,6 +46,7 @@ function normalizeAvatarConfig(c: unknown): AvatarConfig {
       accessory: typeof o.accessory === 'string' ? o.accessory : DEFAULT_AVATAR_CONFIG.accessory,
       shirtColor: typeof o.shirtColor === 'string' ? o.shirtColor : DEFAULT_AVATAR_CONFIG.shirtColor,
       hat: typeof o.hat === 'string' ? o.hat : DEFAULT_AVATAR_CONFIG.hat,
+      hatColor: typeof o.hatColor === 'string' ? o.hatColor : DEFAULT_AVATAR_CONFIG.hatColor,
       necklace: typeof o.necklace === 'string' ? o.necklace : DEFAULT_AVATAR_CONFIG.necklace,
       mouthAccessory: typeof o.mouthAccessory === 'string' ? o.mouthAccessory : DEFAULT_AVATAR_CONFIG.mouthAccessory,
       backgroundImage: typeof o.backgroundImage === 'string' ? o.backgroundImage : DEFAULT_AVATAR_CONFIG.backgroundImage,

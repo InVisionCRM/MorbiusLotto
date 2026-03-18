@@ -70,6 +70,7 @@ const ITEM_FIELDS = [
   { value: 'overlayImage',    label: 'Overlay',         inputType: 'url',    options: [] },
   { value: 'accessory',       label: 'Accessory',       inputType: 'select', options: ['Glasses', 'Aviators', 'Wayfarers', 'Round Glasses', 'Cyberpunk', 'Earrings', 'Headband'] },
   { value: 'hat',             label: 'Hat',             inputType: 'select', options: ['Top Hat', 'Cowboy', 'Crown', 'Bandana'] },
+  { value: 'hatColor',        label: 'Hat Color',       inputType: 'color',  options: [] },
   { value: 'necklace',        label: 'Necklace',        inputType: 'select', options: ['Gold Chain', 'Silver Chain', 'Pearl', 'Pendant'] },
   { value: 'mouthAccessory',  label: 'Mouth',           inputType: 'select', options: ['Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'] },
 ] as const;
@@ -86,7 +87,7 @@ function shortHash(str: string): string {
 
 const FIELD_PREFIX: Partial<Record<ItemField, string>> = {
   skinColor: 'skin', hairColor: 'hair_color', shirtColor: 'shirt_color',
-  hairStyle: 'hair_style', accessory: 'acc', hat: 'hat',
+  hairStyle: 'hair_style', accessory: 'acc', hat: 'hat', hatColor: 'hat_color',
   necklace: 'neck', mouthAccessory: 'mouth', backgroundImage: 'bg', overlayImage: 'overlay',
 };
 
@@ -137,6 +138,7 @@ function randomGradient(): string {
 interface BuilderState {
   field: ItemField;
   inputMode: 'color' | 'gradient'; // only applies to color fields
+  bgMode: 'upload' | 'gradient';   // only applies to backgroundImage field
   hex: string;          // used for flat color mode
   gradientJson: string; // used for gradient mode (serialized GradientDef)
   url: string;          // used for backgroundImage / overlayImage fields
@@ -157,6 +159,7 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
   const [form, setForm] = useState<BuilderState>({
     field: 'skinColor',
     inputMode: 'color',
+    bgMode: 'upload',
     hex: '#FF6B6B',
     gradientJson: serializeGradient(DEFAULT_GRADIENT),
     url: '',
@@ -174,9 +177,10 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
   const isColorField = fieldDef.inputType === 'color';
   const isGradientMode = isColorField && form.inputMode === 'gradient';
 
+  const isBgGradientMode = form.field === 'backgroundImage' && form.bgMode === 'gradient';
   const activeSelectValue = form.useCustom ? form.customValue : form.selectValue;
   const activeValue = isUrlField
-    ? form.url
+    ? (isBgGradientMode ? form.gradientJson : form.url)
     : isSelectField
     ? activeSelectValue
     : isGradientMode
@@ -189,13 +193,16 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
       // Auto-regenerate itemKey when field or value changes (unless manually edited)
       if (patch.field !== undefined || patch.hex !== undefined || patch.url !== undefined ||
           patch.gradientJson !== undefined || patch.selectValue !== undefined ||
-          patch.customValue !== undefined || patch.useCustom !== undefined || patch.inputMode !== undefined) {
+          patch.customValue !== undefined || patch.useCustom !== undefined || patch.inputMode !== undefined ||
+          patch.bgMode !== undefined) {
         const prevDef = ITEM_FIELDS.find(f => f.value === prev.field)!;
-        const prevValue = prevDef.inputType === 'url' ? prev.url
+        const prevValue = prevDef.inputType === 'url'
+          ? (prev.field === 'backgroundImage' && prev.bgMode === 'gradient' ? prev.gradientJson : prev.url)
           : prevDef.inputType === 'select' ? (prev.useCustom ? prev.customValue : prev.selectValue)
           : prev.inputMode === 'gradient' ? prev.gradientJson : prev.hex;
         const nextDef = ITEM_FIELDS.find(f => f.value === next.field)!;
-        const nextValue = nextDef.inputType === 'url' ? next.url
+        const nextValue = nextDef.inputType === 'url'
+          ? (next.field === 'backgroundImage' && next.bgMode === 'gradient' ? next.gradientJson : next.url)
           : nextDef.inputType === 'select' ? (next.useCustom ? next.customValue : next.selectValue)
           : next.inputMode === 'gradient' ? next.gradientJson : next.hex;
         const oldAutoKey = toItemKey(prev.field, prevValue);
@@ -225,7 +232,11 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
     if (!form.itemKey.trim()) { setErr('Item key is required'); return; }
     if (!/^[a-z0-9_]+$/.test(form.itemKey)) { setErr('Item key: lowercase letters, numbers, underscores only'); return; }
     if (isUrlField) {
-      if (!form.url.startsWith('http') && !form.url.startsWith('data:image/')) { setErr('Upload an image first'); return; }
+      if (isBgGradientMode) {
+        if (!parseGradient(form.gradientJson)) { setErr('Invalid gradient'); return; }
+      } else if (!form.url.startsWith('http') && !form.url.startsWith('data:image/')) {
+        setErr('Upload an image first'); return;
+      }
     } else if (isSelectField) {
       if (!activeSelectValue.trim()) { setErr('Select a value or enter a custom one'); return; }
     } else if (isGradientMode) {
@@ -253,7 +264,7 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
       const data = await res.json();
       if (!res.ok) { setErr(data.error ?? 'Create failed'); return; }
       setSuccess(`"${form.displayName}" created!`);
-      setForm({ field: 'skinColor', inputMode: 'color', hex: '#FF6B6B', gradientJson: serializeGradient(DEFAULT_GRADIENT), url: '', selectValue: '', customValue: '', useCustom: false, displayName: '', itemKey: '', tier: 'common' });
+      setForm({ field: 'skinColor', inputMode: 'color', bgMode: 'upload', hex: '#FF6B6B', gradientJson: serializeGradient(DEFAULT_GRADIENT), url: '', selectValue: '', customValue: '', useCustom: false, displayName: '', itemKey: '', tier: 'common' });
       onCreated();
     } catch {
       setErr('Network error');
@@ -370,12 +381,53 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
               </div>
             )}
 
-            {/* Background uploader */}
+            {/* Background uploader / gradient */}
             {isUrlField && (
-              <PixelBackgroundUploader
-                currentImage={form.url}
-                onImageChange={url => updateForm({ url })}
-              />
+              <div className="space-y-3">
+                {form.field === 'backgroundImage' && (
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => updateForm({ bgMode: 'upload' })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        form.bgMode !== 'gradient' ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                      }`}
+                    >
+                      Upload
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateForm({ bgMode: 'gradient' })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 ${
+                        form.bgMode === 'gradient' ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                      }`}
+                    >
+                      ✦ Gradient
+                    </button>
+                  </div>
+                )}
+                {isBgGradientMode ? (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => updateForm({ gradientJson: randomGradient() })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-xs font-medium transition-colors"
+                    >
+                      <Shuffle size={11} /> Randomize Gradient
+                    </button>
+                    <GradientBuilder
+                      value={form.gradientJson}
+                      label="background gradient"
+                      onApply={json => updateForm({ gradientJson: json })}
+                    />
+                  </div>
+                ) : (
+                  <PixelBackgroundUploader
+                    currentImage={form.url}
+                    onImageChange={url => updateForm({ url })}
+                  />
+                )}
+              </div>
             )}
 
             {/* Select field options */}
