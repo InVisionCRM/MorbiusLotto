@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useId } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { motion, useMotionValue, useSpring } from 'framer-motion';
 import { resolveColorValue, angleToSvgCoords, parseGradient } from '@/lib/gradient-utils';
+import { AvatarPatternDefs } from '@/lib/avatar-svg-patterns';
 
 export type Emotion =
   | 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'wink'
@@ -123,13 +124,23 @@ export default function AvatarPreview({
   // Unique per-instance gradient ID prefix to avoid SVG ID collisions across multiple AvatarPreviews
   const uid = useId().replace(/:/g, '');
 
+  // Wrapper that also scopes static pattern URL references (url(#tiger) → url(#${uid}tiger))
+  const resolveColor = (value: string, gradientId: string) => {
+    const result = resolveColorValue(value, gradientId);
+    if (!result.gradientDef) {
+      const m = result.fill.match(/^url\(#(\w+)\)$/);
+      if (m) result.fill = `url(#${uid}${m[1]})`;
+    }
+    return result;
+  };
+
   const { skinColor, hairStyle, hairColor, eyeShape, eyeColor, noseShape, lipShape, accessory } = config;
 
   // Resolve gradient-aware fills for the three color fields
-  const skinFill  = resolveColorValue(skinColor,               `${uid}grad_skin`);
-  const hairFill  = resolveColorValue(hairColor,               `${uid}grad_hair`);
-  const shirtFill = resolveColorValue(config.shirtColor || '#3f3f46', `${uid}grad_shirt`);
-  const hatFill   = config.hatColor ? resolveColorValue(config.hatColor, `${uid}grad_hat`) : null;
+  const skinFill  = resolveColor(skinColor,               `${uid}grad_skin`);
+  const hairFill  = resolveColor(hairColor,               `${uid}grad_hair`);
+  const shirtFill = resolveColor(config.shirtColor || '#3f3f46', `${uid}grad_shirt`);
+  const hatFill   = config.hatColor ? resolveColor(config.hatColor, `${uid}grad_hat`) : null;
   const bgGradDef = config.backgroundImage?.startsWith('{') ? parseGradient(config.backgroundImage) : null;
 
   // ── emotion variants ───────────────────────────────────────────────────────
@@ -422,7 +433,7 @@ export default function AvatarPreview({
       case 'Wayfarers': return <g fill="#111"><rect x="5" y="9" width="6" height="2" /><rect x="13" y="9" width="6" height="2" /><rect x="6" y="11" width="4" height="3" /><rect x="14" y="11" width="4" height="3" /><rect x="11" y="10" width="2" height="1" /><rect x="4" y="10" width="1" height="1" /><rect x="19" y="10" width="1" height="1" /></g>;
       case 'Round Glasses': return <g fill="#333"><rect x="6" y="9" width="4" height="1" /><rect x="6" y="14" width="4" height="1" /><rect x="5" y="10" width="1" height="4" /><rect x="10" y="10" width="1" height="4" /><rect x="14" y="9" width="4" height="1" /><rect x="14" y="14" width="4" height="1" /><rect x="13" y="10" width="1" height="4" /><rect x="18" y="10" width="1" height="4" /><rect x="11" y="11" width="2" height="1" /><rect x="4" y="11" width="1" height="1" /><rect x="19" y="11" width="1" height="1" /><rect x="6" y="10" width="4" height="4" fill="rgba(0,0,0,0.6)" /><rect x="14" y="10" width="4" height="4" fill="rgba(0,0,0,0.6)" /></g>;
       case 'Cyberpunk': return <g><rect x="4" y="10" width="16" height="3" fill="#00ffcc" opacity="0.8" /><rect x="4" y="10" width="16" height="1" fill="#ff00ff" opacity="0.8" /><rect x="4" y="11" width="1" height="2" fill="#111" /><rect x="19" y="11" width="1" height="2" fill="#111" /></g>;
-      case 'Voxel Glasses': return <g><rect x="5" y="10" width="6" height="4" fill="url(#custom)" /><rect x="13" y="10" width="6" height="4" fill="url(#custom)" /><rect x="11" y="11" width="2" height="1" fill="#111" /><rect x="4" y="11" width="1" height="1" fill="#111" /><rect x="19" y="11" width="1" height="1" fill="#111" /></g>;
+      case 'Voxel Glasses': return <g><rect x="5" y="10" width="6" height="4" fill={`url(#${uid}custom)`} /><rect x="13" y="10" width="6" height="4" fill={`url(#${uid}custom)`} /><rect x="11" y="11" width="2" height="1" fill="#111" /><rect x="4" y="11" width="1" height="1" fill="#111" /><rect x="19" y="11" width="1" height="1" fill="#111" /></g>;
       case 'Earrings': return <g fill="#FFD700"><rect x="4" y="13" width="1" height="1" /><rect x="19" y="13" width="1" height="1" /></g>;
       case 'Headband': return <rect x="5" y="7" width="14" height="2" fill="#E11D48" />;
       case 'None': default: return null;
@@ -877,7 +888,7 @@ export default function AvatarPreview({
       case 'Silver Chain': return <g fill="#e2e8f0"><rect x="9" y="19" width="6" height="1" /><rect x="10" y="20" width="4" height="1" /></g>;
       case 'Pearl': return <g fill="#fff"><rect x="9" y="19" width="1" height="1" /><rect x="11" y="19" width="1" height="1" /><rect x="13" y="19" width="1" height="1" /><rect x="15" y="19" width="1" height="1" /><rect x="10" y="20" width="1" height="1" /><rect x="12" y="20" width="1" height="1" /><rect x="14" y="20" width="1" height="1" /></g>;
       case 'Pendant': return <g><rect x="9" y="19" width="6" height="1" fill="#e2e8f0" /><rect x="11" y="20" width="2" height="2" fill="#3b82f6" /></g>;
-      case 'Voxel Chain': return <g><rect x="8" y="19" width="8" height="1" fill="url(#custom)" /><rect x="10" y="20" width="4" height="2" fill="url(#custom)" /></g>;
+      case 'Voxel Chain': return <g><rect x="8" y="19" width="8" height="1" fill={`url(#${uid}custom)`} /><rect x="10" y="20" width="4" height="2" fill={`url(#${uid}custom)`} /></g>;
       default: return null;
     }
   };
@@ -974,38 +985,19 @@ export default function AvatarPreview({
         shapeRendering="geometricPrecision"
       >
         <defs>
-          <pattern id="tiger" patternUnits="userSpaceOnUse" width="4" height="4">
-            <rect width="4" height="4" fill="#f97316" /><rect x="0" y="1" width="2" height="1" fill="#000" /><rect x="2" y="3" width="2" height="1" fill="#000" />
-          </pattern>
-          <pattern id="zebra" patternUnits="userSpaceOnUse" width="4" height="4">
-            <rect width="4" height="4" fill="#fff" /><rect x="0" y="0" width="1" height="4" fill="#000" /><rect x="2" y="0" width="1" height="4" fill="#000" />
-          </pattern>
-          <pattern id="leopard" patternUnits="userSpaceOnUse" width="4" height="4">
-            <rect width="4" height="4" fill="#facc15" /><rect x="0" y="0" width="1" height="1" fill="#78350f" /><rect x="2" y="2" width="1" height="1" fill="#78350f" />
-          </pattern>
-          <pattern id="camo" patternUnits="userSpaceOnUse" width="4" height="4">
-            <rect width="4" height="4" fill="#4d7c0f" /><rect x="0" y="0" width="2" height="1" fill="#14532d" /><rect x="2" y="2" width="2" height="1" fill="#78350f" /><rect x="1" y="3" width="2" height="1" fill="#14532d" />
-          </pattern>
-          <linearGradient id="rainbow" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#ef4444" /><stop offset="20%" stopColor="#f97316" /><stop offset="40%" stopColor="#eab308" /><stop offset="60%" stopColor="#22c55e" /><stop offset="80%" stopColor="#3b82f6" /><stop offset="100%" stopColor="#a855f7" />
-          </linearGradient>
-          <pattern id="galaxy" patternUnits="userSpaceOnUse" width="4" height="4">
-            <rect width="4" height="4" fill="#0f172a" /><rect x="1" y="0" width="1" height="1" fill="#fff" /><rect x="3" y="2" width="1" height="1" fill="#c084fc" /><rect x="0" y="3" width="1" height="1" fill="#38bdf8" />
-          </pattern>
-          <pattern id="checkerboard" patternUnits="userSpaceOnUse" width="2" height="2">
-            <rect width="2" height="2" fill="#fff" /><rect x="0" y="0" width="1" height="1" fill="#000" /><rect x="1" y="1" width="1" height="1" fill="#000" />
-          </pattern>
-          <mask id="faceMask">
+          {/* Decorative patterns — instance-scoped via uid prefix */}
+          <AvatarPatternDefs prefix={uid} />
+          <mask id={`${uid}faceMask`}>
             {renderFaceShape('white')}
           </mask>
-          <radialGradient id="angryGradient" cx="50%" cy="50%" r="50%">
+          <radialGradient id={`${uid}angryGradient`} cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="rgba(239,68,68,0.4)" /><stop offset="100%" stopColor="rgba(239,68,68,0)" />
           </radialGradient>
-          <radialGradient id="sickGradient" cx="50%" cy="50%" r="50%">
+          <radialGradient id={`${uid}sickGradient`} cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="rgba(34,197,94,0.4)" /><stop offset="100%" stopColor="rgba(34,197,94,0)" />
           </radialGradient>
           {config.customPattern && (
-            <pattern id="custom" patternUnits="userSpaceOnUse" width="8" height="8">
+            <pattern id={`${uid}custom`} patternUnits="userSpaceOnUse" width="8" height="8">
               <image href={config.customPattern} x="0" y="0" width="8" height="8" preserveAspectRatio="xMidYMid slice" />
             </pattern>
           )}
@@ -1085,11 +1077,11 @@ export default function AvatarPreview({
             </motion.g>
 
             {/* Face shape */}
-            {renderFaceShape(skinColor)}
+            {renderFaceShape(skinFill.fill)}
 
             {/* Emotion face overlays */}
-            {emotion === 'angry' && <g mask="url(#faceMask)">{renderFaceShape('url(#angryGradient)')}</g>}
-            {emotion === 'sick'  && <g mask="url(#faceMask)">{renderFaceShape('url(#sickGradient)')}</g>}
+            {emotion === 'angry' && <g mask={`url(#${uid}faceMask)`}>{renderFaceShape(`url(#${uid}angryGradient)`)}</g>}
+            {emotion === 'sick'  && <g mask={`url(#${uid}faceMask)`}>{renderFaceShape(`url(#${uid}sickGradient)`)}</g>}
 
             {/* Hair front + hat */}
             <motion.g animate={{ y: offsets.head.y }}>

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
 import { Lock } from 'lucide-react';
 import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
+import { AvatarPatternDefs } from '@/lib/avatar-svg-patterns';
 
 const SkinColors = [
   '#FFF5EE', '#FFE4E1', '#FFDAB9', '#FFCDB2', '#FFB4A2', '#FFDBAC', '#F1C27D', '#E0AC69', '#C68642', '#8D5524', '#7B4B2A', '#5C3A21', '#4A3B32', '#3E2723', '#2D221E', '#1A1110', '#E5989B', '#B5838D', '#6D6875', '#4A4E69', '#22223B',
@@ -134,6 +135,10 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
 
   return (
     <div className="flex flex-col h-full">
+      {/* Hidden SVG providing pattern defs for color swatches */}
+      <svg width="0" height="0" className="absolute">
+        <defs><AvatarPatternDefs /></defs>
+      </svg>
       <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
         <AnimatePresence mode="wait">
           <motion.div

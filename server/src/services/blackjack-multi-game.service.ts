@@ -834,12 +834,15 @@ export class BlackjackMultiGameService {
       };
     });
 
-    // Always show all dealer cards face-up (matches single player behavior)
+    // During 'playing' phase, hide the hole card (only show first dealer card)
+    // Reveal all cards on dealer_turn / completed (matches single-player behavior)
     const dealerCardsRaw: number[] = round?.dealer_cards ?? [];
-    const dealerCardsVisible = dealerCardsRaw;
+    const dealerCardsVisible = table.status === 'playing'
+      ? dealerCardsRaw.slice(0, 1) // only the up-card
+      : dealerCardsRaw;
 
-    const dealerTotObj = dealerCardsRaw.length > 0
-      ? this.pfService.calculateHandTotalV2(dealerCardsRaw)
+    const dealerTotObj = dealerCardsVisible.length > 0
+      ? this.pfService.calculateHandTotalV2(dealerCardsVisible)
       : { total: 0, hasAce: false };
 
     return {

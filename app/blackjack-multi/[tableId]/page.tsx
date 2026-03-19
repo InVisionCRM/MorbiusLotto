@@ -241,6 +241,11 @@ export default function BlackjackMultiTablePage() {
   const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
   const prevPhaseRef = useRef<string>('');
 
+  // Progressive dealer card reveal — matches single-player BlackjackTable behavior
+  const [visibleDealerCards, setVisibleDealerCards] = useState(0);
+  const prevDealerCardCountRef = useRef(0);
+  const dealerRevealTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Platform balance (for display under avatar when seated)
   const [playerBalance, setPlayerBalance] = useState<bigint>(0n);
 
@@ -295,6 +300,73 @@ export default function BlackjackMultiTablePage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase, address]);
+
+  // Progressive dealer card reveal — matches single-player BlackjackTable
+  // During 'playing': show 1 card + face-down hole card (server only sends 1)
+  // On 'dealer_turn'/'completed': reveal cards one at a time with delays
+  useEffect(() => {
+    const dealerCards = state?.dealerCards ?? [];
+    const totalCards = dealerCards.length;
+    const phase = state?.phase ?? 'waiting';
+    const prevCount = prevDealerCardCountRef.current;
+
+    // Phase reset: no cards → reset visible count
+    if (totalCards === 0) {
+      setVisibleDealerCards(0);
+      prevDealerCardCountRef.current = 0;
+      if (dealerRevealTimerRef.current) {
+        clearTimeout(dealerRevealTimerRef.current);
+        dealerRevealTimerRef.current = null;
+      }
+      return;
+    }
+
+    // During playing phase: always show just the 1 card server sends
+    if (phase === 'playing') {
+      setVisibleDealerCards(totalCards); // server sends only 1 during playing
+      prevDealerCardCountRef.current = totalCards;
+      return;
+    }
+
+    // New cards arrived (dealer_turn or completed) — reveal progressively
+    if (totalCards > prevCount && (phase === 'dealer_turn' || phase === 'completed')) {
+      // Clear any existing reveal timer
+      if (dealerRevealTimerRef.current) {
+        clearTimeout(dealerRevealTimerRef.current);
+        dealerRevealTimerRef.current = null;
+      }
+
+      // Start from the hole card (index 1) if we were only showing 1
+      const startFrom = Math.max(visibleDealerCards, 1);
+      let idx = startFrom;
+
+      const revealNext = () => {
+        idx++;
+        if (idx <= totalCards) {
+          setVisibleDealerCards(idx);
+          playSound('/BlackJack/sounds/cards.wav');
+          if (idx < totalCards) {
+            dealerRevealTimerRef.current = setTimeout(revealNext, 1200);
+          }
+        }
+      };
+
+      // Reveal hole card after 800ms, then each additional card every 1200ms
+      dealerRevealTimerRef.current = setTimeout(revealNext, 800);
+      prevDealerCardCountRef.current = totalCards;
+      return;
+    }
+
+    prevDealerCardCountRef.current = totalCards;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.dealerCards?.length, state?.phase]);
+
+  // Cleanup reveal timer on unmount
+  useEffect(() => {
+    return () => {
+      if (dealerRevealTimerRef.current) clearTimeout(dealerRevealTimerRef.current);
+    };
+  }, []);
 
   const roomId = `blackjack:table:${tableId}`;
   const { messages: chatMessages, sendMessage: sendChatMessage } = useChat(roomId, { wsClient, wsConnected });
@@ -368,7 +440,15 @@ export default function BlackjackMultiTablePage() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const boardScale = tableWidth > 0 ? tableWidth / 800 : 1;
+  // Cap scale so content doesn't become absurdly large on wide screens
+  const rawScale = tableWidth > 0 ? tableWidth / 800 : 1;
+  const boardScale = Math.min(rawScale, 1.5);
+  // Center when capped (content won't fill the full container)
+  const scaledW = 800 * boardScale;
+  const scaledH = 450 * boardScale;
+  const containerH = tableWidth * 9 / 16;
+  const offsetX = (tableWidth - scaledW) / 2;
+  const offsetY = (containerH - scaledH) / 2;
 
   if (!tableId) return null;
 
@@ -398,10 +478,10 @@ export default function BlackjackMultiTablePage() {
         {/* Dark overlay */}
         <div className="absolute inset-0" style={{ zIndex: 1, background: 'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))' }} />
 
-        {/* Content — always 800×450, scaled to fill the container */}
+        {/* Content — always 800×450, scaled to fill the container (capped + centered on large screens) */}
         <div
-          className="absolute top-0 left-0 z-10 flex flex-col"
-          style={{ width: 800, height: 450, transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
+          className="absolute z-10 flex flex-col"
+          style={{ width: 800, height: 450, transform: `translate(${offsetX}px, ${offsetY}px) scale(${boardScale})`, transformOrigin: 'top left' }}
         >
 
           {/* Top bar */}
@@ -450,14 +530,30 @@ export default function BlackjackMultiTablePage() {
           {/* ── Play area ── */}
           <div className="flex-1 flex flex-col justify-center items-center gap-4 px-4 pb-4">
 
-            {/* DEALER — all cards face-up (same as single player) */}
+            {/* DEALER — progressive card reveal matching single-player */}
             <div className="flex items-center justify-center" style={{ transform: 'translateY(-20px)' }}>
               <div className="flex">
-                {(state?.dealerCards ?? []).map((c, i) => (
-                  <div key={i} className={i > 0 ? 'card-overlap-dealer' : ''} style={{ zIndex: i }}>
-                    <PlayingCard card={indexToCard(c)} owner="dealer" className="" />
+                {(state?.dealerCards ?? []).map((c, i) => {
+                  // Only render cards up to visibleDealerCards count
+                  if (i >= visibleDealerCards) return null;
+                  return (
+                    <div key={i} className={i > 0 ? 'card-overlap-dealer' : ''} style={{ zIndex: i }}>
+                      <PlayingCard
+                        card={indexToCard(c)}
+                        owner="dealer"
+                        className=""
+                        index={i}
+                        isNewCard={i >= 2 && i === visibleDealerCards - 1}
+                      />
+                    </div>
+                  );
+                })}
+                {/* Face-down hole card during playing phase (server only sends 1 card) */}
+                {state?.phase === 'playing' && (state.dealerCards?.length ?? 0) === 1 && (
+                  <div className="card-overlap-dealer" style={{ zIndex: 1 }}>
+                    <PlayingCard card={{ value: 1 as CardValue, suit: 'spades' }} hidden owner="dealer" className="" />
                   </div>
-                ))}
+                )}
                 {/* Empty placeholders before deal */}
                 {(!state || (state.dealerCards?.length ?? 0) === 0) && (
                   <>
@@ -466,8 +562,8 @@ export default function BlackjackMultiTablePage() {
                   </>
                 )}
               </div>
-              {/* Dealer score — always visible when cards are dealt */}
-              {state && (state.dealerCards?.length ?? 0) > 0 && state.dealerTotal > 0 && (
+              {/* Dealer score — only shown once all cards are revealed */}
+              {state && visibleDealerCards >= (state.dealerCards?.length ?? 0) && state.dealerTotal > 0 && (
                 <div className="ml-3 flex items-center gap-1">
                   <span className={`font-black text-3xl ${state.dealerTotal > 21 ? 'text-red-400' : 'text-white'}`}>
                     {state.dealerTotal > 21 ? 'BUST' : state.dealerTotal}

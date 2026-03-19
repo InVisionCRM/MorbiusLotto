@@ -7,6 +7,7 @@ import { randomizeConfig } from './CharacterCreator';
 import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
 import { Lock, Shuffle } from 'lucide-react';
 import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
+import { AvatarPatternDefs } from '@/lib/avatar-svg-patterns';
 
 // ── data ──────────────────────────────────────────────────────────────────
 
@@ -141,6 +142,10 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
 
   return (
     <div className="flex h-full bg-zinc-900 overflow-hidden">
+      {/* Hidden SVG providing pattern defs for color swatches */}
+      <svg width="0" height="0" className="absolute">
+        <defs><AvatarPatternDefs /></defs>
+      </svg>
 
       {/* ── Left vertical tab sidebar ──────────────────────────────── */}
       <div className="w-[72px] min-w-[72px] flex-shrink-0 flex flex-col overflow-y-auto scrollbar-hide border-r border-zinc-800 bg-zinc-950">
