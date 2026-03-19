@@ -623,6 +623,23 @@ export class BlackjackMultiGameService {
       );
       if (seatsResult.rows.length === 0) return;
 
+      // Only start a new round when the previous round actually completed (not when we reverted
+      // to waiting because no one bet — in that case the last round is still 'betting' and we
+      // must not create a new round every timer tick).
+      const lastRoundResult = await this.pool.query(
+        `SELECT status, completed_at FROM blackjack_multi_rounds
+         WHERE table_id = $1 ORDER BY round_number DESC LIMIT 1`,
+        [tableId],
+      );
+      if (lastRoundResult.rows.length > 0) {
+        const last = lastRoundResult.rows[0];
+        if (last.status !== 'completed') return; // last round still betting/playing/dealer_turn — do not create another
+        if (last.completed_at) {
+          const completedAt = last.completed_at instanceof Date ? last.completed_at.getTime() : new Date(last.completed_at).getTime();
+          if (Date.now() - completedAt < 3000) return; // wait 3s after completion before next betting phase
+        }
+      }
+
       const roundNumResult = await this.pool.query(
         `SELECT COALESCE(MAX(round_number), 0) + 1 AS next_num FROM blackjack_multi_rounds WHERE table_id = $1`,
         [tableId],
@@ -713,14 +730,25 @@ export class BlackjackMultiGameService {
     );
     const dbSeats = seatsResult.rows;
 
-    // Load active round if any
+    // Load active round if any. When table is playing/dealer_turn, only consider rounds in that phase
+    // so we never show a newly created 'betting' round (which would look like a reset).
     let round: any = null;
     let roundSeats: any[] = [];
     if (['betting', 'playing', 'dealer_turn', 'completed'].includes(table.status)) {
-      const roundResult = await this.pool.query(
-        `SELECT * FROM blackjack_multi_rounds WHERE table_id = $1 ORDER BY round_number DESC LIMIT 1`,
-        [tableId],
-      );
+      let roundResult;
+      if (table.status === 'playing' || table.status === 'dealer_turn') {
+        roundResult = await this.pool.query(
+          `SELECT * FROM blackjack_multi_rounds
+           WHERE table_id = $1 AND status IN ('playing', 'dealer_turn', 'completed')
+           ORDER BY round_number DESC LIMIT 1`,
+          [tableId],
+        );
+      } else {
+        roundResult = await this.pool.query(
+          `SELECT * FROM blackjack_multi_rounds WHERE table_id = $1 ORDER BY round_number DESC LIMIT 1`,
+          [tableId],
+        );
+      }
       if (roundResult.rows.length > 0) {
         round = roundResult.rows[0];
         const rsResult = await this.pool.query(

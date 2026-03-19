@@ -5,12 +5,13 @@ function backendUrl(): string | null {
   return u ? u.trim().replace(/\/$/, '') : null;
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { tableId: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ tableId: string }> }) {
   const base = backendUrl();
   if (!base) return NextResponse.json({ error: 'Backend not configured' }, { status: 503 });
 
   try {
-    const r = await fetch(`${base}/api/admin/bj-multi/tables/${params.tableId}`, {
+    const { tableId } = await params;
+    const r = await fetch(`${base}/api/admin/bj-multi/tables/${tableId}`, {
       method: 'DELETE',
       headers: { 'x-admin-secret': process.env.AP ?? '' },
       signal: AbortSignal.timeout(5000),

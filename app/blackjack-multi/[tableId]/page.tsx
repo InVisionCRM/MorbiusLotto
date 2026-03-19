@@ -318,13 +318,27 @@ export default function BlackjackMultiTablePage() {
   const filteredChips = CHIP_PRESETS.filter(c => c.value <= maxBetNum);
   const theme = resolveTheme(state?.themeKind ?? 'video', state?.themeId ?? 'glowingTable');
 
+  // Scale board content to fill the 16:9 container at any size
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [tableWidth, setTableWidth] = useState(0);
+  useEffect(() => {
+    const el = tableRef.current;
+    if (!el) return;
+    setTableWidth(el.clientWidth);
+    const ro = new ResizeObserver(entries => setTableWidth(entries[0].contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const boardScale = tableWidth > 0 ? tableWidth / 800 : 1;
+
   if (!tableId) return null;
 
   return (
     <GlobalMainNav page="blackjack" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
-        className="relative w-full blackjack-table flex flex-col"
+        ref={tableRef}
+        className="relative w-full blackjack-table overflow-hidden"
         style={{
           aspectRatio: '16 / 9',
           boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.9), inset 0 -2px 8px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(0,0,0,0.3)',
@@ -345,8 +359,11 @@ export default function BlackjackMultiTablePage() {
         {/* Dark overlay */}
         <div className="absolute inset-0" style={{ zIndex: 1, background: 'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))' }} />
 
-        {/* Content */}
-        <div className="relative z-10 flex flex-col flex-1">
+        {/* Content — always 800×450, scaled to fill the container */}
+        <div
+          className="absolute top-0 left-0 z-10 flex flex-col"
+          style={{ width: 800, height: 450, transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
+        >
 
           {/* Top bar */}
           <div className="flex items-center justify-between px-4 py-2 bg-black/30 backdrop-blur-sm">
@@ -383,7 +400,7 @@ export default function BlackjackMultiTablePage() {
           {error && <div className="bg-red-900/80 text-red-200 text-xs text-center py-1 px-4">{error}</div>}
 
           {/* ── Play area ── */}
-          <div className="flex-1 flex flex-col justify-center items-center gap-8 sm:gap-4 px-4 pb-4">
+          <div className="flex-1 flex flex-col justify-center items-center gap-4 px-4 pb-4">
 
             {/* DEALER — same translateY as BlackjackTable */}
             <div className="flex items-center justify-center" style={{ transform: 'translateY(-20px)' }}>
@@ -418,7 +435,7 @@ export default function BlackjackMultiTablePage() {
             </div>
 
             {/* 3 SEATS — same translateY offset as BlackjackTable player row */}
-            <div className="grid grid-cols-3 gap-4 sm:gap-8 w-full max-w-3xl" style={{ transform: 'translateY(30px)' }}>
+            <div className="grid grid-cols-3 gap-8 w-full max-w-3xl" style={{ transform: 'translateY(30px)' }}>
               {POSITIONS.map(pos => {
                 const seat = state?.seats.find(s => s.position === pos);
                 const isEmpty = !seat?.playerAddress;
@@ -443,138 +460,140 @@ export default function BlackjackMultiTablePage() {
             </div>
           </div>
 
-          {/* ── Bottom controls — same style as BlackjackMobileActionBar ── */}
-          <div className="px-4 pb-4 pt-2 space-y-2">
-
-            {/* BETTING PHASE: chip panel + Confirm bet */}
-            {state?.phase === 'betting' && myPosition !== null && !hasBet && (
-              <div className="w-full max-w-md mx-auto space-y-2">
-                {/* Chip row */}
-                <div className="grid grid-cols-4 gap-1 sm:gap-2 place-items-center">
-                  {filteredChips.map(chip => (
-                    <button
-                      key={chip.value}
-                      onClick={() => setBetAmount(a => Math.min(maxBetNum, a + chip.value))}
-                      className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-bold text-[10px] sm:text-xs transition-all hover:scale-110 active:scale-95 shadow-md"
-                      style={{ background: `url('${chip.img}') center/contain no-repeat`, border: '1px solid rgba(36,30,30,0.5)' }}
-                    >
-                      <span className="text-white font-bold z-10 relative" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)', fontSize: chip.value >= 25000 ? '8px' : undefined }}>
-                        {chip.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                {/* 1/2 bet, 2x, Clear */}
-                <div className="flex items-center justify-center gap-3">
-                  <button
-                    onClick={() => setBetAmount(a => Math.max(minBetNum, Math.floor(a / 2)))}
-                    className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
-                  >
-                    1/2 bet
-                  </button>
-                  <button
-                    onClick={() => setBetAmount(a => Math.min(maxBetNum, a * 2))}
-                    className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
-                  >
-                    2x
-                  </button>
-                  <button
-                    onClick={() => setBetAmount(0)}
-                    className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
-                  >
-                    Clear
-                  </button>
-                </div>
-
-                {/* Amount display + Confirm */}
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 text-center bg-black/40 rounded-xl py-2 border border-white/10">
-                    <span className="text-white font-black text-xl" style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.8)' }}>
-                      {betAmount.toLocaleString()}
-                    </span>
-                    <span className="text-white/50 text-xs ml-1">MORBIUS</span>
-                  </div>
-                  <button
-                    onClick={placeBet}
-                    disabled={betAmount < minBetNum}
-                    className="px-6 py-2 rounded-xl font-black text-sm tracking-wider transition-all active:scale-95 disabled:opacity-40"
-                    style={{
-                      background: betAmount >= minBetNum ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)' : 'rgba(0,0,0,0.4)',
-                      boxShadow: betAmount >= minBetNum ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none',
-                    }}
-                  >
-                    <span className="text-white">CONFIRM BET</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Bet placed — waiting */}
-            {state?.phase === 'betting' && myPosition !== null && hasBet && (
-              <div className="text-center py-3 text-green-400 font-semibold text-sm">
-                ✓ Bet placed ({formatMorbius(mySeat?.pendingBet ?? '0')} MORBIUS) — waiting for round to start…
-              </div>
-            )}
-
-            {/* MY TURN — action buttons, same style as BlackjackMobileActionBar */}
-            {isMyTurn && activeHand && (
-              <div className="w-full max-w-md mx-auto">
-                <style>{`.multi-action-btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 0 rgba(0,0,0,0.25) !important; }`}</style>
-                <div className="grid grid-cols-4 gap-2">
-                  {/* HIT */}
-                  <button onClick={() => doAction('hit')} disabled={!activeHand.canHit}
-                    className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-red-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ background: 'linear-gradient(180deg, #ef4444 0%, #b91c1c 50%, #991b1b 100%)', boxShadow: activeHand.canHit ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
-                    <Plus className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
-                    <span className="text-white text-[10px] font-medium">Hit</span>
-                  </button>
-                  {/* STAND */}
-                  <button onClick={() => doAction('stand')} disabled={!activeHand.canStand}
-                    className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-blue-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ background: 'linear-gradient(180deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%)', boxShadow: activeHand.canStand ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
-                    <Hand className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
-                    <span className="text-white text-[10px] font-medium">Stand</span>
-                  </button>
-                  {/* DOUBLE */}
-                  <button onClick={() => doAction('double_down')} disabled={!activeHand.canDoubleDown}
-                    className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-amber-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 50%, #b45309 100%)', boxShadow: activeHand.canDoubleDown ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
-                    <Copy className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
-                    <span className="text-white text-[10px] font-medium">Double</span>
-                  </button>
-                  {/* SPLIT */}
-                  <button onClick={() => doAction('split')} disabled={!activeHand.canSplit}
-                    className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-emerald-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ background: 'linear-gradient(180deg, #10b981 0%, #059669 50%, #047857 100%)', boxShadow: activeHand.canSplit ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
-                    <Split className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
-                    <span className="text-white text-[10px] font-medium">Split</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Not seated CTA */}
-            {state && myPosition === null && address && wsConnected && (
-              <div className="text-center text-white/40 text-sm py-2">
-                {state.seats.every(s => s.playerAddress) ? 'Table full — spectating' : 'Click an empty seat to join'}
-              </div>
-            )}
-
-            {/* Chat */}
-            <div className="mt-2 bg-black/40 border border-white/10 rounded-xl p-3 max-h-28 flex flex-col backdrop-blur-sm">
-              <div className="flex-1 overflow-y-auto space-y-0.5 min-h-0">
-                {chatMessages.slice(-10).map(m => (
-                  <div key={m.id} className="text-xs text-white/70">
-                    <span className="text-cyan-400">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
-                    {m.text}
-                  </div>
-                ))}
-              </div>
-              {address && wsConnected && <ChatInput onSend={sendChatMessage} />}
-            </div>
-          </div>
 
         </div>
+      </div>
+
+      {/* ── Controls & Chat — below the 16:9 table ── */}
+      <div className="px-4 py-4 space-y-3 bg-slate-950">
+
+        {/* BETTING PHASE: chip panel + Confirm bet */}
+        {state?.phase === 'betting' && myPosition !== null && !hasBet && (
+          <div className="w-full max-w-md mx-auto space-y-2">
+            {/* Chip row */}
+            <div className="grid grid-cols-4 gap-1 sm:gap-2 place-items-center">
+              {filteredChips.map(chip => (
+                <button
+                  key={chip.value}
+                  onClick={() => setBetAmount(a => Math.min(maxBetNum, a + chip.value))}
+                  className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-bold text-[10px] sm:text-xs transition-all hover:scale-110 active:scale-95 shadow-md"
+                  style={{ background: `url('${chip.img}') center/contain no-repeat`, border: '1px solid rgba(36,30,30,0.5)' }}
+                >
+                  <span className="text-white font-bold z-10 relative" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)', fontSize: chip.value >= 25000 ? '8px' : undefined }}>
+                    {chip.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {/* 1/2 bet, 2x, Clear */}
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => setBetAmount(a => Math.max(minBetNum, Math.floor(a / 2)))}
+                className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
+              >
+                1/2 bet
+              </button>
+              <button
+                onClick={() => setBetAmount(a => Math.min(maxBetNum, a * 2))}
+                className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
+              >
+                2x
+              </button>
+              <button
+                onClick={() => setBetAmount(0)}
+                className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+
+            {/* Amount display + Confirm */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 text-center bg-black/40 rounded-xl py-2 border border-white/10">
+                <span className="text-white font-black text-xl" style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.8)' }}>
+                  {betAmount.toLocaleString()}
+                </span>
+                <span className="text-white/50 text-xs ml-1">MORBIUS</span>
+              </div>
+              <button
+                onClick={placeBet}
+                disabled={betAmount < minBetNum}
+                className="px-6 py-2 rounded-xl font-black text-sm tracking-wider transition-all active:scale-95 disabled:opacity-40"
+                style={{
+                  background: betAmount >= minBetNum ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)' : 'rgba(0,0,0,0.4)',
+                  boxShadow: betAmount >= minBetNum ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none',
+                }}
+              >
+                <span className="text-white">CONFIRM BET</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Bet placed — waiting */}
+        {state?.phase === 'betting' && myPosition !== null && hasBet && (
+          <div className="text-center py-3 text-green-400 font-semibold text-sm">
+            ✓ Bet placed ({formatMorbius(mySeat?.pendingBet ?? '0')} MORBIUS) — waiting for round to start…
+          </div>
+        )}
+
+        {/* MY TURN — action buttons, same style as BlackjackMobileActionBar */}
+        {isMyTurn && activeHand && (
+          <div className="w-full max-w-md mx-auto">
+            <style>{`.multi-action-btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 0 rgba(0,0,0,0.25) !important; }`}</style>
+            <div className="grid grid-cols-4 gap-2">
+              {/* HIT */}
+              <button onClick={() => doAction('hit')} disabled={!activeHand.canHit}
+                className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-red-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: 'linear-gradient(180deg, #ef4444 0%, #b91c1c 50%, #991b1b 100%)', boxShadow: activeHand.canHit ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
+                <Plus className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
+                <span className="text-white text-[10px] font-medium">Hit</span>
+              </button>
+              {/* STAND */}
+              <button onClick={() => doAction('stand')} disabled={!activeHand.canStand}
+                className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-blue-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: 'linear-gradient(180deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%)', boxShadow: activeHand.canStand ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
+                <Hand className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
+                <span className="text-white text-[10px] font-medium">Stand</span>
+              </button>
+              {/* DOUBLE */}
+              <button onClick={() => doAction('double_down')} disabled={!activeHand.canDoubleDown}
+                className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-amber-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 50%, #b45309 100%)', boxShadow: activeHand.canDoubleDown ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
+                <Copy className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
+                <span className="text-white text-[10px] font-medium">Double</span>
+              </button>
+              {/* SPLIT */}
+              <button onClick={() => doAction('split')} disabled={!activeHand.canSplit}
+                className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-emerald-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: 'linear-gradient(180deg, #10b981 0%, #059669 50%, #047857 100%)', boxShadow: activeHand.canSplit ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
+                <Split className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
+                <span className="text-white text-[10px] font-medium">Split</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Not seated CTA */}
+        {state && myPosition === null && address && wsConnected && (
+          <div className="text-center text-white/40 text-sm py-2">
+            {state.seats.every(s => s.playerAddress) ? 'Table full — spectating' : 'Click an empty seat to join'}
+          </div>
+        )}
+
+        {/* Chat */}
+        <div className="bg-black/40 border border-white/10 rounded-xl p-3 max-h-28 flex flex-col">
+          <div className="flex-1 overflow-y-auto space-y-0.5 min-h-0">
+            {chatMessages.slice(-10).map(m => (
+              <div key={m.id} className="text-xs text-white/70">
+                <span className="text-cyan-400">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
+                {m.text}
+              </div>
+            ))}
+          </div>
+          {address && wsConnected && <ChatInput onSend={sendChatMessage} />}
+        </div>
+
       </div>
     </GlobalMainNav>
   );
