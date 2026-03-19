@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
+import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS } from '@/app/BLACKJACK/constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,8 @@ export default function AdminBJMultiTab() {
   const [showCreate, setShowCreate] = useState(false);
   const [minBetEther, setMinBetEther] = useState('1');
   const [maxBetEther, setMaxBetEther] = useState('100000');
+  const [themeKind, setThemeKind] = useState<'video' | 'image'>('video');
+  const [themeId, setThemeId] = useState('glowingTable');
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -61,7 +64,7 @@ export default function AdminBJMultiTab() {
       const res = await fetch(`/api/bj-multi/admin/tables`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ minBet, maxBet }),
+        body: JSON.stringify({ minBet, maxBet, themeKind, themeId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create table');
@@ -206,6 +209,31 @@ export default function AdminBJMultiTab() {
                 placeholder="100000"
               />
             </div>
+          </div>
+          {/* Theme picker */}
+          <div className="space-y-2">
+            <Label className="text-xs text-slate-400">Table Theme</Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setThemeKind('video'); setThemeId('glowingTable'); }}
+                className={`flex-1 text-xs py-1.5 rounded-md border transition-colors ${themeKind === 'video' ? 'border-cyan-500 bg-cyan-900/30 text-cyan-300' : 'border-slate-600 text-slate-400 hover:border-slate-500'}`}
+              >Video</button>
+              <button
+                type="button"
+                onClick={() => { setThemeKind('image'); setThemeId('High-Roller-2'); }}
+                className={`flex-1 text-xs py-1.5 rounded-md border transition-colors ${themeKind === 'image' ? 'border-cyan-500 bg-cyan-900/30 text-cyan-300' : 'border-slate-600 text-slate-400 hover:border-slate-500'}`}
+              >Image</button>
+            </div>
+            <select
+              value={themeId}
+              onChange={e => setThemeId(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-xs h-8 rounded-md px-2"
+            >
+              {(themeKind === 'video' ? BLACKJACK_VIDEO_BACKGROUNDS : BLACKJACK_IMAGE_BACKGROUNDS).map(t => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
           <DialogFooter>

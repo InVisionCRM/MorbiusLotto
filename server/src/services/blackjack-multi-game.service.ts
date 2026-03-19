@@ -78,6 +78,8 @@ export interface BJMultiTableState {
   roundNumber: number;
   turnStartedAt: string | null;
   bettingStartedAt: string | null;
+  themeKind: 'video' | 'image';
+  themeId: string;
 }
 
 export interface BJMultiTableSummary {
@@ -116,7 +118,7 @@ export class BlackjackMultiGameService {
 
   async listTables(): Promise<BJMultiTableSummary[]> {
     const result = await this.pool.query(`
-      SELECT t.id, t.status, t.min_bet, t.max_bet,
+      SELECT t.id, t.status, t.min_bet, t.max_bet, t.theme_kind, t.theme_id,
              COUNT(s.id) AS seated_count
       FROM blackjack_multi_tables t
       LEFT JOIN blackjack_multi_seats s ON s.table_id = t.id
@@ -128,15 +130,17 @@ export class BlackjackMultiGameService {
       status: r.status,
       minBet: r.min_bet,
       maxBet: r.max_bet,
+      themeKind: r.theme_kind ?? 'video',
+      themeId: r.theme_id ?? 'glowingTable',
       seatedCount: Number(r.seated_count),
       emptySeats: 3 - Number(r.seated_count),
     }));
   }
 
-  async createTable(minBet: bigint, maxBet: bigint): Promise<{ id: string }> {
+  async createTable(minBet: bigint, maxBet: bigint, themeKind = 'video', themeId = 'glowingTable'): Promise<{ id: string }> {
     const result = await this.pool.query(
-      `INSERT INTO blackjack_multi_tables (min_bet, max_bet) VALUES ($1, $2) RETURNING id`,
-      [minBet.toString(), maxBet.toString()],
+      `INSERT INTO blackjack_multi_tables (min_bet, max_bet, theme_kind, theme_id) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [minBet.toString(), maxBet.toString(), themeKind, themeId],
     );
     return { id: result.rows[0].id };
   }
@@ -181,6 +185,20 @@ export class BlackjackMultiGameService {
          VALUES ($1, $2, $3)`,
         [tableId, seatPosition, normalized],
       );
+
+      // Transition to betting as soon as the first player joins
+      if (table.status === 'waiting') {
+        await this.pool.query(
+          `UPDATE blackjack_multi_tables SET status = 'betting' WHERE id = $1`, [tableId],
+        );
+        // Create a betting round so the timer has a created_at to track
+        await this.pool.query(
+          `INSERT INTO blackjack_multi_rounds (table_id, round_number, status)
+           SELECT $1, COALESCE(MAX(round_number), 0) + 1, 'betting'
+           FROM blackjack_multi_rounds WHERE table_id = $1`,
+          [tableId],
+        );
+      }
 
       return this.getTableState(tableId);
     } finally {
@@ -703,6 +721,8 @@ export class BlackjackMultiGameService {
       roundNumber: round?.round_number ?? 0,
       turnStartedAt: round?.turn_started_at?.toISOString?.() ?? null,
       bettingStartedAt: (round?.status === 'betting' ? round?.created_at?.toISOString?.() : null) ?? null,
+      themeKind: (table.theme_kind ?? 'video') as 'video' | 'image',
+      themeId: table.theme_id ?? 'glowingTable',
     };
   }
 

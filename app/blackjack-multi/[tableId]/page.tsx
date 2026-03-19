@@ -15,9 +15,20 @@ import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { Plus, Hand, Copy, Split, UserPlus } from 'lucide-react';
 import { CardValue, Suit } from '@/app/BLACKJACK/types';
+import Image from 'next/image';
+import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS } from '@/app/BLACKJACK/constants';
 
 const TURN_TIMEOUT = 30;
 const BETTING_TIMEOUT = 15;
+
+function resolveTheme(kind: 'video' | 'image', id: string) {
+  if (kind === 'video') {
+    const v = BLACKJACK_VIDEO_BACKGROUNDS.find(v => v.id === id);
+    return { kind: 'video' as const, src: v?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src };
+  }
+  const img = BLACKJACK_IMAGE_BACKGROUNDS.find(i => i.id === id);
+  return { kind: 'image' as const, src: img?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src };
+}
 
 function CircularTimerRing({ size, timeLeft, maxTime }: { size: number; timeLeft: number; maxTime: number }) {
   const pad = 5;
@@ -53,7 +64,6 @@ function useCountdown(startedAt: string | null, maxSeconds: number) {
 }
 
 const POSITIONS = [0, 1, 2] as const;
-const TABLE_VIDEO_SRC = '/BlackJack/video%20table/glowingTable.mp4';
 const AVATAR_SIZE = 56;
 
 const CHIP_PRESETS = [
@@ -280,6 +290,7 @@ export default function BlackjackMultiTablePage() {
   const minBetNum = state?.minBet ? Math.ceil(Number(formatEther(BigInt(state.minBet)))) : 500;
   const maxBetNum = state?.maxBet ? Math.floor(Number(formatEther(BigInt(state.maxBet)))) : 50000;
   const filteredChips = CHIP_PRESETS.filter(c => c.value <= maxBetNum);
+  const theme = resolveTheme(state?.themeKind ?? 'video', state?.themeId ?? 'glowingTable');
 
   if (!tableId) return null;
 
@@ -294,12 +305,16 @@ export default function BlackjackMultiTablePage() {
           border: '1px inset rgba(60,60,60,0.5)',
         }}
       >
-        {/* Felt video background */}
-        <video autoPlay muted loop playsInline
-          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-          style={{ zIndex: 0 }}>
-          <source src={TABLE_VIDEO_SRC} type="video/mp4" />
-        </video>
+        {/* Table background — video or image based on admin theme selection */}
+        {theme.kind === 'video' ? (
+          <video key={theme.src} autoPlay muted loop playsInline
+            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+            style={{ zIndex: 0 }}>
+            <source src={theme.src} type="video/mp4" />
+          </video>
+        ) : (
+          <Image src={theme.src} alt="Table" fill className="absolute inset-0 object-cover object-center pointer-events-none" style={{ zIndex: 0 }} priority unoptimized />
+        )}
 
         {/* Dark overlay */}
         <div className="absolute inset-0" style={{ zIndex: 1, background: 'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))' }} />

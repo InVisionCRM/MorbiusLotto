@@ -1,0 +1,3 @@
+ALTER TABLE blackjack_multi_tables
+  ADD COLUMN IF NOT EXISTS theme_kind VARCHAR(10) NOT NULL DEFAULT 'video',
+  ADD COLUMN IF NOT EXISTS theme_id   VARCHAR(100) NOT NULL DEFAULT 'glowingTable';

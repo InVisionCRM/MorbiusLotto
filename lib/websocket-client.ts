@@ -216,6 +216,8 @@ export interface BJMultiTableState {
   roundNumber: number;
   turnStartedAt: string | null;
   bettingStartedAt: string | null;
+  themeKind: 'video' | 'image';
+  themeId: string;
 }
 
 export interface BJMultiTableSummary {
@@ -225,6 +227,8 @@ export interface BJMultiTableSummary {
   maxBet: string;
   seatedCount: number;
   emptySeats: number;
+  themeKind: 'video' | 'image';
+  themeId: string;
 }
 
 /** EIP-712 domain for WebSocket auth (must match server) */

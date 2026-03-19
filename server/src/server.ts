@@ -1620,10 +1620,10 @@ async function initializeServices() {
 
     app.post('/api/admin/bj-multi/tables', async (req, res) => {
       try {
-        const { minBet, maxBet } = req.body as { minBet?: string; maxBet?: string };
+        const { minBet, maxBet, themeKind, themeId } = req.body as { minBet?: string; maxBet?: string; themeKind?: string; themeId?: string };
         const min = minBet ? BigInt(minBet) : BigInt('1000000000000000000');
         const max = maxBet ? BigInt(maxBet) : BigInt('100000000000000000000000');
-        const table = await bjMultiService.createTable(min, max);
+        const table = await bjMultiService.createTable(min, max, themeKind, themeId);
         res.json({ tableId: table.id });
       } catch (error) {
         logger.error('Error creating BJ multi table:', error);
