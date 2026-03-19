@@ -424,9 +424,12 @@ async function initializeServices() {
     // ── Cosmetics ─────────────────────────────────────────────────────────────
 
     // GET /api/cosmetics/items — full catalog with tier + pricing + live minted counts
-    app.get('/api/cosmetics/items', async (_req, res) => {
+    // ?adminAddress= — when wallet is admin, includes delisted items + shopListed on each row
+    app.get('/api/cosmetics/items', async (req, res) => {
       try {
-        const items = await cosmeticsService.getAllItems();
+        const adminAddress = typeof req.query.adminAddress === 'string' ? req.query.adminAddress : '';
+        const includeDelisted = Boolean(adminAddress && isAdminWallet(adminAddress));
+        const items = await cosmeticsService.getAllItems({ includeDelisted });
         res.json(items);
       } catch (error) {
         logger.error('Error fetching cosmetic items:', error);
@@ -460,6 +463,7 @@ async function initializeServices() {
         const result = await cosmeticsService.recordPurchase(walletAddress, itemKey, txHash, currency);
         const statusMap: Record<string, number> = {
           not_found: 404,
+          not_listed: 403,
           already_owned: 409,
           tx_already_used: 409,
           tx_not_found: 422,
@@ -548,23 +552,61 @@ async function initializeServices() {
       }
     });
 
-    // PATCH /api/cosmetics/admin/item — update tier/price/maxSupply (admin only)
-    // Body: { adminAddress, itemKey, tier?, priceMorbius?, maxSupply? }
+    // PATCH /api/cosmetics/admin/item — update tier/price/maxSupply/shopListed (admin only)
+    // Body: { adminAddress, itemKey, tier?, priceMorbius?, maxSupply?, shopListed? }
     app.patch('/api/cosmetics/admin/item', express.json(), async (req, res) => {
       try {
-        const { adminAddress, itemKey, tier, priceMorbius, maxSupply } = req.body ?? {};
+        const { adminAddress, itemKey, tier, priceMorbius, maxSupply, shopListed } = req.body ?? {};
         if (!adminAddress || !itemKey) {
           return res.status(400).json({ error: 'adminAddress and itemKey required' });
         }
         if (!isAdminWallet(adminAddress)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
-        const result = await cosmeticsService.updateItem(itemKey, { tier, priceMorbius, maxSupply });
+        const result = await cosmeticsService.updateItem(itemKey, {
+          tier,
+          priceMorbius,
+          maxSupply,
+          shopListed: typeof shopListed === 'boolean' ? shopListed : undefined,
+        });
         if (result === 'not_found') return res.status(404).json({ error: 'Item not found' });
         if (result === 'supply_below_minted') return res.status(409).json({ error: 'New max supply cannot be below current minted count' });
         sendJson(res, { success: true });
       } catch (error) {
         logger.error('Error updating cosmetic item:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // POST /api/cosmetics/admin/bulk-shop-listed — batch shop_listed from variant review (admin only)
+    // Body: { adminAddress, updates: [{ itemKey, shopListed: boolean }, ...] }
+    app.post('/api/cosmetics/admin/bulk-shop-listed', express.json(), async (req, res) => {
+      try {
+        const { adminAddress, updates } = req.body ?? {};
+        if (!adminAddress || !Array.isArray(updates)) {
+          return res.status(400).json({ error: 'adminAddress and updates array required' });
+        }
+        if (!isAdminWallet(adminAddress)) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const max = 500;
+        if (updates.length > max) {
+          return res.status(400).json({ error: `At most ${max} updates per request` });
+        }
+        const pairs: Array<{ itemKey: string; shopListed: boolean }> = [];
+        for (const u of updates) {
+          if (!u || typeof u.itemKey !== 'string' || u.itemKey.length > 120 || typeof u.shopListed !== 'boolean') {
+            return res.status(400).json({ error: 'Each update must have itemKey (string) and shopListed (boolean)' });
+          }
+          if (!/^[a-z0-9_]+$/.test(u.itemKey)) {
+            return res.status(400).json({ error: 'Invalid itemKey format' });
+          }
+          pairs.push({ itemKey: u.itemKey, shopListed: u.shopListed });
+        }
+        const { updated, notFound } = await cosmeticsService.bulkSetShopListed(pairs);
+        sendJson(res, { success: true, updatedCount: updated, notFound });
+      } catch (error) {
+        logger.error('Error bulk-updating shop_listed:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });
@@ -592,6 +634,25 @@ async function initializeServices() {
         sendJson(res, { success: true, updatedCount: count });
       } catch (error) {
         logger.error('Error updating tier pricing:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // GET /api/cosmetics/admin/item-owners?adminAddress=&itemKey= — list wallets that own an item (admin only)
+    app.get('/api/cosmetics/admin/item-owners', async (req, res) => {
+      try {
+        const adminAddress = typeof req.query.adminAddress === 'string' ? req.query.adminAddress : '';
+        const itemKey = typeof req.query.itemKey === 'string' ? req.query.itemKey : '';
+        if (!adminAddress || !itemKey) {
+          return res.status(400).json({ error: 'adminAddress and itemKey query params required' });
+        }
+        if (!isAdminWallet(adminAddress)) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+        const owners = await cosmeticsService.getOwnersForItem(itemKey);
+        sendJson(res, { owners });
+      } catch (error) {
+        logger.error('Error listing cosmetic item owners:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });

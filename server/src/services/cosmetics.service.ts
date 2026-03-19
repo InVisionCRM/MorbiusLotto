@@ -24,6 +24,7 @@ export type PurchaseResult =
   | 'ok'
   | 'already_owned'
   | 'not_found'
+  | 'not_listed'
   | 'sold_out'
   | 'tx_already_used'
   | 'tx_not_found'
@@ -70,8 +71,14 @@ export interface MarketListing {
 export class CosmeticsService {
   constructor(private readonly pool: Pool) {}
 
-  /** All items from the DB (tier/price/maxSupply may have been overridden by admin). Includes DB-created items. */
-  async getAllItems(): Promise<Array<CosmeticItem & { mintedCount: number }>> {
+  /**
+   * Merged catalog + DB mint/supply/pricing.
+   * Public: omit rows with shop_listed = false. Admin: pass includeDelisted for full list + shopListed on each item.
+   */
+  async getAllItems(options?: { includeDelisted?: boolean }): Promise<
+    Array<CosmeticItem & { mintedCount: number; shopListed?: boolean }>
+  > {
+    const includeDelisted = options?.includeDelisted ?? false;
     const { rows } = await this.pool.query<{
       item_key: string;
       display_name: string;
@@ -82,29 +89,38 @@ export class CosmeticsService {
       is_db_created: boolean;
       unlocks_field: string | null;
       unlocks_value: string | null;
+      shop_listed: boolean;
     }>(
       `SELECT item_key, display_name, minted_count, tier, price_morbius, max_supply,
-              is_db_created, unlocks_field, unlocks_value
+              is_db_created, unlocks_field, unlocks_value,
+              COALESCE(shop_listed, true) AS shop_listed
        FROM cosmetic_items WHERE is_active = true`,
     );
     const dbMap = new Map(rows.map(r => [r.item_key, r]));
+    const catalogKeys = new Set(ITEM_CATALOG.map(i => i.itemKey));
 
-    // Catalog items — override tier/price/supply from DB if present
-    const catalogItems = ITEM_CATALOG.map(i => {
+    const catalogItems: Array<CosmeticItem & { mintedCount: number; shopListed?: boolean }> = [];
+    for (const i of ITEM_CATALOG) {
       const db = dbMap.get(i.itemKey);
-      return {
+      if (!includeDelisted && db && !db.shop_listed) continue;
+      catalogItems.push({
         ...i,
         tier: (db?.tier ?? i.tier) as CosmeticItem['tier'],
         priceMorbius: db ? parseInt(db.price_morbius, 10) : i.priceMorbius,
         maxSupply: db ? parseInt(db.max_supply, 10) : i.maxSupply,
         mintedCount: db ? parseInt(db.minted_count, 10) : 0,
-      };
-    });
+        ...(includeDelisted ? { shopListed: db ? db.shop_listed : true } : {}),
+      });
+    }
 
-    // DB-created items not in the static catalog
-    const catalogKeys = new Set(ITEM_CATALOG.map(i => i.itemKey));
-    const dynamicItems: Array<CosmeticItem & { mintedCount: number }> = rows
-      .filter(r => r.is_db_created && !catalogKeys.has(r.item_key) && r.unlocks_field && r.unlocks_value)
+    const dynamicItems: Array<CosmeticItem & { mintedCount: number; shopListed?: boolean }> = rows
+      .filter(
+        r =>
+          r.is_db_created &&
+          !catalogKeys.has(r.item_key) &&
+          Boolean(r.unlocks_field && r.unlocks_value) &&
+          (includeDelisted || r.shop_listed),
+      )
       .map(r => ({
         itemKey: r.item_key,
         displayName: r.display_name,
@@ -114,6 +130,7 @@ export class CosmeticsService {
         priceMorbius: parseInt(r.price_morbius, 10),
         unlocks: [{ field: r.unlocks_field as any, value: r.unlocks_value! }],
         mintedCount: parseInt(r.minted_count, 10),
+        ...(includeDelisted ? { shopListed: r.shop_listed } : {}),
       }));
 
     return [...catalogItems, ...dynamicItems];
@@ -164,25 +181,26 @@ export class CosmeticsService {
     await this.pool.query(
       `INSERT INTO cosmetic_items
          (item_key, display_name, tier, price_pls, price_morbius, max_supply,
-          is_active, is_db_created, unlocks_field, unlocks_value)
-       VALUES ($1, $2, $3, 0, $4, $5, true, true, $6, $7)`,
+          is_active, is_db_created, unlocks_field, unlocks_value, shop_listed)
+       VALUES ($1, $2, $3, 0, $4, $5, true, true, $6, $7, true)`,
       [params.itemKey, params.displayName, params.tier, params.priceMorbius,
        params.maxSupply, params.unlocksField, params.unlocksValue],
     );
     return 'ok';
   }
 
-  /** Admin: update tier, price, and/or maxSupply for an item. */
+  /** Admin: update tier, price, maxSupply, and/or shop_listed. */
   async updateItem(
     itemKey: string,
-    updates: { tier?: string; priceMorbius?: number; maxSupply?: number },
+    updates: { tier?: string; priceMorbius?: number; maxSupply?: number; shopListed?: boolean },
   ): Promise<'ok' | 'not_found' | 'supply_below_minted'> {
     // Build SET clause dynamically
     const sets: string[] = [];
     const values: unknown[] = [itemKey];
-    if (updates.tier !== undefined)         { values.push(updates.tier);         sets.push(`tier = $${values.length}`); }
-    if (updates.priceMorbius !== undefined) { values.push(updates.priceMorbius); sets.push(`price_morbius = $${values.length}`); }
-    if (updates.maxSupply !== undefined)    { values.push(updates.maxSupply);    sets.push(`max_supply = $${values.length}`); }
+    if (updates.tier !== undefined)          { values.push(updates.tier);           sets.push(`tier = $${values.length}`); }
+    if (updates.priceMorbius !== undefined)  { values.push(updates.priceMorbius);   sets.push(`price_morbius = $${values.length}`); }
+    if (updates.maxSupply !== undefined)     { values.push(updates.maxSupply);      sets.push(`max_supply = $${values.length}`); }
+    if (updates.shopListed !== undefined)    { values.push(updates.shopListed);    sets.push(`shop_listed = $${values.length}`); }
     if (sets.length === 0) return 'ok';
 
     // If we're changing maxSupply, guard against setting it below minted_count
@@ -206,6 +224,43 @@ export class CosmeticsService {
     return 'ok';
   }
 
+  /**
+   * Admin: set shop_listed for many keys (e.g. variant-review approve/reject sync).
+   * Only updates existing active rows. Returns item_key values with no matching row.
+   */
+  async bulkSetShopListed(
+    pairs: Array<{ itemKey: string; shopListed: boolean }>,
+  ): Promise<{ updated: number; notFound: string[] }> {
+    const notFound: string[] = [];
+    let updated = 0;
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const { itemKey, shopListed } of pairs) {
+        const { rowCount } = await client.query(
+          `UPDATE cosmetic_items SET shop_listed = $1 WHERE item_key = $2 AND is_active = true`,
+          [shopListed, itemKey],
+        );
+        if ((rowCount ?? 0) === 0) {
+          const { rows } = await client.query(
+            `SELECT 1 FROM cosmetic_items WHERE item_key = $1`,
+            [itemKey],
+          );
+          if (rows.length === 0) notFound.push(itemKey);
+        } else {
+          updated += rowCount ?? 0;
+        }
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    return { updated, notFound };
+  }
+
   /** Admin: bulk-update price for all items of a given tier. Returns count of rows updated. */
   async updateTierPricing(tier: string, priceMorbius: number): Promise<number> {
     const { rowCount } = await this.pool.query(
@@ -222,6 +277,28 @@ export class CosmeticsService {
       [walletAddress.toLowerCase()],
     );
     return rows.map(r => r.item_key);
+  }
+
+  /** Admin: wallets that own a catalog item (shop purchase or grant; acquired_from set when gifted). */
+  async getOwnersForItem(itemKey: string): Promise<
+    Array<{ walletAddress: string; acquiredAt: string; acquiredFrom: string | null }>
+  > {
+    const { rows } = await this.pool.query<{
+      wallet_address: string;
+      acquired_at: Date;
+      acquired_from: string | null;
+    }>(
+      `SELECT wallet_address, acquired_at, acquired_from
+       FROM player_cosmetics
+       WHERE item_key = $1
+       ORDER BY acquired_at ASC`,
+      [itemKey],
+    );
+    return rows.map(r => ({
+      walletAddress: r.wallet_address,
+      acquiredAt: r.acquired_at.toISOString(),
+      acquiredFrom: r.acquired_from,
+    }));
   }
 
   /** Returns true if the player owns the item. */
@@ -315,6 +392,12 @@ export class CosmeticsService {
   ): Promise<PurchaseResult> {
     const catalogItem = ITEM_CATALOG.find(i => i.itemKey === itemKey);
     if (!catalogItem) return 'not_found';
+
+    const { rows: shopRows } = await this.pool.query<{ shop_listed: boolean }>(
+      `SELECT COALESCE(shop_listed, true) AS shop_listed FROM cosmetic_items WHERE item_key = $1`,
+      [itemKey],
+    );
+    if (shopRows.length > 0 && !shopRows[0].shop_listed) return 'not_listed';
 
     // Replay protection
     const { rows: used } = await this.pool.query<{ count: string }>(
