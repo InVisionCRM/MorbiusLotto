@@ -3390,6 +3390,22 @@ export class WebSocketService {
         logger.error('BJMulti stuck betting error', { tableId: row.table_id, error: err });
       }
     }
+
+    // Transition waiting tables with seated players to betting (so next round can start)
+    const waitingWithSeats = await pool.query(`
+      SELECT t.id AS table_id
+      FROM blackjack_multi_tables t
+      WHERE t.status = 'waiting'
+        AND EXISTS (SELECT 1 FROM blackjack_multi_seats s WHERE s.table_id = t.id)
+    `);
+    for (const row of waitingWithSeats.rows) {
+      try {
+        await this.bjMultiService.startBettingPhase(row.table_id);
+        await this.broadcastBJMultiTableState(row.table_id);
+      } catch (err) {
+        logger.error('BJMulti start betting phase error', { tableId: row.table_id, error: err });
+      }
+    }
   }
 
   private async handleBJMultiListTables(ws: WebSocketClient, message: WebSocketMessage) {

@@ -580,7 +580,19 @@ export class BlackjackMultiGameService {
         [JSON.stringify(hands), rs.id],
       );
 
-      await this.advanceTurn(tableId, round.id);
+      // If same seat has another active hand (e.g. after split), advance to it instead of next seat
+      const nextInSeat = hands.findIndex((h, i) => i > hi && (h.canHit || h.canStand));
+      if (nextInSeat !== -1) {
+        await this.pool.query(
+          `UPDATE blackjack_multi_round_seats SET hands = $1, active_hand_index = $2 WHERE id = $3`,
+          [JSON.stringify(hands), nextInSeat, rs.id],
+        );
+        await this.pool.query(
+          `UPDATE blackjack_multi_rounds SET turn_started_at = NOW() WHERE id = $1`, [round.id],
+        );
+      } else {
+        await this.advanceTurn(tableId, round.id);
+      }
     } finally {
       release();
     }
@@ -593,12 +605,53 @@ export class BlackjackMultiGameService {
   }
 
   /**
+   * Called by the timer watchdog: transition a table from waiting to betting when
+   * there are seated players, so the next round can start (15s betting timer applies).
+   */
+  async startBettingPhase(tableId: string): Promise<void> {
+    const release = await this.tableLocks.acquire(tableId);
+    try {
+      const tableResult = await this.pool.query(
+        `SELECT * FROM blackjack_multi_tables WHERE id = $1`, [tableId],
+      );
+      if (tableResult.rows.length === 0) return;
+      const table = tableResult.rows[0];
+      if (table.status !== 'waiting') return;
+
+      const seatsResult = await this.pool.query(
+        `SELECT id FROM blackjack_multi_seats WHERE table_id = $1`, [tableId],
+      );
+      if (seatsResult.rows.length === 0) return;
+
+      const roundNumResult = await this.pool.query(
+        `SELECT COALESCE(MAX(round_number), 0) + 1 AS next_num FROM blackjack_multi_rounds WHERE table_id = $1`,
+        [tableId],
+      );
+      const roundNumber = Number(roundNumResult.rows[0].next_num);
+
+      const placeholderSeed = require('crypto').randomBytes(32).toString('hex');
+      const placeholderHash = require('crypto').createHash('sha256').update(placeholderSeed).digest('hex');
+      await this.pool.query(
+        `INSERT INTO blackjack_multi_rounds (table_id, round_number, status, server_seed, server_seed_hash)
+         VALUES ($1, $2, 'betting', $3, $4)`,
+        [tableId, roundNumber, placeholderSeed, placeholderHash],
+      );
+      await this.pool.query(
+        `UPDATE blackjack_multi_tables SET status = 'betting' WHERE id = $1`, [tableId],
+      );
+    } finally {
+      release();
+    }
+  }
+
+  /**
    * Called by the timer watchdog: handle betting phase timeout.
    * Seats that haven't bet sit out (or get kicked), then start round if any bets exist.
    */
   async handleBettingTimeout(tableId: string): Promise<void> {
     const release = await this.tableLocks.acquire(tableId);
     let shouldBroadcast = false;
+    let revertedToWaiting = false;
     try {
       const tableResult = await this.pool.query(
         `SELECT * FROM blackjack_multi_tables WHERE id = $1`, [tableId],
@@ -617,11 +670,21 @@ export class BlackjackMultiGameService {
           `UPDATE blackjack_multi_tables SET status = 'waiting' WHERE id = $1`, [tableId],
         );
         shouldBroadcast = true;
+        revertedToWaiting = true;
         return;
       }
       shouldBroadcast = true;
     } finally {
       release();
+    }
+
+    if (revertedToWaiting) {
+      if (this.broadcastCallback) {
+        await this.broadcastCallback(tableId).catch(err =>
+          logger.error('BJMulti: broadcast error after betting timeout', err),
+        );
+      }
+      return;
     }
 
     // Start round outside of lock (startRound acquires its own lock)

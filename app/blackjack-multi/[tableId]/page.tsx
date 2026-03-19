@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
-import { getWebSocketUrlOptional } from '@/lib/api-urls';
+import { getWebSocketUrlOptional, getApiUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { BJMultiTableState, BJMultiSeatState, BJMultiHandObj } from '@/lib/websocket-client';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
@@ -64,7 +64,7 @@ function useCountdown(startedAt: string | null, maxSeconds: number) {
 }
 
 const POSITIONS = [0, 1, 2] as const;
-const AVATAR_SIZE = 56;
+const AVATAR_SIZE = 88;
 
 const CHIP_PRESETS = [
   { value: 500,   label: '500',  img: '/PokerChips/greenpokerchip005.png' },
@@ -92,11 +92,12 @@ function formatMorbius(wei: string): string {
 // Seat component — cards rendered like BlackjackTable (card-overlap-player)
 // ──────────────────────────────────────────────────────────────────────────────
 function Seat({
-  seat, position, isMe, isEmpty, isActing, phase, onTakeSeat, canTakeSeat, turnStartedAt, bettingStartedAt,
+  seat, position, isMe, isEmpty, isActing, phase, onTakeSeat, canTakeSeat, turnStartedAt, bettingStartedAt, balanceLabel,
 }: {
   seat: BJMultiSeatState | null; position: number; isMe: boolean; isEmpty: boolean;
   isActing: boolean; phase: string; onTakeSeat: () => void; canTakeSeat: boolean;
   turnStartedAt: string | null; bettingStartedAt: string | null;
+  balanceLabel?: string | null;
 }) {
   const turnRemaining = useCountdown(isActing ? turnStartedAt : null, TURN_TIMEOUT);
   const betRemaining = useCountdown(phase === 'betting' && !isEmpty ? bettingStartedAt : null, BETTING_TIMEOUT);
@@ -202,6 +203,9 @@ function Seat({
               {seat?.displayName ?? (seat?.playerAddress ? seat.playerAddress.slice(0, 6) + '…' : '—')}
               {isMe && <span className="text-[9px] text-white/40 ml-1">(you)</span>}
             </span>
+            {balanceLabel != null && (
+              <span className="text-[10px] text-white/50 tabular-nums">{balanceLabel} MORBIUS</span>
+            )}
           </div>
 
           {seat?.seatStatus === 'sitting_out' && (
@@ -230,6 +234,26 @@ export default function BlackjackMultiTablePage() {
 
   // Bet panel state
   const [betAmount, setBetAmount] = useState(0); // whole MORBIUS
+
+  // Platform balance (for display under avatar when seated)
+  const [playerBalance, setPlayerBalance] = useState<bigint>(0n);
+
+  const fetchBalance = useCallback(async () => {
+    const apiUrl = getApiUrlOptional();
+    if (!apiUrl || !address) return;
+    try {
+      const res = await fetch(`${apiUrl}/api/player/${address}/balance`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setPlayerBalance(BigInt(data?.balance ?? 0));
+    } catch {
+      // ignore
+    }
+  }, [address]);
+
+  useEffect(() => {
+    fetchBalance();
+  }, [fetchBalance]);
 
   const roomId = `blackjack:table:${tableId}`;
   const { messages: chatMessages, sendMessage: sendChatMessage } = useChat(roomId, { wsClient, wsConnected });
@@ -277,9 +301,11 @@ export default function BlackjackMultiTablePage() {
 
   const placeBet = useCallback(async () => {
     if (!wsClient?.isConnected() || betAmount <= 0) return;
-    try { await wsClient.sendRequest('bj_multi_place_bet', { tableId, amount: parseEther(String(betAmount)).toString() }); }
-    catch (e) { setError((e as Error).message); }
-  }, [wsClient, tableId, betAmount]);
+    try {
+      await wsClient.sendRequest('bj_multi_place_bet', { tableId, amount: parseEther(String(betAmount)).toString() });
+      fetchBalance();
+    } catch (e) { setError((e as Error).message); }
+  }, [wsClient, tableId, betAmount, fetchBalance]);
 
   const doAction = useCallback(async (action: 'hit' | 'stand' | 'double_down' | 'split') => {
     if (!wsClient?.isConnected()) return;
@@ -410,6 +436,7 @@ export default function BlackjackMultiTablePage() {
                     canTakeSeat={!!address && myPosition === null && isEmpty && wsConnected}
                     turnStartedAt={state?.actingSeatPosition === pos ? state?.turnStartedAt ?? null : null}
                     bettingStartedAt={state?.bettingStartedAt ?? null}
+                    balanceLabel={isMe ? formatMorbius(playerBalance.toString()) : null}
                   />
                 );
               })}
@@ -423,7 +450,7 @@ export default function BlackjackMultiTablePage() {
             {state?.phase === 'betting' && myPosition !== null && !hasBet && (
               <div className="w-full max-w-md mx-auto space-y-2">
                 {/* Chip row */}
-                <div className="grid grid-cols-5 gap-1 sm:gap-2 place-items-center">
+                <div className="grid grid-cols-4 gap-1 sm:gap-2 place-items-center">
                   {filteredChips.map(chip => (
                     <button
                       key={chip.value}
@@ -436,7 +463,25 @@ export default function BlackjackMultiTablePage() {
                       </span>
                     </button>
                   ))}
-                  <button onClick={() => setBetAmount(0)} className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors">
+                </div>
+                {/* 1/2 bet, 2x, Clear */}
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    onClick={() => setBetAmount(a => Math.max(minBetNum, Math.floor(a / 2)))}
+                    className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
+                  >
+                    1/2 bet
+                  </button>
+                  <button
+                    onClick={() => setBetAmount(a => Math.min(maxBetNum, a * 2))}
+                    className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
+                  >
+                    2x
+                  </button>
+                  <button
+                    onClick={() => setBetAmount(0)}
+                    className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
+                  >
                     Clear
                   </button>
                 </div>
