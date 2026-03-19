@@ -59,15 +59,22 @@ function itemHexColor(item: ItemRow): string | null {
   return /^#[0-9a-fA-F]{6}$/.test(v) ? v : null;
 }
 
-function ItemSwatch({ item, size = 'sm' }: { item: ItemRow; size?: 'sm' | 'lg' }) {
+function ItemSwatch({ item, size = 'sm' }: { item: ItemRow; size?: 'sm' | 'md' | 'lg' }) {
   const hex = itemHexColor(item);
-  const dim = size === 'lg' ? 'w-14 h-14 rounded-xl' : 'w-5 h-5 rounded';
+  const dim =
+    size === 'lg'
+      ? 'w-14 h-14 rounded-xl'
+      : size === 'md'
+        ? 'w-12 h-12 rounded-xl'
+        : 'w-5 h-5 rounded';
   if (hex) {
     return <div className={`${dim} shrink-0 ring-1 ring-white/10`} style={{ backgroundColor: hex }} />;
   }
   return (
     <div className={`${dim} shrink-0 bg-zinc-700 ring-1 ring-white/10 flex items-center justify-center`}>
-      <span className="text-[8px] text-zinc-400 font-bold leading-none">
+      <span
+        className={`${size === 'sm' ? 'text-[8px]' : 'text-[10px]'} text-zinc-400 font-bold leading-none`}
+      >
         {item.displayName.slice(0, 2).toUpperCase()}
       </span>
     </div>
@@ -1560,7 +1567,7 @@ export default function AdminCosmeticsTab() {
   const editingItem = editKey ? items.find(i => i.itemKey === editKey) : undefined;
 
   return (
-    <div className="space-y-5 max-w-[1700px] mx-auto">
+    <div className="space-y-5 w-full min-w-0 max-w-full">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {address ? (
           <ItemBuilderPanel address={address} onCreated={load} startCollapsed />
@@ -1596,19 +1603,19 @@ export default function AdminCosmeticsTab() {
         )}
       </div>
 
-      <div className={DASH_CARD}>
-        <div className="px-3 py-3 sm:px-4 border-b border-cyan-500/15 flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-2 min-w-0 shrink-0">
+      <div className={`${DASH_CARD} min-w-0`}>
+        <div className="px-3 py-3 sm:px-4 border-b border-cyan-500/15 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 max-w-full items-start gap-2">
             <Package className="text-cyan-400 shrink-0 mt-0.5" size={18} />
-            <div>
+            <div className="min-w-0">
               <h2 className="text-sm font-semibold text-zinc-100">Item catalog</h2>
               <p className="text-[11px] text-zinc-500 leading-snug">
-                Dense grid — tier, minted/supply, owners. Gift icon: grant free to a wallet. Uncheck &quot;Listed in store&quot; in edit to hide from the shop.
+                Tier, minted/supply, and owners. Gift icon: grant free to a wallet. Uncheck &quot;Listed in store&quot; in edit to hide from the shop.
               </p>
             </div>
           </div>
-          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
-            <div className="relative flex-1 min-w-[140px] max-w-md">
+          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0 lg:justify-end">
+            <div className="relative flex-1 min-w-[min(100%,12rem)] max-w-md">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
                 value={search}
@@ -1656,78 +1663,97 @@ export default function AdminCosmeticsTab() {
           </div>
         ) : (
           <>
-            <div className="p-1">
-              <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1">
+            <div className="p-3 sm:p-4 min-w-0 overflow-x-auto">
+              <div
+                className="grid w-full min-w-0 gap-3 sm:gap-4"
+                style={{
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))',
+                }}
+              >
                 {sortedFiltered.map(item => {
                   const isEditing = editKey === item.itemKey;
                   const soldOut = item.mintedCount >= item.maxSupply;
                   return (
                     <div
                       key={item.itemKey}
-                      className={`aspect-square flex flex-col p-1 rounded-md border transition-colors min-w-0 ${
+                      className={`group flex min-w-0 flex-col overflow-hidden rounded-xl border transition-all duration-200 ${
                         isEditing
-                          ? 'border-cyan-400/45 bg-zinc-800/60 ring-1 ring-cyan-500/25'
-                          : 'border-zinc-700/70 bg-zinc-900/35 hover:border-zinc-600'
+                          ? 'border-cyan-400/50 bg-zinc-800/70 shadow-[0_0_0_1px_rgba(34,211,238,0.2)] ring-2 ring-cyan-500/20'
+                          : 'border-cyan-500/15 bg-gradient-to-b from-[rgb(22,28,36)] to-[rgb(16,20,26)] hover:border-cyan-500/35 hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
                       }`}
+                      style={{
+                        boxShadow: isEditing
+                          ? undefined
+                          : 'inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 3px rgba(0,0,0,0.45)',
+                      }}
                     >
-                      <div className="flex-1 min-h-0 flex items-center justify-center">
-                        <ItemSwatch item={item} size="sm" />
+                      <div className="relative flex min-h-[5.5rem] items-center justify-center px-3 pt-3">
+                        <div
+                          className="pointer-events-none absolute inset-0 opacity-90"
+                          style={{
+                            background:
+                              'radial-gradient(circle at 50% 35%, rgba(34, 211, 238, 0.12), transparent 62%)',
+                          }}
+                        />
+                        <ItemSwatch item={item} size="md" />
                       </div>
-                      <p
-                        className="text-[8px] text-zinc-300 text-center line-clamp-2 leading-tight px-0.5 mt-0.5"
-                        title={`${item.displayName} · ${item.itemKey}`}
-                      >
-                        {item.displayName}
-                      </p>
-                      <span
-                        className={`self-center px-1 py-px rounded text-[7px] font-bold uppercase mt-0.5 max-w-full truncate ${TIER_BADGE[item.tier]}`}
-                        title={item.tier}
-                      >
-                        {item.tier}
-                      </span>
-                      {!item.shopListed && (
-                        <span className="text-[7px] text-amber-400/95 text-center leading-tight mt-0.5 font-semibold">
-                          Off store
+                      <div className="flex flex-1 flex-col px-3 pb-3 pt-1">
+                        <p
+                          className="line-clamp-2 min-h-[2.5rem] text-center text-xs font-medium leading-snug text-zinc-100"
+                          title={`${item.displayName} · ${item.itemKey}`}
+                        >
+                          {item.displayName}
+                        </p>
+                        <span
+                          className={`mt-2 self-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${TIER_BADGE[item.tier]}`}
+                          title={item.tier}
+                        >
+                          {item.tier}
                         </span>
-                      )}
-                      <div
-                        className={`text-[8px] text-center tabular-nums mt-0.5 leading-none ${
-                          soldOut ? 'text-red-400 font-medium' : 'text-zinc-500'
-                        }`}
-                      >
-                        {item.mintedCount}/{item.maxSupply}
-                      </div>
-                      <div className="grid grid-cols-3 gap-0.5 mt-1">
-                        <button
-                          type="button"
-                          onClick={() => (isEditing ? cancelEdit() : startEdit(item))}
-                          className={`flex items-center justify-center gap-0.5 rounded py-1 text-[8px] font-semibold transition-colors ${
-                            isEditing
-                              ? 'bg-zinc-700 text-zinc-200 hover:bg-zinc-600'
-                              : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                        {!item.shopListed && (
+                          <span className="mt-1 text-center text-[10px] font-semibold leading-tight text-amber-400/95">
+                            Off store
+                          </span>
+                        )}
+                        <div
+                          className={`mt-2 text-center text-[11px] tabular-nums ${
+                            soldOut ? 'font-semibold text-red-400' : 'text-zinc-400'
                           }`}
-                          title={isEditing ? 'Close editor' : 'Edit price, tier, supply'}
                         >
-                          {isEditing ? <X size={9} /> : <Pencil size={9} />}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!address}
-                          onClick={() => address && setOwnersModal({ itemKey: item.itemKey, displayName: item.displayName })}
-                          className="flex items-center justify-center gap-0.5 rounded py-1 text-[8px] font-semibold bg-zinc-800 text-cyan-400/90 hover:text-cyan-300 hover:bg-zinc-700 disabled:opacity-40 disabled:pointer-events-none transition-colors"
-                          title="Who owns this item"
-                        >
-                          <Users size={9} />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!address}
-                          onClick={() => address && setGrantModal({ itemKey: item.itemKey, displayName: item.displayName })}
-                          className="flex items-center justify-center gap-0.5 rounded py-1 text-[8px] font-semibold bg-zinc-800 text-amber-400/90 hover:text-amber-300 hover:bg-zinc-700 disabled:opacity-40 disabled:pointer-events-none transition-colors"
-                          title="Grant to wallet (admin)"
-                        >
-                          <Gift size={9} />
-                        </button>
+                          {item.mintedCount}/{item.maxSupply} minted
+                        </div>
+                        <div className="mt-3 grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => (isEditing ? cancelEdit() : startEdit(item))}
+                            className={`flex items-center justify-center gap-1 rounded-lg py-2 text-[10px] font-semibold transition-colors ${
+                              isEditing
+                                ? 'bg-zinc-700 text-zinc-100 hover:bg-zinc-600'
+                                : 'border border-zinc-600/60 bg-zinc-900/50 text-zinc-300 hover:border-cyan-500/30 hover:bg-zinc-800 hover:text-white'
+                            }`}
+                            title={isEditing ? 'Close editor' : 'Edit price, tier, supply'}
+                          >
+                            {isEditing ? <X size={14} /> : <Pencil size={14} />}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!address}
+                            onClick={() => address && setOwnersModal({ itemKey: item.itemKey, displayName: item.displayName })}
+                            className="flex items-center justify-center gap-1 rounded-lg border border-zinc-600/60 bg-zinc-900/50 py-2 text-[10px] font-semibold text-cyan-400/95 transition-colors hover:border-cyan-500/35 hover:bg-zinc-800 hover:text-cyan-300 disabled:pointer-events-none disabled:opacity-40"
+                            title="Who owns this item"
+                          >
+                            <Users size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!address}
+                            onClick={() => address && setGrantModal({ itemKey: item.itemKey, displayName: item.displayName })}
+                            className="flex items-center justify-center gap-1 rounded-lg border border-zinc-600/60 bg-zinc-900/50 py-2 text-[10px] font-semibold text-amber-400/95 transition-colors hover:border-amber-500/35 hover:bg-zinc-800 hover:text-amber-300 disabled:pointer-events-none disabled:opacity-40"
+                            title="Grant to wallet (admin)"
+                          >
+                            <Gift size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

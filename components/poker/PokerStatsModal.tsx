@@ -218,7 +218,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
             onClick={() => setActiveTab('history')}
             className={`px-4 py-2 font-semibold transition-colors flex items-center gap-2 rounded-lg ${
               activeTab === 'history'
-                ? 'text-cyan-400 bg-cyan-500/20 border border-cyan-500/40'
+                ? 'text-cyan-500 bg-cyan-500/10 border border-cyan-500/20'
                 : 'text-white/60 hover:text-white'
             }`}
           >
