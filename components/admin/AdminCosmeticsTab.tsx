@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
-import { Package, Search, Pencil, Check, X, Loader2, AlertTriangle, RefreshCw, Plus, ChevronDown, ChevronUp, Shuffle, Copy } from 'lucide-react';
+import { Package, Search, Pencil, Check, X, Loader2, AlertTriangle, RefreshCw, Plus, ChevronDown, ChevronUp, Shuffle, Copy, Paintbrush } from 'lucide-react';
 import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog';
 import PixelBackgroundUploader from '@/components/poker/avatar/PixelBackgroundUploader';
 import GradientBuilder from '@/components/poker/avatar/GradientBuilder';
-import VoxelPainter from '@/components/poker/avatar/VoxelPainter';
+import VoxelPainter, { type VoxelPainterHandle } from '@/components/poker/avatar/VoxelPainter';
 import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
 import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
 import type { AvatarConfig } from '@/lib/websocket-client';
@@ -213,7 +213,11 @@ const HAT_VARIANTS = ['Hat V1', 'Hat V2', 'Hat V3', 'Hat V4', 'Hat V5', 'Hat V6'
 const SHADES_VARIANTS = ['Shades V1', 'Shades V2', 'Shades V3', 'Shades V4', 'Shades V5', 'Shades V6', 'Shades V7', 'Shades V8', 'Shades V9', 'Shades V10'] as const;
 const EYE_VARIANTS = ['Eye V1', 'Eye V2', 'Eye V3', 'Eye V4', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10'] as const;
 
-function DreadlocksVariantReviewPanel() {
+function DreadlocksVariantReviewPanel({
+  voxelPainterRef,
+}: {
+  voxelPainterRef: React.RefObject<VoxelPainterHandle | null>;
+}) {
   const STORAGE_KEY = 'admin_cosmetics_variant_decisions_v1';
   const [decisions, setDecisions] = useState<Record<string, 'approved' | 'rejected' | undefined>>({});
   const [showApprovedOnly, setShowApprovedOnly] = useState(false);
@@ -296,6 +300,14 @@ function DreadlocksVariantReviewPanel() {
                   Reject
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() => void voxelPainterRef.current?.importFromAvatarConfig(previewConfig)}
+                className="mt-1.5 w-full flex items-center justify-center gap-1 px-1.5 py-1 rounded text-[10px] font-medium border border-cyan-500/35 text-cyan-300/90 hover:text-white hover:border-cyan-400/50 hover:bg-cyan-950/30 transition-colors"
+                title="Open Voxel Painter with this preview as a 24×28 grid (full avatar snapshot — erase/recolor, then save as overlay/background)"
+              >
+                <Paintbrush size={10} /> Voxel painter
+              </button>
               <div className="mt-1 text-center text-[9px]">
                 {decision === 'approved' && <span className="text-emerald-400">Approved</span>}
                 {decision === 'rejected' && <span className="text-red-400">Rejected</span>}
@@ -312,7 +324,10 @@ function DreadlocksVariantReviewPanel() {
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-4">
       <div className="mb-2">
         <h3 className="text-sm font-semibold text-white">Variant Review (Not In Store Yet)</h3>
-        <p className="text-[11px] text-zinc-500">Review-first batch: dreadlocks, hair, shirts, hats, shades, and eye types.</p>
+        <p className="text-[11px] text-zinc-500">
+          Review-first batch: dreadlocks, hair, shirts, hats, shades, and eye types. Approve/reject is optional — use{' '}
+          <span className="text-cyan-500/90">Voxel painter</span> on any card to edit a raster snapshot and save your own item.
+        </p>
         <div className="mt-1 text-[10px] text-zinc-400">
           Approved: {Object.values(decisions).filter(v => v === 'approved').length} · Rejected: {Object.values(decisions).filter(v => v === 'rejected').length}
         </div>
@@ -971,6 +986,7 @@ function TierPricingPanel({ address, onUpdated }: { address: string; onUpdated: 
 
 export default function AdminCosmeticsTab() {
   const { address } = useAccount();
+  const voxelPainterRef = useRef<VoxelPainterHandle>(null);
   const [items, setItems] = useState<ItemRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1075,10 +1091,10 @@ export default function AdminCosmeticsTab() {
       {address && <ItemBuilderPanel address={address} onCreated={load} />}
 
       {/* Review-first hairstyle previews */}
-      <DreadlocksVariantReviewPanel />
+      <DreadlocksVariantReviewPanel voxelPainterRef={voxelPainterRef} />
 
       {/* Voxel painter */}
-      {address && <VoxelPainter address={address} onCreated={load} />}
+      {address && <VoxelPainter ref={voxelPainterRef} address={address} onCreated={load} />}
 
       {/* Tier pricing */}
       {address && <TierPricingPanel address={address} onUpdated={load} />}

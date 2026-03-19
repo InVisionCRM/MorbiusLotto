@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { HexColorPicker } from 'react-colorful';
-import { Eraser, Trash2, Eye, EyeOff, ChevronDown, ChevronUp, Plus, Loader2, Check, AlertTriangle } from 'lucide-react';
+import { Eraser, Trash2, Eye, EyeOff, ChevronDown, ChevronUp, Plus, Loader2, Check, AlertTriangle, Upload, Shuffle } from 'lucide-react';
 import AvatarPreview from './AvatarPreview';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog';
+import { angleToSvgCoords, parseGradient, serializeGradient, type GradientDef } from '@/lib/gradient-utils';
+import { rasterizeAvatarConfigToGrid } from './avatar-to-voxel-grid';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -19,6 +21,7 @@ const MORBIUS_PRICE: Record<ItemTier, number> = {
 
 const DEFAULT_CONFIG: AvatarConfig = {
   skinColor: '#F1C27D', hairStyle: 'Short', hairColor: '#2C222B',
+  accessoryColor: '#111111',
   eyeShape: 'Round', eyeColor: '#634e34', noseShape: 'Small',
   lipShape: 'Smile', accessory: 'None', shirtColor: '#3b82f6',
   hat: 'None', hatColor: '', shirtStyle: 'Default', necklace: 'None', mouthAccessory: 'None',
@@ -60,9 +63,170 @@ function gridToDataUrl(grid: Grid): string {
   return canvas.toDataURL('image/png');
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return `rgba(0,0,0,${alpha})`;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/** Sample avatar-style tiled patterns into solid hex per cell (matches lib/avatar-svg-patterns). */
+const PATTERN_KINDS = ['tiger', 'zebra', 'leopard', 'camo', 'galaxy', 'checkerboard'] as const;
+type PatternKind = (typeof PATTERN_KINDS)[number];
+
+function patternPixel(kind: PatternKind, x: number, y: number): string {
+  const u = x % 4;
+  const v = y % 4;
+  switch (kind) {
+    case 'tiger':
+      if (v === 1 && u <= 1) return '#000000';
+      if (v === 3 && u >= 2) return '#000000';
+      return '#f97316';
+    case 'zebra':
+      return u === 0 || u === 2 ? '#000000' : '#ffffff';
+    case 'leopard':
+      if (u === 0 && v === 0) return '#78350f';
+      if (u === 2 && v === 2) return '#78350f';
+      return '#facc15';
+    case 'camo':
+      if (v === 0 && u < 2) return '#14532d';
+      if (v === 2 && u >= 2) return '#78350f';
+      if (v === 3 && u >= 1 && u < 3) return '#14532d';
+      return '#4d7c0f';
+    case 'galaxy':
+      if (u === 1 && v === 0) return '#ffffff';
+      if (u === 3 && v === 2) return '#c084fc';
+      if (u === 0 && v === 3) return '#38bdf8';
+      return '#0f172a';
+    case 'checkerboard':
+      return (x + y) % 2 === 0 ? '#ffffff' : '#000000';
+    default:
+      return '#3f3f46';
+  }
+}
+
+function gridFromPattern(kind: PatternKind): Grid {
+  const g = emptyGrid();
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID; x++) {
+      g[y][x] = patternPixel(kind, x, y);
+    }
+  }
+  return g;
+}
+
+function gridFromGradientDef(def: GradientDef): Grid {
+  const w = GRID;
+  const h = GRID_H;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return emptyGrid();
+  const c = angleToSvgCoords(def.angle);
+  const x1 = (parseFloat(c.x1.replace('%', '')) / 100) * w;
+  const y1 = (parseFloat(c.y1.replace('%', '')) / 100) * h;
+  const x2 = (parseFloat(c.x2.replace('%', '')) / 100) * w;
+  const y2 = (parseFloat(c.y2.replace('%', '')) / 100) * h;
+  const lg = ctx.createLinearGradient(x1, y1, x2, y2);
+  const stops = [...def.stops].sort((a, b) => a.offset - b.offset);
+  for (const s of stops) {
+    lg.addColorStop(s.offset, hexToRgba(s.color, s.opacity));
+  }
+  ctx.fillStyle = lg;
+  ctx.fillRect(0, 0, w, h);
+  const data = ctx.getImageData(0, 0, w, h);
+  const out = emptyGrid();
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const a = data.data[i + 3];
+      if (a < 8) out[y][x] = null;
+      else {
+        const r = data.data[i];
+        const gg = data.data[i + 1];
+        const b = data.data[i + 2];
+        out[y][x] = `#${r.toString(16).padStart(2, '0')}${gg.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+      }
+    }
+  }
+  return out;
+}
+
+function randomHex(): string {
+  const hue = Math.floor(Math.random() * 360);
+  const s = 50 + Math.floor(Math.random() * 40);
+  const l = 35 + Math.floor(Math.random() * 40);
+  const a = (s * Math.min(l, 100 - l)) / 100;
+  const f = (n: number) => {
+    const k = (n + hue / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round((255 * color) / 100)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+/** Random linear gradient JSON; preserves stop count when `existing` parses. */
+function randomGradientJson(existing?: string): string {
+  const angle = Math.floor(Math.random() * 360);
+  const parsed = existing ? parseGradient(existing) : null;
+  const numStops = Math.max(
+    2,
+    Math.min(5, parsed?.stops?.length ?? (2 + (Math.random() > 0.6 ? 1 : 0))),
+  );
+  const offsets =
+    numStops <= 2
+      ? [0, 1]
+      : [0, ...Array.from({ length: numStops - 2 }, () => Math.random()).sort((a, b) => a - b), 1];
+  const stops = Array.from({ length: numStops }, (_, i) => ({
+    color: randomHex(),
+    offset: offsets[i],
+    opacity: 1,
+  }));
+  return serializeGradient({ type: 'linearGradient', angle, stops });
+}
+
+function gridFromImageBitmap(img: HTMLImageElement): Grid {
+  const canvas = document.createElement('canvas');
+  canvas.width = GRID;
+  canvas.height = GRID_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return emptyGrid();
+  ctx.clearRect(0, 0, GRID, GRID_H);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, GRID, GRID_H);
+  const data = ctx.getImageData(0, 0, GRID, GRID_H);
+  const out = emptyGrid();
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const i = (y * GRID + x) * 4;
+      const a = data.data[i + 3];
+      if (a < 12) out[y][x] = null;
+      else {
+        const r = data.data[i];
+        const g = data.data[i + 1];
+        const b = data.data[i + 2];
+        out[y][x] = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+      }
+    }
+  }
+  return out;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function VoxelPainter({ address, onCreated }: { address: string; onCreated: () => void }) {
+export type VoxelPainterHandle = {
+  /** Rasterizes the avatar at 24×28 and loads into the grid; opens the painter panel. */
+  importFromAvatarConfig: (config: AvatarConfig) => Promise<void>;
+};
+
+const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated: () => void }>(
+  function VoxelPainter({ address, onCreated }, ref) {
   const [open, setOpen] = useState(false);
   const [grid, setGrid] = useState<Grid>(emptyGrid);
   const [color, setColor] = useState('#ef4444');
@@ -82,8 +246,30 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  /** Keeps stop count stable across repeated gradient randomize clicks (same as admin gradient tool). */
+  const lastGradientJsonRef = useRef('');
+
+  useImperativeHandle(ref, () => ({
+    importFromAvatarConfig: async (config: AvatarConfig) => {
+      setErr(null);
+      setSuccess(null);
+      try {
+        const g = await rasterizeAvatarConfigToGrid(config);
+        setGrid(g);
+        setOpen(true);
+        setSuccess('Loaded from preview — erase/recolor, then Save as Item');
+        queueMicrotask(() =>
+          containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+        );
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Could not import preview into grid');
+      }
+    },
+  }));
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -128,6 +314,55 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
   }, [painting, paint]);
 
   const handleMouseUp = useCallback(() => setPainting(false), []);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setErr('Please choose an image file');
+      setSuccess(null);
+      return;
+    }
+    setErr(null);
+    setSuccess(null);
+    const url = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      try {
+        setGrid(gridFromImageBitmap(img));
+        setSuccess('Image sampled into grid (24×28)');
+      } catch {
+        setErr('Could not sample image');
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      setErr('Failed to load image');
+    };
+    img.src = url;
+  };
+
+  const handleRandomPattern = () => {
+    setErr(null);
+    setSuccess(null);
+    const kind = PATTERN_KINDS[Math.floor(Math.random() * PATTERN_KINDS.length)];
+    setGrid(gridFromPattern(kind));
+    setSuccess(`Pattern: ${kind}`);
+  };
+
+  const handleRandomGradient = () => {
+    setErr(null);
+    setSuccess(null);
+    const json = randomGradientJson(lastGradientJsonRef.current || undefined);
+    lastGradientJsonRef.current = json;
+    const def = parseGradient(json);
+    if (!def) return;
+    setGrid(gridFromGradientDef(def));
+    setSuccess('Random gradient applied');
+  };
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove);
@@ -186,7 +421,7 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
   const supply = MAX_SUPPLY[tier];
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+    <div ref={containerRef} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setOpen(o => !o)}
@@ -279,27 +514,63 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
                 </svg>
               </div>
 
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+
               {/* Canvas actions */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowRef(r => !r)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${
-                    showRef ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white'
-                  }`}
-                  title="Toggle reference avatar"
-                >
-                  {showRef ? <Eye size={11} /> : <EyeOff size={11} />}
-                  Ghost
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGrid(emptyGrid())}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-zinc-700 text-zinc-400 hover:text-red-400 hover:border-red-800 transition-colors"
-                  title="Clear canvas"
-                >
-                  <Trash2 size={11} /> Clear
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowRef(r => !r)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${
+                      showRef ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white'
+                    }`}
+                    title="Toggle reference avatar"
+                  >
+                    {showRef ? <Eye size={11} /> : <EyeOff size={11} />}
+                    Ghost
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-zinc-700 text-zinc-400 hover:text-cyan-300 hover:border-cyan-600/50 transition-colors"
+                    title="Upload image — scaled to 24×28 cells (transparent where alpha is low)"
+                  >
+                    <Upload size={11} /> Upload image
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGrid(emptyGrid())}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-zinc-700 text-zinc-400 hover:text-red-400 hover:border-red-800 transition-colors"
+                    title="Clear canvas"
+                  >
+                    <Trash2 size={11} /> Clear
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRandomPattern}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-fuchsia-500/35 text-fuchsia-300/90 hover:text-white hover:border-fuchsia-400/60 transition-colors"
+                    title="Fill grid with a random tiger / zebra / leopard / camo / galaxy / checkerboard tile pattern"
+                  >
+                    <Shuffle size={11} /> Random pattern
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRandomGradient}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-indigo-500/35 text-indigo-300/90 hover:text-white hover:border-indigo-400/60 transition-colors"
+                    title="Fill grid with a random linear gradient (keeps stop count on repeat clicks)"
+                  >
+                    <Shuffle size={11} /> Random gradient
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -484,4 +755,6 @@ export default function VoxelPainter({ address, onCreated }: { address: string; 
       )}
     </div>
   );
-}
+});
+
+export default VoxelPainter;
