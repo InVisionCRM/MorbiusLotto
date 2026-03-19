@@ -1474,6 +1474,7 @@ export default function AdminCosmeticsTab() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [ownersModal, setOwnersModal] = useState<{ itemKey: string; displayName: string } | null>(null);
   const [grantModal, setGrantModal] = useState<{ itemKey: string; displayName: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<'create' | 'variants' | 'voxel' | 'pricing'>('create');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1567,107 +1568,163 @@ export default function AdminCosmeticsTab() {
   const editingItem = editKey ? items.find(i => i.itemKey === editKey) : undefined;
 
   return (
-    <div className="space-y-5 w-full min-w-0 max-w-full">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {address ? (
-          <ItemBuilderPanel address={address} onCreated={load} startCollapsed />
-        ) : (
-          <AdminWalletPlaceholder title="Create new item">
-            Connect your admin wallet to add catalog items.
-          </AdminWalletPlaceholder>
-        )}
-        <DreadlocksVariantReviewPanel
-          voxelPainterRef={voxelPainterRef}
-          startCollapsed
-          adminAddress={address ?? null}
-          onStoreSync={load}
-        />
-        {address ? (
-          <VoxelPainterDashboardCard
-            address={address}
+    <div className="space-y-6 w-full min-w-0 max-w-full">
+
+      {/* ── Stats overview ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className={`${DASH_CARD} px-5 py-4`}>
+          <div className="text-2xl font-bold tabular-nums text-zinc-100">{items.length}</div>
+          <div className="text-xs text-zinc-500 mt-1">Total Items</div>
+        </div>
+        <div className={`${DASH_CARD} px-5 py-4`}>
+          <div className="text-2xl font-bold tabular-nums text-emerald-400">{items.filter(i => i.shopListed).length}</div>
+          <div className="text-xs text-zinc-500 mt-1">Listed in Store</div>
+        </div>
+        <div className={`${DASH_CARD} px-5 py-4`}>
+          <div className="text-2xl font-bold tabular-nums text-cyan-400">{items.reduce((s, i) => s + i.mintedCount, 0).toLocaleString()}</div>
+          <div className="text-xs text-zinc-500 mt-1">Total Minted</div>
+        </div>
+        <div className={`${DASH_CARD} px-5 py-4`}>
+          <div className="text-2xl font-bold tabular-nums text-amber-400">{items.filter(i => i.tier === 'legendary').length}</div>
+          <div className="text-xs text-zinc-500 mt-1">Legendary Items</div>
+        </div>
+      </div>
+
+      {/* ── Tool panels (tabbed) ── */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-px scrollbar-none">
+          {([
+            { key: 'create' as const, label: 'Create Item', Icon: Plus, active: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+            { key: 'variants' as const, label: 'Variant Review', Icon: LayoutGrid, active: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' },
+            { key: 'voxel' as const, label: 'Voxel Painter', Icon: Paintbrush, active: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' },
+            { key: 'pricing' as const, label: 'Tier Pricing', Icon: Package, active: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+          ] as const).map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap border ${
+                activeTab === tab.key
+                  ? `${tab.active} shadow-sm`
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03] border-transparent'
+              }`}
+            >
+              <tab.Icon size={16} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Panels — hidden/shown to keep all mounted (preserves refs & state) */}
+        <div className={activeTab === 'create' ? '' : 'hidden'}>
+          {address ? (
+            <ItemBuilderPanel address={address} onCreated={load} startCollapsed={false} />
+          ) : (
+            <AdminWalletPlaceholder title="Create new item">
+              Connect your admin wallet to add catalog items.
+            </AdminWalletPlaceholder>
+          )}
+        </div>
+        <div className={activeTab === 'variants' ? '' : 'hidden'}>
+          <DreadlocksVariantReviewPanel
             voxelPainterRef={voxelPainterRef}
-            onCreated={load}
-            startCollapsed
+            startCollapsed={false}
+            adminAddress={address ?? null}
+            onStoreSync={load}
           />
-        ) : (
-          <AdminWalletPlaceholder title="Voxel painter">
-            Connect to paint overlays / backgrounds and save as shop items.
-          </AdminWalletPlaceholder>
-        )}
-        {address ? (
-          <TierPricingPanel address={address} onUpdated={load} startCollapsed />
-        ) : (
-          <AdminWalletPlaceholder title="Tier pricing defaults">
-            Connect to bulk-update MORBIUS prices by tier.
-          </AdminWalletPlaceholder>
-        )}
+        </div>
+        <div className={activeTab === 'voxel' ? '' : 'hidden'}>
+          {address ? (
+            <VoxelPainterDashboardCard
+              address={address}
+              voxelPainterRef={voxelPainterRef}
+              onCreated={load}
+              startCollapsed={false}
+            />
+          ) : (
+            <AdminWalletPlaceholder title="Voxel painter">
+              Connect to paint overlays / backgrounds and save as shop items.
+            </AdminWalletPlaceholder>
+          )}
+        </div>
+        <div className={activeTab === 'pricing' ? '' : 'hidden'}>
+          {address ? (
+            <TierPricingPanel address={address} onUpdated={load} startCollapsed={false} />
+          ) : (
+            <AdminWalletPlaceholder title="Tier pricing defaults">
+              Connect to bulk-update MORBIUS prices by tier.
+            </AdminWalletPlaceholder>
+          )}
+        </div>
       </div>
 
       <div className={`${DASH_CARD} min-w-0`}>
-        <div className="px-3 py-3 sm:px-4 border-b border-cyan-500/15 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 max-w-full items-start gap-2">
-            <Package className="text-cyan-400 shrink-0 mt-0.5" size={18} />
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-zinc-100">Item catalog</h2>
-              <p className="text-[11px] text-zinc-500 leading-snug">
-                Tier, minted/supply, and owners. Gift icon: grant free to a wallet. Uncheck &quot;Listed in store&quot; in edit to hide from the shop.
+        <div className="px-5 py-5 border-b border-cyan-500/15">
+          <div className="flex items-center gap-3 mb-4">
+            <Package className="text-cyan-400 shrink-0" size={20} />
+            <div>
+              <h2 className="text-base font-semibold text-zinc-100">Item Catalog</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Manage tiers, pricing, supply, and ownership. Use the gift icon to grant items to wallets.
               </p>
             </div>
           </div>
-          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0 lg:justify-end">
-            <div className="relative flex-1 min-w-[min(100%,12rem)] max-w-md">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search…"
-                className="w-full bg-zinc-900/80 border border-zinc-700/80 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500/40"
+                placeholder="Search items…"
+                className="w-full bg-zinc-900/80 border border-zinc-700/80 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
-            <div className="flex items-center gap-0.5 bg-zinc-900/80 border border-zinc-700/80 rounded-lg p-0.5">
-              {(['all', ...TIERS] as const).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTierFilter(t)}
-                  className={`px-2 py-1 rounded text-[10px] font-medium transition-colors capitalize ${
-                    tierFilter === t ? 'bg-zinc-600 text-white' : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-0.5 bg-zinc-900/80 border border-zinc-700/80 rounded-lg p-0.5">
+                {(['all', ...TIERS] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTierFilter(t)}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors capitalize ${
+                      tierFilter === t ? 'bg-zinc-600 text-white' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={load}
+                disabled={loading}
+                className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-50 border border-transparent hover:border-zinc-700"
+                title="Refresh"
+              >
+                <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+              </button>
+              <span className="text-xs text-zinc-500 tabular-nums whitespace-nowrap">{sortedFiltered.length} items</span>
             </div>
-            <button
-              type="button"
-              onClick={load}
-              disabled={loading}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-50 border border-transparent hover:border-zinc-700"
-              title="Refresh"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            </button>
-            <span className="text-[10px] text-zinc-500 tabular-nums">{sortedFiltered.length} shown</span>
           </div>
         </div>
 
         {error && (
-          <div className="mx-3 sm:mx-4 mt-3 flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">
+          <div className="mx-5 mt-4 flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-800/40 rounded-lg px-4 py-3">
             <AlertTriangle size={14} /> {error}
           </div>
         )}
 
         {loading && !items.length ? (
-          <div className="flex items-center justify-center py-16 text-zinc-500 gap-2">
-            <Loader2 size={16} className="animate-spin" /> Loading items…
+          <div className="flex items-center justify-center py-20 text-zinc-500 gap-2">
+            <Loader2 size={18} className="animate-spin" /> Loading items…
           </div>
         ) : (
           <>
-            <div className="p-3 sm:p-4 min-w-0 overflow-x-auto">
+            <div className="p-5 min-w-0 overflow-x-auto">
               <div
-                className="grid w-full min-w-0 gap-3 sm:gap-4"
+                className="grid w-full gap-4"
                 style={{
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
                 }}
               >
                 {sortedFiltered.map(item => {
@@ -1676,7 +1733,7 @@ export default function AdminCosmeticsTab() {
                   return (
                     <div
                       key={item.itemKey}
-                      className={`group flex min-w-0 flex-col overflow-hidden rounded-xl border transition-all duration-200 ${
+                      className={`group flex flex-col overflow-hidden rounded-xl border transition-all duration-200 ${
                         isEditing
                           ? 'border-cyan-400/50 bg-zinc-800/70 shadow-[0_0_0_1px_rgba(34,211,238,0.2)] ring-2 ring-cyan-500/20'
                           : 'border-cyan-500/15 bg-gradient-to-b from-[rgb(22,28,36)] to-[rgb(16,20,26)] hover:border-cyan-500/35 hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
@@ -1687,51 +1744,59 @@ export default function AdminCosmeticsTab() {
                           : 'inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 3px rgba(0,0,0,0.45)',
                       }}
                     >
-                      <div className="relative flex min-h-[5.5rem] items-center justify-center px-3 pt-3">
+                      {/* Swatch header */}
+                      <div className="relative flex min-h-[6.5rem] items-center justify-center px-4 pt-4">
                         <div
                           className="pointer-events-none absolute inset-0 opacity-90"
                           style={{
                             background:
-                              'radial-gradient(circle at 50% 35%, rgba(34, 211, 238, 0.12), transparent 62%)',
+                              'radial-gradient(circle at 50% 35%, rgba(34, 211, 238, 0.10), transparent 62%)',
                           }}
                         />
-                        <ItemSwatch item={item} size="md" />
+                        <ItemSwatch item={item} size="lg" />
                       </div>
-                      <div className="flex flex-1 flex-col px-3 pb-3 pt-1">
+
+                      {/* Card body */}
+                      <div className="flex flex-1 flex-col px-4 pb-4 pt-2">
                         <p
-                          className="line-clamp-2 min-h-[2.5rem] text-center text-xs font-medium leading-snug text-zinc-100"
+                          className="line-clamp-2 min-h-[2.5rem] text-center text-sm font-medium leading-snug text-zinc-100"
                           title={`${item.displayName} · ${item.itemKey}`}
                         >
                           {item.displayName}
                         </p>
-                        <span
-                          className={`mt-2 self-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${TIER_BADGE[item.tier]}`}
-                          title={item.tier}
-                        >
-                          {item.tier}
-                        </span>
-                        {!item.shopListed && (
-                          <span className="mt-1 text-center text-[10px] font-semibold leading-tight text-amber-400/95">
-                            Off store
+
+                        <div className="mt-2.5 flex items-center justify-center gap-2">
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${TIER_BADGE[item.tier]}`}
+                          >
+                            {item.tier}
                           </span>
-                        )}
-                        <div
-                          className={`mt-2 text-center text-[11px] tabular-nums ${
-                            soldOut ? 'font-semibold text-red-400' : 'text-zinc-400'
-                          }`}
-                        >
-                          {item.mintedCount}/{item.maxSupply} minted
+                          {!item.shopListed && (
+                            <span className="rounded-full bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold text-amber-400/95">
+                              Off store
+                            </span>
+                          )}
                         </div>
-                        <div className="mt-3 grid grid-cols-3 gap-1.5">
+
+                        <div className="mt-3 flex items-center justify-center gap-3 text-xs tabular-nums">
+                          <span className="text-amber-300/90 font-medium">{item.priceMorbius.toLocaleString()}</span>
+                          <span className="text-zinc-600">·</span>
+                          <span className={soldOut ? 'font-semibold text-red-400' : 'text-zinc-400'}>
+                            {item.mintedCount}/{item.maxSupply} minted
+                          </span>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="mt-4 grid grid-cols-3 gap-2">
                           <button
                             type="button"
                             onClick={() => (isEditing ? cancelEdit() : startEdit(item))}
-                            className={`flex items-center justify-center gap-1 rounded-lg py-2 text-[10px] font-semibold transition-colors ${
+                            className={`flex items-center justify-center rounded-lg py-2.5 text-xs font-medium transition-colors ${
                               isEditing
                                 ? 'bg-zinc-700 text-zinc-100 hover:bg-zinc-600'
                                 : 'border border-zinc-600/60 bg-zinc-900/50 text-zinc-300 hover:border-cyan-500/30 hover:bg-zinc-800 hover:text-white'
                             }`}
-                            title={isEditing ? 'Close editor' : 'Edit price, tier, supply'}
+                            title={isEditing ? 'Close editor' : 'Edit'}
                           >
                             {isEditing ? <X size={14} /> : <Pencil size={14} />}
                           </button>
@@ -1739,8 +1804,8 @@ export default function AdminCosmeticsTab() {
                             type="button"
                             disabled={!address}
                             onClick={() => address && setOwnersModal({ itemKey: item.itemKey, displayName: item.displayName })}
-                            className="flex items-center justify-center gap-1 rounded-lg border border-zinc-600/60 bg-zinc-900/50 py-2 text-[10px] font-semibold text-cyan-400/95 transition-colors hover:border-cyan-500/35 hover:bg-zinc-800 hover:text-cyan-300 disabled:pointer-events-none disabled:opacity-40"
-                            title="Who owns this item"
+                            className="flex items-center justify-center rounded-lg border border-zinc-600/60 bg-zinc-900/50 py-2.5 text-xs font-medium text-cyan-400/95 transition-colors hover:border-cyan-500/35 hover:bg-zinc-800 hover:text-cyan-300 disabled:pointer-events-none disabled:opacity-40"
+                            title="Owners"
                           >
                             <Users size={14} />
                           </button>
@@ -1748,8 +1813,8 @@ export default function AdminCosmeticsTab() {
                             type="button"
                             disabled={!address}
                             onClick={() => address && setGrantModal({ itemKey: item.itemKey, displayName: item.displayName })}
-                            className="flex items-center justify-center gap-1 rounded-lg border border-zinc-600/60 bg-zinc-900/50 py-2 text-[10px] font-semibold text-amber-400/95 transition-colors hover:border-amber-500/35 hover:bg-zinc-800 hover:text-amber-300 disabled:pointer-events-none disabled:opacity-40"
-                            title="Grant to wallet (admin)"
+                            className="flex items-center justify-center rounded-lg border border-zinc-600/60 bg-zinc-900/50 py-2.5 text-xs font-medium text-amber-400/95 transition-colors hover:border-amber-500/35 hover:bg-zinc-800 hover:text-amber-300 disabled:pointer-events-none disabled:opacity-40"
+                            title="Grant to wallet"
                           >
                             <Gift size={14} />
                           </button>
@@ -1762,27 +1827,27 @@ export default function AdminCosmeticsTab() {
             </div>
 
             {editingItem && editState && (
-              <div className={`${DASH_CARD_DIVIDER} px-3 sm:px-4 py-4 bg-black/20`}>
-                <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="border-t border-cyan-500/15 px-5 py-5 bg-black/20">
+                <div className="flex items-center justify-between gap-3 mb-4">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{editingItem.displayName}</p>
-                    <code className="text-[10px] text-zinc-500 font-mono truncate block">{editingItem.itemKey}</code>
+                    <p className="text-sm font-semibold text-white truncate">{editingItem.displayName}</p>
+                    <code className="text-[11px] text-zinc-500 font-mono truncate block mt-0.5">{editingItem.itemKey}</code>
                   </div>
                   <button
                     type="button"
                     onClick={cancelEdit}
-                    className="shrink-0 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800"
+                    className="shrink-0 p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
                     aria-label="Close editor"
                   >
                     <X size={16} />
                   </button>
                 </div>
-                <div className="flex flex-col sm:flex-row items-start gap-4">
+                <div className="flex flex-col sm:flex-row items-start gap-5">
                   <div className="flex flex-col items-center gap-2 shrink-0">
                     <ItemSwatch item={editingItem} size="lg" />
-                    <p className="text-[10px] text-amber-300/90 tabular-nums">{editingItem.priceMorbius.toLocaleString()} MORBIUS</p>
+                    <p className="text-xs text-amber-300/90 tabular-nums font-medium">{editingItem.priceMorbius.toLocaleString()} MORBIUS</p>
                   </div>
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full min-w-0">
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full min-w-0">
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Tier</label>
                       <select
@@ -1843,16 +1908,16 @@ export default function AdminCosmeticsTab() {
                       type="button"
                       onClick={() => saveEdit(editingItem)}
                       disabled={saving}
-                      className="w-full sm:w-auto px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                       {saving ? 'Saving…' : 'Save changes'}
                     </button>
                   </div>
                 </div>
                 {saveError && (
-                  <div className="mt-3 flex items-center gap-2 text-red-400 text-xs bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">
-                    <AlertTriangle size={11} /> {saveError}
+                  <div className="mt-4 flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-800/40 rounded-lg px-4 py-3">
+                    <AlertTriangle size={13} /> {saveError}
                   </div>
                 )}
               </div>

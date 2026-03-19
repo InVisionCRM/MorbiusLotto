@@ -23,6 +23,7 @@ import AdminReportsTab from '@/components/admin/AdminReportsTab';
 import AdminLPStakingTab from '@/components/admin/AdminLPStakingTab';
 import AdminMerkleDropsTab from '@/components/admin/AdminMerkleDropsTab';
 import AdminBJMultiTab from '@/components/admin/AdminBJMultiTab';
+import AdminPlayerLookup from '@/components/admin/AdminPlayerLookup';
 
 export default function AdminPage() {
   const { address } = useAccount();
@@ -50,6 +51,7 @@ export default function AdminPage() {
     <GlobalMainNav page="home" showBackArrow backArrowHref="/" backArrowLabel="Back to Home">
       <div className="min-h-screen bg-slate-950 text-white pt-4 md:pt-2">
         <main className="container mx-auto px-3 py-3 max-w-6xl">
+        <AdminPlayerLookup />
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="h-auto w-full flex flex-wrap bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs gap-0.5">
             <TabsTrigger value="tables" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
