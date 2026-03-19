@@ -236,16 +236,18 @@ export default function BlackjackMultiTablePage() {
     const wsUrl = getWebSocketUrlOptional();
     if (!wsUrl || !address) return;
     const client = new BlackjackWebSocketClient(wsUrl, address, signTypedDataAsync as any);
-    client.on('connected', async () => {
-      setWsConnected(true); setError(null);
-      await client.sendRequest('join_room', { roomId: `blackjack:table:${tableId}` }).catch(() => {});
-      try { setState(await client.sendRequest('bj_multi_get_state', { tableId }) as BJMultiTableState); }
-      catch { setError('Failed to load table state'); }
-    });
     client.on('disconnected', () => setWsConnected(false));
     client.on('error', (err: any) => setError(err?.message || 'Connection error'));
     client.on('bj_multi_table_state', (p: BJMultiTableState) => setState(p));
-    client.connect();
+
+    client.connect()
+      .then(async () => {
+        setWsConnected(true); setError(null);
+        await client.sendRequest('join_room', { roomId: `blackjack:table:${tableId}` }).catch(() => {});
+        try { setState(await client.sendRequest('bj_multi_get_state', { tableId }) as BJMultiTableState); }
+        catch { setError('Failed to load table state'); }
+      })
+      .catch((err: any) => setError(err?.message || 'Connection failed'));
     wsClientRef.current = client; setWsClient(client);
     return () => { client.disconnect(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
