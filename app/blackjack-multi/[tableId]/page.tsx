@@ -11,12 +11,16 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Input } from '@/components/ui/input';
 import { useChat } from '@/hooks/use-chat';
 import PlayingCard from '@/components/BLACKJACK/PlayingCard';
+import WinNotification from '@/components/BLACKJACK/WinNotification';
+import { BlackjackMobileActionBar } from '@/components/BLACKJACK/BlackjackMobileActionBar';
+import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile';
 import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import { Plus, Hand, Copy, Split, UserPlus } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 import { CardValue, Suit } from '@/app/BLACKJACK/types';
 import Image from 'next/image';
 import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS } from '@/app/BLACKJACK/constants';
+import { useAudio } from '@/hooks/use-audio';
 
 const TURN_TIMEOUT = 30;
 const BETTING_TIMEOUT = 15;
@@ -66,12 +70,6 @@ function useCountdown(startedAt: string | null, maxSeconds: number) {
 const POSITIONS = [0, 1, 2] as const;
 const AVATAR_SIZE = 88;
 
-const CHIP_PRESETS = [
-  { value: 500,   label: '500',  img: '/PokerChips/greenpokerchip005.png' },
-  { value: 5000,  label: '5k',   img: '/PokerChips/bluepokerchip010.png' },
-  { value: 25000, label: '25k',  img: '/PokerChips/redpokerchip015.png' },
-  { value: 50000, label: '50k',  img: '/PokerChips/blackpokerchip000.png' },
-];
 
 function indexToCard(idx: number) {
   const rank = (idx % 13) + 1;
@@ -232,8 +230,16 @@ export default function BlackjackMultiTablePage() {
   const wsClientRef = useRef<BlackjackWebSocketClient | null>(null);
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
 
-  // Bet panel state
-  const [betAmount, setBetAmount] = useState(0); // whole MORBIUS
+  // Bet panel state — string to match BettingPanelMobile interface
+  const [betAmount, setBetAmount] = useState('0'); // whole MORBIUS
+
+  // Sound effects — reuses the same useAudio hook as single player
+  const [soundEnabled] = useState(true);
+  const { playSound } = useAudio(soundEnabled);
+
+  // Win notification — reuses WinNotification from single player
+  const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
+  const prevPhaseRef = useRef<string>('');
 
   // Platform balance (for display under avatar when seated)
   const [playerBalance, setPlayerBalance] = useState<bigint>(0n);
@@ -254,6 +260,41 @@ export default function BlackjackMultiTablePage() {
   useEffect(() => {
     fetchBalance();
   }, [fetchBalance]);
+
+  // Sound effects + win notification on phase transitions (same sounds as single player)
+  useEffect(() => {
+    if (!state) return;
+    const prevPhase = prevPhaseRef.current;
+    prevPhaseRef.current = state.phase;
+    if (!prevPhase) return;
+
+    // Cards dealt sound when playing starts
+    if (prevPhase !== 'playing' && state.phase === 'playing') {
+      playSound('/BlackJack/sounds/cards.wav');
+    }
+
+    // Win/loss sounds + WinNotification when round completes
+    if (prevPhase !== 'completed' && state.phase === 'completed') {
+      const seat = state.seats.find(s =>
+        s.playerAddress && address && s.playerAddress.toLowerCase() === address.toLowerCase()
+      );
+      if (seat && seat.hands.length > 0) {
+        const totalPayout = BigInt(seat.payout || '0');
+        const hasBlackjack = seat.hands.some(h => h.result === 'blackjack');
+        const hasWin = seat.hands.some(h => h.result === 'win' || h.result === 'blackjack');
+        const allLoss = seat.hands.every(h => h.result === 'loss');
+
+        if (hasWin || hasBlackjack) {
+          playSound('/BlackJack/sounds/PlayerWins.mp3');
+          setShowWin({ amount: totalPayout, isBlackjack: hasBlackjack });
+        } else if (allLoss) {
+          playSound('/BlackJack/sounds/DealerWins.mp3');
+        }
+      }
+      fetchBalance();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.phase, address]);
 
   const roomId = `blackjack:table:${tableId}`;
   const { messages: chatMessages, sendMessage: sendChatMessage } = useChat(roomId, { wsClient, wsConnected });
@@ -300,9 +341,10 @@ export default function BlackjackMultiTablePage() {
   }, [wsClient, tableId]);
 
   const placeBet = useCallback(async () => {
-    if (!wsClient?.isConnected() || betAmount <= 0) return;
+    const amt = parseInt(betAmount || '0', 10);
+    if (!wsClient?.isConnected() || amt <= 0) return;
     try {
-      await wsClient.sendRequest('bj_multi_place_bet', { tableId, amount: parseEther(String(betAmount)).toString() });
+      await wsClient.sendRequest('bj_multi_place_bet', { tableId, amount: parseEther(String(amt)).toString() });
       fetchBalance();
     } catch (e) { setError((e as Error).message); }
   }, [wsClient, tableId, betAmount, fetchBalance]);
@@ -313,9 +355,6 @@ export default function BlackjackMultiTablePage() {
     catch (e) { setError((e as Error).message); }
   }, [wsClient, tableId, mySeat]);
 
-  const minBetNum = state?.minBet ? Math.ceil(Number(formatEther(BigInt(state.minBet)))) : 500;
-  const maxBetNum = state?.maxBet ? Math.floor(Number(formatEther(BigInt(state.maxBet)))) : 50000;
-  const filteredChips = CHIP_PRESETS.filter(c => c.value <= maxBetNum);
   const theme = resolveTheme(state?.themeKind ?? 'video', state?.themeId ?? 'glowingTable');
 
   // Scale board content to fill the 16:9 container at any size
@@ -399,10 +438,19 @@ export default function BlackjackMultiTablePage() {
           )}
           {error && <div className="bg-red-900/80 text-red-200 text-xs text-center py-1 px-4">{error}</div>}
 
+          {/* Win notification — reused from single player */}
+          {showWin && (
+            <WinNotification
+              amount={showWin.amount}
+              isBlackjack={showWin.isBlackjack}
+              onComplete={() => setShowWin(null)}
+            />
+          )}
+
           {/* ── Play area ── */}
           <div className="flex-1 flex flex-col justify-center items-center gap-4 px-4 pb-4">
 
-            {/* DEALER — same translateY as BlackjackTable */}
+            {/* DEALER — all cards face-up (same as single player) */}
             <div className="flex items-center justify-center" style={{ transform: 'translateY(-20px)' }}>
               <div className="flex">
                 {(state?.dealerCards ?? []).map((c, i) => (
@@ -410,22 +458,16 @@ export default function BlackjackMultiTablePage() {
                     <PlayingCard card={indexToCard(c)} owner="dealer" className="" />
                   </div>
                 ))}
-                {/* Hidden hole card placeholder */}
-                {state && state.dealerCardCount > (state.dealerCards?.length ?? 0) && (
-                  <div className="card-overlap-dealer" style={{ zIndex: 1 }}>
-                    <PlayingCard card={{ value: 1, suit: 'spades' }} owner="dealer" hidden className="" />
-                  </div>
-                )}
                 {/* Empty placeholders before deal */}
-                {(!state || state.dealerCardCount === 0) && (
+                {(!state || (state.dealerCards?.length ?? 0) === 0) && (
                   <>
                     <div className="w-16 h-24 rounded-lg border border-dashed border-white/10 mr-[-28px]" />
                     <div className="w-16 h-24 rounded-lg border border-dashed border-white/10" />
                   </>
                 )}
               </div>
-              {/* Dealer score */}
-              {state && state.dealerCardCount > 0 && ['dealer_turn', 'completed'].includes(state.phase) && state.dealerTotal > 0 && (
+              {/* Dealer score — always visible when cards are dealt */}
+              {state && (state.dealerCards?.length ?? 0) > 0 && state.dealerTotal > 0 && (
                 <div className="ml-3 flex items-center gap-1">
                   <span className={`font-black text-3xl ${state.dealerTotal > 21 ? 'text-red-400' : 'text-white'}`}>
                     {state.dealerTotal > 21 ? 'BUST' : state.dealerTotal}
@@ -467,110 +509,73 @@ export default function BlackjackMultiTablePage() {
       {/* ── Controls & Chat — below the 16:9 table ── */}
       <div className="px-4 py-4 space-y-3 bg-slate-950">
 
-        {/* BETTING PHASE: chip panel + Confirm bet */}
-        {state?.phase === 'betting' && myPosition !== null && !hasBet && (
+        {/* Betting panel — always visible when seated, disabled when not in betting phase or bet already placed */}
+        {myPosition !== null && (
           <div className="w-full max-w-md mx-auto space-y-2">
-            {/* Chip row */}
-            <div className="grid grid-cols-4 gap-1 sm:gap-2 place-items-center">
-              {filteredChips.map(chip => (
+            <BettingPanelMobile
+              onStartGame={() => {}} // not used — confirm bet button below handles this
+              isPlaying={state?.phase !== 'betting' || hasBet}
+              onBetAmountChange={(val) => setBetAmount(val)}
+              currentBetAmount={betAmount}
+              onHalfBet={() => {
+                const cur = parseInt(betAmount || '0', 10);
+                const half = Math.max(500, Math.floor(cur / 2));
+                setBetAmount(String(half));
+              }}
+              onDoubleBet={() => {
+                const cur = parseInt(betAmount || '0', 10);
+                const doubled = Math.min(50000, cur * 2);
+                setBetAmount(String(doubled));
+              }}
+              playerReserves={BigInt(playerBalance)}
+            />
+            {/* CONFIRM BET button — only active during betting phase */}
+            {state?.phase === 'betting' && !hasBet && (
+              <div className="px-2">
                 <button
-                  key={chip.value}
-                  onClick={() => setBetAmount(a => Math.min(maxBetNum, a + chip.value))}
-                  className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-bold text-[10px] sm:text-xs transition-all hover:scale-110 active:scale-95 shadow-md"
-                  style={{ background: `url('${chip.img}') center/contain no-repeat`, border: '1px solid rgba(36,30,30,0.5)' }}
+                  onClick={placeBet}
+                  disabled={parseInt(betAmount || '0', 10) < 500}
+                  className="w-full py-2.5 rounded-xl font-black text-sm tracking-wider transition-all active:scale-95 disabled:opacity-40"
+                  style={{
+                    background: parseInt(betAmount || '0', 10) >= 500
+                      ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)'
+                      : 'rgba(0,0,0,0.4)',
+                    boxShadow: parseInt(betAmount || '0', 10) >= 500
+                      ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)'
+                      : 'none',
+                  }}
                 >
-                  <span className="text-white font-bold z-10 relative" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)', fontSize: chip.value >= 25000 ? '8px' : undefined }}>
-                    {chip.label}
-                  </span>
+                  <span className="text-white">CONFIRM BET</span>
                 </button>
-              ))}
-            </div>
-            {/* 1/2 bet, 2x, Clear */}
-            <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={() => setBetAmount(a => Math.max(minBetNum, Math.floor(a / 2)))}
-                className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
-              >
-                1/2 bet
-              </button>
-              <button
-                onClick={() => setBetAmount(a => Math.min(maxBetNum, a * 2))}
-                className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
-              >
-                2x
-              </button>
-              <button
-                onClick={() => setBetAmount(0)}
-                className="text-[10px] sm:text-xs text-cyan-300/80 font-bold uppercase tracking-wider hover:text-cyan-300 transition-colors"
-              >
-                Clear
-              </button>
-            </div>
-
-            {/* Amount display + Confirm */}
-            <div className="flex items-center gap-2">
-              <div className="flex-1 text-center bg-black/40 rounded-xl py-2 border border-white/10">
-                <span className="text-white font-black text-xl" style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.8)' }}>
-                  {betAmount.toLocaleString()}
-                </span>
-                <span className="text-white/50 text-xs ml-1">MORBIUS</span>
               </div>
-              <button
-                onClick={placeBet}
-                disabled={betAmount < minBetNum}
-                className="px-6 py-2 rounded-xl font-black text-sm tracking-wider transition-all active:scale-95 disabled:opacity-40"
-                style={{
-                  background: betAmount >= minBetNum ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)' : 'rgba(0,0,0,0.4)',
-                  boxShadow: betAmount >= minBetNum ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none',
-                }}
-              >
-                <span className="text-white">CONFIRM BET</span>
-              </button>
-            </div>
+            )}
+            {/* Bet placed confirmation */}
+            {state?.phase === 'betting' && hasBet && (
+              <div className="text-center py-1 text-green-400 font-semibold text-sm">
+                Bet placed ({formatMorbius(mySeat?.pendingBet ?? '0')} MORBIUS) — waiting for round to start
+              </div>
+            )}
           </div>
         )}
 
-        {/* Bet placed — waiting */}
-        {state?.phase === 'betting' && myPosition !== null && hasBet && (
-          <div className="text-center py-3 text-green-400 font-semibold text-sm">
-            ✓ Bet placed ({formatMorbius(mySeat?.pendingBet ?? '0')} MORBIUS) — waiting for round to start…
-          </div>
-        )}
-
-        {/* MY TURN — action buttons, same style as BlackjackMobileActionBar */}
+        {/* MY TURN — reuses BlackjackMobileActionBar from single player */}
         {isMyTurn && activeHand && (
           <div className="w-full max-w-md mx-auto">
-            <style>{`.multi-action-btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 0 rgba(0,0,0,0.25) !important; }`}</style>
-            <div className="grid grid-cols-4 gap-2">
-              {/* HIT */}
-              <button onClick={() => doAction('hit')} disabled={!activeHand.canHit}
-                className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-red-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(180deg, #ef4444 0%, #b91c1c 50%, #991b1b 100%)', boxShadow: activeHand.canHit ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
-                <Plus className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
-                <span className="text-white text-[10px] font-medium">Hit</span>
-              </button>
-              {/* STAND */}
-              <button onClick={() => doAction('stand')} disabled={!activeHand.canStand}
-                className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-blue-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(180deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%)', boxShadow: activeHand.canStand ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
-                <Hand className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
-                <span className="text-white text-[10px] font-medium">Stand</span>
-              </button>
-              {/* DOUBLE */}
-              <button onClick={() => doAction('double_down')} disabled={!activeHand.canDoubleDown}
-                className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-amber-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 50%, #b45309 100%)', boxShadow: activeHand.canDoubleDown ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
-                <Copy className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
-                <span className="text-white text-[10px] font-medium">Double</span>
-              </button>
-              {/* SPLIT */}
-              <button onClick={() => doAction('split')} disabled={!activeHand.canSplit}
-                className="multi-action-btn h-14 flex flex-col items-center justify-center rounded-xl border-2 border-emerald-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(180deg, #10b981 0%, #059669 50%, #047857 100%)', boxShadow: activeHand.canSplit ? '0 4px 0 0 rgba(0,0,0,0.25)' : 'none' }}>
-                <Split className="w-5 h-5 text-white drop-shadow-sm" strokeWidth={2.5} />
-                <span className="text-white text-[10px] font-medium">Split</span>
-              </button>
-            </div>
+            <BlackjackMobileActionBar
+              onAction={(action) => doAction(action as 'hit' | 'stand' | 'double_down' | 'split')}
+              isPlaying={true}
+              canHit={activeHand.canHit}
+              canStand={activeHand.canStand}
+              canDoubleDown={activeHand.canDoubleDown}
+              canSplit={activeHand.canSplit}
+              canDeal={false}
+              chipStackLength={0}
+              lastBetAmount="0"
+              soundEnabled={soundEnabled}
+              onPlaySfx={playSound}
+              alwaysVisible
+              hideDealRow
+            />
           </div>
         )}
 

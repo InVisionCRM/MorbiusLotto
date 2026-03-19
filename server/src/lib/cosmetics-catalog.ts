@@ -323,3 +323,68 @@ export function isAdminWallet(address: string): boolean {
   const raw = process.env.ADMIN_WALLETS ?? process.env.NEXT_PUBLIC_ADMIN_WALLETS ?? '';
   return raw.split(',').some(a => a.trim().toLowerCase() === address.toLowerCase());
 }
+
+// ─── Placeholder avatar (unlocked-only random config) ───────────────────────────
+
+/** All avatar fields we randomize for placeholder; fixed fields use defaults. */
+const PLACEHOLDER_FIELDS: AvatarField[] = [
+  'skinColor', 'hairStyle', 'hairColor', 'eyeShape', 'eyeColor', 'faceShape',
+  'noseShape', 'lipShape', 'accessory', 'hat', 'necklace', 'mouthAccessory',
+  'shirtColor', 'backgroundImage', 'overlayImage', 'customPattern',
+];
+
+/**
+ * Returns for each avatar field the list of values the player is allowed to use
+ * (free values + values unlocked by owned items).
+ */
+export function getUnlockedValuesPerField(ownedItemKeys: Set<string>): Record<AvatarField, string[]> {
+  const owned = ownedItemKeys;
+  const result = {} as Record<AvatarField, string[]>;
+
+  for (const field of PLACEHOLDER_FIELDS) {
+    const freeSet = FREE_VALUES[field];
+    const values = new Set<string>(freeSet ?? []);
+    for (const item of ITEM_CATALOG) {
+      if (!owned.has(item.itemKey)) continue;
+      for (const u of item.unlocks) {
+        if (u.field === field && u.value !== '__any_non_empty__') values.add(u.value);
+      }
+    }
+    result[field] = [...values];
+  }
+
+  return result;
+}
+
+function pick<T>(arr: T[]): T {
+  if (arr.length === 0) throw new Error('pick() requires non-empty array');
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/**
+ * Generates a random avatar config using only unlocked options (free + owned items).
+ * Used as a stable placeholder for players who have not set an avatar.
+ */
+export function randomPlaceholderConfig(ownedItemKeys: Set<string>): Record<string, unknown> {
+  const unlocked = getUnlockedValuesPerField(ownedItemKeys);
+  return {
+    skinColor: pick(unlocked.skinColor),
+    hairStyle: pick(unlocked.hairStyle),
+    hairColor: pick(unlocked.hairColor),
+    eyeShape: pick(unlocked.eyeShape),
+    eyeColor: pick(unlocked.eyeColor),
+    noseShape: pick(unlocked.noseShape),
+    lipShape: pick(unlocked.lipShape),
+    accessory: pick(unlocked.accessory),
+    shirtColor: pick(unlocked.shirtColor),
+    shirtStyle: 'Default',
+    hat: pick(unlocked.hat),
+    hatColor: '',
+    necklace: pick(unlocked.necklace),
+    mouthAccessory: pick(unlocked.mouthAccessory),
+    backgroundImage: pick(unlocked.backgroundImage),
+    overlayImage: pick(unlocked.overlayImage),
+    faceShape: pick(unlocked.faceShape),
+    customPattern: pick(unlocked.customPattern),
+  };
+}

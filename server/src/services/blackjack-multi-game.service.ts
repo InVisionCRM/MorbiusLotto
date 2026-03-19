@@ -1,6 +1,8 @@
 import { Pool } from 'pg';
 import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
+import { CosmeticsService } from './cosmetics.service';
+import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
 import { logger } from '../utils/logger';
 
 // ---------------------------------------------------------------------------
@@ -768,6 +770,26 @@ export class BlackjackMultiGameService {
     const addresses = dbSeats.map(s => s.player_address).filter(Boolean) as string[];
     const profiles = addresses.length > 0 ? await this.dbService.getProfiles(addresses) : new Map();
 
+    // Ensure every seated player has an avatar (placeholder from unlocked cosmetics if none set)
+    const placeholderByAddress = new Map<string, Record<string, unknown>>();
+    const needPlaceholder = addresses.filter(addr => {
+      const profile = profiles.get(addr.toLowerCase());
+      return !profile || profile.avatarConfig == null;
+    });
+    if (needPlaceholder.length > 0) {
+      const cosmeticsService = new CosmeticsService(this.pool);
+      for (const addr of needPlaceholder) {
+        try {
+          const inventory = await cosmeticsService.getInventory(addr);
+          const placeholder = randomPlaceholderConfig(new Set(inventory));
+          await this.dbService.setDefaultAvatarIfNull(addr, placeholder);
+          placeholderByAddress.set(addr.toLowerCase(), placeholder);
+        } catch (err) {
+          logger.warn(`BJ multi: failed to set placeholder avatar for ${addr}: ${(err as Error).message}`);
+        }
+      }
+    }
+
     // Build seat states — always emit all 3 positions
     const seatMap = new Map(dbSeats.map(s => [s.position, s]));
     const roundSeatMap = new Map(roundSeats.map(rs => [rs.seat_position, rs]));
@@ -802,7 +824,7 @@ export class BlackjackMultiGameService {
         pendingBet: seat.pending_bet || '0',
         displayName: profile?.displayName ?? null,
         profileImageUrl: profile?.profileImageUrl ?? null,
-        avatarConfig: profile?.avatarConfig ?? null,
+        avatarConfig: profile?.avatarConfig ?? placeholderByAddress.get(seat.player_address.toLowerCase()) ?? null,
         betAmount: rs ? rs.bet_amount : '0',
         hands: rs ? (rs.hands as BJMultiHandObj[]) : [],
         activeHandIndex: rs ? (rs.active_hand_index ?? 0) : 0,
@@ -812,14 +834,11 @@ export class BlackjackMultiGameService {
       };
     });
 
-    // Determine which dealer cards to expose
-    const showAllDealerCards = round && ['dealer_turn', 'completed'].includes(round.status);
+    // Always show all dealer cards face-up (matches single player behavior)
     const dealerCardsRaw: number[] = round?.dealer_cards ?? [];
-    const dealerCardsVisible = showAllDealerCards
-      ? dealerCardsRaw
-      : dealerCardsRaw.length > 0 ? [dealerCardsRaw[0]] : [];
+    const dealerCardsVisible = dealerCardsRaw;
 
-    const dealerTotObj = showAllDealerCards && dealerCardsRaw.length > 0
+    const dealerTotObj = dealerCardsRaw.length > 0
       ? this.pfService.calculateHandTotalV2(dealerCardsRaw)
       : { total: 0, hasAce: false };
 

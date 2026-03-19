@@ -2070,6 +2070,23 @@ export class DatabaseService {
     );
   }
 
+  /**
+   * Sets avatar_config only when it is currently null (for new players or those who never set an avatar).
+   * If no row exists, inserts one with empty display_name and the given config.
+   */
+  async setDefaultAvatarIfNull(walletAddress: string, avatarConfig: Record<string, unknown>): Promise<void> {
+    const normalized = this.normalizeAddress(walletAddress);
+    const configJson = JSON.stringify(avatarConfig);
+    await this.pool.query(
+      `INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
+       VALUES ($1, '', NULL, $2::jsonb, NULL, NULL, NULL)
+       ON CONFLICT (wallet_address) DO UPDATE SET
+         avatar_config = COALESCE(chat_display_names.avatar_config, EXCLUDED.avatar_config),
+         updated_at = NOW()`,
+      [normalized, configJson],
+    );
+  }
+
   /** Explicitly update social/bio fields — allows clearing (pass empty string → stored as null). */
   async updateProfileSocial(
     walletAddress: string,

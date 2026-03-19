@@ -3,6 +3,8 @@ import { Table, Card, CardRank, CardSuit, BettingRound } from '@chevtek/poker-en
 import { bestHand } from './poker-hand-eval';
 import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
+import { CosmeticsService } from './cosmetics.service';
+import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
 import { logger } from '../utils/logger';
 import crypto from 'crypto';
 
@@ -505,17 +507,33 @@ export class PokerGameService {
     }
 
     const seatAddresses = seats.map((s) => s.playerAddress).filter((a): a is string => !!a);
+    const placeholderByAddress = new Map<string, Record<string, unknown>>();
     if (seatAddresses.length > 0) {
       const profiles = await this.dbService.getProfiles(seatAddresses);
+      const needPlaceholder = seatAddresses.filter((addr) => {
+        const profile = profiles.get(this.normalizeAddress(addr));
+        return !profile || profile.avatarConfig == null;
+      });
+      if (needPlaceholder.length > 0) {
+        const cosmeticsService = new CosmeticsService(this.getPool());
+        for (const addr of needPlaceholder) {
+          try {
+            const inventory = await cosmeticsService.getInventory(addr);
+            const placeholder = randomPlaceholderConfig(new Set(inventory));
+            await this.dbService.setDefaultAvatarIfNull(addr, placeholder);
+            placeholderByAddress.set(this.normalizeAddress(addr), placeholder);
+          } catch (err) {
+            logger.warn(`Poker: failed to set placeholder avatar for ${addr}: ${(err as Error).message}`);
+          }
+        }
+      }
       for (const seat of seats) {
         if (!seat.playerAddress) continue;
         const normalized = this.normalizeAddress(seat.playerAddress);
         const profile = profiles.get(normalized);
-        if (profile) {
-          seat.displayName = profile.displayName;
-          seat.profileImageUrl = profile.profileImageUrl;
-          seat.avatarConfig = profile.avatarConfig;
-        }
+        seat.displayName = profile?.displayName ?? null;
+        seat.profileImageUrl = profile?.profileImageUrl ?? null;
+        seat.avatarConfig = profile?.avatarConfig ?? placeholderByAddress.get(normalized) ?? null;
       }
     }
 

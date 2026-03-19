@@ -27,6 +27,8 @@ export interface BlackjackMobileActionBarProps {
   perfectPairsBet?: number;
   /** Callback when PP bet changes (cycles 0→1k→...→10k→0). */
   onPerfectPairsBetChange?: (amount: number) => void;
+  /** Hide the REBET/DEAL row (used in multiplayer where rounds start automatically). */
+  hideDealRow?: boolean;
 }
 
 export function BlackjackMobileActionBar({
@@ -48,6 +50,7 @@ export function BlackjackMobileActionBar({
   alwaysVisible = false,
   perfectPairsBet = 0,
   onPerfectPairsBetChange,
+  hideDealRow = false,
 }: BlackjackMobileActionBarProps) {
   const playKnock = () => {
     if (soundEnabled) {
@@ -164,7 +167,7 @@ export function BlackjackMobileActionBar({
         </div>
 
         {/* REBET | DEAL row */}
-        <div className="flex items-center gap-2 w-full flex-1 min-h-0">
+        {!hideDealRow && <div className="flex items-center gap-2 w-full flex-1 min-h-0">
         <div className="flex-1 flex h-full rounded-lg sm:rounded-xl overflow-hidden">
           {onRebetAndDeal && (
             <button
@@ -203,7 +206,7 @@ export function BlackjackMobileActionBar({
             <span className="text-white font-black text-sm tracking-wider drop-shadow-sm">DEAL</span>
           </button>
         </div>
-        </div>
+        </div>}
       </div>
     </section>
     </>
