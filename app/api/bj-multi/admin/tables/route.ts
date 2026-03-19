@@ -10,7 +10,10 @@ export async function GET() {
   if (!base) return NextResponse.json({ error: 'Backend not configured' }, { status: 503 });
 
   try {
-    const r = await fetch(`${base}/api/admin/bj-multi/tables`, { signal: AbortSignal.timeout(5000) });
+    const r = await fetch(`${base}/api/admin/bj-multi/tables`, {
+      signal: AbortSignal.timeout(5000),
+      headers: { 'x-admin-secret': process.env.AP ?? '' },
+    });
     const data = await r.json();
     return NextResponse.json(data, { status: r.status });
   } catch (err) {
@@ -26,7 +29,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const r = await fetch(`${base}/api/admin/bj-multi/tables`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-admin-secret': process.env.AP ?? '' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(5000),
     });

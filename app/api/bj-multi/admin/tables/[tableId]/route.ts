@@ -12,6 +12,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { tableId:
   try {
     const r = await fetch(`${base}/api/admin/bj-multi/tables/${params.tableId}`, {
       method: 'DELETE',
+      headers: { 'x-admin-secret': process.env.AP ?? '' },
       signal: AbortSignal.timeout(5000),
     });
     const data = await r.json();
