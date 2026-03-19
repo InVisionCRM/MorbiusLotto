@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatEther } from 'viem';
-import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
+import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { BJMultiTableSummary } from '@/lib/websocket-client';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
@@ -27,10 +27,8 @@ export default function BlackjackMultiLobbyPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchTables = useCallback(async () => {
-    const apiUrl = getApiUrlOptional();
-    if (!apiUrl) { setLoading(false); return; }
     try {
-      const res = await fetch(`${apiUrl}/api/admin/bj-multi/tables`);
+      const res = await fetch(`/api/bj-multi/admin/tables`);
       const data = await res.json();
       setTables(data.tables ?? []);
     } catch (err) {
