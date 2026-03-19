@@ -21,7 +21,7 @@ import type { AvatarConfig } from '@/lib/websocket-client';
 import { UserPlus, MessageCircle, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 import { CardValue, Suit } from '@/app/BLACKJACK/types';
 import Image from 'next/image';
-import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTING_OPEN, SOUNDS_BETTING_CLOSED, SOUNDS_DEALER_PHRASE, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_TIP, SOUND_PUSH, pickRandom } from '@/app/BLACKJACK/constants';
+import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTING_OPEN, SOUNDS_BETTING_CLOSED, SOUNDS_DEALER_PHRASE, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_DEALER_BLACKJACK, SOUNDS_TIP, SOUND_PUSH, pickRandom } from '@/app/BLACKJACK/constants';
 import { useAudio, AudioManager } from '@/hooks/use-audio';
 import { usePlayerStatsEnhanced } from '@/hooks/use-blackjack-stats';
 
@@ -464,6 +464,8 @@ export default function BlackjackMultiTablePage() {
         const allLoss = seat.hands.every(h => h.result === 'loss');
         const allPush = seat.hands.every(h => h.result === 'push');
 
+        const dealerHadBJ = state.dealerTotal === 21 && (state.dealerCards?.length ?? 0) === 2;
+
         if (hasBlackjack) {
           playDealerVoice(pickRandom(SOUNDS_PLAYER_BLACKJACK));
           setShowWin({ amount: totalPayout, isBlackjack: true });
@@ -472,8 +474,12 @@ export default function BlackjackMultiTablePage() {
           setShowWin({ amount: totalPayout, isBlackjack: false });
         } else if (allPush) {
           playDealerVoice(SOUND_PUSH);
+        } else if (allLoss && dealerHadBJ) {
+          playDealerVoice(pickRandom(SOUNDS_DEALER_BLACKJACK));
         } else if (allLoss) {
-          playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
+          if (SOUNDS_DEALER_WINS.length > 0) {
+            playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
+          }
         }
       }
       fetchBalance();

@@ -102,6 +102,7 @@ export interface AvatarConfig {
   skinColor: string;
   hairStyle: string;
   hairColor: string;
+  accessoryColor?: string;
   eyeShape: string;
   eyeColor: string;
   noseShape: string;

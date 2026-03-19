@@ -9,6 +9,7 @@ export type AvatarField =
   | 'skinColor'
   | 'hairStyle'
   | 'hairColor'
+  | 'accessoryColor'
   | 'eyeShape'
   | 'eyeColor'
   | 'faceShape'
@@ -54,6 +55,10 @@ export const FREE_VALUES: Record<AvatarField, Set<string>> = {
   hairColor: new Set([
     '#090806', '#2C222B', '#71635A', '#B7A69E',
     '#DCD0BA', '#FFF5E1', '#A56B46', '#B55239',
+  ]),
+  accessoryColor: new Set([
+    '#111111', '#333333', 'rgba(0,0,0,0.85)',
+    'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
   ]),
   // All free — no paid variants
   eyeShape:  new Set(['Round', 'Almond', 'Narrow', 'Wide']),
@@ -304,7 +309,7 @@ export function getLockedFields(
 ): LockedField[] {
   const locked: LockedField[] = [];
   const fields: AvatarField[] = [
-    'skinColor', 'hairStyle', 'hairColor', 'accessory',
+    'skinColor', 'hairStyle', 'hairColor', 'accessoryColor', 'accessory',
     'hat', 'necklace', 'mouthAccessory', 'shirtColor', 'backgroundImage', 'overlayImage',
   ];
   for (const field of fields) {

@@ -39,7 +39,7 @@ import {
   TournamentPinEntry,
 } from '@/components/BLACKJACK/Tournament';
 import { CreateTournamentRequest, TournamentListItem } from '@/lib/tournament-types';
-import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_TIP, SOUND_PUSH, pickRandom } from './constants';
+import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_DEALER_BLACKJACK, SOUNDS_TIP, SOUND_PUSH, pickRandom } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -410,7 +410,7 @@ export default function BlackjackPage() {
 
 
   // Game result for chip animations
-  const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
+  const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | 'dealer_blackjack' | null>(null);
 
   // Convert integer MORBIUS amount to chip stack (same denominations as rebet/half/double)
   const CHIP_VALUES = [50000, 25000, 5000, 500];
@@ -731,9 +731,9 @@ export default function BlackjackPage() {
   const [pendingWinData, setPendingWinData] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
 
   // Pending game result for chip animation (waits for dealer reveal to complete)
-  const [pendingChipResult, setPendingChipResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
+  const [pendingChipResult, setPendingChipResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | 'dealer_blackjack' | null>(null);
   // Ref to track result for chip clearing after animation
-  const chipResultRef = useRef<'win' | 'loss' | 'push' | 'blackjack' | null>(null);
+  const chipResultRef = useRef<'win' | 'loss' | 'push' | 'blackjack' | 'dealer_blackjack' | null>(null);
 
   // Pending game completion data — deferred until dealer reveal completes for immersion
   const pendingGameCompletionRef = useRef<{
@@ -1691,12 +1691,16 @@ export default function BlackjackPage() {
       setLastBetAmount(betInMorbius.toString());
 
       // Determine game result for chip animations (will be set after dealer reveal)
-      let chipAnimResult: 'win' | 'loss' | 'push' | 'blackjack' | null = null;
+      let chipAnimResult: 'win' | 'loss' | 'push' | 'blackjack' | 'dealer_blackjack' | null = null;
       if (data.result === 'blackjack') {
         chipAnimResult = 'blackjack';
+      } else if (data.result === 'dealer_blackjack') {
+        chipAnimResult = 'dealer_blackjack';
       } else if (data.result === 'loss' || (payout === BigInt(0) && betAmount > BigInt(0))) {
-        // Explicitly check for loss result OR payout = 0 with bet > 0 (dealer blackjack case)
-        chipAnimResult = 'loss';
+        // Check if dealer had blackjack from processedGame or gameState
+        const dHand = data.processedGame?.dealerHand || data.gameState?.dealerHand;
+        const dealerHadBJ = dHand?.isBlackjack || (dHand?.total === 21 && dHand?.cards?.length === 2);
+        chipAnimResult = dealerHadBJ ? 'dealer_blackjack' : 'loss';
       } else if (profit > BigInt(0)) {
         chipAnimResult = 'win';
       } else if (profit < BigInt(0)) {
@@ -1932,8 +1936,12 @@ export default function BlackjackPage() {
       setPendingChipResult(null);
       // Dealer voice outcome sounds
       if (soundEnabled) {
-        if (pendingChipResult === 'loss') {
-          playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
+        if (pendingChipResult === 'dealer_blackjack') {
+          playDealerVoice(pickRandom(SOUNDS_DEALER_BLACKJACK));
+        } else if (pendingChipResult === 'loss') {
+          if (SOUNDS_DEALER_WINS.length > 0) {
+            playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
+          }
         } else if (pendingChipResult === 'blackjack') {
           playDealerVoice(pickRandom(SOUNDS_PLAYER_BLACKJACK));
         } else if (pendingChipResult === 'win') {

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { Package, Search, Pencil, Check, X, Loader2, AlertTriangle, RefreshCw, Plus, ChevronDown, ChevronUp, Shuffle } from 'lucide-react';
+import { Package, Search, Pencil, Check, X, Loader2, AlertTriangle, RefreshCw, Plus, ChevronDown, ChevronUp, Shuffle, Copy } from 'lucide-react';
 import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog';
 import PixelBackgroundUploader from '@/components/poker/avatar/PixelBackgroundUploader';
 import GradientBuilder from '@/components/poker/avatar/GradientBuilder';
@@ -67,13 +67,15 @@ interface EditState {
 const ITEM_FIELDS = [
   { value: 'skinColor',       label: 'Skin Color',      inputType: 'color',  options: [] },
   { value: 'hairColor',       label: 'Hair Color',      inputType: 'color',  options: [] },
-  { value: 'hairStyle',       label: 'Hair Style',      inputType: 'select', options: ['Spiky', 'Messy', 'Pigtails', 'Mullet', 'Mohawk', 'Dreadlocks', 'Updo', 'Braids', 'Cornrows', 'Dreads Fade'] },
+  { value: 'accessoryColor',  label: 'Glasses Color',   inputType: 'color',  options: [] },
+  { value: 'hairStyle',       label: 'Hair Style',      inputType: 'select', options: ['Spiky', 'Messy', 'Pigtails', 'Mullet', 'Mohawk', 'Dreadlocks', 'Dreadlocks V1', 'Dreadlocks V2', 'Dreadlocks V3', 'Dreadlocks V4', 'Dreadlocks V5', 'Dreadlocks V6', 'Dreadlocks V7', 'Dreadlocks V8', 'Dreadlocks V9', 'Dreadlocks V10', 'Locks V1', 'Locks V2', 'Locks V3', 'Locks V4', 'Locks V5', 'Locks V6', 'Locks V7', 'Locks V8', 'Locks V9', 'Locks V10', 'Updo', 'Braids', 'Cornrows', 'Dreads Fade'] },
+  { value: 'eyeShape',        label: 'Eye Shape',       inputType: 'select', options: ['Round', 'Almond', 'Narrow', 'Wide', 'Eye V1', 'Eye V2', 'Eye V3', 'Eye V4', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10'] },
   { value: 'shirtColor',      label: 'Shirt Color',     inputType: 'color',  options: [] },
-  { value: 'shirtStyle',      label: 'Shirt Style',     inputType: 'select', options: ['Default','Tuxedo','Cheetah Print','Hawaiian','Pinstripe','Flannel','Denim Jacket','Leather Jacket','Varsity','Hoodie','Camo','Suit','Blazer','Kimono','Polo','Zebra Print','Leopard Print','Snake Skin','Tie-Dye','Neon Crop','Biker','Sailor','Space Suit','Grim Reaper','Golden Armor'] },
+  { value: 'shirtStyle',      label: 'Shirt Style',     inputType: 'select', options: ['Default','Tuxedo','Cheetah Print','Hawaiian','Pinstripe','Flannel','Denim Jacket','Leather Jacket','Varsity','Hoodie','Camo','Suit','Blazer','Kimono','Polo','Zebra Print','Leopard Print','Snake Skin','Tie-Dye','Neon Crop','Biker','Sailor','Space Suit','Grim Reaper','Golden Armor','Streetwear V1','Streetwear V2','Streetwear V3','Streetwear V4','Streetwear V5','Streetwear V6','Streetwear V7','Streetwear V8','Streetwear V9','Streetwear V10'] },
   { value: 'backgroundImage', label: 'Background',      inputType: 'url',    options: [] },
   { value: 'overlayImage',    label: 'Overlay',         inputType: 'url',    options: [] },
-  { value: 'accessory',       label: 'Accessory',       inputType: 'select', options: ['Glasses', 'Aviators', 'Wayfarers', 'Round Glasses', 'Cyberpunk', 'Earrings', 'Headband'] },
-  { value: 'hat',             label: 'Hat',             inputType: 'select', options: ['Top Hat', 'Cowboy', 'Crown', 'Bandana'] },
+  { value: 'accessory',       label: 'Accessory',       inputType: 'select', options: ['Glasses', 'Aviators', 'Wayfarers', 'Round Glasses', 'Cyberpunk', 'Shades V1', 'Shades V2', 'Shades V3', 'Shades V4', 'Shades V5', 'Shades V6', 'Shades V7', 'Shades V8', 'Shades V9', 'Shades V10', 'Earrings', 'Headband'] },
+  { value: 'hat',             label: 'Hat',             inputType: 'select', options: ['Top Hat', 'Cowboy', 'Crown', 'Bandana', 'Hat V1', 'Hat V2', 'Hat V3', 'Hat V4', 'Hat V5', 'Hat V6', 'Hat V7', 'Hat V8', 'Hat V9', 'Hat V10'] },
   { value: 'hatColor',        label: 'Hat Color',       inputType: 'color',  options: [] },
   { value: 'necklace',        label: 'Necklace',        inputType: 'select', options: ['Gold Chain', 'Silver Chain', 'Pearl', 'Pendant'] },
   { value: 'mouthAccessory',  label: 'Mouth',           inputType: 'select', options: ['Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'] },
@@ -91,7 +93,8 @@ function shortHash(str: string): string {
 
 const FIELD_PREFIX: Partial<Record<ItemField, string>> = {
   skinColor: 'skin', hairColor: 'hair_color', shirtColor: 'shirt_color', shirtStyle: 'shirt_style',
-  hairStyle: 'hair_style', accessory: 'acc', hat: 'hat', hatColor: 'hat_color',
+  accessoryColor: 'accessory_color',
+  hairStyle: 'hair_style', eyeShape: 'eye_shape', accessory: 'acc', hat: 'hat', hatColor: 'hat_color',
   necklace: 'neck', mouthAccessory: 'mouth', backgroundImage: 'bg', overlayImage: 'overlay',
 };
 
@@ -102,10 +105,14 @@ function toItemKey(field: ItemField, value: string) {
     const slug = value.split('/').pop()?.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 24) ?? prefix;
     return `${prefix}_${slug}`;
   }
-  if (field === 'hairStyle' || field === 'accessory' || field === 'hat' || field === 'necklace' || field === 'mouthAccessory') {
+  if (field === 'hairStyle' || field === 'eyeShape' || field === 'accessory' || field === 'hat' || field === 'necklace' || field === 'mouthAccessory') {
     return `${prefix}_${value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
   }
   // Color fields — could be hex or gradient JSON
+  if (value.startsWith('url(#') && value.endsWith(')')) {
+    const name = value.slice(5, -1).toLowerCase().replace(/[^a-z0-9_]/g, '');
+    return `${prefix}_pattern_${name}`;
+  }
   if (value.startsWith('{')) return `${prefix}_grad_${shortHash(value)}`;
   return `${prefix}_custom_${value.replace('#', '').toLowerCase()}`;
 }
@@ -126,25 +133,58 @@ function randomHex(): string {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
-function randomGradient(): string {
+function randomGradient(existing?: string): string {
   const angle = Math.floor(Math.random() * 360);
-  const numStops = 2 + (Math.random() > 0.6 ? 1 : 0);
+  const parsed = existing ? parseGradient(existing) : null;
+  const numStops = Math.max(2, Math.min(5, parsed?.stops?.length ?? (2 + (Math.random() > 0.6 ? 1 : 0))));
+  const offsets = numStops <= 2
+    ? [0, 1]
+    : [
+        0,
+        ...Array.from({ length: numStops - 2 }, () => Math.random()).sort((a, b) => a - b),
+        1,
+      ];
   const stops = Array.from({ length: numStops }, (_, i) => ({
     color: randomHex(),
-    offset: numStops === 2 ? i : i / (numStops - 1),
+    offset: offsets[i],
     opacity: 1,
   }));
   return serializeGradient({ type: 'linearGradient', angle, stops });
 }
 
+const PATTERN_OPTIONS = [
+  'url(#tiger)',
+  'url(#zebra)',
+  'url(#leopard)',
+  'url(#camo)',
+  'url(#rainbow)',
+  'url(#galaxy)',
+  'url(#checkerboard)',
+] as const;
+
+function randomPattern(): string {
+  return PATTERN_OPTIONS[Math.floor(Math.random() * PATTERN_OPTIONS.length)];
+}
+
+const PATTERN_BULK_FIELDS = ['skinColor', 'hairColor', 'shirtColor', 'hatColor', 'accessoryColor'] as const;
+type PatternBulkField = (typeof PATTERN_BULK_FIELDS)[number];
+const PATTERN_BULK_LABEL: Record<PatternBulkField, string> = {
+  skinColor: 'Skin',
+  hairColor: 'Hair',
+  shirtColor: 'Shirt',
+  hatColor: 'Hat',
+  accessoryColor: 'Glasses',
+};
+
 // ─── Builder panel ─────────────────────────────────────────────────────────────
 
 interface BuilderState {
   field: ItemField;
-  inputMode: 'color' | 'gradient'; // only applies to color fields
+  inputMode: 'color' | 'gradient' | 'pattern'; // only applies to color fields
   bgMode: 'upload' | 'gradient';   // only applies to backgroundImage field
   hex: string;          // used for flat color mode
   gradientJson: string; // used for gradient mode (serialized GradientDef)
+  patternValue: string; // used for pattern mode (url(#pattern))
   url: string;          // used for backgroundImage / overlayImage fields
   selectValue: string;  // used for select fields (preset option)
   customValue: string;  // used for select fields (custom typed value)
@@ -154,11 +194,181 @@ interface BuilderState {
   tier: ItemTier;
 }
 
+const DREADLOCKS_VARIANTS = [
+  'Dreadlocks V1',
+  'Dreadlocks V2',
+  'Dreadlocks V3',
+  'Dreadlocks V4',
+  'Dreadlocks V5',
+  'Dreadlocks V6',
+  'Dreadlocks V7',
+  'Dreadlocks V8',
+  'Dreadlocks V9',
+  'Dreadlocks V10',
+] as const;
+
+const HAIR_VARIANTS = ['Locks V1', 'Locks V2', 'Locks V3', 'Locks V4', 'Locks V5', 'Locks V6', 'Locks V7', 'Locks V8', 'Locks V9', 'Locks V10'] as const;
+const SHIRT_VARIANTS = ['Streetwear V1', 'Streetwear V2', 'Streetwear V3', 'Streetwear V4', 'Streetwear V5', 'Streetwear V6', 'Streetwear V7', 'Streetwear V8', 'Streetwear V9', 'Streetwear V10'] as const;
+const HAT_VARIANTS = ['Hat V1', 'Hat V2', 'Hat V3', 'Hat V4', 'Hat V5', 'Hat V6', 'Hat V7', 'Hat V8', 'Hat V9', 'Hat V10'] as const;
+const SHADES_VARIANTS = ['Shades V1', 'Shades V2', 'Shades V3', 'Shades V4', 'Shades V5', 'Shades V6', 'Shades V7', 'Shades V8', 'Shades V9', 'Shades V10'] as const;
+const EYE_VARIANTS = ['Eye V1', 'Eye V2', 'Eye V3', 'Eye V4', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10'] as const;
+
+function DreadlocksVariantReviewPanel() {
+  const STORAGE_KEY = 'admin_cosmetics_variant_decisions_v1';
+  const [decisions, setDecisions] = useState<Record<string, 'approved' | 'rejected' | undefined>>({});
+  const [showApprovedOnly, setShowApprovedOnly] = useState(false);
+  const setDecision = (key: string, value: 'approved' | 'rejected' | undefined) =>
+    setDecisions(prev => ({ ...prev, [key]: value }));
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, 'approved' | 'rejected' | undefined>;
+      if (parsed && typeof parsed === 'object') setDecisions(parsed);
+    } catch {
+      // ignore malformed local storage
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(decisions));
+    } catch {
+      // ignore storage quota issues
+    }
+  }, [decisions]);
+
+  const renderCards = (
+    title: string,
+    groupKey: string,
+    variants: readonly string[],
+    mutator: (variant: string) => Partial<AvatarConfig>,
+  ) => (
+    <div className="space-y-2">
+      <h4 className="text-xs font-semibold text-zinc-300">{title}</h4>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        {variants.map((variant) => {
+          const key = `${groupKey}:${variant}`;
+          const decision = decisions[key];
+          if (showApprovedOnly && decision !== 'approved') return null;
+          const previewConfig: AvatarConfig = {
+            ...DEFAULT_AVATAR_CONFIG,
+            hairColor: '#3B3024',
+            skinColor: '#8D5524',
+            shirtColor: '#3f3f46',
+            accessory: 'None',
+            hat: 'None',
+            ...mutator(variant),
+          };
+          return (
+            <div key={variant} className="bg-zinc-800/60 border border-zinc-700 rounded-lg p-2">
+              <div className="mx-auto w-20 h-24 rounded-md bg-zinc-900/60 border border-zinc-700 overflow-hidden">
+                <AvatarPreview config={previewConfig} emotion="neutral" className="w-full h-full" compact />
+              </div>
+              <div className="mt-1.5 flex items-center justify-center gap-2">
+                <div className="w-9 h-9 rounded-full overflow-hidden border border-zinc-600 bg-zinc-900/60">
+                  <AvatarPreview config={previewConfig} emotion="neutral" className="w-full h-full" compact />
+                </div>
+                <div className="text-[10px] text-zinc-300 font-medium leading-tight">{variant}</div>
+              </div>
+              <div className="mt-1.5 grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setDecision(key, decision === 'approved' ? undefined : 'approved')}
+                  className={`px-1.5 py-1 rounded text-[10px] font-medium border transition-colors ${
+                    decision === 'approved'
+                      ? 'bg-emerald-700/70 border-emerald-500 text-emerald-100'
+                      : 'border-zinc-700 text-zinc-400 hover:text-emerald-300 hover:border-emerald-600/60'
+                  }`}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDecision(key, decision === 'rejected' ? undefined : 'rejected')}
+                  className={`px-1.5 py-1 rounded text-[10px] font-medium border transition-colors ${
+                    decision === 'rejected'
+                      ? 'bg-red-700/70 border-red-500 text-red-100'
+                      : 'border-zinc-700 text-zinc-400 hover:text-red-300 hover:border-red-600/60'
+                  }`}
+                >
+                  Reject
+                </button>
+              </div>
+              <div className="mt-1 text-center text-[9px]">
+                {decision === 'approved' && <span className="text-emerald-400">Approved</span>}
+                {decision === 'rejected' && <span className="text-red-400">Rejected</span>}
+                {!decision && <span className="text-zinc-500">Unreviewed</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-4">
+      <div className="mb-2">
+        <h3 className="text-sm font-semibold text-white">Variant Review (Not In Store Yet)</h3>
+        <p className="text-[11px] text-zinc-500">Review-first batch: dreadlocks, hair, shirts, hats, shades, and eye types.</p>
+        <div className="mt-1 text-[10px] text-zinc-400">
+          Approved: {Object.values(decisions).filter(v => v === 'approved').length} · Rejected: {Object.values(decisions).filter(v => v === 'rejected').length}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowApprovedOnly(v => !v)}
+            className={`px-2 py-1 rounded text-[10px] font-medium border transition-colors ${
+              showApprovedOnly
+                ? 'bg-emerald-700/70 border-emerald-500 text-emerald-100'
+                : 'border-zinc-700 text-zinc-400 hover:text-emerald-300 hover:border-emerald-600/60'
+            }`}
+          >
+            {showApprovedOnly ? 'Showing Approved Only' : 'Show Approved Only'}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const approved = Object.entries(decisions)
+                .filter(([, v]) => v === 'approved')
+                .map(([k]) => k);
+              try {
+                await navigator.clipboard.writeText(approved.join('\n'));
+              } catch {
+                // Clipboard may be blocked; user can still read from the UI.
+              }
+            }}
+            className="px-2 py-1 rounded text-[10px] font-medium border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+          >
+            Copy Approved List
+          </button>
+          <button
+            type="button"
+            onClick={() => setDecisions({})}
+            className="px-2 py-1 rounded text-[10px] font-medium border border-zinc-700 text-zinc-400 hover:text-red-300 hover:border-red-600/60 transition-colors"
+          >
+            Clear Decisions
+          </button>
+        </div>
+      </div>
+      {renderCards('Dreadlocks set (previous batch)', 'dreads', DREADLOCKS_VARIANTS, (variant) => ({ hairStyle: variant }))}
+      {renderCards('Hair variants x10', 'hair', HAIR_VARIANTS, (variant) => ({ hairStyle: variant }))}
+      {renderCards('Shirt variants x10', 'shirt', SHIRT_VARIANTS, (variant) => ({ shirtStyle: variant }))}
+      {renderCards('Hat variants x10', 'hat', HAT_VARIANTS, (variant) => ({ hat: variant }))}
+      {renderCards('Sunglasses variants x10', 'shades', SHADES_VARIANTS, (variant) => ({ accessory: variant }))}
+      {renderCards('Eye-type variants x10', 'eye', EYE_VARIANTS, (variant) => ({ eyeShape: variant }))}
+    </div>
+  );
+}
+
 function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [patternSetConfirmOpen, setPatternSetConfirmOpen] = useState(false);
 
   const [form, setForm] = useState<BuilderState>({
     field: 'skinColor',
@@ -166,6 +376,7 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
     bgMode: 'upload',
     hex: '#FF6B6B',
     gradientJson: serializeGradient(DEFAULT_GRADIENT),
+    patternValue: 'url(#tiger)',
     url: '',
     selectValue: '',
     customValue: '',
@@ -180,6 +391,7 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
   const isSelectField = fieldDef.inputType === 'select';
   const isColorField = fieldDef.inputType === 'color';
   const isGradientMode = isColorField && form.inputMode === 'gradient';
+  const isPatternMode = isColorField && form.inputMode === 'pattern';
 
   const isBgGradientMode = form.field === 'backgroundImage' && form.bgMode === 'gradient';
   const activeSelectValue = form.useCustom ? form.customValue : form.selectValue;
@@ -187,6 +399,8 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
     ? (isBgGradientMode ? form.gradientJson : form.url)
     : isSelectField
     ? activeSelectValue
+    : isPatternMode
+    ? form.patternValue
     : isGradientMode
     ? form.gradientJson
     : form.hex;
@@ -196,18 +410,20 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
       const next = { ...prev, ...patch };
       // Auto-regenerate itemKey when field or value changes (unless manually edited)
       if (patch.field !== undefined || patch.hex !== undefined || patch.url !== undefined ||
-          patch.gradientJson !== undefined || patch.selectValue !== undefined ||
+          patch.gradientJson !== undefined || patch.patternValue !== undefined || patch.selectValue !== undefined ||
           patch.customValue !== undefined || patch.useCustom !== undefined || patch.inputMode !== undefined ||
           patch.bgMode !== undefined) {
         const prevDef = ITEM_FIELDS.find(f => f.value === prev.field)!;
         const prevValue = prevDef.inputType === 'url'
           ? (prev.field === 'backgroundImage' && prev.bgMode === 'gradient' ? prev.gradientJson : prev.url)
           : prevDef.inputType === 'select' ? (prev.useCustom ? prev.customValue : prev.selectValue)
+          : prev.inputMode === 'pattern' ? prev.patternValue
           : prev.inputMode === 'gradient' ? prev.gradientJson : prev.hex;
         const nextDef = ITEM_FIELDS.find(f => f.value === next.field)!;
         const nextValue = nextDef.inputType === 'url'
           ? (next.field === 'backgroundImage' && next.bgMode === 'gradient' ? next.gradientJson : next.url)
           : nextDef.inputType === 'select' ? (next.useCustom ? next.customValue : next.selectValue)
+          : next.inputMode === 'pattern' ? next.patternValue
           : next.inputMode === 'gradient' ? next.gradientJson : next.hex;
         const oldAutoKey = toItemKey(prev.field, prevValue);
         if (prev.itemKey === oldAutoKey || prev.itemKey === '') {
@@ -228,6 +444,31 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
 
   const price = MORBIUS_PRICE[form.tier];
   const supply = MAX_SUPPLY[form.tier];
+
+  const createItemRequest = async (payload: {
+    itemKey: string;
+    displayName: string;
+    unlocksField: ItemField;
+    unlocksValue: string;
+  }): Promise<{ ok: boolean; error?: string }> => {
+    const res = await fetch(`/api/cosmetics/admin/create-item`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        adminAddress: address,
+        itemKey: payload.itemKey,
+        displayName: payload.displayName,
+        tier: form.tier,
+        priceMorbius: price,
+        maxSupply: supply,
+        unlocksField: payload.unlocksField,
+        unlocksValue: payload.unlocksValue,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error ?? 'Create failed' };
+    return { ok: true };
+  };
 
   const handleCreate = async () => {
     setErr(null);
@@ -251,24 +492,85 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
 
     setBusy(true);
     try {
-      const res = await fetch(`/api/cosmetics/admin/create-item`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          adminAddress: address,
-          itemKey: form.itemKey,
-          displayName: form.displayName.trim(),
-          tier: form.tier,
-          priceMorbius: price,
-          maxSupply: supply,
-          unlocksField: form.field,
-          unlocksValue: activeValue,
-        }),
+      const result = await createItemRequest({
+        itemKey: form.itemKey,
+        displayName: form.displayName.trim(),
+        unlocksField: form.field,
+        unlocksValue: activeValue,
       });
-      const data = await res.json();
-      if (!res.ok) { setErr(data.error ?? 'Create failed'); return; }
+      if (!result.ok) { setErr(result.error ?? 'Create failed'); return; }
       setSuccess(`"${form.displayName}" created!`);
-      setForm({ field: 'skinColor', inputMode: 'color', bgMode: 'upload', hex: '#FF6B6B', gradientJson: serializeGradient(DEFAULT_GRADIENT), url: '', selectValue: '', customValue: '', useCustom: false, displayName: '', itemKey: '', tier: 'common' });
+      setForm({ field: 'skinColor', inputMode: 'color', bgMode: 'upload', hex: '#FF6B6B', gradientJson: serializeGradient(DEFAULT_GRADIENT), patternValue: 'url(#tiger)', url: '', selectValue: '', customValue: '', useCustom: false, displayName: '', itemKey: '', tier: 'common' });
+      onCreated();
+    } catch {
+      setErr('Network error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openPatternSetConfirm = () => {
+    setErr(null);
+    setSuccess(null);
+    if (!isPatternMode) {
+      setErr('Switch to Pattern mode first');
+      return;
+    }
+    if (!form.displayName.trim()) {
+      setErr('Name is required');
+      return;
+    }
+    setPatternSetConfirmOpen(true);
+  };
+
+  const copyPatternSetKeys = async () => {
+    const lines = PATTERN_BULK_FIELDS.map((field) => {
+      const key = toItemKey(field, form.patternValue);
+      return `${PATTERN_BULK_LABEL[field]}\t${key}`;
+    });
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setSuccess('Item keys copied to clipboard');
+    } catch {
+      setErr('Could not copy to clipboard');
+    }
+  };
+
+  const executePatternSetCreate = async () => {
+    setErr(null);
+    setSuccess(null);
+    if (!isPatternMode || !form.displayName.trim()) {
+      setPatternSetConfirmOpen(false);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      let created = 0;
+      let duplicates = 0;
+      const failures: string[] = [];
+      for (const field of PATTERN_BULK_FIELDS) {
+        const key = toItemKey(field, form.patternValue);
+        const display = `${form.displayName.trim()} (${PATTERN_BULK_LABEL[field]})`;
+        const result = await createItemRequest({
+          itemKey: key,
+          displayName: display,
+          unlocksField: field,
+          unlocksValue: form.patternValue,
+        });
+        if (result.ok) {
+          created++;
+        } else if ((result.error ?? '').toLowerCase().includes('already exists')) {
+          duplicates++;
+        } else {
+          failures.push(`${PATTERN_BULK_LABEL[field]}: ${result.error ?? 'Create failed'}`);
+        }
+      }
+      setPatternSetConfirmOpen(false);
+      if (failures.length > 0) {
+        setErr(`Pattern set partially failed — ${failures.join(' | ')}`);
+      }
+      setSuccess(`Pattern set complete: ${created} created, ${duplicates} already existed.`);
       onCreated();
     } catch {
       setErr('Network error');
@@ -324,11 +626,13 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                 <div className="space-y-2">
                   <div className="flex gap-1">
                     <button type="button" onClick={() => updateForm({ inputMode: 'color' })}
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${!isGradientMode ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'}`}>Flat</button>
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${!isGradientMode && !isPatternMode ? 'bg-zinc-700 border-zinc-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'}`}>Flat</button>
                     <button type="button" onClick={() => updateForm({ inputMode: 'gradient' })}
                       className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors flex items-center gap-1 ${isGradientMode ? 'bg-indigo-700 border-indigo-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'}`}>✦ Gradient</button>
+                    <button type="button" onClick={() => updateForm({ inputMode: 'pattern' })}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${isPatternMode ? 'bg-fuchsia-700 border-fuchsia-500 text-white' : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'}`}>Pattern</button>
                   </div>
-                  {!isGradientMode ? (
+                  {!isGradientMode && !isPatternMode ? (
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded ring-1 ring-white/10 shrink-0" style={{ backgroundColor: form.hex }} />
                       <input type="color" value={form.hex} onChange={e => updateForm({ hex: e.target.value })}
@@ -340,13 +644,39 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                         <Shuffle size={9} /> Rnd
                       </button>
                     </div>
-                  ) : (
+                  ) : isGradientMode ? (
                     <div className="space-y-1.5">
-                      <button type="button" onClick={() => updateForm({ gradientJson: randomGradient() })}
+                      <button type="button" onClick={() => updateForm({ gradientJson: randomGradient(form.gradientJson) })}
                         className="flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] font-medium transition-colors">
                         <Shuffle size={9} /> Randomize
                       </button>
                       <GradientBuilder value={form.gradientJson} onApply={json => updateForm({ gradientJson: json })} />
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <button type="button" onClick={() => updateForm({ patternValue: randomPattern() })}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] font-medium transition-colors">
+                          <Shuffle size={9} /> Randomize Pattern
+                        </button>
+                        <button type="button" onClick={openPatternSetConfirm}
+                          className="px-2 py-0.5 rounded border border-fuchsia-500/40 text-fuchsia-300 hover:text-white hover:border-fuchsia-400 text-[10px] font-medium transition-colors">
+                          1-Click Create Pattern Set
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {PATTERN_OPTIONS.map(p => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => updateForm({ patternValue: p })}
+                            className={`h-8 rounded border transition-colors text-[10px] ${form.patternValue === p ? 'border-fuchsia-400 ring-1 ring-fuchsia-500/50 text-fuchsia-300 bg-zinc-800' : 'border-zinc-700 hover:border-zinc-500 text-zinc-400 bg-zinc-900/60'}`}
+                            title={p}
+                          >
+                            {p.slice(5, -1)}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -365,7 +695,7 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                   )}
                   {isBgGradientMode ? (
                     <div className="space-y-1.5">
-                      <button type="button" onClick={() => updateForm({ gradientJson: randomGradient() })}
+                      <button type="button" onClick={() => updateForm({ gradientJson: randomGradient(form.gradientJson) })}
                         className="flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] font-medium transition-colors">
                         <Shuffle size={9} /> Randomize
                       </button>
@@ -443,6 +773,100 @@ function ItemBuilderPanel({ address, onCreated }: { address: string; onCreated: 
                   {busy ? 'Creating…' : 'Create'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {patternSetConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pattern-set-confirm-title"
+          onClick={() => { if (!busy) setPatternSetConfirmOpen(false); }}
+        >
+          <div
+            className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            style={{
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-cyan-500/20 bg-zinc-900/50">
+              <h3 id="pattern-set-confirm-title" className="text-sm font-semibold text-white">
+                Create pattern set?
+              </h3>
+              <p className="text-[10px] text-zinc-400 mt-1">
+                This will create <span className="text-cyan-300/90">{PATTERN_BULK_FIELDS.length}</span> shop items with the same pattern unlock value, one per field.
+              </p>
+            </div>
+            <div className="p-4 space-y-3 max-h-[min(60vh,320px)] overflow-y-auto">
+              <div className="text-[10px] text-zinc-500">
+                <span className="text-zinc-400 font-medium">Pattern:</span>{' '}
+                <code className="text-fuchsia-300/90 font-mono">{form.patternValue}</code>
+              </div>
+              <div className="text-[10px] text-zinc-500">
+                <span className="text-zinc-400 font-medium">Base name:</span>{' '}
+                <span className="text-zinc-300">{form.displayName.trim()}</span>
+              </div>
+              <ul className="space-y-2 text-[10px]">
+                {PATTERN_BULK_FIELDS.map((field) => {
+                  const itemKey = toItemKey(field, form.patternValue);
+                  const shopName = `${form.displayName.trim()} (${PATTERN_BULK_LABEL[field]})`;
+                  return (
+                    <li
+                      key={field}
+                      className="rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-2.5 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <span className="text-zinc-400 font-medium shrink-0">{PATTERN_BULK_LABEL[field]}</span>
+                        <code className="text-cyan-400/90 font-mono truncate text-right" title={itemKey}>
+                          {itemKey}
+                        </code>
+                      </div>
+                      <div className="text-zinc-500 truncate" title={shopName}>
+                        {shopName}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="text-[10px] text-zinc-500 flex flex-wrap gap-x-3 gap-y-1">
+                <span>
+                  Tier: <span className="text-zinc-300 capitalize">{form.tier}</span>
+                </span>
+                <span>
+                  Price: <span className="text-amber-300/90">{price.toLocaleString()}</span> MORBIUS each
+                </span>
+                <span>Supply: {supply} each</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-3 border-t border-zinc-700/80 bg-zinc-950/40">
+              <button
+                type="button"
+                onClick={copyPatternSetKeys}
+                className="mr-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-zinc-600 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] font-medium transition-colors"
+              >
+                <Copy size={12} /> Copy keys
+              </button>
+              <button
+                type="button"
+                onClick={() => setPatternSetConfirmOpen(false)}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-lg border border-zinc-600 text-zinc-300 hover:bg-zinc-800 text-xs font-medium transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void executePatternSetCreate()}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {busy ? <Loader2 size={12} className="animate-spin" /> : null}
+                {busy ? 'Creating…' : 'Create all'}
+              </button>
             </div>
           </div>
         </div>
@@ -649,6 +1073,9 @@ export default function AdminCosmeticsTab() {
     <div className="space-y-4">
       {/* Builder */}
       {address && <ItemBuilderPanel address={address} onCreated={load} />}
+
+      {/* Review-first hairstyle previews */}
+      <DreadlocksVariantReviewPanel />
 
       {/* Voxel painter */}
       {address && <VoxelPainter address={address} onCreated={load} />}

@@ -139,9 +139,12 @@ export default function AvatarPreview({
   // Resolve gradient-aware fills for the three color fields
   const skinFill  = resolveColor(skinColor,               `${uid}grad_skin`);
   const hairFill  = resolveColor(hairColor,               `${uid}grad_hair`);
+  const accessoryFill = resolveColor(config.accessoryColor || '#111111', `${uid}grad_accessory`);
   const shirtFill = resolveColor(config.shirtColor || '#3f3f46', `${uid}grad_shirt`);
   const hatFill   = config.hatColor ? resolveColor(config.hatColor, `${uid}grad_hat`) : null;
   const bgGradDef = config.backgroundImage?.startsWith('{') ? parseGradient(config.backgroundImage) : null;
+  const sortedStops = (stops: Array<{ color: string; offset: number; opacity: number }>) =>
+    [...stops].sort((a, b) => a.offset - b.offset);
 
   // ── emotion variants ───────────────────────────────────────────────────────
 
@@ -331,6 +334,26 @@ export default function AvatarPreview({
       case 'Bob': return <rect x="4" y="8" width="16" height="7" fill={hairFill.fill} />;
       case 'Ponytail': return <g fill={hairFill.fill}><rect x="18" y="9" width="4" height="3" /><rect x="22" y="10" width="1" height="1" /></g>;
       case 'Dreadlocks': return <g fill={hairFill.fill}><rect x="3" y="8" width="2" height="10" /><rect x="19" y="8" width="2" height="10" /><rect x="5" y="8" width="2" height="12" /><rect x="17" y="8" width="2" height="12" /></g>;
+      case 'Dreadlocks V1': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="6" y="9" width="2" height="10" /><rect x="9" y="9" width="2" height="11" /><rect x="12" y="9" width="2" height="11" /><rect x="15" y="9" width="2" height="10" /></g>;
+      case 'Dreadlocks V2': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="6" y="9" width="2" height="9" /><rect x="9" y="9" width="2" height="10" /><rect x="12" y="9" width="2" height="10" /><rect x="15" y="9" width="2" height="9" /><rect x="9" y="13" width="2" height="1" fill="#f59e0b" /><rect x="12" y="15" width="2" height="1" fill="#22c55e" /></g>;
+      case 'Dreadlocks V3': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="3" y="9" width="2" height="10" /><rect x="6" y="9" width="2" height="11" /><rect x="9" y="9" width="2" height="10" /><rect x="12" y="9" width="2" height="10" /><rect x="15" y="9" width="2" height="11" /><rect x="18" y="9" width="2" height="10" /></g>;
+      case 'Dreadlocks V4': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="3" y="9" width="2" height="9" /><rect x="6" y="9" width="2" height="10" /><rect x="9" y="9" width="2" height="10" /><rect x="12" y="9" width="2" height="10" /><rect x="15" y="9" width="2" height="10" /><rect x="18" y="9" width="2" height="9" /><rect x="6" y="13" width="2" height="1" fill="#ef4444" /><rect x="15" y="14" width="2" height="1" fill="#f59e0b" /></g>;
+      case 'Dreadlocks V5': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="6" y="9" width="2" height="9" /><rect x="9" y="9" width="2" height="10" /><rect x="12" y="9" width="2" height="10" /><rect x="15" y="9" width="2" height="9" /><rect x="5" y="10" width="1" height="7" /><rect x="18" y="10" width="1" height="7" /></g>;
+      case 'Dreadlocks V6': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="6" y="9" width="2" height="12" /><rect x="9" y="9" width="2" height="13" /><rect x="12" y="9" width="2" height="13" /><rect x="15" y="9" width="2" height="12" /></g>;
+      case 'Dreadlocks V7': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="6" y="9" width="2" height="12" /><rect x="9" y="9" width="2" height="13" /><rect x="12" y="9" width="2" height="13" /><rect x="15" y="9" width="2" height="12" /><rect x="9" y="17" width="2" height="1" fill="#f59e0b" /><rect x="12" y="18" width="2" height="1" fill="#22c55e" /></g>;
+      case 'Dreadlocks V8': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="3" y="9" width="2" height="12" /><rect x="6" y="9" width="2" height="11" /><rect x="9" y="9" width="2" height="12" /><rect x="12" y="9" width="2" height="12" /><rect x="15" y="9" width="2" height="11" /><rect x="18" y="9" width="2" height="12" /></g>;
+      case 'Dreadlocks V9': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="2" y="9" width="2" height="12" /><rect x="5" y="9" width="2" height="11" /><rect x="8" y="9" width="2" height="12" /><rect x="11" y="9" width="2" height="12" /><rect x="14" y="9" width="2" height="11" /><rect x="17" y="9" width="2" height="11" /><rect x="20" y="9" width="2" height="12" /></g>;
+      case 'Dreadlocks V10': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="3" y="9" width="2" height="11" /><rect x="6" y="9" width="2" height="12" /><rect x="9" y="9" width="2" height="13" /><rect x="12" y="9" width="2" height="13" /><rect x="15" y="9" width="2" height="12" /><rect x="18" y="9" width="2" height="11" /><rect x="9" y="16" width="2" height="1" fill="#ef4444" /><rect x="12" y="17" width="2" height="1" fill="#f59e0b" /></g>;
+      case 'Locks V1': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="6" y="9" width="2" height="9" /><rect x="9" y="9" width="2" height="10" /><rect x="12" y="9" width="2" height="10" /><rect x="15" y="9" width="2" height="9" /></g>;
+      case 'Locks V2': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="4" y="9" width="2" height="10" /><rect x="7" y="9" width="2" height="11" /><rect x="10" y="9" width="2" height="10" /><rect x="13" y="9" width="2" height="10" /><rect x="16" y="9" width="2" height="11" /><rect x="18" y="9" width="2" height="10" /></g>;
+      case 'Locks V3': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="6" y="9" width="2" height="11" /><rect x="9" y="9" width="2" height="12" /><rect x="12" y="9" width="2" height="12" /><rect x="15" y="9" width="2" height="11" /></g>;
+      case 'Locks V4': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="3" y="9" width="2" height="11" /><rect x="6" y="9" width="2" height="12" /><rect x="9" y="9" width="2" height="11" /><rect x="12" y="9" width="2" height="11" /><rect x="15" y="9" width="2" height="12" /><rect x="18" y="9" width="2" height="11" /></g>;
+      case 'Locks V5': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="5" y="9" width="2" height="10" /><rect x="8" y="9" width="2" height="11" /><rect x="11" y="9" width="2" height="12" /><rect x="14" y="9" width="2" height="11" /><rect x="17" y="9" width="2" height="10" /></g>;
+      case 'Locks V6': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="6" y="9" width="2" height="12" /><rect x="9" y="9" width="2" height="13" /><rect x="12" y="9" width="2" height="13" /><rect x="15" y="9" width="2" height="12" /></g>;
+      case 'Locks V7': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="3" y="9" width="2" height="12" /><rect x="6" y="9" width="2" height="13" /><rect x="9" y="9" width="2" height="12" /><rect x="12" y="9" width="2" height="12" /><rect x="15" y="9" width="2" height="13" /><rect x="18" y="9" width="2" height="12" /></g>;
+      case 'Locks V8': return <g fill={hairFill.fill}><rect x="5" y="7" width="14" height="2" /><rect x="4" y="9" width="2" height="11" /><rect x="7" y="9" width="2" height="12" /><rect x="10" y="9" width="2" height="13" /><rect x="13" y="9" width="2" height="12" /><rect x="16" y="9" width="2" height="11" /></g>;
+      case 'Locks V9': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="2" y="9" width="2" height="12" /><rect x="5" y="9" width="2" height="12" /><rect x="8" y="9" width="2" height="13" /><rect x="11" y="9" width="2" height="12" /><rect x="14" y="9" width="2" height="12" /><rect x="17" y="9" width="2" height="12" /><rect x="20" y="9" width="2" height="12" /></g>;
+      case 'Locks V10': return <g fill={hairFill.fill}><rect x="4" y="7" width="16" height="2" /><rect x="3" y="9" width="2" height="12" /><rect x="6" y="9" width="2" height="13" /><rect x="9" y="9" width="2" height="14" /><rect x="12" y="9" width="2" height="14" /><rect x="15" y="9" width="2" height="13" /><rect x="18" y="9" width="2" height="12" /></g>;
       case 'Afro': return <g fill={hairFill.fill}><rect x="2" y="4" width="20" height="12" rx="4" /></g>;
       case 'Mullet': return <rect x="4" y="12" width="16" height="6" fill={hairFill.fill} />;
       case 'Pigtails': return <g fill={hairFill.fill}><rect x="2" y="9" width="3" height="6" /><rect x="19" y="9" width="3" height="6" /></g>;
@@ -347,6 +370,26 @@ export default function AvatarPreview({
       case 'Fade': return <g><rect x="6" y="6" width="12" height="2" fill={hairFill.fill} /><rect x="5" y="8" width="1" height="3" fill={skinFill.fill} opacity="0.5" /><rect x="18" y="8" width="1" height="3" fill={skinFill.fill} opacity="0.5" /></g>;
       case 'Mohawk': return <g fill={hairFill.fill}><rect x="10" y="2" width="4" height="6" /><rect x="11" y="1" width="2" height="1" /></g>;
       case 'Dreadlocks': return <g fill={hairFill.fill}><rect x="5" y="5" width="14" height="3" /><rect x="4" y="8" width="2" height="4" /><rect x="18" y="8" width="2" height="4" /><rect x="6" y="8" width="2" height="2" /><rect x="16" y="8" width="2" height="2" /></g>;
+      case 'Dreadlocks V1': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="6" y="8" width="2" height="3" /><rect x="9" y="8" width="2" height="4" /><rect x="12" y="8" width="2" height="4" /><rect x="15" y="8" width="2" height="3" /></g>;
+      case 'Dreadlocks V2': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="6" y="8" width="2" height="3" /><rect x="9" y="8" width="2" height="4" /><rect x="12" y="8" width="2" height="4" /><rect x="15" y="8" width="2" height="3" /><rect x="9" y="10" width="2" height="1" fill="#f59e0b" /></g>;
+      case 'Dreadlocks V3': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="4" y="8" width="2" height="3" /><rect x="7" y="8" width="2" height="4" /><rect x="10" y="8" width="2" height="3" /><rect x="13" y="8" width="2" height="3" /><rect x="16" y="8" width="2" height="4" /><rect x="18" y="8" width="2" height="3" /></g>;
+      case 'Dreadlocks V4': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="4" y="8" width="2" height="3" /><rect x="7" y="8" width="2" height="4" /><rect x="10" y="8" width="2" height="3" /><rect x="13" y="8" width="2" height="3" /><rect x="16" y="8" width="2" height="4" /><rect x="18" y="8" width="2" height="3" /><rect x="16" y="10" width="2" height="1" fill="#22c55e" /></g>;
+      case 'Dreadlocks V5': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="5" y="8" width="2" height="3" /><rect x="8" y="8" width="2" height="4" /><rect x="11" y="8" width="2" height="4" /><rect x="14" y="8" width="2" height="3" /><rect x="17" y="8" width="2" height="3" /></g>;
+      case 'Dreadlocks V6': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="6" y="8" width="2" height="4" /><rect x="9" y="8" width="2" height="5" /><rect x="12" y="8" width="2" height="5" /><rect x="15" y="8" width="2" height="4" /></g>;
+      case 'Dreadlocks V7': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="6" y="8" width="2" height="4" /><rect x="9" y="8" width="2" height="5" /><rect x="12" y="8" width="2" height="5" /><rect x="15" y="8" width="2" height="4" /><rect x="12" y="11" width="2" height="1" fill="#f59e0b" /></g>;
+      case 'Dreadlocks V8': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="4" y="8" width="2" height="4" /><rect x="7" y="8" width="2" height="4" /><rect x="10" y="8" width="2" height="5" /><rect x="13" y="8" width="2" height="5" /><rect x="16" y="8" width="2" height="4" /><rect x="18" y="8" width="2" height="4" /></g>;
+      case 'Dreadlocks V9': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="3" y="8" width="2" height="4" /><rect x="6" y="8" width="2" height="4" /><rect x="9" y="8" width="2" height="5" /><rect x="12" y="8" width="2" height="5" /><rect x="15" y="8" width="2" height="4" /><rect x="18" y="8" width="2" height="4" /><rect x="19" y="8" width="2" height="4" /></g>;
+      case 'Dreadlocks V10': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="4" y="8" width="2" height="4" /><rect x="7" y="8" width="2" height="5" /><rect x="10" y="8" width="2" height="5" /><rect x="13" y="8" width="2" height="5" /><rect x="16" y="8" width="2" height="5" /><rect x="18" y="8" width="2" height="4" /><rect x="7" y="11" width="2" height="1" fill="#ef4444" /></g>;
+      case 'Locks V1': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="6" y="8" width="2" height="3" /><rect x="9" y="8" width="2" height="4" /><rect x="12" y="8" width="2" height="4" /><rect x="15" y="8" width="2" height="3" /></g>;
+      case 'Locks V2': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="4" y="8" width="2" height="3" /><rect x="7" y="8" width="2" height="4" /><rect x="10" y="8" width="2" height="3" /><rect x="13" y="8" width="2" height="3" /><rect x="16" y="8" width="2" height="4" /><rect x="18" y="8" width="2" height="3" /></g>;
+      case 'Locks V3': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="6" y="8" width="2" height="4" /><rect x="9" y="8" width="2" height="5" /><rect x="12" y="8" width="2" height="5" /><rect x="15" y="8" width="2" height="4" /></g>;
+      case 'Locks V4': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="4" y="8" width="2" height="4" /><rect x="7" y="8" width="2" height="5" /><rect x="10" y="8" width="2" height="4" /><rect x="13" y="8" width="2" height="4" /><rect x="16" y="8" width="2" height="5" /><rect x="18" y="8" width="2" height="4" /></g>;
+      case 'Locks V5': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="5" y="8" width="2" height="3" /><rect x="8" y="8" width="2" height="4" /><rect x="11" y="8" width="2" height="5" /><rect x="14" y="8" width="2" height="4" /><rect x="17" y="8" width="2" height="3" /></g>;
+      case 'Locks V6': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="6" y="8" width="2" height="4" /><rect x="9" y="8" width="2" height="5" /><rect x="12" y="8" width="2" height="5" /><rect x="15" y="8" width="2" height="4" /></g>;
+      case 'Locks V7': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="4" y="8" width="2" height="4" /><rect x="7" y="8" width="2" height="5" /><rect x="10" y="8" width="2" height="5" /><rect x="13" y="8" width="2" height="5" /><rect x="16" y="8" width="2" height="5" /><rect x="18" y="8" width="2" height="4" /></g>;
+      case 'Locks V8': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="4" y="8" width="2" height="4" /><rect x="7" y="8" width="2" height="5" /><rect x="10" y="8" width="2" height="5" /><rect x="13" y="8" width="2" height="5" /><rect x="16" y="8" width="2" height="4" /></g>;
+      case 'Locks V9': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="3" y="8" width="2" height="4" /><rect x="6" y="8" width="2" height="5" /><rect x="9" y="8" width="2" height="5" /><rect x="12" y="8" width="2" height="5" /><rect x="15" y="8" width="2" height="5" /><rect x="18" y="8" width="2" height="4" /><rect x="19" y="8" width="2" height="4" /></g>;
+      case 'Locks V10': return <g fill={hairFill.fill}><rect x="4" y="6" width="16" height="2" /><rect x="4" y="8" width="2" height="4" /><rect x="7" y="8" width="2" height="5" /><rect x="10" y="8" width="2" height="6" /><rect x="13" y="8" width="2" height="6" /><rect x="16" y="8" width="2" height="5" /><rect x="18" y="8" width="2" height="4" /></g>;
       case 'Afro': return <g fill={hairFill.fill}><rect x="4" y="4" width="16" height="4" /><rect x="3" y="5" width="18" height="4" /></g>;
       case 'Mullet': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="5" y="8" width="1" height="2" /><rect x="18" y="8" width="1" height="2" /></g>;
       case 'Pigtails': return <g fill={hairFill.fill}><rect x="5" y="6" width="14" height="2" /><rect x="4" y="8" width="2" height="2" /><rect x="18" y="8" width="2" height="2" /></g>;
@@ -371,6 +414,16 @@ export default function AvatarPreview({
         case 'Almond': return <g><rect x={x} y="11" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="11" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
         case 'Narrow': return <g><rect x={x} y="12" width="3" height="1" fill="white" /><motion.rect x={x + 1} y="12" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
         case 'Wide': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><motion.rect x={x + 0.5} y="11" width="2" height="2" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V1': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><motion.rect x={x + 1} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V2': return <g><rect x={x} y="11" width="3" height="1" fill="white" /><rect x={x} y="12" width="2" height="1" fill="white" /><motion.rect x={x + 1} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V3': return <g><rect x={x} y="11" width="2" height="2" fill="white" /><rect x={x + 2} y="12" width="1" height="1" fill="white" /><motion.rect x={x + 0.5} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V4': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><motion.rect x={x + 1.5} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V5': return <g><rect x={x} y="12" width="3" height="1" fill="white" /><rect x={x + 1} y="11" width="1" height="1" fill="white" /><motion.rect x={x + 1} y="12" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V6': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><rect x={x + 1} y="10" width="1" height="1" fill="white" /><motion.rect x={x + 1} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V7': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><rect x={x} y="10" width="1" height="1" fill="white" /><rect x={x + 2} y="10" width="1" height="1" fill="white" /><motion.rect x={x + 1} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V8': return <g><rect x={x} y="11" width="3" height="1" fill="white" /><rect x={x + 1} y="12" width="2" height="1" fill="white" /><motion.rect x={x + 1.2} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V9': return <g><rect x={x} y="11" width="2" height="2" fill="white" /><motion.rect x={x + 1} y="11.5" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
+        case 'Eye V10': return <g><rect x={x} y="11" width="3" height="2" fill="white" /><rect x={x + 1} y="12" width="1" height="1" fill={eyeColor} /><motion.rect x={x + 0.8} y="11.2" width="1" height="1" fill={eyeColor} style={(!compact || trackMouse || roamEyes) ? { x: mouseX, y: mouseY } : {}} /></g>;
         default: return null;
       }
     };
@@ -426,13 +479,24 @@ export default function AvatarPreview({
   // ── accessories ────────────────────────────────────────────────────────────
 
   const renderAccessories = () => {
+    const ac = accessoryFill.fill;
     switch (accessory) {
-      case 'Glasses': return <g fill="#333"><rect x="6" y="10" width="5" height="1" /><rect x="6" y="13" width="5" height="1" /><rect x="6" y="11" width="1" height="2" /><rect x="10" y="11" width="1" height="2" /><rect x="13" y="10" width="5" height="1" /><rect x="13" y="13" width="5" height="1" /><rect x="13" y="11" width="1" height="2" /><rect x="17" y="11" width="1" height="2" /><rect x="11" y="11" width="2" height="1" /><rect x="4" y="11" width="2" height="1" /><rect x="18" y="11" width="2" height="1" /></g>;
-      case 'Sunglasses': return <g fill="rgba(0,0,0,0.85)"><rect x="6" y="10" width="5" height="4" /><rect x="13" y="10" width="5" height="4" /><rect x="11" y="11" width="2" height="1" /><rect x="4" y="11" width="2" height="1" /><rect x="18" y="11" width="2" height="1" /></g>;
-      case 'Aviators': return <g fill="rgba(0,0,0,0.85)"><rect x="5" y="10" width="6" height="4" /><rect x="6" y="14" width="4" height="1" /><rect x="13" y="10" width="6" height="4" /><rect x="14" y="14" width="4" height="1" /><rect x="11" y="10" width="2" height="1" /><rect x="4" y="10" width="1" height="1" /><rect x="19" y="10" width="1" height="1" /></g>;
-      case 'Wayfarers': return <g fill="#111"><rect x="5" y="9" width="6" height="2" /><rect x="13" y="9" width="6" height="2" /><rect x="6" y="11" width="4" height="3" /><rect x="14" y="11" width="4" height="3" /><rect x="11" y="10" width="2" height="1" /><rect x="4" y="10" width="1" height="1" /><rect x="19" y="10" width="1" height="1" /></g>;
-      case 'Round Glasses': return <g fill="#333"><rect x="6" y="9" width="4" height="1" /><rect x="6" y="14" width="4" height="1" /><rect x="5" y="10" width="1" height="4" /><rect x="10" y="10" width="1" height="4" /><rect x="14" y="9" width="4" height="1" /><rect x="14" y="14" width="4" height="1" /><rect x="13" y="10" width="1" height="4" /><rect x="18" y="10" width="1" height="4" /><rect x="11" y="11" width="2" height="1" /><rect x="4" y="11" width="1" height="1" /><rect x="19" y="11" width="1" height="1" /><rect x="6" y="10" width="4" height="4" fill="rgba(0,0,0,0.6)" /><rect x="14" y="10" width="4" height="4" fill="rgba(0,0,0,0.6)" /></g>;
+      case 'Glasses': return <g fill={ac}><rect x="6" y="10" width="5" height="1" /><rect x="6" y="13" width="5" height="1" /><rect x="6" y="11" width="1" height="2" /><rect x="10" y="11" width="1" height="2" /><rect x="13" y="10" width="5" height="1" /><rect x="13" y="13" width="5" height="1" /><rect x="13" y="11" width="1" height="2" /><rect x="17" y="11" width="1" height="2" /><rect x="11" y="11" width="2" height="1" /><rect x="4" y="11" width="2" height="1" /><rect x="18" y="11" width="2" height="1" /></g>;
+      case 'Sunglasses': return <g fill={ac}><rect x="6" y="10" width="5" height="4" /><rect x="13" y="10" width="5" height="4" /><rect x="11" y="11" width="2" height="1" /><rect x="4" y="11" width="2" height="1" /><rect x="18" y="11" width="2" height="1" /></g>;
+      case 'Aviators': return <g fill={ac}><rect x="5" y="10" width="6" height="4" /><rect x="6" y="14" width="4" height="1" /><rect x="13" y="10" width="6" height="4" /><rect x="14" y="14" width="4" height="1" /><rect x="11" y="10" width="2" height="1" /><rect x="4" y="10" width="1" height="1" /><rect x="19" y="10" width="1" height="1" /></g>;
+      case 'Wayfarers': return <g fill={ac}><rect x="5" y="9" width="6" height="2" /><rect x="13" y="9" width="6" height="2" /><rect x="6" y="11" width="4" height="3" /><rect x="14" y="11" width="4" height="3" /><rect x="11" y="10" width="2" height="1" /><rect x="4" y="10" width="1" height="1" /><rect x="19" y="10" width="1" height="1" /></g>;
+      case 'Round Glasses': return <g fill={ac}><rect x="6" y="9" width="4" height="1" /><rect x="6" y="14" width="4" height="1" /><rect x="5" y="10" width="1" height="4" /><rect x="10" y="10" width="1" height="4" /><rect x="14" y="9" width="4" height="1" /><rect x="14" y="14" width="4" height="1" /><rect x="13" y="10" width="1" height="4" /><rect x="18" y="10" width="1" height="4" /><rect x="11" y="11" width="2" height="1" /><rect x="4" y="11" width="1" height="1" /><rect x="19" y="11" width="1" height="1" /><rect x="6" y="10" width="4" height="4" fill="rgba(0,0,0,0.6)" /><rect x="14" y="10" width="4" height="4" fill="rgba(0,0,0,0.6)" /></g>;
       case 'Cyberpunk': return <g><rect x="4" y="10" width="16" height="3" fill="#00ffcc" opacity="0.8" /><rect x="4" y="10" width="16" height="1" fill="#ff00ff" opacity="0.8" /><rect x="4" y="11" width="1" height="2" fill="#111" /><rect x="19" y="11" width="1" height="2" fill="#111" /></g>;
+      case 'Shades V1': return <g fill={ac}><rect x="5" y="10" width="6" height="3" /><rect x="13" y="10" width="6" height="3" /><rect x="11" y="11" width="2" height="1" /></g>;
+      case 'Shades V2': return <g fill={ac}><rect x="5" y="9" width="6" height="4" /><rect x="13" y="9" width="6" height="4" /><rect x="11" y="10" width="2" height="1" /><rect x="4" y="10" width="1" height="2" /><rect x="19" y="10" width="1" height="2" /></g>;
+      case 'Shades V3': return <g fill={ac}><rect x="6" y="10" width="4" height="3" /><rect x="14" y="10" width="4" height="3" /><rect x="10" y="11" width="4" height="1" /></g>;
+      case 'Shades V4': return <g fill={ac}><rect x="5" y="10" width="6" height="4" /><rect x="13" y="10" width="6" height="4" /><rect x="11" y="11" width="2" height="2" /><rect x="6" y="9" width="4" height="1" /><rect x="14" y="9" width="4" height="1" /></g>;
+      case 'Shades V5': return <g fill={ac}><rect x="5" y="11" width="6" height="2" /><rect x="13" y="11" width="6" height="2" /><rect x="11" y="11" width="2" height="1" /></g>;
+      case 'Shades V6': return <g fill={ac}><rect x="5" y="10" width="5" height="4" /><rect x="14" y="10" width="5" height="4" /><rect x="10" y="11" width="4" height="1" /></g>;
+      case 'Shades V7': return <g fill={ac}><rect x="6" y="9" width="5" height="4" /><rect x="13" y="9" width="5" height="4" /><rect x="11" y="10" width="2" height="1" /><rect x="5" y="10" width="1" height="2" /><rect x="18" y="10" width="1" height="2" /></g>;
+      case 'Shades V8': return <g fill={ac}><rect x="5" y="10" width="6" height="3" /><rect x="13" y="10" width="6" height="3" /><rect x="11" y="10" width="2" height="1" /><rect x="6" y="13" width="4" height="1" /><rect x="14" y="13" width="4" height="1" /></g>;
+      case 'Shades V9': return <g fill={ac}><rect x="5" y="10" width="6" height="4" /><rect x="13" y="10" width="6" height="4" /><rect x="11" y="11" width="2" height="1" /><rect x="4" y="11" width="1" height="1" /><rect x="19" y="11" width="1" height="1" /></g>;
+      case 'Shades V10': return <g fill={ac}><rect x="5" y="9" width="6" height="3" /><rect x="13" y="9" width="6" height="3" /><rect x="11" y="10" width="2" height="1" /><rect x="6" y="12" width="4" height="2" /><rect x="14" y="12" width="4" height="2" /></g>;
       case 'Voxel Glasses': return <g><rect x="5" y="10" width="6" height="4" fill={`url(#${uid}custom)`} /><rect x="13" y="10" width="6" height="4" fill={`url(#${uid}custom)`} /><rect x="11" y="11" width="2" height="1" fill="#111" /><rect x="4" y="11" width="1" height="1" fill="#111" /><rect x="19" y="11" width="1" height="1" fill="#111" /></g>;
       case 'Earrings': return <g fill="#FFD700"><rect x="4" y="13" width="1" height="1" /><rect x="19" y="13" width="1" height="1" /></g>;
       case 'Headband': return <rect x="5" y="7" width="14" height="2" fill="#E11D48" />;
@@ -449,6 +513,16 @@ export default function AvatarPreview({
       case 'Cowboy': return <g><rect x="7" y="2" width="10" height="5" fill={hc ?? '#78350f'} /><rect x="3" y="7" width="18" height="2" fill={hc ?? '#78350f'} /></g>;
       case 'Crown': return <g fill={hc ?? '#fbbf24'}><rect x="5" y="4" width="14" height="4" /><rect x="5" y="2" width="2" height="2" /><rect x="11" y="2" width="2" height="2" /><rect x="17" y="2" width="2" height="2" /></g>;
       case 'Bandana': return <g fill={hc ?? '#ef4444'}><rect x="5" y="6" width="14" height="3" /><rect x="18" y="7" width="2" height="4" /></g>;
+      case 'Hat V1': return <g><rect x="5" y="4" width="14" height="3" fill={hc ?? '#1f2937'} /><rect x="4" y="7" width="16" height="1" fill={hc ?? '#1f2937'} /></g>;
+      case 'Hat V2': return <g><rect x="6" y="3" width="12" height="4" fill={hc ?? '#111827'} /><rect x="4" y="7" width="16" height="2" fill={hc ?? '#111827'} /></g>;
+      case 'Hat V3': return <g><rect x="7" y="2" width="10" height="5" fill={hc ?? '#334155'} /><rect x="4" y="7" width="16" height="1" fill={hc ?? '#334155'} /></g>;
+      case 'Hat V4': return <g><rect x="6" y="4" width="12" height="4" fill={hc ?? '#7c2d12'} /><rect x="5" y="8" width="14" height="1" fill={hc ?? '#7c2d12'} /><rect x="10" y="5" width="4" height="1" fill="rgba(255,255,255,0.2)" /></g>;
+      case 'Hat V5': return <g><rect x="5" y="4" width="14" height="4" fill={hc ?? '#0f766e'} /><rect x="5" y="8" width="14" height="1" fill={hc ?? '#0f766e'} /><rect x="9" y="4" width="6" height="1" fill="rgba(255,255,255,0.2)" /></g>;
+      case 'Hat V6': return <g><rect x="4" y="5" width="16" height="3" fill={hc ?? '#1d4ed8'} /><rect x="6" y="4" width="12" height="1" fill={hc ?? '#1d4ed8'} /></g>;
+      case 'Hat V7': return <g><rect x="5" y="3" width="14" height="5" fill={hc ?? '#6b21a8'} /><rect x="4" y="8" width="16" height="1" fill={hc ?? '#6b21a8'} /></g>;
+      case 'Hat V8': return <g><rect x="6" y="4" width="12" height="3" fill={hc ?? '#854d0e'} /><rect x="5" y="7" width="14" height="2" fill={hc ?? '#854d0e'} /><rect x="10" y="4" width="4" height="1" fill="rgba(255,255,255,0.2)" /></g>;
+      case 'Hat V9': return <g><rect x="6" y="3" width="12" height="4" fill={hc ?? '#374151'} /><rect x="5" y="7" width="14" height="1" fill={hc ?? '#374151'} /><rect x="8" y="8" width="8" height="1" fill={hc ?? '#374151'} /></g>;
+      case 'Hat V10': return <g><rect x="5" y="4" width="14" height="3" fill={hc ?? '#0f172a'} /><rect x="4" y="7" width="16" height="2" fill={hc ?? '#0f172a'} /><rect x="11" y="4" width="2" height="1" fill="rgba(255,255,255,0.25)" /></g>;
       default: return null;
     }
   };
@@ -457,6 +531,16 @@ export default function AvatarPreview({
     const c = shirtFill.fill;
     const style = config.shirtStyle || 'Default';
     switch (style) {
+      case 'Streetwear V1': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="4" y="22" width="16" height="1" fill="rgba(255,255,255,0.15)" /><rect x="7" y="24" width="10" height="2" fill="rgba(0,0,0,0.12)" /></g>;
+      case 'Streetwear V2': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="4" y="20" width="16" height="2" fill="rgba(0,0,0,0.2)" /><rect x="11" y="22" width="2" height="6" fill="rgba(255,255,255,0.12)" /></g>;
+      case 'Streetwear V3': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="5" y="21" width="3" height="3" fill="rgba(255,255,255,0.18)" /><rect x="16" y="21" width="3" height="3" fill="rgba(255,255,255,0.18)" /><rect x="8" y="26" width="8" height="1" fill="rgba(0,0,0,0.2)" /></g>;
+      case 'Streetwear V4': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="4" y="24" width="16" height="1" fill="rgba(255,255,255,0.2)" /><rect x="9" y="20" width="6" height="2" fill="rgba(0,0,0,0.15)" /></g>;
+      case 'Streetwear V5': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="4" y="20" width="2" height="8" fill="rgba(0,0,0,0.12)" /><rect x="18" y="20" width="2" height="8" fill="rgba(0,0,0,0.12)" /><rect x="10" y="22" width="4" height="2" fill="rgba(255,255,255,0.18)" /></g>;
+      case 'Streetwear V6': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="6" y="21" width="12" height="1" fill="rgba(255,255,255,0.2)" /><rect x="6" y="25" width="12" height="1" fill="rgba(255,255,255,0.15)" /><rect x="11" y="22" width="2" height="5" fill="rgba(0,0,0,0.15)" /></g>;
+      case 'Streetwear V7': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="5" y="23" width="14" height="1" fill="rgba(0,0,0,0.15)" /><rect x="8" y="24" width="8" height="3" fill="rgba(255,255,255,0.12)" /></g>;
+      case 'Streetwear V8': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="4" y="21" width="16" height="1" fill="rgba(255,255,255,0.18)" /><rect x="9" y="22" width="6" height="2" fill="rgba(0,0,0,0.2)" /><rect x="10" y="25" width="4" height="2" fill="rgba(0,0,0,0.1)" /></g>;
+      case 'Streetwear V9': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="6" y="20" width="12" height="2" fill="rgba(0,0,0,0.12)" /><rect x="6" y="26" width="12" height="1" fill="rgba(255,255,255,0.18)" /><rect x="11" y="22" width="2" height="4" fill="rgba(255,255,255,0.12)" /></g>;
+      case 'Streetwear V10': return <g><rect x="4" y="20" width="16" height="8" fill={c} /><rect x="5" y="21" width="3" height="2" fill="rgba(0,0,0,0.15)" /><rect x="16" y="21" width="3" height="2" fill="rgba(0,0,0,0.15)" /><rect x="8" y="24" width="8" height="2" fill="rgba(255,255,255,0.16)" /><rect x="10" y="26" width="4" height="1" fill="rgba(0,0,0,0.15)" /></g>;
       case 'Tuxedo': return (
         <g>
           <rect x="4" y="20" width="16" height="8" fill="#1a1a1a" />
@@ -1004,35 +1088,42 @@ export default function AvatarPreview({
           {/* Dynamic gradient defs — IDs are instance-unique to avoid collisions */}
           {skinFill.gradientDef && (
             <linearGradient id={`${uid}grad_skin`} {...angleToSvgCoords(skinFill.gradientDef.angle)}>
-              {skinFill.gradientDef.stops.map((s, i) => (
+              {sortedStops(skinFill.gradientDef.stops).map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
             </linearGradient>
           )}
           {hairFill.gradientDef && (
             <linearGradient id={`${uid}grad_hair`} {...angleToSvgCoords(hairFill.gradientDef.angle)}>
-              {hairFill.gradientDef.stops.map((s, i) => (
+              {sortedStops(hairFill.gradientDef.stops).map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
             </linearGradient>
           )}
           {shirtFill.gradientDef && (
             <linearGradient id={`${uid}grad_shirt`} {...angleToSvgCoords(shirtFill.gradientDef.angle)}>
-              {shirtFill.gradientDef.stops.map((s, i) => (
+              {sortedStops(shirtFill.gradientDef.stops).map((s, i) => (
+                <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
+              ))}
+            </linearGradient>
+          )}
+          {accessoryFill.gradientDef && (
+            <linearGradient id={`${uid}grad_accessory`} {...angleToSvgCoords(accessoryFill.gradientDef.angle)}>
+              {sortedStops(accessoryFill.gradientDef.stops).map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
             </linearGradient>
           )}
           {hatFill?.gradientDef && (
             <linearGradient id={`${uid}grad_hat`} {...angleToSvgCoords(hatFill.gradientDef.angle)}>
-              {hatFill.gradientDef.stops.map((s, i) => (
+              {sortedStops(hatFill.gradientDef.stops).map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
             </linearGradient>
           )}
           {bgGradDef && (
             <linearGradient id={`${uid}grad_bg`} {...angleToSvgCoords(bgGradDef.angle)}>
-              {bgGradDef.stops.map((s, i) => (
+              {sortedStops(bgGradDef.stops).map((s, i) => (
                 <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} stopOpacity={s.opacity} />
               ))}
             </linearGradient>

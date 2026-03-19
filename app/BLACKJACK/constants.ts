@@ -8,6 +8,7 @@ export const SOUNDS_BETTING_CLOSED = Array.from({ length: 5 }, (_, i) => `/Black
 export const SOUNDS_DEALER_PHRASE = Array.from({ length: 19 }, (_, i) => `/BlackJack/sounds/dealer-phrase-${i + 1}.mp3`);
 export const SOUNDS_PLAYER_WINS = Array.from({ length: 5 }, (_, i) => `/BlackJack/sounds/player-wins-${i + 1}.mp3`);
 export const SOUNDS_PLAYER_BLACKJACK = Array.from({ length: 4 }, (_, i) => `/BlackJack/sounds/player-blackjack-${i + 1}.mp3`);
+export const SOUNDS_DEALER_BLACKJACK = Array.from({ length: 4 }, (_, i) => `/BlackJack/sounds/dealer-blackjack-${i + 1}.mp3`);
 export const SOUNDS_DEALER_WINS = Array.from({ length: 4 }, (_, i) => `/BlackJack/sounds/dealer-wins-${i + 1}.mp3`);
 export const SOUNDS_TIP = Array.from({ length: 7 }, (_, i) => `/BlackJack/sounds/tip-${i + 1}.mp3`);
 export const SOUND_PUSH = '/BlackJack/sounds/push-1.mp3';
