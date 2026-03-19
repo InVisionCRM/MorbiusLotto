@@ -803,6 +803,41 @@ async function initializeServices() {
       }
     });
 
+    app.get('/api/tips/stats', async (req, res) => {
+      try {
+        const pool = dbService.getPool();
+        const tipAgg = await pool.query<{ total_wei: string; tip_count: string }>(
+          `SELECT COALESCE(SUM((payload->>'amount')::numeric), 0)::text AS total_wei,
+                  COUNT(*)::text AS tip_count
+           FROM blackjack_multi_audit_log WHERE action_type = 'tip_dealer'`
+        );
+        const tipByPlayer = await pool.query<{ player_address: string; total_wei: string; cnt: string; display_name: string | null }>(
+          `SELECT a.player_address,
+                  SUM((a.payload->>'amount')::numeric)::text AS total_wei,
+                  COUNT(*)::text AS cnt,
+                  p.display_name
+           FROM blackjack_multi_audit_log a
+           LEFT JOIN player_profiles p ON LOWER(p.wallet_address) = LOWER(a.player_address)
+           WHERE a.action_type = 'tip_dealer'
+           GROUP BY a.player_address, p.display_name
+           ORDER BY SUM((a.payload->>'amount')::numeric) DESC LIMIT 20`
+        );
+        sendJson(res, {
+          totalTipAmountWei: tipAgg.rows[0]?.total_wei ?? '0',
+          tipCount: parseInt(tipAgg.rows[0]?.tip_count ?? '0', 10),
+          tippers: tipByPlayer.rows.map(r => ({
+            address: r.player_address,
+            displayName: r.display_name || null,
+            totalWei: r.total_wei,
+            count: parseInt(r.cnt, 10),
+          })),
+        });
+      } catch (error) {
+        logger.error('Error fetching tip stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     app.get('/api/game/:gameId/verify', async (req, res) => {
       try {
         const { gameId } = req.params;
@@ -1851,6 +1886,29 @@ async function initializeServices() {
           '7d': bj7d,
         };
 
+        // Tip stats — aggregate from audit log
+        let tipStats: { totalTipAmountWei: string; tipCount: number; tippers: Array<{ address: string; totalWei: string; count: number }> } = { totalTipAmountWei: '0', tipCount: 0, tippers: [] };
+        try {
+          const pool = dbService.getPool();
+          const tipAgg = await pool.query<{ total_wei: string; tip_count: string }>(
+            `SELECT COALESCE(SUM((payload->>'amount')::numeric), 0)::text AS total_wei,
+                    COUNT(*)::text AS tip_count
+             FROM blackjack_multi_audit_log WHERE action_type = 'tip_dealer'`
+          );
+          const tipByPlayer = await pool.query<{ player_address: string; total_wei: string; cnt: string }>(
+            `SELECT player_address,
+                    SUM((payload->>'amount')::numeric)::text AS total_wei,
+                    COUNT(*)::text AS cnt
+             FROM blackjack_multi_audit_log WHERE action_type = 'tip_dealer'
+             GROUP BY player_address ORDER BY SUM((payload->>'amount')::numeric) DESC LIMIT 50`
+          );
+          tipStats = {
+            totalTipAmountWei: tipAgg.rows[0]?.total_wei ?? '0',
+            tipCount: parseInt(tipAgg.rows[0]?.tip_count ?? '0', 10),
+            tippers: tipByPlayer.rows.map(r => ({ address: r.player_address, totalWei: r.total_wei, count: parseInt(r.cnt, 10) })),
+          };
+        } catch { /* ignore if table doesn't exist yet */ }
+
         sendJson(res, {
           api,
           ws,
@@ -1863,6 +1921,7 @@ async function initializeServices() {
           blackjackDeposited,
           blackjackWithdrawn,
           blackjackTimeframes,
+          tipStats,
         });
       } catch (error) {
         logger.error('Error in admin health:', error);

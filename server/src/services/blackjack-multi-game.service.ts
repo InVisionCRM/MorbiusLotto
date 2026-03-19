@@ -82,6 +82,7 @@ export interface BJMultiTableState {
   bettingStartedAt: string | null;
   themeKind: 'video' | 'image';
   themeId: string;
+  stateVersion: number;
 }
 
 export interface BJMultiTableSummary {

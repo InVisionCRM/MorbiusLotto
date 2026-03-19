@@ -3647,8 +3647,16 @@ export class WebSocketService {
       if (tipAmount <= 0n) return this.sendError(ws, 'Invalid tip amount', message.requestId);
       const deployerWallet = (process.env.NEXT_PUBLIC_BLACKJACK_DEPLOYER_WALLET || process.env.BLACKJACK_DEPLOYER_WALLET || '').toLowerCase();
       if (!deployerWallet) return this.sendError(ws, 'Deployer wallet not configured', message.requestId);
-      await this.dbService.deductPlayerBalance(ws.playerAddress.toLowerCase(), tipAmount);
+      const normalized = ws.playerAddress.toLowerCase();
+      await this.dbService.deductPlayerBalance(normalized, tipAmount);
       await this.dbService.addPlayerBalance(deployerWallet, tipAmount);
+      // Log to audit table so admin can track tips
+      const pool = this.dbService.getPool();
+      await pool.query(
+        `INSERT INTO blackjack_multi_audit_log (table_id, round_id, player_address, action_type, payload)
+         VALUES ('00000000-0000-0000-0000-000000000000', NULL, $1, 'tip_dealer', $2)`,
+        [normalized, JSON.stringify({ amount: amount, recipient: deployerWallet, source: 'generic' })]
+      ).catch(() => {}); // don't fail the tip if logging fails
       this.sendMessage(ws, { type: 'tip_dealer_result', payload: { success: true }, requestId: message.requestId });
     } catch (error) {
       logger.error('Generic tip dealer error:', error);

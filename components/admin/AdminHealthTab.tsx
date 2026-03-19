@@ -69,6 +69,12 @@ export interface AdminHealthData {
   blackjackWithdrawn?: string;
   /** Time-bucketed: allTime, 1h, 24h, 7d */
   blackjackTimeframes?: Record<string, { deposited: string; withdrawn: string }>;
+  /** Tip stats — aggregated from audit log */
+  tipStats?: {
+    totalTipAmountWei: string;
+    tipCount: number;
+    tippers: Array<{ address: string; totalWei: string; count: number }>;
+  };
 }
 
 function formatMorbius(wei: string): string {
@@ -1287,6 +1293,48 @@ export default function AdminHealthTab() {
                     morbiusWei={w.morbiusWei}
                   />
                 ))}
+
+                {/* Tip Stats Card */}
+                {data.tipStats && data.tipStats.tipCount > 0 && (
+                  <Card className="border-amber-500/20 bg-gradient-to-br from-amber-950/20 to-slate-950/80 col-span-full">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2 text-amber-300">
+                        <Gift className="w-4 h-4" />
+                        Dealer Tips
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-2xl font-bold text-white">{formatMorbius(data.tipStats.totalTipAmountWei)}</span>
+                        <span className="text-xs text-slate-400">MORBIUS total</span>
+                        <span className="text-xs text-slate-500">({data.tipStats.tipCount} tip{data.tipStats.tipCount !== 1 ? 's' : ''})</span>
+                      </div>
+                      {data.tipStats.tippers.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Top tippers</p>
+                          <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                            {data.tipStats.tippers.map((t) => (
+                              <div key={t.address} className="flex items-center justify-between text-xs py-0.5 px-1 rounded hover:bg-white/5">
+                                <button
+                                  onClick={() => copyToClipboard(t.address)}
+                                  className="text-slate-400 hover:text-white font-mono transition-colors"
+                                  title={t.address}
+                                >
+                                  {truncateAddress(t.address)}
+                                </button>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-amber-300 font-medium">{formatMorbius(t.totalWei)}</span>
+                                  <span className="text-slate-600 text-[10px]">({t.count}x)</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {FUNDABLE_GAMES.map((game) => {
                   const reserve =
                     game.key === 'bigwheel' && bigWheelData
