@@ -297,6 +297,24 @@ export class BlackjackMultiGameService {
     }
   }
 
+  /**
+   * Check if the table is in betting phase and every seated player has placed a bet.
+   * Used to skip the betting timer when there's no one left to wait for.
+   */
+  async allSeatedPlayersHaveBet(tableId: string): Promise<boolean> {
+    const tableResult = await this.pool.query(
+      `SELECT status FROM blackjack_multi_tables WHERE id = $1`, [tableId],
+    );
+    if (tableResult.rows.length === 0) return false;
+    if (tableResult.rows[0].status !== 'betting') return false;
+
+    const seatsResult = await this.pool.query(
+      `SELECT pending_bet FROM blackjack_multi_seats WHERE table_id = $1`, [tableId],
+    );
+    if (seatsResult.rows.length === 0) return false;
+    return seatsResult.rows.every(s => BigInt(s.pending_bet || '0') > 0n);
+  }
+
   // --------------------------------------------------------------------------
   // Round lifecycle
   // --------------------------------------------------------------------------

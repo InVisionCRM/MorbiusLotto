@@ -3489,6 +3489,12 @@ export class WebSocketService {
       const betAmount = toBigIntSafe(amount);
       const state = await this.bjMultiService.placeBet(tableId, ws.playerAddress, betAmount);
 
+      // Skip the betting timer if every seated player has already bet — no one to wait for
+      const allBet = await this.bjMultiService.allSeatedPlayersHaveBet(tableId);
+      if (allBet) {
+        await this.bjMultiService.startRound(tableId);
+      }
+
       this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
       const roomId = `blackjack:table:${tableId}`;
       const broadcastState = await this.bjMultiService.getTableState(tableId);

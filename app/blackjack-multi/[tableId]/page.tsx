@@ -68,7 +68,7 @@ function useCountdown(startedAt: string | null, maxSeconds: number) {
 }
 
 const POSITIONS = [0, 1, 2] as const;
-const AVATAR_SIZE = 88;
+const AVATAR_SIZE = 56;
 
 
 function indexToCard(idx: number) {
@@ -109,7 +109,7 @@ function Seat({
       {/* Cards area */}
       {isEmpty ? (
         <div
-          className={`flex flex-col items-center justify-center gap-2 rounded-2xl px-4 py-6 min-h-[120px] border-2 border-dashed transition-all cursor-pointer ${
+          className={`flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-4 min-h-[80px] border-2 border-dashed transition-all cursor-pointer ${
             canTakeSeat ? 'border-white/20 hover:border-cyan-400/50 hover:bg-cyan-900/10' : 'border-white/10'
           }`}
           onClick={canTakeSeat ? onTakeSeat : undefined}
@@ -134,14 +134,14 @@ function Seat({
                     <div className="flex">
                       {hand.cards.map((c, ci) => (
                         <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
-                          <PlayingCard card={indexToCard(c)} owner="player" className="" />
+                          <PlayingCard card={indexToCard(c)} owner="player" className="" size="small" />
                         </div>
                       ))}
                     </div>
                     {/* Score counter */}
-                    <div className={`ml-2 flex items-center gap-1 ${isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''}`}
-                      style={{ padding: isActing && seat.activeHandIndex === hi ? '6px' : '3px' }}>
-                      <span className={`font-black text-2xl ${hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : 'text-white'}`}>
+                    <div className={`ml-1 flex items-center gap-1 ${isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''}`}
+                      style={{ padding: isActing && seat.activeHandIndex === hi ? '4px' : '2px' }}>
+                      <span className={`font-black text-lg ${hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : 'text-white'}`}>
                         {hand.isBust ? 'BUST' : hand.isBlackjack ? 'BJ!' : hand.total}
                       </span>
                     </div>
@@ -159,9 +159,9 @@ function Seat({
             </div>
           ) : (
             /* Placeholder cards when seated but no hand yet */
-            <div className="flex gap-0 min-h-[80px] items-center justify-center">
+            <div className="flex gap-0 min-h-[60px] items-center justify-center">
               {phase !== 'waiting' && phase !== 'betting' ? null : (
-                <div className="w-16 h-24 rounded-lg border border-dashed border-white/10" />
+                <div className="w-14 h-20 rounded-lg border border-dashed border-white/10" />
               )}
             </div>
           )}
@@ -169,8 +169,8 @@ function Seat({
           {/* Chip stack for bet */}
           {seat && BigInt(seat.pendingBet) > 0n && (
             <div className="flex flex-col items-center">
-              <div className="relative w-10 h-10">
-                <div className="w-10 h-10 rounded-full"
+              <div className="relative w-7 h-7">
+                <div className="w-7 h-7 rounded-full"
                   style={{ background: `url('/PokerChips/greenpokerchip005.png') center/contain no-repeat` }} />
               </div>
               <span className="text-white text-xs font-bold mt-0.5" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
@@ -440,24 +440,30 @@ export default function BlackjackMultiTablePage() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // Cap scale so content doesn't become absurdly large on wide screens
-  const rawScale = tableWidth > 0 ? tableWidth / 800 : 1;
-  const boardScale = Math.min(rawScale, 1.5);
-  // Center when capped (content won't fill the full container)
-  const scaledW = 800 * boardScale;
-  const scaledH = 450 * boardScale;
-  const containerH = tableWidth * 9 / 16;
-  const offsetX = (tableWidth - scaledW) / 2;
-  const offsetY = (containerH - scaledH) / 2;
+  const boardScale = tableWidth > 0 ? tableWidth / 800 : 1;
 
   if (!tableId) return null;
 
   return (
     <GlobalMainNav page="blackjack" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
+      <style>{`
+        .card-overlap-dealer { margin-left: -12px; }
+        .card-overlap-player { margin-left: -16px; }
+        .card-slide-in {
+          animation: cardSlideIn 0.4s ease-out forwards;
+        }
+        @keyframes cardSlideIn {
+          from { opacity: 0; transform: translateX(60px) translateY(-40px); }
+          to { opacity: 1; transform: translateX(0) translateY(0); }
+        }
+      `}</style>
+      {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
+      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2 md:gap-4 min-h-0">
+
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
         ref={tableRef}
-        className="relative w-full blackjack-table overflow-hidden"
+        className="relative w-full blackjack-table overflow-hidden md:row-start-1 md:col-start-1"
         style={{
           aspectRatio: '16 / 9',
           boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.9), inset 0 -2px 8px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(0,0,0,0.3)',
@@ -478,10 +484,10 @@ export default function BlackjackMultiTablePage() {
         {/* Dark overlay */}
         <div className="absolute inset-0" style={{ zIndex: 1, background: 'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))' }} />
 
-        {/* Content — always 800×450, scaled to fill the container (capped + centered on large screens) */}
+        {/* Content — always 800×450, scaled to fill the container */}
         <div
-          className="absolute z-10 flex flex-col"
-          style={{ width: 800, height: 450, transform: `translate(${offsetX}px, ${offsetY}px) scale(${boardScale})`, transformOrigin: 'top left' }}
+          className="absolute top-0 left-0 z-10 flex flex-col"
+          style={{ width: 800, height: 450, transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
         >
 
           {/* Top bar */}
@@ -542,6 +548,7 @@ export default function BlackjackMultiTablePage() {
                         card={indexToCard(c)}
                         owner="dealer"
                         className=""
+                        size="small"
                         index={i}
                         isNewCard={i >= 2 && i === visibleDealerCards - 1}
                       />
@@ -551,21 +558,21 @@ export default function BlackjackMultiTablePage() {
                 {/* Face-down hole card during playing phase (server only sends 1 card) */}
                 {state?.phase === 'playing' && (state.dealerCards?.length ?? 0) === 1 && (
                   <div className="card-overlap-dealer" style={{ zIndex: 1 }}>
-                    <PlayingCard card={{ value: 1 as CardValue, suit: 'spades' }} hidden owner="dealer" className="" />
+                    <PlayingCard card={{ value: 1 as CardValue, suit: 'spades' }} hidden owner="dealer" className="" size="small" />
                   </div>
                 )}
                 {/* Empty placeholders before deal */}
                 {(!state || (state.dealerCards?.length ?? 0) === 0) && (
                   <>
-                    <div className="w-16 h-24 rounded-lg border border-dashed border-white/10 mr-[-28px]" />
-                    <div className="w-16 h-24 rounded-lg border border-dashed border-white/10" />
+                    <div className="w-14 h-20 rounded-lg border border-dashed border-white/10 mr-[-18px]" />
+                    <div className="w-14 h-20 rounded-lg border border-dashed border-white/10" />
                   </>
                 )}
               </div>
               {/* Dealer score — only shown once all cards are revealed */}
               {state && visibleDealerCards >= (state.dealerCards?.length ?? 0) && state.dealerTotal > 0 && (
-                <div className="ml-3 flex items-center gap-1">
-                  <span className={`font-black text-3xl ${state.dealerTotal > 21 ? 'text-red-400' : 'text-white'}`}>
+                <div className="ml-2 flex items-center gap-1">
+                  <span className={`font-black text-xl ${state.dealerTotal > 21 ? 'text-red-400' : 'text-white'}`}>
                     {state.dealerTotal > 21 ? 'BUST' : state.dealerTotal}
                   </span>
                 </div>
@@ -573,7 +580,7 @@ export default function BlackjackMultiTablePage() {
             </div>
 
             {/* 3 SEATS — same translateY offset as BlackjackTable player row */}
-            <div className="grid grid-cols-3 gap-8 w-full max-w-3xl" style={{ transform: 'translateY(30px)' }}>
+            <div className="grid grid-cols-3 gap-4 w-full max-w-3xl" style={{ transform: 'translateY(20px)' }}>
               {POSITIONS.map(pos => {
                 const seat = state?.seats.find(s => s.position === pos);
                 const isEmpty = !seat?.playerAddress;
@@ -602,8 +609,8 @@ export default function BlackjackMultiTablePage() {
         </div>
       </div>
 
-      {/* ── Controls & Chat — below the 16:9 table ── */}
-      <div className="px-4 py-4 space-y-3 bg-slate-950">
+      {/* ── Controls & Chat — sidebar on md+, below table on mobile ── */}
+      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-y-auto">
 
         {/* Betting panel — always visible when seated, disabled when not in betting phase or bet already placed */}
         {myPosition !== null && (
@@ -683,7 +690,7 @@ export default function BlackjackMultiTablePage() {
         )}
 
         {/* Chat */}
-        <div className="bg-black/40 border border-white/10 rounded-xl p-3 max-h-28 flex flex-col">
+        <div className="bg-black/40 border border-white/10 rounded-xl p-3 max-h-28 md:max-h-none md:flex-1 flex flex-col">
           <div className="flex-1 overflow-y-auto space-y-0.5 min-h-0">
             {chatMessages.slice(-10).map(m => (
               <div key={m.id} className="text-xs text-white/70">
@@ -696,6 +703,7 @@ export default function BlackjackMultiTablePage() {
         </div>
 
       </div>
+      </div>{/* close grid */}
     </GlobalMainNav>
   );
 }
