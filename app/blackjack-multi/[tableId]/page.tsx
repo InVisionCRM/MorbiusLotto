@@ -296,11 +296,11 @@ export default function BlackjackMultiTablePage() {
 
   return (
     <GlobalMainNav page="blackjack" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
-      {/* ── Table container — same structure as BlackjackTable.tsx ── */}
+      {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
         className="relative w-full blackjack-table flex flex-col"
         style={{
-          minHeight: 'calc(100vh - 56px)',
+          aspectRatio: '16 / 9',
           boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.9), inset 0 -2px 8px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(0,0,0,0.3)',
           border: '1px inset rgba(60,60,60,0.5)',
         }}
@@ -308,12 +308,12 @@ export default function BlackjackMultiTablePage() {
         {/* Table background — video or image based on admin theme selection */}
         {theme.kind === 'video' ? (
           <video key={theme.src} autoPlay muted loop playsInline
-            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+            className="absolute inset-0 w-full h-full object-contain pointer-events-none"
             style={{ zIndex: 0 }}>
             <source src={theme.src} type="video/mp4" />
           </video>
         ) : (
-          <Image src={theme.src} alt="Table" fill className="absolute inset-0 object-cover object-center pointer-events-none" style={{ zIndex: 0 }} priority unoptimized />
+          <Image src={theme.src} alt="Table" fill className="absolute inset-0 object-contain pointer-events-none" style={{ zIndex: 0 }} priority unoptimized />
         )}
 
         {/* Dark overlay */}

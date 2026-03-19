@@ -191,12 +191,15 @@ export class BlackjackMultiGameService {
         await this.pool.query(
           `UPDATE blackjack_multi_tables SET status = 'betting' WHERE id = $1`, [tableId],
         );
-        // Create a betting round so the timer has a created_at to track
+        // Create a betting round so the timer has a created_at to track.
+        // server_seed/hash are placeholders — overwritten with real values in startRound().
+        const placeholderSeed = require('crypto').randomBytes(32).toString('hex');
+        const placeholderHash = require('crypto').createHash('sha256').update(placeholderSeed).digest('hex');
         await this.pool.query(
-          `INSERT INTO blackjack_multi_rounds (table_id, round_number, status)
-           SELECT $1, COALESCE(MAX(round_number), 0) + 1, 'betting'
+          `INSERT INTO blackjack_multi_rounds (table_id, round_number, status, server_seed, server_seed_hash)
+           SELECT $1, COALESCE(MAX(round_number), 0) + 1, 'betting', $2, $3
            FROM blackjack_multi_rounds WHERE table_id = $1`,
-          [tableId],
+          [tableId, placeholderSeed, placeholderHash],
         );
       }
 
@@ -348,12 +351,20 @@ export class BlackjackMultiGameService {
         return this.getTableState(tableId);
       }
 
-      // Get current round number
+      // Reuse the existing betting round (created when first player joined), or get next round number
+      const existingRoundResult = await this.pool.query(
+        `SELECT * FROM blackjack_multi_rounds WHERE table_id = $1 AND status = 'betting' ORDER BY created_at DESC LIMIT 1`,
+        [tableId],
+      );
+      const existingRound = existingRoundResult.rows[0] ?? null;
+
       const roundNumResult = await this.pool.query(
         `SELECT COALESCE(MAX(round_number), 0) AS last FROM blackjack_multi_rounds WHERE table_id = $1`,
         [tableId],
       );
-      const roundNumber = Number(roundNumResult.rows[0].last) + 1;
+      const roundNumber = existingRound
+        ? Number(existingRound.round_number)
+        : Number(roundNumResult.rows[0].last) + 1;
 
       // Generate provably fair deck
       const serverSeed = this.pfService.generateServerSeed();
@@ -362,30 +373,41 @@ export class BlackjackMultiGameService {
       const deck = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, roundNumber);
 
       // Initial deal: s0c1, s1c1, …, dealer_c1, s0c2, s1c2, …, dealer_c2
-      // Only betting seats receive cards
       let dp = 0;
       const initialCards1: number[] = bettingSeats.map(() => deck[dp++]);
       const dealerCard1 = deck[dp++];
       const initialCards2: number[] = bettingSeats.map(() => deck[dp++]);
       const dealerCard2 = deck[dp++];
-
       const dealerCards = [dealerCard1, dealerCard2];
       const dealerTotObj = this.pfService.calculateHandTotalV2(dealerCards);
 
-      // Create round
-      const roundResult = await this.pool.query(
-        `INSERT INTO blackjack_multi_rounds
-           (table_id, round_number, dealer_cards, dealer_total, dealer_has_ace,
-            server_seed, server_seed_hash, client_seed, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'playing')
-         RETURNING id`,
-        [
-          tableId, roundNumber,
-          JSON.stringify(dealerCards), dealerTotObj.total, dealerTotObj.hasAce,
-          serverSeed, serverSeedHash, clientSeed,
-        ],
-      );
-      const roundId = roundResult.rows[0].id;
+      let roundId: string;
+      if (existingRound) {
+        // Update the placeholder betting round with real seeds
+        await this.pool.query(
+          `UPDATE blackjack_multi_rounds SET
+             server_seed = $1, server_seed_hash = $2, client_seed = $3,
+             dealer_cards = $4, dealer_total = $5, dealer_has_ace = $6,
+             status = 'playing'
+           WHERE id = $7`,
+          [serverSeed, serverSeedHash, clientSeed,
+           JSON.stringify(dealerCards), dealerTotObj.total, dealerTotObj.hasAce,
+           existingRound.id],
+        );
+        roundId = existingRound.id;
+      } else {
+        // Fallback: insert a new round
+        const roundResult = await this.pool.query(
+          `INSERT INTO blackjack_multi_rounds
+             (table_id, round_number, dealer_cards, dealer_total, dealer_has_ace,
+              server_seed, server_seed_hash, client_seed, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'playing')
+           RETURNING id`,
+          [tableId, roundNumber, JSON.stringify(dealerCards), dealerTotObj.total, dealerTotObj.hasAce,
+           serverSeed, serverSeedHash, clientSeed],
+        );
+        roundId = roundResult.rows[0].id;
+      }
 
       // Create round_seat rows for each betting seat
       for (let i = 0; i < bettingSeats.length; i++) {

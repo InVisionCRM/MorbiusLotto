@@ -212,7 +212,7 @@ export function TableProfile({
                 <iframe
                   src={iframeSrc}
                   title={hasToken && !iframeUrlProp?.trim() ? 'Token chart' : 'Embed'}
-                  className="w-full aspect-video min-h-[320px] border-0"
+                  className="w-full min-h-[600px] border-0"
                   sandbox="allow-scripts allow-same-origin"
                 />
               </div>
