@@ -72,49 +72,181 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-/** Sample avatar-style tiled patterns into solid hex per cell (matches lib/avatar-svg-patterns). */
-const PATTERN_KINDS = ['tiger', 'zebra', 'leopard', 'camo', 'galaxy', 'checkerboard'] as const;
-type PatternKind = (typeof PATTERN_KINDS)[number];
-
-function patternPixel(kind: PatternKind, x: number, y: number): string {
-  const u = x % 4;
-  const v = y % 4;
-  switch (kind) {
-    case 'tiger':
-      if (v === 1 && u <= 1) return '#000000';
-      if (v === 3 && u >= 2) return '#000000';
-      return '#f97316';
-    case 'zebra':
-      return u === 0 || u === 2 ? '#000000' : '#ffffff';
-    case 'leopard':
-      if (u === 0 && v === 0) return '#78350f';
-      if (u === 2 && v === 2) return '#78350f';
-      return '#facc15';
-    case 'camo':
-      if (v === 0 && u < 2) return '#14532d';
-      if (v === 2 && u >= 2) return '#78350f';
-      if (v === 3 && u >= 1 && u < 3) return '#14532d';
-      return '#4d7c0f';
-    case 'galaxy':
-      if (u === 1 && v === 0) return '#ffffff';
-      if (u === 3 && v === 2) return '#c084fc';
-      if (u === 0 && v === 3) return '#38bdf8';
-      return '#0f172a';
-    case 'checkerboard':
-      return (x + y) % 2 === 0 ? '#ffffff' : '#000000';
-    default:
-      return '#3f3f46';
-  }
+/** Generate a random palette of 2-5 colors using HSL for nice distribution. */
+function randomPalette(count?: number): string[] {
+  const n = count ?? (2 + Math.floor(Math.random() * 4));
+  const baseHue = Math.random() * 360;
+  const spread = 30 + Math.random() * 180; // how far apart hues are
+  return Array.from({ length: n }, (_, i) => {
+    const hue = (baseHue + (i / n) * spread) % 360;
+    const sat = 50 + Math.floor(Math.random() * 45);
+    const lit = 25 + Math.floor(Math.random() * 50);
+    return hslToHex(hue, sat, lit);
+  });
 }
 
-function gridFromPattern(kind: PatternKind): Grid {
+function hslToHex(h: number, s: number, l: number): string {
+  const a = (s * Math.min(l, 100 - l)) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round((255 * c) / 100).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+/** Simple 2D value noise for organic patterns. */
+function valueNoise(x: number, y: number, seed: number): number {
+  // Hash function
+  const hash = (ix: number, iy: number) => {
+    let h = ix * 374761393 + iy * 668265263 + seed;
+    h = (h ^ (h >> 13)) * 1274126177;
+    h = h ^ (h >> 16);
+    return (h & 0x7fffffff) / 0x7fffffff;
+  };
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  // Smooth interpolation
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const v00 = hash(ix, iy);
+  const v10 = hash(ix + 1, iy);
+  const v01 = hash(ix, iy + 1);
+  const v11 = hash(ix + 1, iy + 1);
+  return v00 * (1 - sx) * (1 - sy) + v10 * sx * (1 - sy) + v01 * (1 - sx) * sy + v11 * sx * sy;
+}
+
+/** Generate a truly random pattern grid. Picks a random algorithm each time. */
+function generateRandomPattern(): { grid: Grid; label: string } {
+  const algorithms = [
+    generateNoisePattern,
+    generateStripesPattern,
+    generateSpotsPattern,
+    generateBlocksPattern,
+    generateWavesPattern,
+    generatePlasmaPattern,
+  ];
+  const pick = algorithms[Math.floor(Math.random() * algorithms.length)];
+  return pick();
+}
+
+function generateNoisePattern(): { grid: Grid; label: string } {
+  const palette = randomPalette();
+  const seed = Math.floor(Math.random() * 100000);
+  const scale = 2 + Math.random() * 6; // controls "zoom" of noise
   const g = emptyGrid();
   for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID; x++) {
-      g[y][x] = patternPixel(kind, x, y);
+      const n = valueNoise(x / scale, y / scale, seed);
+      const idx = Math.floor(n * palette.length) % palette.length;
+      g[y][x] = palette[idx];
     }
   }
-  return g;
+  return { grid: g, label: `Noise (${palette.length} colors)` };
+}
+
+function generateStripesPattern(): { grid: Grid; label: string } {
+  const palette = randomPalette(2 + Math.floor(Math.random() * 3));
+  const angle = Math.random() * Math.PI; // random stripe angle
+  const width = 2 + Math.floor(Math.random() * 5); // stripe width
+  const g = emptyGrid();
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const proj = x * Math.cos(angle) + y * Math.sin(angle);
+      const idx = Math.floor(proj / width) % palette.length;
+      g[y][x] = palette[(idx + palette.length) % palette.length];
+    }
+  }
+  return { grid: g, label: `Stripes (${palette.length} colors)` };
+}
+
+function generateSpotsPattern(): { grid: Grid; label: string } {
+  const bgColor = hslToHex(Math.random() * 360, 20 + Math.random() * 30, 15 + Math.random() * 25);
+  const spotColors = randomPalette(1 + Math.floor(Math.random() * 3));
+  const numSpots = 8 + Math.floor(Math.random() * 20);
+  const g = emptyGrid();
+  // Fill background
+  for (let y = 0; y < GRID_H; y++)
+    for (let x = 0; x < GRID; x++)
+      g[y][x] = bgColor;
+  // Place random spots
+  for (let i = 0; i < numSpots; i++) {
+    const cx = Math.random() * GRID;
+    const cy = Math.random() * GRID_H;
+    const r = 1 + Math.random() * 3;
+    const sc = spotColors[Math.floor(Math.random() * spotColors.length)];
+    for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(GRID_H - 1, Math.ceil(cy + r)); y++) {
+      for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(GRID - 1, Math.ceil(cx + r)); x++) {
+        if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) {
+          g[y][x] = sc;
+        }
+      }
+    }
+  }
+  return { grid: g, label: `Spots (${numSpots} dots)` };
+}
+
+function generateBlocksPattern(): { grid: Grid; label: string } {
+  const palette = randomPalette(3 + Math.floor(Math.random() * 4));
+  const g = emptyGrid();
+  // Fill with base color
+  const base = palette[0];
+  for (let y = 0; y < GRID_H; y++)
+    for (let x = 0; x < GRID; x++)
+      g[y][x] = base;
+  // Place random rectangles
+  const numRects = 6 + Math.floor(Math.random() * 12);
+  for (let i = 0; i < numRects; i++) {
+    const rx = Math.floor(Math.random() * GRID);
+    const ry = Math.floor(Math.random() * GRID_H);
+    const rw = 2 + Math.floor(Math.random() * 8);
+    const rh = 2 + Math.floor(Math.random() * 8);
+    const rc = palette[1 + Math.floor(Math.random() * (palette.length - 1))];
+    for (let y = ry; y < Math.min(GRID_H, ry + rh); y++)
+      for (let x = rx; x < Math.min(GRID, rx + rw); x++)
+        g[y][x] = rc;
+  }
+  return { grid: g, label: `Blocks (${numRects} rects)` };
+}
+
+function generateWavesPattern(): { grid: Grid; label: string } {
+  const palette = randomPalette(3 + Math.floor(Math.random() * 3));
+  const freq = 0.15 + Math.random() * 0.4;
+  const amp = 2 + Math.random() * 6;
+  const phase = Math.random() * Math.PI * 2;
+  const g = emptyGrid();
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const wave = Math.sin(x * freq + phase) * amp + y;
+      const band = Math.floor(wave / (GRID_H / palette.length));
+      const idx = ((band % palette.length) + palette.length) % palette.length;
+      g[y][x] = palette[idx];
+    }
+  }
+  return { grid: g, label: `Waves (${palette.length} bands)` };
+}
+
+function generatePlasmaPattern(): { grid: Grid; label: string } {
+  const palette = randomPalette(4 + Math.floor(Math.random() * 4));
+  const seed1 = Math.random() * 100;
+  const seed2 = Math.random() * 100;
+  const g = emptyGrid();
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const v = (
+        Math.sin(x * 0.3 + seed1) +
+        Math.sin(y * 0.3 + seed2) +
+        Math.sin((x + y) * 0.2) +
+        Math.sin(Math.sqrt(x * x + y * y) * 0.3)
+      ) / 4; // -1 to 1
+      const norm = (v + 1) / 2; // 0 to 1
+      const idx = Math.floor(norm * palette.length) % palette.length;
+      g[y][x] = palette[idx];
+    }
+  }
+  return { grid: g, label: `Plasma (${palette.length} colors)` };
 }
 
 function gridFromGradientDef(def: GradientDef): Grid {
@@ -348,9 +480,9 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
   const handleRandomPattern = () => {
     setErr(null);
     setSuccess(null);
-    const kind = PATTERN_KINDS[Math.floor(Math.random() * PATTERN_KINDS.length)];
-    setGrid(gridFromPattern(kind));
-    setSuccess(`Pattern: ${kind}`);
+    const { grid: g, label } = generateRandomPattern();
+    setGrid(g);
+    setSuccess(`Pattern: ${label}`);
   };
 
   const handleRandomGradient = () => {
@@ -452,21 +584,6 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
                 }}
                 onMouseDown={handleMouseDown}
               >
-                {/* Reference ghost avatar */}
-                {showRef && (
-                  <div
-                    className="absolute inset-0 pointer-events-none"
-                    style={{ opacity: 0.35 }}
-                  >
-                    <AvatarPreview
-                      config={{ ...refConfig, overlayImage: '' }}
-                      emotion="neutral"
-                      compact={false}
-                      className="w-full h-full"
-                    />
-                  </div>
-                )}
-
                 {/* Checkerboard transparency indicator */}
                 <div
                   className="absolute inset-0 pointer-events-none"
@@ -479,6 +596,21 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
                   }}
                 />
 
+                {/* Reference ghost avatar */}
+                {showRef && (
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ opacity: 1, zIndex: 1 }}
+                  >
+                    <AvatarPreview
+                      config={{ ...refConfig, overlayImage: '' }}
+                      emotion="neutral"
+                      compact={false}
+                      className="w-full h-full"
+                    />
+                  </div>
+                )}
+
                 {/* Painted pixels */}
                 <svg
                   viewBox={`0 0 ${GRID} ${GRID_H}`}
@@ -486,7 +618,7 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
                   height={GRID_H * CELL}
                   className="absolute inset-0"
                   shapeRendering="crispEdges"
-                  style={{ zIndex: 1 }}
+                  style={{ zIndex: 2 }}
                 >
                   {grid.flatMap((row, y) =>
                     row.map((c, x) =>
@@ -501,7 +633,7 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
                   width={GRID * CELL}
                   height={GRID_H * CELL}
                   className="absolute inset-0 pointer-events-none"
-                  style={{ zIndex: 2 }}
+                  style={{ zIndex: 3 }}
                 >
                   {/* Vertical lines */}
                   {Array.from({ length: GRID + 1 }, (_, i) => (

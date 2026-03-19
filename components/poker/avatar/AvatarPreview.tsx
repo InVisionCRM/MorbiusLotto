@@ -979,13 +979,91 @@ export default function AvatarPreview({
 
   const renderMouthAccessory = () => {
     switch (config.mouthAccessory) {
-      case 'Cigar': return <g><rect x="13" y="16" width="4" height="1" fill="#78350f" /><rect x="17" y="16" width="1" height="1" fill="#ef4444" /></g>;
-      case 'Cigarette': return <g><rect x="13" y="16" width="3" height="1" fill="#fff" /><rect x="16" y="16" width="1" height="1" fill="#f97316" /></g>;
-      case 'Pipe': return <g><rect x="13" y="16" width="4" height="1" fill="#451a03" /><rect x="16" y="15" width="2" height="2" fill="#451a03" /></g>;
+      case 'Cigar': return (
+        <g>
+          <rect x="13" y="16" width="4" height="1" fill="#78350f" />
+          {/* Animated ember tip */}
+          <motion.rect x="17" y="16" width="1" height="1"
+            animate={{ fill: ['#ef4444', '#ff6b1a', '#ffdd33', '#ff6b1a', '#ef4444'] }}
+            transition={{ repeat: Infinity, duration: 2 + Math.random() * 2, ease: 'easeInOut' }}
+          />
+        </g>
+      );
+      case 'Cigarette': return (
+        <g>
+          <rect x="13" y="16" width="3" height="1" fill="#fff" />
+          {/* Animated ember tip */}
+          <motion.rect x="16" y="16" width="1" height="1"
+            animate={{ fill: ['#f97316', '#ff8c1a', '#ffcc33', '#ff8c1a', '#f97316'] }}
+            transition={{ repeat: Infinity, duration: 1.5 + Math.random() * 2, ease: 'easeInOut' }}
+          />
+        </g>
+      );
+      case 'Pipe': return (
+        <g>
+          <rect x="13" y="16" width="4" height="1" fill="#451a03" />
+          <rect x="16" y="15" width="2" height="2" fill="#451a03" />
+          {/* Animated ember glow inside bowl */}
+          <motion.rect x="16.25" y="15.1" width="1.5" height="0.6" rx="0.2"
+            animate={{ fill: ['#ef4444', '#ff6b1a', '#ffcc33', '#ff6b1a', '#ef4444'], opacity: [0.6, 0.9, 0.6] }}
+            transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
+          />
+        </g>
+      );
       case 'Bubblegum': return <rect x="12" y="14" width="4" height="4" rx="2" fill="#f472b6" opacity="0.9" />;
       case 'Medical Mask': return <g><rect x="8" y="14" width="8" height="4" fill="#bae6fd" /><rect x="6" y="14" width="2" height="1" fill="#e0f2fe" /><rect x="16" y="14" width="2" height="1" fill="#e0f2fe" /></g>;
       default: return null;
     }
+  };
+
+  /** Smoke particles rising from cigar / cigarette / pipe */
+  const renderSmokingEffects = () => {
+    // Determine smoke origin based on accessory type
+    let originX: number, originY: number;
+    switch (config.mouthAccessory) {
+      case 'Cigar':     originX = 17.5; originY = 15.5; break;
+      case 'Cigarette': originX = 16.5; originY = 15.5; break;
+      case 'Pipe':      originX = 17;   originY = 14.5; break;
+      default: return null;
+    }
+
+    // 6 smoke particles with staggered timing and different drift paths
+    const particles = [
+      { dx: 0.3,  rise: -6,  size: 0.6, dur: 2.8, delay: 0 },
+      { dx: -0.5, rise: -7,  size: 0.7, dur: 3.2, delay: 0.5 },
+      { dx: 0.8,  rise: -8,  size: 0.8, dur: 3.5, delay: 1.0 },
+      { dx: -0.2, rise: -5,  size: 0.5, dur: 2.5, delay: 1.5 },
+      { dx: 1.1,  rise: -9,  size: 0.9, dur: 3.8, delay: 2.0 },
+      { dx: -0.8, rise: -7,  size: 0.7, dur: 3.0, delay: 2.5 },
+    ];
+
+    return (
+      <g>
+        {particles.map((p, i) => (
+          <motion.rect
+            key={`smoke-${i}`}
+            x={originX - p.size / 2}
+            y={originY}
+            width={p.size}
+            height={p.size}
+            rx={p.size / 2}
+            fill="#9ca3af"
+            animate={{
+              y: [originY, originY + p.rise * 0.3, originY + p.rise],
+              x: [originX - p.size / 2, originX - p.size / 2 + p.dx * 0.5, originX - p.size / 2 + p.dx * 2],
+              opacity: [0, 0.35, 0.2, 0],
+              scale: [0.5, 1, 1.8],
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: p.dur,
+              delay: p.delay,
+              ease: 'easeOut',
+            }}
+          />
+        ))}
+      </g>
+    );
   };
 
   // ── emotion particle effects (full-size only) ─────────────────────────────
@@ -1201,6 +1279,7 @@ export default function AvatarPreview({
                 </motion.g>
                 <motion.g animate={{ y: offsets.mouth.y - offsets.eyes.y }}>
                   {renderMouthAccessory()}
+                  {renderSmokingEffects()}
                 </motion.g>
               </motion.g>
             </motion.g>
