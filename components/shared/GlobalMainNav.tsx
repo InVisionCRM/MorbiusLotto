@@ -306,6 +306,11 @@ function NavContent(props: {
         {page === 'blackjack' && (
           <>
             <SidebarButton label="Play" icon={<i className={`fas fa-play w-5 text-center shrink-0 ${navItem('', 'fa-play', currentView === 'game')}`} aria-hidden />} onClick={() => onViewChange?.('game')} active={currentView === 'game'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'game')}`} />
+            {isAdmin && (
+              <a href="/blackjack-multi" className="w-full">
+                <SidebarButton label="Multiplayer" icon={<i className="fas fa-users w-5 text-center text-cyan-400 shrink-0" aria-hidden />} className="rounded-lg px-2 py-2 transition-colors text-white hover:bg-white/5 w-full" />
+              </a>
+            )}
             {isDeployer && (
               <SidebarButton label="Analytics" icon={<i className={`fas fa-chart-line w-5 text-center shrink-0 ${navItem('', 'fa-chart-line', currentView === 'analytics')}`} aria-hidden />} onClick={() => onViewChange?.('analytics')} active={currentView === 'analytics'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'analytics')}`} />
             )}

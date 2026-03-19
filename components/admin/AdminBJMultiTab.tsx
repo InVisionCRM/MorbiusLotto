@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
-import { getApiUrl } from '@/lib/api-urls';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +39,7 @@ export default function AdminBJMultiTab() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${getApiUrl()}/api/admin/bj-multi/tables`);
+      const res = await fetch(`/api/bj-multi/admin/tables`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load tables');
       setTables(data.tables);
@@ -59,7 +58,7 @@ export default function AdminBJMultiTab() {
     try {
       const minBet = parseEther(minBetEther || '1').toString();
       const maxBet = parseEther(maxBetEther || '100000').toString();
-      const res = await fetch(`${getApiUrl()}/api/admin/bj-multi/tables`, {
+      const res = await fetch(`/api/bj-multi/admin/tables`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ minBet, maxBet }),
@@ -80,7 +79,7 @@ export default function AdminBJMultiTab() {
     setDeletingId(tableId);
     setError(null);
     try {
-      const res = await fetch(`${getApiUrl()}/api/admin/bj-multi/tables/${tableId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/bj-multi/admin/tables/${tableId}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to delete table');
       await fetchTables();
