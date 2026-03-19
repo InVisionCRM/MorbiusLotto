@@ -3391,11 +3391,11 @@ export class WebSocketService {
       }
     }
 
-    // Transition waiting tables with seated players to betting (so next round can start)
+    // Transition waiting/completed tables with seated players to betting (so next round can start)
     const waitingWithSeats = await pool.query(`
       SELECT t.id AS table_id
       FROM blackjack_multi_tables t
-      WHERE t.status = 'waiting'
+      WHERE t.status IN ('waiting', 'completed')
         AND EXISTS (SELECT 1 FROM blackjack_multi_seats s WHERE s.table_id = t.id)
     `);
     for (const row of waitingWithSeats.rows) {

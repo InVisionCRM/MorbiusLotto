@@ -296,7 +296,7 @@ function OnchainActions({
         setStep('done');
         setMsg('✓ Root set on-chain! Epoch is now published — users can claim.');
         try {
-          const publishRes = await fetch(`${apiBase}/api/admin/merkle-lp/epoch/${epoch.id}/publish`, {
+          const publishRes = await fetch(`${adminBase}/api/admin/merkle-lp/epoch/${epoch.id}/publish`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-admin-wallet': adminAddr },
           });
@@ -405,11 +405,15 @@ function OnchainActions({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+// Admin API must be called same-origin so Next.js proxy can inject x-admin-secret (backend returns 403 otherwise).
+const ADMIN_API_BASE = '';
+
 export default function AdminLPStakingTab() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const apiBase = getApiUrlOptional() ?? '';
+  const adminBase = ADMIN_API_BASE;
 
   // Contract balance
   const { data: merkleLPBalance, refetch: refetchBalance } = useReadContract({
@@ -491,7 +495,7 @@ export default function AdminLPStakingTab() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/epochs`, { headers: adminHeaders() });
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/epochs`, { headers: adminHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setEpochs(Array.isArray(data) ? data : []);
@@ -506,7 +510,7 @@ export default function AdminLPStakingTab() {
     if (!address) return;
     setLoadingPairs(true);
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/pairs`, { headers: adminHeaders() });
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/pairs`, { headers: adminHeaders() });
       const data = await res.json();
       setPairs(Array.isArray(data) ? data : []);
     } catch {
@@ -520,7 +524,7 @@ export default function AdminLPStakingTab() {
     if (!address) return;
     setBlocklistLoading(true);
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/blocklist`, { headers: adminHeaders() });
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/blocklist`, { headers: adminHeaders() });
       const data = await res.json();
       setBlocklist(Array.isArray(data) ? data : []);
     } catch { /* non-critical */ } finally {
@@ -531,7 +535,7 @@ export default function AdminLPStakingTab() {
   const fetchSettings = useCallback(async () => {
     if (!address) return;
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/settings`, { headers: adminHeaders() });
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/settings`, { headers: adminHeaders() });
       if (res.ok) {
         const data = await res.json() as LPSettings;
         setSettings(data);
@@ -550,7 +554,7 @@ export default function AdminLPStakingTab() {
       [epochId]: { rows: prev[epochId]?.rows ?? [], total: prev[epochId]?.total ?? 0, page, loading: true },
     }));
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/epoch/${epochId}/snapshot?page=${page}&pageSize=50`, {
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/epoch/${epochId}/snapshot?page=${page}&pageSize=50`, {
         headers: adminHeaders(),
       });
       const data = await res.json();
@@ -573,7 +577,7 @@ export default function AdminLPStakingTab() {
     setSettingsBusy(true);
     setSettingsMsg('');
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/settings`, {
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/settings`, {
         method: 'POST',
         headers: adminHeaders(),
         body: JSON.stringify(settingsDraft),
@@ -598,7 +602,7 @@ export default function AdminLPStakingTab() {
     setAddingPair(true);
     setPairError('');
     try {
-      const r = await fetch(`${apiBase}/api/admin/merkle-lp/pairs`, {
+      const r = await fetch(`${adminBase}/api/admin/merkle-lp/pairs`, {
         method: 'POST',
         headers: adminHeaders(),
         body: JSON.stringify({
@@ -623,7 +627,7 @@ export default function AdminLPStakingTab() {
 
   const togglePair = async (pairAddress: string, active: boolean) => {
     try {
-      await fetch(`${apiBase}/api/admin/merkle-lp/pairs/${pairAddress}`, {
+      await fetch(`${adminBase}/api/admin/merkle-lp/pairs/${pairAddress}`, {
         method: 'PATCH',
         headers: adminHeaders(),
         body: JSON.stringify({ active }),
@@ -635,7 +639,7 @@ export default function AdminLPStakingTab() {
   const deletePair = async (pairAddress: string) => {
     if (!confirm('Remove this LP pair from snapshots?')) return;
     try {
-      await fetch(`${apiBase}/api/admin/merkle-lp/pairs/${pairAddress}`, {
+      await fetch(`${adminBase}/api/admin/merkle-lp/pairs/${pairAddress}`, {
         method: 'DELETE',
         headers: adminHeaders(),
       });
@@ -687,7 +691,7 @@ export default function AdminLPStakingTab() {
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/epoch/create`, {
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/epoch/create`, {
         method: 'POST',
         headers: adminHeaders(),
       });
@@ -710,7 +714,7 @@ export default function AdminLPStakingTab() {
     setQuickCreating(true);
     setError(null);
     try {
-      const createRes = await fetch(`${apiBase}/api/admin/merkle-lp/epoch/create`, {
+      const createRes = await fetch(`${adminBase}/api/admin/merkle-lp/epoch/create`, {
         method: 'POST',
         headers: adminHeaders(),
       });
@@ -718,7 +722,7 @@ export default function AdminLPStakingTab() {
       if (!createRes.ok) throw new Error(epochData.error || `HTTP ${createRes.status}`);
       const epochId = epochData.id;
 
-      const calcRes = await fetch(`${apiBase}/api/admin/merkle-lp/epoch/${epochId}/calculate`, {
+      const calcRes = await fetch(`${adminBase}/api/admin/merkle-lp/epoch/${epochId}/calculate`, {
         method: 'POST',
         headers: adminHeaders(),
         body: JSON.stringify({ newRewardAmount: settings.default_reward_wei }),
@@ -738,7 +742,7 @@ export default function AdminLPStakingTab() {
   const handleSnapshot = async (epochId: number) => {
     setEpochBusy(epochId, true); setEpochMsg(epochId, '');
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/epoch/${epochId}/snapshot`, { method: 'POST', headers: adminHeaders() });
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/epoch/${epochId}/snapshot`, { method: 'POST', headers: adminHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setEpochMsg(epochId, `✓ Snapshot: ${data.total_holders ?? '?'} holders`);
@@ -756,7 +760,7 @@ export default function AdminLPStakingTab() {
     const weiAmount = (BigInt(Math.round(Number(raw) * 1e9)) * BigInt(1e9)).toString();
     setEpochBusy(epochId, true); setEpochMsg(epochId, '');
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/epoch/${epochId}/calculate`, {
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/epoch/${epochId}/calculate`, {
         method: 'POST', headers: adminHeaders(),
         body: JSON.stringify({ newRewardAmount: weiAmount }),
       });
@@ -776,7 +780,7 @@ export default function AdminLPStakingTab() {
   const handleFinalize = async (epochId: number) => {
     setEpochBusy(epochId, true); setEpochMsg(epochId, '');
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/epoch/${epochId}/finalize`, { method: 'POST', headers: adminHeaders() });
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/epoch/${epochId}/finalize`, { method: 'POST', headers: adminHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setEpochMsg(epochId, `✓ Root: ${data.root?.slice(0, 18)}…`);
@@ -795,7 +799,7 @@ export default function AdminLPStakingTab() {
   const handleManualPublish = async (epochId: number) => {
     setEpochBusy(epochId, true); setEpochMsg(epochId, '');
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/epoch/${epochId}/publish`, {
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/epoch/${epochId}/publish`, {
         method: 'POST', headers: adminHeaders(),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -823,7 +827,7 @@ export default function AdminLPStakingTab() {
       setEpochMsg(epoch.id, `Revoking on-chain… tx: ${hash.slice(0, 14)}…`);
       await publicClient!.waitForTransactionReceipt({ hash });
       try {
-        await fetch(`${apiBase}/api/admin/merkle-lp/epoch/${epoch.id}/revoke`, {
+        await fetch(`${adminBase}/api/admin/merkle-lp/epoch/${epoch.id}/revoke`, {
           method: 'POST',
           headers: adminHeaders(),
         });
@@ -843,7 +847,7 @@ export default function AdminLPStakingTab() {
     if (!/^0x[0-9a-fA-F]{40}$/.test(newBlockAddr.trim())) { setError('Invalid address'); return; }
     setBlocklistBusy(true);
     try {
-      const res = await fetch(`${apiBase}/api/admin/merkle-lp/blocklist`, {
+      const res = await fetch(`${adminBase}/api/admin/merkle-lp/blocklist`, {
         method: 'POST', headers: adminHeaders(),
         body: JSON.stringify({ address: newBlockAddr.trim(), reason: newBlockReason.trim() }),
       });
@@ -860,7 +864,7 @@ export default function AdminLPStakingTab() {
   const handleRemoveFromBlocklist = async (addr: string) => {
     setBlocklistBusy(true);
     try {
-      await fetch(`${apiBase}/api/admin/merkle-lp/blocklist/${addr}`, { method: 'DELETE', headers: adminHeaders() });
+      await fetch(`${adminBase}/api/admin/merkle-lp/blocklist/${addr}`, { method: 'DELETE', headers: adminHeaders() });
       await fetchBlocklist();
     } catch { /* non-critical */ } finally {
       setBlocklistBusy(false);
@@ -876,7 +880,7 @@ export default function AdminLPStakingTab() {
       const toAdd = SNAPSHOT_EXCLUSION_CONTRACTS.filter((addr) => addr && !existingSet.has(addr.toLowerCase()));
       for (let i = 0; i < toAdd.length; i++) {
         const addr = toAdd[i].startsWith('0x') ? toAdd[i] : `0x${toAdd[i]}`;
-        const res = await fetch(`${apiBase}/api/admin/merkle-lp/blocklist`, {
+        const res = await fetch(`${adminBase}/api/admin/merkle-lp/blocklist`, {
           method: 'POST',
           headers: adminHeaders(),
           body: JSON.stringify({ address: addr, reason: 'ALL_DEPLOYMENTS.MD / game or LP contract' }),
@@ -1508,7 +1512,7 @@ export default function AdminLPStakingTab() {
                               <OnchainActions
                                 epoch={epoch}
                                 adminAddr={address}
-                                apiBase={apiBase}
+                                apiBase={adminBase}
                                 onPublished={handlePublished}
                               />
                             </div>

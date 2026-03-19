@@ -168,7 +168,7 @@ export class BlackjackMultiGameService {
       );
       if (tableResult.rows.length === 0) throw new Error('Table not found');
       const table = tableResult.rows[0];
-      if (!['waiting', 'betting'].includes(table.status)) {
+      if (!['waiting', 'betting', 'completed'].includes(table.status)) {
         throw new Error('Table is not accepting players right now');
       }
       if (![0, 1, 2].includes(seatPosition)) throw new Error('Invalid seat position');
@@ -187,7 +187,7 @@ export class BlackjackMultiGameService {
       );
 
       // Transition to betting as soon as the first player joins
-      if (table.status === 'waiting') {
+      if (table.status === 'waiting' || table.status === 'completed') {
         await this.pool.query(
           `UPDATE blackjack_multi_tables SET status = 'betting' WHERE id = $1`, [tableId],
         );
@@ -282,8 +282,8 @@ export class BlackjackMultiGameService {
         [betAmount.toString(), tableId, normalized],
       );
 
-      // If table is still 'waiting', advance it to 'betting'
-      if (table.status === 'waiting') {
+      // If table is still 'waiting' or 'completed', advance it to 'betting'
+      if (table.status === 'waiting' || table.status === 'completed') {
         await this.pool.query(
           `UPDATE blackjack_multi_tables SET status = 'betting' WHERE id = $1`, [tableId],
         );
@@ -616,7 +616,7 @@ export class BlackjackMultiGameService {
       );
       if (tableResult.rows.length === 0) return;
       const table = tableResult.rows[0];
-      if (table.status !== 'waiting') return;
+      if (table.status !== 'waiting' && table.status !== 'completed') return;
 
       const seatsResult = await this.pool.query(
         `SELECT id FROM blackjack_multi_seats WHERE table_id = $1`, [tableId],
@@ -682,9 +682,14 @@ export class BlackjackMultiGameService {
       );
       const bettingSeats = seatsResult.rows.filter(s => BigInt(s.pending_bet || '0') > 0n);
       if (bettingSeats.length === 0) {
-        // Nothing to do, revert to waiting
+        // No bets — revert to waiting and cancel the betting round so
+        // startBettingPhase can create a fresh one on next timer tick.
         await this.pool.query(
           `UPDATE blackjack_multi_tables SET status = 'waiting' WHERE id = $1`, [tableId],
+        );
+        await this.pool.query(
+          `UPDATE blackjack_multi_rounds SET status = 'completed', completed_at = NOW()
+           WHERE table_id = $1 AND status = 'betting'`, [tableId],
         );
         shouldBroadcast = true;
         revertedToWaiting = true;
@@ -1163,13 +1168,15 @@ export class BlackjackMultiGameService {
       }
     }
 
-    // Reveal server seed and mark complete
+    // Reveal server seed and mark complete.
+    // Table goes to 'completed' (NOT 'waiting') so getTableState still returns round
+    // data (dealer cards, results, payouts). The timer watchdog transitions to betting later.
     await this.pool.query(
       `UPDATE blackjack_multi_rounds SET status = 'completed', completed_at = NOW() WHERE id = $1`,
       [roundId],
     );
     await this.pool.query(
-      `UPDATE blackjack_multi_tables SET status = 'waiting' WHERE id = $1`, [tableId],
+      `UPDATE blackjack_multi_tables SET status = 'completed' WHERE id = $1`, [tableId],
     );
   }
 
