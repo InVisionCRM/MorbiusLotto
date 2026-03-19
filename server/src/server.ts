@@ -1622,7 +1622,7 @@ async function initializeServices() {
       try {
         const { minBet, maxBet, themeKind, themeId } = req.body as { minBet?: string; maxBet?: string; themeKind?: string; themeId?: string };
         const min = minBet ? BigInt(minBet) : BigInt('1000000000000000000');
-        const max = maxBet ? BigInt(maxBet) : BigInt('100000000000000000000000');
+        const max = maxBet ? BigInt(maxBet) : BigInt('50000000000000000000000');
         const table = await bjMultiService.createTable(min, max, themeKind, themeId);
         res.json({ tableId: table.id });
       } catch (error) {

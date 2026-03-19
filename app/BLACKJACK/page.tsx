@@ -39,7 +39,7 @@ import {
   TournamentPinEntry,
 } from '@/components/BLACKJACK/Tournament';
 import { CreateTournamentRequest, TournamentListItem } from '@/lib/tournament-types';
-import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind } from './constants';
+import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_PLAYER_WINS, SOUNDS_DEALER_WINS, SOUND_PUSH, SOUND_PLAYER_BLACKJACK, pickRandom } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -51,7 +51,7 @@ import { toBigIntSafe } from '@/lib/safe-bigint';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
 import { useTokenApproval } from '@/hooks/use-token-approval';
-import { useAudio } from '@/hooks/use-audio';
+import { useAudio, AudioManager } from '@/hooks/use-audio';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 import { AdSpace } from '@/components/shared/AdSpace';
 
@@ -202,6 +202,34 @@ export default function BlackjackPage() {
   const prefLoadedRef = useRef(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const { playSound } = useAudio(soundEnabled);
+  const dealerVoiceRef = useRef<{ source: AudioBufferSourceNode; gain: GainNode } | null>(null);
+
+  // Play a dealer voice line on a dedicated channel (stops any currently playing voice)
+  const playDealerVoice = useCallback(async (path: string, volume = 0.5) => {
+    if (!soundEnabled) return;
+    if (dealerVoiceRef.current) {
+      try { dealerVoiceRef.current.source.stop(); } catch { /* already stopped */ }
+      dealerVoiceRef.current = null;
+    }
+    const ctx = AudioManager.getContext();
+    if (!ctx || ctx.state !== 'running') { playSound(path, volume); return; }
+    try {
+      const buf = await AudioManager.loadSound(path);
+      if (!buf) return;
+      const source = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      source.buffer = buf;
+      gain.gain.value = volume;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.onended = () => { if (dealerVoiceRef.current?.source === source) dealerVoiceRef.current = null; };
+      source.start(0);
+      dealerVoiceRef.current = { source, gain };
+    } catch {
+      playSound(path, volume);
+    }
+  }, [soundEnabled, playSound]);
+
   const [videoSource, setVideoSource] = useState<string>('glowingTable');
   const [videoSyncToClock, setVideoSyncToClock] = useState(true);
   const [videoPosition, setVideoPosition] = useState(50); // 0-100, used when sync to clock is off
@@ -1891,13 +1919,17 @@ export default function BlackjackPage() {
       chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
       setCurrentGameResult(pendingChipResult);
       setPendingChipResult(null);
-      // Play sound: dealer wins (including dealer blackjack)
-      if (soundEnabled && pendingChipResult === 'loss') {
-        playSound('/BlackJack/sounds/DealerWins.mp3');
-      }
-      // Play sound: player wins (including player blackjack — same as any other win). Never on push.
-      if (soundEnabled && pendingChipResult !== 'push' && (pendingChipResult === 'win' || pendingChipResult === 'blackjack')) {
-        playSound('/BlackJack/sounds/PlayerWins.mp3');
+      // Dealer voice outcome sounds
+      if (soundEnabled) {
+        if (pendingChipResult === 'loss') {
+          playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
+        } else if (pendingChipResult === 'blackjack') {
+          playDealerVoice(SOUND_PLAYER_BLACKJACK);
+        } else if (pendingChipResult === 'win') {
+          playDealerVoice(pickRandom(SOUNDS_PLAYER_WINS));
+        } else if (pendingChipResult === 'push') {
+          playDealerVoice(SOUND_PUSH);
+        }
       }
     }
 
@@ -2001,7 +2033,7 @@ export default function BlackjackPage() {
     // Refresh game history lists so Recent Games / Recent Plays update immediately
     queryClient.invalidateQueries({ queryKey: ['playerGames'] });
     queryClient.invalidateQueries({ queryKey: ['blackjackRecentGamesGlobal'] });
-  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, fetchBalance, address, tournament, queryClient]);
+  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, playDealerVoice, fetchBalance, address, tournament, queryClient]);
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {

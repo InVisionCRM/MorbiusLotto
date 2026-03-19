@@ -2,6 +2,17 @@
 
 import { CardValue, Suit, Card } from './types';
 
+// ── Dealer voice sound pools (shared by single-player and multiplayer) ──
+export const SOUNDS_BETTING_OPEN = Array.from({ length: 6 }, (_, i) => `/BlackJack/sounds/betting-open-${i + 1}.mp3`);
+export const SOUNDS_BETTING_CLOSED = Array.from({ length: 5 }, (_, i) => `/BlackJack/sounds/betting-closed-${i + 1}.mp3`);
+export const SOUNDS_DEALER_PHRASE = Array.from({ length: 19 }, (_, i) => `/BlackJack/sounds/dealer-phrase-${i + 1}.mp3`);
+export const SOUNDS_PLAYER_WINS = Array.from({ length: 3 }, (_, i) => `/BlackJack/sounds/player-wins-${i + 1}.mp3`);
+export const SOUNDS_DEALER_WINS = Array.from({ length: 4 }, (_, i) => `/BlackJack/sounds/dealer-wins-${i + 1}.mp3`);
+export const SOUNDS_TIP = Array.from({ length: 7 }, (_, i) => `/BlackJack/sounds/tip-${i + 1}.mp3`);
+export const SOUND_PUSH = '/BlackJack/sounds/push-1.mp3';
+export const SOUND_PLAYER_BLACKJACK = '/BlackJack/sounds/player-blackjack.mp3';
+export function pickRandom(arr: string[]) { return arr[Math.floor(Math.random() * arr.length)]; }
+
 // Card values mapping
 export const CARD_VALUES: Record<CardValue, string> = {
   1: 'A',
@@ -56,7 +67,7 @@ export const TOTAL_CARDS = DECKS * CARDS_PER_DECK;
 // Bet limits (in MORBIUS, 18 decimals)
 export const BET_LIMITS = {
   MIN_BET: BigInt(1_000_000_000_000_000_000),           // 1 MORBIUS
-  MAX_BET: BigInt(100_000_000_000_000_000_000_000),    // 100,000 MORBIUS
+  MAX_BET: BigInt(50_000_000_000_000_000_000_000),     // 50,000 MORBIUS
 };
 
 // Animation timings (in milliseconds)

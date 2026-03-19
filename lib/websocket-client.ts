@@ -624,6 +624,7 @@ export class BlackjackWebSocketClient {
   private attemptReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       logger.error('Max reconnection attempts reached');
+      this.emit('reconnect_failed', { attempts: this.reconnectAttempts });
       return;
     }
 
@@ -631,12 +632,23 @@ export class BlackjackWebSocketClient {
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
 
     logger.info(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    this.emit('reconnecting', { attempt: this.reconnectAttempts, maxAttempts: this.maxReconnectAttempts, delay });
 
     setTimeout(() => {
-      this.connect().catch(() => {
-        // Connection failed, will retry
-      });
+      this.connect()
+        .then(() => {
+          this.emit('reconnected', {});
+        })
+        .catch(() => {
+          // Connection failed, will retry via onclose -> attemptReconnect
+        });
     }, delay);
+  }
+
+  /** Emit an event to registered handlers. */
+  private emit(event: string, payload: any): void {
+    const handlers = this.messageHandlers.get(event);
+    if (handlers) handlers.forEach(h => h(payload));
   }
 
   /**

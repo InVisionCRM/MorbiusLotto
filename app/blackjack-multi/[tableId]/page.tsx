@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
@@ -14,13 +14,16 @@ import PlayingCard from '@/components/BLACKJACK/PlayingCard';
 import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { BlackjackMobileActionBar } from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile';
+import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
+import type { Emotion } from '@/components/poker/avatar/AvatarPreview';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, MessageCircle, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 import { CardValue, Suit } from '@/app/BLACKJACK/types';
 import Image from 'next/image';
-import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS } from '@/app/BLACKJACK/constants';
-import { useAudio } from '@/hooks/use-audio';
+import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTING_OPEN, SOUNDS_BETTING_CLOSED, SOUNDS_DEALER_PHRASE, SOUNDS_PLAYER_WINS, SOUNDS_DEALER_WINS, SOUNDS_TIP, SOUND_PUSH, SOUND_PLAYER_BLACKJACK, pickRandom } from '@/app/BLACKJACK/constants';
+import { useAudio, AudioManager } from '@/hooks/use-audio';
+import { usePlayerStatsEnhanced } from '@/hooks/use-blackjack-stats';
 
 const TURN_TIMEOUT = 30;
 const BETTING_TIMEOUT = 15;
@@ -70,6 +73,20 @@ function useCountdown(startedAt: string | null, maxSeconds: number) {
 const POSITIONS = [0, 1, 2] as const;
 const AVATAR_SIZE = 56;
 
+// Avatar animation constants — matches poker system
+const AVATAR_EMOTION_DURATION_MS = 3000;
+const AVATAR_EMOTION_WINK_MS = 1200;
+const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
+  { title: 'Happy',     emotion: 'happy'     },
+  { title: 'Wink',      emotion: 'wink'      },
+  { title: 'Surprised', emotion: 'surprised' },
+  { title: 'Angry',     emotion: 'angry'     },
+  { title: 'Sad',       emotion: 'sad'       },
+  { title: 'Dance',     emotion: 'dance'     },
+  { title: 'Jackpot',   emotion: 'jackpot'   },
+  { title: 'Sink',      emotion: 'sink'      },
+];
+
 
 function indexToCard(idx: number) {
   const rank = (idx % 13) + 1;
@@ -104,8 +121,38 @@ function Seat({
     r === 'loss' ? 'text-red-400' :
     r === 'push' ? 'text-yellow-400' : '';
 
+  // Avatar animations — matches poker system
+  const [localEmotion, setLocalEmotion] = useState<Emotion | null>(null);
+  const [animPickerOpen, setAnimPickerOpen] = useState(false);
+  const localEmotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-emotion based on round result
+  const resultEmotion: Emotion = useMemo(() => {
+    if (!seat?.result) return 'neutral';
+    if (seat.result === 'blackjack') return 'jackpot';
+    if (seat.result === 'win') return 'happy';
+    if (seat.result === 'loss') return 'sad';
+    if (seat.result === 'push') return 'surprised';
+    return 'neutral';
+  }, [seat?.result]);
+
+  // Priority: local pick > result-driven > neutral
+  const activeEmotion: Emotion = localEmotion ?? (phase === 'completed' ? resultEmotion : 'neutral');
+
+  // Close animation picker when phase changes
+  useEffect(() => { setAnimPickerOpen(false); }, [phase]);
+
+  const handleAnimationSelect = useCallback((emotion: Emotion) => {
+    setAnimPickerOpen(false);
+    setLocalEmotion(emotion);
+    if (localEmotionTimerRef.current) clearTimeout(localEmotionTimerRef.current);
+    localEmotionTimerRef.current = setTimeout(() => {
+      setLocalEmotion(null);
+    }, emotion === 'wink' ? AVATAR_EMOTION_WINK_MS : AVATAR_EMOTION_DURATION_MS);
+  }, []);
+
   return (
-    <div className="flex flex-col items-center gap-2 min-w-0">
+    <div className="relative flex flex-col items-center gap-2 min-w-0">
       {/* Cards area */}
       {isEmpty ? (
         <div
@@ -179,36 +226,79 @@ function Seat({
             </div>
           )}
 
-          {/* Player avatar with circular timer ring */}
-          <div className="flex flex-col items-center gap-1">
-            <div className="relative" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
-              {/* Turn timer ring */}
+          {seat?.seatStatus === 'sitting_out' && (
+            <span className="text-[9px] text-white/30">sitting out</span>
+          )}
+
+          {/* Player avatar + name — pinned to bottom */}
+          <div className="absolute bottom-[-32px] left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+            <div className="relative flex-shrink-0" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
               {isActing && <CircularTimerRing size={AVATAR_SIZE} timeLeft={turnRemaining} maxTime={TURN_TIMEOUT} />}
-              {/* Betting timer ring */}
               {!isActing && phase === 'betting' && <CircularTimerRing size={AVATAR_SIZE} timeLeft={betRemaining} maxTime={BETTING_TIMEOUT} />}
-              <div className="w-full h-full rounded-full overflow-hidden bg-slate-800"
-                style={{ border: isMe ? '2px solid rgba(34,211,238,0.6)' : isActing ? '2px solid transparent' : '2px solid rgba(255,255,255,0.15)' }}>
+              <div
+                className="w-full h-full rounded-full overflow-hidden bg-slate-800"
+                style={{ border: isMe ? '2px solid rgba(34,211,238,0.6)' : isActing ? '2px solid transparent' : '2px solid rgba(255,255,255,0.15)', cursor: isMe ? 'pointer' : 'default' }}
+                onClick={isMe ? () => setAnimPickerOpen(o => !o) : undefined}
+              >
                 {seat?.avatarConfig ? (
-                  <AvatarPreview config={seat.avatarConfig as unknown as AvatarConfig} emotion="neutral" className="w-full h-full" />
+                  <AvatarPreview
+                    config={seat.avatarConfig as unknown as AvatarConfig}
+                    emotion={activeEmotion}
+                    trackMouse={isMe}
+                    roamEyes={!isMe && !isActing}
+                    forceAsleep={seat?.seatStatus === 'sitting_out'}
+                    compact
+                    className="w-full h-full"
+                  />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-sm font-bold text-slate-400">
+                  <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-400">
                     {seat?.displayName?.[0]?.toUpperCase() ?? '?'}
                   </div>
                 )}
               </div>
-            </div>
-            <span className={`text-xs font-medium truncate max-w-[90px] ${isMe ? 'text-cyan-300' : 'text-white/80'}`}>
-              {seat?.displayName ?? (seat?.playerAddress ? seat.playerAddress.slice(0, 6) + '…' : '—')}
-              {isMe && <span className="text-[9px] text-white/40 ml-1">(you)</span>}
-            </span>
-            {balanceLabel != null && (
-              <span className="text-[10px] text-white/50 tabular-nums">{balanceLabel} MORBIUS</span>
-            )}
-          </div>
 
-          {seat?.seatStatus === 'sitting_out' && (
-            <span className="text-[9px] text-white/30">sitting out</span>
-          )}
+              {/* Animation picker — appears above avatar on click (current player only) */}
+              {isMe && animPickerOpen && (
+                <div
+                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 bg-black/90 border border-white/20 rounded-lg p-1.5 backdrop-blur-md"
+                  style={{ width: 160 }}
+                >
+                  <div className="grid grid-cols-4 gap-1">
+                    {AVATAR_ANIMATIONS.map(({ title, emotion }) => (
+                      <button
+                        key={emotion}
+                        type="button"
+                        onClick={() => handleAnimationSelect(emotion)}
+                        className="flex flex-col items-center gap-0.5 p-1 rounded hover:bg-white/10 transition-colors"
+                        title={title}
+                      >
+                        <div className="w-7 h-7 rounded-full overflow-hidden">
+                          {seat?.avatarConfig && (
+                            <AvatarPreview
+                              config={seat.avatarConfig as unknown as AvatarConfig}
+                              emotion={emotion}
+                              compact
+                              className="w-full h-full"
+                            />
+                          )}
+                        </div>
+                        <span className="text-[7px] text-white/50 leading-none">{title}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className={`text-[10px] font-medium truncate max-w-[80px] leading-tight ${isMe ? 'text-cyan-300' : 'text-white/80'}`}>
+                {seat?.displayName ?? (seat?.playerAddress ? seat.playerAddress.slice(0, 6) + '…' : '—')}
+                {isMe && <span className="text-[8px] text-white/40 ml-0.5">(you)</span>}
+              </span>
+              {balanceLabel != null && (
+                <span className="text-[9px] text-white/50 tabular-nums leading-tight">{balanceLabel}</span>
+              )}
+            </div>
+          </div>
         </>
       )}
     </div>
@@ -225,17 +315,82 @@ export default function BlackjackMultiTablePage() {
   const { signTypedDataAsync } = useSignTypedData();
 
   const [state, setState] = useState<BJMultiTableState | null>(null);
+  const stateRef = useRef<BJMultiTableState | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'failed'>('connecting');
+  const [reconnectInfo, setReconnectInfo] = useState<{ attempt: number; maxAttempts: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [roundHistory, setRoundHistory] = useState<any[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [tipNotification, setTipNotification] = useState<{ name: string } | null>(null);
+  const [tipAnimating, setTipAnimating] = useState(false);
   const wsClientRef = useRef<BlackjackWebSocketClient | null>(null);
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
 
   // Bet panel state — string to match BettingPanelMobile interface
   const [betAmount, setBetAmount] = useState('0'); // whole MORBIUS
 
-  // Sound effects — reuses the same useAudio hook as single player
-  const [soundEnabled] = useState(true);
+  // Sound effects
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const { playSound } = useAudio(soundEnabled);
+  const dealerVoiceRef = useRef<{ source: AudioBufferSourceNode; gain: GainNode } | null>(null);
+  const prevSeatAddrsRef = useRef<(string | null)[]>([null, null, null]);
+
+  // Play a dealer voice line on a dedicated channel (stops any currently playing voice)
+  const playDealerVoice = useCallback(async (path: string, volume = 0.5) => {
+    if (!soundEnabled) return;
+    // Stop any currently playing dealer voice
+    if (dealerVoiceRef.current) {
+      try { dealerVoiceRef.current.source.stop(); } catch { /* already stopped */ }
+      dealerVoiceRef.current = null;
+    }
+    // Reuse the global AudioContext from AudioManager
+    const ctx = AudioManager.getContext();
+    if (!ctx || ctx.state !== 'running') { playSound(path, volume); return; }
+    try {
+      const buf = await AudioManager.loadSound(path);
+      if (!buf) return;
+      const source = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      source.buffer = buf;
+      gain.gain.value = volume;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.onended = () => { if (dealerVoiceRef.current?.source === source) dealerVoiceRef.current = null; };
+      source.start(0);
+      dealerVoiceRef.current = { source, gain };
+    } catch {
+      playSound(path, volume);
+    }
+  }, [soundEnabled, playSound]);
+
+  // Dealer random phrase timer during betting
+  const dealerPhraseTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Player stats — combined single + multiplayer via updated SQL functions
+  const { data: playerStatsData, isLoading: playerStatsLoading } = usePlayerStatsEnhanced();
+  const playerStats = playerStatsData ? {
+    totalGames: Number(playerStatsData.total_games) || 0,
+    totalBet: playerStatsData.total_bet || BigInt(0),
+    totalWin: playerStatsData.total_win || BigInt(0),
+    winRate: Number(playerStatsData.win_rate) || 0,
+    blackjackCount: Number(playerStatsData.blackjack_count) || 0,
+    currentStreak: Number(playerStatsData.current_streak) || 0,
+    bestStreak: Number(playerStatsData.best_streak) || 0,
+    biggestWin: playerStatsData.biggest_win || BigInt(0),
+    biggestLoss: playerStatsData.biggest_loss || BigInt(0),
+    averageBet: Number(playerStatsData.average_bet) || 0,
+    averagePayout: Number(playerStatsData.average_payout) || 0,
+    profitLoss: Number(formatEther(playerStatsData.profit_loss || BigInt(0))),
+    roi: Number(playerStatsData.roi) || 0,
+    gamesToday: Number(playerStatsData.games_today) || 0,
+    gamesThisWeek: Number(playerStatsData.games_this_week) || 0,
+    favoriteBetAmount: Number(formatEther(playerStatsData.favorite_bet_amount || BigInt(0))),
+    lastGameTimestamp: playerStatsData.last_game_timestamp ? new Date(playerStatsData.last_game_timestamp).getTime() : undefined,
+  } : null;
+
+  // Chat dropdown overlay
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Win notification — reuses WinNotification from single player
   const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
@@ -266,19 +421,38 @@ export default function BlackjackMultiTablePage() {
     fetchBalance();
   }, [fetchBalance]);
 
-  // Sound effects + win notification on phase transitions (same sounds as single player)
+  // Sound effects + win notification on phase transitions
   useEffect(() => {
     if (!state) return;
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = state.phase;
     if (!prevPhase) return;
 
-    // Cards dealt sound when playing starts
-    if (prevPhase !== 'playing' && state.phase === 'playing') {
+    // ── Betting opens: announce + schedule a random dealer phrase ──
+    if (prevPhase !== 'betting' && state.phase === 'betting') {
+      playDealerVoice(pickRandom(SOUNDS_BETTING_OPEN));
+      // Clear any lingering phrase timer
+      if (dealerPhraseTimerRef.current) clearTimeout(dealerPhraseTimerRef.current);
+      // Play a random dealer phrase partway through the betting window
+      dealerPhraseTimerRef.current = setTimeout(() => {
+        playDealerVoice(pickRandom(SOUNDS_DEALER_PHRASE));
+      }, 5000 + Math.random() * 4000); // 5–9s into betting
+    }
+
+    // ── Betting closes → dealing: stop any phrase, announce, then deal sound ──
+    if (prevPhase === 'betting' && state.phase === 'playing') {
+      if (dealerPhraseTimerRef.current) { clearTimeout(dealerPhraseTimerRef.current); dealerPhraseTimerRef.current = null; }
+      playDealerVoice(pickRandom(SOUNDS_BETTING_CLOSED));
+      // Card deal sound slightly after the voice starts
+      setTimeout(() => playSound('/BlackJack/sounds/cards.wav'), 600);
+    }
+
+    // ── Cards dealt sound for non-betting→playing transitions ──
+    if (prevPhase !== 'betting' && prevPhase !== 'playing' && state.phase === 'playing') {
       playSound('/BlackJack/sounds/cards.wav');
     }
 
-    // Win/loss sounds + WinNotification when round completes
+    // ── Round completes: outcome voice lines + WinNotification ──
     if (prevPhase !== 'completed' && state.phase === 'completed') {
       const seat = state.seats.find(s =>
         s.playerAddress && address && s.playerAddress.toLowerCase() === address.toLowerCase()
@@ -288,18 +462,42 @@ export default function BlackjackMultiTablePage() {
         const hasBlackjack = seat.hands.some(h => h.result === 'blackjack');
         const hasWin = seat.hands.some(h => h.result === 'win' || h.result === 'blackjack');
         const allLoss = seat.hands.every(h => h.result === 'loss');
+        const allPush = seat.hands.every(h => h.result === 'push');
 
-        if (hasWin || hasBlackjack) {
-          playSound('/BlackJack/sounds/PlayerWins.mp3');
-          setShowWin({ amount: totalPayout, isBlackjack: hasBlackjack });
+        if (hasBlackjack) {
+          playDealerVoice(SOUND_PLAYER_BLACKJACK);
+          setShowWin({ amount: totalPayout, isBlackjack: true });
+        } else if (hasWin) {
+          playDealerVoice(pickRandom(SOUNDS_PLAYER_WINS));
+          setShowWin({ amount: totalPayout, isBlackjack: false });
+        } else if (allPush) {
+          playDealerVoice(SOUND_PUSH);
         } else if (allLoss) {
-          playSound('/BlackJack/sounds/DealerWins.mp3');
+          playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
         }
       }
       fetchBalance();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase, address]);
+
+  // Play join/leave sounds when seat occupancy changes
+  useEffect(() => {
+    if (!state) return;
+    const current = state.seats.map(s => s.playerAddress?.toLowerCase() ?? null);
+    const prev = prevSeatAddrsRef.current;
+    for (let i = 0; i < 3; i++) {
+      if (!prev[i] && current[i]) {
+        // Someone joined
+        if (current[i] !== address?.toLowerCase()) playSound('/Poker/PokerSounds/OpponentJoined.mp3');
+      } else if (prev[i] && !current[i]) {
+        // Someone left
+        if (prev[i] !== address?.toLowerCase()) playSound('/Poker/PokerSounds/OpponentLeft.mp3');
+      }
+    }
+    prevSeatAddrsRef.current = current;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.seats]);
 
   // Progressive dealer card reveal — matches single-player BlackjackTable
   // During 'playing': show 1 card + face-down hole card (server only sends 1)
@@ -361,10 +559,12 @@ export default function BlackjackMultiTablePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.dealerCards?.length, state?.phase]);
 
-  // Cleanup reveal timer on unmount
+  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (dealerRevealTimerRef.current) clearTimeout(dealerRevealTimerRef.current);
+      if (dealerPhraseTimerRef.current) clearTimeout(dealerPhraseTimerRef.current);
+      if (dealerVoiceRef.current) { try { dealerVoiceRef.current.source.stop(); } catch {} }
     };
   }, []);
 
@@ -383,18 +583,38 @@ export default function BlackjackMultiTablePage() {
     const wsUrl = getWebSocketUrlOptional();
     if (!wsUrl || !address) return;
     const client = new BlackjackWebSocketClient(wsUrl, address, signTypedDataAsync as any);
-    client.on('disconnected', () => setWsConnected(false));
+    client.on('disconnected', () => { setWsConnected(false); setWsStatus('reconnecting'); });
+    client.on('reconnecting', (info: any) => { setWsStatus('reconnecting'); setReconnectInfo(info); });
+    client.on('reconnected', async () => {
+      setWsConnected(true); setWsStatus('connected'); setReconnectInfo(null); setError(null);
+      // Re-join room and refresh state after reconnect
+      await client.sendRequest('join_room', { roomId: `blackjack:table:${tableId}` }).catch(() => {});
+      try { setState(await client.sendRequest('bj_multi_get_state', { tableId }) as BJMultiTableState); }
+      catch { /* state will come via broadcast */ }
+    });
+    client.on('reconnect_failed', () => { setWsStatus('failed'); setReconnectInfo(null); });
     client.on('error', (err: any) => setError(err?.message || 'Connection error'));
-    client.on('bj_multi_table_state', (p: BJMultiTableState) => setState(p));
+    client.on('bj_multi_table_state', (p: BJMultiTableState) => { setState(p); stateRef.current = p; });
+    client.on('bj_multi_tip_notification', (p: any) => {
+      const addr = (p.playerAddress ?? '').toLowerCase();
+      // Resolve name from current seat state
+      const seatMatch = stateRef.current?.seats.find(
+        (s: any) => s.playerAddress?.toLowerCase() === addr
+      );
+      const name = (seatMatch as any)?.displayName || addr.slice(-4);
+      setTipNotification({ name });
+      setTimeout(() => setTipNotification(null), 5000);
+    });
 
+    setWsStatus('connecting');
     client.connect()
       .then(async () => {
-        setWsConnected(true); setError(null);
+        setWsConnected(true); setWsStatus('connected'); setError(null);
         await client.sendRequest('join_room', { roomId: `blackjack:table:${tableId}` }).catch(() => {});
         try { setState(await client.sendRequest('bj_multi_get_state', { tableId }) as BJMultiTableState); }
         catch { setError('Failed to load table state'); }
       })
-      .catch((err: any) => setError(err?.message || 'Connection failed'));
+      .catch((err: any) => { setError(err?.message || 'Connection failed'); setWsStatus('failed'); });
     wsClientRef.current = client; setWsClient(client);
     return () => { client.disconnect(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -402,30 +622,39 @@ export default function BlackjackMultiTablePage() {
 
   const takeSeat = useCallback(async (pos: number) => {
     if (!wsClient?.isConnected() || !address) return;
+    playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
     try { await wsClient.sendRequest('bj_multi_join_table', { tableId, seatPosition: pos }); }
     catch (e) { setError((e as Error).message); }
-  }, [wsClient, tableId, address]);
+  }, [wsClient, tableId, address, playSound]);
 
   const leaveSeat = useCallback(async () => {
     if (!wsClient?.isConnected()) return;
+    playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
     try { await wsClient.sendRequest('bj_multi_leave_table', { tableId }); }
     catch (e) { setError((e as Error).message); }
-  }, [wsClient, tableId]);
+  }, [wsClient, tableId, playSound]);
 
   const placeBet = useCallback(async () => {
     const amt = parseInt(betAmount || '0', 10);
     if (!wsClient?.isConnected() || amt <= 0) return;
+    playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
     try {
       await wsClient.sendRequest('bj_multi_place_bet', { tableId, amount: parseEther(String(amt)).toString() });
       fetchBalance();
     } catch (e) { setError((e as Error).message); }
-  }, [wsClient, tableId, betAmount, fetchBalance]);
+  }, [wsClient, tableId, betAmount, fetchBalance, playSound]);
 
   const doAction = useCallback(async (action: 'hit' | 'stand' | 'double_down' | 'split') => {
     if (!wsClient?.isConnected()) return;
+    // Sound: knock for hit, click confirmation for everything else
+    if (action === 'hit') {
+      playSound('/BlackJack/sounds/knock.wav');
+    } else {
+      playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
+    }
     try { await wsClient.sendRequest('bj_multi_action', { tableId, action, handIndex: mySeat?.activeHandIndex ?? 0 }); }
     catch (e) { setError((e as Error).message); }
-  }, [wsClient, tableId, mySeat]);
+  }, [wsClient, tableId, mySeat, playSound]);
 
   const theme = resolveTheme(state?.themeKind ?? 'video', state?.themeId ?? 'glowingTable');
 
@@ -455,6 +684,28 @@ export default function BlackjackMultiTablePage() {
         @keyframes cardSlideIn {
           from { opacity: 0; transform: translateX(60px) translateY(-40px); }
           to { opacity: 1; transform: translateX(0) translateY(0); }
+        }
+        .betting-breathe {
+          animation: breathe 3s ease-in-out infinite;
+        }
+        @keyframes breathe {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.05); }
+        }
+        .tip-chip-fly {
+          animation: tipChipFly 0.7s ease-in forwards;
+        }
+        @keyframes tipChipFly {
+          0% { opacity: 1; transform: translateY(0) scale(1); }
+          60% { opacity: 1; transform: translateY(-80px) scale(0.8); }
+          100% { opacity: 0; transform: translateY(-120px) scale(0.3); }
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
@@ -509,6 +760,12 @@ export default function BlackjackMultiTablePage() {
                    state.phase === 'dealer_turn' ? 'Dealer turn' : 'Round complete'}
                 </span>
               )}
+              {(state as any)?.viewerCount > 0 && (
+                <span className="text-[10px] text-white/40 flex items-center gap-1">
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  {(state as any).viewerCount}
+                </span>
+              )}
               {myPosition !== null && (
                 <button onClick={leaveSeat} className="text-xs text-white/40 hover:text-red-400 transition-colors">
                   Leave seat
@@ -517,12 +774,90 @@ export default function BlackjackMultiTablePage() {
             </div>
           </div>
 
-          {!wsConnected && (
-            <div className="bg-black/60 text-amber-400 text-xs text-center py-1.5 animate-pulse">
-              {address ? 'Connecting…' : 'Connect your wallet to play'}
+          {/* Tip dealer button — top center */}
+          {address && wsConnected && wsClient && myPosition !== null && (
+            <div className="flex flex-col items-center" style={{ position: 'relative', zIndex: 12 }}>
+              <button
+                onClick={async () => {
+                  if (tipAnimating) return;
+                  playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
+                  setTipAnimating(true);
+                  try {
+                    await wsClient.sendRequest('bj_multi_tip_dealer', {
+                      tableId,
+                      amount: (BigInt(2000) * BigInt('1000000000000000000')).toString(),
+                    });
+                    // Dealer thanks voice line after tip succeeds
+                    playDealerVoice(pickRandom(SOUNDS_TIP));
+                    fetchBalance();
+                  } catch (e) { setError((e as Error).message); setTipAnimating(false); }
+                }}
+                disabled={tipAnimating}
+                className="px-3 py-1 rounded bg-amber-900/50 border border-amber-600/40 text-amber-300 text-[11px] font-medium hover:bg-amber-800/60 transition-all disabled:opacity-50"
+              >
+                Tip 2,000
+              </button>
+
+              {/* Chip animation — flies up to dealer */}
+              {tipAnimating && (
+                <div
+                  className="absolute pointer-events-none"
+                  style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}
+                  onAnimationEnd={() => setTipAnimating(false)}
+                >
+                  <div className="tip-chip-fly">
+                    <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
+                      <span className="text-white text-[8px] font-bold">$</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Thank you message */}
+              {tipNotification && (
+                <div className="mt-1 px-3 py-1 rounded bg-black/70 border border-amber-600/30 text-amber-300 text-[10px] text-center animate-fade-in whitespace-nowrap">
+                  Thanks for the tip! Best of luck to you, {tipNotification.name}
+                </div>
+              )}
             </div>
           )}
-          {error && <div className="bg-red-900/80 text-red-200 text-xs text-center py-1 px-4">{error}</div>}
+
+          {!wsConnected && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+              <div className="bg-slate-900 border border-slate-700 rounded-lg px-6 py-4 text-center max-w-xs">
+                {!address ? (
+                  <p className="text-amber-400 text-sm">Connect your wallet to play</p>
+                ) : wsStatus === 'failed' ? (
+                  <>
+                    <p className="text-red-400 text-sm font-medium mb-2">Connection lost</p>
+                    <p className="text-slate-400 text-xs mb-3">Could not reconnect to the server.</p>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs rounded transition-colors"
+                    >
+                      Reload Page
+                    </button>
+                  </>
+                ) : wsStatus === 'reconnecting' ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                    <p className="text-amber-400 text-sm font-medium">Reconnecting...</p>
+                    {reconnectInfo && (
+                      <p className="text-slate-400 text-xs mt-1">
+                        Attempt {reconnectInfo.attempt} of {reconnectInfo.maxAttempts}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                    <p className="text-cyan-400 text-sm">Connecting...</p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+          {error && wsConnected && <div className="bg-red-900/80 text-red-200 text-xs text-center py-1 px-4">{error}</div>}
 
           {/* Win notification — reused from single player */}
           {showWin && (
@@ -579,6 +914,15 @@ export default function BlackjackMultiTablePage() {
               )}
             </div>
 
+            {/* "Place your bets!" breathing text during betting phase */}
+            {state?.phase === 'betting' && (
+              <div className="betting-breathe rounded-xl px-6 py-2" style={{ background: 'rgba(0,0,0,0.45)' }}>
+                <span className="text-white font-bold text-lg tracking-wide" style={{ fontFamily: 'Jost, sans-serif' }}>
+                  Place your bets!
+                </span>
+              </div>
+            )}
+
             {/* 3 SEATS — same translateY offset as BlackjackTable player row */}
             <div className="grid grid-cols-3 gap-4 w-full max-w-3xl" style={{ transform: 'translateY(20px)' }}>
               {POSITIONS.map(pos => {
@@ -607,9 +951,50 @@ export default function BlackjackMultiTablePage() {
 
 
         </div>
+
+        {/* Chat + sound overlay — top-left over the table */}
+        <div className="absolute top-12 left-2 z-20" style={{ maxWidth: '280px' }}>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setChatOpen(o => !o)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-black/60 border border-white/15 text-white/70 hover:text-white hover:bg-black/75 transition-colors text-xs backdrop-blur-sm"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span>Chat</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${chatOpen ? 'rotate-180' : ''}`} />
+              {chatMessages.length > 0 && !chatOpen && (
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              )}
+            </button>
+            <button
+              onClick={() => setSoundEnabled(e => !e)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-black/60 border border-white/15 text-white/70 hover:text-white hover:bg-black/75 transition-colors text-xs backdrop-blur-sm"
+              title={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
+            >
+              {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-red-400" />}
+              <span>{soundEnabled ? 'Sounds' : 'Muted'}</span>
+            </button>
+          </div>
+          {chatOpen && (
+            <div className="mt-1 bg-black/80 border border-white/15 rounded p-2.5 backdrop-blur-md w-[260px]">
+              <div className="max-h-32 overflow-y-auto space-y-0.5 min-h-0">
+                {chatMessages.slice(-12).map(m => (
+                  <div key={m.id} className="text-xs text-white/70">
+                    <span className="text-cyan-400">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
+                    {m.text}
+                  </div>
+                ))}
+                {chatMessages.length === 0 && (
+                  <div className="text-xs text-white/30 text-center py-2">No messages yet</div>
+                )}
+              </div>
+              {address && wsConnected && <ChatInput onSend={sendChatMessage} />}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ── Controls & Chat — sidebar on md+, below table on mobile ── */}
+      {/* ── Controls — sidebar on md+, below table on mobile ── */}
       <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-y-auto">
 
         {/* Betting panel — always visible when seated, disabled when not in betting phase or bet already placed */}
@@ -689,18 +1074,61 @@ export default function BlackjackMultiTablePage() {
           </div>
         )}
 
-        {/* Chat */}
-        <div className="bg-black/40 border border-white/10 rounded-xl p-3 max-h-28 md:max-h-none md:flex-1 flex flex-col">
-          <div className="flex-1 overflow-y-auto space-y-0.5 min-h-0">
-            {chatMessages.slice(-10).map(m => (
-              <div key={m.id} className="text-xs text-white/70">
-                <span className="text-cyan-400">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
-                {m.text}
+        {/* Round history — collapsible */}
+        {wsConnected && wsClient && (
+          <div className="border border-slate-800 rounded-lg overflow-hidden">
+            <button
+              onClick={async () => {
+                const opening = !historyOpen;
+                setHistoryOpen(opening);
+                if (opening && roundHistory.length === 0) {
+                  try {
+                    const res = await wsClient.sendRequest('bj_multi_table_history', { tableId, limit: 15 });
+                    setRoundHistory(res?.rounds ?? []);
+                  } catch { /* ignore */ }
+                }
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 bg-slate-800/50 hover:bg-slate-800 transition-colors text-xs text-white/70"
+            >
+              <span>Round History</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {historyOpen && (
+              <div className="max-h-48 overflow-y-auto divide-y divide-slate-800/50">
+                {roundHistory.length === 0 ? (
+                  <div className="text-xs text-white/30 text-center py-3">No completed rounds yet</div>
+                ) : roundHistory.map((r: any) => (
+                  <div key={r.id} className="px-3 py-2 text-xs space-y-0.5">
+                    <div className="flex justify-between text-white/60">
+                      <span>Round #{r.round_number}</span>
+                      <span>Dealer: {r.dealer_total}</span>
+                    </div>
+                    {(r.seats ?? []).map((s: any, i: number) => {
+                      const result = s.result;
+                      const color = result === 'win' || result === 'blackjack' ? 'text-green-400' : result === 'push' ? 'text-yellow-400' : 'text-red-400';
+                      return (
+                        <div key={i} className={`flex justify-between ${color}`}>
+                          <span>{s.playerAddress?.slice(0, 6)}…{s.playerAddress?.slice(-4)}</span>
+                          <span>{result ?? '?'} · {formatMorbius(s.payout ?? '0')}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-          {address && wsConnected && <ChatInput onSend={sendChatMessage} />}
-        </div>
+        )}
+
+        {/* Player stats — combined single + multiplayer */}
+        {address && playerStats && (
+          <PlayerStatsDashboard
+            stats={playerStats}
+            isLoading={playerStatsLoading}
+            playerAddress={address}
+            reserveBalance={BigInt(playerBalance)}
+          />
+        )}
 
       </div>
       </div>{/* close grid */}
@@ -708,14 +1136,66 @@ export default function BlackjackMultiTablePage() {
   );
 }
 
+const CHAT_MAX_LENGTH = 150;
+const CHAT_BURST_LIMIT = 3;
+const CHAT_COOLDOWN_MS = 30_000;
+
 function ChatInput({ onSend }: { onSend: (text: string) => void }) {
   const [text, setText] = useState('');
+  const sentTimestamps = useRef<number[]>([]);
+  const [cooldownEnd, setCooldownEnd] = useState(0);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+
+  // Tick cooldown display
+  useEffect(() => {
+    if (cooldownEnd <= Date.now()) { setCooldownLeft(0); return; }
+    const tick = () => setCooldownLeft(Math.max(0, Math.ceil((cooldownEnd - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [cooldownEnd]);
+
+  const handleSend = () => {
+    const msg = text.trim();
+    if (!msg) return;
+    const now = Date.now();
+    if (now < cooldownEnd) return;
+
+    // Prune timestamps older than cooldown window
+    sentTimestamps.current = sentTimestamps.current.filter(t => now - t < CHAT_COOLDOWN_MS);
+
+    if (sentTimestamps.current.length >= CHAT_BURST_LIMIT) {
+      const end = sentTimestamps.current[0] + CHAT_COOLDOWN_MS;
+      setCooldownEnd(end);
+      setCooldownLeft(Math.ceil((end - now) / 1000));
+      return;
+    }
+
+    sentTimestamps.current.push(now);
+    onSend(msg);
+    setText('');
+  };
+
+  const onCooldown = cooldownLeft > 0;
+
   return (
     <form className="flex gap-2 mt-1.5"
-      onSubmit={e => { e.preventDefault(); if (text.trim()) { onSend(text.trim()); setText(''); } }}>
-      <Input value={text} onChange={e => setText(e.target.value)} placeholder="Table chat…"
-        className="h-7 text-xs bg-white/10 border-white/20 text-slate-200 placeholder:text-white/30" maxLength={200} />
-      <button type="submit" className="px-3 h-7 text-xs rounded-md bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-colors">
+      onSubmit={e => { e.preventDefault(); handleSend(); }}>
+      <div className="relative flex-1">
+        <Input
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder={onCooldown ? `Wait ${cooldownLeft}s…` : 'Table chat…'}
+          className="h-7 text-xs bg-white/10 border-white/20 text-slate-200 placeholder:text-white/30 pr-8"
+          maxLength={CHAT_MAX_LENGTH}
+          disabled={onCooldown}
+        />
+        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-white/25 tabular-nums pointer-events-none">
+          {text.length}/{CHAT_MAX_LENGTH}
+        </span>
+      </div>
+      <button type="submit" disabled={onCooldown || !text.trim()}
+        className="px-3 h-7 text-xs rounded-md bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-colors disabled:opacity-40 disabled:pointer-events-none">
         Send
       </button>
     </form>

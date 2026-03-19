@@ -1213,21 +1213,36 @@ export class DatabaseService {
 
   async getTopPlayers(limit: number = 25): Promise<TopPlayerEntry[]> {
     const query = `
-      WITH agg AS (
-        SELECT
-          p.wallet_address,
-          COUNT(g.*)::BIGINT AS total_games,
-          COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
-          COALESCE(SUM(g.total_payout), 0)::NUMERIC(78, 0) AS total_win,
-          (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
-          CASE WHEN COUNT(g.*) > 0 THEN
-            ROUND((COUNT(*) FILTER (WHERE g.result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
-          ELSE 0 END AS win_rate
+      WITH all_game_rows AS (
+        -- Single-player
+        SELECT LOWER(p.wallet_address) AS addr,
+               g.total_bet_amount, g.total_payout, g.result
         FROM players p
         JOIN game_sessions gs ON gs.player_id = p.id
         JOIN games g ON g.session_id = gs.id AND g.result IS NOT NULL AND g.result != 'ongoing'
-        GROUP BY p.id, p.wallet_address
-        HAVING COUNT(g.*) >= 10
+
+        UNION ALL
+
+        -- Multiplayer
+        SELECT LOWER(s.player_address) AS addr,
+               s.bet_amount AS total_bet_amount, s.payout AS total_payout, s.result
+        FROM blackjack_multi_round_seats s
+        JOIN blackjack_multi_rounds r ON s.round_id = r.id
+        WHERE s.result IS NOT NULL AND r.status = 'completed'
+      ),
+      agg AS (
+        SELECT
+          addr AS wallet_address,
+          COUNT(*)::BIGINT AS total_games,
+          COALESCE(SUM(total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(total_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(total_payout), 0) - COALESCE(SUM(total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate
+        FROM all_game_rows
+        GROUP BY addr
+        HAVING COUNT(*) >= 10
       )
       SELECT ROW_NUMBER() OVER (ORDER BY profit_loss DESC, win_rate DESC)::INTEGER AS rank, *
       FROM agg
@@ -1422,6 +1437,7 @@ export class DatabaseService {
     const normalizedAddress = this.normalizeAddress(walletAddress);
     // Fallback: when total_bet_amount/total_payout are 0 (e.g. tournament games), sum from game_hands.
     // Tournament chip amounts are 1:1; scale by 1e18 so formatEther displays correctly.
+    // UNIONs multiplayer blackjack round seats so both game types appear in history.
     const query = `
       WITH gh_agg AS (
         SELECT game_id,
@@ -1429,22 +1445,60 @@ export class DatabaseService {
           SUM(payout) AS payout_sum
         FROM game_hands
         GROUP BY game_id
+      ),
+      combined AS (
+        -- Single-player games
+        SELECT
+          g.id, g.session_id, g.game_number,
+          CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
+          g.dealer_cards, g.dealer_total, g.result,
+          CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
+          g.dealer_actions, g.actions, g.created_at, g.completed_at, g.server_seed_revealed,
+          g.client_seed_commitment, g.dealer_seed, g.hand_count, g.current_hand_index,
+          g.rng_counter, g.rng_version, g.perfect_pairs_bet_amount, g.perfect_pairs_payout,
+          gs.player_id,
+          'single' AS game_mode
+        FROM games g
+        JOIN game_sessions gs ON g.session_id = gs.id
+        JOIN players p ON gs.player_id = p.id
+        LEFT JOIN gh_agg gh ON gh.game_id = g.id
+        WHERE LOWER(p.wallet_address) = LOWER($1)
+
+        UNION ALL
+
+        -- Multiplayer games
+        SELECT
+          s.id::text                      AS id,
+          r.id::text                      AS session_id,
+          r.round_number                  AS game_number,
+          s.bet_amount                    AS total_bet_amount,
+          r.dealer_cards                  AS dealer_cards,
+          r.dealer_total                  AS dealer_total,
+          s.result                        AS result,
+          s.payout                        AS total_payout,
+          '[]'::jsonb                     AS dealer_actions,
+          '[]'::jsonb                     AS actions,
+          r.created_at                    AS created_at,
+          r.completed_at                  AS completed_at,
+          FALSE                           AS server_seed_revealed,
+          NULL                            AS client_seed_commitment,
+          NULL                            AS dealer_seed,
+          1                               AS hand_count,
+          0                               AS current_hand_index,
+          0                               AS rng_counter,
+          1                               AS rng_version,
+          0::numeric                      AS perfect_pairs_bet_amount,
+          0::numeric                      AS perfect_pairs_payout,
+          NULL::uuid                      AS player_id,
+          'multi' AS game_mode
+        FROM blackjack_multi_round_seats s
+        JOIN blackjack_multi_rounds r ON s.round_id = r.id
+        WHERE LOWER(s.player_address) = LOWER($1)
+          AND s.result IS NOT NULL
+          AND r.status = 'completed'
       )
-      SELECT
-        g.id, g.session_id, g.game_number,
-        CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
-        g.dealer_cards, g.dealer_total, g.result,
-        CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
-        g.dealer_actions, g.actions, g.created_at, g.completed_at, g.server_seed_revealed,
-        g.client_seed_commitment, g.dealer_seed, g.hand_count, g.current_hand_index,
-        g.rng_counter, g.rng_version, g.perfect_pairs_bet_amount, g.perfect_pairs_payout,
-        gs.player_id
-      FROM games g
-      JOIN game_sessions gs ON g.session_id = gs.id
-      JOIN players p ON gs.player_id = p.id
-      LEFT JOIN gh_agg gh ON gh.game_id = g.id
-      WHERE LOWER(p.wallet_address) = LOWER($1)
-      ORDER BY g.created_at DESC
+      SELECT * FROM combined
+      ORDER BY created_at DESC
       LIMIT $2 OFFSET $3
     `;
     const result = await this.pool.query(query, [normalizedAddress, limit, offset]);
@@ -1452,7 +1506,8 @@ export class DatabaseService {
     return games;
   }
 
-  /** Recent completed games globally (all players) for "Recent Play" feed. */
+  /** Recent completed games globally (all players) for "Recent Play" feed.
+   *  Includes both single-player and multiplayer blackjack games. */
   async getRecentGamesGlobal(limit: number = 20): Promise<Array<{
     id: string;
     wallet_address: string;
@@ -1468,20 +1523,38 @@ export class DatabaseService {
           SUM(payout) AS payout_sum
         FROM game_hands
         GROUP BY game_id
+      ),
+      combined AS (
+        -- Single-player games
+        SELECT
+          g.id,
+          p.wallet_address,
+          g.result,
+          CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
+          CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
+          g.created_at
+        FROM games g
+        JOIN game_sessions gs ON g.session_id = gs.id
+        JOIN players p ON gs.player_id = p.id
+        LEFT JOIN gh_agg gh ON gh.game_id = g.id
+        WHERE g.result IS NOT NULL AND g.result != 'ongoing'
+
+        UNION ALL
+
+        -- Multiplayer games
+        SELECT
+          s.id::text            AS id,
+          s.player_address      AS wallet_address,
+          s.result,
+          s.bet_amount          AS total_bet_amount,
+          s.payout              AS total_payout,
+          r.created_at
+        FROM blackjack_multi_round_seats s
+        JOIN blackjack_multi_rounds r ON s.round_id = r.id
+        WHERE s.result IS NOT NULL AND r.status = 'completed'
       )
-      SELECT
-        g.id,
-        p.wallet_address,
-        g.result,
-        CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
-        CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
-        g.created_at
-      FROM games g
-      JOIN game_sessions gs ON g.session_id = gs.id
-      JOIN players p ON gs.player_id = p.id
-      LEFT JOIN gh_agg gh ON gh.game_id = g.id
-      WHERE g.result IS NOT NULL AND g.result != 'ongoing'
-      ORDER BY g.created_at DESC
+      SELECT * FROM combined
+      ORDER BY created_at DESC
       LIMIT $1
     `;
     const result = await this.pool.query(query, [limit]);

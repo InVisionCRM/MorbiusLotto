@@ -100,6 +100,7 @@ export interface BJMultiTableSummary {
 export class BlackjackMultiGameService {
   private readonly tableLocks = new KeyedMutex();
   private broadcastCallback: ((tableId: string) => Promise<void>) | null = null;
+  private readonly stateVersions = new Map<string, number>();
 
   constructor(
     private readonly dbService: DatabaseService,
@@ -112,6 +113,21 @@ export class BlackjackMultiGameService {
 
   private get pool(): Pool {
     return this.dbService.getPool();
+  }
+
+  /** Bump and return the monotonic state version for a table. */
+  private bumpStateVersion(tableId: string): number {
+    const v = (this.stateVersions.get(tableId) ?? 0) + 1;
+    this.stateVersions.set(tableId, v);
+    return v;
+  }
+
+  /** Fire-and-forget audit log entry — never throws. */
+  private audit(tableId: string, actionType: string, roundId?: string | null, playerAddress?: string | null, payload?: Record<string, any>): void {
+    this.pool.query(
+      `INSERT INTO blackjack_multi_audit_log (table_id, round_id, player_address, action_type, payload) VALUES ($1, $2, $3, $4, $5)`,
+      [tableId, roundId ?? null, playerAddress ?? null, actionType, JSON.stringify(payload ?? {})],
+    ).catch(err => logger.error('BJMulti audit log write failed', { tableId, actionType, error: err }));
   }
 
   // --------------------------------------------------------------------------
@@ -155,6 +171,49 @@ export class BlackjackMultiGameService {
     return (result.rowCount ?? 0) > 0;
   }
 
+  /** Tip the dealer (house). Deducts from player balance, credits deployer wallet. */
+  async tipDealer(tableId: string, playerAddress: string, amount: bigint): Promise<{ success: boolean }> {
+    if (amount <= 0n) throw new Error('Tip amount must be positive');
+    const maxTip = BigInt('5000000000000000000000'); // 5000 MORBIUS max tip
+    if (amount > maxTip) throw new Error('Tip amount too large');
+
+    const normalized = playerAddress.toLowerCase();
+    const balance = await this.dbService.getPlayerBalance(normalized);
+    if (balance < amount) throw new Error('Insufficient balance to tip');
+
+    const deployerWallet = (process.env.NEXT_PUBLIC_BLACKJACK_DEPLOYER_WALLET || process.env.BLACKJACK_DEPLOYER_WALLET || '').toLowerCase();
+    if (!deployerWallet) throw new Error('Deployer wallet not configured');
+
+    await this.dbService.deductPlayerBalance(normalized, amount);
+    await this.dbService.addPlayerBalance(deployerWallet, amount);
+    this.audit(tableId, 'tip_dealer', null, normalized, { amount: amount.toString(), recipient: deployerWallet });
+
+    return { success: true };
+  }
+
+  /** Fetch completed rounds for a table (most recent first). */
+  async getTableHistory(tableId: string, limit = 20): Promise<any[]> {
+    const result = await this.pool.query(`
+      SELECT r.id, r.round_number, r.dealer_cards, r.dealer_total, r.dealer_has_ace,
+             r.server_seed, r.server_seed_hash, r.completed_at,
+             COALESCE(json_agg(json_build_object(
+               'seatPosition', rs.seat_position,
+               'playerAddress', rs.player_address,
+               'hands', rs.hands,
+               'result', rs.result,
+               'payout', rs.payout,
+               'betAmount', rs.bet_amount
+             ) ORDER BY rs.seat_position) FILTER (WHERE rs.id IS NOT NULL), '[]') AS seats
+      FROM blackjack_multi_rounds r
+      LEFT JOIN blackjack_multi_round_seats rs ON rs.round_id = r.id
+      WHERE r.table_id = $1 AND r.status = 'completed'
+      GROUP BY r.id
+      ORDER BY r.round_number DESC
+      LIMIT $2
+    `, [tableId, limit]);
+    return result.rows;
+  }
+
   // --------------------------------------------------------------------------
   // Seat management
   // --------------------------------------------------------------------------
@@ -187,6 +246,7 @@ export class BlackjackMultiGameService {
          VALUES ($1, $2, $3)`,
         [tableId, seatPosition, normalized],
       );
+      this.audit(tableId, 'join_table', null, normalized, { seatPosition });
 
       // Transition to betting as soon as the first player joins
       if (table.status === 'waiting' || table.status === 'completed') {
@@ -233,6 +293,7 @@ export class BlackjackMultiGameService {
         `DELETE FROM blackjack_multi_seats WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
         [tableId, normalized],
       );
+      this.audit(tableId, 'leave_table', null, normalized, { refundedBet: pendingBet.toString() });
 
       return this.getTableState(tableId);
     } finally {
@@ -283,6 +344,7 @@ export class BlackjackMultiGameService {
         `UPDATE blackjack_multi_seats SET pending_bet = $1 WHERE table_id = $2 AND LOWER(player_address) = LOWER($3)`,
         [betAmount.toString(), tableId, normalized],
       );
+      this.audit(tableId, 'place_bet', null, normalized, { betAmount: betAmount.toString() });
 
       // If table is still 'waiting' or 'completed', advance it to 'betting'
       if (table.status === 'waiting' || table.status === 'completed') {
@@ -394,10 +456,10 @@ export class BlackjackMultiGameService {
 
       // Initial deal: s0c1, s1c1, …, dealer_c1, s0c2, s1c2, …, dealer_c2
       let dp = 0;
-      const initialCards1: number[] = bettingSeats.map(() => deck[dp++]);
-      const dealerCard1 = deck[dp++];
-      const initialCards2: number[] = bettingSeats.map(() => deck[dp++]);
-      const dealerCard2 = deck[dp++];
+      const initialCards1: number[] = bettingSeats.map(() => { const d = this.drawCard(deck, dp); dp = d.dp; return d.card; });
+      const dc1 = this.drawCard(deck, dp); dp = dc1.dp; const dealerCard1 = dc1.card;
+      const initialCards2: number[] = bettingSeats.map(() => { const d = this.drawCard(deck, dp); dp = d.dp; return d.card; });
+      const dc2 = this.drawCard(deck, dp); dp = dc2.dp; const dealerCard2 = dc2.card;
       const dealerCards = [dealerCard1, dealerCard2];
       const dealerTotObj = this.pfService.calculateHandTotalV2(dealerCards);
 
@@ -507,6 +569,7 @@ export class BlackjackMultiGameService {
     playerAddress: string,
     action: 'hit' | 'stand' | 'double_down' | 'split',
     handIndex?: number,
+    actionId?: string,
   ): Promise<BJMultiTableState> {
     const release = await this.tableLocks.acquire(tableId);
     try {
@@ -531,6 +594,12 @@ export class BlackjackMultiGameService {
       const rs = rsResult.rows[0];
       if (rs.seat_position !== round.acting_seat_position) throw new Error('Not your turn');
 
+      // Idempotency check: reject duplicate action IDs
+      if (actionId && rs.last_action_id === actionId) {
+        logger.warn('BJMulti: duplicate actionId rejected', { tableId, actionId, seat: rs.seat_position });
+        return this.getTableState(tableId);
+      }
+
       const hi = handIndex ?? rs.active_hand_index ?? 0;
       const hands: BJMultiHandObj[] = rs.hands;
       if (!hands[hi]) throw new Error('Hand not found');
@@ -547,6 +616,15 @@ export class BlackjackMultiGameService {
         await this.handleSplit(tableId, round, rs, hands, hi, deck, dp, normalized);
       } else {
         await this.handleHandAction(tableId, round, rs, hands, hi, action, deck, dp, normalized);
+      }
+      this.audit(tableId, action, round.id, normalized, { handIndex: hi, seatPosition: rs.seat_position });
+
+      // Persist action ID for idempotency
+      if (actionId) {
+        await this.pool.query(
+          `UPDATE blackjack_multi_round_seats SET last_action_id = $1 WHERE id = $2`,
+          [actionId, rs.id],
+        );
       }
 
       return this.getTableState(tableId);
@@ -575,6 +653,7 @@ export class BlackjackMultiGameService {
       logger.info('BJMulti: auto-standing timed-out turn', {
         tableId, roundId: round.id, actingSeat: round.acting_seat_position,
       });
+      this.audit(tableId, 'auto_stand', round.id, null, { seatPosition: round.acting_seat_position });
 
       // Stand the acting seat's current hand
       const rsResult = await this.pool.query(
@@ -881,6 +960,7 @@ export class BlackjackMultiGameService {
       bettingStartedAt: (round?.status === 'betting' ? round?.created_at?.toISOString?.() : null) ?? null,
       themeKind: (table.theme_kind ?? 'video') as 'video' | 'image',
       themeId: table.theme_id ?? 'glowingTable',
+      stateVersion: this.bumpStateVersion(tableId),
     };
   }
 
@@ -915,6 +995,14 @@ export class BlackjackMultiGameService {
     return totalCards;
   }
 
+  /** Safe deck draw — throws if deck is exhausted (should never happen with 6-deck shoe). */
+  private drawCard(deck: number[], dp: number): { card: number; dp: number } {
+    if (dp >= deck.length) {
+      throw new Error(`Deck exhausted at position ${dp}/${deck.length} — cannot draw`);
+    }
+    return { card: deck[dp], dp: dp + 1 };
+  }
+
   private canSplit(cards: number[]): boolean {
     if (cards.length !== 2) return false;
     const r1 = this.pfService.cardIndexToRank(Number(cards[0]));
@@ -940,7 +1028,8 @@ export class BlackjackMultiGameService {
     let dp = await this.computeDeckPositionAsync(round.id, round.dealer_cards);
 
     if (action === 'hit') {
-      const card = deck[dp++];
+      const draw = this.drawCard(deck, dp); dp = draw.dp;
+      const card = draw.card;
       hand.cards.push(card);
       hand.actions.push({ type: 'hit', card, timestamp: Date.now() });
       const tot = this.pfService.calculateHandTotalV2(hand.cards);
@@ -968,7 +1057,8 @@ export class BlackjackMultiGameService {
       await this.dbService.deductPlayerBalance(playerAddress, bet);
 
       hand.betAmount = (bet * 2n).toString();
-      const card = deck[dp++];
+      const draw = this.drawCard(deck, dp); dp = draw.dp;
+      const card = draw.card;
       hand.cards.push(card);
       hand.actions.push({ type: 'double_down', card, timestamp: Date.now() });
       const tot = this.pfService.calculateHandTotalV2(hand.cards);
@@ -1033,8 +1123,8 @@ export class BlackjackMultiGameService {
 
     let dp = await this.computeDeckPositionAsync(round.id, round.dealer_cards);
 
-    const card1 = deck[dp++];
-    const card2 = deck[dp++];
+    const draw1 = this.drawCard(deck, dp); dp = draw1.dp; const card1 = draw1.card;
+    const draw2 = this.drawCard(deck, dp); dp = draw2.dp; const card2 = draw2.card;
 
     const h1Cards = [hand.cards[0], card1];
     const h2Cards = [hand.cards[1], card2];
@@ -1132,7 +1222,8 @@ export class BlackjackMultiGameService {
     while (true) {
       const dh = this.pfService.calculateHandTotalV2(dealerCards);
       if (dh.total >= 17 && !(dh.total === 17 && dh.hasAce)) break;
-      dealerCards.push(deck[dp++]);
+      const draw = this.drawCard(deck, dp); dp = draw.dp;
+      dealerCards.push(draw.card);
     }
 
     const finalDh = this.pfService.calculateHandTotalV2(dealerCards);
@@ -1149,6 +1240,13 @@ export class BlackjackMultiGameService {
       `SELECT * FROM blackjack_multi_rounds WHERE id = $1`, [roundId],
     );
     const round = roundResult.rows[0];
+
+    // Guard: don't re-settle an already completed round
+    if (round.status === 'completed') {
+      logger.warn('BJMulti: settleRoundInternal called on already-completed round', { roundId });
+      return;
+    }
+
     const dealerCards: number[] = round.dealer_cards;
     const dealerTotal = this.pfService.calculateHandTotalV2(dealerCards).total;
     const dealerBlackjack = this.pfService.isNaturalBlackjackV2(dealerCards);
@@ -1158,6 +1256,12 @@ export class BlackjackMultiGameService {
     );
 
     for (const rs of rsResult.rows) {
+      // Guard: skip seats already settled (prevents double-crediting)
+      if (rs.settled) {
+        logger.warn('BJMulti: skipping already-settled seat', { roundId, seatId: rs.id });
+        continue;
+      }
+
       const hands: BJMultiHandObj[] = rs.hands;
       let totalPayout = 0n;
 
@@ -1168,7 +1272,9 @@ export class BlackjackMultiGameService {
             hand.payout = hand.betAmount; // return stake
           } else {
             hand.result = 'blackjack';
-            hand.payout = ((BigInt(hand.betAmount) * 5n) / 2n).toString();
+            // 3:2 blackjack payout: bet * 5 / 2, rounded up to avoid truncation
+            const bjBet = BigInt(hand.betAmount);
+            hand.payout = ((bjBet * 5n + 1n) / 2n).toString();
           }
         } else if (hand.isBust) {
           hand.result = 'loss';
@@ -1218,6 +1324,7 @@ export class BlackjackMultiGameService {
     await this.pool.query(
       `UPDATE blackjack_multi_tables SET status = 'completed' WHERE id = $1`, [tableId],
     );
+    this.audit(tableId, 'settle', roundId, null, { dealerTotal, dealerBlackjack, seatCount: rsResult.rows.length });
   }
 
   /**
