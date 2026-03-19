@@ -3362,7 +3362,7 @@ export class WebSocketService {
       SELECT DISTINCT r.table_id
       FROM blackjack_multi_rounds r
       WHERE r.status = 'betting'
-        AND r.created_at < NOW() - INTERVAL '30 seconds'
+        AND r.created_at < NOW() - INTERVAL '15 seconds'
     `);
     for (const row of expiredBetting.rows) {
       try {

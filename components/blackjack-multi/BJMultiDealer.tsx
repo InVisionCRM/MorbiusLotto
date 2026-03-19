@@ -25,24 +25,29 @@ export default function BJMultiDealer({ cards, cardCount, total, phase }: Props)
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <p className="text-xs text-slate-500 uppercase tracking-wider">Dealer</p>
-      <div className="flex items-center gap-1 flex-wrap justify-center min-h-[72px]">
+      <div className="flex items-center gap-1.5 flex-wrap justify-center min-h-[80px]">
         {cards.map((c, i) => (
-          <PlayingCard key={i} card={indexToCard(c)} owner="dealer" className="w-10 h-14" />
+          <PlayingCard key={i} card={indexToCard(c)} owner="dealer" className="w-12 h-16 drop-shadow-lg" />
         ))}
-        {/* Face-down card backs for hidden cards */}
         {Array.from({ length: hiddenCount }).map((_, i) => (
           <PlayingCard
             key={`hidden-${i}`}
             card={{ value: 1, suit: 'spades' }}
             hidden
             owner="dealer"
-            className="w-10 h-14"
+            className="w-12 h-16 drop-shadow-lg"
           />
         ))}
+        {cardCount === 0 && (
+          <div className="flex gap-1.5">
+            {[0, 1].map(i => (
+              <div key={i} className="w-12 h-16 rounded-lg border-2 border-dashed border-white/10" />
+            ))}
+          </div>
+        )}
       </div>
       {showTotal && total > 0 && (
-        <span className={`text-xs font-semibold ${total > 21 ? 'text-red-400' : 'text-white'}`}>
+        <span className={`text-sm font-bold px-3 py-0.5 rounded-full bg-black/50 ${total > 21 ? 'text-red-400' : 'text-white'}`}>
           {total > 21 ? 'Bust' : total}
         </span>
       )}

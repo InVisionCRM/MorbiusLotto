@@ -77,6 +77,7 @@ export interface BJMultiTableState {
   phase: 'waiting' | 'betting' | 'playing' | 'dealer_turn' | 'completed';
   roundNumber: number;
   turnStartedAt: string | null;
+  bettingStartedAt: string | null;
 }
 
 export interface BJMultiTableSummary {
@@ -701,6 +702,7 @@ export class BlackjackMultiGameService {
       phase: (table.status as BJMultiTableState['phase']),
       roundNumber: round?.round_number ?? 0,
       turnStartedAt: round?.turn_started_at?.toISOString?.() ?? null,
+      bettingStartedAt: (round?.status === 'betting' ? round?.created_at?.toISOString?.() : null) ?? null,
     };
   }
 

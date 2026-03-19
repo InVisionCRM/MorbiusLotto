@@ -66,11 +66,11 @@ export default function BJMultiSeat({ seat, position, isMe, isEmpty, isActing, p
   };
 
   return (
-    <div className={`rounded-xl border p-3 min-h-[160px] flex flex-col items-center gap-2 transition-all ${
-      isMe ? 'border-cyan-500/60 bg-slate-800/80' :
-      isActing ? 'border-yellow-500/60 bg-slate-800/60' :
-      isEmpty ? 'border-slate-700/50 bg-slate-900/30' :
-      'border-slate-700 bg-slate-800/40'
+    <div className={`rounded-xl p-3 min-h-[160px] flex flex-col items-center gap-2 transition-all backdrop-blur-sm ${
+      isMe ? 'border border-cyan-400/60 bg-black/50 shadow-[0_0_16px_rgba(34,211,238,0.15)]' :
+      isActing ? 'border border-yellow-400/70 bg-black/50 shadow-[0_0_20px_rgba(250,204,21,0.2)]' :
+      isEmpty ? 'border border-white/10 bg-black/20' :
+      'border border-white/20 bg-black/40'
     }`}>
       {isEmpty ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-2">
@@ -126,7 +126,7 @@ export default function BJMultiSeat({ seat, position, isMe, isEmpty, isActing, p
                 <div key={hi} className="flex flex-col items-center gap-1">
                   <div className="flex gap-0.5 flex-wrap justify-center">
                     {hand.cards.map((c, ci) => (
-                      <PlayingCard key={ci} card={indexToCard(c)} owner="player" className="w-7 h-10" />
+                      <PlayingCard key={ci} card={indexToCard(c)} owner="player" className="w-9 h-12 drop-shadow-md" />
                     ))}
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px]">

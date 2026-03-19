@@ -215,6 +215,7 @@ export interface BJMultiTableState {
   phase: 'waiting' | 'betting' | 'playing' | 'dealer_turn' | 'completed';
   roundNumber: number;
   turnStartedAt: string | null;
+  bettingStartedAt: string | null;
 }
 
 export interface BJMultiTableSummary {
