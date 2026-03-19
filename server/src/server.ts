@@ -15,6 +15,7 @@ import { TournamentSchedulerService } from './services/tournament-scheduler.serv
 import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
+import { BlackjackMultiGameService } from './services/blackjack-multi-game.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { InstantLotteryService } from './services/instant-lottery.service';
 import { MerkleDropsService } from './services/merkle-drops.service';
@@ -268,8 +269,11 @@ async function initializeServices() {
       logger.warn(`Poker: failed to clear stale hands on startup: ${err.message}`);
     }
 
+    // Initialize multiplayer blackjack service
+    const bjMultiService = new BlackjackMultiGameService(dbService, pfService);
+
     // Initialize WebSocket service
-    const wsService = new WebSocketService(server, gameService, dbService, tournamentService, pokerGameService);
+    const wsService = new WebSocketService(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService);
 
     // Wire broadcast so bot actions (which bypass the WS handler) still push state to clients
     pokerGameService.setBroadcastCallback((tableId) => wsService.broadcastPokerTableState(tableId));
@@ -286,6 +290,9 @@ async function initializeServices() {
     pokerGameService.setPostHandCallback(
       (tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber)
     );
+
+    // Wire BJ multi broadcast callback
+    bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
 
     // Freeroll scheduler (polls pending scheduled events: start, end)
     freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);
@@ -1597,6 +1604,42 @@ async function initializeServices() {
         logger.error('Error deleting poker table:', error);
         const msg = dbSchemaError(error);
         res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
+      }
+    });
+
+    // Admin: Multiplayer Blackjack table management
+    app.get('/api/admin/bj-multi/tables', async (req, res) => {
+      try {
+        const tables = await bjMultiService.listTables();
+        res.json({ tables });
+      } catch (error) {
+        logger.error('Error fetching BJ multi tables:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.post('/api/admin/bj-multi/tables', async (req, res) => {
+      try {
+        const { minBet, maxBet } = req.body as { minBet?: string; maxBet?: string };
+        const min = minBet ? BigInt(minBet) : BigInt('1000000000000000000');
+        const max = maxBet ? BigInt(maxBet) : BigInt('100000000000000000000000');
+        const table = await bjMultiService.createTable(min, max);
+        res.json({ tableId: table.id });
+      } catch (error) {
+        logger.error('Error creating BJ multi table:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.delete('/api/admin/bj-multi/tables/:tableId', async (req, res) => {
+      try {
+        const { tableId } = req.params;
+        const ok = await bjMultiService.deleteTable(tableId);
+        if (!ok) { res.status(404).json({ error: 'Table not found' }); return; }
+        res.json({ ok: true });
+      } catch (error) {
+        logger.error('Error deleting BJ multi table:', error);
+        res.status(500).json({ error: 'Internal server error' });
       }
     });
 

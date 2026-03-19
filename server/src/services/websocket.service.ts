@@ -5,6 +5,8 @@ import { BlackjackGameService, GameState, CreateGameRequest, PlayerActionRequest
 import { TournamentService, TournamentState, LeaderboardEntry, TOURNAMENT_CONFIG } from './tournament.service';
 import { PokerGameService, PokerTableState } from './poker-game.service';
 import { PokerTournamentService } from './poker-tournament.service';
+import { BlackjackMultiGameService } from './blackjack-multi-game.service';
+import { isAdminWallet } from '../lib/cosmetics-catalog';
 import { logger } from '../utils/logger';
 import { toBigIntSafe } from '../utils/safe-bigint';
 import { v4 as uuidv4 } from 'uuid';
@@ -83,6 +85,11 @@ function isTournamentRoom(room: string): boolean {
   return room.startsWith('tournament:') && room.length > 'tournament:'.length;
 }
 
+// Check if a room ID is a multiplayer blackjack table room (blackjack:table:{uuid})
+function isBlackjackTableRoom(room: string): boolean {
+  return room.startsWith('blackjack:table:') && room.length > 'blackjack:table:'.length;
+}
+
 function getTournamentIdFromRoom(room: string): string {
   return room.slice('tournament:'.length);
 }
@@ -125,6 +132,8 @@ export class WebSocketService {
   private tournamentService?: TournamentService;
   private pokerGameService: PokerGameService | null = null;
   private pokerTournamentService: PokerTournamentService | null = null;
+  private bjMultiService: BlackjackMultiGameService | null = null;
+  private bjMultiTimerInterval: NodeJS.Timeout | null = null;
   private betLimitsCache: { minBet: bigint; maxBet: bigint; cachedAt: number } | null = null;
 
   constructor(
@@ -132,10 +141,12 @@ export class WebSocketService {
     private gameService: BlackjackGameService,
     private dbService: DatabaseService,
     tournamentService?: TournamentService,
-    pokerGameService?: PokerGameService | null
+    pokerGameService?: PokerGameService | null,
+    bjMultiService?: BlackjackMultiGameService | null,
   ) {
     this.tournamentService = tournamentService;
     this.pokerGameService = pokerGameService ?? null;
+    this.bjMultiService = bjMultiService ?? null;
     this.wss = new WebSocketServer({ server });
     
     // Initialize public client for reading contract state
@@ -173,6 +184,17 @@ export class WebSocketService {
           await this.pokerGameService!.autoFoldTimedOutTurns();
         } catch (err) {
           logger.error('Poker auto-fold watchdog error', err);
+        }
+      }, 5000);
+    }
+
+    // Multiplayer blackjack turn timer + betting timeout enforcement (5s poll)
+    if (this.bjMultiService) {
+      this.bjMultiTimerInterval = setInterval(async () => {
+        try {
+          await this.tickBJMultiTimers();
+        } catch (err) {
+          logger.error('BJMulti timer watchdog error', err);
         }
       }, 5000);
     }
@@ -625,6 +647,56 @@ export class WebSocketService {
         case 'poker_tournament_cancel':
           if (!this.requireAuth(ws, message)) return;
           await this.handlePokerTournamentCancel(ws, message);
+          break;
+
+        // Multiplayer Blackjack
+        case 'bj_multi_list_tables':
+          await this.handleBJMultiListTables(ws, message);
+          break;
+
+        case 'bj_multi_join_table':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleBJMultiJoinTable(ws, message);
+          break;
+
+        case 'bj_multi_leave_table':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleBJMultiLeaveTable(ws, message);
+          break;
+
+        case 'bj_multi_place_bet':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleBJMultiPlaceBet(ws, message);
+          break;
+
+        case 'bj_multi_action':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleBJMultiAction(ws, message);
+          break;
+
+        case 'bj_multi_get_state':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleBJMultiGetState(ws, message);
+          break;
+
+        case 'bj_multi_create_table':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleBJMultiCreateTable(ws, message);
+          break;
+
+        case 'bj_multi_delete_table':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleBJMultiDeleteTable(ws, message);
+          break;
+
+        case 'bj_multi_quick_reaction':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleBJMultiQuickReaction(ws, message);
+          break;
+
+        case 'bj_multi_avatar_emotion':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleBJMultiAvatarEmotion(ws, message);
           break;
 
         default:
@@ -1144,7 +1216,8 @@ export class WebSocketService {
       }
       const normalized = roomId.toLowerCase().trim();
       const isPokerTableRoom = normalized.startsWith('poker:table:');
-      if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom) {
+      const isBJMultiRoom = isBlackjackTableRoom(normalized);
+      if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom && !isBJMultiRoom) {
         return this.sendError(ws, 'Invalid room', message.requestId);
       }
 
@@ -1175,7 +1248,7 @@ export class WebSocketService {
       }
       this.roomToClients.get(normalized)!.add(ws.connectionId!);
 
-      const recent = isPokerTableRoom ? [] : await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
+      const recent = (isPokerTableRoom || isBJMultiRoom) ? [] : await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
       const addresses = [...new Set(recent.map(m => m.sender_address).filter(Boolean) as string[])];
       const displayNames = await this.dbService.getDisplayNames(addresses);
       const config = await this.dbService.getAdminGameConfig();
@@ -1467,7 +1540,7 @@ export class WebSocketService {
       }
       const normalized = roomId.toLowerCase().trim();
       const isPokerTableRoom = normalized.startsWith('poker:table:');
-      if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom) {
+      if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom && !isBlackjackTableRoom(normalized)) {
         return this.sendError(ws, 'Invalid room', message.requestId);
       }
       const limitNum = typeof limit === 'number' && limit > 0 && limit <= CHAT_RECENT_MESSAGES_LIMIT
@@ -1591,7 +1664,7 @@ export class WebSocketService {
 
       const normalizedRoom = roomId.toLowerCase().trim();
       const isPokerTableRoom = normalizedRoom.startsWith('poker:table:');
-      if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom) && !isPokerTableRoom) {
+      if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom) && !isPokerTableRoom && !isBlackjackTableRoom(normalizedRoom)) {
         return this.sendError(ws, 'Invalid room', message.requestId);
       }
       // Tournament rooms require participant check on send
@@ -3235,6 +3308,9 @@ export class WebSocketService {
     if (this.pokerAutoFoldInterval) {
       clearInterval(this.pokerAutoFoldInterval);
     }
+    if (this.bjMultiTimerInterval) {
+      clearInterval(this.bjMultiTimerInterval);
+    }
 
     this.wss.clients.forEach((client: WebSocketClient) => {
       client.close(1000, 'Server shutdown');
@@ -3242,5 +3318,277 @@ export class WebSocketService {
 
     this.wss.close();
     logger.info('WebSocket service shut down');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Multiplayer Blackjack handlers
+  // ---------------------------------------------------------------------------
+
+  /** Broadcast current BJ multi table state to room. */
+  public async broadcastBJMultiTableState(tableId: string): Promise<void> {
+    if (!this.bjMultiService) return;
+    try {
+      const state = await this.bjMultiService.getTableState(tableId);
+      this.broadcastToRoom(`blackjack:table:${tableId}`, { type: 'bj_multi_table_state', payload: state });
+    } catch (err) {
+      logger.error('broadcastBJMultiTableState failed', { tableId, error: err });
+    }
+  }
+
+  /** Timer tick: check for expired turns and betting timeouts across all active BJ multi tables. */
+  private async tickBJMultiTimers(): Promise<void> {
+    if (!this.bjMultiService) return;
+    const pool = this.dbService.getPool();
+
+    // Find tables with an active round that has an expired turn (playing + turn_started_at + 30s < NOW())
+    const timedOutTurns = await pool.query(`
+      SELECT DISTINCT r.table_id
+      FROM blackjack_multi_rounds r
+      WHERE r.status = 'playing'
+        AND r.acting_seat_position IS NOT NULL
+        AND r.turn_started_at < NOW() - INTERVAL '30 seconds'
+    `);
+    for (const row of timedOutTurns.rows) {
+      try {
+        await this.bjMultiService.autoStandTimedOut(row.table_id);
+        await this.broadcastBJMultiTableState(row.table_id);
+      } catch (err) {
+        logger.error('BJMulti auto-stand error', { tableId: row.table_id, error: err });
+      }
+    }
+
+    // Find tables in 'betting' status where the round is older than 30s and at least one seat has a bet
+    const expiredBetting = await pool.query(`
+      SELECT DISTINCT r.table_id
+      FROM blackjack_multi_rounds r
+      WHERE r.status = 'betting'
+        AND r.created_at < NOW() - INTERVAL '30 seconds'
+    `);
+    for (const row of expiredBetting.rows) {
+      try {
+        await this.bjMultiService.handleBettingTimeout(row.table_id);
+        await this.broadcastBJMultiTableState(row.table_id);
+      } catch (err) {
+        logger.error('BJMulti betting timeout error', { tableId: row.table_id, error: err });
+      }
+    }
+
+    // Also handle tables stuck in 'betting' with no active round (e.g. table.status = 'betting' but no round)
+    const stuckBetting = await pool.query(`
+      SELECT t.id AS table_id
+      FROM blackjack_multi_tables t
+      WHERE t.status = 'betting'
+        AND NOT EXISTS (
+          SELECT 1 FROM blackjack_multi_rounds r WHERE r.table_id = t.id AND r.status = 'betting'
+        )
+    `);
+    for (const row of stuckBetting.rows) {
+      try {
+        await this.bjMultiService.handleBettingTimeout(row.table_id);
+        await this.broadcastBJMultiTableState(row.table_id);
+      } catch (err) {
+        logger.error('BJMulti stuck betting error', { tableId: row.table_id, error: err });
+      }
+    }
+  }
+
+  private async handleBJMultiListTables(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.bjMultiService) return this.sendError(ws, 'BJ multi not available', message.requestId);
+      const tables = await this.bjMultiService.listTables();
+      this.sendMessage(ws, { type: 'bj_multi_table_list', payload: { tables }, requestId: message.requestId });
+    } catch (error) {
+      logger.error('BJ multi list tables error:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to list tables', message.requestId);
+    }
+  }
+
+  private async handleBJMultiJoinTable(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.bjMultiService || !ws.playerAddress) {
+        return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+      }
+      const { tableId, seatPosition } = (message.payload ?? {}) as { tableId?: string; seatPosition?: number };
+      if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
+      if (seatPosition === undefined || seatPosition === null) {
+        return this.sendError(ws, 'seatPosition required', message.requestId);
+      }
+
+      const state = await this.bjMultiService.joinTable(tableId, ws.playerAddress, seatPosition);
+
+      // Assign connection to room
+      const roomId = `blackjack:table:${tableId}`;
+      if (ws.currentRoom && ws.connectionId) {
+        const prev = this.roomToClients.get(ws.currentRoom);
+        if (prev) { prev.delete(ws.connectionId); if (prev.size === 0) this.roomToClients.delete(ws.currentRoom); }
+      }
+      ws.currentRoom = roomId;
+      if (!this.roomToClients.has(roomId)) this.roomToClients.set(roomId, new Set());
+      this.roomToClients.get(roomId)!.add(ws.connectionId!);
+
+      this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+      const broadcastState = await this.bjMultiService.getTableState(tableId);
+      this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: broadcastState });
+    } catch (error) {
+      logger.error('BJ multi join table error:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to join table', message.requestId);
+    }
+  }
+
+  private async handleBJMultiLeaveTable(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.bjMultiService || !ws.playerAddress) {
+        return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+      }
+      const { tableId } = (message.payload ?? {}) as { tableId?: string };
+      if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
+
+      const state = await this.bjMultiService.leaveTable(tableId, ws.playerAddress);
+
+      const roomId = `blackjack:table:${tableId}`;
+      if (ws.connectionId) {
+        const set = this.roomToClients.get(roomId);
+        if (set) { set.delete(ws.connectionId); if (set.size === 0) this.roomToClients.delete(roomId); }
+      }
+      ws.currentRoom = undefined;
+
+      this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+      const broadcastState = await this.bjMultiService.getTableState(tableId);
+      this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: broadcastState });
+    } catch (error) {
+      logger.error('BJ multi leave table error:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to leave table', message.requestId);
+    }
+  }
+
+  private async handleBJMultiPlaceBet(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.bjMultiService || !ws.playerAddress) {
+        return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+      }
+      const { tableId, amount } = (message.payload ?? {}) as { tableId?: string; amount?: string };
+      if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
+      if (!amount) return this.sendError(ws, 'amount required', message.requestId);
+
+      const betAmount = toBigIntSafe(amount);
+      const state = await this.bjMultiService.placeBet(tableId, ws.playerAddress, betAmount);
+
+      this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+      const roomId = `blackjack:table:${tableId}`;
+      const broadcastState = await this.bjMultiService.getTableState(tableId);
+      this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: broadcastState });
+    } catch (error) {
+      logger.error('BJ multi place bet error:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to place bet', message.requestId);
+    }
+  }
+
+  private async handleBJMultiAction(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.bjMultiService || !ws.playerAddress) {
+        return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+      }
+      const { tableId, action, handIndex } = (message.payload ?? {}) as {
+        tableId?: string; action?: string; handIndex?: number;
+      };
+      if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
+      if (!action || !['hit', 'stand', 'double_down', 'split'].includes(action)) {
+        return this.sendError(ws, 'action must be hit, stand, double_down, or split', message.requestId);
+      }
+
+      const state = await this.bjMultiService.playerAction(
+        tableId, ws.playerAddress, action as 'hit' | 'stand' | 'double_down' | 'split', handIndex,
+      );
+
+      this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+      const roomId = `blackjack:table:${tableId}`;
+      const broadcastState = await this.bjMultiService.getTableState(tableId);
+      this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: broadcastState });
+    } catch (error) {
+      logger.error('BJ multi action error:', error);
+      this.sendError(ws, (error as Error).message || 'Action failed', message.requestId);
+    }
+  }
+
+  private async handleBJMultiGetState(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.bjMultiService) return this.sendError(ws, 'BJ multi not available', message.requestId);
+      const { tableId } = (message.payload ?? {}) as { tableId?: string };
+      if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
+
+      const state = await this.bjMultiService.getTableState(tableId);
+      this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+    } catch (error) {
+      logger.error('BJ multi get state error:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to get state', message.requestId);
+    }
+  }
+
+  private async handleBJMultiCreateTable(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.bjMultiService) return this.sendError(ws, 'BJ multi not available', message.requestId);
+      if (!ws.playerAddress || !isAdminWallet(ws.playerAddress)) {
+        return this.sendError(ws, 'Admin required', message.requestId);
+      }
+      const { minBet, maxBet } = (message.payload ?? {}) as { minBet?: string; maxBet?: string };
+      const min = minBet ? toBigIntSafe(minBet) : BigInt('1000000000000000000');
+      const max = maxBet ? toBigIntSafe(maxBet) : BigInt('100000000000000000000000');
+
+      const table = await this.bjMultiService.createTable(min, max);
+      const tables = await this.bjMultiService.listTables();
+      this.sendMessage(ws, { type: 'bj_multi_table_created', payload: { tableId: table.id, tables }, requestId: message.requestId });
+    } catch (error) {
+      logger.error('BJ multi create table error:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to create table', message.requestId);
+    }
+  }
+
+  private async handleBJMultiDeleteTable(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.bjMultiService) return this.sendError(ws, 'BJ multi not available', message.requestId);
+      if (!ws.playerAddress || !isAdminWallet(ws.playerAddress)) {
+        return this.sendError(ws, 'Admin required', message.requestId);
+      }
+      const { tableId } = (message.payload ?? {}) as { tableId?: string };
+      if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
+
+      const ok = await this.bjMultiService.deleteTable(tableId);
+      if (!ok) return this.sendError(ws, 'Table not found', message.requestId);
+      const tables = await this.bjMultiService.listTables();
+      this.sendMessage(ws, { type: 'bj_multi_table_deleted', payload: { tableId, tables }, requestId: message.requestId });
+    } catch (error) {
+      logger.error('BJ multi delete table error:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to delete table', message.requestId);
+    }
+  }
+
+  private async handleBJMultiQuickReaction(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) return this.sendError(ws, 'Wallet required', message.requestId);
+      const { tableId, type, value } = (message.payload ?? {}) as { tableId?: string; type?: string; value?: string };
+      if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
+
+      this.broadcastToRoom(`blackjack:table:${tableId}`, {
+        type: 'bj_multi_quick_reaction',
+        payload: { tableId, playerAddress: ws.playerAddress, reactionType: type, value },
+      });
+    } catch (error) {
+      logger.error('BJ multi quick reaction error:', error);
+    }
+  }
+
+  private async handleBJMultiAvatarEmotion(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) return this.sendError(ws, 'Wallet required', message.requestId);
+      const { tableId, emotion } = (message.payload ?? {}) as { tableId?: string; emotion?: string };
+      if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
+
+      this.broadcastToRoom(`blackjack:table:${tableId}`, {
+        type: 'bj_multi_avatar_emotion',
+        payload: { tableId, playerAddress: ws.playerAddress, emotion },
+      });
+    } catch (error) {
+      logger.error('BJ multi avatar emotion error:', error);
+    }
   }
 }

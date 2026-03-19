@@ -865,10 +865,7 @@ export default function AvatarPreview({
       default: return (
         <g>
           <rect x="4" y="20" width="16" height="8" fill={c} />
-          <rect x="9" y="20" width="6" height="1" fill="rgba(0,0,0,0.2)" />
-          <rect x="10" y="21" width="4" height="1" fill="rgba(0,0,0,0.2)" />
-          <rect x="4" y="24" width="16" height="1" fill="rgba(0,0,0,0.12)" />
-          <rect x="11" y="22" width="2" height="5" fill="rgba(0,0,0,0.08)" />
+          <rect x="4" y="27" width="16" height="1" fill="rgba(0,0,0,0.08)" />
         </g>
       );
     }

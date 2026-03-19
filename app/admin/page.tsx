@@ -22,6 +22,7 @@ import AdminMemesTab from '@/components/admin/AdminMemesTab';
 import AdminReportsTab from '@/components/admin/AdminReportsTab';
 import AdminLPStakingTab from '@/components/admin/AdminLPStakingTab';
 import AdminMerkleDropsTab from '@/components/admin/AdminMerkleDropsTab';
+import AdminBJMultiTab from '@/components/admin/AdminBJMultiTab';
 
 export default function AdminPage() {
   const { address } = useAccount();
@@ -90,6 +91,9 @@ export default function AdminPage() {
             <TabsTrigger value="cosmetics" className="rounded data-[state=active]:bg-purple-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <Package className="w-3 h-3 mr-1 hidden sm:inline" /> Items
             </TabsTrigger>
+            <TabsTrigger value="bj-multi" className="rounded data-[state=active]:bg-red-700/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
+              BJ Multi
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="tables" className="mt-3 focus-visible:outline-none">
@@ -142,6 +146,10 @@ export default function AdminPage() {
 
           <TabsContent value="cosmetics" className="mt-3 focus-visible:outline-none">
             <AdminCosmeticsTab />
+          </TabsContent>
+
+          <TabsContent value="bj-multi" className="mt-3 focus-visible:outline-none">
+            <AdminBJMultiTab />
           </TabsContent>
         </Tabs>
         </main>

@@ -163,6 +163,69 @@ export interface PokerTableState {
   myHoleCards: number[] | null;
 }
 
+// ---------------------------------------------------------------------------
+// Multiplayer Blackjack types
+// ---------------------------------------------------------------------------
+
+export interface BJMultiHandObj {
+  cards: number[];
+  total: number;
+  hasAce: boolean;
+  isBlackjack: boolean;
+  isBust: boolean;
+  betAmount: string;
+  result?: 'win' | 'loss' | 'push' | 'blackjack' | null;
+  payout: string;
+  actions: any[];
+  canHit: boolean;
+  canStand: boolean;
+  canDoubleDown: boolean;
+  canSplit: boolean;
+}
+
+export interface BJMultiSeatState {
+  position: number;
+  playerAddress: string | null;
+  seatStatus: 'active' | 'sitting_out';
+  consecutiveSitOuts: number;
+  pendingBet: string;
+  displayName?: string | null;
+  profileImageUrl?: string | null;
+  avatarConfig?: Record<string, unknown> | null;
+  betAmount: string;
+  hands: BJMultiHandObj[];
+  activeHandIndex: number;
+  result?: string | null;
+  payout: string;
+  isActing: boolean;
+}
+
+export interface BJMultiTableState {
+  tableId: string;
+  status: string;
+  minBet: string;
+  maxBet: string;
+  seats: BJMultiSeatState[];
+  dealerCards: number[];
+  dealerCardCount: number;
+  dealerTotal: number;
+  dealerHasAce: boolean;
+  currentRoundId: string | null;
+  actingSeatPosition: number | null;
+  phase: 'waiting' | 'betting' | 'playing' | 'dealer_turn' | 'completed';
+  roundNumber: number;
+  turnStartedAt: string | null;
+}
+
+export interface BJMultiTableSummary {
+  id: string;
+  status: string;
+  minBet: string;
+  maxBet: string;
+  seatedCount: number;
+  emptySeats: number;
+}
+
 /** EIP-712 domain for WebSocket auth (must match server) */
 const AUTH_EIP712_DOMAIN = {
   name: 'MORBlotto Blackjack' as const,

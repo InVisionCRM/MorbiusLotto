@@ -45,6 +45,12 @@ const Accessories = ['None', 'Glasses', 'Sunglasses', 'Aviators', 'Wayfarers', '
 const Hats = ['None', 'Cap', 'Beanie', 'Top Hat', 'Cowboy', 'Crown', 'Bandana'];
 const Necklaces = ['None', 'Gold Chain', 'Silver Chain', 'Pearl', 'Pendant'];
 const MouthAccessories = ['None', 'Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'];
+const ShirtStyles = [
+  'Default', 'Tuxedo', 'Cheetah Print', 'Hawaiian', 'Pinstripe', 'Flannel',
+  'Denim Jacket', 'Leather Jacket', 'Varsity', 'Hoodie', 'Camo', 'Suit',
+  'Blazer', 'Kimono', 'Polo', 'Zebra Print', 'Leopard Print', 'Snake Skin',
+  'Tie-Dye', 'Neon Crop', 'Biker', 'Sailor', 'Space Suit', 'Grim Reaper', 'Golden Armor',
+];
 
 // ── category config ────────────────────────────────────────────────────────
 
@@ -69,6 +75,7 @@ const CATS: Category[] = [
   { id: 'lips',  label: 'Lips',             short: 'LIPS',  field: 'lipShape',       type: 'shape' },
   { id: 'mouth', label: 'Mouth',            short: 'MOUTH', field: 'mouthAccessory', type: 'shape' },
   { id: 'shirt', label: 'Shirt Color',      short: 'SHIRT', field: 'shirtColor',     type: 'color' },
+  { id: 'sstyle',label: 'Shirt Style',      short: 'STYLE', field: 'shirtStyle',     type: 'shape' },
   { id: 'glass', label: 'Glasses & Extras', short: 'GLASS', field: 'accessory',      type: 'shape' },
   { id: 'hat',   label: 'Hat',              short: 'HAT',   field: 'hat',            type: 'shape' },
   { id: 'neck',  label: 'Necklace',         short: 'NECK',  field: 'necklace',       type: 'shape' },
@@ -99,6 +106,7 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
       case 'skin':  return SkinColors;
       case 'hairc': return HairColors;
       case 'shirt': return ShirtColors;
+      case 'sstyle':return ShirtStyles;
       case 'glass': return Accessories;
       case 'neck':  return Necklaces;
       case 'face':  return FaceShapes;
