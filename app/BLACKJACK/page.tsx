@@ -39,7 +39,7 @@ import {
   TournamentPinEntry,
 } from '@/components/BLACKJACK/Tournament';
 import { CreateTournamentRequest, TournamentListItem } from '@/lib/tournament-types';
-import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_PLAYER_WINS, SOUNDS_DEALER_WINS, SOUND_PUSH, SOUND_PLAYER_BLACKJACK, pickRandom } from './constants';
+import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_TIP, SOUND_PUSH, pickRandom } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -609,6 +609,9 @@ export default function BlackjackPage() {
   // WebSocket client (declare before fetchBalance/syncBalance)
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+
+  // Tip dealer state
+  const [tipAnimating, setTipAnimating] = useState(false);
 
   // Tournament mode state
   const [isTournamentMode, setIsTournamentMode] = useState(false);
@@ -1924,7 +1927,7 @@ export default function BlackjackPage() {
         if (pendingChipResult === 'loss') {
           playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
         } else if (pendingChipResult === 'blackjack') {
-          playDealerVoice(SOUND_PLAYER_BLACKJACK);
+          playDealerVoice(pickRandom(SOUNDS_PLAYER_BLACKJACK));
         } else if (pendingChipResult === 'win') {
           playDealerVoice(pickRandom(SOUNDS_PLAYER_WINS));
         } else if (pendingChipResult === 'push') {
@@ -2718,6 +2721,44 @@ export default function BlackjackPage() {
               }}
               inTournament={tournament.tournamentState.inTournament}
             />
+
+            {/* Tip dealer button — top center overlay */}
+            {address && wsConnected && wsClient && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
+                <button
+                  onClick={async () => {
+                    if (tipAnimating) return;
+                    playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
+                    setTipAnimating(true);
+                    try {
+                      await wsClient.sendRequest('tip_dealer', {
+                        amount: (BigInt(2000) * BigInt('1000000000000000000')).toString(),
+                      });
+                      playDealerVoice(pickRandom(SOUNDS_TIP));
+                      fetchBalance();
+                    } catch { setTipAnimating(false); }
+                    setTimeout(() => setTipAnimating(false), 900);
+                  }}
+                  disabled={tipAnimating}
+                  className="px-3 py-1 rounded bg-amber-900/50 border border-amber-600/40 text-amber-300 text-[11px] font-medium hover:bg-amber-800/60 transition-all disabled:opacity-50 backdrop-blur-sm"
+                >
+                  Tip 2,000
+                </button>
+                {tipAnimating && (
+                  <div
+                    className="absolute pointer-events-none"
+                    style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}
+                    onAnimationEnd={() => setTipAnimating(false)}
+                  >
+                    <div className="tip-chip-fly">
+                      <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
+                        <span className="text-white text-[8px] font-bold">$</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Win Notification */}
             {showWinNotification && (

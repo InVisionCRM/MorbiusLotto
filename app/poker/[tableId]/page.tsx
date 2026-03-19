@@ -65,6 +65,7 @@ export default function PokerTablePage() {
   const [broadcastEmotionBySeatIndex, setBroadcastEmotionBySeatIndex] = useState<Record<number, Emotion>>({});
   const emotionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const clientRef = useRef<BlackjackWebSocketClient | null>(null);
+  const [tipAnimating, setTipAnimating] = useState(false);
   const fetchSeqRef = useRef(0);
 
   const normalizedAddress = address?.toLowerCase() ?? null;
@@ -765,6 +766,39 @@ export default function PokerTablePage() {
               width: '100%',
             }}
           >
+            {/* Tip dealer button — top center overlay */}
+            {normalizedAddress && wsConnected && wsClient && mySeat && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
+                <button
+                  onClick={async () => {
+                    if (tipAnimating) return;
+                    sounds.play('call', ps('PlayerClickConfirmation1.mp3'));
+                    setTipAnimating(true);
+                    try {
+                      await wsClient.sendRequest('tip_dealer', {
+                        amount: (BigInt(2000) * BigInt('1000000000000000000')).toString(),
+                      });
+                      fetchLatestState();
+                    } catch { /* ignore */ }
+                    setTimeout(() => setTipAnimating(false), 900);
+                  }}
+                  disabled={tipAnimating}
+                  className="px-3 py-1 rounded bg-amber-900/50 border border-amber-600/40 text-amber-300 text-[11px] font-medium hover:bg-amber-800/60 transition-all disabled:opacity-50 backdrop-blur-sm"
+                >
+                  Tip 2,000
+                </button>
+                {tipAnimating && (
+                  <div className="absolute pointer-events-none" style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}>
+                    <div className="tip-chip-fly">
+                      <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
+                        <span className="text-white text-[8px] font-bold">$</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {state ? (
               <PokerTable
                 state={state}

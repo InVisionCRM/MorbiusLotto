@@ -719,6 +719,11 @@ export class WebSocketService {
           await this.handleBJMultiAvatarEmotion(ws, message);
           break;
 
+        case 'tip_dealer':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handleGenericTipDealer(ws, message);
+          break;
+
         default:
           this.sendError(ws, 'Unknown message type', message.requestId);
       }
@@ -3623,6 +3628,30 @@ export class WebSocketService {
       });
     } catch (error) {
       logger.error('BJ multi tip dealer error:', error);
+      this.sendError(ws, (error as Error).message || 'Tip failed', message.requestId);
+    }
+  }
+
+  /**
+   * Generic tip dealer — works from any game page (solo blackjack, poker, etc.)
+   * Deducts from player balance and credits the deployer wallet.
+   */
+  private async handleGenericTipDealer(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!ws.playerAddress) {
+        return this.sendError(ws, 'Wallet required', message.requestId);
+      }
+      const { amount } = (message.payload ?? {}) as { amount?: string };
+      if (!amount) return this.sendError(ws, 'amount required', message.requestId);
+      const tipAmount = BigInt(amount);
+      if (tipAmount <= 0n) return this.sendError(ws, 'Invalid tip amount', message.requestId);
+      const deployerWallet = (process.env.NEXT_PUBLIC_BLACKJACK_DEPLOYER_WALLET || process.env.BLACKJACK_DEPLOYER_WALLET || '').toLowerCase();
+      if (!deployerWallet) return this.sendError(ws, 'Deployer wallet not configured', message.requestId);
+      await this.dbService.deductPlayerBalance(ws.playerAddress.toLowerCase(), tipAmount);
+      await this.dbService.addPlayerBalance(deployerWallet, tipAmount);
+      this.sendMessage(ws, { type: 'tip_dealer_result', payload: { success: true }, requestId: message.requestId });
+    } catch (error) {
+      logger.error('Generic tip dealer error:', error);
       this.sendError(ws, (error as Error).message || 'Tip failed', message.requestId);
     }
   }

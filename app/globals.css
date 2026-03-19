@@ -461,5 +461,14 @@ body {
   font-style: normal;
 }
 
+/* Tip chip fly animation — chip floats up and fades out */
+@keyframes tipChipFly {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-60px); opacity: 0; }
+}
+.tip-chip-fly {
+  animation: tipChipFly 0.8s ease-out forwards;
+}
+
 /* RainbowKit Modal Fix - No longer needed since transform moved to wrapper */
 /* Modals render to body, which is now untransformed, so they center correctly */
