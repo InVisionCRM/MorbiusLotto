@@ -1,21 +1,17 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
-import { HeroParallax } from '@/components/ui/hero-parallax'
-import { CometCard } from '@/components/ui/comet-card'
+import { Marquee } from '@/components/ui/marquee'
+import { cn } from '@/lib/utils'
 import {
-  Zap,
-  Clock,
-  BadgeCheck,
-  Star,
-  Layers,
-  ChevronRight,
-  Tag,
-  Spade,
-  MessagesSquare,
-} from 'lucide-react'
+  homeSectionSubtitleClass,
+  homeSectionTitleClass,
+  homeSectionTitleGradientClass,
+} from '@/lib/home-section-typography'
+import { Zap, ChevronRight, Tag } from 'lucide-react'
 
-// ── Products for HeroParallax (3 rows × 5) ────────────────────────────────────
+// ── Branded table assets for marquee rows (3 × 5) ───────────────────────────
 
 const TABLE_PRODUCTS = [
   { title: 'LBRTY',      link: '/marketing', thumbnail: '/BlackJack/BrandedTable/Liberty.png'       },
@@ -35,19 +31,19 @@ const TABLE_PRODUCTS = [
   { title: 'pTGC',      link: '/marketing', thumbnail: '/BlackJack/BrandedTable/pTGC.png'          },
 ]
 
-// ── HeroParallax custom header ────────────────────────────────────────────────
+// ── Section header (above marquee strips) ─────────────────────────────────────
 
 function ParallaxHeader() {
   return (
-    <div className="max-w-7xl relative mx-auto pt-10 md:pt-16 pb-2 md:pb-4 px-4 w-full left-0 top-0">
-      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-semibold uppercase tracking-wider mb-2">
-        <Zap className="w-3.5 h-3.5" />
+    <div className="max-w-7xl relative mx-auto flex w-full flex-col items-center px-4 pt-10 pb-2 text-center md:pt-16 md:pb-4">
+      <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-950/60 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-cyan-300">
+        <Zap className="h-3.5 w-3.5 shrink-0" />
         Custom Blackjack Tables &mdash; Limited Spots
       </div>
 
-      <div className="flex justify-start mb-2">
+      <div className="mb-2 flex justify-center">
         <div
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm"
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm"
           style={{
             background: 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.1))',
             border: '1px solid rgba(239,68,68,0.4)',
@@ -60,20 +56,19 @@ function ParallaxHeader() {
         </div>
       </div>
 
-      <h1 className="text-3xl md:text-6xl font-extrabold text-white leading-tight mb-3">
-        Bring Your Brand<br />
-        <span className="bg-gradient-to-r from-cyan-400 to-blue-400 text-transparent bg-clip-text">
-          To The Table
-        </span>
+      <h1 className={cn(homeSectionTitleClass, 'mb-3 max-w-4xl leading-tight')}>
+        <span className="text-white">Bring Your Brand</span>
+        <br />
+        <span className={homeSectionTitleGradientClass}>To The Table</span>
       </h1>
 
-      <p className="max-w-2xl md:text-lg text-slate-300 leading-relaxed mb-4">
+      <p className={cn(homeSectionSubtitleClass, 'mb-4 max-w-2xl text-pretty')}>
         Morbius builds a fully branded game table for your token — live in{' '}
         <span className="text-white font-semibold">24 hours</span>, with a token profile,
         Gold Badge, and your design auto-applied to every future game we launch.
       </p>
 
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="mb-4 flex flex-wrap justify-center gap-3">
         <Link
           href="/marketing#payment"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm shadow-lg shadow-cyan-900/30 transition-all"
@@ -89,82 +84,65 @@ function ParallaxHeader() {
           See Full Details
         </Link>
       </div>
-
-      <div className="flex flex-wrap gap-4 text-xs text-slate-400 mb-0">
-        <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-cyan-500" /> 24hr turnaround</span>
-        <span className="flex items-center gap-1.5"><BadgeCheck className="w-3.5 h-3.5 text-amber-400" /> Gold Badge included</span>
-        <span className="flex items-center gap-1.5"><Star className="w-3.5 h-3.5 text-violet-400" /> Featured on PulseChainAi.com</span>
-        <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-green-400" /> All future games included</span>
-      </div>
     </div>
   )
 }
 
-// ── Package summary (used below TableShowcaseDisplay on home) ─────────────────
-
-export function PackageSummarySection() {
+function TableMarqueeStrip({
+  products,
+  reverse,
+}: {
+  products: { title: string; link: string; thumbnail: string }[]
+  reverse?: boolean
+}) {
   return (
-    <section className="py-10 px-4">
-      <div className="max-w-2xl mx-auto">
-        <CometCard>
-          <div
-            className="rounded-2xl p-6"
-            style={{
-              background: 'linear-gradient(135deg, rgba(10,15,30,0.9), rgba(15,20,45,0.9))',
-              border: '1px solid rgba(99,102,241,0.25)',
-            }}
-          >
-            <h3 className="text-lg font-bold text-white mb-4">
-              Package Summary — $49{' '}
-              <span className="text-slate-600 line-through text-base font-normal">$99</span>
-            </h3>
-            <ul className="space-y-3 text-sm mb-6">
-              {[
-                'Custom branded table on Morbius (Blackjack + all future games)',
-                'TableProfile card with logo, socials & contract',
-                'GOLD badge on PulseChainAi.com',
-                'Custom token description on PulseChainAi.com',
-                'Featured on the front page of PulseChainAi.com',
-                '24hr delivery guaranteed',
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-slate-300">
-                  <BadgeCheck className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/marketing#payment"
-                className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm shadow-lg shadow-cyan-900/30 transition-all"
-              >
-                <Spade className="w-4 h-4" />
-                Get Your Custom Table
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-              <a
-                href="https://t.me/kylecruise"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-5 py-3 rounded-xl bg-blue-900/40 hover:bg-blue-900/60 border border-blue-500/30 text-blue-300 text-sm transition-colors font-semibold"
-              >
-                <MessagesSquare className="w-4 h-4" />
-                Telegram @kylecruise
-              </a>
-            </div>
-          </div>
-        </CometCard>
-      </div>
-    </section>
+    <Marquee
+      reverse={reverse}
+      pauseOnHover
+      className="[--duration:45s] border-y border-white/5 bg-black/20 py-3"
+    >
+      {products.map((p) => (
+        <Link
+          key={p.title}
+          href={p.link}
+          className="group relative mx-2 flex h-36 w-56 shrink-0 overflow-hidden rounded-xl border border-cyan-500/20 shadow-lg shadow-black/40 transition hover:border-cyan-400/50"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.9), rgba(40, 40, 40, 0.7))',
+            boxShadow:
+              'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.06), 0 4px 12px rgba(0, 0, 0, 0.5)',
+          }}
+        >
+          <Image
+            src={p.thumbnail}
+            alt={p.title}
+            fill
+            sizes="224px"
+            className="object-cover object-left-top transition group-hover:scale-[1.02]"
+          />
+          <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
+            {p.title}
+          </span>
+        </Link>
+      ))}
+    </Marquee>
   )
 }
 
-// ── Section export (parallax only; 3D table + package summary live on home page) ─
+// ── Section export (marquee strips + parallax header) ─
 
 export function PulseChainSection() {
+  const row1 = TABLE_PRODUCTS.slice(0, 5)
+  const row2 = TABLE_PRODUCTS.slice(5, 10)
+  const row3 = TABLE_PRODUCTS.slice(10, 15)
+
   return (
-    <div className="w-full">
-      <HeroParallax products={TABLE_PRODUCTS} header={<ParallaxHeader />} />
+    <div className="w-full overflow-hidden pb-6 antialiased">
+      <ParallaxHeader />
+      <div className="mt-2 space-y-3 md:mt-4">
+        <TableMarqueeStrip products={row1} />
+        <TableMarqueeStrip products={row2} reverse />
+        <TableMarqueeStrip products={row3} />
+      </div>
     </div>
   )
 }

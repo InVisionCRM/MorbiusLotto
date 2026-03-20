@@ -941,7 +941,7 @@ export default function BlackjackMultiTablePage() {
         }
       `}</style>
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] gap-2 md:gap-4 min-h-0 md:pt-3" style={{ scrollbarGutter: 'stable both-edges' }}>
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] gap-2 md:gap-4 min-h-0 pt-14 md:pt-14" style={{ scrollbarGutter: 'stable both-edges' }}>
 
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
@@ -973,19 +973,38 @@ export default function BlackjackMultiTablePage() {
           style={{ width: 800, height: 450, transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
         >
 
-          {/* Top bar */}
-          <div className="flex items-center justify-between px-4 py-2 bg-black/30 backdrop-blur-sm">
-            <div className="text-xs text-white/50">
+          {/* Top bar — md+: phase pill centered (industry-standard three-zone header); mobile: pill stays in trailing cluster */}
+          <div className="relative flex items-center justify-between px-4 py-2 bg-black/30 backdrop-blur-sm">
+            <div className="text-xs text-white/50 min-w-0 shrink z-10 pr-2">
               {state ? `Round #${state.roundNumber} · ${formatMorbius(state.minBet ?? '0')}–${formatMorbius(state.maxBet ?? '0')} MORBIUS` : 'Multiplayer Blackjack'}
             </div>
-            <div className="flex items-center gap-2">
+            {state && (
+              <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 hidden -translate-x-1/2 -translate-y-1/2 md:block">
+                <span
+                  className={`pointer-events-auto text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
+                    state.phase === 'betting'     ? 'bg-yellow-900/80 text-yellow-300' :
+                    state.phase === 'playing'     ? 'bg-green-900/80 text-green-300' :
+                    state.phase === 'dealer_turn' ? 'bg-blue-900/80 text-blue-300' :
+                    'bg-white/10 text-white/60'
+                  }`}
+                >
+                  {state.phase === 'waiting'     ? 'Waiting for players' :
+                   state.phase === 'betting'     ? 'Place your bets' :
+                   state.phase === 'playing'     ? 'Players acting' :
+                   state.phase === 'dealer_turn' ? 'Dealer turn' : 'Round complete'}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 z-10 shrink-0">
               {state && (
-                <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                  state.phase === 'betting'     ? 'bg-yellow-900/80 text-yellow-300' :
-                  state.phase === 'playing'     ? 'bg-green-900/80 text-green-300' :
-                  state.phase === 'dealer_turn' ? 'bg-blue-900/80 text-blue-300' :
-                  'bg-white/10 text-white/60'
-                }`}>
+                <span
+                  className={`md:hidden text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                    state.phase === 'betting'     ? 'bg-yellow-900/80 text-yellow-300' :
+                    state.phase === 'playing'     ? 'bg-green-900/80 text-green-300' :
+                    state.phase === 'dealer_turn' ? 'bg-blue-900/80 text-blue-300' :
+                    'bg-white/10 text-white/60'
+                  }`}
+                >
                   {state.phase === 'waiting'     ? 'Waiting for players' :
                    state.phase === 'betting'     ? 'Place your bets' :
                    state.phase === 'playing'     ? 'Players acting' :
@@ -1166,38 +1185,44 @@ export default function BlackjackMultiTablePage() {
               })()}
             </div>
 
-            {/* "Place your bets!" breathing text during betting phase */}
+            {/* "Place your bets!" — mobile/tablet cue; desktop uses centered header pill */}
             {state?.phase === 'betting' && (
-              <div className="betting-breathe rounded-xl px-6 py-2" style={{ background: 'rgba(0,0,0,0.45)' }}>
+              <div className="betting-breathe rounded-xl px-6 py-2 md:hidden" style={{ background: 'rgba(0,0,0,0.45)' }}>
                 <span className="text-white font-bold text-lg tracking-wide" style={{ fontFamily: 'Jost, sans-serif' }}>
                   Place your bets!
                 </span>
               </div>
             )}
 
-            {/* 3 SEATS — same translateY offset as BlackjackTable player row */}
-            <div className="grid grid-cols-3 gap-4 w-full max-w-3xl" style={{ transform: 'translateY(6px)' }}>
+            {/* 3 SEATS — CSS grid + per-column justify (reliable vs ad-hoc transforms); outer columns align start/end */}
+            <div
+              className="grid w-full max-w-4xl grid-cols-3 gap-2 sm:gap-3 md:gap-4 mx-auto"
+              style={{ transform: 'translateY(6px)' }}
+            >
               {POSITIONS.map(pos => {
                 const seat = state?.seats.find(s => s.position === pos);
                 const isEmpty = !seat?.playerAddress;
                 const isMe = seat?.playerAddress?.toLowerCase() === address?.toLowerCase();
+                const align =
+                  pos === 0 ? 'flex justify-start' : pos === 2 ? 'flex justify-end' : 'flex justify-center';
                 return (
-                  <Seat
-                    key={pos}
-                    seat={seat ?? null}
-                    position={pos}
-                    isMe={isMe}
-                    isEmpty={isEmpty}
-                    isActing={state?.actingSeatPosition === pos && state?.phase === 'playing'}
-                    phase={state?.phase ?? 'waiting'}
-                    onTakeSeat={() => takeSeat(pos)}
-                    canTakeSeat={!!address && myPosition === null && isEmpty && wsConnected}
-                    turnStartedAt={state?.actingSeatPosition === pos ? state?.turnStartedAt ?? null : null}
-                    bettingStartedAt={state?.bettingStartedAt ?? null}
-                    balanceLabel={isMe ? formatMorbius(playerBalance.toString()) : null}
-                    onOpenProfile={setSelectedProfileAddress}
-                    showOutcomeLabel={showSeatOutcomeLabels}
-                  />
+                  <div key={pos} className={`min-w-0 ${align}`}>
+                    <Seat
+                      seat={seat ?? null}
+                      position={pos}
+                      isMe={isMe}
+                      isEmpty={isEmpty}
+                      isActing={state?.actingSeatPosition === pos && state?.phase === 'playing'}
+                      phase={state?.phase ?? 'waiting'}
+                      onTakeSeat={() => takeSeat(pos)}
+                      canTakeSeat={!!address && myPosition === null && isEmpty && wsConnected}
+                      turnStartedAt={state?.actingSeatPosition === pos ? state?.turnStartedAt ?? null : null}
+                      bettingStartedAt={state?.bettingStartedAt ?? null}
+                      balanceLabel={isMe ? formatMorbius(playerBalance.toString()) : null}
+                      onOpenProfile={setSelectedProfileAddress}
+                      showOutcomeLabel={showSeatOutcomeLabels}
+                    />
+                  </div>
                 );
               })}
             </div>
@@ -1206,21 +1231,25 @@ export default function BlackjackMultiTablePage() {
 
         </div>
 
-        {/* Chat + sound overlay — bottom-left on mobile, top-left on desktop */}
-        <div className="absolute left-2 bottom-2 md:bottom-auto md:top-12 z-20" style={{ maxWidth: '280px' }}>
+        {/* Mobile: chat toggle + panel on table overlay; md+: chat lives in sidebar only */}
+        <div className="absolute left-2 bottom-2 md:bottom-auto md:top-12 z-20 md:max-w-none" style={{ maxWidth: '280px' }}>
           <div className="flex items-center gap-1.5">
+            <div className="contents md:hidden">
+              <button
+                type="button"
+                onClick={() => setChatOpen(o => !o)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-black/60 border border-white/15 text-white/70 hover:text-white hover:bg-black/75 transition-colors text-xs backdrop-blur-sm"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>Chat</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${chatOpen ? 'rotate-180' : ''}`} />
+                {chatMessages.length > 0 && !chatOpen && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                )}
+              </button>
+            </div>
             <button
-              onClick={() => setChatOpen(o => !o)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-black/60 border border-white/15 text-white/70 hover:text-white hover:bg-black/75 transition-colors text-xs backdrop-blur-sm"
-            >
-              <MessageCircle className="w-3.5 h-3.5" />
-              <span>Chat</span>
-              <ChevronDown className={`w-3 h-3 transition-transform ${chatOpen ? 'rotate-180' : ''}`} />
-              {chatMessages.length > 0 && !chatOpen && (
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-              )}
-            </button>
-            <button
+              type="button"
               onClick={() => setSoundEnabled(e => !e)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-black/60 border border-white/15 text-white/70 hover:text-white hover:bg-black/75 transition-colors text-xs backdrop-blur-sm"
               title={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
@@ -1230,7 +1259,7 @@ export default function BlackjackMultiTablePage() {
             </button>
           </div>
           {chatOpen && (
-            <div className="mt-1 bg-black/80 border border-white/15 rounded p-2.5 backdrop-blur-md w-[260px]">
+            <div className="mt-1 bg-black/80 border border-white/15 rounded p-2.5 backdrop-blur-md w-[260px] md:hidden">
               <div className="max-h-32 overflow-y-auto space-y-0.5 min-h-0">
                 {chatMessages.slice(-12).map(m => (
                   <div key={m.id} className="text-xs text-white/70">
@@ -1310,9 +1339,51 @@ export default function BlackjackMultiTablePage() {
           </div>
         )}
 
+        {/* Realtime chart — directly under betting controls */}
+        <div className="w-full min-w-0 shrink-0">
+          <div className="h-64 md:h-72 min-w-0">
+            <BlackjackRealTimeBetChart
+              ref={chartRef}
+              sessionStartTime={Number(state?.roundNumber ?? 0)}
+            />
+          </div>
+        </div>
+
+        {/* Desktop: table chat always visible under chart (mobile keeps overlay chat) */}
+        <div
+          className="hidden md:flex md:flex-col w-full min-w-0 gap-2 rounded-xl p-3 shrink-0 border border-cyan-500/25"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.85), rgba(40, 40, 40, 0.65))',
+            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+          }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold text-cyan-300/90 uppercase tracking-wide">Table chat</h3>
+            {chatMessages.length > 0 && (
+              <span className="text-[10px] text-white/40 tabular-nums">{chatMessages.length} msgs</span>
+            )}
+          </div>
+          <div className="max-h-40 overflow-y-auto space-y-0.5 min-h-[120px] pr-1">
+            {chatMessages.slice(-24).map(m => (
+              <div key={m.id} className="text-xs text-white/75 break-words">
+                <span className="text-cyan-400 font-medium">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
+                {m.text}
+              </div>
+            ))}
+            {chatMessages.length === 0 && (
+              <div className="text-xs text-white/35 text-center py-6">No messages yet</div>
+            )}
+          </div>
+          {address && wsConnected ? (
+            <ChatInput onSend={sendChatMessage} />
+          ) : (
+            <p className="text-[11px] text-white/40 text-center py-1">Connect wallet to chat</p>
+          )}
+        </div>
+
         {/* MY TURN — reuses BlackjackMobileActionBar from single player */}
         {isMyTurn && activeHand && (
-          <div className="w-full max-w-md mx-auto">
+          <div className="w-full max-w-xl mx-auto">
             <BlackjackMobileActionBar
               onAction={(action) => doAction(action as 'hit' | 'stand' | 'double_down' | 'split')}
               isPlaying={true}
@@ -1338,51 +1409,40 @@ export default function BlackjackMultiTablePage() {
           </div>
         )}
 
-        {/* Table token profile + player dashboard — in sidebar above chart so it’s visible without scrolling past the chart */}
-        <section className="w-full min-w-0 grid grid-cols-1 gap-4 md:gap-5 items-start shrink-0">
-          <div className="w-full min-w-0">
-            <TableTokenProfileCard
-              compact
-              themeKind={(state?.themeKind ?? 'video') as 'image' | 'video'}
-              themeId={state?.themeId ?? 'glowingTable'}
-              getThemeInfo={getThemeInfo}
-              getTableProfile={getTableProfile}
-            />
-          </div>
-          <div className="w-full min-w-0">
-            {address && playerStats ? (
-              <PlayerStatsDashboard
-                stats={playerStats}
-                isLoading={playerStatsLoading}
-                playerAddress={address}
-                reserveBalance={BigInt(playerBalance)}
-              />
-            ) : (
-              <div
-                className="min-h-[280px] md:min-h-[320px] rounded-xl overflow-hidden flex items-center justify-center px-6 text-center text-white/60"
-                style={{
-                  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              >
-                Connect wallet to view your player dashboard.
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Realtime chart under profile + stats */}
-        <div className="w-full min-w-0 shrink-0">
-          <div className="h-64 md:h-72 min-w-0">
-            <BlackjackRealTimeBetChart
-              ref={chartRef}
-              sessionStartTime={Number(state?.roundNumber ?? 0)}
-            />
-          </div>
-        </div>
-
       </div>
+
+      {/* Table token profile + player dashboard */}
+      <section className="md:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-start">
+        <div>
+          <TableTokenProfileCard
+            themeKind={(state?.themeKind ?? 'video') as 'image' | 'video'}
+            themeId={state?.themeId ?? 'glowingTable'}
+            getThemeInfo={getThemeInfo}
+            getTableProfile={getTableProfile}
+          />
+        </div>
+        <div>
+          {address && playerStats ? (
+            <PlayerStatsDashboard
+              stats={playerStats}
+              isLoading={playerStatsLoading}
+              playerAddress={address}
+              reserveBalance={BigInt(playerBalance)}
+            />
+          ) : (
+            <div
+              className="min-h-[420px] lg:min-h-[520px] rounded-xl overflow-hidden flex items-center justify-center px-6 text-center text-white/60"
+              style={{
+                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
+              Connect wallet to view your player dashboard.
+            </div>
+          )}
+        </div>
+      </section>
 
       <PlayerProfileModal
         isOpen={!!selectedProfileAddress}

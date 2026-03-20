@@ -10,6 +10,15 @@ import {
   type RoomJoinedPayload,
 } from '@/lib/websocket-client';
 
+function normalizeChatMessage(m: ChatMessagePayload): ChatMessagePayload {
+  return {
+    ...m,
+    displayName: m.displayName ?? null,
+    profileImageUrl: m.profileImageUrl ?? null,
+    avatarConfig: m.avatarConfig ?? null,
+  };
+}
+
 export interface UseChatOptions {
   /** Optional existing WebSocket client (e.g. from Blackjack page). If not provided, a chat-only client is created. */
   wsClient?: BlackjackWebSocketClient | null;
@@ -65,7 +74,7 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
     try {
       const { messages: older } = await c.getChatHistory(roomIdRef.current, oldestId, 50);
       if (older.length === 0) return;
-      setMessages((prev) => [...older.map((m) => ({ ...m, displayName: m.displayName ?? null })), ...prev]);
+      setMessages((prev) => [...older.map(normalizeChatMessage), ...prev]);
     } finally {
       setLoadingMore(false);
     }
@@ -93,16 +102,7 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
       })
       .then((payload: RoomJoinedPayload) => {
         if (roomIdRef.current === payload.roomId) {
-          setMessages(
-            payload.recentMessages.map((m) => ({
-              id: m.id,
-              roomId: m.roomId,
-              senderAddress: m.senderAddress,
-              displayName: m.displayName ?? null,
-              text: m.text,
-              timestamp: m.timestamp,
-            }))
-          );
+          setMessages(payload.recentMessages.map((m) => normalizeChatMessage(m as ChatMessagePayload)));
           setChatPaused(payload.chatPaused === true);
         }
       })
@@ -115,7 +115,7 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
       if (payload.roomId !== roomIdRef.current) return;
       setMessages((prev) => {
         if (prev.some((m) => m.id === payload.id)) return prev;
-        return [...prev, payload];
+        return [...prev, normalizeChatMessage(payload)];
       });
     };
 
@@ -157,16 +157,7 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
       .joinRoom(roomId)
       .then((payload: RoomJoinedPayload) => {
         if (roomIdRef.current === payload.roomId) {
-          setMessages(
-            payload.recentMessages.map((m) => ({
-              id: m.id,
-              roomId: m.roomId,
-              senderAddress: m.senderAddress,
-              displayName: m.displayName ?? null,
-              text: m.text,
-              timestamp: m.timestamp,
-            }))
-          );
+          setMessages(payload.recentMessages.map((m) => normalizeChatMessage(m as ChatMessagePayload)));
           setChatPaused(payload.chatPaused === true);
         }
       })
@@ -178,7 +169,7 @@ export function useChat(roomId: string, options: UseChatOptions = {}) {
       if (payload.roomId !== roomIdRef.current) return;
       setMessages((prev) => {
         if (prev.some((m) => m.id === payload.id)) return prev;
-        return [...prev, payload];
+        return [...prev, normalizeChatMessage(payload)];
       });
     };
 

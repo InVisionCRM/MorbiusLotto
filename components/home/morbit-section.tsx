@@ -2,6 +2,13 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
+import {
+  homeSectionHeading2Class,
+  homeSectionSubtitleClass,
+  homeSectionTitleClass,
+  homeSectionTitleGradientClass,
+} from '@/lib/home-section-typography'
 
 const fadeIn = {
   hidden: { opacity: 0, y: 30 },
@@ -23,7 +30,7 @@ export function MorbItSection() {
           viewport={{ once: true, margin: "-100px" }}
           variants={fadeIn}
         >
-          <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
+          <h2 className="text-4xl font-russo-one font-normal text-cyan-500 md:text-5xl lg:text-6xl mb-2">
             MORB-IT
           </h2>
           <p className="text-white/50 text-sm">
@@ -41,8 +48,9 @@ export function MorbItSection() {
           <div className="p-8 md:p-12 rounded-2xl">
               {/* Community Message */}
               <div className="text-center mb-10">
-                <h3 className="text-2xl md:text-3xl font-russo-one font-normal text-white mb-6">
-                  Without Our Community, We Are Nothing
+                <h3 className={cn(homeSectionHeading2Class, 'mb-6')}>
+                  <span className="text-white">Without Our Community, </span>
+                  <span className={homeSectionTitleGradientClass}>We Are Nothing</span>
                 </h3>
                 <p className="text-lg text-white/80 font-prosto-one max-w-2xl mx-auto leading-relaxed mb-6">
                   In crypto, projects come and go. Without a loyal community, even the best ideas fade to dust.
@@ -65,8 +73,8 @@ export function MorbItSection() {
                   </svg>
                 </div>
 
-                <h4 className="text-xl md:text-2xl font-russo-one font-normal text-white mb-4">
-                  Memes Are Power
+                <h4 className={cn('text-xl md:text-2xl lg:text-3xl font-bold mb-4 tracking-tight')}>
+                  <span className={homeSectionTitleGradientClass}>Memes Are Power</span>
                 </h4>
                 <p className="text-lg text-white/80 font-prosto-one max-w-xl mx-auto mb-8">
                   Memes move markets. They spread ideas faster than any whitepaper ever could.

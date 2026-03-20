@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
 import Link from 'next/link'
+import { WalletMenu } from '@/components/shared/WalletMenu'
+import { useProfile } from '@/hooks/use-player-profile'
 import { usePathname } from 'next/navigation'
 
 interface HeaderProps {
@@ -26,6 +27,7 @@ const formatSeconds = (totalSeconds: number) => {
 
 export function Header({ nextDrawEndTime, fallbackRemaining = BigInt(0), onBentoClick, hideKenoButton }: HeaderProps) {
   const pathname = usePathname()
+  const { profileDisplayName, profileImageUrl } = useProfile()
   const [menuOpen, setMenuOpen] = useState(false)
   const [gamesSubmenuOpen, setGamesSubmenuOpen] = useState(false)
 
@@ -72,14 +74,7 @@ export function Header({ nextDrawEndTime, fallbackRemaining = BigInt(0), onBento
           <div className="flex items-center gap-2 ml-auto">
             {/* Wallet Connect Button */}
             <div className="scale-75 origin-right">
-              <ConnectButton
-                chainStatus="none"
-                showBalance={false}
-                accountStatus={{
-                  smallScreen: 'avatar',
-                  largeScreen: 'full',
-                }}
-              />
+              <WalletMenu profileDisplayName={profileDisplayName} profileImageUrl={profileImageUrl} />
             </div>
 
             {/* Hamburger Menu */}

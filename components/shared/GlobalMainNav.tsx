@@ -45,15 +45,25 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/keno-dashboard': 'keno',
 };
 
-const OTHER_GAMES = [
+type OtherGameNavItem =
+  | { label: string; href: string; icon: 'blackjack' | `fa-${string}` }
+  | { label: string; icon: 'blackjack' | `fa-${string}`; comingSoon: true };
+
+function isOtherGameLinked(g: OtherGameNavItem): g is Extract<OtherGameNavItem, { href: string }> {
+  return 'href' in g;
+}
+
+const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Plinko', href: '/PLINKO', icon: 'fa-circle' },
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
   { label: 'Lottery', href: '/lottery', icon: 'fa-ticket-alt' },
   { label: 'Keno', href: '/keno', icon: 'fa-th' },
-] as const;
+  { label: 'Multiplayer Blackjack', icon: 'fa-users', comingSoon: true },
+  { label: "Texas Hold'em", icon: 'fa-coins', comingSoon: true },
+];
 
 const SIDEBAR_PANEL_STYLE = {
-  background: 'rgba(74, 103, 125, 0.31)',
+  background: 'rgba(50, 76, 96, 0.49)',
   backdropFilter: 'blur(4px)',
   boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.67), inset 0 -3px 6px rgba(0, 0, 0, 0.65), 0 1px 3px rgba(17, 179, 208, 0.86)',
   border: '1px inset rgba(60, 60, 60, 0.5)',
@@ -251,9 +261,21 @@ function NavContent(props: {
     active ? 'bg-cyan-500/20 text-cyan-300' : 'text-white hover:bg-white/5';
 
   const otherGamesFiltered = OTHER_GAMES.filter((g) => {
-    const gamePage = g.href === '/BLACKJACK' ? 'blackjack' : g.href === '/PLINKO' ? 'plinko' : g.href === '/lottery' ? 'lottery' : 'keno';
+    if ('comingSoon' in g && g.comingSoon) return true;
+    if (!isOtherGameLinked(g)) return false;
+    const gamePage =
+      g.href === '/BLACKJACK' ? 'blackjack' : g.href === '/PLINKO' ? 'plinko' : g.href === '/lottery' ? 'lottery' : 'keno';
     return gamePage !== page;
   });
+
+  const otherGameIcon = (g: OtherGameNavItem) =>
+    g.icon === 'blackjack' ? (
+      <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
+        <Image src="/BlackJack/Cards/PNG/AS.png" alt="" width={20} height={20} className="object-contain" />
+      </span>
+    ) : (
+      <i className={`fas ${g.icon} w-5 text-center text-white shrink-0`} aria-hidden />
+    );
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -306,11 +328,9 @@ function NavContent(props: {
         {page === 'blackjack' && (
           <>
             <SidebarButton label="Play" icon={<i className={`fas fa-play w-5 text-center shrink-0 ${navItem('', 'fa-play', currentView === 'game')}`} aria-hidden />} onClick={() => onViewChange?.('game')} active={currentView === 'game'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'game')}`} />
-            {isAdmin && (
-              <a href="/blackjack-multi" className="w-full">
-                <SidebarButton label="Multiplayer" icon={<i className="fas fa-users w-5 text-center text-cyan-400 shrink-0" aria-hidden />} className="rounded-lg px-2 py-2 transition-colors text-white hover:bg-white/5 w-full" />
-              </a>
-            )}
+            <a href="/blackjack-multi" className="w-full">
+              <SidebarButton label="Multiplayer" icon={<i className="fas fa-users w-5 text-center text-cyan-400 shrink-0" aria-hidden />} className="rounded-lg px-2 py-2 transition-colors text-white hover:bg-white/5 w-full" />
+            </a>
             {isDeployer && (
               <SidebarButton label="Analytics" icon={<i className={`fas fa-chart-line w-5 text-center shrink-0 ${navItem('', 'fa-chart-line', currentView === 'analytics')}`} aria-hidden />} onClick={() => onViewChange?.('analytics')} active={currentView === 'analytics'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'analytics')}`} />
             )}
@@ -378,7 +398,7 @@ function NavContent(props: {
 
           <SidebarButton label="Profile" icon={<i className="fas fa-user-edit w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenProfileSettings ? onOpenProfileSettings() : onOpenProfileModal?.()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarButton label="Avatar" icon={<i className="fas fa-user-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenProfileModal?.()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarLink link={{ label: 'Claim Morbius', href: '/staking', icon: <i className="fas fa-gift w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <i className="fas fa-gift w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
         </div>
 
         {/* Other Games - exclude current page */}
@@ -386,23 +406,31 @@ function NavContent(props: {
           <div className="px-2 py-1 overflow-hidden">
             <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Other Games</motion.span>
           </div>
-          {otherGamesFiltered.map((g) => (
-            <SidebarLink
-              key={g.href}
-              link={{
-                label: g.label,
-                href: g.href,
-                icon: g.icon === 'blackjack' ? (
-                  <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
-                    <Image src="/BlackJack/Cards/PNG/AS.png" alt="" width={20} height={20} className="object-contain" />
-                  </span>
-                ) : (
-                  <i className={`fas ${g.icon} w-5 text-center text-white shrink-0`} aria-hidden />
-                ),
-              }}
-              className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
-            />
-          ))}
+          {otherGamesFiltered.map((g) =>
+            'comingSoon' in g && g.comingSoon ? (
+              <div
+                key={g.label}
+                className="flex items-center justify-start gap-2 rounded-lg px-2 py-2 text-white/70 cursor-default select-none"
+                aria-disabled="true"
+              >
+                {otherGameIcon(g)}
+                <div className="flex flex-col min-w-0 items-start">
+                  <span className="text-sm font-medium text-white/90 leading-tight">{g.label}</span>
+                  <span className="text-[10px] uppercase tracking-wide text-amber-400/85">Under construction</span>
+                </div>
+              </div>
+            ) : isOtherGameLinked(g) ? (
+              <SidebarLink
+                key={g.href}
+                link={{
+                  label: g.label,
+                  href: g.href,
+                  icon: otherGameIcon(g),
+                }}
+                className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+              />
+            ) : null
+          )}
         </div>
 
         {/* Advertising */}
@@ -447,7 +475,7 @@ function NavContent(props: {
           <motion.div animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="px-2 py-1">
             <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
           </motion.div>
-          <SidebarLink link={{ label: 'Earn', href: '/staking', icon: <i className="fas fa-coins w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarLink link={{ label: 'Claim', href: '/claim', icon: <i className="fas fa-coins w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Swap', href: '/swap', icon: <i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Provide LP', href: 'https://pulsex.com', icon: <i className="fas fa-tint w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
           <SidebarLink link={{ label: 'Chart', href: 'https://scan.morbius.io/geicko?address=0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1&tab=chart', icon: <i className="fas fa-chart-line w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
@@ -629,7 +657,12 @@ export default function GlobalMainNav({
             onOpenProfileModal={() => setProfileAvatarModalOpen(true)}
           />
         </SidebarBody>
-        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0" style={gameLocked ? { position: 'relative', zIndex: 100002 } : undefined}>{children}</div>
+        <div
+          className="relative z-0 flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden pt-14 md:pt-0"
+          style={gameLocked ? { position: 'relative', zIndex: 100002 } : undefined}
+        >
+          {children}
+        </div>
       </div>
 
       {page === 'blackjack' && onThemeChange && (

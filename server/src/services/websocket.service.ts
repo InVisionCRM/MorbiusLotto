@@ -1275,7 +1275,7 @@ export class WebSocketService {
 
       const recent = (isPokerTableRoom || isBJMultiRoom) ? [] : await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
       const addresses = [...new Set(recent.map(m => m.sender_address).filter(Boolean) as string[])];
-      const displayNames = await this.dbService.getDisplayNames(addresses);
+      const profiles = await this.dbService.getProfiles(addresses);
       const config = await this.dbService.getAdminGameConfig();
       const chatPaused = config['chat_paused'] === 'true';
 
@@ -1283,14 +1283,20 @@ export class WebSocketService {
         type: 'room_joined',
         payload: {
           roomId: normalized,
-          recentMessages: recent.map(m => ({
-            id: m.id,
-            roomId: m.room_id,
-            senderAddress: m.sender_address,
-            displayName: m.sender_address ? displayNames.get(m.sender_address.toLowerCase()) ?? null : null,
-            text: m.text,
-            timestamp: m.created_at
-          })),
+          recentMessages: recent.map(m => {
+            const addr = m.sender_address?.toLowerCase();
+            const p = addr ? profiles.get(addr) : undefined;
+            return {
+              id: m.id,
+              roomId: m.room_id,
+              senderAddress: m.sender_address,
+              displayName: p?.displayName ?? null,
+              profileImageUrl: p?.profileImageUrl ?? null,
+              avatarConfig: p?.avatarConfig ?? null,
+              text: m.text,
+              timestamp: m.created_at
+            };
+          }),
           chatPaused
         },
         requestId: message.requestId
@@ -1573,15 +1579,21 @@ export class WebSocketService {
         : 50;
       const older = await this.dbService.getChatMessagesBefore(normalized, beforeId, limitNum);
       const addresses = [...new Set(older.map(m => m.sender_address).filter(Boolean) as string[])];
-      const displayNames = await this.dbService.getDisplayNames(addresses);
-      const messages = older.map(m => ({
-        id: m.id,
-        roomId: m.room_id,
-        senderAddress: m.sender_address,
-        displayName: m.sender_address ? displayNames.get(m.sender_address.toLowerCase()) ?? null : null,
-        text: m.text,
-        timestamp: m.created_at
-      }));
+      const profiles = await this.dbService.getProfiles(addresses);
+      const messages = older.map(m => {
+        const addr = m.sender_address?.toLowerCase();
+        const p = addr ? profiles.get(addr) : undefined;
+        return {
+          id: m.id,
+          roomId: m.room_id,
+          senderAddress: m.sender_address,
+          displayName: p?.displayName ?? null,
+          profileImageUrl: p?.profileImageUrl ?? null,
+          avatarConfig: p?.avatarConfig ?? null,
+          text: m.text,
+          timestamp: m.created_at
+        };
+      });
       this.sendMessage(ws, {
         type: 'chat_history',
         payload: { messages },
@@ -1728,15 +1740,26 @@ export class WebSocketService {
 
       const row = await this.dbService.insertChatMessage(normalizedRoom, senderAddress, trimmed);
 
-      const displayName = row.sender_address
-        ? await this.dbService.getDisplayName(row.sender_address)
-        : null;
+      let displayName: string | null = null;
+      let profileImageUrl: string | null = null;
+      let avatarConfig: Record<string, unknown> | null = null;
+      if (row.sender_address) {
+        const profile = await this.dbService.getProfile(row.sender_address);
+        if (profile) {
+          const dn = profile.displayName?.trim();
+          displayName = dn ? dn : null;
+          profileImageUrl = profile.profileImageUrl;
+          avatarConfig = profile.avatarConfig;
+        }
+      }
 
       const broadcastPayload = {
         id: row.id,
         roomId: row.room_id,
         senderAddress: row.sender_address,
         displayName,
+        profileImageUrl,
+        avatarConfig,
         text: row.text,
         timestamp: row.created_at
       };

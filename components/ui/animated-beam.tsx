@@ -1,9 +1,31 @@
 "use client"
 
-import { RefObject, useEffect, useId, useState } from "react"
+import { forwardRef, useEffect, useId, useState, type ReactNode, type RefObject } from "react"
 import { motion } from "motion/react"
 
 import { cn } from "@/lib/utils"
+
+/**
+ * Circular beam endpoint — pass gradient + border via `className` (see tokenomics-router-beam).
+ */
+export const BeamHubIconSlot = forwardRef<
+  HTMLDivElement,
+  { className?: string; children?: ReactNode; title?: string }
+>(({ className, children, title }, ref) => (
+  <div
+    ref={ref}
+    title={title}
+    className={cn(
+      "z-10 flex size-12 shrink-0 items-center justify-center rounded-full p-2",
+      "border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_8px_28px_rgba(0,0,0,0.28)] ring-1 ring-white/10",
+      "bg-gradient-to-br from-neutral-200 to-neutral-400",
+      className
+    )}
+  >
+    {children}
+  </div>
+))
+BeamHubIconSlot.displayName = "BeamHubIconSlot"
 
 export interface AnimatedBeamProps {
   className?: string
@@ -19,16 +41,12 @@ export interface AnimatedBeamProps {
   gradientStopColor?: string
   delay?: number
   duration?: number
+  repeat?: number
+  repeatDelay?: number
   startXOffset?: number
   startYOffset?: number
   endXOffset?: number
   endYOffset?: number
-  /** Sweep gradient along Y axis instead of X (for vertical beams) */
-  vertical?: boolean
-  /** Start path at bottom center of fromRef (so beam merges with card edge) */
-  startFromBottom?: boolean
-  /** End path at top center of toRef (so beam merges with target edge) */
-  endAtTop?: boolean
 }
 
 export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
@@ -36,55 +54,40 @@ export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
   containerRef,
   fromRef,
   toRef,
-  curvature = 115,
+  curvature = 0,
   reverse = false, // Include the reverse prop
-  duration = Math.random() * 1.5 + 2,
+  duration = 5,
   delay = 0,
   pathColor = "gray",
   pathWidth = 2,
   pathOpacity = 0.2,
   gradientStartColor = "#ffaa40",
   gradientStopColor = "#9c40ff",
+  repeat = Infinity,
+  repeatDelay = 0,
   startXOffset = 0,
   startYOffset = 0,
   endXOffset = 0,
   endYOffset = 0,
-  vertical = false,
-  startFromBottom = false,
-  endAtTop = false,
 }) => {
   const id = useId()
   const [pathD, setPathD] = useState("")
   const [svgDimensions, setSvgDimensions] = useState({ width: 0, height: 0 })
 
-  // Calculate the gradient coordinates based on the reverse and vertical props
-  const gradientCoordinates = vertical
-    ? reverse
-      ? {
-          x1: ["0%", "0%"],
-          x2: ["0%", "0%"],
-          y1: ["90%", "-10%"],
-          y2: ["100%", "0%"],
-        }
-      : {
-          x1: ["0%", "0%"],
-          x2: ["0%", "0%"],
-          y1: ["10%", "110%"],
-          y2: ["0%", "100%"],
-        }
-    : reverse
-      ? {
-          x1: ["90%", "-10%"],
-          x2: ["100%", "0%"],
-          y1: ["0%", "0%"],
-          y2: ["0%", "0%"],
-        }
-      : {
-          x1: ["10%", "110%"],
-          x2: ["0%", "100%"],
-          y1: ["0%", "0%"],
-          y2: ["0%", "0%"],
-        }
+  // Calculate the gradient coordinates based on the reverse prop
+  const gradientCoordinates = reverse
+    ? {
+        x1: ["90%", "-10%"],
+        x2: ["100%", "0%"],
+        y1: ["0%", "0%"],
+        y2: ["0%", "0%"],
+      }
+    : {
+        x1: ["10%", "110%"],
+        x2: ["0%", "100%"],
+        y1: ["0%", "0%"],
+        y2: ["0%", "0%"],
+      }
 
   useEffect(() => {
     const updatePath = () => {
@@ -99,14 +102,12 @@ export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
 
         const startX =
           rectA.left - containerRect.left + rectA.width / 2 + startXOffset
-        const startY = startFromBottom
-          ? rectA.bottom - containerRect.top
-          : rectA.top - containerRect.top + rectA.height / 2 + startYOffset
+        const startY =
+          rectA.top - containerRect.top + rectA.height / 2 + startYOffset
         const endX =
           rectB.left - containerRect.left + rectB.width / 2 + endXOffset
-        const endY = endAtTop
-          ? rectB.top - containerRect.top
-          : rectB.top - containerRect.top + rectB.height / 2 + endYOffset
+        const endY =
+          rectB.top - containerRect.top + rectB.height / 2 + endYOffset
 
         const controlY = startY - curvature
         const d = `M ${startX},${startY} Q ${
@@ -142,8 +143,6 @@ export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
     startYOffset,
     endXOffset,
     endYOffset,
-    startFromBottom,
-    endAtTop,
   ])
 
   return (
@@ -193,8 +192,8 @@ export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
             delay,
             duration,
             ease: [0.16, 1, 0.3, 1], // https://easings.net/#easeOutExpo
-            repeat: Infinity,
-            repeatDelay: 0,
+            repeat,
+            repeatDelay,
           }}
         >
           <stop stopColor={gradientStartColor} stopOpacity="0"></stop>

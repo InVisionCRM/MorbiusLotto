@@ -237,7 +237,7 @@ Migration: `server/migrations/046_merkle_lp_drops.sql`
 | `server/src/server.ts` | Express routes wiring (`/api/merkle-lp/*` and `/api/admin/merkle-lp/*`) |
 | `hooks/use-merkle-claims-lp.ts` | React hook — fetches epochs/proofs, reads hasClaimed, executes claim tx |
 | `components/staking/MerkleClaimsLPPanel.tsx` | User-facing LP rewards panel (claim button, pool balance, countdown) |
-| `app/staking/page.tsx` | Staking page — renders LP panel alongside MORBIUS holder panel |
+| `app/claim/page.tsx` | Claims page — renders LP panel alongside MORBIUS holder panel (`/staking` redirects here) |
 | `components/admin/AdminLPStakingTab.tsx` | Admin panel — epoch lifecycle controls + LP pair management |
 
 ---

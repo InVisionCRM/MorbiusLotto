@@ -1,17 +1,19 @@
 'use client'
 
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { WalletMenu } from '@/components/shared/WalletMenu'
+import { useProfile } from '@/hooks/use-player-profile'
 import { useAccount } from 'wagmi'
 
 export function SwitchModal() {
   const { isConnected } = useAccount()
+  const { profileDisplayName, profileImageUrl } = useProfile()
 
   return (
     <div className="w-full">
       {!isConnected ? (
         <div className="flex flex-col items-center justify-center py-12 gap-4">
           <p className="text-white/60 text-sm mb-2">Connect your wallet to use the swap feature</p>
-          <ConnectButton showBalance={false} />
+          <WalletMenu profileDisplayName={profileDisplayName} profileImageUrl={profileImageUrl} />
         </div>
       ) : (
         <iframe

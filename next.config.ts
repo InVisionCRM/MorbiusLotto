@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import webpack from "webpack";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [{ source: "/staking", destination: "/claim", permanent: true }]
+  },
   // Empty turbopack config to satisfy Next.js requirement (we use webpack)
   turbopack: {},
   images: {

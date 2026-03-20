@@ -1,58 +1,22 @@
+'use client'
+
 import Image from 'next/image'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import { PaymentBadges } from '@/components/home/payment-badges'
-
-const fadeInUp = {
-  hidden: { opacity: 0, y: 40 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, ease: 'easeOut' as const }
-  }
-}
-
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.15 }
-  }
-}
+import { cn } from '@/lib/utils'
+import { homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
 
 export function GamesSection() {
   return (
     <main className="w-full px-4 py-6 md:py-8 relative z-10 overflow-hidden" id="games">
-      {/* Static background */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.06] pointer-events-none"
-        style={{ backgroundImage: 'url(/BlackJack/TourCards/TourCard2.png)' }}
-        aria-hidden
-      />
-      {/* Section header — matches other home sections */}
-      <motion.div
-        className="relative z-10 text-center mb-8"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, margin: "0%" }}
-        variants={fadeInUp}
-      >
-        <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
-          Games
-        </h2>
-      </motion.div>
+      <div className="relative">
+        <div className="text-center mb-8">
+          <h2 className={cn(homeSectionTitleClass, 'mb-2')}>
+            <span className={homeSectionTitleGradientClass}>Games</span>
+          </h2>
+        </div>
 
-      {/* Games Grid — 2 cols min, 4 max; tight gaps; scroll animation */}
-      <motion.div
-        className="relative z-10 grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-2 max-w-6xl mx-auto"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, margin: '-40px' }}
-        variants={staggerContainer}
-      >
-
-        {/* Lottery Card */}
-        <motion.div variants={fadeInUp}>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5 sm:gap-2 max-w-6xl mx-auto">
           <Link href="/lottery" className="group block">
             <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
               <div className="relative h-full w-full rounded-xl overflow-hidden">
@@ -70,10 +34,7 @@ export function GamesSection() {
               </div>
             </div>
           </Link>
-        </motion.div>
 
-        {/* Keno Card */}
-        <motion.div variants={fadeInUp}>
           <Link href="/keno" className="group block">
             <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
               <div className="relative h-full w-full rounded-xl overflow-hidden">
@@ -91,10 +52,7 @@ export function GamesSection() {
               </div>
             </div>
           </Link>
-        </motion.div>
 
-        {/* Plinko Card */}
-        <motion.div variants={fadeInUp}>
           <Link href="/PLINKO" className="group block">
             <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
               <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
@@ -115,10 +73,7 @@ export function GamesSection() {
               </div>
             </div>
           </Link>
-        </motion.div>
 
-        {/* BlackJack Card */}
-        <motion.div variants={fadeInUp}>
           <Link href="/BLACKJACK" className="group block">
             <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
               <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
@@ -139,9 +94,60 @@ export function GamesSection() {
               </div>
             </div>
           </Link>
-        </motion.div>
 
-      </motion.div>
+          <div
+            className="group block cursor-not-allowed"
+            role="group"
+            aria-label="Multiplayer Blackjack — under construction"
+          >
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs bg-white/5 backdrop-blur-md border border-white/10 border-dashed border-amber-500/35">
+              <div className="absolute top-1.5 right-1.5 z-10 bg-black/50 text-amber-200/95 font-semibold text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md border border-amber-500/40">
+                Under construction
+              </div>
+              <div className="relative h-full w-full rounded-xl overflow-hidden">
+                <Image
+                  src="/BlackJack/TableBackground1.png"
+                  alt=""
+                  fill
+                  className="object-cover opacity-20 grayscale"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/45 to-black/30" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center">
+                  <h3 className="text-base sm:text-lg lg:text-xl font-jost text-white drop-shadow-lg leading-tight">
+                    Multiplayer Blackjack
+                  </h3>
+                  <p className="text-[10px] sm:text-xs text-amber-200/90 font-medium uppercase tracking-wide">
+                    Under construction
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="group block cursor-not-allowed"
+            role="group"
+            aria-label="Texas Hold'em — under construction"
+          >
+            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs bg-white/5 backdrop-blur-md border border-white/10 border-dashed border-amber-500/35">
+              <div className="absolute top-1.5 right-1.5 z-10 bg-black/50 text-amber-200/95 font-semibold text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md border border-amber-500/40">
+                Under construction
+              </div>
+              <div className="relative h-full w-full rounded-xl overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.12),transparent_65%)]" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center">
+                  <h3 className="text-base sm:text-lg lg:text-xl font-jost text-white drop-shadow-lg leading-tight">
+                    Texas Hold&apos;em
+                  </h3>
+                  <p className="text-[10px] sm:text-xs text-amber-200/90 font-medium uppercase tracking-wide">
+                    Under construction
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
   )
 }

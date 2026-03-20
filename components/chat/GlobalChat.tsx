@@ -107,6 +107,7 @@ export function GlobalChat() {
             roomId={roomId}
             title={title}
             collapsible={false}
+            bareShell
             className="flex-1 flex flex-col min-h-0 overflow-hidden"
             sheetOpen={open}
             onUnreadChange={setHasUnread}

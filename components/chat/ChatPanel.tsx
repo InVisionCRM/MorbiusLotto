@@ -3,24 +3,25 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useChat } from '@/hooks/use-chat';
-import { Theme } from '@/lib/theme';
 import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
-import { PlayerStatsModal } from './PlayerStatsModal';
-import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
-import type { ChatMessagePayload } from '@/lib/websocket-client';
+import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
+import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
+import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
+import type { AvatarConfig, BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 
-/** LightModal panel + Theme.inset offset shadows */
-const LIGHT_SHELL_STYLE: React.CSSProperties = {
-  background: 'white',
-  boxShadow: Theme.inset.boxShadow,
-  border: Theme.inset.border,
+/** Plinko-style dark panel shell */
+const CHAT_SHELL_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.96), rgba(40, 40, 40, 0.9))',
+  boxShadow:
+    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.08), 0 4px 20px rgba(0, 0, 0, 0.5)',
+  border: '1px inset rgba(60, 60, 60, 0.5)',
 };
 
-/** Inner recessed area (message list, emoji picker) */
-const LIGHT_INSET_STYLE: React.CSSProperties = {
-  background: 'rgb(249 250 251)', /* gray-50 */
-  boxShadow: Theme.inset.light.boxShadow,
-  border: Theme.inset.light.border,
+/** Recessed message list / emoji tray */
+const CHAT_INSET_STYLE: React.CSSProperties = {
+  background: 'rgba(16, 18, 22, 0.94)',
+  boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.65)',
+  border: '1px solid rgba(55, 65, 75, 0.5)',
 };
 
 const CHAT_MESSAGE_MAX_LENGTH = 150;
@@ -30,41 +31,9 @@ const EMOJI_LIST = [
   '❤️', '💯', '🔥','🎉', '👀', '🤔', '😎', '🥳', '🙃',
 ];
 
-/** 25 cross-color gradient placeholders (pink+yellow, red+blue, cyan+pink, etc.); same user always gets same gradient */
-const AVATAR_GRADIENTS: string[] = [
-  'linear-gradient(135deg, #ec4899 0%, #eab308 100%)',   /* pink & yellow */
-  'linear-gradient(135deg, #ef4444 0%, #3b82f6 100%)',   /* red & blue */
-  'linear-gradient(135deg, #ef4444 0%, #eab308 100%)',    /* red & yellow */
-  'linear-gradient(135deg, #06b6d4 0%, #000000 100%)',    /* cyan & black */
-  'linear-gradient(135deg, #06b6d4 0%, #ec4899 100%)',   /* cyan & pink */
-  'linear-gradient(135deg, #8b5cf6 0%, #f97316 100%)',    /* violet & orange */
-  'linear-gradient(135deg, #22c55e 0%, #6366f1 100%)',    /* green & indigo */
-  'linear-gradient(135deg, #f59e0b 0%, #ec4899 100%)',    /* amber & pink */
-  'linear-gradient(135deg, #14b8a6 0%, #dc2626 100%)',    /* teal & red */
-  'linear-gradient(135deg, #a855f7 0%, #22d3ee 100%)',    /* purple & cyan */
-  'linear-gradient(135deg, #fbbf24 0%, #7c3aed 100%)',    /* yellow & violet */
-  'linear-gradient(135deg, #06b6d4 0%, #f43f5e 100%)',    /* cyan & rose */
-  'linear-gradient(135deg, #3b82f6 0%, #f97316 100%)',    /* blue & orange */
-  'linear-gradient(135deg, #84cc16 0%, #ec4899 100%)',   /* lime & pink */
-  'linear-gradient(135deg, #ef4444 0%, #8b5cf6 100%)',   /* red & purple */
-  'linear-gradient(135deg, #22d3ee 0%, #f59e0b 100%)',    /* cyan & amber */
-  'linear-gradient(135deg, #ec4899 0%, #3b82f6 100%)',    /* pink & blue */
-  'linear-gradient(135deg, #eab308 0%, #14b8a6 100%)',    /* yellow & teal */
-  'linear-gradient(135deg, #f97316 0%, #6366f1 100%)',    /* orange & indigo */
-  'linear-gradient(135deg, #dc2626 0%, #22c55e 100%)',    /* red & green */
-  'linear-gradient(135deg, #a855f7 0%, #fbbf24 100%)',    /* purple & yellow */
-  'linear-gradient(135deg, #06b6d4 0%, #ef4444 100%)',    /* cyan & red */
-  'linear-gradient(135deg, #4ade80 0%, #f43f5e 100%)',    /* green & rose */
-  'linear-gradient(135deg, #f59e0b 0%, #6366f1 100%)',    /* amber & indigo */
-  'linear-gradient(135deg, #ec4899 0%, #14b8a6 100%)',    /* pink & teal */
-  'linear-gradient(135deg, #000000 0%, #eab308 100%)',     /* black & yellow */
-];
-
-function avatarGradientIndex(msg: ChatMessagePayload): number {
-  const id = msg.senderAddress ?? msg.displayName?.trim() ?? 'anon';
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return h % AVATAR_GRADIENTS.length;
+function mergeChatAvatarConfig(raw: unknown): AvatarConfig | null {
+  if (raw == null || typeof raw !== 'object') return null;
+  return { ...DEFAULT_AVATAR_CONFIG, ...(raw as Partial<AvatarConfig>) };
 }
 
 function formatTime(iso: string): string {
@@ -118,6 +87,57 @@ function senderInitials(msg: ChatMessagePayload): string {
   return label.slice(0, 2).toUpperCase();
 }
 
+function ChatMessageAvatar({
+  msg,
+  isOwnMessage,
+  onOwnClick,
+}: {
+  msg: ChatMessagePayload;
+  isOwnMessage: boolean;
+  onOwnClick?: () => void;
+}) {
+  const config = mergeChatAvatarConfig(msg.avatarConfig);
+  const imgUrl = msg.profileImageUrl?.trim() || null;
+
+  const inner = (
+    <>
+      {config ? (
+        <AvatarPreview config={config} compact className="h-full w-full" emotion="neutral" />
+      ) : imgUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imgUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center text-[9px] font-semibold uppercase tracking-tight text-slate-500">
+          {senderInitials(msg)}
+        </span>
+      )}
+    </>
+  );
+
+  const shellClass =
+    'h-8 w-8 shrink-0 overflow-hidden rounded-full bg-slate-950 ring-1 ring-cyan-500/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]';
+
+  if (isOwnMessage && onOwnClick) {
+    return (
+      <button
+        type="button"
+        onClick={onOwnClick}
+        className={`${shellClass} cursor-pointer transition hover:ring-cyan-400/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500`}
+        title="Profile settings"
+        aria-label="Open profile settings"
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <div className={shellClass} aria-hidden>
+      {inner}
+    </div>
+  );
+}
+
 export interface ChatPanelProps {
   /** Chat room: 'main' (home), 'blackjack', 'plinko', 'keno', etc. */
   roomId: string;
@@ -141,6 +161,8 @@ export interface ChatPanelProps {
   headerActions?: React.ReactNode;
   /** Compact mode: single-line input + send on one row, normal font, minimal chrome (e.g. table chat). */
   compact?: boolean;
+  /** When true, no outer gradient/border (parent e.g. ChatSidebar drawer already provides chrome). */
+  bareShell?: boolean;
 }
 
 export function ChatPanel({
@@ -155,6 +177,7 @@ export function ChatPanel({
   fillHeight = false,
   headerActions,
   compact = false,
+  bareShell = false,
 }: ChatPanelProps) {
   const { messages, sendMessage, connected, error, setDisplayName, getProfile, loadMore, loadingMore, chatPaused } = useChat(roomId, { wsClient, wsConnected });
   const { openProfileSettings } = useProfileSettingsModal();
@@ -163,7 +186,7 @@ export function ChatPanel({
   const [showNameInput, setShowNameInput] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
-  const [selectedPlayer, setSelectedPlayer] = useState<{ address: string; displayName?: string | null } | null>(null);
+  const [profileModalAddress, setProfileModalAddress] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -289,9 +312,8 @@ export function ChatPanel({
     }
   };
 
-  const lm = Theme.lightModal;
   const messageListMaxHeight = fillHeight ? 'flex-1' : collapsible ? 'max-h-[150px]' : 'max-h-[28rem]';
-  const listStyle = compact ? { background: 'rgba(248,250,252,0.98)' } : LIGHT_INSET_STYLE;
+  const listStyle = compact ? { background: 'rgba(22, 24, 30, 0.96)' } : CHAT_INSET_STYLE;
   const panelContent = (
     <>
       <div className={`relative flex-1 flex flex-col ${fillHeight ? 'min-h-0' : 'min-h-[120px]'} ${messageListMaxHeight}`}>
@@ -307,103 +329,88 @@ export function ChatPanel({
                 type="button"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className={`text-xs disabled:opacity-50 px-2 py-1 rounded-xl border border-gray-200 ${lm.mutedText} hover:bg-gray-100 hover:text-gray-900`}
+                className="text-xs disabled:opacity-50 px-2 py-1 rounded-lg border border-cyan-500/20 text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-colors"
               >
                 {loadingMore ? 'Loading…' : 'Load older messages'}
               </button>
             </div>
           )}
           {chatPaused && (
-            <div className="text-amber-700 text-xs p-2 rounded-lg bg-amber-50 border border-amber-200 text-center font-sans">
+            <div className="text-amber-200/90 text-xs p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-center font-sans">
               Chat is temporarily paused
             </div>
           )}
           {error && (
-            <div className="text-amber-700 text-xs p-2 rounded-lg bg-amber-50 border border-amber-200 font-sans">
+            <div className="text-amber-200/90 text-xs p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 font-sans">
               {error}
             </div>
           )}
           {!connected && !error && (
-            <div className={`${lm.mutedText} text-xs p-2 font-sans`}>Connecting…</div>
+            <div className="text-slate-500 text-xs p-2 font-sans">Connecting…</div>
           )}
           {connected && messages.length === 0 && (
-            <div className={`${lm.mutedText} text-xs p-2 font-sans`}>No messages yet. Say hi!</div>
+            <div className="text-slate-500 text-xs p-2 font-sans">No messages yet. Say hi!</div>
           )}
           {messages.map((msg) => {
             const isOwnMessage = !!walletAddress && msg.senderAddress?.toLowerCase() === walletAddress.toLowerCase();
-            const avatarStyle = {
-              background: AVATAR_GRADIENTS[avatarGradientIndex(msg)],
-              textShadow: '0 0 1px rgba(0,0,0,0.4)',
-            };
             if (compact) {
               return (
                 <div key={msg.id} className="text-left flex gap-1.5 items-baseline font-sans">
-                  <span className="text-[11px] text-gray-500 shrink-0">{senderLabel(msg)}:</span>
-                  <span className="text-[13px] text-gray-900 break-words min-w-0">{msg.text}</span>
+                  <span className="text-[11px] text-slate-500 shrink-0">{senderLabel(msg)}:</span>
+                  <span className="text-[13px] text-slate-200 break-words min-w-0">{msg.text}</span>
                 </div>
               );
             }
             return (
-            <div key={msg.id} className="text-left flex gap-2 font-sans">
-              {isOwnMessage ? (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const p = await getProfile();
-                      openProfileSettings({
-                        displayName: p.displayName ?? '',
-                        profileImageUrl: p.profileImageUrl,
-                        bio: (p as any).bio ?? null,
-                        xHandle: (p as any).xHandle ?? null,
-                        tgHandle: (p as any).tgHandle ?? null,
-                        onSave: async (name, img, bio, xHandle, tgHandle) => {
-                          await setDisplayName(name, img, bio, xHandle, tgHandle);
-                        },
-                      });
-                    } catch {
-                      // Not connected or no client
-                    }
-                  }}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 text-white cursor-pointer hover:ring-2 hover:ring-cyan-500/50 transition-shadow"
-                  style={avatarStyle}
-                  title="Profile settings"
-                  aria-label="Open profile settings"
-                >
-                  {senderInitials(msg)}
-                </button>
-              ) : (
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 text-white"
-                  style={avatarStyle}
-                  aria-hidden
-                >
-                  {senderInitials(msg)}
-                </div>
-              )}
+            <div key={msg.id} className="text-left flex gap-2.5 font-sans">
+              <ChatMessageAvatar
+                msg={msg}
+                isOwnMessage={isOwnMessage}
+                onOwnClick={
+                  isOwnMessage
+                    ? async () => {
+                        try {
+                          const p = await getProfile();
+                          openProfileSettings({
+                            displayName: p.displayName ?? '',
+                            profileImageUrl: p.profileImageUrl,
+                            bio: (p as { bio?: string | null }).bio ?? null,
+                            xHandle: (p as { xHandle?: string | null }).xHandle ?? null,
+                            tgHandle: (p as { tgHandle?: string | null }).tgHandle ?? null,
+                            onSave: async (name, img, bio, xHandle, tgHandle) => {
+                              await setDisplayName(name, img, bio, xHandle, tgHandle);
+                            },
+                          });
+                        } catch {
+                          // Not connected or no client
+                        }
+                      }
+                    : undefined
+                }
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2 flex-wrap">
                   {msg.senderAddress ? (
                     <button
                       type="button"
-                      onClick={() => setSelectedPlayer({ address: msg.senderAddress!, displayName: msg.displayName })}
-                      className={`font-jost ${lm.accentText} text-xs font-medium shrink-0 hover:text-cyan-600 cursor-pointer transition-colors`}
+                      onClick={() => setProfileModalAddress(msg.senderAddress!)}
+                      className="font-jost text-cyan-400 text-xs font-medium shrink-0 hover:text-cyan-300 cursor-pointer transition-colors"
                     >
                       {senderLabel(msg)}
                     </button>
                   ) : (
-                    <span className={`font-jost ${lm.accentText} text-xs font-medium shrink-0`}>
+                    <span className="font-jost text-cyan-400 text-xs font-medium shrink-0">
                       {senderLabel(msg)}
                     </span>
                   )}
                   <span
-                    className={`${lm.mutedText} text-[10px] shrink-0`}
+                    className="text-slate-500 text-[10px] shrink-0 tabular-nums"
                     title={formatTime(msg.timestamp)}
                   >
                     {formatRelative(msg.timestamp)}
                   </span>
                 </div>
-                <p className={`${lm.bodyText} text-sm break-words pl-0 mt-0.5`}>{msg.text}</p>
+                <p className="text-slate-200 text-sm break-words pl-0 mt-0.5 leading-relaxed">{msg.text}</p>
               </div>
             </div>
             );
@@ -413,7 +420,7 @@ export function ChatPanel({
           <button
             type="button"
             onClick={scrollToBottom}
-            className={`absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-xl text-xs font-medium ${lm.primaryButton}`}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r from-cyan-600 to-cyan-700 text-white border border-cyan-500/40 shadow-lg shadow-cyan-900/40 hover:from-cyan-500 hover:to-cyan-600 transition-colors"
           >
             Scroll to bottom
           </button>
@@ -421,19 +428,19 @@ export function ChatPanel({
       </div>
       <form
         onSubmit={handleSubmit}
-        className={`font-sans flex-shrink-0 border-t border-gray-200 ${lm.bodyText} ${compact ? 'p-2 flex items-end gap-2' : 'p-2 flex flex-col gap-2'}`}
+        className={`font-sans flex-shrink-0 border-t border-cyan-500/15 text-slate-200 ${compact ? 'p-2 flex items-end gap-2' : 'p-2 flex flex-col gap-2'}`}
       >
         {!compact && showEmojiPicker && (
           <div
-            className="flex flex-wrap gap-1 p-2 rounded-xl border border-gray-200 max-h-24 overflow-y-auto"
-            style={LIGHT_INSET_STYLE}
+            className="flex flex-wrap gap-1 p-2 rounded-lg border border-cyan-500/20 max-h-24 overflow-y-auto"
+            style={CHAT_INSET_STYLE}
           >
             {EMOJI_LIST.map((emoji) => (
               <button
                 key={emoji}
                 type="button"
                 onClick={() => insertEmoji(emoji)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-200 text-lg leading-none transition"
+                className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/10 text-lg leading-none transition text-slate-200"
                 title={emoji}
               >
                 {emoji}
@@ -452,7 +459,7 @@ export function ChatPanel({
               disabled={!connected || chatPaused}
               maxLength={CHAT_MESSAGE_MAX_LENGTH}
               rows={1}
-              className="w-full min-w-0 h-11 py-2.5 px-3 rounded-full border border-gray-200 bg-white text-[15px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-400 resize-none overflow-hidden font-sans"
+              className="w-full min-w-0 h-11 py-2.5 px-3 rounded-full border border-white/10 bg-slate-900/90 text-[15px] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/35 focus:border-cyan-500/40 resize-none overflow-hidden font-sans"
               aria-label="Message"
             />
           ) : (
@@ -466,9 +473,9 @@ export function ChatPanel({
                 disabled={!connected || chatPaused}
                 maxLength={CHAT_MESSAGE_MAX_LENGTH}
                 rows={4}
-                className={`${lm.input} w-full resize-none py-2 pr-14 text-sm`}
+                className="w-full resize-none py-2 pr-14 text-sm rounded-lg border border-white/10 bg-slate-900/85 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/35 focus:border-cyan-500/40"
               />
-              <span className={`absolute right-2 bottom-2 text-[10px] tabular-nums pointer-events-none ${lm.mutedText}`}>
+              <span className="absolute right-2 bottom-2 text-[10px] tabular-nums pointer-events-none text-slate-500">
                 {input.length}/{CHAT_MESSAGE_MAX_LENGTH}
               </span>
             </>
@@ -479,7 +486,7 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => setShowEmojiPicker((v) => !v)}
-              className={`w-9 h-9 flex-shrink-0 rounded-xl text-lg flex items-center justify-center transition ${lm.secondaryButton}`}
+              className="w-9 h-9 flex-shrink-0 rounded-lg text-lg flex items-center justify-center transition bg-slate-800/90 border border-cyan-500/20 text-slate-200 hover:bg-slate-700/90"
               title="Insert emoji"
               aria-label="Insert emoji"
             >
@@ -491,7 +498,7 @@ export function ChatPanel({
             disabled={!connected || chatPaused || !input.trim()}
             className={compact
               ? 'min-w-[52px] min-h-[44px] h-11 px-4 rounded-full bg-cyan-500 hover:bg-cyan-600 disabled:opacity-40 disabled:pointer-events-none text-white font-medium text-[15px] flex items-center justify-center transition-colors touch-manipulation'
-              : `px-4 py-2 rounded-xl text-sm font-medium shrink-0 ml-auto ${lm.primaryButton}`}
+              : 'px-4 py-2 rounded-lg text-sm font-medium shrink-0 ml-auto bg-gradient-to-r from-cyan-600 to-cyan-700 text-white border border-cyan-500/40 hover:from-cyan-500 hover:to-cyan-600 disabled:opacity-40 disabled:pointer-events-none shadow-md shadow-cyan-900/25 transition-colors'}
             aria-label="Send"
           >
             Send
@@ -503,19 +510,23 @@ export function ChatPanel({
 
   const shell = (
     <div
-      className={`flex flex-col overflow-hidden h-full font-sans ${compact ? 'min-h-0 border-0 shadow-none rounded-none bg-transparent' : `font-poppins rounded-2xl border-2 border-gray-200 shadow-xl min-h-[320px] ${fillHeight ? 'min-h-0' : ''}`} ${className}`}
-      style={compact ? undefined : LIGHT_SHELL_STYLE}
+      className={`flex flex-col overflow-hidden h-full font-sans ${
+        compact || bareShell
+          ? 'min-h-0 border-0 shadow-none rounded-none bg-transparent'
+          : `font-poppins rounded-xl border border-cyan-500/30 shadow-2xl min-h-[320px] ${fillHeight ? 'min-h-0' : ''}`
+      } ${className}`}
+      style={compact || bareShell ? undefined : CHAT_SHELL_STYLE}
     >
       {(!compact || title) && (
-        <div className={`flex flex-col gap-1 px-3 py-2 border-b border-gray-200 ${lm.bodyText} ${compact ? 'py-1.5' : ''}`}>
-          <div className="flex items-center justify-between">
-            <span className={`${lm.accentText} font-semibold text-sm`}>{title}</span>
-            <div className="flex items-center gap-2">
+        <div className={`flex flex-col gap-1 px-3 py-2 border-b border-cyan-500/15 text-slate-200 ${compact ? 'py-1.5' : ''}`}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-cyan-400 font-semibold text-sm tracking-tight truncate">{title}</span>
+            <div className="flex items-center gap-2 shrink-0">
               {!compact && walletAddress && connected && !showNameInput && (
                 <button
                   type="button"
                   onClick={() => setShowNameInput(true)}
-                  className={`text-xs shrink-0 ${lm.linkText}`}
+                  className="text-xs shrink-0 text-cyan-400/90 hover:text-cyan-300 transition-colors"
                 >
                   Set display name
                 </button>
@@ -524,27 +535,27 @@ export function ChatPanel({
             </div>
           </div>
           {walletAddress && connected && showNameInput && (
-            <div className="flex gap-2 items-center mt-1">
+            <div className="flex gap-2 items-center mt-1 flex-wrap">
               <input
                 type="text"
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
                 placeholder="Display name (3–32 chars)"
                 maxLength={32}
-                className={`flex-1 min-w-0 rounded-xl px-2 py-1 text-xs ${lm.input} py-1.5`}
+                className="flex-1 min-w-0 min-w-[120px] rounded-lg px-2 py-1.5 text-xs border border-white/10 bg-slate-900/85 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/35"
               />
               <button
                 type="button"
                 onClick={handleSaveDisplayName}
                 disabled={nameInput.trim().length < 3 || nameSaving}
-                className={`px-2 py-1 rounded-xl text-xs font-medium shrink-0 ${lm.primaryButton}`}
+                className="px-2 py-1.5 rounded-lg text-xs font-medium shrink-0 bg-gradient-to-r from-cyan-600 to-cyan-700 text-white border border-cyan-500/40 disabled:opacity-40"
               >
                 {nameSaving ? '…' : 'Save'}
               </button>
               <button
                 type="button"
                 onClick={() => { setShowNameInput(false); setNameInput(''); }}
-                className={`px-2 py-1 rounded-xl text-xs shrink-0 ${lm.linkText}`}
+                className="px-2 py-1.5 rounded-lg text-xs shrink-0 text-slate-400 hover:text-slate-200 transition-colors"
               >
                 Cancel
               </button>
@@ -556,11 +567,13 @@ export function ChatPanel({
     </div>
   );
 
-  const statsModal = selectedPlayer && (
-    <PlayerStatsModal
-      address={selectedPlayer.address}
-      displayName={selectedPlayer.displayName}
-      onClose={() => setSelectedPlayer(null)}
+  const profileModal = (
+    <PlayerProfileModal
+      isOpen={!!profileModalAddress}
+      onClose={() => setProfileModalAddress(null)}
+      address={profileModalAddress}
+      game="all"
+      modalZIndex="z-[10060]"
     />
   );
 
@@ -576,7 +589,7 @@ export function ChatPanel({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="absolute -top-1 -right-1 z-10 w-9 h-9 rounded-full flex items-center justify-center bg-gray-200 border-2 border-gray-400 text-gray-700 hover:bg-gray-300 hover:text-black hover:border-gray-500 transition-colors shadow-sm"
+                className="absolute -top-1 -right-1 z-10 w-9 h-9 rounded-lg flex items-center justify-center bg-slate-800 border border-cyan-500/35 text-cyan-200 hover:bg-slate-700 hover:text-white transition-colors shadow-lg"
                 aria-label="Close chat"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -589,10 +602,9 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className={`w-full rounded-2xl py-3 px-4 text-left flex items-center gap-2 border-2 border-gray-200 font-semibold text-sm transition hover:bg-gray-50 hover:border-cyan-500/50 shadow-lg relative ${lm.accentText}`}
+              className="w-full rounded-xl py-3 px-4 text-left flex items-center gap-2 border border-cyan-500/30 font-semibold text-sm transition text-cyan-400 hover:text-cyan-300 hover:border-cyan-400/50 shadow-lg relative bg-gradient-to-br from-slate-900 to-slate-800"
               style={{
-                background: 'white',
-                boxShadow: Theme.inset.light.boxShadow,
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.35)',
               }}
               aria-label={`Open ${title}${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
             >
@@ -608,7 +620,7 @@ export function ChatPanel({
             </button>
           )}
         </div>
-        {statsModal}
+        {profileModal}
       </>
     );
   }
@@ -616,7 +628,7 @@ export function ChatPanel({
   return (
     <>
       <div className={className}>{shell}</div>
-      {statsModal}
+      {profileModal}
     </>
   );
 }

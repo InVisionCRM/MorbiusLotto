@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getApiUrlOptional } from '@/lib/api-urls';
 import {
   BLACKJACK_IMAGE_BACKGROUNDS,
   BLACKJACK_VIDEO_BACKGROUNDS,
@@ -37,36 +36,33 @@ export interface TableThemeInfo {
   kind: 'image' | 'video';
 }
 
+function normalizeSrc(src: string): string {
+  if (!src) return src;
+  if (/^https?:\/\//.test(src) || src.startsWith('/')) return src;
+  return `https://${src}`;
+}
+
 /**
  * Fetches blackjack table list from API when available; falls back to static constants.
  * Use for table picker and resolving theme to label/src.
  */
 export function useBlackjackTables() {
-  const apiBase = getApiUrlOptional();
   const [imageOptions, setImageOptions] = useState<TableOption[]>(() =>
     BLACKJACK_IMAGE_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src }))
   );
   const [videoOptions, setVideoOptions] = useState<TableOption[]>(() =>
     BLACKJACK_VIDEO_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src }))
   );
-  const [loading, setLoading] = useState(!!apiBase);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!apiBase) {
-      setLoading(false);
-      return;
-    }
     let cancelled = false;
     setLoading(true);
-    fetch(`${apiBase}/api/blackjack/tables?enabledOnly=true`)
+    // Same-origin proxy (app/api/blackjack/tables) → Express + DB. Works when only BLACKJACK_SERVER_URL is set on the server.
+    fetch('/api/blackjack/tables?enabledOnly=true')
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
       .then((rows: Array<{ id: string; kind: string; name: string; src: string; description?: string; token_contract_address?: string; logo_url?: string; ticker?: string; iframe_url?: string; website_url?: string }>) => {
         if (cancelled || !Array.isArray(rows)) return;
-        const normalizeSrc = (src: string) => {
-          if (!src) return src;
-          if (/^https?:\/\//.test(src) || src.startsWith('/')) return src;
-          return `https://${src}`;
-        };
         const mapRow = (r: (typeof rows)[0]) => ({
           id: r.id,
           label: r.name,
@@ -95,28 +91,54 @@ export function useBlackjackTables() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [apiBase]);
+  }, []);
+
+  const resolveThemeSource = useCallback(
+    (kind: 'image' | 'video', id: string): string | null => {
+      const options = kind === 'video' ? videoOptions : imageOptions;
+      const byId = options.find((x) => x.id === id);
+      if (byId?.src) return normalizeSrc(byId.src);
+      const legacy = (kind === 'video' ? BLACKJACK_VIDEO_BACKGROUNDS : BLACKJACK_IMAGE_BACKGROUNDS).find((x) => x.id === id);
+      if (legacy?.src) return normalizeSrc(legacy.src);
+      // Some multiplayer tables store src directly as theme_id.
+      if (id.startsWith('/') || /^https?:\/\//.test(id)) return normalizeSrc(id);
+      return null;
+    },
+    [imageOptions, videoOptions]
+  );
 
   const getThemeInfo = useCallback(
     (theme: { kind: 'image' | 'video'; id: string }): TableThemeInfo => {
+      const options = theme.kind === 'video' ? videoOptions : imageOptions;
+      const byId = options.find((x) => x.id === theme.id);
+      if (byId) return { label: byId.label, src: byId.src, kind: theme.kind };
+
+      const resolvedSrc = resolveThemeSource(theme.kind, theme.id);
+      if (resolvedSrc) {
+        const bySrc = options.find((x) => normalizeSrc(x.src) === resolvedSrc);
+        if (bySrc) return { label: bySrc.label, src: bySrc.src, kind: theme.kind };
+      }
+
       if (theme.kind === 'video') {
-        const v = videoOptions.find((x) => x.id === theme.id);
-        if (v) return { label: v.label, src: v.src, kind: 'video' };
         const fallback = BLACKJACK_VIDEO_BACKGROUNDS[0];
         return { label: fallback.label, src: fallback.src, kind: 'video' };
       }
-      const img = imageOptions.find((x) => x.id === theme.id);
-      if (img) return { label: img.label, src: img.src, kind: 'image' };
       const def = BLACKJACK_IMAGE_BACKGROUNDS.find((x) => x.id === DEFAULT_BLACKJACK_IMAGE_ID) ?? BLACKJACK_IMAGE_BACKGROUNDS[0];
       return { label: def.label, src: def.src, kind: 'image' };
     },
-    [imageOptions, videoOptions]
+    [imageOptions, videoOptions, resolveThemeSource]
   );
 
   const getTableProfile = useCallback(
     (kind: 'image' | 'video', id: string): TableProfileData | null => {
       const options = kind === 'video' ? videoOptions : imageOptions;
-      const row = options.find((x) => x.id === id);
+      let row = options.find((x) => x.id === id);
+      if (!row) {
+        const resolvedSrc = resolveThemeSource(kind, id);
+        if (resolvedSrc) {
+          row = options.find((x) => normalizeSrc(x.src) === resolvedSrc);
+        }
+      }
       if (row) {
         return {
           name: row.label ?? null,
@@ -140,7 +162,7 @@ export function useBlackjackTables() {
         website_url: null,
       };
     },
-    [imageOptions, videoOptions, getThemeInfo]
+    [imageOptions, videoOptions, getThemeInfo, resolveThemeSource]
   );
 
   return { imageOptions, videoOptions, loading, getThemeInfo, getTableProfile };

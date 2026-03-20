@@ -8,42 +8,18 @@ import { useAuth } from '@/hooks/use-auth'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { HeroSection } from '@/components/home/hero-section'
-import { GamesSection } from '@/components/home/games-section'
-import { RoadMap } from '@/components/home/RoadMap'
 import { SocialsSection } from '@/components/home/socials-section'
+import { GamesSection } from '@/components/home/games-section'
 import { TokenomicsSection } from '@/components/home/tokenomics-section'
 import { ResponsibleGamingSection } from '@/components/home/responsible-gaming-section'
 import { MorbiusInfoSection } from '@/components/home/morbius-info-section'
-import { PulseChainSection, PackageSummarySection } from '@/components/home/pulsechain-section'
+import { PulseChainSection } from '@/components/home/pulsechain-section'
 import { TableShowcaseDisplay } from '@/components/marketing/TableShowcaseDisplay'
 import { MorbItSection } from '@/components/home/morbit-section'
 import Footer from '@/components/PLINKO/Footer'
-import { Theme } from '@/lib/theme'
 
-const TOUR_CARDS = [
-  '/BlackJack/TourCards/TourCard1.png',
-  '/BlackJack/TourCards/TourCard2.png',
-  '/BlackJack/TourCards/TourCard3.png',
-  '/BlackJack/TourCards/TourCard4.png',
-  '/BlackJack/TourCards/TourCard5.png',
-] as const
-
-function SectionWithBg({ children, bgImage }: { children: React.ReactNode; bgImage: string }) {
-  return (
-    <div className="relative w-full">
-      <Image
-        src={bgImage}
-        alt=""
-        fill
-        className="object-cover opacity-5 pointer-events-none select-none"
-        sizes="100vw"
-        loading="lazy"
-        quality={60}
-      />
-      <div className="relative z-10">{children}</div>
-    </div>
-  )
-}
+/** Full-viewport fixed background behind home content */
+const HOME_FIXED_BG = '/BlackJack/TourCards/TourCard2.png' as const
 
 export default function HomePage() {
   const [loginOpen, setLoginOpen] = useState(false)
@@ -59,102 +35,92 @@ export default function HomePage() {
       onSignOut={signOut}
       onOpenPlayerProfile={address ? (game) => { setPlayerProfileGame(game ?? 'all'); setPlayerProfileOpen(true); } : undefined}
     >
-      <div className="min-h-screen text-white flex flex-col items-center relative" style={{ background: Theme.greyGradient.background }}>
-        <FirstVisitNotification className="font-poppins text-center">
-          <p className="text-gray-700 text-base sm:text-lg tracking-wide">
-            The Morbius token analyzer has been redirected to{' '}
-            <a
-              href="https://scan.morbius.io"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-bold underline underline-offset-1 text-cyan-500 hover:text-cyan-600"
-            >
-              Scan.Morbius.io
-            </a>
-            .
-          </p>
-        </FirstVisitNotification>
-        <style jsx global>{`
-          ::-webkit-scrollbar {
-            width: 4px;
-          }
+      <div className="relative w-full min-h-screen flex flex-col items-center text-white bg-neutral-950">
+        {/* Fixed single image — viewport-locked; dark scrim keeps sections readable */}
+        <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden>
+          <Image
+            src={HOME_FIXED_BG}
+            alt=""
+            fill
+            className="object-cover select-none opacity-[0.22]"
+            sizes="100vw"
+            priority
+            quality={85}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(10,10,10,0.82) 0%, rgba(20,20,20,0.72) 40%, rgba(10,10,10,0.85) 100%)',
+            }}
+          />
+        </div>
 
-          ::-webkit-scrollbar-track {
-            background: transparent;
-          }
+        <div className="relative z-[1] w-full flex flex-col items-center">
+          <div className="relative z-10 w-full flex flex-col items-center">
+            <FirstVisitNotification className="font-poppins text-center">
+              <p className="text-gray-300 text-base sm:text-lg tracking-wide">
+                The Morbius token analyzer has been redirected to{' '}
+                <a
+                  href="https://scan.morbius.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold underline underline-offset-1 text-cyan-400 hover:text-cyan-300"
+                >
+                  Scan.Morbius.io
+                </a>
+                .
+              </p>
+            </FirstVisitNotification>
+            <style jsx global>{`
+              ::-webkit-scrollbar {
+                width: 4px;
+              }
 
-          ::-webkit-scrollbar-thumb {
-            background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.5) 50%, rgb(6, 182, 212) 100%);
-            border-radius: 2px;
-          }
+              ::-webkit-scrollbar-track {
+                background: transparent;
+              }
 
-          ::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.7) 50%, rgb(6, 182, 212) 100%);
-          }
-        `}</style>
+              ::-webkit-scrollbar-thumb {
+                background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.5) 50%, rgb(6, 182, 212) 100%);
+                border-radius: 2px;
+              }
 
-        {/* Hero Section */}
-      <div className="relative z-[1] w-full flex flex-col items-center">
-      <HeroSection
-        onOpenPlayerProfile={address ? () => { setPlayerProfileGame('all'); setPlayerProfileOpen(true) } : undefined}
-        onOpenAuthModal={() => setLoginOpen(true)}
-      />
+              ::-webkit-scrollbar-thumb:hover {
+                background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.7) 50%, rgb(6, 182, 212) 100%);
+              }
+            `}</style>
 
-      {/* Games: Lottery, Keno, Plinko, Blackjack — right under hero */}
-      <section className="w-full flex flex-col items-center">
-        <GamesSection />
-      </section>
+            <HeroSection
+              onOpenPlayerProfile={address ? () => { setPlayerProfileGame('all'); setPlayerProfileOpen(true) } : undefined}
+              onOpenAuthModal={() => setLoginOpen(true)}
+            />
 
-      <div className="w-full flex flex-col items-center gap-y-0 py-8 px-4">
-        {/* Morbius Token Info (DexScreener) — above Tokenomics */}
-        <SectionWithBg bgImage={TOUR_CARDS[2]}>
-          <MorbiusInfoSection />
-        </SectionWithBg>
+            <div className="w-full pt-24 md:pt-32 lg:pt-40">
+              <SocialsSection />
+            </div>
 
-        {/* Tokenomics Section — What is Morbius? / Be the House! */}
-        <SectionWithBg bgImage={TOUR_CARDS[3]}>
-          <TokenomicsSection />
-        </SectionWithBg>
+            <section className="w-full flex flex-col items-center pt-10 md:pt-16">
+              <GamesSection />
+            </section>
 
-        {/* Roadmap: Tournaments, Slot Machines, Texas Hold'em, Sponsorship */}
-        <SectionWithBg bgImage={TOUR_CARDS[4]}>
-          <RoadMap />
-        </SectionWithBg>
+            <div className="flex w-full flex-col items-center gap-y-20 px-4 py-12 md:gap-y-28 md:py-20">
+              <MorbiusInfoSection />
 
-        {/* Responsible Gaming Section */}
-        <SectionWithBg bgImage={TOUR_CARDS[0]}>
-          <ResponsibleGamingSection />
-        </SectionWithBg>
+              <TokenomicsSection />
 
-        {/* Parallax: Bring Your Brand To The Table */}
-        <SectionWithBg bgImage={TOUR_CARDS[1]}>
-          <PulseChainSection />
-        </SectionWithBg>
+              <PulseChainSection />
 
-        {/* 3D table displays (right below parallax) */}
-        <SectionWithBg bgImage={TOUR_CARDS[2]}>
-          <TableShowcaseDisplay />
-        </SectionWithBg>
+              <TableShowcaseDisplay />
 
-        {/* Package summary card */}
-        <SectionWithBg bgImage={TOUR_CARDS[3]}>
-          <PackageSummarySection />
-        </SectionWithBg>
+              <MorbItSection />
 
-        {/* Socials Section */}
-        <SectionWithBg bgImage={TOUR_CARDS[4]}>
-          <SocialsSection />
-        </SectionWithBg>
+              <ResponsibleGamingSection />
 
-        {/* Morb-It Section */}
-        <SectionWithBg bgImage={TOUR_CARDS[0]}>
-          <MorbItSection />
-        </SectionWithBg>
-
-        {/* Footer */}
-        <Footer />
-      </div>
-      </div>
+              <Footer />
+            </div>
+          </div>
+        </div>
       </div>
 
       <LoginModal

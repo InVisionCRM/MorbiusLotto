@@ -3,8 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useDisconnect } from 'wagmi';
+import { WalletMenu } from '@/components/shared/WalletMenu';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
 
@@ -20,8 +19,6 @@ export default function SlotMachinesMainNav({
   onSoundToggle
 }: SlotMachinesMainNavProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -181,69 +178,8 @@ export default function SlotMachinesMainNav({
                 )}
               </div>
 
-              {/* Wallet Connect */}
-              <ConnectButton.Custom>
-                {({
-                  account,
-                  chain,
-                  openAccountModal,
-                  openChainModal,
-                  openConnectModal,
-                  mounted,
-                }) => {
-                  const ready = mounted;
-                  const connected = ready && account && chain;
-
-                  return (
-                    <div
-                      {...(!ready && {
-                        'aria-hidden': true,
-                        style: {
-                          opacity: 0,
-                          pointerEvents: 'none',
-                          userSelect: 'none',
-                        },
-                      })}
-                    >
-                      {(() => {
-                        if (!connected) {
-                          return (
-                            <button
-                              onClick={openConnectModal}
-                              className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-sm hover:from-purple-500 hover:to-pink-500 transition-all"
-                            >
-                              Connect
-                            </button>
-                          );
-                        }
-
-                        if (chain.unsupported) {
-                          return (
-                            <button
-                              onClick={openChainModal}
-                              className="px-4 py-2 rounded-lg bg-red-600 text-white font-bold text-sm"
-                            >
-                              Wrong Network
-                            </button>
-                          );
-                        }
-
-                        return (
-                          <button
-                            onClick={openAccountModal}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-900/30 hover:bg-purple-800/40 transition-colors"
-                          >
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
-                            <span className="text-purple-300 text-sm font-medium">
-                              {account.displayName}
-                            </span>
-                          </button>
-                        );
-                      })()}
-                    </div>
-                  );
-                }}
-              </ConnectButton.Custom>
+              {/* Wallet — Deposit/Withdraw in dropdown */}
+              <WalletMenu className="shrink-0" />
             </div>
           </div>
         </div>

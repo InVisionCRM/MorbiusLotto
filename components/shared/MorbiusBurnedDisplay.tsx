@@ -15,9 +15,18 @@ interface MorbiusBurnedDisplayProps {
   showLogo?: boolean;
   /** Override spring physics for the NumberTicker */
   springConfig?: { damping?: number; stiffness?: number };
+  /** When false, render a plain formatted count (no NumberTicker). */
+  useAnimatedNumbers?: boolean;
 }
 
-export function MorbiusBurnedDisplay({ variant = 'inline', className = '', labelClassName, showLogo = true, springConfig }: MorbiusBurnedDisplayProps) {
+export function MorbiusBurnedDisplay({
+  variant = 'inline',
+  className = '',
+  labelClassName,
+  showLogo = true,
+  springConfig,
+  useAnimatedNumbers = true,
+}: MorbiusBurnedDisplayProps) {
   const { burnedAmount, isLoading } = useMorbiusBurned();
 
   // Convert from wei to whole tokens (no decimals for display)
@@ -34,11 +43,17 @@ export function MorbiusBurnedDisplay({ variant = 'inline', className = '', label
             <span className="text-3xl font-black text-orange-400 animate-pulse">Loading...</span>
           ) : (
             <>
-              <NumberTicker
-                value={burnedTokens}
-                className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500"
-                {...(springConfig && { springConfig })}
-              />
+              {useAnimatedNumbers ? (
+                <NumberTicker
+                  value={burnedTokens}
+                  className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500"
+                  {...(springConfig && { springConfig })}
+                />
+              ) : (
+                <span className="text-3xl font-black tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500 md:text-4xl">
+                  {burnedTokens.toLocaleString()}
+                </span>
+              )}
               {showLogo && (
                 <Image
                   src="/morbius/MorbiusLogo (3).png"
@@ -63,10 +78,11 @@ export function MorbiusBurnedDisplay({ variant = 'inline', className = '', label
         <span className="text-orange-400 text-sm animate-pulse">...</span>
       ) : (
         <>
-          <NumberTicker
-            value={burnedTokens}
-            className="text-orange-400 font-bold text-sm"
-          />
+          {useAnimatedNumbers ? (
+            <NumberTicker value={burnedTokens} className="text-orange-400 font-bold text-sm" />
+          ) : (
+            <span className="text-sm font-bold tabular-nums text-orange-400">{burnedTokens.toLocaleString()}</span>
+          )}
           {showLogo && (
             <Image
               src="/morbius/MorbiusLogo (3).png"

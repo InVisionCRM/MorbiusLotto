@@ -1,5 +1,9 @@
 'use client'
 
+import { motion } from 'framer-motion'
+import { cn } from '@/lib/utils'
+import { homeSectionSubtitleClass, homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
+
 interface ShowcaseData {
   name: string
   accentColor: string
@@ -40,11 +44,42 @@ const SHOWCASES: ShowcaseData[] = [
   },
 ]
 
-function BrowserMockup({ data }: { data: ShowcaseData }) {
+function BrowserMockup({ data, index }: { data: ShowcaseData; index: number }) {
   const isRight = data.rotateY < 0
+  const slideX = index === 0 ? -120 : index === 2 ? 120 : 0
 
   return (
-    <div className="relative flex flex-col items-center">
+    <motion.div
+      className="relative flex flex-col items-center"
+      initial={{ opacity: 0, x: slideX, y: 64 }}
+      whileInView={{ opacity: 1, x: 0, y: 0 }}
+      viewport={{ once: true, margin: '-80px', amount: 0.2 }}
+      transition={{
+        opacity: {
+          duration: 2.1,
+          delay: index * 0.42,
+          ease: [0.12, 0.55, 0.18, 1],
+        },
+        x: {
+          type: 'spring',
+          stiffness: 16,
+          damping: 50,
+          mass: 4.5,
+          delay: index * 0.42,
+          restDelta: 0.5,
+          restSpeed: 0.5,
+        },
+        y: {
+          type: 'spring',
+          stiffness: 16,
+          damping: 50,
+          mass: 4.5,
+          delay: index * 0.42,
+          restDelta: 0.5,
+          restSpeed: 0.5,
+        },
+      }}
+    >
       {/* Outer wrapper gives space for floating cards */}
       <div className="relative w-full" style={{ paddingBottom: '3.5rem', paddingTop: '1.5rem' }}>
 
@@ -140,7 +175,7 @@ function BrowserMockup({ data }: { data: ShowcaseData }) {
       >
         {data.name}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -149,17 +184,18 @@ export function TableShowcaseDisplay() {
     <section className="py-16 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-14">
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">
-            Already Live on Morbius
+          <h2 className={cn(homeSectionTitleClass, 'mb-2')}>
+            <span className="text-white">Already Live on </span>
+            <span className={homeSectionTitleGradientClass}>Morbius</span>
           </h2>
-          <p className="text-slate-400">
+          <p className={cn(homeSectionSubtitleClass)}>
             Three custom tables of many that we&apos;ve built for projects in the PulseChain ecosystem.
           </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-10 md:gap-6 items-start">
-          {SHOWCASES.map((data) => (
-            <BrowserMockup key={data.name} data={data} />
+          {SHOWCASES.map((data, index) => (
+            <BrowserMockup key={data.name} data={data} index={index} />
           ))}
         </div>
       </div>

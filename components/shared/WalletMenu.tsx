@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion } from 'motion/react'
+import { useRouter } from 'next/navigation'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useProfile } from '@/hooks/use-player-profile'
@@ -9,7 +10,10 @@ import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
 import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator'
 
 export interface WalletMenuProps {
-  /** When provided, shows Deposit/Withdraw button that calls this */
+  /**
+   * When provided, Deposit/Withdraw calls this (e.g. in-game modal).
+   * When omitted, the menu still shows Deposit/Withdraw and navigates to Blackjack with the deposit modal opened.
+   */
   onOpenDepositModal?: () => void
   /** When provided, shows balance line in dropdown (in MORBIUS, 18 decimals) */
   reserveBalance?: bigint
@@ -45,6 +49,7 @@ export function WalletMenu({
   variant = 'default',
   sidebarOpen = true,
 }: WalletMenuProps) {
+  const router = useRouter()
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
   const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook, avatarConfig } = useProfile()
@@ -90,6 +95,15 @@ export function WalletMenu({
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isWalletDropdownOpen])
+
+  const handleDepositWithdraw = useCallback(() => {
+    if (onOpenDepositModal) {
+      onOpenDepositModal()
+    } else {
+      router.push('/BLACKJACK?open=deposit')
+    }
+    setIsWalletDropdownOpen(false)
+  }, [onOpenDepositModal, router])
 
   return (
     <div className={`flex items-center flex-shrink-0 relative ${className}`} ref={walletDropdownRef}>
@@ -165,18 +179,14 @@ export function WalletMenu({
                   <i className="fas fa-wallet w-4 text-center" aria-hidden />
                   Wallet
                 </div>
-                {onOpenDepositModal && (
-                  <button
-                    onClick={() => {
-                      onOpenDepositModal()
-                      setIsWalletDropdownOpen(false)
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${variant === 'sidebar' ? 'text-white hover:bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
-                  >
-                    <i className="fas fa-wallet w-4 text-center" />
-                    <span className="text-sm font-medium">Deposit/Withdraw</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleDepositWithdraw}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors border border-cyan-500/25 bg-cyan-500/10 ${variant === 'sidebar' ? 'text-white hover:bg-cyan-500/15' : 'text-gray-200 hover:bg-cyan-500/15 hover:text-white'}`}
+                >
+                  <i className="fas fa-exchange-alt w-4 text-center text-cyan-300/90" aria-hidden />
+                  <span className="text-sm font-semibold">Deposit / Withdraw</span>
+                </button>
                 {onOpenProfileSettings && (
                   <button
                     type="button"

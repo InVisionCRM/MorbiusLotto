@@ -1455,6 +1455,7 @@ async function initializeServices() {
           logo_url: r.logo_url,
           ticker: r.ticker,
           iframe_url: r.iframe_url,
+          website_url: r.website_url,
           sort_order: r.sort_order,
           enabled: r.enabled,
         })));

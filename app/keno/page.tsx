@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { cn, triggerSuccessConfetti } from '@/lib/utils'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { WalletMenu } from '@/components/shared/WalletMenu'
 import { useAccount, usePublicClient, useReadContract, useReadContracts } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { formatEther, parseEther, decodeEventLog } from 'viem'
@@ -815,7 +815,9 @@ export default function KenoPage() {
 
       {/* Play Button */}
       {!isConnected ? (
-        <ConnectButton />
+        <div className="w-full flex justify-center">
+          <WalletMenu className="justify-center" />
+        </div>
       ) : (
         <Button
           className={cn(

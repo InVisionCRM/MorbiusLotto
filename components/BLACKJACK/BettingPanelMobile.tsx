@@ -148,15 +148,15 @@ export function BettingPanelMobile({
             </button>
           </div>
         </div>
-        {/* Preset add amounts + Clear — 5-col grid */}
-        <div className="grid grid-cols-5 gap-0 overflow-hidden">
+        {/* Preset add amounts + Clear — larger touch targets */}
+        <div className="grid grid-cols-5 gap-0 overflow-hidden rounded-md border border-white/20">
           {PRESETS.map((amount) => (
             <button
               key={amount}
               type="button"
               onClick={() => addPreset(amount)}
               disabled={isPlaying}
-              className="h-7 min-h-0 py-0 px-0 text-white/90 text-xs font-medium hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-r border-white/20"
+              className="h-9 sm:h-10 min-h-0 py-0 px-0 text-white/95 text-sm sm:text-[15px] font-semibold hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-r border-white/20"
               aria-label={`Add ${amount} to bet`}
             >
               {amount >= 1000 ? `${amount / 1000}k` : amount}
@@ -166,7 +166,7 @@ export function BettingPanelMobile({
             type="button"
             onClick={handleClearBet}
             disabled={isPlaying}
-            className="h-7 min-h-0 py-0 px-0 text-white/90 text-xs font-medium hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="h-9 sm:h-10 min-h-0 py-0 px-0 text-white/95 text-sm sm:text-[15px] font-semibold hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             aria-label="Clear bet"
           >
             Clear

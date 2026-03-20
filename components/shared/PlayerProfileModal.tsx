@@ -38,9 +38,11 @@ interface PlayerProfileModalProps {
   address: string | null
   /** Initial game to show; when opened from home (no arg), pass 'all' to show combined stats first. */
   game?: PlayerProfileGame
+  /** Stack above high-z chrome (e.g. chat drawer z-[9002]); passed to Dialog overlay + content. */
+  modalZIndex?: string
 }
 
-export function PlayerProfileModal({ isOpen, onClose, address, game = 'all' }: PlayerProfileModalProps) {
+export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', modalZIndex }: PlayerProfileModalProps) {
   const [giftOpen, setGiftOpen] = useState(false)
   const [copiedAddress, setCopiedAddress] = useState(false)
 
@@ -67,7 +69,10 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all' }: P
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto bg-gradient-to-b from-gray-900 to-black border-cyan-500/30">
+        <DialogContent
+          modalZIndex={modalZIndex}
+          className="max-w-6xl max-h-[90vh] overflow-y-auto bg-gradient-to-b from-gray-900 to-black border-cyan-500/30"
+        >
           <DialogHeader className="flex flex-row items-center justify-between gap-4">
             <DialogTitle className="text-xl font-bold text-white">
               Player Dashboard

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAccount, useSignTypedData } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { WalletMenu } from '@/components/shared/WalletMenu';
+import { useProfile } from '@/hooks/use-player-profile';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
@@ -10,6 +11,7 @@ import { CreatorDashboard } from '@/components/Creators/CreatorDashboard';
 
 export default function CreatorsPage() {
   const { address, isConnected } = useAccount();
+  const { profileDisplayName, profileImageUrl } = useProfile();
   const { signTypedDataAsync } = useSignTypedData();
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
   const [wsError, setWsError] = useState<string | null>(null);
@@ -74,7 +76,7 @@ export default function CreatorsPage() {
             <i className="fas fa-crown text-5xl text-purple-400 mb-4" />
             <h1 className="text-2xl font-bold text-white mb-2">Creator Dashboard</h1>
             <p className="text-gray-400 mb-6">Connect your wallet to view your tournament creator dashboard</p>
-            <ConnectButton />
+            <WalletMenu profileDisplayName={profileDisplayName} profileImageUrl={profileImageUrl} />
           </div>
         )}
 

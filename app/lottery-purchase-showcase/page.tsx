@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useAccount, usePublicClient, useWatchContractEvent } from 'wagmi'
 import { formatUnits, parseAbiItem } from 'viem'
 import Link from 'next/link'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { WalletMenu } from '@/components/shared/WalletMenu'
+import { useProfile } from '@/hooks/use-player-profile'
 import { PlayerPurchaseHistory, PurchaseEntry, PurchaseSummary, RoundDetail } from '@/components/shared/player-purchase-history'
 import {
   KENO_ADDRESS,
@@ -33,6 +34,7 @@ const formatTime = (iso: string | number | null | undefined) => {
 
 export default function LotteryPurchaseShowcase() {
   const { address } = useAccount()
+  const { profileDisplayName, profileImageUrl } = useProfile()
   const publicClient = usePublicClient()
   const router = useRouter()
 
@@ -576,7 +578,7 @@ export default function LotteryPurchaseShowcase() {
                 History
               </h1>
             </div>
-            <ConnectButton />
+            <WalletMenu profileDisplayName={profileDisplayName} profileImageUrl={profileImageUrl} />
           </div>
         </div>
       </div>

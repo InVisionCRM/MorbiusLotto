@@ -108,7 +108,8 @@ export const DesktopSidebar = ({
     <>
       <motion.div
         className={cn(
-          "min-h-screen px-3 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 overflow-hidden rounded-r-xl",
+          // z-20: sit above page-level fixed full-viewport layers (e.g. home bg) that share the viewport
+          "min-h-screen px-3 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 overflow-hidden rounded-r-xl relative z-20",
           className
         )}
         animate={{

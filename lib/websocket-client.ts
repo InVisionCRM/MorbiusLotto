@@ -31,6 +31,10 @@ export interface ChatMessagePayload {
   roomId: string;
   senderAddress: string | null;
   displayName?: string | null;
+  /** Legacy uploaded image; used when avatarConfig is absent */
+  profileImageUrl?: string | null;
+  /** Morbius character avatar (same shape as poker AvatarConfig) */
+  avatarConfig?: Record<string, unknown> | null;
   text: string;
   timestamp: string; // ISO
 }
@@ -43,6 +47,8 @@ export interface RoomJoinedPayload {
     roomId: string;
     senderAddress: string | null;
     displayName?: string | null;
+    profileImageUrl?: string | null;
+    avatarConfig?: Record<string, unknown> | null;
     text: string;
     timestamp: string;
   }>;

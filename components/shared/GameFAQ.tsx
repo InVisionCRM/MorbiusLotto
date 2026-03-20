@@ -68,11 +68,11 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
     },
     {
       q: 'How do I deposit and withdraw?',
-      a: 'Use the Deposit/Withdraw button to move MORBIUS between your wallet and the table. You need a small amount of PLS for gas. Withdrawals may incur a small fee per the contract.',
+      a: 'Use the Deposit/Withdraw button to move MORBIUS between your wallet and the table. You need a small amount of PLS for gas.',
     },
     {
       q: 'What are the fees?',
-      a: 'There is a fee on wager (when you bet) and a fee on withdraw (when you take MORBIUS back to your wallet). Exact amounts are set by the contract and shown in the UI.',
+      a: 'Blackjack applies a 5% fee on withdrawals only (moving MORBIUS from your table balance back to your wallet). The 5% is split: 0.5% burn, 1.25% holders, 1.5% LP providers, 1.75% platform. Amounts are enforced by the contract and reflected in the UI when you withdraw.',
     },
     {
       q: 'How is the RNG calculated?',

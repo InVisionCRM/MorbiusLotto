@@ -3,7 +3,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Theme } from '@/lib/theme'
 
 interface HeroSectionProps {
   onOpenPlayerProfile?: () => void
@@ -15,14 +14,17 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal }: HeroSectio
   return (
     <section
       className="relative w-full min-h-[100dvh] min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 pt-0 pb-14"
-      style={{ background: Theme.greyGradient.background }}
+      style={{
+        background:
+          'linear-gradient(165deg, rgb(2, 2, 4) 0%, rgb(6, 6, 8) 35%, rgb(3, 3, 5) 70%, rgb(1, 1, 2) 100%)',
+      }}
     >
-      {/* Tour card backdrop at 5% opacity */}
+      {/* Extra vignette so hero reads darker than the page fixed bg */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.05] z-0"
-        style={{ backgroundImage: 'url(/BlackJack/TourCards/TourCard5.png)' }}
+        className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-b from-black/28 via-black/22 to-black/35"
+        aria-hidden
       />
-      {/* Background: chip rotates in front of tour card image */}
+      {/* Accent: rotating chip (masked fade toward content) */}
       <div
         className="absolute inset-0 z-[1]"
         style={{
@@ -31,9 +33,18 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal }: HeroSectio
         }}
       >
         <motion.div
-          className="absolute flex inset-0 bg-contain bg-center bg-no-repeat opacity-50"
+          className="absolute flex inset-0 bg-contain bg-center bg-no-repeat opacity-[0.15]"
           style={{
             backgroundImage: 'url(/PokerChips/bluepokerchip010.png)',
+            // Soft oval vignette so the chip dissolves into the hero instead of a hard bbox
+            maskImage:
+              'radial-gradient(ellipse 72% 68% at 50% 40%, black 32%, black 48%, transparent 76%)',
+            WebkitMaskImage:
+              'radial-gradient(ellipse 72% 68% at 50% 40%, black 32%, black 48%, transparent 76%)',
+            maskRepeat: 'no-repeat',
+            WebkitMaskRepeat: 'no-repeat',
+            maskSize: '100% 100%',
+            WebkitMaskSize: '100% 100%',
           }}
           animate={{ rotate: 360 }}
           transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
@@ -90,7 +101,7 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal }: HeroSectio
 
           <Link
             href="#what-is-morbius"
-            className="px-6 py-3 bg-white/10 border border-white/20 text-white font-semibold text-sm sm:text-base rounded-full hover:bg-white/20 hover:border-cyan-500/50 transition-all duration-300 hover:scale-105"
+            className="px-7 py-3.5 bg-white/10 border border-white/20 text-white font-semibold text-base sm:text-lg rounded-full hover:bg-white/20 hover:border-cyan-500/50 transition-all duration-300 hover:scale-105"
           >
             What is Morbius?
           </Link>

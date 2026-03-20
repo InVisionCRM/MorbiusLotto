@@ -14,6 +14,8 @@ import {
   Tag,
 } from 'lucide-react'
 import { CryptoPaymentPanel } from './CryptoPaymentPanel'
+import { cn } from '@/lib/utils'
+import { homeSectionSubtitleClass, homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -401,13 +403,11 @@ export function AdvertisingSection() {
             Advertising — Reach PulseChain Traders
           </div>
 
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
-            Want to Advertise on{' '}
-            <span className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
-              Morbius?
-            </span>
+          <h2 className={cn(homeSectionTitleClass, 'mb-3')}>
+            <span className="text-white">Want to Advertise on </span>
+            <span className={homeSectionTitleGradientClass}>Morbius?</span>
           </h2>
-          <p className="text-slate-400 text-lg max-w-xl mx-auto mb-5">
+          <p className={cn(homeSectionSubtitleClass, 'max-w-xl mb-5')}>
             Put your token in front of active PulseChain players. Tap any price to purchase
             directly — payment is in PLS at the live rate.
           </p>

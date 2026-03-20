@@ -1,6 +1,8 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { cn } from '@/lib/utils'
+import { homeSectionSubtitleClass, homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
 import { PauseCircle, Clock, Wallet, ShieldCheck, Gamepad2, MessageCircle } from 'lucide-react'
 
 const X_LINK = 'https://x.com/morbiusfinance'
@@ -88,10 +90,10 @@ export function ResponsibleGamingSection() {
           viewport={{ once: true, margin: '-50px' }}
           transition={{ duration: 0.5 }}
         >
-          <h2 className="text-3xl md:text-4xl font-russo-one font-normal text-cyan-500 mb-2">
-            Responsible Gaming
+          <h2 className={cn(homeSectionTitleClass, 'mb-2')}>
+            <span className={homeSectionTitleGradientClass}>Responsible Gaming</span>
           </h2>
-          <p className="text-white/50 text-sm">
+          <p className={cn(homeSectionSubtitleClass, 'text-base md:text-lg')}>
             We give you the tools to play responsibly and step away when you need to.
           </p>
         </motion.div>

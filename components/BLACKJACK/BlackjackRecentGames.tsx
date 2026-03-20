@@ -33,7 +33,7 @@ function ResultRow({ r, compact }: { r: PlayerGameRow; compact?: boolean }) {
 
   if (compact) {
     return (
-      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 py-2 px-2 border-b border-white/5 last:border-0 text-sm">
+      <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(140px,0.95fr)_4.5rem] items-center gap-4 sm:gap-5 py-2 px-2 sm:px-3 border-b border-white/5 last:border-0 text-sm">
         <span className="text-white/70 min-w-0 truncate">
           <span className="text-white/50 font-mono">{timeStr}</span>
           <span className="mx-1.5">·</span>
@@ -88,7 +88,7 @@ export function BlackjackRecentGames({
   const hasMore = displayCount < games.length
 
   return (
-    <div className="rounded-xl overflow-hidden w-full max-w-xl flex flex-col h-full min-h-0" style={panelStyle}>
+    <div className="rounded-xl overflow-hidden w-full flex flex-col h-full min-h-0 min-w-0" style={panelStyle}>
       <div className="px-3 py-2 border-b border-white/10 shrink-0">
         <h3 className="text-cyan-300 font-semibold text-sm">{title}</h3>
       </div>
@@ -106,10 +106,10 @@ export function BlackjackRecentGames({
           <div className="p-4 text-center text-white/50 text-sm">No games yet. Play Blackjack to see history here.</div>
         ) : (
           <>
-            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-2 py-1.5 text-[10px] uppercase tracking-wider text-white/40 border-b border-white/10">
+            <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(140px,0.95fr)_4.5rem] items-center gap-4 sm:gap-5 px-2 sm:px-3 py-1.5 text-[10px] uppercase tracking-wider text-white/40 border-b border-white/10">
               <span>Game</span>
-              <span>Net</span>
-              <span>Verify</span>
+              <span className="text-right">Net</span>
+              <span className="text-center sm:text-right">Verify</span>
             </div>
             {displayGames.map((r) => (
               <ResultRow key={r.id} r={r} compact={compact} />
