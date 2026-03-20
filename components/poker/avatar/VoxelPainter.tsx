@@ -485,6 +485,28 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
     setSuccess(`Pattern: ${label}`);
   };
 
+  const handleRecolorGrid = () => {
+    setErr(null);
+    setSuccess(null);
+    // Collect unique colors in the current grid
+    const uniqueColors = new Set<string>();
+    for (let y = 0; y < GRID_H; y++)
+      for (let x = 0; x < GRID; x++) {
+        const c = grid[y][x];
+        if (c) uniqueColors.add(c);
+      }
+    if (uniqueColors.size === 0) { setErr('Nothing to recolor — draw something first'); return; }
+    // Map each existing color to a new random one
+    const palette = randomPalette(uniqueColors.size);
+    const colorMap = new Map<string, string>();
+    let i = 0;
+    for (const old of uniqueColors) {
+      colorMap.set(old, palette[i++]);
+    }
+    setGrid(prev => prev.map(row => row.map(c => (c ? colorMap.get(c) ?? c : null))));
+    setSuccess(`Recolored ${uniqueColors.size} colors`);
+  };
+
   const handleRandomGradient = () => {
     setErr(null);
     setSuccess(null);
@@ -701,6 +723,14 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
                     title="Fill grid with a random linear gradient (keeps stop count on repeat clicks)"
                   >
                     <Shuffle size={11} /> Random gradient
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRecolorGrid}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-amber-500/35 text-amber-300/90 hover:text-white hover:border-amber-400/60 transition-colors"
+                    title="Keep the current pattern but randomize all colors"
+                  >
+                    <Shuffle size={11} /> Recolor
                   </button>
                 </div>
               </div>

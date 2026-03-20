@@ -396,6 +396,13 @@ export default function BlackjackMultiTablePage() {
   const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
   const prevPhaseRef = useRef<string>('');
 
+  /** Outcome audio + win toast — deferred until dealer cards are fully revealed (single-player parity). */
+  type PendingDealerOutcome = {
+    kind: 'player_blackjack' | 'player_win' | 'push' | 'dealer_blackjack' | 'dealer_win' | 'silent';
+    payout: bigint;
+  };
+  const pendingDealerOutcomeRef = useRef<PendingDealerOutcome | null>(null);
+
   // Progressive dealer card reveal — matches single-player BlackjackTable behavior
   const [visibleDealerCards, setVisibleDealerCards] = useState(0);
   const prevDealerCardCountRef = useRef(0);
@@ -420,6 +427,42 @@ export default function BlackjackMultiTablePage() {
   useEffect(() => {
     fetchBalance();
   }, [fetchBalance]);
+
+  const flushPendingDealerOutcome = useCallback(() => {
+    const pending = pendingDealerOutcomeRef.current;
+    if (!pending) return;
+    pendingDealerOutcomeRef.current = null;
+    if (soundEnabled) {
+      switch (pending.kind) {
+        case 'player_blackjack':
+          playDealerVoice(pickRandom(SOUNDS_PLAYER_BLACKJACK));
+          break;
+        case 'player_win':
+          playDealerVoice(pickRandom(SOUNDS_PLAYER_WINS));
+          break;
+        case 'push':
+          playDealerVoice(SOUND_PUSH);
+          break;
+        case 'dealer_blackjack':
+          playDealerVoice(pickRandom(SOUNDS_DEALER_BLACKJACK));
+          break;
+        case 'dealer_win':
+          if (SOUNDS_DEALER_WINS.length > 0) {
+            playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
+          }
+          break;
+        case 'silent':
+          break;
+      }
+    }
+    if (pending.kind === 'player_blackjack' || pending.kind === 'player_win') {
+      setShowWin({
+        amount: pending.payout,
+        isBlackjack: pending.kind === 'player_blackjack',
+      });
+    }
+    fetchBalance();
+  }, [soundEnabled, playDealerVoice, fetchBalance]);
 
   // Sound effects + win notification on phase transitions
   useEffect(() => {
@@ -452,7 +495,7 @@ export default function BlackjackMultiTablePage() {
       playSound('/BlackJack/sounds/cards.wav');
     }
 
-    // ── Round completes: outcome voice lines + WinNotification ──
+    // ── Round completes: outcome voice + win toast — deferred until dealer reveal finishes (flushPendingDealerOutcome) ──
     if (prevPhase !== 'completed' && state.phase === 'completed') {
       const seat = state.seats.find(s =>
         s.playerAddress && address && s.playerAddress.toLowerCase() === address.toLowerCase()
@@ -466,23 +509,16 @@ export default function BlackjackMultiTablePage() {
 
         const dealerHadBJ = state.dealerTotal === 21 && (state.dealerCards?.length ?? 0) === 2;
 
-        if (hasBlackjack) {
-          playDealerVoice(pickRandom(SOUNDS_PLAYER_BLACKJACK));
-          setShowWin({ amount: totalPayout, isBlackjack: true });
-        } else if (hasWin) {
-          playDealerVoice(pickRandom(SOUNDS_PLAYER_WINS));
-          setShowWin({ amount: totalPayout, isBlackjack: false });
-        } else if (allPush) {
-          playDealerVoice(SOUND_PUSH);
-        } else if (allLoss && dealerHadBJ) {
-          playDealerVoice(pickRandom(SOUNDS_DEALER_BLACKJACK));
-        } else if (allLoss) {
-          if (SOUNDS_DEALER_WINS.length > 0) {
-            playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
-          }
-        }
+        let kind: PendingDealerOutcome['kind'] = 'silent';
+        if (hasBlackjack) kind = 'player_blackjack';
+        else if (hasWin) kind = 'player_win';
+        else if (allPush) kind = 'push';
+        else if (allLoss && dealerHadBJ) kind = 'dealer_blackjack';
+        else if (allLoss) kind = 'dealer_win';
+        pendingDealerOutcomeRef.current = { kind, payout: totalPayout };
+      } else {
+        fetchBalance();
       }
-      fetchBalance();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase, address]);
@@ -564,6 +600,27 @@ export default function BlackjackMultiTablePage() {
     prevDealerCardCountRef.current = totalCards;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.dealerCards?.length, state?.phase]);
+
+  // After dealer cards are fully revealed, play outcome voice + win toast (matches single-player handleDealerRevealComplete)
+  useEffect(() => {
+    if (state?.phase !== 'completed') return;
+    if (!pendingDealerOutcomeRef.current) return;
+    const total = state.dealerCards?.length ?? 0;
+    if (total === 0) {
+      flushPendingDealerOutcome();
+      return;
+    }
+    if (visibleDealerCards >= total) {
+      flushPendingDealerOutcome();
+    }
+  }, [state?.phase, state?.dealerCards?.length, visibleDealerCards, flushPendingDealerOutcome]);
+
+  // Safety: if the table advances before reveal animation finishes, still announce outcome
+  useEffect(() => {
+    if (state?.phase !== 'betting' && state?.phase !== 'waiting') return;
+    if (!pendingDealerOutcomeRef.current) return;
+    flushPendingDealerOutcome();
+  }, [state?.phase, flushPendingDealerOutcome]);
 
   // Cleanup timers on unmount
   useEffect(() => {

@@ -743,9 +743,18 @@ export class MerkleDropsLPService {
     }
 
     try {
-      const root = await this.generateMerkleTree(epochId);
-      const epoch = await this.getEpoch(epochId);
-      if (!epoch) throw new Error(`Epoch ${epochId} not found after finalize`);
+      let epoch = await this.getEpoch(epochId);
+      if (!epoch) throw new Error(`Epoch ${epochId} not found`);
+
+      let root: string;
+      if (epoch.status === 'finalized' && epoch.merkle_root) {
+        root = epoch.merkle_root;
+        logger.info(`[MerkleLP] Epoch ${epochId} already finalized, root: ${root} — retrying on-chain publish`);
+      } else {
+        root = await this.generateMerkleTree(epochId);
+        epoch = await this.getEpoch(epochId);
+        if (!epoch) throw new Error(`Epoch ${epochId} not found after finalize`);
+      }
 
       const totalWei = BigInt(epoch.total_reward_amount || '0');
       const result = await setEpochRootOnChain(
@@ -755,8 +764,13 @@ export class MerkleDropsLPService {
       );
 
       if (!result.success) {
-        logger.error(`[MerkleLP] Auto-publish setEpochRoot failed — ${result.error}`);
-        return;
+        // If the root is already set on-chain, that's fine — just mark published in DB
+        if (result.error && /epoch already set/i.test(result.error)) {
+          logger.info(`[MerkleLP] Epoch #${epoch.epoch_number} root already on-chain — marking published in DB`);
+        } else {
+          logger.error(`[MerkleLP] Auto-publish setEpochRoot failed — ${result.error}`);
+          return;
+        }
       }
 
       await this.markPublished(epochId);
@@ -861,6 +875,38 @@ export class MerkleDropsLPService {
         if (!shouldFire) return;
 
         logger.info(`[MerkleLP] Cron fired (${scheduleType}): creating LP epoch`);
+
+        // ── Recover stuck epochs before creating a new one ──────────────────
+        const { rows: stuckEpochs } = await this.pool.query<{ id: number; epoch_number: number; status: string; total_reward_amount: string }>(
+          `SELECT id, epoch_number, status, total_reward_amount FROM merkle_lp_epochs
+           WHERE status IN ('calculated', 'finalized') ORDER BY id`,
+        );
+        if (stuckEpochs.length > 0) {
+          const autoPublish = settings['auto_publish_onchain'] === 'true';
+          for (const stuck of stuckEpochs) {
+            const totalReward = BigInt(stuck.total_reward_amount || '0');
+            if (totalReward === 0n) {
+              logger.info(`[MerkleLP] Resetting stuck zero-reward epoch #${stuck.epoch_number} (${stuck.status}) → snapshot`);
+              await this.pool.query(
+                `UPDATE merkle_lp_epochs SET status = 'snapshot', calculated_at = NULL,
+                 total_reward_amount = '0', new_reward_amount = '0', rollup_amount = '0'
+                 WHERE id = $1`,
+                [stuck.id],
+              );
+            } else if (autoPublish) {
+              logger.info(`[MerkleLP] Retrying finalize+publish for stuck epoch #${stuck.epoch_number} (${stuck.status})`);
+              try {
+                await this.autoFinalizeAndPublish(stuck.id);
+              } catch (retryErr) {
+                logger.error(`[MerkleLP] Retry finalize+publish failed for epoch #${stuck.epoch_number}`, retryErr);
+                return;
+              }
+            } else {
+              logger.warn(`[MerkleLP] Epoch #${stuck.epoch_number} stuck at ${stuck.status} — manual intervention required`);
+              return;
+            }
+          }
+        }
 
         try { await this.syncClaimStatus(); } catch (err) {
           logger.error('[MerkleLP] Sync claim status failed — continuing', err);

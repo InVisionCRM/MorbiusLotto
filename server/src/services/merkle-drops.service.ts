@@ -802,14 +802,23 @@ export class MerkleDropsService {
     }
 
     try {
-      // 1. Finalize — build Merkle tree
-      logger.info(`[MerkleDrops] Auto-finalizing epoch ${epochId}`);
-      const root = await this.generateMerkleTree(epochId);
-      logger.info(`[MerkleDrops] Merkle root generated: ${root}`);
+      // Re-fetch epoch to check current status
+      let epoch = await this.getEpoch(epochId);
+      if (!epoch) throw new Error(`Epoch ${epochId} not found`);
 
-      // Re-fetch epoch to get amounts
-      const epoch = await this.getEpoch(epochId);
-      if (!epoch) throw new Error(`Epoch ${epochId} not found after finalize`);
+      let root: string;
+      if (epoch.status === 'finalized' && epoch.merkle_root) {
+        // Already finalized — skip tree generation, just need to publish on-chain
+        root = epoch.merkle_root;
+        logger.info(`[MerkleDrops] Epoch ${epochId} already finalized, root: ${root} — retrying on-chain publish`);
+      } else {
+        // 1. Finalize — build Merkle tree
+        logger.info(`[MerkleDrops] Auto-finalizing epoch ${epochId}`);
+        root = await this.generateMerkleTree(epochId);
+        logger.info(`[MerkleDrops] Merkle root generated: ${root}`);
+        epoch = await this.getEpoch(epochId);
+        if (!epoch) throw new Error(`Epoch ${epochId} not found after finalize`);
+      }
 
       const totalWei = BigInt(epoch.total_reward_amount || '0');
 
@@ -820,8 +829,13 @@ export class MerkleDropsService {
         totalWei,
       );
       if (!setRootResult.success) {
-        logger.error(`[MerkleDrops] Auto-publish: setEpochRoot failed — ${setRootResult.error}`);
-        return;
+        // If the root is already set on-chain, that's fine — just mark published in DB
+        if (setRootResult.error && /epoch already set/i.test(setRootResult.error)) {
+          logger.info(`[MerkleDrops] Epoch #${epoch.epoch_number} root already on-chain — marking published in DB`);
+        } else {
+          logger.error(`[MerkleDrops] Auto-publish: setEpochRoot failed — ${setRootResult.error}`);
+          return;
+        }
       }
 
       // 3. Mark published in DB
@@ -920,6 +934,46 @@ export class MerkleDropsService {
         if (!shouldFire) return;
 
         logger.info(`[MerkleDrops] Cron fired (${scheduleType}): creating epoch automatically`);
+
+        // ── Recover stuck epochs before creating a new one ──────────────────
+        // If a prior epoch is stuck at 'calculated' or 'finalized', the twin-epoch
+        // guard will block calculateRewards for any new epoch. Recover first:
+        //   - calculated with 0 rewards → reset to snapshot (harmless dead epoch)
+        //   - calculated/finalized with rewards → retry finalize+publish
+        const { rows: stuckEpochs } = await this.pool.query<{ id: number; epoch_number: number; status: string; total_reward_amount: string }>(
+          `SELECT id, epoch_number, status, total_reward_amount FROM merkle_epochs
+           WHERE status IN ('calculated', 'finalized') ORDER BY id`,
+        );
+        if (stuckEpochs.length > 0) {
+          const autoPublish = settings['auto_publish_onchain'] === 'true';
+          for (const stuck of stuckEpochs) {
+            const totalReward = BigInt(stuck.total_reward_amount || '0');
+            if (totalReward === 0n) {
+              // Zero-reward epoch — just reset it so it stops blocking
+              logger.info(`[MerkleDrops] Resetting stuck zero-reward epoch #${stuck.epoch_number} (${stuck.status}) → snapshot`);
+              await this.pool.query(
+                `UPDATE merkle_epochs SET status = 'snapshot', calculated_at = NULL,
+                 total_reward_amount = '0', new_reward_amount = '0', rollup_amount = '0'
+                 WHERE id = $1`,
+                [stuck.id],
+              );
+            } else if (autoPublish) {
+              // Has rewards — retry finalize+publish
+              logger.info(`[MerkleDrops] Retrying finalize+publish for stuck epoch #${stuck.epoch_number} (${stuck.status})`);
+              try {
+                await this.autoFinalizeAndPublish(stuck.id);
+              } catch (retryErr) {
+                logger.error(`[MerkleDrops] Retry finalize+publish failed for epoch #${stuck.epoch_number}`, retryErr);
+                // Still stuck — skip creating a new epoch this tick
+                return;
+              }
+            } else {
+              // Can't auto-publish — just warn and bail
+              logger.warn(`[MerkleDrops] Epoch #${stuck.epoch_number} stuck at ${stuck.status} — manual intervention required`);
+              return;
+            }
+          }
+        }
 
         // Sync on-chain claim status before calculating rollups
         try {
