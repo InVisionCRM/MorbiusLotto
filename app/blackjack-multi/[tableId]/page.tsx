@@ -245,7 +245,7 @@ function Seat({
           )}
 
           {/* Player avatar + name — pinned to bottom */}
-          <div className="absolute bottom-[-52px] left-1/2 -translate-x-1/2 flex items-center gap-2">
+          <div className="absolute bottom-[-26px] left-1/2 -translate-x-1/2 flex items-center gap-2">
             <div className="relative flex-shrink-0" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
               {isActing && <CircularTimerRing size={AVATAR_SIZE} timeLeft={turnRemaining} maxTime={TURN_TIMEOUT} />}
               {!isActing && phase === 'betting' && <CircularTimerRing size={AVATAR_SIZE} timeLeft={betRemaining} maxTime={BETTING_TIMEOUT} />}
@@ -1105,11 +1105,11 @@ export default function BlackjackMultiTablePage() {
       </div>
 
       {/* ── Controls — sidebar on md+, below table on mobile ── */}
-      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-4 md:overflow-y-auto md:pt-10">
+      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-y-auto md:pt-2">
 
         {/* Betting panel — always visible when seated, disabled when not in betting phase or bet already placed */}
         {myPosition !== null && (
-          <div className="w-full max-w-none mx-auto space-y-3 md:scale-[1.08] md:origin-top">
+          <div className="w-full max-w-md mx-auto space-y-2">
             <BettingPanelMobile
               onStartGame={() => {}} // not used — confirm bet button below handles this
               isPlaying={state?.phase !== 'betting' || hasBet}
@@ -1129,11 +1129,11 @@ export default function BlackjackMultiTablePage() {
             />
             {/* CONFIRM BET button — only active during betting phase */}
             {state?.phase === 'betting' && !hasBet && (
-              <div className="px-2 md:px-0">
+              <div className="px-2">
                 <button
                   onClick={placeBet}
                   disabled={parseInt(betAmount || '0', 10) < 500}
-                  className="w-full py-3 rounded-xl font-black text-base tracking-wider transition-all active:scale-95 disabled:opacity-40"
+                  className="w-full py-2.5 rounded-xl font-black text-sm tracking-wider transition-all active:scale-95 disabled:opacity-40"
                   style={{
                     background: parseInt(betAmount || '0', 10) >= 500
                       ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)'
@@ -1186,72 +1186,38 @@ export default function BlackjackMultiTablePage() {
 
       </div>
 
-      {/* Table token profile card — below board on left (same as single-player) */}
-      <div className="md:col-start-1">
-        <TableTokenProfileCard
-          themeKind={(state?.themeKind ?? 'video') as 'image' | 'video'}
-          themeId={state?.themeId ?? 'glowingTable'}
-          getThemeInfo={getThemeInfo}
-          getTableProfile={getTableProfile}
-        />
-      </div>
-
-      {/* Right companion panel — balances row with table profile card */}
-      <div className="md:col-start-2">
-        <div
-          className="min-h-[420px] lg:min-h-[520px] rounded-xl overflow-hidden"
-          style={{
-            background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
-          }}
-        >
-          <div className="px-3 py-2 border-b border-cyan-500/20 flex items-center justify-between">
-            <h3 className="text-cyan-300 font-semibold text-sm">Table Overview</h3>
-            <span className="text-[10px] text-cyan-300/70 uppercase tracking-wider">Live</span>
-          </div>
-
-          <div className="p-3 space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg p-2 bg-black/25 border border-white/10">
-                <div className="text-[10px] text-white/50 uppercase tracking-wider">Round</div>
-                <div className="text-white font-semibold tabular-nums">{state?.roundNumber ?? '-'}</div>
-              </div>
-              <div className="rounded-lg p-2 bg-black/25 border border-white/10">
-                <div className="text-[10px] text-white/50 uppercase tracking-wider">Phase</div>
-                <div className="text-white font-semibold capitalize">{state?.phase ? state.phase.replace('_', ' ') : 'waiting'}</div>
-              </div>
-              <div className="rounded-lg p-2 bg-black/25 border border-white/10">
-                <div className="text-[10px] text-white/50 uppercase tracking-wider">Min Bet</div>
-                <div className="text-cyan-300 font-semibold tabular-nums">{formatMorbius(state?.minBet ?? '0')}</div>
-              </div>
-              <div className="rounded-lg p-2 bg-black/25 border border-white/10">
-                <div className="text-[10px] text-white/50 uppercase tracking-wider">Max Bet</div>
-                <div className="text-cyan-300 font-semibold tabular-nums">{formatMorbius(state?.maxBet ?? '0')}</div>
-              </div>
-            </div>
-
-            <div className="rounded-lg p-3 bg-black/25 border border-cyan-500/20">
-              <div className="text-[10px] text-white/50 uppercase tracking-wider mb-1">Seats</div>
-              <div className="text-white/90">
-                {(state?.seats?.filter((s) => !!s.playerAddress).length ?? 0)} / 3 occupied
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Player stats — below game board, spanning full width */}
-      {address && playerStats && (
-        <div className="md:col-span-2">
-          <PlayerStatsDashboard
-            stats={playerStats}
-            isLoading={playerStatsLoading}
-            playerAddress={address}
-            reserveBalance={BigInt(playerBalance)}
+      {/* Table token profile + player dashboard */}
+      <section className="md:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-start">
+        <div>
+          <TableTokenProfileCard
+            themeKind={(state?.themeKind ?? 'video') as 'image' | 'video'}
+            themeId={state?.themeId ?? 'glowingTable'}
+            getThemeInfo={getThemeInfo}
+            getTableProfile={getTableProfile}
           />
         </div>
-      )}
+        <div>
+          {address && playerStats ? (
+            <PlayerStatsDashboard
+              stats={playerStats}
+              isLoading={playerStatsLoading}
+              playerAddress={address}
+              reserveBalance={BigInt(playerBalance)}
+            />
+          ) : (
+            <div
+              className="min-h-[420px] lg:min-h-[520px] rounded-xl overflow-hidden flex items-center justify-center px-6 text-center text-white/60"
+              style={{
+                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
+              Connect wallet to view your player dashboard.
+            </div>
+          )}
+        </div>
+      </section>
 
       <PlayerProfileModal
         isOpen={!!selectedProfileAddress}

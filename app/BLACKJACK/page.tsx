@@ -2884,30 +2884,41 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Table token profile */}
-        <div className="mt-4">
-          <TableTokenProfileCard
-            key={`${theme}-${useVideoBackground ? videoSource : imageSource}`}
-            themeKind={theme}
-            themeId={useVideoBackground ? videoSource : imageSource}
-            getThemeInfo={getThemeInfo}
-            getTableProfile={getTableProfile}
-            onChangeTableClick={() => setThemeModalOpen(true)}
-          />
-        </div>
-
-        {/* Player stats dashboard (same placement pattern as multiplayer) */}
-        {address && playerStats && (
-          <div className="mt-4">
-            <PlayerStatsDashboard
-              stats={playerStats}
-              isLoading={playerStatsLoading}
-              playerAddress={address}
-              wsClient={wsConnected ? wsClient : null}
-              reserveBalance={offChainBalance}
+        {/* Table profile + player dashboard */}
+        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-start">
+          <div>
+            <TableTokenProfileCard
+              key={`${theme}-${useVideoBackground ? videoSource : imageSource}`}
+              themeKind={theme}
+              themeId={useVideoBackground ? videoSource : imageSource}
+              getThemeInfo={getThemeInfo}
+              getTableProfile={getTableProfile}
+              onChangeTableClick={() => setThemeModalOpen(true)}
             />
           </div>
-        )}
+          <div>
+            {address && playerStats ? (
+              <PlayerStatsDashboard
+                stats={playerStats}
+                isLoading={playerStatsLoading}
+                playerAddress={address}
+                wsClient={wsConnected ? wsClient : null}
+                reserveBalance={offChainBalance}
+              />
+            ) : (
+              <div
+                className="min-h-[420px] lg:min-h-[520px] rounded-xl overflow-hidden flex items-center justify-center px-6 text-center text-white/60"
+                style={{
+                  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                }}
+              >
+                Connect wallet to view your player dashboard.
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* Dealer Tip Leaderboard */}
         {tipStats && tipStats.tipCount > 0 && (
@@ -2943,52 +2954,63 @@ export default function BlackjackPage() {
           </div>
         )}
 
-        {/* Recent Games / Recent Play / Leaderboard tabs */}
-        <section className="mt-4 px-0">
-          <div
-            className="relative rounded-2xl overflow-hidden"
-            style={{
-              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-              border: '1px inset rgba(60, 60, 60, 0.5)',
-            }}
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
+        {/* FAQ + Recent tabs */}
+        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-start">
+          <div className="w-full">
+            <GameFAQ
+              game="blackjack"
+              addresses={[
+                { label: 'Blackjack Contract', address: BLACKJACK_ADDRESS },
+                { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+              ]}
+            />
+          </div>
+          <div className="px-0">
+            <div
+              className="relative rounded-2xl overflow-hidden"
+              style={{
+                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
 
-            <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
-              <TabsList className="grid w-full grid-cols-3 h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1">
-                <TabsTrigger
-                  value="recent-games"
-                  className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
-                >
-                  Recent Games
-                </TabsTrigger>
-                <TabsTrigger
-                  value="recent-play"
-                  className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
-                >
-                  Recent Play
-                </TabsTrigger>
-                <TabsTrigger
-                  value="leaderboard"
-                  className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
-                >
-                  Leaderboard
-                </TabsTrigger>
-              </TabsList>
+              <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
+                <TabsList className="grid w-full grid-cols-3 h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1">
+                  <TabsTrigger
+                    value="recent-games"
+                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                  >
+                    Recent Games
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="recent-play"
+                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                  >
+                    Recent Play
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="leaderboard"
+                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                  >
+                    Leaderboard
+                  </TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="recent-games" className="mt-4 focus-visible:outline-none">
-                <BlackjackRecentGames compact title="Recent Games" />
-              </TabsContent>
+                <TabsContent value="recent-games" className="mt-4 focus-visible:outline-none">
+                  <BlackjackRecentGames compact title="Recent Games" />
+                </TabsContent>
 
-              <TabsContent value="recent-play" className="mt-4 focus-visible:outline-none">
-                <BlackjackRecentPlays compact title="Recent Play" />
-              </TabsContent>
+                <TabsContent value="recent-play" className="mt-4 focus-visible:outline-none">
+                  <BlackjackRecentPlays compact title="Recent Play" />
+                </TabsContent>
 
-              <TabsContent value="leaderboard" className="mt-4 focus-visible:outline-none">
-                <BlackjackTopPlayers />
-              </TabsContent>
-            </Tabs>
+                <TabsContent value="leaderboard" className="mt-4 focus-visible:outline-none">
+                  <BlackjackTopPlayers />
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
         </section>
 
@@ -3355,17 +3377,6 @@ export default function BlackjackPage() {
         )}
 
       </main>
-
-      {/* FAQ (includes contract addresses) */}
-      <div className="w-full flex justify-center py-4 px-4">
-        <GameFAQ
-          game="blackjack"
-          addresses={[
-            { label: 'Blackjack Contract', address: BLACKJACK_ADDRESS },
-            { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
-          ]}
-        />
-      </div>
 
       <Footer />
       </GlobalMainNav>
