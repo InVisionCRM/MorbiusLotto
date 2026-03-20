@@ -27,6 +27,7 @@ import { GameFAQ } from '@/components/shared/GameFAQ'
 import { toast } from 'sonner'
 import type { InstantLotteryResultRow } from '@/hooks/use-instant-lottery'
 import { AdSpace } from '@/components/shared/AdSpace'
+import { FloatingPokerChips } from '@/components/home/FloatingPokerChips'
 
 const ZERO = '0x0000000000000000000000000000000000000000'
 const isDeployed = (LOTTERY_INSTANT_ADDRESS as string) !== ZERO
@@ -189,79 +190,86 @@ export default function LotteryPage() {
   return (
     <div className="flex flex-col min-h-screen w-full">
       <GlobalMainNav>
-        <main className="flex flex-col pt-4 md:pt-2 px-2 gap-4 lg:px-4 lg:gap-6 min-h-[calc(100vh-4rem)] max-w-5xl mx-auto w-full relative">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-            <div className="rounded-lg p-3" style={panelStyle}>
-              <div className="text-xs text-white/60 mb-1">Reserve</div>
-              <div className="text-sm sm:text-base font-bold text-white">
-                {formatTokenDisplay((reserve as bigint) ?? 0n, TOKEN_DECIMALS)}
+        <div className="relative w-full">
+          <FloatingPokerChips />
+          <main className="relative z-10 flex flex-col pt-4 md:pt-2 px-2 gap-4 lg:px-4 lg:gap-6 min-h-[calc(100vh-4rem)] max-w-5xl mx-auto w-full">
+            <div className="relative z-10 flex flex-col gap-4 lg:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                <div className="rounded-lg p-3" style={panelStyle}>
+                  <div className="text-xs text-white/60 mb-1">Reserve</div>
+                  <div className="text-sm sm:text-base font-bold text-white">
+                    {formatTokenDisplay((reserve as bigint) ?? 0n, TOKEN_DECIMALS)}
+                  </div>
+                </div>
+                <div className="rounded-lg p-3" style={panelStyle}>
+                  <div className="text-xs text-white/60 mb-1">Total plays</div>
+                  <div className="text-sm sm:text-base font-bold text-white">{totalPlays.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</div>
+                </div>
+                <div className="rounded-lg p-3" style={panelStyle}>
+                  <div className="text-xs text-white/60 mb-1">Wagered</div>
+                  <div className="text-sm sm:text-base font-bold text-white">
+                    {formatTokenDisplay((totalWagered as bigint) ?? 0n, TOKEN_DECIMALS)}
+                  </div>
+                </div>
+                <div className="rounded-lg p-3" style={panelStyle}>
+                  <div className="text-xs text-white/60 mb-1">Payouts</div>
+                  <div className="text-sm sm:text-base font-bold text-white">
+                    {formatTokenDisplay((totalPayouts as bigint) ?? 0n, TOKEN_DECIMALS)}
+                  </div>
+                </div>
               </div>
+
+              <section className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                <div className="order-1">
+                  <InstantBallDraw
+                    winningNumbers={resultToAnimate ? [...resultToAnimate.winningNumbers] : null}
+                    resultKey={getResultKey(resultToAnimate)}
+                    onComplete={onDrawComplete}
+                    compact
+                  />
+                </div>
+                <div className="order-2">
+                  <InstantLotteryPlayPanel onResult={onResult} onError={(err) => toast.error(err.message)} />
+                </div>
+              </section>
+
+              <section className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+                <div className="min-w-0">
+                  <LotteryTopPlayers />
+                </div>
+                <div className="min-w-0">
+                  <InstantLotteryHistory
+                    results={
+                      lastPlayResult && results[0]?.transactionHash !== lastPlayResult.transactionHash
+                        ? [lastPlayResult, ...results]
+                        : results
+                    }
+                    limit={20}
+                    compact
+                  />
+                </div>
+                <div className="min-w-0">
+                  <GlobalLotteryHistoryTable title="Recent games" />
+                </div>
+              </section>
             </div>
-            <div className="rounded-lg p-3" style={panelStyle}>
-              <div className="text-xs text-white/60 mb-1">Total plays</div>
-              <div className="text-sm sm:text-base font-bold text-white">{totalPlays.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</div>
-            </div>
-            <div className="rounded-lg p-3" style={panelStyle}>
-              <div className="text-xs text-white/60 mb-1">Wagered</div>
-              <div className="text-sm sm:text-base font-bold text-white">
-                {formatTokenDisplay((totalWagered as bigint) ?? 0n, TOKEN_DECIMALS)}
-              </div>
-            </div>
-            <div className="rounded-lg p-3" style={panelStyle}>
-              <div className="text-xs text-white/60 mb-1">Payouts</div>
-              <div className="text-sm sm:text-base font-bold text-white">
-                {formatTokenDisplay((totalPayouts as bigint) ?? 0n, TOKEN_DECIMALS)}
-              </div>
-            </div>
+          </main>
+
+          {/* FAQ (includes contract addresses) */}
+          <div className="relative z-10 w-full flex justify-center py-4">
+            <GameFAQ
+              game="lottery"
+              addresses={[
+                { label: 'Instant Lottery Contract', address: LOTTERY_INSTANT_ADDRESS as string },
+                { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+              ]}
+            />
           </div>
 
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            <div className="order-1">
-              <InstantBallDraw
-                winningNumbers={resultToAnimate ? [...resultToAnimate.winningNumbers] : null}
-                resultKey={getResultKey(resultToAnimate)}
-                onComplete={onDrawComplete}
-                compact
-              />
-            </div>
-            <div className="order-2">
-              <InstantLotteryPlayPanel onResult={onResult} onError={(err) => toast.error(err.message)} />
-            </div>
-          </section>
-
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-            <div className="min-w-0">
-              <LotteryTopPlayers />
-            </div>
-            <div className="min-w-0">
-              <InstantLotteryHistory
-                results={
-                  lastPlayResult && results[0]?.transactionHash !== lastPlayResult.transactionHash
-                    ? [lastPlayResult, ...results]
-                    : results
-                }
-                limit={20}
-                compact
-              />
-            </div>
-            <div className="min-w-0">
-              <GlobalLotteryHistoryTable title="Recent games" />
-            </div>
-          </section>
-        </main>
-
-        {/* FAQ (includes contract addresses) */}
-        <div className="w-full flex justify-center py-4">
-          <GameFAQ
-            game="lottery"
-            addresses={[
-              { label: 'Instant Lottery Contract', address: LOTTERY_INSTANT_ADDRESS as string },
-              { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
-            ]}
-          />
+          <div className="relative z-10">
+            <Footer />
+          </div>
         </div>
-
-        <Footer />
       </GlobalMainNav>
 
       <InstantLotteryResultModal

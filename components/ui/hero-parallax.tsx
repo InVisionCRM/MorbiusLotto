@@ -59,15 +59,16 @@ export const HeroParallax = ({
     useTransform(scrollYProgress, [settleStart, settleEnd], [20, 0]),
     springConfig
   );
-  // Keep end value modest so all 3 rows stay visible (avoid clipping third row)
+  // Start lower in the viewport so the grid does not appear pinned to the top.
+  // Keep end value modest so all 3 rows stay visible (avoid clipping third row).
   const translateY = useSpring(
-    useTransform(scrollYProgress, [settleStart, settleEnd], [-350, 80]),
+    useTransform(scrollYProgress, [settleStart, settleEnd], [-150, 80]),
     springConfig
   );
   return (
     <div
       ref={ref}
-      className="pt-4 pb-6 overflow-hidden antialiased relative flex flex-col self-auto [perspective:500px] [transform-style:preserve-3d]"
+      className="pt-10 md:pt-14 pb-6 overflow-hidden antialiased relative flex flex-col self-auto [perspective:500px] [transform-style:preserve-3d]"
       style={{ height: `${sectionHeightVh}vh` }}
     >
       {header ?? <Header />}
@@ -78,7 +79,7 @@ export const HeroParallax = ({
           translateY,
           opacity,
         }}
-        className="-mt-4 md:-mt-6"
+        className="mt-2 md:mt-4"
       >
         <motion.div className="flex flex-row-reverse space-x-reverse space-x-10 mb-6">
           {firstRow.map((product) => (

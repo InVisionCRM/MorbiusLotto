@@ -1039,29 +1039,35 @@ export default function AvatarPreview({
 
     return (
       <g>
-        {particles.map((p, i) => (
-          <motion.rect
-            key={`smoke-${i}`}
-            x={originX - p.size / 2}
-            y={originY}
-            width={p.size}
-            height={p.size}
-            rx={p.size / 2}
-            fill="#9ca3af"
-            animate={{
-              y: [originY, originY + p.rise * 0.3, originY + p.rise],
-              x: [originX - p.size / 2, originX - p.size / 2 + p.dx * 0.5, originX - p.size / 2 + p.dx * 2],
-              opacity: [0, 0.35, 0.2, 0],
-              scale: [0.5, 1, 1.8],
-            }}
-            transition={{
-              repeat: Infinity,
-              duration: p.dur,
-              delay: p.delay,
-              ease: 'easeOut',
-            }}
-          />
-        ))}
+        {particles.map((p, i) => {
+          const startSize = p.size * 0.5;
+          const midSize = p.size;
+          const endSize = p.size * 1.8;
+          return (
+            <motion.rect
+              key={`smoke-${i}`}
+              fill="#9ca3af"
+              animate={{
+                y: [originY, originY + p.rise * 0.3, originY + p.rise],
+                x: [
+                  originX - startSize / 2,
+                  originX - midSize / 2 + p.dx * 0.5,
+                  originX - endSize / 2 + p.dx * 2,
+                ],
+                width: [startSize, midSize, endSize],
+                height: [startSize, midSize, endSize],
+                rx: [startSize / 2, midSize / 2, endSize / 2],
+                opacity: [0, 0.35, 0.2, 0],
+              }}
+              transition={{
+                repeat: Infinity,
+                duration: p.dur,
+                delay: p.delay,
+                ease: 'easeOut',
+              }}
+            />
+          );
+        })}
       </g>
     );
   };

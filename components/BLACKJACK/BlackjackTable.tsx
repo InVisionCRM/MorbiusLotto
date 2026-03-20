@@ -832,7 +832,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   return (
     <div
       ref={tableContainerRef}
-      className="relative w-full max-w-full sm:max-w-6xl mx-auto blackjack-table flex flex-col flex-1 min-h-[380px] sm:min-h-[600px]"
+      className="relative w-full max-w-full mx-auto blackjack-table flex flex-col flex-1 min-h-[380px] sm:min-h-[600px]"
       style={{
         boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.9), inset 0 -2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3)',
         border: '1px inset rgba(60, 60, 60, 0.5)',

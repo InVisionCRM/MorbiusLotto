@@ -3250,7 +3250,7 @@ export default function BlackjackPage() {
         />
 
         {currentView === 'stats' && (
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-[1800px] mx-auto">
             {playerStatsLoading ? (
               <div className="text-center py-12 text-cyan-300">Loading player statistics...</div>
             ) : playerStatsError ? (
@@ -3273,7 +3273,7 @@ export default function BlackjackPage() {
         )}
 
         {currentView === 'analytics' && isDeployer && (
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-[1800px] mx-auto">
             {globalAnalyticsLoading ? (
               <div className="text-center py-12 text-cyan-300">Loading global analytics...</div>
             ) : globalAnalyticsError ? (

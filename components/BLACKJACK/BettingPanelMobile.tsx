@@ -86,7 +86,7 @@ export function BettingPanelMobile({
   };
 
   return (
-    <section className="w-full max-w-md mx-auto px-2 py-1">
+    <section className="w-full px-2 py-1">
       <div className="flex flex-col gap-1 w-full">
         <div className="flex items-center justify-between gap-2 w-full">
           <span className="text-xs text-gray-400 uppercase tracking-wider">Amount</span>
