@@ -117,18 +117,30 @@ export function useBlackjackTables() {
     (kind: 'image' | 'video', id: string): TableProfileData | null => {
       const options = kind === 'video' ? videoOptions : imageOptions;
       const row = options.find((x) => x.id === id);
-      if (!row) return null;
+      if (row) {
+        return {
+          name: row.label ?? null,
+          description: row.description ?? null,
+          token_contract_address: row.token_contract_address ?? null,
+          logo_url: row.logo_url ?? null,
+          ticker: row.ticker ?? null,
+          iframe_url: row.iframe_url ?? null,
+          website_url: row.website_url ?? null,
+        };
+      }
+      // Multiplayer / deep links: theme_id may not exist in admin table list — still show theme label
+      const info = getThemeInfo({ kind, id });
       return {
-        name: row.label ?? null,
-        description: row.description ?? null,
-        token_contract_address: row.token_contract_address ?? null,
-        logo_url: row.logo_url ?? null,
-        ticker: row.ticker ?? null,
-        iframe_url: row.iframe_url ?? null,
-        website_url: row.website_url ?? null,
+        name: info.label,
+        description: null,
+        token_contract_address: null,
+        logo_url: null,
+        ticker: null,
+        iframe_url: null,
+        website_url: null,
       };
     },
-    [imageOptions, videoOptions]
+    [imageOptions, videoOptions, getThemeInfo]
   );
 
   return { imageOptions, videoOptions, loading, getThemeInfo, getTableProfile };

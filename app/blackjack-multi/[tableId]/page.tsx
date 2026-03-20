@@ -106,6 +106,37 @@ function formatMorbius(wei: string): string {
   } catch { return '0'; }
 }
 
+/** Total MORBIUS (wei) shown as chips: pending bet in betting phase, else sum of per-hand bets after deal. */
+function seatTableBetWei(seat: BJMultiSeatState): bigint {
+  try {
+    const pb = BigInt(seat.pendingBet || '0');
+    if (pb > 0n) return pb;
+    if (seat.hands?.length) {
+      return seat.hands.reduce((a, h) => a + BigInt(h.betAmount || '0'), 0n);
+    }
+    return BigInt(seat.betAmount || '0');
+  } catch {
+    return 0n;
+  }
+}
+
+/** Blackjack total from server card indices (0–51), using only the first `visibleCount` cards. */
+function handTotalFromCardIndices(indices: number[], visibleCount: number): number {
+  const n = Math.max(0, Math.min(visibleCount, indices.length));
+  let total = 0;
+  let hasAce = false;
+  for (let i = 0; i < n; i++) {
+    const rank = (indices[i] % 13) + 1;
+    if (rank === 1) {
+      hasAce = true;
+      total += 11;
+    } else if (rank >= 11) total += 10;
+    else total += rank;
+  }
+  if (hasAce && total > 21) total -= 10;
+  return total;
+}
+
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Seat component — cards rendered like BlackjackTable (card-overlap-player)
@@ -191,28 +222,80 @@ function Seat({
         <>
           {/* Hands */}
           {seat && seat.hands.length > 0 ? (
-            <div className="flex flex-col items-center gap-3 min-h-[120px] justify-start">
-              {seat.hands.map((hand, hi) => (
-                <div key={hi} className="flex flex-col items-center gap-1">
-                  <div className="flex items-center">
-                    {/* Cards with overlap */}
-                    <div className="flex">
-                      {hand.cards.map((c, ci) => (
-                        <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
-                          <PlayingCard card={indexToCard(c)} owner="player" className="" size="small" />
-                        </div>
-                      ))}
+            <div className={`flex min-h-[120px] justify-center items-start ${seat.hands.length > 1 ? 'flex-row gap-2' : 'flex-col items-center gap-3'}`}>
+              {seat.hands.map((hand, hi) => {
+                const hasSplit = seat.hands.length > 1;
+                const isActiveHand = hasSplit && isActing && seat.activeHandIndex === hi;
+                const isCompletedHand = hasSplit && isActing && (hand.isBust || hi < seat.activeHandIndex);
+                return (
+                  <div
+                    key={hi}
+                    className={`flex flex-col items-center gap-1 ${hasSplit ? 'px-1.5 py-1 rounded-md transition-all duration-300' : ''}`}
+                    style={
+                      hasSplit
+                        ? {
+                            background: isActiveHand
+                              ? 'linear-gradient(145deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05))'
+                              : isCompletedHand
+                                ? 'linear-gradient(145deg, rgba(100, 100, 100, 0.1), rgba(50, 50, 50, 0.05))'
+                                : 'transparent',
+                            border: isActiveHand
+                              ? '2px solid rgba(6, 182, 212, 0.5)'
+                              : isCompletedHand
+                                ? '1px solid rgba(100, 100, 100, 0.3)'
+                                : '1px solid rgba(60, 60, 60, 0.35)',
+                            boxShadow: isActiveHand
+                              ? '0 0 16px rgba(6, 182, 212, 0.28), inset 0 0 8px rgba(6, 182, 212, 0.08)'
+                              : 'none',
+                            opacity: isCompletedHand ? 0.72 : 1,
+                            transform: isActiveHand ? 'scale(1.02)' : 'scale(1)',
+                          }
+                        : undefined
+                    }
+                  >
+                    {hasSplit && (
+                      <div className="mb-0 flex items-center gap-1">
+                        <span
+                          className={`text-[9px] font-bold uppercase tracking-wider ${
+                            isActiveHand ? 'text-cyan-400' : 'text-white/45'
+                          }`}
+                        >
+                          Hand {hi + 1}
+                        </span>
+                        {isActiveHand && <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" aria-hidden />}
+                      </div>
+                    )}
+                    <div className="flex items-center">
+                      <div className="flex">
+                        {hand.cards.map((c, ci) => (
+                          <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
+                            <PlayingCard card={indexToCard(c)} owner="player" className="" size="small" />
+                          </div>
+                        ))}
+                      </div>
+                      <div
+                        className={`ml-1 flex items-center gap-1 rounded-full transition-all duration-300 ${
+                          isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''
+                        }`}
+                        style={{ padding: isActing && seat.activeHandIndex === hi ? '4px' : '2px' }}
+                      >
+                        <span
+                          className={`font-black text-lg relative z-10 ${
+                            hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : isActiveHand ? 'text-white' : hasSplit ? 'text-white/75' : 'text-white'
+                          }`}
+                        >
+                          {hand.isBust ? 'BUST' : hand.isBlackjack ? 'BJ!' : hand.total}
+                        </span>
+                      </div>
                     </div>
-                    {/* Score counter */}
-                    <div className={`ml-1 flex items-center gap-1 ${isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''}`}
-                      style={{ padding: isActing && seat.activeHandIndex === hi ? '4px' : '2px' }}>
-                      <span className={`font-black text-lg ${hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : 'text-white'}`}>
-                        {hand.isBust ? 'BUST' : hand.isBlackjack ? 'BJ!' : hand.total}
+                    {hasSplit && phase !== 'betting' && BigInt(hand.betAmount || '0') > 0n && (
+                      <span className="text-[10px] font-bold text-white/70 mt-0.5" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
+                        {formatMorbius(hand.betAmount)}
                       </span>
-                    </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             /* Placeholder cards when seated but no hand yet */
@@ -223,8 +306,8 @@ function Seat({
             </div>
           )}
 
-          {/* Chip stack for bet */}
-          {seat && BigInt(seat.pendingBet) > 0n && (
+          {/* Chip stack — pending bet (betting) or committed total (play through settle) */}
+          {seat && seatTableBetWei(seat) > 0n && (
             <div className="flex flex-col items-center">
               <div className="relative w-10 h-10">
                 <div
@@ -236,7 +319,7 @@ function Seat({
                 />
               </div>
               <span className="text-white text-sm font-bold mt-0.5" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
-                {formatMorbius(seat.pendingBet)}
+                {formatMorbius(seatTableBetWei(seat).toString())}
               </span>
             </div>
           )}
@@ -835,6 +918,27 @@ export default function BlackjackMultiTablePage() {
           from { opacity: 0; transform: translateY(-4px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes cyanGlow {
+          0%, 100% {
+            box-shadow: 0 0 8px rgba(34, 211, 238, 0.4),
+                        0 0 16px rgba(34, 211, 238, 0.2),
+                        inset 0 0 8px rgba(34, 211, 238, 0.1);
+            border-color: rgba(34, 211, 238, 0.5);
+          }
+          50% {
+            box-shadow: 0 0 16px rgba(34, 211, 238, 0.6),
+                        0 0 24px rgba(34, 211, 238, 0.3),
+                        inset 0 0 12px rgba(34, 211, 238, 0.15);
+            border-color: rgba(34, 211, 238, 0.7);
+          }
+        }
+        .card-counter-active {
+          border: 2px solid rgba(34, 211, 238, 0.5);
+          animation: cyanGlow 2s ease-in-out infinite;
+        }
+        .card-counter-winner {
+          transform: scale(1.25);
+        }
       `}</style>
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] gap-2 md:gap-4 min-h-0 md:pt-3" style={{ scrollbarGutter: 'stable both-edges' }}>
@@ -852,12 +956,12 @@ export default function BlackjackMultiTablePage() {
         {/* Table background — video or image based on admin theme selection */}
         {theme.kind === 'video' ? (
           <video key={theme.src} autoPlay muted loop playsInline
-            className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
             style={{ zIndex: 0 }}>
             <source src={theme.src} type="video/mp4" />
           </video>
         ) : (
-          <Image src={theme.src} alt="Table" fill className="absolute inset-0 object-contain pointer-events-none" style={{ zIndex: 0 }} priority unoptimized />
+          <Image src={theme.src} alt="Table" fill className="absolute inset-0 object-cover object-center pointer-events-none" style={{ zIndex: 0 }} priority unoptimized />
         )}
 
         {/* Dark overlay */}
@@ -1032,14 +1136,34 @@ export default function BlackjackMultiTablePage() {
                   </>
                 )}
               </div>
-              {/* Dealer score — only shown once all cards are revealed */}
-              {state && visibleDealerCards >= (state.dealerCards?.length ?? 0) && state.dealerTotal > 0 && (
-                <div className="ml-2 flex items-center gap-1">
-                  <span className={`font-black text-xl ${state.dealerTotal > 21 ? 'text-red-400' : 'text-white'}`}>
-                    {state.dealerTotal > 21 ? 'BUST' : state.dealerTotal}
-                  </span>
-                </div>
-              )}
+              {/* Dealer total — visible count like single-player (up-card during play; builds during dealer reveal) */}
+              {state && visibleDealerCards > 0 && (state.dealerCards?.length ?? 0) > 0 && (() => {
+                const dCards = state.dealerCards;
+                const vis = Math.min(visibleDealerCards, dCards.length);
+                const shown = handTotalFromCardIndices(dCards, vis);
+                const fullReveal = vis >= dCards.length;
+                const naturalBj = fullReveal && dCards.length === 2 && shown === 21;
+                const bust = fullReveal && shown > 21;
+                const isDealerTurn = state.phase === 'dealer_turn';
+                return (
+                  <div className="ml-2 flex items-center gap-1">
+                    <div
+                      className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
+                        isDealerTurn ? 'card-counter-active' : ''
+                      }`}
+                      style={{ padding: isDealerTurn ? '6px' : '3px' }}
+                    >
+                      <span
+                        className={`font-black text-xl relative z-10 ${
+                          bust ? 'text-red-400' : naturalBj ? 'text-yellow-400' : 'text-white'
+                        }`}
+                      >
+                        {bust ? 'BUST' : naturalBj ? 'BJ' : shown}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* "Place your bets!" breathing text during betting phase */}
@@ -1150,21 +1274,31 @@ export default function BlackjackMultiTablePage() {
             {/* CONFIRM BET button — only active during betting phase */}
             {state?.phase === 'betting' && !hasBet && (
               <div className="px-2">
-                <button
-                  onClick={placeBet}
-                  disabled={parseInt(betAmount || '0', 10) < 500}
-                  className="w-full py-2.5 rounded-xl font-black text-sm tracking-wider transition-all active:scale-95 disabled:opacity-40"
-                  style={{
-                    background: parseInt(betAmount || '0', 10) >= 500
-                      ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)'
-                      : 'rgba(0,0,0,0.4)',
-                    boxShadow: parseInt(betAmount || '0', 10) >= 500
-                      ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)'
-                      : 'none',
-                  }}
-                >
-                  <span className="text-white">CONFIRM BET</span>
-                </button>
+                {(() => {
+                  const betOk = parseInt(betAmount || '0', 10) >= 500;
+                  return (
+                    <button
+                      type="button"
+                      onClick={placeBet}
+                      disabled={!betOk}
+                      className={`w-full py-2.5 rounded-xl font-black text-sm tracking-wider transition-all border-2 ${
+                        betOk
+                          ? 'text-white border-emerald-400/45 active:scale-95 enabled:hover:brightness-105'
+                          : 'text-white/55 border-cyan-500/35 bg-[rgba(34,211,238,0.07)] cursor-not-allowed shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                      }`}
+                      style={
+                        betOk
+                          ? {
+                              background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)',
+                              boxShadow: '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)',
+                            }
+                          : undefined
+                      }
+                    >
+                      CONFIRM BET
+                    </button>
+                  );
+                })()}
               </div>
             )}
             {/* Bet placed confirmation */}
@@ -1204,8 +1338,42 @@ export default function BlackjackMultiTablePage() {
           </div>
         )}
 
-        {/* Realtime chart under betting controls */}
-        <div className="w-full min-w-0">
+        {/* Table token profile + player dashboard — in sidebar above chart so it’s visible without scrolling past the chart */}
+        <section className="w-full min-w-0 grid grid-cols-1 gap-4 md:gap-5 items-start shrink-0">
+          <div className="w-full min-w-0">
+            <TableTokenProfileCard
+              compact
+              themeKind={(state?.themeKind ?? 'video') as 'image' | 'video'}
+              themeId={state?.themeId ?? 'glowingTable'}
+              getThemeInfo={getThemeInfo}
+              getTableProfile={getTableProfile}
+            />
+          </div>
+          <div className="w-full min-w-0">
+            {address && playerStats ? (
+              <PlayerStatsDashboard
+                stats={playerStats}
+                isLoading={playerStatsLoading}
+                playerAddress={address}
+                reserveBalance={BigInt(playerBalance)}
+              />
+            ) : (
+              <div
+                className="min-h-[280px] md:min-h-[320px] rounded-xl overflow-hidden flex items-center justify-center px-6 text-center text-white/60"
+                style={{
+                  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                }}
+              >
+                Connect wallet to view your player dashboard.
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Realtime chart under profile + stats */}
+        <div className="w-full min-w-0 shrink-0">
           <div className="h-64 md:h-72 min-w-0">
             <BlackjackRealTimeBetChart
               ref={chartRef}
@@ -1215,39 +1383,6 @@ export default function BlackjackMultiTablePage() {
         </div>
 
       </div>
-
-      {/* Table token profile + player dashboard */}
-      <section className="md:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-start">
-        <div>
-          <TableTokenProfileCard
-            themeKind={(state?.themeKind ?? 'video') as 'image' | 'video'}
-            themeId={state?.themeId ?? 'glowingTable'}
-            getThemeInfo={getThemeInfo}
-            getTableProfile={getTableProfile}
-          />
-        </div>
-        <div>
-          {address && playerStats ? (
-            <PlayerStatsDashboard
-              stats={playerStats}
-              isLoading={playerStatsLoading}
-              playerAddress={address}
-              reserveBalance={BigInt(playerBalance)}
-            />
-          ) : (
-            <div
-              className="min-h-[420px] lg:min-h-[520px] rounded-xl overflow-hidden flex items-center justify-center px-6 text-center text-white/60"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px inset rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              Connect wallet to view your player dashboard.
-            </div>
-          )}
-        </div>
-      </section>
 
       <PlayerProfileModal
         isOpen={!!selectedProfileAddress}

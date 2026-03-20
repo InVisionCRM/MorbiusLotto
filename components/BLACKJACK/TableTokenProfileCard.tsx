@@ -16,6 +16,8 @@ export interface TableTokenProfileCardProps {
   getTableProfile: (kind: 'image' | 'video', id: string) => TableProfileData | null;
   /** When provided, "Change Table" opens the theme selector (e.g. setThemeModalOpen(true)) */
   onChangeTableClick?: () => void;
+  /** Shorter min-height for sidebars (e.g. multiplayer table page) */
+  compact?: boolean;
 }
 
 const PANEL_STYLE = {
@@ -39,12 +41,15 @@ export function TableTokenProfileCard({
   getThemeInfo,
   getTableProfile,
   onChangeTableClick,
+  compact = false,
 }: TableTokenProfileCardProps) {
   const profile = getTableProfile(themeKind, themeId);
 
   return (
     <div
-      className="min-h-[420px] lg:min-h-[520px] rounded-xl p-[2px] min-w-0 animate-shimmer-slow"
+      className={`rounded-xl p-[2px] min-w-0 animate-shimmer-slow ${
+        compact ? 'min-h-[280px] md:min-h-[300px]' : 'min-h-[420px] lg:min-h-[520px]'
+      }`}
       style={GOLD_BORDER_STYLE}
     >
       <div
