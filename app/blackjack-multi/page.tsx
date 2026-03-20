@@ -10,6 +10,8 @@ import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { BJMultiTableSummary } from '@/lib/websocket-client';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Button } from '@/components/ui/button';
+import { GameFAQ } from '@/components/shared/GameFAQ';
+import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { Users, ArrowRight, Filter } from 'lucide-react';
 
 function formatMorbius(wei: string): string {
@@ -171,6 +173,16 @@ export default function BlackjackMultiLobbyPage() {
                 </Link>
               </div>
             ))}
+          </div>
+
+          <div className="mt-6">
+            <GameFAQ
+              game="blackjack"
+              addresses={[
+                { label: 'Blackjack Contract', address: BLACKJACK_ADDRESS },
+                { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+              ]}
+            />
           </div>
         </main>
       </div>

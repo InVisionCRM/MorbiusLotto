@@ -246,7 +246,7 @@ function Seat({
           )}
 
           {/* Player avatar + name — pinned to bottom */}
-          <div className="absolute bottom-[-26px] left-1/2 -translate-x-1/2 flex items-center gap-2">
+          <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 flex items-center gap-2">
             <div className="relative flex-shrink-0" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
               {isActing && <CircularTimerRing size={AVATAR_SIZE} timeLeft={turnRemaining} maxTime={TURN_TIMEOUT} />}
               {!isActing && phase === 'betting' && <CircularTimerRing size={AVATAR_SIZE} timeLeft={betRemaining} maxTime={BETTING_TIMEOUT} />}
@@ -319,7 +319,7 @@ function Seat({
               )}
             </div>
             <div
-              className={`flex flex-col min-w-0 rounded-md px-2 py-1.5 bg-black/35 backdrop-blur-sm border border-white/10 ${canOpenProfile ? 'cursor-pointer hover:bg-black/45 transition-colors' : ''}`}
+              className={`flex flex-col min-w-0 rounded-md px-2 py-1 bg-black/35 backdrop-blur-sm border border-white/10 ${canOpenProfile ? 'cursor-pointer hover:bg-black/45 transition-colors' : ''}`}
               onClick={() => {
                 if (canOpenProfile && seat?.playerAddress) onOpenProfile(seat.playerAddress);
               }}
@@ -1052,7 +1052,7 @@ export default function BlackjackMultiTablePage() {
             )}
 
             {/* 3 SEATS — same translateY offset as BlackjackTable player row */}
-            <div className="grid grid-cols-3 gap-4 w-full max-w-3xl" style={{ transform: 'translateY(20px)' }}>
+            <div className="grid grid-cols-3 gap-4 w-full max-w-3xl" style={{ transform: 'translateY(6px)' }}>
               {POSITIONS.map(pos => {
                 const seat = state?.seats.find(s => s.position === pos);
                 const isEmpty = !seat?.playerAddress;

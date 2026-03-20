@@ -14,6 +14,8 @@ import Footer from '@/components/BIG-WHEEL/Footer';
 import { FloatingPokerChips } from '@/components/home/FloatingPokerChips';
 import { Theme } from '@/lib/theme';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
+import { GameFAQ } from '@/components/shared/GameFAQ';
+import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { isAdminWallet } from '@/lib/admin';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 
@@ -550,6 +552,15 @@ export default function PokerLobbyPage() {
               })}
             </div>
           )}
+
+          <div className="mt-6">
+            <GameFAQ
+              game="poker"
+              addresses={[
+                { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+              ]}
+            />
+          </div>
         </div>
 
         {joinModal && (

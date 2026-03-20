@@ -2977,22 +2977,22 @@ export default function BlackjackPage() {
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
 
               <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
-                <TabsList className="flex w-full h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1 gap-1">
+                <TabsList className="grid w-full grid-cols-3 h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1">
                   <TabsTrigger
                     value="recent-games"
-                    className="flex-[1.6] font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
                   >
                     Recent Games
                   </TabsTrigger>
                   <TabsTrigger
                     value="recent-play"
-                    className="flex-[1.6] font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
                   >
                     Recent Play
                   </TabsTrigger>
                   <TabsTrigger
                     value="leaderboard"
-                    className="flex-1 font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
                   >
                     Leaderboard
                   </TabsTrigger>

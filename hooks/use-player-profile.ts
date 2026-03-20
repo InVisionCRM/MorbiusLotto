@@ -147,7 +147,7 @@ export function usePlayerProfileStats(address: string | null) {
       }
     },
     enabled: !!address,
-    refetchInterval: 30000,
+    refetchInterval: 10000,
   })
 }
 
@@ -185,5 +185,6 @@ export function usePlayerProfileGames(address: string | null, limit: number = 50
       })
     },
     enabled: !!address,
+    refetchInterval: 30000,
   })
 }

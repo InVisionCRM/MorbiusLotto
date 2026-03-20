@@ -18,7 +18,7 @@ export interface FAQAddress {
 }
 
 interface GameFAQProps {
-  game: 'plinko' | 'blackjack' | 'keno' | 'lottery'
+  game: 'plinko' | 'blackjack' | 'keno' | 'lottery' | 'poker'
   addresses: FAQAddress[]
 }
 
@@ -145,6 +145,36 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
     {
       q: 'Do I need to claim my winnings?',
       a: 'No. Payouts are sent automatically in the same transaction. Nothing to claim.',
+    },
+    {
+      q: 'My transaction is stuck. What can I do?',
+      a: 'Try sending 1 PLS to yourself (your own wallet address) from the same wallet. This can clear stuck nonces and help the network process pending transactions.',
+    },
+    {
+      q: 'Who do I contact if there\'s an issue?',
+      a: 'Contact @Morbius_io on X (x.com) or use the Report tab in the site menu.',
+    },
+    {
+      q: 'Where are the contract addresses?',
+      a: null,
+    },
+  ],
+  poker: [
+    {
+      q: 'How do multiplayer Poker tables work?',
+      a: 'Join a table from the lobby, choose your buy-in, and play no-limit Texas Hold\'em against other players. A hand runs through pre-flop, flop, turn, river, and showdown.',
+    },
+    {
+      q: 'How do chips and buy-ins work?',
+      a: 'Your table stack comes from your in-game MORBIUS balance. When you join a table, your selected buy-in is moved into your seat stack for that table.',
+    },
+    {
+      q: 'How do I leave a table?',
+      a: 'Click Leave. You\'ll get a confirmation showing your leaving amount, and your remaining stack is returned to your game balance.',
+    },
+    {
+      q: 'Is there a separate claim step for Poker winnings?',
+      a: 'No separate claim is needed during table play. Pots and stacks update automatically as hands resolve.',
     },
     {
       q: 'My transaction is stuck. What can I do?',

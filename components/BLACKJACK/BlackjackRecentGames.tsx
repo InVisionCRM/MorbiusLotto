@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi'
 import { formatEther } from 'viem'
 import { toBigIntSafe } from '@/lib/safe-bigint'
 import { usePlayerGames, type PlayerGameRow } from '@/hooks/use-blackjack-stats'
+import Link from 'next/link'
 
 const panelStyle = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
@@ -32,15 +33,21 @@ function ResultRow({ r, compact }: { r: PlayerGameRow; compact?: boolean }) {
 
   if (compact) {
     return (
-      <div className="flex items-center justify-between gap-2 py-2 px-2 border-b border-white/5 last:border-0 text-sm">
-        <span className="text-white/70 shrink-0 min-w-0">
+      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 py-2 px-2 border-b border-white/5 last:border-0 text-sm">
+        <span className="text-white/70 min-w-0 truncate">
           <span className="text-white/50 font-mono">{timeStr}</span>
           <span className="mx-1.5">·</span>
           {resultLabel} · #{r.game_number}
         </span>
-        <span className={`shrink-0 tabular-nums ${win ? 'text-green-400' : 'text-white/60'}`}>
+        <span className={`shrink-0 tabular-nums text-right ${win ? 'text-green-400' : 'text-white/60'}`}>
           {win ? '+' : ''}{formatMorbius(profit)} MORBIUS
         </span>
+        <Link
+          href={`/BLACKJACK/verify?gameId=${encodeURIComponent(r.id)}`}
+          className="shrink-0 text-blue-400 hover:text-blue-300 text-xs font-semibold underline underline-offset-2"
+        >
+          Verify
+        </Link>
       </div>
     )
   }
@@ -99,6 +106,11 @@ export function BlackjackRecentGames({
           <div className="p-4 text-center text-white/50 text-sm">No games yet. Play Blackjack to see history here.</div>
         ) : (
           <>
+            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-2 py-1.5 text-[10px] uppercase tracking-wider text-white/40 border-b border-white/10">
+              <span>Game</span>
+              <span>Net</span>
+              <span>Verify</span>
+            </div>
             {displayGames.map((r) => (
               <ResultRow key={r.id} r={r} compact={compact} />
             ))}
