@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { motion } from 'framer-motion'
 import { usePlayerProfileGames, useProfileForAddress } from '@/hooks/use-player-profile'
+import { useQuery } from '@tanstack/react-query'
 import { isAdminWallet } from '@/lib/admin'
 import {
   TrendingUp,
@@ -41,6 +42,15 @@ import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView'
 import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client'
 import type { GameHistoryEntry } from '@/components/BLACKJACK/GameHistory'
+
+interface HistoryHandData {
+  game_id: string
+  cards: number[]
+  total: number
+  result: 'win' | 'loss' | 'push' | 'blackjack'
+  payout: bigint
+  actions: Array<{ type?: string }>
+}
 
 export interface PlayerStats {
   totalGames: number
@@ -183,12 +193,46 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
 
   // Fetch game history for cumulative chart and history tab
   const { data: games, isLoading: gamesLoading } = usePlayerProfileGames(playerAddress, 1000) // Fetch up to 1000 games for all-time data
+  const completedGames = useMemo(
+    () => (games ?? []).filter((g) => g.result && g.completed_at),
+    [games]
+  )
+  const historyGames = useMemo(() => completedGames.slice(0, 100), [completedGames])
+
+  const { data: historyHandsByGame = {}, isLoading: handsLoading } = useQuery<Record<string, HistoryHandData[]>>({
+    queryKey: ['playerProfileHistoryHands', historyGames.map((g) => g.game_id).join('|')],
+    enabled: historyGames.length > 0,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        historyGames.map(async (game) => {
+          try {
+            const response = await fetch(`/api/game/${encodeURIComponent(game.game_id)}/hands`)
+            if (!response.ok) return [game.game_id, []] as const
+            const data = await response.json()
+            const hands = (Array.isArray(data) ? data : []).map((hand: any) => ({
+              game_id: String(hand.game_id ?? game.game_id),
+              cards: Array.isArray(hand.cards)
+                ? hand.cards.map((card: unknown) => Number(card)).filter((n: number) => Number.isFinite(n))
+                : [],
+              total: Number(hand.total ?? 0),
+              result: (hand.result ?? 'loss') as 'win' | 'loss' | 'push' | 'blackjack',
+              payout: BigInt(typeof hand.payout === 'string' ? hand.payout : String(hand.payout ?? 0)),
+              actions: Array.isArray(hand.actions) ? hand.actions : [],
+            }))
+            return [game.game_id, hands] as const
+          } catch {
+            return [game.game_id, []] as const
+          }
+        })
+      )
+      return Object.fromEntries(entries)
+    },
+    staleTime: 30_000,
+  })
 
   // Convert games to GameHistoryEntry format for History tab
   const historyEntries: GameHistoryEntry[] = useMemo(() => {
-    if (!games) return []
-    return games
-      .filter((g) => g.result && g.completed_at)
+    return completedGames
       .map((game) => ({
         id: game.id,
         gameId: game.game_id,
@@ -196,12 +240,21 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
         betAmount: game.total_bet_amount,
         payout: game.total_payout,
         result: game.result as 'win' | 'loss' | 'push' | 'blackjack',
-        playerHands: [],
-        dealerCards: [],
-        dealerTotal: 0,
+        playerHands: (historyHandsByGame[game.game_id] ?? []).map((hand) => ({
+          cards: hand.cards,
+          total: hand.total,
+          result: hand.result,
+          payout: hand.payout,
+        })),
+        dealerCards: game.dealer_cards,
+        dealerTotal: game.dealer_total,
         verified: false,
+        wasSplit: (historyHandsByGame[game.game_id] ?? []).length > 1,
+        wasDoubleDown: (historyHandsByGame[game.game_id] ?? []).some((hand) =>
+          (hand.actions ?? []).some((action) => action?.type === 'double_down')
+        ),
       }))
-  }, [games])
+  }, [completedGames, historyHandsByGame])
 
   // Build cumulative area chart data from game history
   const cumulativeChartData = useMemo(() => {
@@ -595,7 +648,7 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
 
       {/* History Tab */}
       {activeTab === 'history' && (
-        <GameHistory history={historyEntries} isLoading={gamesLoading} />
+        <GameHistory history={historyEntries} isLoading={gamesLoading || handsLoading} />
       )}
 
       {/* Creator Tab */}

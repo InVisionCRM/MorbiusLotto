@@ -15,6 +15,8 @@ import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { BlackjackMobileActionBar } from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
+import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
+import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
 import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
 import type { Emotion } from '@/components/poker/avatar/AvatarPreview';
 import type { AvatarConfig } from '@/lib/websocket-client';
@@ -24,6 +26,7 @@ import Image from 'next/image';
 import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTING_OPEN, SOUNDS_BETTING_CLOSED, SOUNDS_DEALER_PHRASE, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_DEALER_BLACKJACK, SOUNDS_TIP, SOUND_PUSH, pickRandom } from '@/app/BLACKJACK/constants';
 import { useAudio, AudioManager } from '@/hooks/use-audio';
 import { usePlayerStatsEnhanced } from '@/hooks/use-blackjack-stats';
+import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 
 const TURN_TIMEOUT = 30;
 const BETTING_TIMEOUT = 15;
@@ -71,7 +74,7 @@ function useCountdown(startedAt: string | null, maxSeconds: number) {
 }
 
 const POSITIONS = [0, 1, 2] as const;
-const AVATAR_SIZE = 56;
+const AVATAR_SIZE = 68;
 
 // Avatar animation constants — matches poker system
 const AVATAR_EMOTION_DURATION_MS = 3000;
@@ -107,12 +110,14 @@ function formatMorbius(wei: string): string {
 // Seat component — cards rendered like BlackjackTable (card-overlap-player)
 // ──────────────────────────────────────────────────────────────────────────────
 function Seat({
-  seat, position, isMe, isEmpty, isActing, phase, onTakeSeat, canTakeSeat, turnStartedAt, bettingStartedAt, balanceLabel,
+  seat, position, isMe, isEmpty, isActing, phase, onTakeSeat, canTakeSeat, turnStartedAt, bettingStartedAt, balanceLabel, onOpenProfile, showOutcomeLabel,
 }: {
   seat: BJMultiSeatState | null; position: number; isMe: boolean; isEmpty: boolean;
   isActing: boolean; phase: string; onTakeSeat: () => void; canTakeSeat: boolean;
   turnStartedAt: string | null; bettingStartedAt: string | null;
   balanceLabel?: string | null;
+  onOpenProfile?: (address: string) => void;
+  showOutcomeLabel?: boolean;
 }) {
   const turnRemaining = useCountdown(isActing ? turnStartedAt : null, TURN_TIMEOUT);
   const betRemaining = useCountdown(phase === 'betting' && !isEmpty ? bettingStartedAt : null, BETTING_TIMEOUT);
@@ -138,6 +143,18 @@ function Seat({
 
   // Priority: local pick > result-driven > neutral
   const activeEmotion: Emotion = localEmotion ?? (phase === 'completed' ? resultEmotion : 'neutral');
+  const canOpenProfile = !!seat?.playerAddress && !!onOpenProfile && !isMe;
+  const seatOutcomeLabel = (() => {
+    if (!seat || seat.hands.length === 0) return null;
+    const hasBlackjack = seat.hands.some((h) => h.result === 'blackjack');
+    const hasWin = seat.hands.some((h) => h.result === 'win' || h.result === 'blackjack');
+    const allLoss = seat.hands.every((h) => h.result === 'loss');
+    const allPush = seat.hands.every((h) => h.result === 'push');
+    if (hasBlackjack || hasWin) return { text: `WON +${formatMorbius(seat.payout || '0')}`, cls: 'text-emerald-300' };
+    if (allLoss) return { text: 'LOST', cls: 'text-red-300' };
+    if (allPush) return { text: 'PUSH', cls: 'text-yellow-300' };
+    return null;
+  })();
 
   // Close animation picker when phase changes
   useEffect(() => { setAnimPickerOpen(false); }, [phase]);
@@ -152,7 +169,7 @@ function Seat({
   }, []);
 
   return (
-    <div className="relative flex flex-col items-center gap-2 min-w-0">
+    <div className="relative flex flex-col items-center gap-2 min-w-0 h-[250px]">
       {/* Cards area */}
       {isEmpty ? (
         <div
@@ -173,7 +190,7 @@ function Seat({
         <>
           {/* Hands */}
           {seat && seat.hands.length > 0 ? (
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center gap-3 min-h-[120px] justify-start">
               {seat.hands.map((hand, hi) => (
                 <div key={hi} className="flex flex-col items-center gap-1">
                   <div className="flex items-center">
@@ -193,20 +210,12 @@ function Seat({
                       </span>
                     </div>
                   </div>
-                  {/* Result */}
-                  {hand.result && (
-                    <div className={`text-xs font-bold ${resultColor(hand.result)}`}>
-                      {hand.result === 'blackjack' ? 'Blackjack! 🎉' :
-                       hand.result === 'win' ? `Won +${formatMorbius(hand.payout)}` :
-                       hand.result === 'loss' ? 'Lost' : 'Push'}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
           ) : (
             /* Placeholder cards when seated but no hand yet */
-            <div className="flex gap-0 min-h-[60px] items-center justify-center">
+            <div className="flex gap-0 min-h-[120px] items-center justify-center">
               {phase !== 'waiting' && phase !== 'betting' ? null : (
                 <div className="w-14 h-20 rounded-lg border border-dashed border-white/10" />
               )}
@@ -216,11 +225,16 @@ function Seat({
           {/* Chip stack for bet */}
           {seat && BigInt(seat.pendingBet) > 0n && (
             <div className="flex flex-col items-center">
-              <div className="relative w-7 h-7">
-                <div className="w-7 h-7 rounded-full"
-                  style={{ background: `url('/PokerChips/greenpokerchip005.png') center/contain no-repeat` }} />
+              <div className="relative w-10 h-10">
+                <div
+                  className="w-10 h-10 rounded-full"
+                  style={{
+                    background: `url('/PokerChips/greenpokerchip005.png') center/contain no-repeat`,
+                    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))',
+                  }}
+                />
               </div>
-              <span className="text-white text-xs font-bold mt-0.5" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
+              <span className="text-white text-sm font-bold mt-0.5" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
                 {formatMorbius(seat.pendingBet)}
               </span>
             </div>
@@ -231,14 +245,22 @@ function Seat({
           )}
 
           {/* Player avatar + name — pinned to bottom */}
-          <div className="absolute bottom-[-32px] left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+          <div className="absolute bottom-[-52px] left-1/2 -translate-x-1/2 flex items-center gap-2">
             <div className="relative flex-shrink-0" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
               {isActing && <CircularTimerRing size={AVATAR_SIZE} timeLeft={turnRemaining} maxTime={TURN_TIMEOUT} />}
               {!isActing && phase === 'betting' && <CircularTimerRing size={AVATAR_SIZE} timeLeft={betRemaining} maxTime={BETTING_TIMEOUT} />}
               <div
                 className="w-full h-full rounded-full overflow-hidden bg-slate-800"
                 style={{ border: isMe ? '2px solid rgba(34,211,238,0.6)' : isActing ? '2px solid transparent' : '2px solid rgba(255,255,255,0.15)', cursor: isMe ? 'pointer' : 'default' }}
-                onClick={isMe ? () => setAnimPickerOpen(o => !o) : undefined}
+                onClick={() => {
+                  if (isMe) {
+                    setAnimPickerOpen(o => !o);
+                    return;
+                  }
+                  if (canOpenProfile && seat?.playerAddress) {
+                    onOpenProfile(seat.playerAddress);
+                  }
+                }}
               >
                 {seat?.avatarConfig ? (
                   <AvatarPreview
@@ -288,14 +310,25 @@ function Seat({
                   </div>
                 </div>
               )}
+
+              {showOutcomeLabel && seatOutcomeLabel && (
+                <div className={`absolute left-1/2 -translate-x-1/2 top-full mt-[2px] text-[11px] font-bold whitespace-nowrap ${seatOutcomeLabel.cls}`}>
+                  {seatOutcomeLabel.text}
+                </div>
+              )}
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className={`text-[10px] font-medium truncate max-w-[80px] leading-tight ${isMe ? 'text-cyan-300' : 'text-white/80'}`}>
+            <div
+              className={`flex flex-col min-w-0 rounded-md px-2 py-1.5 bg-black/35 backdrop-blur-sm border border-white/10 ${canOpenProfile ? 'cursor-pointer hover:bg-black/45 transition-colors' : ''}`}
+              onClick={() => {
+                if (canOpenProfile && seat?.playerAddress) onOpenProfile(seat.playerAddress);
+              }}
+            >
+              <span className="text-[12px] font-semibold truncate max-w-[120px] leading-tight text-white/90">
                 {seat?.displayName ?? (seat?.playerAddress ? seat.playerAddress.slice(0, 6) + '…' : '—')}
-                {isMe && <span className="text-[8px] text-white/40 ml-0.5">(you)</span>}
+                {isMe && <span className="text-[9px] text-white/90 ml-1">(you)</span>}
               </span>
               {balanceLabel != null && (
-                <span className="text-[9px] text-white/50 tabular-nums leading-tight">{balanceLabel}</span>
+                <span className="text-[11px] text-white/90 tabular-nums leading-tight">{balanceLabel}</span>
               )}
             </div>
           </div>
@@ -317,6 +350,7 @@ export default function BlackjackMultiTablePage() {
   const [state, setState] = useState<BJMultiTableState | null>(null);
   const stateRef = useRef<BJMultiTableState | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const [selectedProfileAddress, setSelectedProfileAddress] = useState<string | null>(null);
   const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'failed'>('connecting');
   const [reconnectInfo, setReconnectInfo] = useState<{ attempt: number; maxAttempts: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -405,6 +439,7 @@ export default function BlackjackMultiTablePage() {
   const [visibleDealerCards, setVisibleDealerCards] = useState(0);
   const prevDealerCardCountRef = useRef(0);
   const dealerRevealTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [showSeatOutcomeLabels, setShowSeatOutcomeLabels] = useState(false);
 
   // Platform balance (for display under avatar when seated)
   const [playerBalance, setPlayerBalance] = useState<bigint>(0n);
@@ -430,6 +465,8 @@ export default function BlackjackMultiTablePage() {
     const pending = pendingDealerOutcomeRef.current;
     if (!pending) return;
     pendingDealerOutcomeRef.current = null;
+    // Unlock seat WON/LOST labels exactly when outcome voice starts.
+    setShowSeatOutcomeLabels(true);
     if (soundEnabled) {
       switch (pending.kind) {
         case 'player_blackjack':
@@ -465,6 +502,9 @@ export default function BlackjackMultiTablePage() {
   // Sound effects + win notification on phase transitions
   useEffect(() => {
     if (!state) return;
+    if (state.phase !== 'completed' && showSeatOutcomeLabels) {
+      setShowSeatOutcomeLabels(false);
+    }
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = state.phase;
     if (!prevPhase) return;
@@ -474,10 +514,16 @@ export default function BlackjackMultiTablePage() {
       playDealerVoice(pickRandom(SOUNDS_BETTING_OPEN));
       // Clear any lingering phrase timer
       if (dealerPhraseTimerRef.current) clearTimeout(dealerPhraseTimerRef.current);
-      // Play a random dealer phrase partway through the betting window
-      dealerPhraseTimerRef.current = setTimeout(() => {
-        playDealerVoice(pickRandom(SOUNDS_DEALER_PHRASE));
-      }, 5000 + Math.random() * 4000); // 5–9s into betting
+      // Play a random dealer phrase only every 5th hand (quieter table pacing).
+      const roundNumber = Number(state.roundNumber ?? 0);
+      const shouldPlayMidBetPhrase = roundNumber > 0 && roundNumber % 5 === 0;
+      if (shouldPlayMidBetPhrase && SOUNDS_DEALER_PHRASE.length > 0) {
+        dealerPhraseTimerRef.current = setTimeout(() => {
+          playDealerVoice(pickRandom(SOUNDS_DEALER_PHRASE));
+        }, 5000 + Math.random() * 4000); // 5–9s into betting
+      } else {
+        dealerPhraseTimerRef.current = null;
+      }
     }
 
     // ── Betting closes → dealing: stop any phrase, announce, then deal sound ──
@@ -683,14 +729,14 @@ export default function BlackjackMultiTablePage() {
 
   const takeSeat = useCallback(async (pos: number) => {
     if (!wsClient?.isConnected() || !address) return;
-    playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
+    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
     try { await wsClient.sendRequest('bj_multi_join_table', { tableId, seatPosition: pos }); }
     catch (e) { setError((e as Error).message); }
   }, [wsClient, tableId, address, playSound]);
 
   const leaveSeat = useCallback(async () => {
     if (!wsClient?.isConnected()) return;
-    playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
+    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
     try { await wsClient.sendRequest('bj_multi_leave_table', { tableId }); }
     catch (e) { setError((e as Error).message); }
   }, [wsClient, tableId, playSound]);
@@ -698,7 +744,7 @@ export default function BlackjackMultiTablePage() {
   const placeBet = useCallback(async () => {
     const amt = parseInt(betAmount || '0', 10);
     if (!wsClient?.isConnected() || amt <= 0) return;
-    playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
+    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
     try {
       await wsClient.sendRequest('bj_multi_place_bet', { tableId, amount: parseEther(String(amt)).toString() });
       fetchBalance();
@@ -711,13 +757,14 @@ export default function BlackjackMultiTablePage() {
     if (action === 'hit') {
       playSound('/BlackJack/sounds/knock.wav');
     } else {
-      playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
+      playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
     }
     try { await wsClient.sendRequest('bj_multi_action', { tableId, action, handIndex: mySeat?.activeHandIndex ?? 0 }); }
     catch (e) { setError((e as Error).message); }
   }, [wsClient, tableId, mySeat, playSound]);
 
   const theme = resolveTheme(state?.themeKind ?? 'video', state?.themeId ?? 'glowingTable');
+  const { getThemeInfo, getTableProfile } = useBlackjackTables();
 
   // Scale board content to fill the 16:9 container at any size
   const tableRef = useRef<HTMLDivElement>(null);
@@ -841,7 +888,7 @@ export default function BlackjackMultiTablePage() {
               <button
                 onClick={async () => {
                   if (tipAnimating) return;
-                  playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
+                  playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
                   setTipAnimating(true);
                   try {
                     await wsClient.sendRequest('bj_multi_tip_dealer', {
@@ -1004,6 +1051,8 @@ export default function BlackjackMultiTablePage() {
                     turnStartedAt={state?.actingSeatPosition === pos ? state?.turnStartedAt ?? null : null}
                     bettingStartedAt={state?.bettingStartedAt ?? null}
                     balanceLabel={isMe ? formatMorbius(playerBalance.toString()) : null}
+                    onOpenProfile={setSelectedProfileAddress}
+                    showOutcomeLabel={showSeatOutcomeLabels}
                   />
                 );
               })}
@@ -1013,8 +1062,8 @@ export default function BlackjackMultiTablePage() {
 
         </div>
 
-        {/* Chat + sound overlay — top-left over the table */}
-        <div className="absolute top-12 left-2 z-20" style={{ maxWidth: '280px' }}>
+        {/* Chat + sound overlay — bottom-left on mobile, top-left on desktop */}
+        <div className="absolute left-2 bottom-2 md:bottom-auto md:top-12 z-20" style={{ maxWidth: '280px' }}>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setChatOpen(o => !o)}
@@ -1056,11 +1105,11 @@ export default function BlackjackMultiTablePage() {
       </div>
 
       {/* ── Controls — sidebar on md+, below table on mobile ── */}
-      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-y-auto">
+      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-4 md:overflow-y-auto md:pt-10">
 
         {/* Betting panel — always visible when seated, disabled when not in betting phase or bet already placed */}
         {myPosition !== null && (
-          <div className="w-full max-w-md mx-auto space-y-2">
+          <div className="w-full max-w-none mx-auto space-y-3 md:scale-[1.08] md:origin-top">
             <BettingPanelMobile
               onStartGame={() => {}} // not used — confirm bet button below handles this
               isPlaying={state?.phase !== 'betting' || hasBet}
@@ -1080,11 +1129,11 @@ export default function BlackjackMultiTablePage() {
             />
             {/* CONFIRM BET button — only active during betting phase */}
             {state?.phase === 'betting' && !hasBet && (
-              <div className="px-2">
+              <div className="px-2 md:px-0">
                 <button
                   onClick={placeBet}
                   disabled={parseInt(betAmount || '0', 10) < 500}
-                  className="w-full py-2.5 rounded-xl font-black text-sm tracking-wider transition-all active:scale-95 disabled:opacity-40"
+                  className="w-full py-3 rounded-xl font-black text-base tracking-wider transition-all active:scale-95 disabled:opacity-40"
                   style={{
                     background: parseInt(betAmount || '0', 10) >= 500
                       ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)'
@@ -1137,6 +1186,61 @@ export default function BlackjackMultiTablePage() {
 
       </div>
 
+      {/* Table token profile card — below board on left (same as single-player) */}
+      <div className="md:col-start-1">
+        <TableTokenProfileCard
+          themeKind={(state?.themeKind ?? 'video') as 'image' | 'video'}
+          themeId={state?.themeId ?? 'glowingTable'}
+          getThemeInfo={getThemeInfo}
+          getTableProfile={getTableProfile}
+        />
+      </div>
+
+      {/* Right companion panel — balances row with table profile card */}
+      <div className="md:col-start-2">
+        <div
+          className="min-h-[420px] lg:min-h-[520px] rounded-xl overflow-hidden"
+          style={{
+            background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            border: '1px inset rgba(60, 60, 60, 0.5)',
+          }}
+        >
+          <div className="px-3 py-2 border-b border-cyan-500/20 flex items-center justify-between">
+            <h3 className="text-cyan-300 font-semibold text-sm">Table Overview</h3>
+            <span className="text-[10px] text-cyan-300/70 uppercase tracking-wider">Live</span>
+          </div>
+
+          <div className="p-3 space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg p-2 bg-black/25 border border-white/10">
+                <div className="text-[10px] text-white/50 uppercase tracking-wider">Round</div>
+                <div className="text-white font-semibold tabular-nums">{state?.roundNumber ?? '-'}</div>
+              </div>
+              <div className="rounded-lg p-2 bg-black/25 border border-white/10">
+                <div className="text-[10px] text-white/50 uppercase tracking-wider">Phase</div>
+                <div className="text-white font-semibold capitalize">{state?.phase ? state.phase.replace('_', ' ') : 'waiting'}</div>
+              </div>
+              <div className="rounded-lg p-2 bg-black/25 border border-white/10">
+                <div className="text-[10px] text-white/50 uppercase tracking-wider">Min Bet</div>
+                <div className="text-cyan-300 font-semibold tabular-nums">{formatMorbius(state?.minBet ?? '0')}</div>
+              </div>
+              <div className="rounded-lg p-2 bg-black/25 border border-white/10">
+                <div className="text-[10px] text-white/50 uppercase tracking-wider">Max Bet</div>
+                <div className="text-cyan-300 font-semibold tabular-nums">{formatMorbius(state?.maxBet ?? '0')}</div>
+              </div>
+            </div>
+
+            <div className="rounded-lg p-3 bg-black/25 border border-cyan-500/20">
+              <div className="text-[10px] text-white/50 uppercase tracking-wider mb-1">Seats</div>
+              <div className="text-white/90">
+                {(state?.seats?.filter((s) => !!s.playerAddress).length ?? 0)} / 3 occupied
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Player stats — below game board, spanning full width */}
       {address && playerStats && (
         <div className="md:col-span-2">
@@ -1148,6 +1252,13 @@ export default function BlackjackMultiTablePage() {
           />
         </div>
       )}
+
+      <PlayerProfileModal
+        isOpen={!!selectedProfileAddress}
+        onClose={() => setSelectedProfileAddress(null)}
+        address={selectedProfileAddress}
+        game="blackjack"
+      />
 
       </div>{/* close grid */}
     </GlobalMainNav>

@@ -2745,7 +2745,7 @@ export default function BlackjackPage() {
                 <button
                   onClick={async () => {
                     if (tipAnimating) return;
-                    playSound('/Poker/PokerSounds/PlayerClickConfirmation1.mp3');
+                    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
                     setTipAnimating(true);
                     try {
                       await wsClient.sendRequest('tip_dealer', {

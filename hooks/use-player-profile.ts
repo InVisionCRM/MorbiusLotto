@@ -25,6 +25,8 @@ export interface PlayerProfileGame {
   result: 'win' | 'loss' | 'push' | 'blackjack' | null
   total_bet_amount: bigint
   total_payout: bigint
+  dealer_cards: number[]
+  dealer_total: number
   created_at: string
   completed_at: string | null
 }
@@ -173,6 +175,10 @@ export function usePlayerProfileGames(address: string | null, limit: number = 50
           result: game.result,
           total_bet_amount: BigInt(typeof betRaw === 'string' ? betRaw : String(betRaw ?? 0)),
           total_payout: BigInt(typeof payoutRaw === 'string' ? payoutRaw : String(payoutRaw ?? 0)),
+          dealer_cards: Array.isArray(game.dealer_cards)
+            ? game.dealer_cards.map((card: unknown) => Number(card)).filter((n: number) => Number.isFinite(n))
+            : [],
+          dealer_total: Number(game.dealer_total ?? 0),
           created_at: game.created_at || game.createdAt,
           completed_at: game.completed_at || game.completedAt,
         }
