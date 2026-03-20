@@ -8,7 +8,7 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon, Flag, Gift, Droplets, Megaphone, Package } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon, Flag, Gift, Droplets, Megaphone, Package, ArrowDownUp } from 'lucide-react';
 import AdminTablesTab from '@/components/admin/AdminTablesTab';
 import AdminCosmeticsTab from '@/components/admin/AdminCosmeticsTab';
 import AdminAdvertisingTab from '@/components/admin/AdminAdvertisingTab';
@@ -24,6 +24,7 @@ import AdminLPStakingTab from '@/components/admin/AdminLPStakingTab';
 import AdminMerkleDropsTab from '@/components/admin/AdminMerkleDropsTab';
 import AdminBJMultiTab from '@/components/admin/AdminBJMultiTab';
 import AdminPlayerLookup from '@/components/admin/AdminPlayerLookup';
+import AdminPendingTransfersTab from '@/components/admin/AdminPendingTransfersTab';
 
 export default function AdminPage() {
   const { address } = useAccount();
@@ -71,6 +72,9 @@ export default function AdminPage() {
             </TabsTrigger>
             <TabsTrigger value="escrow" className="rounded data-[state=active]:bg-yellow-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <Wallet className="w-3 h-3 mr-1 hidden sm:inline" /> Escrow
+            </TabsTrigger>
+            <TabsTrigger value="pending-transfers" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
+              <ArrowDownUp className="w-3 h-3 mr-1 hidden sm:inline" /> Pending
             </TabsTrigger>
             <TabsTrigger value="chat" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
               <MessageSquare className="w-3 h-3 mr-1 hidden sm:inline" /> Chat
@@ -120,6 +124,10 @@ export default function AdminPage() {
 
           <TabsContent value="escrow" className="mt-3 focus-visible:outline-none">
             <AdminEscrowTab />
+          </TabsContent>
+
+          <TabsContent value="pending-transfers" className="mt-3 focus-visible:outline-none">
+            <AdminPendingTransfersTab />
           </TabsContent>
 
           <TabsContent value="chat" className="mt-3 focus-visible:outline-none">

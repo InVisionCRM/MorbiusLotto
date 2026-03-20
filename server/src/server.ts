@@ -2052,6 +2052,32 @@ async function initializeServices() {
       }
     });
 
+    // Admin: pending deposits/withdrawals tables (paginated)
+    app.get('/api/admin/pending-transfers', async (req, res) => {
+      try {
+        const type = String(req.query.type || 'deposits').toLowerCase();
+        const limit = Math.min(Math.max(parseInt(String(req.query.limit || '25'), 10) || 25, 1), 100);
+        const offset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0);
+
+        if (type !== 'deposits' && type !== 'withdrawals') {
+          res.status(400).json({ error: 'type must be "deposits" or "withdrawals"' });
+          return;
+        }
+
+        if (type === 'deposits') {
+          const rows = await dbService.listPendingDeposits(limit, offset);
+          sendJson(res, { type, rows, limit, offset, hasMore: rows.length === limit });
+          return;
+        }
+
+        const rows = await dbService.listPendingWithdrawals(limit, offset);
+        sendJson(res, { type, rows, limit, offset, hasMore: rows.length === limit });
+      } catch (error) {
+        logger.error('Error fetching admin pending transfers:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Admin: manually refund an expired pending withdrawal (when cron couldn't verify due to RPC, etc.)
     app.post('/api/admin/withdrawals/refund-expired', async (req, res) => {
       try {

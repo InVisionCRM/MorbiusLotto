@@ -763,6 +763,35 @@ export class DatabaseService {
     return result.rows;
   }
 
+  /** List pending_deposits rows for admin tables with pagination. */
+  async listPendingDeposits(limit = 25, offset = 0): Promise<Array<{
+    id: string;
+    wallet_address: string;
+    amount_wei: string;
+    tx_hash: string | null;
+    status: string;
+    created_at: string;
+  }>> {
+    const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
+    const safeOffset = Math.max(Number(offset) || 0, 0);
+    const result = await this.pool.query(
+      `SELECT id, wallet_address, amount_wei::TEXT AS amount_wei, tx_hash, status, created_at
+       FROM pending_deposits
+       ORDER BY created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [safeLimit, safeOffset],
+    );
+
+    return result.rows.map((r: any) => ({
+      id: String(r.id),
+      wallet_address: r.wallet_address ?? '',
+      amount_wei: r.amount_wei ?? '0',
+      tx_hash: r.tx_hash ?? null,
+      status: r.status ?? 'unknown',
+      created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    }));
+  }
+
   /** Mark pending deposit as credited and credit players.balance. */
   async creditPendingDeposit(jobId: string): Promise<boolean> {
     const client = await this.pool.connect();
@@ -1112,6 +1141,37 @@ export class DatabaseService {
     `;
     const result = await this.pool.query(query);
     return result.rows;
+  }
+
+  /** List pending_withdrawals rows for admin tables with pagination. */
+  async listPendingWithdrawals(limit = 25, offset = 0): Promise<Array<{
+    id: string;
+    wallet_address: string;
+    amount: string;
+    tx_hash: string | null;
+    nonce: string;
+    status: string;
+    created_at: string;
+  }>> {
+    const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
+    const safeOffset = Math.max(Number(offset) || 0, 0);
+    const result = await this.pool.query(
+      `SELECT id, wallet_address, amount::TEXT AS amount, tx_hash, nonce::TEXT AS nonce, status, created_at
+       FROM pending_withdrawals
+       ORDER BY created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [safeLimit, safeOffset],
+    );
+
+    return result.rows.map((r: any) => ({
+      id: String(r.id),
+      wallet_address: r.wallet_address ?? '',
+      amount: r.amount ?? '0',
+      tx_hash: r.tx_hash ?? null,
+      nonce: r.nonce ?? '0',
+      status: r.status ?? 'unknown',
+      created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    }));
   }
 
   /**
