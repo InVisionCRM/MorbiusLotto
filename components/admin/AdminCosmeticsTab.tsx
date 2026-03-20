@@ -1472,6 +1472,7 @@ export default function AdminCosmeticsTab() {
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [toggleStoreBusyKey, setToggleStoreBusyKey] = useState<string | null>(null);
   const [ownersModal, setOwnersModal] = useState<{ itemKey: string; displayName: string } | null>(null);
   const [grantModal, setGrantModal] = useState<{ itemKey: string; displayName: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'create' | 'variants' | 'voxel' | 'pricing'>('create');
@@ -1553,6 +1554,38 @@ export default function AdminCosmeticsTab() {
       setSaveError('Network error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleItemStoreVisibility = async (item: ItemRow, shopListed: boolean) => {
+    if (!address) return;
+    setToggleStoreBusyKey(item.itemKey);
+    setError(null);
+    try {
+      const res = await fetch('/api/cosmetics/admin/item', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminAddress: address,
+          itemKey: item.itemKey,
+          tier: item.tier,
+          priceMorbius: item.priceMorbius,
+          maxSupply: item.maxSupply,
+          shopListed,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? `Failed to ${shopListed ? 'list' : 'remove'} item`);
+        return;
+      }
+      setItems(prev =>
+        prev.map(i => (i.itemKey === item.itemKey ? { ...i, shopListed } : i)),
+      );
+    } catch {
+      setError('Network error while updating store visibility');
+    } finally {
+      setToggleStoreBusyKey(null);
     }
   };
 
@@ -1787,7 +1820,7 @@ export default function AdminCosmeticsTab() {
                         </div>
 
                         {/* Actions */}
-                        <div className="mt-4 grid grid-cols-3 gap-2">
+                        <div className="mt-4 grid grid-cols-4 gap-2">
                           <button
                             type="button"
                             onClick={() => (isEditing ? cancelEdit() : startEdit(item))}
@@ -1817,6 +1850,25 @@ export default function AdminCosmeticsTab() {
                             title="Grant to wallet"
                           >
                             <Gift size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!address || toggleStoreBusyKey === item.itemKey}
+                            onClick={() => void toggleItemStoreVisibility(item, !item.shopListed)}
+                            className={`flex items-center justify-center rounded-lg border py-2.5 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+                              item.shopListed
+                                ? 'border-red-700/60 bg-red-950/30 text-red-300 hover:border-red-500/70 hover:bg-red-900/40 hover:text-red-200'
+                                : 'border-emerald-700/60 bg-emerald-950/30 text-emerald-300 hover:border-emerald-500/70 hover:bg-emerald-900/40 hover:text-emerald-200'
+                            }`}
+                            title={item.shopListed ? 'Remove from store' : 'List in store'}
+                          >
+                            {toggleStoreBusyKey === item.itemKey ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : item.shopListed ? (
+                              'Off'
+                            ) : (
+                              'On'
+                            )}
                           </button>
                         </div>
                       </div>

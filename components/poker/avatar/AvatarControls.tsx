@@ -3,10 +3,10 @@
 import React from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
 import { Lock } from 'lucide-react';
 import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
 import { AvatarPatternDefs } from '@/lib/avatar-svg-patterns';
+import { useCatalog } from '@/hooks/use-cosmetics';
 
 const SkinColors = [
   '#FFF5EE', '#FFE4E1', '#FFDAB9', '#FFCDB2', '#FFB4A2', '#FFDBAC', '#F1C27D', '#E0AC69', '#C68642', '#8D5524', '#7B4B2A', '#5C3A21', '#4A3B32', '#3E2723', '#2D221E', '#1A1110', '#E5989B', '#B5838D', '#6D6875', '#4A4E69', '#22223B',
@@ -70,8 +70,9 @@ function ColorSwatch({ value }: { value: string }) {
 
 export default function AvatarControls({ config, onChange, activeTab, compact = false, ownedItems, isAdmin = false, onLockedItemClick }: AvatarControlsProps) {
   const update = (key: keyof AvatarConfig, value: string) => onChange({ ...config, [key]: value });
+  const { items: catalogItems } = useCatalog();
 
-  const bgItems = ITEM_CATALOG.filter(i => i.unlocks.some(u => u.field === 'backgroundImage'));
+  const bgItems = catalogItems.filter(i => i.unlocks.some(u => u.field === 'backgroundImage'));
 
   const isLocked = (field: AvatarField, value: string): boolean => {
     if (isAdmin) return false;

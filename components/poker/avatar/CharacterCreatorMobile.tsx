@@ -4,10 +4,10 @@ import React, { useState } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import AvatarPreview from './AvatarPreview';
 import { randomizeConfig } from './CharacterCreator';
-import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
 import { Lock, Shuffle } from 'lucide-react';
 import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
 import { AvatarPatternDefs } from '@/lib/avatar-svg-patterns';
+import { useCatalog } from '@/hooks/use-cosmetics';
 
 // ── data ──────────────────────────────────────────────────────────────────
 
@@ -104,6 +104,7 @@ type Props = {
 
 export default function CharacterCreatorMobile({ config, onChange, displayName, onDisplayNameChange, ownedItems, isAdmin = false, onLockedItemClick }: Props) {
   const [activeId, setActiveId] = useState('skin');
+  const { items: catalogItems } = useCatalog();
 
   const activeCat = CATS.find(c => c.id === activeId)!;
 
@@ -218,7 +219,7 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
 
           {/* Backgrounds */}
           {activeCat.type === 'bg' && (() => {
-            const bgItems = ITEM_CATALOG.filter(i => i.unlocks.some(u => u.field === 'backgroundImage'));
+            const bgItems = catalogItems.filter(i => i.unlocks.some(u => u.field === 'backgroundImage'));
             if (bgItems.length === 0) {
               return <p className="text-[11px] text-zinc-500 text-center py-4">No backgrounds yet.</p>;
             }

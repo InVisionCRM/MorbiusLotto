@@ -117,28 +117,32 @@ export function TableProfile({
       >
         <div className="flex flex-col">
           {/* Token info: logo, name, ticker, description, buy + dex links */}
-          <div className="p-3 sm:p-4 flex flex-col justify-center gap-3">
-            <div className="flex items-center gap-3">
+          <div className="p-3 sm:p-4 flex flex-col justify-center gap-4">
+            <div className="flex flex-col items-center gap-3">
               {loading && !logoUrlProp ? (
-                <div className="w-12 h-12 rounded-full bg-slate-700 animate-pulse shrink-0" />
+                <div className="w-20 h-20 rounded-full bg-slate-700 animate-pulse shrink-0" />
               ) : logoUrl ? (
                 <img
                   src={logoUrl}
                   alt=""
-                  className="w-12 h-12 rounded-full object-cover border border-cyan-500/30 shrink-0"
+                  className="w-20 h-20 rounded-full object-cover border border-cyan-500/30 shrink-0"
+                  style={{ boxShadow: '0 12px 28px rgba(34, 211, 238, 0.25), 0 8px 18px rgba(0, 0, 0, 0.55)' }}
                 />
               ) : (
-                <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center text-cyan-400 font-bold shrink-0">
+                <div
+                  className="w-20 h-20 rounded-full bg-slate-600 flex items-center justify-center text-cyan-400 text-2xl font-bold shrink-0"
+                  style={{ boxShadow: '0 12px 28px rgba(34, 211, 238, 0.2), 0 8px 18px rgba(0, 0, 0, 0.55)' }}
+                >
                   {(symbol || name).slice(0, 1)}
                 </div>
               )}
-              <div>
-                <h2 className="text-lg font-semibold text-white">{name}</h2>
-                <p className="text-cyan-400/90 text-sm">{symbol}</p>
+              <div className="text-center">
+                <h2 className="text-xl font-semibold text-white">{name}</h2>
+                <p className="text-cyan-400/90 text-base">{symbol}</p>
               </div>
             </div>
             {description && (
-              <p className="text-gray-400 text-sm text-center w-full">{description}</p>
+              <p className="text-gray-300 text-base leading-relaxed text-center w-full">{description}</p>
             )}
             {hasToken && tokenAddress && (
               <div className="flex flex-wrap items-center gap-2">
