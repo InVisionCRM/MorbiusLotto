@@ -95,7 +95,10 @@ export default function HomePage() {
 
         {/* Hero Section */}
       <div className="relative z-[1] w-full flex flex-col items-center">
-      <HeroSection />
+      <HeroSection
+        onOpenPlayerProfile={address ? () => { setPlayerProfileGame('all'); setPlayerProfileOpen(true) } : undefined}
+        onOpenAuthModal={() => setLoginOpen(true)}
+      />
 
       {/* Games: Lottery, Keno, Plinko, Blackjack — right under hero */}
       <section className="w-full flex flex-col items-center">

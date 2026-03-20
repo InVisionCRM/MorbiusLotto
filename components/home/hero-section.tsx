@@ -5,7 +5,12 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Theme } from '@/lib/theme'
 
-export function HeroSection() {
+interface HeroSectionProps {
+  onOpenPlayerProfile?: () => void
+  onOpenAuthModal?: () => void
+}
+
+export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal }: HeroSectionProps) {
 
   return (
     <section
@@ -98,6 +103,19 @@ export function HeroSection() {
             className="px-6 py-3 bg-gradient-to-b from-purple-600 to-purple-800 text-white font-semibold text-sm sm:text-base rounded-full hover:from-cyan-500 hover:to-cyan-700 transition-all duration-300 hover:scale-105 shadow-lg shadow-purple-500/20"
           >
             Play Now
+          </button>
+
+          <button
+            onClick={() => {
+              if (onOpenPlayerProfile) {
+                onOpenPlayerProfile()
+                return
+              }
+              onOpenAuthModal?.()
+            }}
+            className="px-6 py-3 bg-gradient-to-b from-slate-800 to-slate-900 border border-cyan-500/30 text-white font-semibold text-sm sm:text-base rounded-full hover:from-slate-700 hover:to-slate-800 hover:border-cyan-400/50 transition-all duration-300 hover:scale-105 shadow-lg shadow-cyan-900/20"
+          >
+            My Dashboard
           </button>
         </motion.div>
       </div>

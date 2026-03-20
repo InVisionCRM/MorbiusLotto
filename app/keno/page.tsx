@@ -28,6 +28,7 @@ import Footer from '@/components/PLINKO/Footer'
 import { GameFAQ } from '@/components/shared/GameFAQ'
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text'
 import { NumberTicker } from '@/components/ui/number-ticker'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { useKenoPlayerStats } from '@/hooks/use-keno-results'
@@ -1063,18 +1064,57 @@ export default function KenoPage() {
           </div>
         </div>
 
-        {/* Recent plays | Recent games — 2-col grid */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-6">
-          <div className="min-w-0">
-            <KenoRecentPlays compact />
-          </div>
-          <div className="min-w-0">
-            <GlobalKenoHistoryTable title="Recent games" />
+        {/* Recent Games / Recent Play / Leaderboard tabs */}
+        <section className="mt-6">
+          <div
+            className="relative rounded-2xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+            }}
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
+
+            <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
+              <TabsList className="grid w-full grid-cols-3 h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1">
+                <TabsTrigger
+                  value="recent-games"
+                  className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                >
+                  Recent Games
+                </TabsTrigger>
+                <TabsTrigger
+                  value="recent-play"
+                  className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                >
+                  Recent Play
+                </TabsTrigger>
+                <TabsTrigger
+                  value="leaderboard"
+                  className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                >
+                  Leaderboard
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="recent-games" className="mt-4 focus-visible:outline-none">
+                <GlobalKenoHistoryTable title="Recent games" />
+              </TabsContent>
+
+              <TabsContent value="recent-play" className="mt-4 focus-visible:outline-none">
+                <KenoRecentPlays compact />
+              </TabsContent>
+
+              <TabsContent value="leaderboard" className="mt-4 focus-visible:outline-none">
+                <KenoTopPlayers />
+              </TabsContent>
+            </Tabs>
           </div>
         </section>
 
-        {/* How to Play | Leaderboard — 2-col grid */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-6">
+        {/* How to Play */}
+        <section className="mt-6">
           <Card
             className="rounded-xl overflow-hidden border border-cyan-500/30"
             style={{
@@ -1104,9 +1144,6 @@ export default function KenoPage() {
               </div>
             </div>
           </Card>
-          <div className="min-w-0">
-            <KenoTopPlayers />
-          </div>
         </section>
 
       </main>

@@ -26,6 +26,7 @@ import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/compo
 import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
 import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { useTournament, TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
 import {
@@ -2691,7 +2692,7 @@ export default function BlackjackPage() {
                 : handleDealClick}
               isPlaying={gameState.isPlaying}
               onDealerRevealComplete={handleDealerRevealComplete}
-              gameResult={currentGameResult}
+              gameResult={currentGameResult === 'dealer_blackjack' ? 'loss' : currentGameResult}
               onChipAnimationComplete={handleChipAnimationComplete}
               history={gameState.history}
               totalPayout={currentGame?.totalPayout || BigInt(0)}
@@ -2799,7 +2800,7 @@ export default function BlackjackPage() {
               onStartGame={handleStartTournamentGame}
               isPlaying={gameState.isPlaying}
               handsRemaining={(tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining}
-              gameResult={currentGameResult}
+              gameResult={currentGameResult === 'dealer_blackjack' ? 'loss' : currentGameResult}
               onHit={() => handleTournamentPlayerAction(Action.HIT)}
               onStand={() => handleTournamentPlayerAction(Action.STAND)}
               onDoubleDown={() => handleTournamentPlayerAction(Action.DOUBLE_DOWN)}
@@ -2883,8 +2884,8 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Recent Games + Table token: grid 2-col on lg */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        {/* Table token profile */}
+        <div className="mt-4">
           <TableTokenProfileCard
             key={`${theme}-${useVideoBackground ? videoSource : imageSource}`}
             themeKind={theme}
@@ -2893,8 +2894,20 @@ export default function BlackjackPage() {
             getTableProfile={getTableProfile}
             onChangeTableClick={() => setThemeModalOpen(true)}
           />
-          <BlackjackRecentGames compact title="Recent Games" />
         </div>
+
+        {/* Player stats dashboard (same placement pattern as multiplayer) */}
+        {address && playerStats && (
+          <div className="mt-4">
+            <PlayerStatsDashboard
+              stats={playerStats}
+              isLoading={playerStatsLoading}
+              playerAddress={address}
+              wsClient={wsConnected ? wsClient : null}
+              reserveBalance={offChainBalance}
+            />
+          </div>
+        )}
 
         {/* Dealer Tip Leaderboard */}
         {tipStats && tipStats.tipCount > 0 && (
@@ -2930,15 +2943,54 @@ export default function BlackjackPage() {
           </div>
         )}
 
-        {/* Leaderboard + Recent Play (same as Plinko/Keno/Lottery) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mt-4 px-0 items-stretch">
-          <div className="min-w-0 min-h-0 flex flex-col">
-            <BlackjackTopPlayers />
+        {/* Recent Games / Recent Play / Leaderboard tabs */}
+        <section className="mt-4 px-0">
+          <div
+            className="relative rounded-2xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+            }}
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
+
+            <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
+              <TabsList className="grid w-full grid-cols-3 h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1">
+                <TabsTrigger
+                  value="recent-games"
+                  className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                >
+                  Recent Games
+                </TabsTrigger>
+                <TabsTrigger
+                  value="recent-play"
+                  className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                >
+                  Recent Play
+                </TabsTrigger>
+                <TabsTrigger
+                  value="leaderboard"
+                  className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                >
+                  Leaderboard
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="recent-games" className="mt-4 focus-visible:outline-none">
+                <BlackjackRecentGames compact title="Recent Games" />
+              </TabsContent>
+
+              <TabsContent value="recent-play" className="mt-4 focus-visible:outline-none">
+                <BlackjackRecentPlays compact title="Recent Play" />
+              </TabsContent>
+
+              <TabsContent value="leaderboard" className="mt-4 focus-visible:outline-none">
+                <BlackjackTopPlayers />
+              </TabsContent>
+            </Tabs>
           </div>
-          <div className="min-w-0 min-h-0 flex flex-col">
-            <BlackjackRecentPlays compact title="Recent Play" />
-          </div>
-        </div>
+        </section>
 
         {/* Tournament card - commented out
           <div
