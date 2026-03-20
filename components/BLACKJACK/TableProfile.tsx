@@ -112,7 +112,7 @@ export function TableProfile({
   return (
     <section className="w-full pt-1 pb-2 px-2 sm:px-4">
       <div
-        className="rounded-2xl overflow-hidden border-2 border-cyan-500/30 max-w-4xl mx-auto"
+        className="rounded-2xl overflow-hidden border-2 border-cyan-500/30 w-full"
         style={panelStyle}
       >
         <div className="flex flex-col">
@@ -138,7 +138,7 @@ export function TableProfile({
               </div>
             </div>
             {description && (
-              <p className="text-gray-400 text-sm max-w-md">{description}</p>
+              <p className="text-gray-400 text-sm text-center w-full">{description}</p>
             )}
             {hasToken && tokenAddress && (
               <div className="flex flex-wrap items-center gap-2">

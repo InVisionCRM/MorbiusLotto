@@ -17,6 +17,7 @@ import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
+import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
 import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
 import type { Emotion } from '@/components/poker/avatar/AvatarPreview';
 import type { AvatarConfig } from '@/lib/websocket-client';
@@ -427,6 +428,8 @@ export default function BlackjackMultiTablePage() {
   // Win notification — reuses WinNotification from single player
   const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
   const prevPhaseRef = useRef<string>('');
+  const chartRef = useRef<BlackjackRealTimeBetChartRef>(null);
+  const lastChartRoundRef = useRef<number>(0);
 
   /** Outcome audio + win toast — deferred until dealer cards are fully revealed (single-player parity). */
   type PendingDealerOutcome = {
@@ -560,6 +563,19 @@ export default function BlackjackMultiTablePage() {
         else if (allLoss && dealerHadBJ) kind = 'dealer_blackjack';
         else if (allLoss) kind = 'dealer_win';
         pendingDealerOutcomeRef.current = { kind, payout: totalPayout };
+
+        // Feed multiplayer rounds into realtime chart once per round.
+        const roundNo = Number(state.roundNumber ?? 0);
+        if (roundNo > 0 && lastChartRoundRef.current !== roundNo) {
+          const totalBetWei = seat.hands.reduce((acc, h) => {
+            try { return acc + BigInt(h.betAmount || '0'); } catch { return acc; }
+          }, 0n);
+          chartRef.current?.addGameResult(totalBetWei, totalPayout, {
+            gameId: state.currentRoundId ?? undefined,
+            result: kind,
+          });
+          lastChartRoundRef.current = roundNo;
+        }
       } else {
         fetchBalance();
       }
@@ -772,8 +788,12 @@ export default function BlackjackMultiTablePage() {
   useEffect(() => {
     const el = tableRef.current;
     if (!el) return;
-    setTableWidth(el.clientWidth);
-    const ro = new ResizeObserver(entries => setTableWidth(entries[0].contentRect.width));
+    const quantize = (v: number) => Math.round(v / 4) * 4;
+    setTableWidth(quantize(el.clientWidth));
+    const ro = new ResizeObserver((entries) => {
+      const next = quantize(entries[0].contentRect.width);
+      setTableWidth((prev) => (Math.abs(prev - next) >= 4 ? next : prev));
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -817,7 +837,7 @@ export default function BlackjackMultiTablePage() {
         }
       `}</style>
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
-      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2 md:gap-4 min-h-0">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] gap-2 md:gap-4 min-h-0 md:pt-3" style={{ scrollbarGutter: 'stable both-edges' }}>
 
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
@@ -1105,11 +1125,11 @@ export default function BlackjackMultiTablePage() {
       </div>
 
       {/* ── Controls — sidebar on md+, below table on mobile ── */}
-      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-y-auto md:pt-2">
+      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-y-auto md:pt-4">
 
         {/* Betting panel — always visible when seated, disabled when not in betting phase or bet already placed */}
         {myPosition !== null && (
-          <div className="w-full max-w-md mx-auto space-y-2">
+          <div className="w-full max-w-none mx-auto space-y-2">
             <BettingPanelMobile
               onStartGame={() => {}} // not used — confirm bet button below handles this
               isPlaying={state?.phase !== 'betting' || hasBet}
@@ -1183,6 +1203,16 @@ export default function BlackjackMultiTablePage() {
             {state.seats.every(s => s.playerAddress) ? 'Table full — spectating' : 'Click an empty seat to join'}
           </div>
         )}
+
+        {/* Realtime chart under betting controls */}
+        <div className="w-full min-w-0">
+          <div className="h-64 md:h-72 min-w-0">
+            <BlackjackRealTimeBetChart
+              ref={chartRef}
+              sessionStartTime={Number(state?.roundNumber ?? 0)}
+            />
+          </div>
+        </div>
 
       </div>
 
