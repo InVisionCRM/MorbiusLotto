@@ -2,8 +2,9 @@
 
 import React from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
+import type { AvatarRandomizeFieldKey } from '@/lib/avatar-randomize-pins';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock } from 'lucide-react';
+import { Lock, Pin } from 'lucide-react';
 import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
 import { AvatarPatternDefs } from '@/lib/avatar-svg-patterns';
 import { useCatalog } from '@/hooks/use-cosmetics';
@@ -39,7 +40,7 @@ const AccessoryColors = [
   'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
 ];
 
-const HairStyles = ['Bald', 'Short', 'Buzz', 'Fade', 'Long Straight', 'Long Wavy', 'Ponytail', 'Curly', 'Spiky', 'Bob', 'Mohawk', 'Dreadlocks', 'Dreadlocks V1', 'Dreadlocks V2', 'Dreadlocks V3', 'Dreadlocks V4', 'Dreadlocks V5', 'Dreadlocks V6', 'Dreadlocks V7', 'Dreadlocks V8', 'Dreadlocks V9', 'Dreadlocks V10', 'Locks V1', 'Locks V2', 'Locks V3', 'Locks V4', 'Locks V5', 'Locks V6', 'Locks V7', 'Locks V8', 'Locks V9', 'Locks V10', 'Afro', 'Mullet', 'Pigtails', 'Messy'];
+const HairStyles = ['Bald', 'Short', 'Buzz', 'Fade', 'Long Straight', 'Long Wavy', 'Ponytail', 'Curly', 'Spiky', 'Bob', 'Mohawk', 'Dreadlocks', 'Afro', 'Mullet', 'Pigtails', 'Messy'];
 const FaceShapes = ['Square', 'Round', 'Oval', 'Heart', 'Diamond'];
 const EyeShapes = ['Round', 'Almond', 'Narrow', 'Wide', 'Eye V1', 'Eye V2', 'Eye V3', 'Eye V4', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10'];
 const NoseShapes = ['Small', 'Wide', 'Pointy', 'Button'];
@@ -57,6 +58,8 @@ type AvatarControlsProps = {
   ownedItems?: Set<string>;
   isAdmin?: boolean;
   onLockedItemClick?: (itemKey: string) => void;
+  pinnedRandomFields?: Set<string>;
+  onToggleRandomPin?: (field: AvatarRandomizeFieldKey) => void;
 };
 
 /** Render a color swatch — handles hex and url(#pattern) values. */
@@ -68,7 +71,57 @@ function ColorSwatch({ value }: { value: string }) {
   );
 }
 
-export default function AvatarControls({ config, onChange, activeTab, compact = false, ownedItems, isAdmin = false, onLockedItemClick }: AvatarControlsProps) {
+function SectionHead({
+  label,
+  pinField,
+  compact,
+  pinnedRandomFields,
+  onToggleRandomPin,
+}: {
+  label: string;
+  pinField?: AvatarRandomizeFieldKey;
+  compact: boolean;
+  pinnedRandomFields?: Set<string>;
+  onToggleRandomPin?: (field: AvatarRandomizeFieldKey) => void;
+}) {
+  const pinned = pinField ? pinnedRandomFields?.has(pinField) : false;
+  return (
+    <div className={`flex items-center justify-between gap-2 ${compact ? 'mb-1.5' : 'mb-4'}`}>
+      <h3 className={`font-semibold text-zinc-400 uppercase tracking-widest min-w-0 ${compact ? 'text-[10px]' : 'text-sm'}`}>
+        {label}
+      </h3>
+      {pinField && onToggleRandomPin && (
+        <button
+          type="button"
+          aria-pressed={!!pinned}
+          title={
+            pinned
+              ? 'Unpin — this part will change on Randomize'
+              : 'Pin — keep this part when you Randomize (any color, owned item, gift, etc.)'
+          }
+          onClick={() => onToggleRandomPin(pinField)}
+          className={`shrink-0 rounded-md p-1 transition-colors touch-manipulation ${
+            pinned ? 'text-amber-400 bg-amber-500/15' : 'text-zinc-600 hover:text-cyan-300 hover:bg-zinc-800'
+          }`}
+        >
+          <Pin size={compact ? 11 : 13} className={pinned ? 'fill-amber-400/35' : ''} strokeWidth={2} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function AvatarControls({
+  config,
+  onChange,
+  activeTab,
+  compact = false,
+  ownedItems,
+  isAdmin = false,
+  onLockedItemClick,
+  pinnedRandomFields,
+  onToggleRandomPin,
+}: AvatarControlsProps) {
   const update = (key: keyof AvatarConfig, value: string) => onChange({ ...config, [key]: value });
   const { items: catalogItems } = useCatalog();
 
@@ -81,10 +134,6 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
     if (!itemKey) return false;
     return !ownedItems.has(itemKey);
   };
-
-  const SectionLabel = ({ children }: { children: React.ReactNode }) => (
-    <h3 className={`font-semibold text-zinc-400 uppercase tracking-widest ${compact ? 'text-[10px] mb-1.5' : 'text-sm mb-4'}`}>{children}</h3>
-  );
 
   const renderColorGrid = (colors: string[], activeColor: string, field: AvatarField) => (
     <div className={`grid ${compact ? 'grid-cols-8 sm:grid-cols-10 gap-1.5' : 'grid-cols-6 sm:grid-cols-7 gap-3'}`}>
@@ -158,7 +207,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
           >
             {activeTab === 'skin' && (
               <section>
-                <SectionLabel>Skin Tone</SectionLabel>
+                <SectionHead label="Skin Tone" pinField="skinColor" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                 {renderColorGrid(SkinColors, config.skinColor, 'skinColor')}
               </section>
             )}
@@ -166,11 +215,11 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             {activeTab === 'hair' && (
               <>
                 <section>
-                  <SectionLabel>Hair Style</SectionLabel>
+                  <SectionHead label="Hair Style" pinField="hairStyle" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(HairStyles, config.hairStyle, 'hairStyle')}
                 </section>
                 <section>
-                  <SectionLabel>Hair Color</SectionLabel>
+                  <SectionHead label="Hair Color" pinField="hairColor" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderColorGrid(HairColors, config.hairColor, 'hairColor')}
                 </section>
               </>
@@ -179,11 +228,11 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             {activeTab === 'eyes' && (
               <>
                 <section>
-                  <SectionLabel>Eye Shape</SectionLabel>
+                  <SectionHead label="Eye Shape" pinField="eyeShape" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(EyeShapes, config.eyeShape, 'eyeShape')}
                 </section>
                 <section>
-                  <SectionLabel>Eye Color</SectionLabel>
+                  <SectionHead label="Eye Color" pinField="eyeColor" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderColorGrid(EyeColors, config.eyeColor, 'eyeColor')}
                 </section>
               </>
@@ -192,19 +241,19 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             {activeTab === 'face' && (
               <>
                 <section>
-                  <SectionLabel>Face Shape</SectionLabel>
+                  <SectionHead label="Face Shape" pinField="faceShape" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(FaceShapes, config.faceShape, 'faceShape')}
                 </section>
                 <section>
-                  <SectionLabel>Nose</SectionLabel>
+                  <SectionHead label="Nose" pinField="noseShape" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(NoseShapes, config.noseShape, 'noseShape')}
                 </section>
                 <section>
-                  <SectionLabel>Lips</SectionLabel>
+                  <SectionHead label="Lips" pinField="lipShape" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(LipShapes, config.lipShape, 'lipShape')}
                 </section>
                 <section>
-                  <SectionLabel>Mouth Accessory</SectionLabel>
+                  <SectionHead label="Mouth Accessory" pinField="mouthAccessory" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(MouthAccessories, config.mouthAccessory, 'mouthAccessory')}
                 </section>
               </>
@@ -213,11 +262,11 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             {activeTab === 'clothes' && (
               <>
                 <section>
-                  <SectionLabel>Shirt Color</SectionLabel>
+                  <SectionHead label="Shirt Color" pinField="shirtColor" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderColorGrid(ShirtColors, config.shirtColor, 'shirtColor')}
                 </section>
                 <section>
-                  <SectionLabel>Shirt Style</SectionLabel>
+                  <SectionHead label="Shirt Style" pinField="shirtStyle" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(ShirtStyles, config.shirtStyle || 'Default', 'shirtStyle')}
                 </section>
               </>
@@ -226,19 +275,19 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
             {activeTab === 'acc' && (
               <>
                 <section>
-                  <SectionLabel>Glasses & Earrings</SectionLabel>
+                  <SectionHead label="Glasses & Earrings" pinField="accessory" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(Accessories, config.accessory, 'accessory')}
                 </section>
                 <section>
-                  <SectionLabel>Glasses Color</SectionLabel>
+                  <SectionHead label="Glasses Color" pinField="accessoryColor" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderColorGrid(AccessoryColors, config.accessoryColor || '#111111', 'accessoryColor')}
                 </section>
                 <section>
-                  <SectionLabel>Hats</SectionLabel>
+                  <SectionHead label="Hats" pinField="hat" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(Hats, config.hat, 'hat')}
                 </section>
                 <section>
-                  <SectionLabel>Necklaces</SectionLabel>
+                  <SectionHead label="Necklaces" pinField="necklace" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                   {renderShapeGrid(Necklaces, config.necklace, 'necklace')}
                 </section>
               </>
@@ -250,7 +299,7 @@ export default function AvatarControls({ config, onChange, activeTab, compact = 
                   <p className="text-xs text-zinc-500 text-center py-8">No background items in the catalog yet — add them via the admin item builder.</p>
                 ) : (
                   <>
-                    <SectionLabel>Backgrounds</SectionLabel>
+                    <SectionHead label="Backgrounds" pinField="backgroundImage" compact={compact} pinnedRandomFields={pinnedRandomFields} onToggleRandomPin={onToggleRandomPin} />
                     <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"

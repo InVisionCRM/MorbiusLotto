@@ -9,7 +9,6 @@ import { formatEther, parseEther } from 'viem';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { PokerTableSummary, PokerSeatState } from '@/lib/websocket-client';
-import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/BIG-WHEEL/Footer';
 import { FloatingPokerChips } from '@/components/home/FloatingPokerChips';
 import { Theme } from '@/lib/theme';
@@ -315,7 +314,7 @@ export default function PokerLobbyPage() {
   }
 
   return (
-    <GlobalMainNav page="home">
+    <>
       <div className="relative min-h-screen h-full w-full flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
         <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.1),transparent_70%)] pointer-events-none" />
         <FloatingPokerChips />
@@ -797,6 +796,6 @@ export default function PokerLobbyPage() {
         onClose={() => setShowDepositModal(false)}
         balanceLabel="Poker Balance"
       />
-    </GlobalMainNav>
+    </>
   );
 }

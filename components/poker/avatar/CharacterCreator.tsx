@@ -7,6 +7,8 @@ import AvatarControls from './AvatarControls';
 import CharacterCreatorMobile from './CharacterCreatorMobile';
 import { motion } from 'framer-motion';
 import { Palette, Scissors, Eye, Smile, Sparkles, Shirt, Image as ImageIcon, Glasses, Shuffle } from 'lucide-react';
+import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
+import type { AvatarRandomizeFieldKey } from '@/lib/avatar-randomize-pins';
 
 export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   skinColor: '#F1C27D',
@@ -32,8 +34,18 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
 
 function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
-export function randomizeConfig(ownedItems?: Set<string>): AvatarConfig {
-  // Free values only (unless the player owns more)
+export type RandomizeConfigOptions = {
+  /** Catalog item keys pinned in the shop — unlock fields applied after the random roll. */
+  pinnedItemKeys?: Set<string>;
+  /** Current avatar — values are copied for each key in `pinnedFields` after shop pins (editor pins win). */
+  preserveFrom?: AvatarConfig;
+  /** Avatar field keys to keep from `preserveFrom` (any source: free color, owned, gift, background URL, etc.). */
+  pinnedFields?: Set<string>;
+};
+
+/** @param ownedItems Reserved for future owned-only random pools */
+export function randomizeConfig(ownedItems?: Set<string>, options?: RandomizeConfigOptions): AvatarConfig {
+  void ownedItems;
   const skinColors = ['#FFF5EE','#FFE4E1','#FFDAB9','#FFCDB2','#FFB4A2','#FFDBAC','#F1C27D','#E0AC69','#C68642','#8D5524','#7B4B2A','#5C3A21','#4A3B32','#3E2723','#2D221E','#1A1110'];
   const hairStyles = ['Bald','Short','Buzz','Fade','Long Straight','Long Wavy','Ponytail','Curly','Bob'];
   const hairColors = ['#090806','#2C222B','#71635A','#B7A69E','#D6C4C2','#CABFB1','#DCD0BA','#FFF5E1','#E6CEA8','#E5C8A8','#DEBC99','#B89778','#A56B46','#B55239','#8D4A43','#91553D','#533D32','#3B3024'];
@@ -44,7 +56,7 @@ export function randomizeConfig(ownedItems?: Set<string>): AvatarConfig {
   const faceShapes = ['Square','Round','Oval','Heart','Diamond'];
   const shirtColors = ['#ef4444','#3b82f6','#22c55e','#ffffff','#9ca3af','#3f3f46','#000000'];
 
-  return {
+  const base: AvatarConfig = {
     skinColor: pick(skinColors),
     hairStyle: pick(hairStyles),
     hairColor: pick(hairColors),
@@ -65,6 +77,30 @@ export function randomizeConfig(ownedItems?: Set<string>): AvatarConfig {
     overlayImage: '',
     customPattern: '',
   };
+
+  const shopPins = options?.pinnedItemKeys;
+  if (shopPins?.size) {
+    for (const key of shopPins) {
+      const item = ITEM_CATALOG.find((i) => i.itemKey === key);
+      if (!item) continue;
+      for (const u of item.unlocks) {
+        Object.assign(base, { [u.field]: u.value } as Partial<AvatarConfig>);
+      }
+    }
+  }
+
+  const preserve = options?.preserveFrom;
+  const fieldPins = options?.pinnedFields;
+  if (preserve && fieldPins?.size) {
+    for (const key of fieldPins) {
+      const k = key as AvatarRandomizeFieldKey;
+      if (!(k in preserve)) continue;
+      const v = preserve[k];
+      Object.assign(base, { [k]: typeof v === 'string' ? v : '' } as Partial<AvatarConfig>);
+    }
+  }
+
+  return base;
 }
 
 const tabs = [
@@ -94,9 +130,14 @@ type CharacterCreatorProps = {
   isAdmin?: boolean;
   /** Called when user clicks a locked item — opens the purchase sheet in the parent. */
   onLockedItemClick?: (itemKey: string) => void;
+  /** Keys locked in the cosmetics shop — Randomize keeps those catalog unlocks. */
+  pinnedItemKeys?: Set<string>;
+  /** Field keys pinned in the editor — Randomize keeps current values (owned, free, gift, etc.). */
+  pinnedRandomFields?: Set<string>;
+  onToggleRandomPin?: (field: AvatarRandomizeFieldKey) => void;
 };
 
-export default function CharacterCreator({ config: controlledConfig, onChange, initialConfig, displayName, onDisplayNameChange, compact = false, ownedItems, isAdmin = false, onLockedItemClick }: CharacterCreatorProps) {
+export default function CharacterCreator({ config: controlledConfig, onChange, initialConfig, displayName, onDisplayNameChange, compact = false, ownedItems, isAdmin = false, onLockedItemClick, pinnedItemKeys, pinnedRandomFields, onToggleRandomPin }: CharacterCreatorProps) {
   const [internalConfig, setInternalConfig] = useState<AvatarConfig>(initialConfig ?? DEFAULT_AVATAR_CONFIG);
   const config = controlledConfig ?? internalConfig;
   const setConfig = onChange ?? setInternalConfig;
@@ -125,7 +166,15 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
     if (!isOn) setGlassesAnimationKey(prev => prev + 1);
   };
 
-  const handleRandomizeAll = () => setConfig(randomizeConfig(ownedItems));
+  const handleRandomizeAll = () => {
+    const opts: RandomizeConfigOptions = {};
+    if (pinnedItemKeys?.size) opts.pinnedItemKeys = pinnedItemKeys;
+    if (pinnedRandomFields?.size) {
+      opts.preserveFrom = config;
+      opts.pinnedFields = pinnedRandomFields;
+    }
+    setConfig(randomizeConfig(ownedItems, Object.keys(opts).length ? opts : undefined));
+  };
 
   return (
     <div className="flex flex-col w-full min-h-0 flex-1">
@@ -139,6 +188,9 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
           ownedItems={ownedItems}
           isAdmin={isAdmin}
           onLockedItemClick={onLockedItemClick}
+          pinnedItemKeys={pinnedItemKeys}
+          pinnedRandomFields={pinnedRandomFields}
+          onToggleRandomPin={onToggleRandomPin}
         />
       </div>
 
@@ -194,31 +246,38 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
 
           <div className={`w-full ${compact ? '' : 'mt-8 text-center'}`}>
             {compact ? (
-              <div className="flex justify-center items-center gap-1 flex-wrap">
-                <button
-                  onClick={handleRandomizeAll}
-                  className="flex items-center justify-center gap-1 rounded-md font-medium transition-colors border touch-manipulation px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border-zinc-700"
-                >
-                  <Shuffle size={11} />
-                  Random
-                </button>
-                <button
-                  onClick={handleDealWithIt}
-                  className={`flex items-center justify-center gap-1 rounded-md font-medium transition-colors border touch-manipulation px-2 py-1 text-[10px] ${config.accessory === 'Sunglasses' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'}`}
-                >
-                  <Glasses size={11} />
-                  Shades
-                </button>
-                {(['happy', 'sad', 'angry', 'surprised', 'wink'] as Emotion[]).map((emo) => (
+              <>
+                <div className="flex justify-center items-center gap-1 flex-wrap">
                   <button
-                    key={emo}
-                    onClick={() => playEmotion(emo)}
-                    className={`rounded-md font-medium capitalize transition-colors touch-manipulation px-1.5 py-1 text-[10px] flex items-center justify-center ${emotion === emo ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'}`}
+                    onClick={handleRandomizeAll}
+                    className="flex items-center justify-center gap-1 rounded-md font-medium transition-colors border touch-manipulation px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border-zinc-700"
                   >
-                    {emo}
+                    <Shuffle size={11} />
+                    Random
                   </button>
-                ))}
-              </div>
+                  <button
+                    onClick={handleDealWithIt}
+                    className={`flex items-center justify-center gap-1 rounded-md font-medium transition-colors border touch-manipulation px-2 py-1 text-[10px] ${config.accessory === 'Sunglasses' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'}`}
+                  >
+                    <Glasses size={11} />
+                    Shades
+                  </button>
+                  {(['happy', 'sad', 'angry', 'surprised', 'wink'] as Emotion[]).map((emo) => (
+                    <button
+                      key={emo}
+                      onClick={() => playEmotion(emo)}
+                      className={`rounded-md font-medium capitalize transition-colors touch-manipulation px-1.5 py-1 text-[10px] flex items-center justify-center ${emotion === emo ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'}`}
+                    >
+                      {emo}
+                    </button>
+                  ))}
+                </div>
+                {onToggleRandomPin && (
+                  <p className="text-[9px] text-zinc-500 text-center max-w-[220px] mt-1 leading-snug">
+                    Amber pushpin on each section keeps that part when you Randomize (any color or item).
+                  </p>
+                )}
+              </>
             ) : (
               <>
                 <div className="flex justify-center gap-2 mb-6">
@@ -255,7 +314,17 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
         </div>
         {/* Options panel */}
         <div className={`w-full md:w-3/5 flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${compact ? 'p-2 min-h-[220px] md:min-h-0' : 'p-6 sm:p-8'}`}>
-          <AvatarControls config={config} onChange={setConfig} activeTab={activeTab} compact={compact} ownedItems={ownedItems} isAdmin={isAdmin} onLockedItemClick={onLockedItemClick} />
+          <AvatarControls
+            config={config}
+            onChange={setConfig}
+            activeTab={activeTab}
+            compact={compact}
+            ownedItems={ownedItems}
+            isAdmin={isAdmin}
+            onLockedItemClick={onLockedItemClick}
+            pinnedRandomFields={pinnedRandomFields}
+            onToggleRandomPin={onToggleRandomPin}
+          />
         </div>
       </div>
       </div> {/* end desktop wrapper */}

@@ -9,13 +9,19 @@ import CharacterCreator, { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avat
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProfileWs } from '@/contexts/profile-ws-context';
 import { useInventory } from '@/hooks/use-cosmetics';
-import { isAdminWallet, ITEM_CATALOG, type ItemTier } from '@/lib/cosmetics-catalog';
-import { CosmeticsShop } from '@/components/shared/CosmeticsShop';
+import { isAdminWallet, ITEM_CATALOG, type CosmeticItem, type ItemTier } from '@/lib/cosmetics-catalog';
+import {
+  AVATAR_RANDOMIZE_FIELD_PINS_KEY,
+  readRandomizeFieldPinsFromStorage,
+  type AvatarRandomizeFieldKey,
+} from '@/lib/avatar-randomize-pins';
+import { CosmeticsShop, COSMETICS_SHOP_PINS_STORAGE_KEY } from '@/components/shared/CosmeticsShop';
 import { CosmeticsMarketplace } from '@/components/shared/CosmeticsMarketplace';
 import { ItemPurchaseSheet } from '@/components/shared/ItemPurchaseSheet';
 import { GiftItemModal } from '@/components/shared/GiftItemModal';
 import { Gift, Package, Tag } from 'lucide-react';
 import { createListing } from '@/hooks/use-cosmetics';
+import { toast } from 'sonner';
 
 const TIER_BADGE: Record<ItemTier, string> = {
   common:    'bg-zinc-700 text-zinc-300',
@@ -59,6 +65,18 @@ function normalizeAvatarConfig(c: unknown): AvatarConfig {
   return DEFAULT_AVATAR_CONFIG;
 }
 
+function readCosmeticShopPins(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = sessionStorage.getItem(COSMETICS_SHOP_PINS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as unknown;
+    return Array.isArray(arr) ? new Set(arr.filter((x): x is string => typeof x === 'string')) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
 export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSave }: ProfileAvatarModalProps) {
   const profileWs = useProfileWs();
   const wsClient = wsClientProp ?? profileWs?.wsClient ?? null;
@@ -83,6 +101,43 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
   const [listingPrice, setListingPrice] = useState('');
   const [listingError, setListingError] = useState<string | null>(null);
   const [listingBusy, setListingBusy]   = useState(false);
+  const [cosmeticShopPins, setCosmeticShopPins] = useState<Set<string>>(readCosmeticShopPins);
+  const [randomizePinnedFields, setRandomizePinnedFields] = useState<Set<string>>(readRandomizeFieldPinsFromStorage);
+
+  const toggleRandomPin = useCallback((field: AvatarRandomizeFieldKey) => {
+    setRandomizePinnedFields((prev) => {
+      const next = new Set(prev);
+      const k = field as string;
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }, []);
+
+  const toggleCosmeticShopPin = useCallback((itemKey: string) => {
+    setCosmeticShopPins((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemKey)) next.delete(itemKey);
+      else next.add(itemKey);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(COSMETICS_SHOP_PINS_STORAGE_KEY, JSON.stringify([...cosmeticShopPins]));
+    } catch {
+      /* ignore */
+    }
+  }, [cosmeticShopPins]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(AVATAR_RANDOMIZE_FIELD_PINS_KEY, JSON.stringify([...randomizePinnedFields]));
+    } catch {
+      /* ignore */
+    }
+  }, [randomizePinnedFields]);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -310,6 +365,9 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                   ownedItems={ownedSet}
                   isAdmin={adminBypass}
                   onLockedItemClick={setPurchaseSheetKey}
+                  pinnedItemKeys={cosmeticShopPins}
+                  pinnedRandomFields={randomizePinnedFields}
+                  onToggleRandomPin={toggleRandomPin}
                 />
                 <AnimatePresence>
                   {purchaseSheetKey && (
@@ -377,6 +435,23 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
       onClose={() => setShopOpen(false)}
       ownedItems={ownedSet}
       onPurchased={() => refreshInventory()}
+      onWearItem={(item: CosmeticItem) => {
+        setConfig((c) => {
+          const next = { ...c };
+          for (const u of item.unlocks) {
+            (next as Record<string, string>)[u.field] = u.value;
+          }
+          return next;
+        });
+        toast.success('Applied to avatar — Save to keep');
+      }}
+      onSellItem={(itemKey) => {
+        setListingItem(itemKey);
+        setListingPrice('');
+        setListingError(null);
+      }}
+      pinnedItemKeys={cosmeticShopPins}
+      onTogglePin={toggleCosmeticShopPin}
     />
 
     {/* Marketplace modal */}

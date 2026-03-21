@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShoppingBag, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, ShoppingBag, CheckCircle2, Loader2, Lock } from 'lucide-react';
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
 import { parseEther } from 'viem';
 import { toast } from 'sonner';
@@ -55,30 +55,24 @@ const TIER_BADGE: Record<ItemTier, string> = {
   legendary: 'bg-amber-900/80 text-amber-300 border border-amber-600/50',
 };
 
-const TIER_RING: Record<ItemTier, string> = {
-  common:    'ring-zinc-700/60',
-  uncommon:  'ring-emerald-700/60',
-  rare:      'ring-blue-700/60',
-  legendary: 'ring-amber-600/60',
-};
+const SHOP_CARD_SHELL =
+  'group flex flex-col overflow-hidden rounded-xl border border-cyan-500/15 bg-gradient-to-b from-[rgb(22,28,36)] to-[rgb(16,20,26)] transition-all duration-200';
+const SHOP_CARD_SHADOW =
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_1px_3px_rgba(0,0,0,0.45)]';
 
-const TIER_GLOW: Record<ItemTier, string> = {
-  common:    '',
-  uncommon:  'shadow-emerald-900/20',
-  rare:      'shadow-blue-900/30',
-  legendary: 'shadow-amber-900/40',
-};
+export const COSMETICS_SHOP_PINS_STORAGE_KEY = 'morblotto_cosmetics_shop_pins';
 
 // ── Item preview ──────────────────────────────────────────────────────────────
 
-function ItemPreview({ item }: { item: CosmeticItem }) {
+function ItemPreview({ item, large }: { item: CosmeticItem; large?: boolean }) {
   const value = item.unlocks[0]?.value ?? '';
+  const dim = large ? 'w-[4.5rem] h-[4.5rem]' : 'w-14 h-14';
 
   if (value.startsWith('#') || value.startsWith('url(#')) {
     const isPattern = value.startsWith('url(#');
     const patternName = isPattern ? value.slice(5, -1) : '';
     return (
-      <div className="w-14 h-14 rounded-full overflow-hidden ring-2 ring-white/10 mx-auto">
+      <div className={`${dim} rounded-full overflow-hidden ring-2 ring-white/10 mx-auto`}>
         <svg viewBox="0 0 56 56" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
           <defs>
             {patternName === 'tiger'        && <pattern id="sp-tiger" patternUnits="userSpaceOnUse" width="8" height="8"><rect width="8" height="8" fill="#c2410c"/><rect width="4" height="8" fill="#1a0a00" opacity="0.5"/></pattern>}
@@ -105,8 +99,8 @@ function ItemPreview({ item }: { item: CosmeticItem }) {
   }
 
   return (
-    <div className="w-14 h-14 rounded-full bg-zinc-800 ring-2 ring-white/10 mx-auto flex items-center justify-center">
-      <span className="text-[9px] font-bold text-zinc-300 text-center leading-tight px-1">{item.displayName}</span>
+    <div className={`${dim} rounded-full bg-zinc-800 ring-2 ring-white/10 mx-auto flex items-center justify-center`}>
+      <span className={`${large ? 'text-[10px]' : 'text-[9px]'} font-bold text-zinc-300 text-center leading-tight px-1`}>{item.displayName}</span>
     </div>
   );
 }
@@ -118,22 +112,76 @@ export interface CosmeticsShopProps {
   onClose: () => void;
   ownedItems: Set<string>;
   onPurchased: (newItems: string[]) => void;
+  /** Apply this catalog item’s unlocks to the avatar preview (parent should update config + save). */
+  onWearItem?: (item: CosmeticItem) => void;
+  /** Open list-for-sale flow (e.g. parent shows listing modal). */
+  onSellItem?: (itemKey: string) => void;
+  /** Controlled pins (e.g. profile modal) — pass with `onTogglePin` to sync with Randomize. */
+  pinnedItemKeys?: Set<string>;
+  onTogglePin?: (itemKey: string) => void;
 }
 
 type BuyPhase = 'idle' | 'confirming' | 'pending' | 'done' | 'error';
 
-export function CosmeticsShop({ open, onClose, ownedItems, onPurchased }: CosmeticsShopProps) {
+export function CosmeticsShop({
+  open,
+  onClose,
+  ownedItems,
+  onPurchased,
+  onWearItem,
+  onSellItem,
+  pinnedItemKeys: pinnedItemKeysProp,
+  onTogglePin: onTogglePinProp,
+}: CosmeticsShopProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const { items: catalogItems } = useCatalog();
 
+  const pinsControlled = pinnedItemKeysProp != null && onTogglePinProp != null;
+
   const [category, setCategory]       = useState<CategoryId>('all');
   const [tier, setTier]               = useState<ItemTier | 'all'>('all');
-  const [showOwned, setShowOwned]     = useState(false);
+  /** When true, list only cosmetics you do not own (shop/mint view). When false, full catalog — needed for Lock + Wear on owned items. */
+  const [unownedOnly, setUnownedOnly] = useState(false);
   const [buying, setBuying]           = useState<string | null>(null);
   const [buyPhase, setBuyPhase]       = useState<BuyPhase>('idle');
   const [confirmItem, setConfirmItem] = useState<CosmeticItem | null>(null);
+  const [internalPinnedKeys, setInternalPinnedKeys] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const raw = sessionStorage.getItem(COSMETICS_SHOP_PINS_STORAGE_KEY);
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw) as unknown;
+      return Array.isArray(arr) ? new Set(arr.filter((x): x is string => typeof x === 'string')) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const pinnedKeys = pinsControlled ? pinnedItemKeysProp! : internalPinnedKeys;
+
+  useEffect(() => {
+    if (pinsControlled) return;
+    try {
+      sessionStorage.setItem(COSMETICS_SHOP_PINS_STORAGE_KEY, JSON.stringify([...internalPinnedKeys]));
+    } catch {
+      /* ignore */
+    }
+  }, [internalPinnedKeys, pinsControlled]);
+
+  const togglePin = (itemKey: string) => {
+    if (pinsControlled) {
+      onTogglePinProp!(itemKey);
+      return;
+    }
+    setInternalPinnedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemKey)) next.delete(itemKey);
+      else next.add(itemKey);
+      return next;
+    });
+  };
 
   // Merge static catalog with live supply data
   const catalogWithSupply = useMemo(() => {
@@ -144,9 +192,9 @@ export function CosmeticsShop({ open, onClose, ownedItems, onPurchased }: Cosmet
   const filtered = useMemo(() => catalogWithSupply.filter(item => {
     if (category !== 'all' && itemCategory(item) !== category) return false;
     if (tier !== 'all' && item.tier !== tier) return false;
-    if (!showOwned && ownedItems.has(item.itemKey)) return false;
+    if (unownedOnly && ownedItems.has(item.itemKey)) return false;
     return true;
-  }), [catalogWithSupply, category, tier, showOwned, ownedItems]);
+  }), [catalogWithSupply, category, tier, unownedOnly, ownedItems]);
 
   const handleBuy = async () => {
     if (!confirmItem || !address || !publicClient) return;
@@ -203,10 +251,16 @@ export function CosmeticsShop({ open, onClose, ownedItems, onPurchased }: Cosmet
         >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <ShoppingBag size={18} className="text-amber-400" />
-              <h2 className="text-base font-bold text-white">Cosmetics Shop</h2>
-              <span className="text-xs text-zinc-500">{ownedItems.size} owned</span>
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <ShoppingBag size={18} className="text-amber-400" />
+                <h2 className="text-base font-bold text-white">Cosmetics Shop</h2>
+                <span className="text-xs text-zinc-500">{ownedItems.size} owned</span>
+              </div>
+              <p className="text-[11px] text-zinc-500 sm:ml-1">
+                <Lock size={10} className="inline mr-1 opacity-70 align-baseline" aria-hidden />
+                Lock pins a cosmetic so Randomize keeps it (saved in this browser).
+              </p>
             </div>
             <button onClick={onClose} className="text-zinc-500 hover:text-white p-2 rounded-lg hover:bg-zinc-800 transition-colors">
               <X size={18} />
@@ -237,10 +291,12 @@ export function CosmeticsShop({ open, onClose, ownedItems, onPurchased }: Cosmet
                 </button>
               ))}
               <button
-                onClick={() => setShowOwned(p => !p)}
-                className={`ml-auto px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${showOwned ? 'bg-green-700/50 text-green-300' : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-300'}`}
+                type="button"
+                onClick={() => setUnownedOnly(p => !p)}
+                className={`ml-auto px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${unownedOnly ? 'bg-amber-900/50 text-amber-200' : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-300'}`}
+                title={unownedOnly ? 'Show full catalog (owned + unowned)' : 'Show only items you can still mint'}
               >
-                {showOwned ? 'Showing owned' : 'Hide owned'}
+                {unownedOnly ? 'Unowned only' : 'All items'}
               </button>
             </div>
           </div>
@@ -248,59 +304,153 @@ export function CosmeticsShop({ open, onClose, ownedItems, onPurchased }: Cosmet
           {/* Item grid */}
           <div className="flex-1 overflow-y-auto p-4">
             {filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-zinc-500 gap-2">
+              <div className="flex flex-col items-center justify-center h-40 text-zinc-500 gap-2 px-4 text-center">
                 <CheckCircle2 size={28} className="text-green-500/60" />
-                <p className="text-sm">You own everything in this category!</p>
+                <p className="text-sm">
+                  {unownedOnly
+                    ? 'You own every cosmetic in this filter — switch to All items to see Lock / Wear.'
+                    : 'No items match this filter.'}
+                </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              <div
+                className="grid w-full gap-4"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}
+              >
                 {filtered.map(item => {
-                  const owned   = ownedItems.has(item.itemKey);
+                  const owned = ownedItems.has(item.itemKey);
                   const isBuying = buying === item.itemKey;
-                  const mintedCount = (item as any).mintedCount ?? 0;
+                  const mintedCount = (item as { mintedCount?: number }).mintedCount ?? 0;
                   const soldOut = mintedCount >= item.maxSupply;
                   const remaining = item.maxSupply - mintedCount;
+                  const pinned = pinnedKeys.has(item.itemKey);
+                  const canMint = !owned && !soldOut;
+                  const canWear = owned && !!onWearItem;
+                  const canSell = owned && !!onSellItem;
+
+                  const actionBtn =
+                    'rounded px-1 py-1 text-[11px] font-semibold tracking-wide transition-colors disabled:cursor-not-allowed';
+
                   return (
                     <motion.div
                       key={item.itemKey}
                       layout
-                      className={`relative flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
-                        owned    ? 'border-green-700/40 bg-green-950/20' :
-                        soldOut  ? 'border-zinc-700/30 bg-zinc-900/40 opacity-60 cursor-not-allowed' :
-                        `ring-1 ${TIER_RING[item.tier]} bg-zinc-900 hover:bg-zinc-800/80 cursor-pointer shadow-lg ${TIER_GLOW[item.tier]}`
+                      className={`relative ${SHOP_CARD_SHELL} ${SHOP_CARD_SHADOW} ${
+                        soldOut && !owned ? 'opacity-65' : 'hover:border-cyan-500/35 hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
                       }`}
-                      onClick={() => !owned && !isBuying && !soldOut && setConfirmItem(item)}
                     >
-                      {owned && (
-                        <span className="absolute top-1.5 right-1.5">
-                          <CheckCircle2 size={14} className="text-green-400" />
-                        </span>
-                      )}
-                      {soldOut && !owned && (
-                        <span className="absolute top-1.5 right-1.5 bg-zinc-800 rounded px-1 py-px text-[8px] font-bold text-zinc-500 uppercase">Sold Out</span>
-                      )}
-
-                      <ItemPreview item={item} />
-
-                      <div className="text-center w-full">
-                        <p className="text-xs font-semibold text-zinc-200 leading-tight truncate">{item.displayName}</p>
-                        <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${TIER_BADGE[item.tier]}`}>
-                          {item.tier}
-                        </span>
+                      {/* Swatch — flush to card top (no top padding) */}
+                      <div className="relative flex min-h-[6.25rem] items-center justify-center px-4 pt-0 pb-3">
+                        <div
+                          className="pointer-events-none absolute inset-0 opacity-90"
+                          style={{
+                            background:
+                              'radial-gradient(circle at 50% 35%, rgba(34, 211, 238, 0.10), transparent 62%)',
+                          }}
+                        />
+                        <div className="relative z-[1]">
+                          <ItemPreview item={item} large />
+                        </div>
+                        {soldOut && !owned && (
+                          <span className="absolute right-2 top-2 z-[2] rounded bg-zinc-900/90 px-1.5 py-px text-[8px] font-bold uppercase text-zinc-500 ring-1 ring-zinc-600/50">
+                            Sold out
+                          </span>
+                        )}
+                        {owned && (
+                          <span className="absolute right-2 top-2 z-[2] rounded bg-emerald-950/90 px-1.5 py-px text-[8px] font-bold uppercase text-emerald-400 ring-1 ring-emerald-600/40">
+                            Owned
+                          </span>
+                        )}
                       </div>
 
-                      {!owned && (
-                        <div className="w-full text-center">
-                          <p className="text-[11px] text-amber-300 font-semibold">{item.priceMorbius.toLocaleString()} Morbius</p>
-                          {!soldOut && (
-                            <p className="text-[9px] text-zinc-600">{remaining} / {item.maxSupply} left</p>
+                      <div className="flex flex-1 flex-col px-4 pb-3 pt-0">
+                        <p
+                          className="line-clamp-2 min-h-[2.25rem] text-center text-sm font-medium leading-snug text-zinc-100"
+                          title={item.displayName}
+                        >
+                          {item.displayName}
+                        </p>
+
+                        <div className="mt-2 flex items-center justify-center gap-2">
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${TIER_BADGE[item.tier]}`}
+                          >
+                            {item.tier}
+                          </span>
+                        </div>
+
+                        {!owned && (
+                          <div className="mt-2.5 flex items-center justify-center gap-2 text-xs tabular-nums">
+                            <span className="font-medium text-amber-300/90">{item.priceMorbius.toLocaleString()}</span>
+                            <span className="text-zinc-600">·</span>
+                            <span className={soldOut ? 'font-semibold text-red-400' : 'text-zinc-400'}>
+                              {remaining} / {item.maxSupply}
+                            </span>
+                          </div>
+                        )}
+
+                        <div
+                          role="group"
+                          aria-label={`Actions for ${item.displayName}`}
+                          className="mt-3 flex flex-wrap items-center justify-center gap-x-0.5 border-t border-cyan-500/15 pt-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            aria-pressed={pinned}
+                            title={
+                              pinned
+                                ? 'Unpin — this cosmetic will change on Randomize'
+                                : 'Pin — kept when you Randomize avatar (saved in this browser)'
+                            }
+                            onClick={() => togglePin(item.itemKey)}
+                            className={`${actionBtn} inline-flex items-center gap-0.5 text-zinc-300 hover:text-cyan-300 aria-pressed:text-amber-400 aria-pressed:font-bold`}
+                          >
+                            <Lock size={11} className="shrink-0 opacity-90" aria-hidden />
+                            Lock
+                          </button>
+                          <span className="select-none px-0.5 text-zinc-600" aria-hidden>
+                            /
+                          </span>
+                          <button
+                            type="button"
+                            disabled={!canWear}
+                            title={owned ? 'Apply to avatar preview' : 'Own this item to wear'}
+                            onClick={() => canWear && onWearItem?.(item)}
+                            className={`${actionBtn} text-zinc-300 hover:text-blue-500 disabled:opacity-35 disabled:hover:text-zinc-300`}
+                          >
+                            Wear
+                          </button>
+                          <span className="select-none px-0.5 text-zinc-600" aria-hidden>
+                            /
+                          </span>
+                          {owned ? (
+                            <button
+                              type="button"
+                              disabled={!canSell}
+                              title="List for sale"
+                              onClick={() => canSell && onSellItem?.(item.itemKey)}
+                              className={`${actionBtn} text-zinc-300 hover:text-amber-400 disabled:opacity-35 disabled:hover:text-zinc-300`}
+                            >
+                              Sell
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={!canMint || isBuying}
+                              title={soldOut ? 'Sold out' : 'Mint from shop'}
+                              onClick={() => canMint && setConfirmItem(item)}
+                              className={`${actionBtn} text-zinc-300 hover:text-green-600 disabled:opacity-35 disabled:hover:text-zinc-300`}
+                            >
+                              Mint
+                            </button>
                           )}
                         </div>
-                      )}
+                      </div>
 
                       {isBuying && (
-                        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60">
-                          <Loader2 size={20} className="animate-spin text-amber-400" />
+                        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60 z-10">
+                          <Loader2 size={22} className="animate-spin text-amber-400" />
                         </div>
                       )}
                     </motion.div>

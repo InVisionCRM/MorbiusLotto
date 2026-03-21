@@ -38,6 +38,10 @@ export interface PixelImageProps {
   maxAnimationDelay?: number
   /** Delay (ms) before grayscale → color (when grayscaleAnimation is true). */
   colorRevealDelay?: number
+  /**
+   * After color reveal, how much color to keep (0–100). 100 = full color; 20 ≈ subtle color (80% grayscale).
+   */
+  colorPercent?: number
   className?: string
 }
 
@@ -50,6 +54,7 @@ export const PixelImage = ({
   pixelFadeInDuration = 100,
   maxAnimationDelay = 200,
   colorRevealDelay = 1500,
+  colorPercent = 100,
   customGrid,
   className,
 }: PixelImageProps) => {
@@ -129,6 +134,18 @@ export const PixelImage = ({
     })
   }, [rows, cols, maxAnimationDelay, reducedMotion])
 
+  const colorPct = Math.max(0, Math.min(100, colorPercent))
+  const revealedGrayscale = 1 - colorPct / 100
+
+  const imgFilter =
+    alwaysGrayscale
+      ? "grayscale(1)"
+      : grayscaleAnimation
+        ? `grayscale(${!showColor ? 1 : revealedGrayscale})`
+        : colorPct < 100
+          ? `grayscale(${revealedGrayscale})`
+          : undefined
+
   return (
     <div
       className={cn(
@@ -152,13 +169,9 @@ export const PixelImage = ({
           <img
             src={src}
             alt=""
-            className={cn(
-              "h-full w-full object-cover",
-              rounded && "rounded-[2.5rem]",
-              alwaysGrayscale && "grayscale",
-              !alwaysGrayscale && grayscaleAnimation && (showColor ? "grayscale-0" : "grayscale")
-            )}
+            className={cn("h-full w-full object-cover", rounded && "rounded-[2.5rem]")}
             style={{
+              ...(imgFilter ? { filter: imgFilter } : {}),
               transition:
                 grayscaleAnimation && !alwaysGrayscale
                   ? `filter ${pixelFadeInDuration}ms cubic-bezier(0.4, 0, 0.2, 1)`

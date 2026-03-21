@@ -92,8 +92,9 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal }: HeroSectio
             src={HERO_TOUR_CARD_SRC}
             grid="8x8"
             rounded={false}
-            alwaysGrayscale
-            grayscaleAnimation={false}
+            grayscaleAnimation
+            colorPercent={20}
+            colorRevealDelay={HERO_PIXEL_MAX_DELAY_MS}
             className="absolute inset-0 h-full w-full hover:!scale-100"
             pixelFadeInDuration={HERO_PIXEL_FADE_MS}
             maxAnimationDelay={HERO_PIXEL_MAX_DELAY_MS}

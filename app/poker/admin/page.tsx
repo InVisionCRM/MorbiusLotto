@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { formatEther } from 'viem';
 import { isAdminWallet } from '@/lib/admin';
-import GlobalMainNav from '@/components/shared/GlobalMainNav';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -410,20 +409,17 @@ export default function PokerAdminPage() {
 
   if (!isAdmin) {
     return (
-      <GlobalMainNav page="home">
-        <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center gap-3">
-          <span className="text-4xl">🚫</span>
-          <h1 className="text-lg font-semibold text-slate-200">Admin wallet required</h1>
-          <Link href="/poker" className="text-xs text-cyan-400 hover:underline">← Back to Poker</Link>
-        </div>
-      </GlobalMainNav>
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center gap-3">
+        <span className="text-4xl">🚫</span>
+        <h1 className="text-lg font-semibold text-slate-200">Admin wallet required</h1>
+        <Link href="/poker" className="text-xs text-cyan-400 hover:underline">← Back to Poker</Link>
+      </div>
     );
   }
 
   return (
-    <GlobalMainNav page="home">
-      <div className="min-h-screen bg-slate-950 text-white">
-        <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="min-h-screen bg-slate-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-6">
 
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -458,8 +454,7 @@ export default function PokerAdminPage() {
           {activeTab === 'tournaments' && <TournamentsTab data={statusData} />}
           {activeTab === 'tables'      && <TablesTab data={statusData} />}
           {activeTab === 'tests'       && <TestsTab />}
-        </div>
       </div>
-    </GlobalMainNav>
+    </div>
   );
 }

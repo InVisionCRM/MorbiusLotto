@@ -95,7 +95,7 @@ const ITEM_FIELDS = [
   { value: 'skinColor',       label: 'Skin Color',      inputType: 'color',  options: [] },
   { value: 'hairColor',       label: 'Hair Color',      inputType: 'color',  options: [] },
   { value: 'accessoryColor',  label: 'Glasses Color',   inputType: 'color',  options: [] },
-  { value: 'hairStyle',       label: 'Hair Style',      inputType: 'select', options: ['Spiky', 'Messy', 'Pigtails', 'Mullet', 'Mohawk', 'Dreadlocks', 'Dreadlocks V1', 'Dreadlocks V2', 'Dreadlocks V3', 'Dreadlocks V4', 'Dreadlocks V5', 'Dreadlocks V6', 'Dreadlocks V7', 'Dreadlocks V8', 'Dreadlocks V9', 'Dreadlocks V10', 'Locks V1', 'Locks V2', 'Locks V3', 'Locks V4', 'Locks V5', 'Locks V6', 'Locks V7', 'Locks V8', 'Locks V9', 'Locks V10', 'Updo', 'Braids', 'Cornrows', 'Dreads Fade'] },
+  { value: 'hairStyle',       label: 'Hair Style',      inputType: 'select', options: ['Spiky', 'Messy', 'Pigtails', 'Mullet', 'Mohawk', 'Dreadlocks', 'Updo', 'Braids', 'Cornrows', 'Dreads Fade'] },
   { value: 'eyeShape',        label: 'Eye Shape',       inputType: 'select', options: ['Round', 'Almond', 'Narrow', 'Wide', 'Eye V1', 'Eye V2', 'Eye V3', 'Eye V4', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10'] },
   { value: 'shirtColor',      label: 'Shirt Color',     inputType: 'color',  options: [] },
   { value: 'shirtStyle',      label: 'Shirt Style',     inputType: 'select', options: ['Default','Tuxedo','Cheetah Print','Hawaiian','Pinstripe','Flannel','Denim Jacket','Leather Jacket','Varsity','Hoodie','Camo','Suit','Blazer','Kimono','Polo','Zebra Print','Leopard Print','Snake Skin','Tie-Dye','Neon Crop','Biker','Sailor','Space Suit','Grim Reaper','Golden Armor','Streetwear V1','Streetwear V2','Streetwear V3','Streetwear V4','Streetwear V5','Streetwear V6','Streetwear V7','Streetwear V8','Streetwear V9','Streetwear V10'] },
@@ -263,20 +263,6 @@ interface BuilderState {
   tier: ItemTier;
 }
 
-const DREADLOCKS_VARIANTS = [
-  'Dreadlocks V1',
-  'Dreadlocks V2',
-  'Dreadlocks V3',
-  'Dreadlocks V4',
-  'Dreadlocks V5',
-  'Dreadlocks V6',
-  'Dreadlocks V7',
-  'Dreadlocks V8',
-  'Dreadlocks V9',
-  'Dreadlocks V10',
-] as const;
-
-const HAIR_VARIANTS = ['Locks V1', 'Locks V2', 'Locks V3', 'Locks V4', 'Locks V5', 'Locks V6', 'Locks V7', 'Locks V8', 'Locks V9', 'Locks V10'] as const;
 const SHIRT_VARIANTS = ['Streetwear V1', 'Streetwear V2', 'Streetwear V3', 'Streetwear V4', 'Streetwear V5', 'Streetwear V6', 'Streetwear V7', 'Streetwear V8', 'Streetwear V9', 'Streetwear V10'] as const;
 const HAT_VARIANTS = ['Hat V1', 'Hat V2', 'Hat V3', 'Hat V4', 'Hat V5', 'Hat V6', 'Hat V7', 'Hat V8', 'Hat V9', 'Hat V10'] as const;
 const SHADES_VARIANTS = ['Shades V1', 'Shades V2', 'Shades V3', 'Shades V4', 'Shades V5', 'Shades V6', 'Shades V7', 'Shades V8', 'Shades V9', 'Shades V10'] as const;
@@ -288,8 +274,6 @@ const VARIANT_REVIEW_SYNC_SPEC: ReadonlyArray<{
   field: ItemField;
   variants: readonly string[];
 }> = [
-  { groupKey: 'dreads', field: 'hairStyle', variants: DREADLOCKS_VARIANTS },
-  { groupKey: 'hair', field: 'hairStyle', variants: HAIR_VARIANTS },
   { groupKey: 'shirt', field: 'shirtStyle', variants: SHIRT_VARIANTS },
   { groupKey: 'hat', field: 'hat', variants: HAT_VARIANTS },
   { groupKey: 'shades', field: 'accessory', variants: SHADES_VARIANTS },
@@ -532,8 +516,6 @@ function DreadlocksVariantReviewPanel({
           <div className="mt-2 text-[10px] text-emerald-400/90">{syncMsg}</div>
         )}
       </div>
-      {renderCards('Dreadlocks set (previous batch)', 'dreads', DREADLOCKS_VARIANTS, (variant) => ({ hairStyle: variant }))}
-      {renderCards('Hair variants x10', 'hair', HAIR_VARIANTS, (variant) => ({ hairStyle: variant }))}
       {renderCards('Shirt variants x10', 'shirt', SHIRT_VARIANTS, (variant) => ({ shirtStyle: variant }))}
       {renderCards('Hat variants x10', 'hat', HAT_VARIANTS, (variant) => ({ hat: variant }))}
       {renderCards('Sunglasses variants x10', 'shades', SHADES_VARIANTS, (variant) => ({ accessory: variant }))}

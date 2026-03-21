@@ -11,7 +11,6 @@ import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { PokerTableState, ChatMessagePayload } from '@/lib/websocket-client';
 import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
-import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
 import { PokerTable } from '@/components/poker/PokerTable';
 import type { Emotion } from '@/components/poker/avatar/AvatarPreview';
@@ -669,21 +668,8 @@ export default function PokerTablePage() {
     />
   );
 
-  /** Mobile nav center: show hole cards when we have 2 (poker only), 1px padding to maximize space */
-  const mobileBarCenterContent = useMemo(() => {
-    const cards = state?.myHoleCards;
-    if (!cards || cards.length < 2) return null;
-    return (
-      <div className="flex items-center justify-center gap-px p-px">
-        <CardDisplay cardIndex={cards[0]} small className="!w-[37px] !h-[52px] min-w-0 shrink-0 overflow-hidden [&>*]:!w-full [&>*]:!h-full [&>*]:!min-w-0 [&>*]:!min-h-0" />
-        <CardDisplay cardIndex={cards[1]} small className="!w-[37px] !h-[52px] min-w-0 shrink-0 overflow-hidden [&>*]:!w-full [&>*]:!h-full [&>*]:!min-w-0 [&>*]:!min-h-0" />
-      </div>
-    );
-  }, [state?.myHoleCards]);
-
   return (
-    <GlobalMainNav page="home" mobileBarCenterContent={mobileBarCenterContent}>
-      <PokerThemeProvider themeId={pokerTheme}>
+    <PokerThemeProvider themeId={pokerTheme}>
         <div
           className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
           style={{
@@ -719,9 +705,17 @@ export default function PokerTablePage() {
               ← Lobby
             </Link>
             {state && (
-              <span className="text-[10px] text-[rgba(255,255,255,0.45)] tabular-nums truncate flex-1 text-center">
-                {fmtChips(state.smallBlind)}/{fmtChips(state.bigBlind)} · {state.seats.filter(s => s.playerAddress).length}/{state.maxSeats} seats
-              </span>
+              <div className="flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5">
+                {state.myHoleCards && state.myHoleCards.length >= 2 && (
+                  <div className="flex items-center justify-center gap-px p-px sm:hidden">
+                    <CardDisplay cardIndex={state.myHoleCards[0]} small className="!w-[37px] !h-[52px] min-w-0 shrink-0 overflow-hidden [&>*]:!w-full [&>*]:!h-full [&>*]:!min-w-0 [&>*]:!min-h-0" />
+                    <CardDisplay cardIndex={state.myHoleCards[1]} small className="!w-[37px] !h-[52px] min-w-0 shrink-0 overflow-hidden [&>*]:!w-full [&>*]:!h-full [&>*]:!min-w-0 [&>*]:!min-h-0" />
+                  </div>
+                )}
+                <span className="text-[10px] text-[rgba(255,255,255,0.45)] tabular-nums truncate text-center w-full">
+                  {fmtChips(state.smallBlind)}/{fmtChips(state.bigBlind)} · {state.seats.filter(s => s.playerAddress).length}/{state.maxSeats} seats
+                </span>
+              </div>
             )}
             <div className="flex items-center gap-1.5 shrink-0 relative">
               <button
@@ -1008,6 +1002,5 @@ export default function PokerTablePage() {
           }}
         />
       </PokerThemeProvider>
-    </GlobalMainNav>
   );
 }

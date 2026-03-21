@@ -4,7 +4,8 @@ import React, { useState } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import AvatarPreview from './AvatarPreview';
 import { randomizeConfig } from './CharacterCreator';
-import { Lock, Shuffle } from 'lucide-react';
+import { Lock, Shuffle, Pin } from 'lucide-react';
+import type { AvatarRandomizeFieldKey } from '@/lib/avatar-randomize-pins';
 import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
 import { AvatarPatternDefs } from '@/lib/avatar-svg-patterns';
 import { useCatalog } from '@/hooks/use-cosmetics';
@@ -41,7 +42,7 @@ const AccessoryColors = [
   '#111111', '#333333', 'rgba(0,0,0,0.85)',
   'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
 ];
-const HairStyles = ['Bald', 'Short', 'Buzz', 'Fade', 'Long Straight', 'Long Wavy', 'Ponytail', 'Curly', 'Spiky', 'Bob', 'Mohawk', 'Dreadlocks', 'Dreadlocks V1', 'Dreadlocks V2', 'Dreadlocks V3', 'Dreadlocks V4', 'Dreadlocks V5', 'Dreadlocks V6', 'Dreadlocks V7', 'Dreadlocks V8', 'Dreadlocks V9', 'Dreadlocks V10', 'Locks V1', 'Locks V2', 'Locks V3', 'Locks V4', 'Locks V5', 'Locks V6', 'Locks V7', 'Locks V8', 'Locks V9', 'Locks V10', 'Afro', 'Mullet', 'Pigtails', 'Messy'];
+const HairStyles = ['Bald', 'Short', 'Buzz', 'Fade', 'Long Straight', 'Long Wavy', 'Ponytail', 'Curly', 'Spiky', 'Bob', 'Mohawk', 'Dreadlocks', 'Afro', 'Mullet', 'Pigtails', 'Messy'];
 const FaceShapes = ['Square', 'Round', 'Oval', 'Heart', 'Diamond'];
 const EyeShapes = ['Round', 'Almond', 'Narrow', 'Wide', 'Eye V1', 'Eye V2', 'Eye V3', 'Eye V4', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10'];
 const NoseShapes = ['Small', 'Wide', 'Pointy', 'Button'];
@@ -100,9 +101,12 @@ type Props = {
   ownedItems?: Set<string>;
   isAdmin?: boolean;
   onLockedItemClick?: (itemKey: string) => void;
+  pinnedItemKeys?: Set<string>;
+  pinnedRandomFields?: Set<string>;
+  onToggleRandomPin?: (field: AvatarRandomizeFieldKey) => void;
 };
 
-export default function CharacterCreatorMobile({ config, onChange, displayName, onDisplayNameChange, ownedItems, isAdmin = false, onLockedItemClick }: Props) {
+export default function CharacterCreatorMobile({ config, onChange, displayName, onDisplayNameChange, ownedItems, isAdmin = false, onLockedItemClick, pinnedItemKeys, pinnedRandomFields, onToggleRandomPin }: Props) {
   const [activeId, setActiveId] = useState('skin');
   const { items: catalogItems } = useCatalog();
 
@@ -138,7 +142,15 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
     update(activeCat.field, opts[Math.floor(Math.random() * opts.length)]);
   };
 
-  const handleRandomizeAll = () => onChange(randomizeConfig(ownedItems));
+  const handleRandomizeAll = () => {
+    const opts: { pinnedItemKeys?: Set<string>; preserveFrom?: AvatarConfig; pinnedFields?: Set<string> } = {};
+    if (pinnedItemKeys?.size) opts.pinnedItemKeys = pinnedItemKeys;
+    if (pinnedRandomFields?.size) {
+      opts.preserveFrom = config;
+      opts.pinnedFields = pinnedRandomFields;
+    }
+    onChange(randomizeConfig(ownedItems, Object.keys(opts).length ? opts : undefined));
+  };
 
   const currentVal = activeCat.field ? (config[activeCat.field] as string ?? '') : '';
 
@@ -191,30 +203,58 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
         <AvatarPreview config={config} roamEyes className="w-36 aspect-[6/7] flex-shrink-0" />
 
         {/* Randomize All */}
-        <button
-          type="button"
-          onClick={handleRandomizeAll}
-          className="flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-emerald-400 text-xs font-medium touch-manipulation transition-colors border border-zinc-700 flex-shrink-0"
-        >
-          <Shuffle size={13} />
-          Randomize All
-        </button>
+        <div className="flex flex-col items-center gap-1 flex-shrink-0 w-full max-w-[280px]">
+          <button
+            type="button"
+            onClick={handleRandomizeAll}
+            className="flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-emerald-400 text-xs font-medium touch-manipulation transition-colors border border-zinc-700"
+          >
+            <Shuffle size={13} />
+            Randomize All
+          </button>
+          {onToggleRandomPin && (
+            <p className="text-[9px] text-zinc-500 text-center leading-snug px-1">
+              Amber pushpin by the category name keeps that part (colors, styles, background).
+            </p>
+          )}
+        </div>
 
         {/* Category label + all variations inline */}
         <div className="w-full max-w-[280px] flex flex-col gap-2 flex-shrink-0">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest">
+            <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest min-w-0">
               {activeCat.label}
             </p>
-            {activeCat.type !== 'bg' && activeCat.field && (
-              <button
-                type="button"
-                onClick={handleRandom}
-                className="text-[10px] font-medium text-zinc-500 hover:text-zinc-300 touch-manipulation"
-              >
-                🎲 Random
-              </button>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {activeCat.field && onToggleRandomPin && (
+                <button
+                  type="button"
+                  aria-pressed={pinnedRandomFields?.has(activeCat.field) ?? false}
+                  title={
+                    pinnedRandomFields?.has(activeCat.field)
+                      ? 'Unpin — will change on Randomize All'
+                      : 'Pin — keep on Randomize All'
+                  }
+                  onClick={() => onToggleRandomPin(activeCat.field as AvatarRandomizeFieldKey)}
+                  className={`p-1 rounded-md touch-manipulation transition-colors ${
+                    pinnedRandomFields?.has(activeCat.field)
+                      ? 'text-amber-400 bg-amber-500/15'
+                      : 'text-zinc-600 hover:text-cyan-300 hover:bg-zinc-800'
+                  }`}
+                >
+                  <Pin size={12} className={pinnedRandomFields?.has(activeCat.field) ? 'fill-amber-400/35' : ''} strokeWidth={2} />
+                </button>
+              )}
+              {activeCat.type !== 'bg' && activeCat.field && (
+                <button
+                  type="button"
+                  onClick={handleRandom}
+                  className="text-[10px] font-medium text-zinc-500 hover:text-zinc-300 touch-manipulation"
+                >
+                  🎲 Random
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Backgrounds */}

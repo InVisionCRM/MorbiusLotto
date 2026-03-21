@@ -20,6 +20,7 @@ export type AvatarField =
   | 'necklace'
   | 'mouthAccessory'
   | 'shirtColor'
+  | 'shirtStyle'
   | 'backgroundImage'
   | 'overlayImage'
   | 'customPattern'; // non-empty customPattern requires feature_custom_bg
@@ -72,6 +73,7 @@ export const FREE_VALUES: Record<AvatarField, Set<string>> = {
   shirtColor: new Set([
     '#ef4444', '#3b82f6', '#22c55e', '#ffffff', '#9ca3af', '#3f3f46', '#000000',
   ]),
+  shirtStyle: new Set(['Default']),
   backgroundImage: new Set(['']), // empty string = free; any URL requires ownership of a background item
   overlayImage:    new Set(['']), // empty string = free; any data URL requires ownership of an overlay item
   customPattern:   new Set(['']), // legacy field — no longer gated
@@ -198,6 +200,12 @@ const ACCESSORY_ITEMS: CosmeticItem[] = [
   item('acc_cyberpunk', 'Cyberpunk Visor', 'legendary', [{ field: 'accessory', value: 'Cyberpunk' }]),
 ];
 
+const SHADES_VARIANT_ITEMS: CosmeticItem[] = Array.from({ length: 10 }, (_, i) => {
+  const n = i + 1;
+  const value = `Shades V${n}`;
+  return item(`acc_shades_v${n}`, value, 'uncommon', [{ field: 'accessory', value }]);
+});
+
 // ── Hats ──────────────────────────────────────────────────────────────────────
 const HAT_ITEMS: CosmeticItem[] = [
   item('hat_bandana',  'Bandana',    'common',    [{ field: 'hat', value: 'Bandana' }]),
@@ -205,6 +213,12 @@ const HAT_ITEMS: CosmeticItem[] = [
   item('hat_top_hat',  'Top Hat',    'rare',      [{ field: 'hat', value: 'Top Hat' }]),
   item('hat_crown',    'Crown',      'legendary', [{ field: 'hat', value: 'Crown' }]),
 ];
+
+const HAT_VARIANT_ITEMS: CosmeticItem[] = Array.from({ length: 10 }, (_, i) => {
+  const n = i + 1;
+  const value = `Hat V${n}`;
+  return item(`hat_hat_v${n}`, value, 'uncommon', [{ field: 'hat', value }]);
+});
 
 // ── Necklaces ─────────────────────────────────────────────────────────────────
 const NECKLACE_ITEMS: CosmeticItem[] = [
@@ -238,6 +252,23 @@ const SHIRT_COLOR_ITEMS: CosmeticItem[] = [
   item('shirt_hot_pink',    'Hot Pink',     'uncommon', [{ field: 'shirtColor', value: '#ec4899' }]),
 ];
 
+function adminShirtStyleItemKey(style: string): string {
+  return `shirt_style_custom_${style.replace('#', '').toLowerCase()}`;
+}
+
+const PAID_SHIRT_STYLES = [
+  'Tuxedo', 'Cheetah Print', 'Hawaiian', 'Pinstripe', 'Flannel',
+  'Denim Jacket', 'Leather Jacket', 'Varsity', 'Hoodie', 'Camo', 'Suit',
+  'Blazer', 'Kimono', 'Polo', 'Zebra Print', 'Leopard Print', 'Snake Skin',
+  'Tie-Dye', 'Neon Crop', 'Biker', 'Sailor', 'Space Suit', 'Grim Reaper', 'Golden Armor',
+  'Streetwear V1', 'Streetwear V2', 'Streetwear V3', 'Streetwear V4', 'Streetwear V5',
+  'Streetwear V6', 'Streetwear V7', 'Streetwear V8', 'Streetwear V9', 'Streetwear V10',
+] as const;
+
+const SHIRT_STYLE_ITEMS: CosmeticItem[] = PAID_SHIRT_STYLES.map(style =>
+  item(adminShirtStyleItemKey(style), style, 'uncommon', [{ field: 'shirtStyle', value: style }]),
+);
+
 // ── Patterns (unlock url(#pattern) for skin, hair, AND shirt) ─────────────────
 function patternItem(name: string, displayName: string, tier: ItemTier): CosmeticItem {
   const val = `url(#${name})`;
@@ -266,9 +297,12 @@ export const ITEM_CATALOG: CosmeticItem[] = [
   ...HAIR_STYLE_ITEMS,
   ...HAIR_COLOR_ITEMS,
   ...ACCESSORY_ITEMS,
+  ...SHADES_VARIANT_ITEMS,
   ...HAT_ITEMS,
+  ...HAT_VARIANT_ITEMS,
   ...NECKLACE_ITEMS,
   ...SHIRT_COLOR_ITEMS,
+  ...SHIRT_STYLE_ITEMS,
   ...PATTERN_ITEMS,
 ];
 
@@ -309,7 +343,7 @@ export function getLockedFields(
   const locked: LockedField[] = [];
   const fields: AvatarField[] = [
     'skinColor', 'hairStyle', 'hairColor', 'accessoryColor', 'accessory',
-    'hat', 'necklace', 'mouthAccessory', 'shirtColor', 'backgroundImage', 'overlayImage',
+    'hat', 'necklace', 'mouthAccessory', 'shirtColor', 'shirtStyle', 'backgroundImage', 'overlayImage',
   ];
   for (const field of fields) {
     const value = config[field];
@@ -336,7 +370,7 @@ export function isAdminWallet(address: string): boolean {
 const PLACEHOLDER_FIELDS: AvatarField[] = [
   'skinColor', 'hairStyle', 'hairColor', 'accessoryColor', 'eyeShape', 'eyeColor', 'faceShape',
   'noseShape', 'lipShape', 'accessory', 'hat', 'necklace', 'mouthAccessory',
-  'shirtColor', 'backgroundImage', 'overlayImage', 'customPattern',
+  'shirtColor', 'shirtStyle', 'backgroundImage', 'overlayImage', 'customPattern',
 ];
 
 /**
@@ -384,7 +418,7 @@ export function randomPlaceholderConfig(ownedItemKeys: Set<string>): Record<stri
     lipShape: pick(unlocked.lipShape),
     accessory: pick(unlocked.accessory),
     shirtColor: pick(unlocked.shirtColor),
-    shirtStyle: 'Default',
+    shirtStyle: pick(unlocked.shirtStyle),
     hat: pick(unlocked.hat),
     hatColor: '',
     necklace: pick(unlocked.necklace),
