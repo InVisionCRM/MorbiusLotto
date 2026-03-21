@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { ExternalLink, Copy } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
+import { CopyButton } from '@/components/ui/copy-button'
 
 const SWAP_PAGE_URL = '/swap'
 const VIEW_ON_MORBIUS_BASE = 'https://scan.morbius.io/geicko?address='
@@ -150,14 +151,15 @@ export function TableProfile({
                 <span className="font-mono text-xs text-slate-300 truncate max-w-[200px]" title={tokenAddress}>
                   {tokenAddress}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(tokenAddress)}
-                  className="p-1.5 rounded-md text-slate-500 hover:text-cyan-400 hover:bg-slate-700/50 transition-colors"
+                <CopyButton
+                  content={tokenAddress}
+                  copyToast="Address copied"
+                  variant="ghost"
+                  size="sm"
+                  className="p-1.5 h-8 w-8 text-slate-500 hover:text-cyan-400 hover:bg-slate-700/50"
                   title="Copy address"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
+                  aria-label="Copy address"
+                />
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2">

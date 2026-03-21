@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
-import { Package, Search, Pencil, Check, X, Loader2, AlertTriangle, RefreshCw, Plus, ChevronDown, ChevronUp, Shuffle, Copy, Paintbrush, Users, LayoutGrid, ExternalLink, Gift } from 'lucide-react';
+import { Package, Search, Pencil, Check, X, Loader2, AlertTriangle, RefreshCw, Plus, ChevronDown, ChevronUp, Shuffle, Paintbrush, Users, LayoutGrid, ExternalLink, Gift } from 'lucide-react';
+import { CopyButton } from '@/components/ui/copy-button';
 import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog';
 import PixelBackgroundUploader from '@/components/poker/avatar/PixelBackgroundUploader';
 import GradientBuilder from '@/components/poker/avatar/GradientBuilder';
@@ -712,19 +713,6 @@ function ItemBuilderPanel({
     setPatternSetConfirmOpen(true);
   };
 
-  const copyPatternSetKeys = async () => {
-    const lines = PATTERN_BULK_FIELDS.map((field) => {
-      const key = toItemKey(field, form.patternValue);
-      return `${PATTERN_BULK_LABEL[field]}\t${key}`;
-    });
-    try {
-      await navigator.clipboard.writeText(lines.join('\n'));
-      setSuccess('Item keys copied to clipboard');
-    } catch {
-      setErr('Could not copy to clipboard');
-    }
-  };
-
   const executePatternSetCreate = async () => {
     setErr(null);
     setSuccess(null);
@@ -1034,13 +1022,25 @@ function ItemBuilderPanel({
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-3 border-t border-zinc-700/80 bg-zinc-950/40">
-              <button
-                type="button"
-                onClick={copyPatternSetKeys}
-                className="mr-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-zinc-600 text-zinc-400 hover:text-white hover:border-zinc-500 text-[10px] font-medium transition-colors"
-              >
-                <Copy size={12} /> Copy keys
-              </button>
+              <div className="mr-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-600 text-zinc-400 hover:border-zinc-500 text-[10px] font-medium transition-colors">
+                <CopyButton
+                  content={PATTERN_BULK_FIELDS.map((field) => {
+                    const key = toItemKey(field, form.patternValue);
+                    return `${PATTERN_BULK_LABEL[field]}\t${key}`;
+                  }).join('\n')}
+                  onCopiedChange={(c) => {
+                    if (c) setSuccess('Item keys copied to clipboard');
+                  }}
+                  onCopyError={() => setErr('Could not copy to clipboard')}
+                  toastOnError={false}
+                  variant="ghost"
+                  size="xs"
+                  className="h-6 w-6 p-0 text-zinc-400 hover:text-white hover:bg-transparent"
+                  title="Copy keys"
+                  aria-label="Copy keys"
+                />
+                <span className="text-zinc-400">Copy keys</span>
+              </div>
               <button
                 type="button"
                 onClick={() => setPatternSetConfirmOpen(false)}

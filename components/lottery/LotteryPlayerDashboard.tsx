@@ -11,11 +11,9 @@ import {
   Trophy,
   TrendingUp,
   TrendingDown,
-  Copy,
-  Check,
   ExternalLink,
 } from 'lucide-react'
-import { toast } from 'sonner'
+import { CopyButton } from '@/components/ui/copy-button'
 import {
   Area,
   AreaChart,
@@ -67,18 +65,8 @@ export function LotteryPlayerDashboard({
   isLoadingResults = false,
 }: LotteryPlayerDashboardProps) {
   const [activeTab, setActiveTab] = useState<'stats' | 'history'>('stats')
-  const [addressCopied, setAddressCopied] = useState(false)
   const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'profit'>('newest')
   const { displayName, profileImageUrl, avatarConfig } = useProfileForAddress(playerAddress)
-
-  const handleCopyAddress = () => {
-    if (!playerAddress) return
-    navigator.clipboard.writeText(playerAddress).then(() => {
-      setAddressCopied(true)
-      toast.success('Address copied')
-      setTimeout(() => setAddressCopied(false), 2000)
-    }).catch(() => toast.error('Failed to copy'))
-  }
 
   // Sort results for history: ensure we have a consistent order (newest first by default for display)
   const sortedForChart = useMemo(() => {
@@ -209,15 +197,15 @@ export function LotteryPlayerDashboard({
           <span className="font-mono text-xs sm:text-sm text-cyan-300/90 break-all min-w-0" title={playerAddress}>
             {playerAddress}
           </span>
-          <button
-            type="button"
-            onClick={handleCopyAddress}
-            className="shrink-0 p-1.5 rounded text-white/60 hover:text-white transition-colors"
+          <CopyButton
+            content={playerAddress}
+            copyToast="Address copied"
+            variant="ghost"
+            size="default"
+            className="p-1.5 h-9 w-9 text-white/60 hover:text-white"
             title="Copy address"
             aria-label="Copy address"
-          >
-            {addressCopied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-          </button>
+          />
         </div>
       )}
 

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
-import { X, Copy, Check, ExternalLink, UserPlus, UserCheck, Gift } from 'lucide-react';
+import { X, ExternalLink, UserPlus, UserCheck, Gift } from 'lucide-react';
+import { CopyButton } from '@/components/ui/copy-button';
 import { usePokerPlayerStats } from '@/hooks/use-poker-stats';
 import { useIsFollowing, useFollowMutation, useFollowCounts } from '@/hooks/use-follow';
 import { useProfileForAddress } from '@/hooks/use-player-profile';
@@ -47,7 +48,6 @@ export function PokerOpponentProfileCard({
   const { data: counts } = useFollowCounts(address);
   const { data: isFollowing, isLoading: followLoading } = useIsFollowing(myAddr, address);
   const { follow, unfollow } = useFollowMutation(myAddr, address);
-  const [copied, setCopied] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click or Escape
@@ -56,12 +56,6 @@ export function PokerOpponentProfileCard({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(address).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
 
   const shortAddr = `${address.slice(0, 6)}…${address.slice(-4)}`;
   const name = displayName?.trim() || shortAddr;
@@ -141,27 +135,23 @@ export function PokerOpponentProfileCard({
               >
                 {name}
               </div>
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="flex items-center gap-1 mt-0.5 group"
-                title="Copy address"
-              >
+              <div className="flex items-center gap-1 mt-0.5" title="Copy address">
                 <span
                   className="font-mono truncate"
                   style={{ color: 'rgba(148,163,184,0.8)', fontSize: 11 }}
                 >
                   {shortAddr}
                 </span>
-                <span
-                  className="shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
-                  style={{ color: copied ? '#4ade80' : '#94a3b8' }}
-                >
-                  {copied
-                    ? <Check className="w-3 h-3" />
-                    : <Copy className="w-3 h-3" />}
-                </span>
-              </button>
+                <CopyButton
+                  content={address}
+                  copyToast="Address copied"
+                  variant="ghost"
+                  size="xs"
+                  className="h-7 w-7 shrink-0 p-0 opacity-60 hover:opacity-100 text-[#94a3b8]"
+                  title="Copy address"
+                  aria-label="Copy address"
+                />
+              </div>
             </div>
 
             {/* Close */}

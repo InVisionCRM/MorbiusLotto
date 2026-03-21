@@ -165,7 +165,7 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
 
   return (
     <div
-      className="w-full h-full rounded-lg pt-1 pr-1 pb-1 pl-1 flex flex-col"
+      className="w-full h-full min-h-0 rounded-lg pt-1 pr-1 pb-1 pl-1 flex flex-col"
       style={{
         background: 'linear-gradient(145deg,rgb(16, 26, 35),rgb(35, 36, 41))',
         boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.8), inset 0 -2px 4px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.5)',
@@ -175,12 +175,12 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
 
       {/* Header with Stats */}
       <div className="mb-1">
-        <div className="grid grid-cols-3 items-center justify-center text-center">
-          <div className="bg-gray-800/50 w-full px-1 py-1 rounded-tl-lg border-t border-b border-gray-700/50">
+        <div className="grid grid-cols-3 items-center justify-items-stretch gap-px text-center">
+          <div className="min-w-0 bg-gray-800/50 px-1 py-1 rounded-tl-lg border-t border-b border-gray-700/50">
             <div className="text-cyan-300/80 text-[8px] uppercase tracking-wider">Drops</div>
             <div className="text-white font-bold text-sm text-center">{currentStats.totalBets}</div>
           </div>
-          <div className="bg-gray-800/50 w-full px-1 py-1 border-t border-b border-gray-700/50">
+          <div className="min-w-0 bg-gray-800/50 px-1 py-1 border-t border-b border-gray-700/50">
             <div className="text-cyan-300/80 text-[8px] uppercase tracking-wider">Net P&L</div>
             <div className={`font-bold text-sm flex text-center justify-center items-center gap-0.5 ${netPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {netPnL >= 0 ? '+' : ''}{Math.round(netPnL)}
@@ -191,7 +191,7 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
               />
             </div>
           </div>
-          <div className="bg-gray-800/50 w-full px-1 py-1 border-t border-b border-gray-700/50">
+          <div className="min-w-0 bg-gray-800/50 px-1 py-1 border-t border-b border-gray-700/50">
             <div className="text-cyan-300/80 text-[8px] uppercase tracking-wider">ROI</div>
             <div className={`font-bold text-sm ${parseFloat(roi) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {parseFloat(roi) >= 0 ? '+' : ''}{roi}%
@@ -200,8 +200,8 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="h-full min-h-[200px] w-full flex-1 relative">
+      {/* Chart — flex-1 + min-h-0 so parent can split 50/50 with betting panel */}
+      <div className="relative h-full min-h-[120px] w-full flex-1">
         {/* History Button Overlay */}
         <button
           onClick={() => setHistoryModalOpen(true)}

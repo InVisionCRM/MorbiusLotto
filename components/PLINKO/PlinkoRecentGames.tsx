@@ -6,6 +6,14 @@ import { usePlinkoResults } from '@/hooks/use-plinko-results'
 import { formatUnits } from 'viem'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
 import type { PlinkoResultRow } from '@/hooks/use-plinko-results'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 const PAGE_SIZE = 25
 
@@ -23,41 +31,6 @@ const panelStyle = {
   boxShadow:
     'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
   border: '1px inset rgba(60, 60, 60, 0.5)',
-}
-
-function ResultRow({ r, compact }: { r: PlinkoResultRow; compact?: boolean }) {
-  const win = r.profit > 0n
-  const multDisplay = Number(r.multiplier) / 100
-  const timeStr = formatTime(r.timestamp)
-  if (compact) {
-    return (
-      <div className="flex items-center justify-between gap-2 py-2 px-2 border-b border-white/5 last:border-0 text-sm">
-        <span className="text-white/70 shrink-0 min-w-0">
-          <span className="text-white/50 font-mono">{timeStr}</span>
-          <span className="mx-1.5">·</span>
-          {r.riskLevelName} · {multDisplay.toFixed(2)}x
-        </span>
-        <span className={`shrink-0 tabular-nums ${win ? 'text-green-400' : 'text-white/60'}`}>
-          {win ? '+' : ''}{formatMorbius(r.profit)} MORBIUS
-        </span>
-      </div>
-    )
-  }
-  return (
-    <div className="py-2 px-3 border-b border-white/5 last:border-0 space-y-1 text-sm">
-      <div className="flex justify-between text-sm text-white/70">
-        <span className="text-white/50 font-mono">{timeStr}</span>
-        <span>
-          {r.riskLevelName} · {multDisplay.toFixed(2)}x · Wager {formatMorbius(r.wager)}
-        </span>
-      </div>
-      <div className="flex justify-end">
-        <span className={`tabular-nums text-sm ${win ? 'text-green-400' : 'text-white/50'}`}>
-          {win ? '+' : ''}{formatMorbius(r.profit)} MORBIUS
-        </span>
-      </div>
-    </div>
-  )
 }
 
 export interface PlinkoRecentGamesProps {
@@ -83,23 +56,72 @@ export function PlinkoRecentGames({
   const hasMore = displayCount < results.length
 
   return (
-    <div className="rounded-xl overflow-hidden w-full max-w-xl" style={panelStyle}>
-      <div className="px-3 py-2 border-b border-white/10">
-        <h3 className="text-cyan-300 font-semibold text-sm">{title}</h3>
+    <div className="w-full min-w-0 overflow-hidden rounded-xl" style={panelStyle}>
+      <div className="border-b border-white/10 px-3 py-2">
+        <h3 className="text-sm font-semibold text-cyan-300">{title}</h3>
       </div>
-      <div className="max-h-64 overflow-y-auto">
+      <div className="max-h-64 overflow-y-auto overflow-x-hidden">
         {!address ? (
-          <div className="p-4 text-center text-white/50 text-sm">Connect wallet to see your recent games.</div>
+          <div className="p-4 text-center text-sm text-white/50">Connect wallet to see your recent games.</div>
         ) : displayResults.length === 0 ? (
-          <div className="p-4 text-center text-white/50 text-sm">No games yet. Play Plinko to see history here.</div>
+          <div className="p-4 text-center text-sm text-white/50">No games yet. Play Plinko to see history here.</div>
+        ) : compact ? (
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow className="border-white/10 hover:bg-transparent">
+                <TableHead className="w-1/3 text-white/70 font-medium">Time</TableHead>
+                <TableHead className="w-1/3 text-center text-white/70 font-medium">Result</TableHead>
+                <TableHead className="w-1/3 text-right text-white/70 font-medium">P/L</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {displayResults.map((r, i) => {
+                const win = r.profit > 0n
+                const multDisplay = Number(r.multiplier) / 100
+                const timeStr = formatTime(r.timestamp)
+                return (
+                  <TableRow key={`${r.transactionHash ?? ''}-${r.seed}-${i}`} className="border-white/5 hover:bg-white/5">
+                    <TableCell className="min-w-0 text-left text-xs text-white/60 sm:text-sm">
+                      <span className="font-mono">{timeStr}</span>
+                    </TableCell>
+                    <TableCell className="min-w-0 text-center text-xs text-white/80 sm:text-sm">
+                      {r.riskLevelName} · {multDisplay.toFixed(2)}x
+                    </TableCell>
+                    <TableCell
+                      className={`text-right tabular-nums text-xs sm:text-sm ${win ? 'text-emerald-400' : 'text-red-400/90'}`}
+                    >
+                      {win ? '+' : ''}
+                      {formatMorbius(r.profit)}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
         ) : (
-          displayResults.map((r, i) => (
-            <ResultRow
-              key={`${r.transactionHash ?? ''}-${r.seed}-${i}`}
-              r={r}
-              compact={compact}
-            />
-          ))
+          <div className="divide-y divide-white/5">
+            {displayResults.map((r, i) => {
+              const win = r.profit > 0n
+              const multDisplay = Number(r.multiplier) / 100
+              const timeStr = formatTime(r.timestamp)
+              return (
+                <div key={`${r.transactionHash ?? ''}-${r.seed}-${i}`} className="space-y-1 px-3 py-2 text-sm">
+                  <div className="flex justify-between text-white/70">
+                    <span className="font-mono text-white/50">{timeStr}</span>
+                    <span>
+                      {r.riskLevelName} · {multDisplay.toFixed(2)}x · Wager {formatMorbius(r.wager)}
+                    </span>
+                  </div>
+                  <div className="flex justify-end">
+                    <span className={`tabular-nums text-sm ${win ? 'text-green-400' : 'text-white/50'}`}>
+                      {win ? '+' : ''}
+                      {formatMorbius(r.profit)} MORBIUS
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
       {hasMore && displayResults.length > 0 && (

@@ -10,6 +10,7 @@ import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { HeroSection } from '@/components/home/hero-section'
 import { SocialsSection } from '@/components/home/socials-section'
 import { GamesSection } from '@/components/home/games-section'
+import { AvatarShowcaseSection } from '@/components/home/avatar-showcase-section'
 import { TokenomicsSection } from '@/components/home/tokenomics-section'
 import { ResponsibleGamingSection } from '@/components/home/responsible-gaming-section'
 import { MorbiusInfoSection } from '@/components/home/morbius-info-section'
@@ -18,7 +19,7 @@ import { TableShowcaseDisplay } from '@/components/marketing/TableShowcaseDispla
 import { MorbItSection } from '@/components/home/morbit-section'
 import Footer from '@/components/PLINKO/Footer'
 
-/** Full-viewport fixed background behind home content */
+/** Fixed full-viewport background (very subtle at 5% opacity) */
 const HOME_FIXED_BG = '/BlackJack/TourCards/TourCard2.png' as const
 
 export default function HomePage() {
@@ -36,23 +37,15 @@ export default function HomePage() {
       onOpenPlayerProfile={address ? (game) => { setPlayerProfileGame(game ?? 'all'); setPlayerProfileOpen(true); } : undefined}
     >
       <div className="relative w-full min-h-screen flex flex-col items-center text-white bg-neutral-950">
-        {/* Fixed single image — viewport-locked; dark scrim keeps sections readable */}
-        <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden>
+        <div className="pointer-events-none fixed inset-0 z-0" aria-hidden>
           <Image
             src={HOME_FIXED_BG}
             alt=""
             fill
-            className="object-cover select-none opacity-[0.22]"
+            className="select-none object-cover opacity-[0.05]"
             sizes="100vw"
             priority
             quality={85}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(10,10,10,0.82) 0%, rgba(20,20,20,0.72) 40%, rgba(10,10,10,0.85) 100%)',
-            }}
           />
         </div>
 
@@ -112,6 +105,8 @@ export default function HomePage() {
               <PulseChainSection />
 
               <TableShowcaseDisplay />
+
+              <AvatarShowcaseSection />
 
               <MorbItSection />
 

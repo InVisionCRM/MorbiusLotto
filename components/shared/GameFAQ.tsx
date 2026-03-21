@@ -1,8 +1,8 @@
 'use client'
 
 import React from 'react'
-import { Copy, ExternalLink } from 'lucide-react'
-import { toast } from 'sonner'
+import { ExternalLink } from 'lucide-react'
+import { CopyButton } from '@/components/ui/copy-button'
 import {
   Accordion,
   AccordionContent,
@@ -192,13 +192,6 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
 }
 
 function AddressBlock({ addresses }: { addresses: FAQAddress[] }) {
-  const copy = (addr: string, label: string) => {
-    navigator.clipboard.writeText(addr).then(
-      () => toast.success(`${label} address copied`),
-      () => toast.error('Failed to copy')
-    )
-  }
-
   return (
     <div className="space-y-3 pt-1">
       {addresses.map(({ label, address }) => (
@@ -211,14 +204,15 @@ function AddressBlock({ addresses }: { addresses: FAQAddress[] }) {
             {address}
           </code>
           <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => copy(address, label)}
-              className="p-1.5 rounded hover:bg-white/10 text-white/70 hover:text-cyan-300 transition-colors"
+            <CopyButton
+              content={address}
+              copyToast={`${label} address copied`}
+              variant="ghost"
+              size="sm"
+              className="p-1.5 h-8 w-8 text-white/70 hover:text-cyan-300"
               title={`Copy ${label}`}
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </button>
+              aria-label={`Copy ${label}`}
+            />
             <a
               href={`${EXPLORER_BASE}${address}`}
               target="_blank"

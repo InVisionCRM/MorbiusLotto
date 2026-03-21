@@ -37,6 +37,7 @@ import { GameFAQ } from '@/components/shared/GameFAQ';
 import PlinkoTopPlayers from '@/components/PLINKO/PlinkoTopPlayers';
 import { PlinkoRecentPlays } from '@/components/PLINKO/PlinkoRecentPlays';
 import { PlinkoRecentGames } from '@/components/PLINKO/PlinkoRecentGames';
+import { PlinkoPlayerDashboard } from '@/components/PLINKO/PlinkoPlayerDashboard';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
 import { AdSpace } from '@/components/shared/AdSpace';
 
@@ -1185,16 +1186,18 @@ const Home: React.FC = () => {
       {/* RESPONSIVE LAYOUT - Mobile-first approach */}
       <div className="flex relative pt-4 md:pt-2 px-2 gap-2 flex-col lg:flex-row lg:px-3 lg:gap-3 min-h-[calc(100vh-4rem)]">
         {/* LEFT COLUMN - BUY SECTION + CHART - Mobile-first responsive */}
-        <div className="order-2 lg:order-1 lg:flex lg:w-[320px] xl:w-[360px] 2xl:w-[400px] lg:flex-col lg:p-1 lg:overflow-y-auto lg:relative lg:z-20 lg:self-stretch">
+        <div className="order-2 lg:order-1 lg:flex lg:w-[320px] xl:w-[360px] 2xl:w-[400px] lg:flex-col lg:p-1 lg:overflow-hidden lg:relative lg:z-20 lg:self-stretch lg:min-h-0 flex flex-col min-h-0">
           {!freePlayEnabled && (
             <div
-              className="relative rounded-2xl overflow-hidden h-full flex flex-col"
+              className="relative rounded-2xl overflow-hidden flex flex-col flex-1 min-h-[min(32rem,72dvh)] lg:min-h-0 lg:h-full"
               style={{
                 background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                 boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
                 border: '1px inset rgba(60, 60, 60, 0.5)',
               }}
             >
+              {/* Top half — betting controls */}
+              <div className="relative flex min-h-0 flex-1 basis-0 flex-col border-b border-white/10">
               {/* Game Running Overlay - Chart (top) + History (bottom) */}
               {isGameRunning && (
                 <div className="absolute inset-0 z-30 flex flex-col rounded-2xl overflow-hidden"
@@ -1278,7 +1281,7 @@ const Home: React.FC = () => {
                 </div>
               )}
 
-              <div className="relative z-10 p-3 lg:p-3 xl:p-4 2xl:p-5 flex-1 flex flex-col justify-center">
+              <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-start overflow-y-auto overscroll-contain p-3 lg:p-3 xl:p-4 2xl:p-5">
                 {/* Multiplier Table Button - Top Right */}
                 <button
                   onClick={() => setShowMultiplierTable(true)}
@@ -1588,6 +1591,28 @@ const Home: React.FC = () => {
                   </div>
                 </div>
               </div>
+              </div>
+
+              {/* Bottom half — P&L chart (equal vertical split with betting panel) */}
+              <div className="flex min-h-[10rem] flex-1 basis-0 flex-col p-2">
+                <RealTimeBetChart
+                  sessionStartTime={chartSessionStartTime.current}
+                  contractWagerPerBall={wagerPerBall}
+                  freePlayWager={currentWagerRef.current}
+                  betHistory={sharedBetHistory}
+                  chartStats={sharedChartStats}
+                  drops={plinkoHistory.drops}
+                  stats={plinkoHistory.stats}
+                  isConnected={plinkoHistory.isConnected}
+                  playerKey={plinkoHistory.playerKey}
+                  onExport={plinkoHistory.exportHistory}
+                  onClear={async () => {
+                    if (confirm('Are you sure you want to clear all history? This cannot be undone.')) {
+                      await plinkoHistory.clearHistory();
+                    }
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -1683,80 +1708,68 @@ const Home: React.FC = () => {
         </div>
       </div>
 
-      {/* Chart + Recent Play: 2-col grid */}
-      <div className="px-3 mt-4 mb-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="h-64 md:h-72 lg:h-80 min-w-0 order-1">
-            <RealTimeBetChart
-              sessionStartTime={chartSessionStartTime.current}
-              contractWagerPerBall={wagerPerBall}
-              freePlayWager={currentWagerRef.current}
-              betHistory={sharedBetHistory}
-              chartStats={sharedChartStats}
-              drops={plinkoHistory.drops}
-              stats={plinkoHistory.stats}
-              isConnected={plinkoHistory.isConnected}
-              playerKey={plinkoHistory.playerKey}
-              onExport={plinkoHistory.exportHistory}
-              onClear={async () => {
-                if (confirm('Are you sure you want to clear all history? This cannot be undone.')) {
-                  await plinkoHistory.clearHistory();
-                }
-              }}
-            />
+      {/* 3-tab container + player dashboard (2-col on lg); FAQs directly below */}
+      <section className="px-3 mt-4 mb-6 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <div
+            className="relative rounded-2xl overflow-hidden min-w-0"
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+            }}
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
+
+            <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
+              <TabsList className="grid h-11 w-full max-w-full grid-cols-3 gap-1 rounded-xl border border-cyan-500/30 bg-black/40 p-1">
+                <TabsTrigger
+                  value="recent-games"
+                  className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
+                >
+                  Recent Games
+                </TabsTrigger>
+                <TabsTrigger
+                  value="recent-play"
+                  className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
+                >
+                  Recent Play
+                </TabsTrigger>
+                <TabsTrigger
+                  value="leaderboard"
+                  className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
+                >
+                  Leaderboard
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="recent-games" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
+                <PlinkoRecentGames compact title="Recent Games" />
+              </TabsContent>
+
+              <TabsContent value="recent-play" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
+                <PlinkoRecentPlays compact title="Recent Play" />
+              </TabsContent>
+
+              <TabsContent value="leaderboard" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
+                <PlinkoTopPlayers />
+              </TabsContent>
+            </Tabs>
           </div>
-          <div className="min-w-0 order-2">
-            <PlinkoRecentGames compact title="Recent Games" />
+
+          <div className="min-w-0 min-h-0 lg:max-h-[min(720px,75vh)] lg:overflow-y-auto custom-scrollbar">
+            <PlinkoPlayerDashboard playerAddress={address ?? null} />
           </div>
         </div>
-      </div>
 
-      {/* Recent Games / Recent Play / Leaderboard tabs */}
-      <section className="px-3 mt-4 mb-6">
-        <div
-          className="relative rounded-2xl overflow-hidden"
-          style={{
-            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
-          }}
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
-
-          <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
-            <TabsList className="grid w-full grid-cols-3 h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1">
-              <TabsTrigger
-                value="recent-games"
-                className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
-              >
-                Recent Games
-              </TabsTrigger>
-              <TabsTrigger
-                value="recent-play"
-                className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
-              >
-                Recent Play
-              </TabsTrigger>
-              <TabsTrigger
-                value="leaderboard"
-                className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
-              >
-                Leaderboard
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="recent-games" className="mt-4 focus-visible:outline-none">
-              <PlinkoRecentGames compact title="Recent Games" />
-            </TabsContent>
-
-            <TabsContent value="recent-play" className="mt-4 focus-visible:outline-none">
-              <PlinkoRecentPlays compact title="Recent Play" />
-            </TabsContent>
-
-            <TabsContent value="leaderboard" className="mt-4 focus-visible:outline-none">
-              <PlinkoTopPlayers />
-            </TabsContent>
-          </Tabs>
+        <div className="w-full flex justify-center">
+          <GameFAQ
+            game="plinko"
+            addresses={[
+              { label: 'Plinko Contract', address: PLINKO_ADDRESS },
+              { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+            ]}
+          />
         </div>
       </section>
 
@@ -2306,17 +2319,6 @@ const Home: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* FAQ (includes contract addresses) */}
-      <div className="w-full flex justify-center py-4">
-        <GameFAQ
-          game="plinko"
-          addresses={[
-            { label: 'Plinko Contract', address: PLINKO_ADDRESS },
-            { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
-          ]}
-        />
-      </div>
 
       {/* Footer */}
       <Footer />

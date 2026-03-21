@@ -1,8 +1,26 @@
 'use client'
 
-import Image from 'next/image'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
+import { PixelImage } from '@/components/ui/pixel-image'
+
+const HERO_VIDEO_SRC = '/morbius-rocket.mp4' as const
+
+/** Single tour card — full-bleed cover + slow pixel reveal after intro video. */
+const HERO_TOUR_CARD_SRC = '/BlackJack/TourCards/TourCard1.png' as const
+/** Pixel tiles fade in slowly (ms per tile + stagger cap). */
+const HERO_PIXEL_FADE_MS = 1500
+const HERO_PIXEL_MAX_DELAY_MS = 3000
+
+const VIDEO_FADE_MS = 1200
+
+/** Show headline layer this many ms before the video fade finishes (overlap). */
+const LOGO_REVEAL_EARLY_MS = 2500
+
+/** Shared hero CTA: glassmorphism, cyan edge, no drop/glow shadows. */
+const HERO_GLASS_BTN =
+  'inline-flex items-center justify-center rounded-full border border-cyan-500/45 bg-white/[0.07] px-6 py-3 text-sm font-semibold text-white/95 backdrop-blur-xl transition-colors duration-200 hover:bg-white/[0.14] hover:border-cyan-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/35 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 sm:px-7 sm:py-3.5 sm:text-base shadow-none'
 
 interface HeroSectionProps {
   onOpenPlayerProfile?: () => void
@@ -10,113 +28,162 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal }: HeroSectionProps) {
+  const [videoPhase, setVideoPhase] = useState<'playing' | 'fading' | 'done'>('playing')
+  const [reducedMotion, setReducedMotion] = useState(false)
+  useLayoutEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (mq.matches) {
+      setReducedMotion(true)
+      setVideoPhase('done')
+    }
+  }, [])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const apply = () => {
+      const next = mq.matches
+      setReducedMotion(next)
+      if (next) setVideoPhase('done')
+    }
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
+  const handleVideoEnded = useCallback(() => {
+    setVideoPhase((p) => (p === 'playing' ? 'fading' : p))
+  }, [])
+
+  const handleVideoError = useCallback(() => {
+    setVideoPhase('done')
+  }, [])
+
+  // Reveal logo 0.5s before video fade ends so it starts coming in earlier
+  useEffect(() => {
+    if (videoPhase !== 'fading' || reducedMotion) return
+    const delay = Math.max(0, VIDEO_FADE_MS - LOGO_REVEAL_EARLY_MS)
+    const t = setTimeout(() => setVideoPhase('done'), delay)
+    return () => clearTimeout(t)
+  }, [videoPhase, reducedMotion])
+
+  const handleFadeWrapperTransitionEnd = useCallback((e: React.TransitionEvent<HTMLDivElement>) => {
+    if (e.propertyName !== 'opacity') return
+    setVideoPhase((p) => (p === 'fading' ? 'done' : p))
+  }, [])
 
   return (
-    <section
-      className="relative w-full min-h-[100dvh] min-h-[100svh] flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 pt-0 pb-14"
-      style={{
-        background:
-          'linear-gradient(165deg, rgb(2, 2, 4) 0%, rgb(6, 6, 8) 35%, rgb(3, 3, 5) 70%, rgb(1, 1, 2) 100%)',
-      }}
-    >
-      {/* Extra vignette so hero reads darker than the page fixed bg */}
+    <section className="relative flex min-h-[100dvh] min-h-[100svh] w-full flex-col items-center justify-center overflow-hidden bg-neutral-950 px-4 pb-14 pt-8 sm:px-6 sm:pt-10">
+      {/* Scrim so headline + buttons stay readable */}
       <div
-        className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-b from-black/28 via-black/22 to-black/35"
+        className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/55 via-black/50 to-black/65"
         aria-hidden
       />
-      {/* Accent: rotating chip (masked fade toward content) */}
       <div
-        className="absolute inset-0 z-[1]"
-        style={{
-          maskImage: 'linear-gradient(to bottom, black 30%, transparent 50%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, black 30%, transparent 50%)',
-        }}
-      >
-        <motion.div
-          className="absolute flex inset-0 bg-contain bg-center bg-no-repeat opacity-[0.15]"
-          style={{
-            backgroundImage: 'url(/PokerChips/bluepokerchip010.png)',
-            // Soft oval vignette so the chip dissolves into the hero instead of a hard bbox
-            maskImage:
-              'radial-gradient(ellipse 72% 68% at 50% 40%, black 32%, black 48%, transparent 76%)',
-            WebkitMaskImage:
-              'radial-gradient(ellipse 72% 68% at 50% 40%, black 32%, black 48%, transparent 76%)',
-            maskRepeat: 'no-repeat',
-            WebkitMaskRepeat: 'no-repeat',
-            maskSize: '100% 100%',
-            WebkitMaskSize: '100% 100%',
-          }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
-        />
-      </div>
+        className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-br from-slate-950/40 via-transparent to-purple-950/30"
+        aria-hidden
+      />
 
-      {/* Hero Content - centered with responsive offset (no fixed px) */}
-      <div className="flex flex-col gap-y-2 items-center justify-center z-10 text-center w-full max-w-4xl mx-auto -mt-[8vh] sm:-mt-[6vh]">
-        {/* Logo - responsive size, backdrop + shadow so it stands out against the chip */}
-        <motion.div
-          className="mb-2 sm:mb-4 relative"
-          initial={{ y: -89, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.9, delay: 0.3, ease: "easeOut" }}
+      {/* Full-bleed tour card — object-cover tiles, very slow pixel reveal, grayscale */}
+      {videoPhase === 'done' && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[3] overflow-hidden opacity-[0.5] md:opacity-[0.5]"
+          aria-hidden
         >
-          <Image
-            src="/morbius/MorbiusLogo (3).png"
-            alt="Morbius"
-            width={160}
-            height={160}
-            className="relative z-10 mx-2 sm:mx-5 w-48 h-48 sm:w-64 sm:h-64 md:w-72 md:h-72 lg:w-80 lg:h-80 object-contain drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)] drop-shadow-[0_0_40px_rgba(34,211,238,0.15)]"
-            priority
+          <PixelImage
+            src={HERO_TOUR_CARD_SRC}
+            grid="8x8"
+            rounded={false}
+            alwaysGrayscale
+            grayscaleAnimation={false}
+            className="absolute inset-0 h-full w-full hover:!scale-100"
+            pixelFadeInDuration={HERO_PIXEL_FADE_MS}
+            maxAnimationDelay={HERO_PIXEL_MAX_DELAY_MS}
           />
-        </motion.div>
+        </div>
+      )}
 
-        {/* Main Headline */}
-        <motion.h1
-          className="font-russo-one mb-3 sm:mb-4"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
-        >
-          <span className="block text-4xl sm:text-5xl md:text-5xl lg:text-6xl font-black text-white tracking-tight">
-            DEFI GAMING
-          </span>
-          <span className="block text-4xl sm:text-5xl md:text-5xl lg:text-6xl font-black text-purple-500 tracking-tight">
-            DONE RIGHT
-          </span>
-        </motion.h1>
+      {/* Accent: rotating chip — disabled per design */}
+      {/*
+      ...
+      */}
 
-        {/* Buttons */}
-        <motion.div
-          className="flex flex-row gap-3 sm:gap-4 justify-center flex-wrap"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 1.4, ease: "easeOut" }}
-        >
-          <Link
-            href="/swap"
-            className="px-6 py-3 bg-gradient-to-b from-cyan-600 to-cyan-800 text-white font-semibold text-sm sm:text-base rounded-full hover:from-purple-500 hover:to-purple-700 transition-all duration-300 hover:scale-105 shadow-lg shadow-cyan-500/20"
+      <div className="relative z-10 flex w-full max-w-4xl flex-col items-center justify-center gap-y-2 px-2 text-center">
+        {/*
+          Video + headline share one fixed min-height stack so copy never jumps when the clip fades.
+          Headline sits in the lower third of the video (overlap); position is unchanged after video ends.
+        */}
+        <div className="relative mx-auto w-full max-w-3xl min-h-[min(52vw,420px)] sm:min-h-[min(48vw,460px)]">
+          <div
+            className={`pointer-events-none absolute inset-x-0 top-0 z-0 aspect-video w-full overflow-hidden transition-opacity ease-out select-none ${
+              videoPhase === 'done' || reducedMotion ? 'opacity-0' : 'opacity-100'
+            }`}
+            style={{ transitionDuration: `${VIDEO_FADE_MS}ms` }}
+            onTransitionEnd={handleFadeWrapperTransitionEnd}
+            aria-hidden
           >
+            {!reducedMotion && (
+              <div
+                className="h-full w-full"
+                style={{
+                  WebkitMaskImage:
+                    'radial-gradient(ellipse 56% 52% at 50% 48%, #000 18%, #000 36%, transparent 74%)',
+                  maskImage:
+                    'radial-gradient(ellipse 56% 52% at 50% 48%, #000 18%, #000 36%, transparent 74%)',
+                  WebkitMaskRepeat: 'no-repeat',
+                  maskRepeat: 'no-repeat',
+                  WebkitMaskSize: '100% 100%',
+                  maskSize: '100% 100%',
+                }}
+              >
+                <video
+                  className="h-full w-full object-cover"
+                  src={HERO_VIDEO_SRC}
+                  autoPlay
+                  muted
+                  playsInline
+                  preload="auto"
+                  onEnded={handleVideoEnded}
+                  onError={handleVideoError}
+                />
+              </div>
+            )}
+          </div>
+
+          <h1 className="font-russo-one relative z-20 mx-auto mb-3 max-w-4xl px-1 pt-[clamp(11rem,31vw,17.5rem)] text-center sm:mb-4">
+            <span className="block text-4xl font-black tracking-tight text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)] sm:text-5xl md:text-5xl lg:text-6xl">
+              DEFI GAMING,
+            </span>
+            <span className="block text-4xl font-black tracking-tight text-purple-500 drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)] sm:text-5xl md:text-5xl lg:text-6xl">
+              DONE RIGHT
+            </span>
+          </h1>
+        </div>
+
+        <motion.div
+          className="flex flex-row flex-wrap justify-center gap-3 sm:gap-4"
+          initial={{ opacity: 1, y: 0 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Link href="/swap" className={HERO_GLASS_BTN}>
             Get Morbius
           </Link>
 
-          <Link
-            href="#what-is-morbius"
-            className="px-7 py-3.5 bg-white/10 border border-white/20 text-white font-semibold text-base sm:text-lg rounded-full hover:bg-white/20 hover:border-cyan-500/50 transition-all duration-300 hover:scale-105"
-          >
+          <Link href="#what-is-morbius" className={HERO_GLASS_BTN}>
             What is Morbius?
           </Link>
 
           <button
+            type="button"
             onClick={() => {
-              const gamesSection = document.querySelector('main');
-              gamesSection?.scrollIntoView({ behavior: 'smooth' });
+              const gamesSection = document.querySelector('main')
+              gamesSection?.scrollIntoView({ behavior: 'smooth' })
             }}
-            className="px-6 py-3 bg-gradient-to-b from-purple-600 to-purple-800 text-white font-semibold text-sm sm:text-base rounded-full hover:from-cyan-500 hover:to-cyan-700 transition-all duration-300 hover:scale-105 shadow-lg shadow-purple-500/20"
+            className={HERO_GLASS_BTN}
           >
             Play Now
           </button>
 
           <button
+            type="button"
             onClick={() => {
               if (onOpenPlayerProfile) {
                 onOpenPlayerProfile()
@@ -124,27 +191,25 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal }: HeroSectio
               }
               onOpenAuthModal?.()
             }}
-            className="px-6 py-3 bg-gradient-to-b from-slate-800 to-slate-900 border border-cyan-500/30 text-white font-semibold text-sm sm:text-base rounded-full hover:from-slate-700 hover:to-slate-800 hover:border-cyan-400/50 transition-all duration-300 hover:scale-105 shadow-lg shadow-cyan-900/20"
+            className={HERO_GLASS_BTN}
           >
             My Dashboard
           </button>
         </motion.div>
       </div>
 
-      {/* Scroll Indicator - fixed to bottom of section so it's consistent everywhere */}
       <motion.div
-        className="absolute bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 z-10 flex justify-center"
+        className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 justify-center sm:bottom-6"
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1, delay: 2, ease: "easeOut" }}
+        animate={{ opacity: videoPhase === 'done' ? 1 : 0.35 }}
+        transition={{ duration: 0.8, delay: videoPhase === 'done' ? 0.4 : 0, ease: 'easeOut' }}
       >
         <div className="animate-bounce">
-          <svg className="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-5 w-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
         </div>
       </motion.div>
-
     </section>
   )
 }

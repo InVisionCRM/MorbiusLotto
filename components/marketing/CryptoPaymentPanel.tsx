@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Copy, Check, ChevronRight, AlertCircle, Loader2, MessagesSquare } from 'lucide-react'
+import { ChevronRight, AlertCircle, Loader2, MessagesSquare } from 'lucide-react'
+import { CopyButton as ClipboardCopyButton } from '@/components/ui/copy-button'
 import { WPLS_TOKEN_ADDRESS } from '@/lib/contracts'
 
 // ── Configure your payment wallet here ──────────────────────────────────────
@@ -64,15 +65,8 @@ export function usePlsUsdPrice() {
   return { price, loading, error }
 }
 
-function CopyButton({ text, accent = 'cyan' }: { text: string; accent?: 'cyan' | 'amber' }) {
+function PaymentCopyControl({ text, accent = 'cyan' }: { text: string; accent?: 'cyan' | 'amber' }) {
   const [copied, setCopied] = useState(false)
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
 
   const colorClass =
     accent === 'amber'
@@ -80,23 +74,21 @@ function CopyButton({ text, accent = 'cyan' }: { text: string; accent?: 'cyan' |
       : 'bg-cyan-600/20 hover:bg-cyan-600/35 border-cyan-500/40 text-cyan-300'
 
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all shrink-0 ${colorClass}`}
+    <div
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all shrink-0 ${colorClass}`}
     >
-      {copied ? (
-        <>
-          <Check className="w-4 h-4 text-green-400" />
-          <span className="text-green-400">Copied!</span>
-        </>
-      ) : (
-        <>
-          <Copy className="w-4 h-4" />
-          Copy
-        </>
-      )}
-    </button>
+      <ClipboardCopyButton
+        content={text}
+        onCopiedChange={(c) => setCopied(!!c)}
+        toastOnError={false}
+        variant="ghost"
+        size="sm"
+        className="h-7 w-7 p-0 text-inherit hover:bg-black/10"
+        title="Copy"
+        aria-label="Copy"
+      />
+      <span className={copied ? 'text-green-400' : undefined}>{copied ? 'Copied!' : 'Copy'}</span>
+    </div>
   )
 }
 
@@ -199,7 +191,7 @@ export function CryptoPaymentPanel({
                 `${plsAmountFormatted} PLS`
               )}
             </div>
-            {plsAmountFormatted && <CopyButton text={plsAmountFormatted} accent={accent} />}
+            {plsAmountFormatted && <PaymentCopyControl text={plsAmountFormatted} accent={accent} />}
           </div>
           {plsAmount && (
             <p className="text-xs text-slate-500 pl-1">
@@ -222,7 +214,7 @@ export function CryptoPaymentPanel({
             <div className="flex-1 px-4 py-3 rounded-xl font-mono text-sm text-slate-200 bg-slate-800/60 border border-slate-600/50 truncate">
               {PAYMENT_WALLET}
             </div>
-            <CopyButton text={PAYMENT_WALLET} accent={accent} />
+            <PaymentCopyControl text={PAYMENT_WALLET} accent={accent} />
           </div>
         </div>
 

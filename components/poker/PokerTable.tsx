@@ -66,6 +66,8 @@ export interface PokerTableProps {
   onAnimationReaction?: (emotion: import('@/components/poker/avatar/AvatarPreview').Emotion) => void;
   /** Called when any player clicks an opponent's avatar. */
   onOpponentClick?: (address: string) => void;
+  /** Right-click radial on opponent (profile / follow / gift). */
+  onOpponentRadialAction?: (action: 'profile' | 'follow' | 'gift', address: string) => void;
   /** When set, renders the tournament HUD overlay in the top-left corner. */
   tournamentHUD?: {
     state: PokerTournamentState;
@@ -78,7 +80,7 @@ export interface PokerTableProps {
   onOpenEditQuickChat?: () => void;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [, setDims] = useState({ w: 640, h: 500 });
 
@@ -142,6 +144,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onPhraseReaction: onPhraseReaction,
       onAnimationReaction: onAnimationReaction,
       onOpponentClick: onOpponentClick,
+      onOpponentRadialAction: onOpponentRadialAction,
       quickChatPhrases,
       setQuickChatPhrases,
       onOpenEditQuickChat,

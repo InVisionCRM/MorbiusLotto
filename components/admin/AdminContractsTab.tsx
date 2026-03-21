@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useReadContract } from 'wagmi';
 import { formatEther, formatUnits, isAddress, parseEther, parseUnits } from 'viem';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +15,8 @@ import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55';
 import { blackjackAbi } from '@/abi/blackjack';
 import { tournamentPrizeEscrowAbi } from '@/abi/tournament-prize-escrow';
 import { morbiusHolderDistributorAbi } from '@/abi/morbius-holder-distributor';
-import { ChevronDown, ChevronRight, Copy, ExternalLink, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Loader2 } from 'lucide-react';
+import { CopyButton } from '@/components/ui/copy-button';
 
 const TOKEN_DECIMALS = 18;
 
@@ -99,17 +100,17 @@ function FunctionCaller({ func, contractName }: { func: FunctionCall; contractNa
     },
   });
 
+  const resultCopyText = useMemo(() => {
+    if (data === undefined) return '';
+    return typeof data === 'object'
+      ? JSON.stringify(data, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
+      : String(data);
+  }, [data]);
+
   const handleCall = () => {
     if (hasArgs) {
       setManualCall(true);
       setTimeout(() => refetch(), 100);
-    }
-  };
-
-  const copyResult = () => {
-    if (data !== undefined) {
-      const resultStr = typeof data === 'object' ? JSON.stringify(data, (_, v) => typeof v === 'bigint' ? v.toString() : v) : String(data);
-      navigator.clipboard.writeText(resultStr);
     }
   };
 
@@ -172,14 +173,13 @@ function FunctionCaller({ func, contractName }: { func: FunctionCall; contractNa
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] text-slate-400">Result:</span>
                     {data !== undefined && (
-                      <Button
-                        onClick={copyResult}
+                      <CopyButton
+                        content={resultCopyText}
+                        copyToast="Result copied"
                         size="sm"
                         variant="ghost"
                         className="h-5 w-5 p-0"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </Button>
+                      />
                     )}
                   </div>
                   {error ? (
@@ -212,14 +212,13 @@ function FunctionCaller({ func, contractName }: { func: FunctionCall; contractNa
           <div className="flex items-center gap-1">
             {isLoading && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
             {data !== undefined && (
-              <Button
-                onClick={copyResult}
+              <CopyButton
+                content={resultCopyText}
+                copyToast="Result copied"
                 size="sm"
                 variant="ghost"
                 className="h-6 w-6 p-0"
-              >
-                <Copy className="w-3 h-3" />
-              </Button>
+              />
             )}
           </div>
         )}

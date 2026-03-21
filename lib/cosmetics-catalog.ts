@@ -95,9 +95,10 @@ const MORBIUS_PRICE: Record<ItemTier, number> = {
   legendary: 100_000,
 };
 
+/** Max mintable copies per shop item at each tier (catalog default; DB row may differ if already minted). */
 export const MAX_SUPPLY: Record<ItemTier, number> = {
-  common:    50,
-  uncommon:  25,
+  common:    20,
+  uncommon:  10,
   rare:      5,
   legendary: 1,
 };

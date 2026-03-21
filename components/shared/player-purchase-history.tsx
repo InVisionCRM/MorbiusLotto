@@ -10,10 +10,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { CopyButton } from '@/components/ui/copy-button'
 import { Badge } from '@/components/ui/badge'
-import { RefreshCw, Copy, CheckCheck } from 'lucide-react'
+import { RefreshCw, CheckCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
 import { formatMORBIUS } from '@/lib/format-utils'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
@@ -268,21 +268,21 @@ export function PlayerPurchaseHistory({
                     </TableCell>
                     <TableCell className="py-2.5 px-4 text-center">
                       {r.tx ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={async (e) => {
-                            e.stopPropagation()
-                            await navigator.clipboard.writeText(r.tx!)
-                            toast.success('Transaction hash copied!', {
-                              description: `${r.tx!.slice(0, 10)}...${r.tx!.slice(-8)}`,
-                            })
-                          }}
-                          className="text-sky-300 hover:text-sky-200 hover:bg-white/5 h-7 px-2"
+                        <div
+                          className="inline-flex items-center gap-1 text-sky-300 hover:text-sky-200 h-7 px-2 rounded-md hover:bg-white/5"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <Copy className="w-3 h-3 mr-1" />
-                          Txn
-                        </Button>
+                          <CopyButton
+                            content={r.tx}
+                            copyToast="Transaction hash copied!"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-sky-300 hover:text-sky-200 hover:bg-transparent"
+                            title="Copy transaction hash"
+                            aria-label="Copy transaction hash"
+                          />
+                          <span className="text-xs font-medium">Txn</span>
+                        </div>
                       ) : (
                         <span className="text-white/40">—</span>
                       )}

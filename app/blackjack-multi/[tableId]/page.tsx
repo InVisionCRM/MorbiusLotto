@@ -28,6 +28,8 @@ import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTIN
 import { useAudio, AudioManager } from '@/hooks/use-audio';
 import { usePlayerStatsEnhanced } from '@/hooks/use-blackjack-stats';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
+import { IconButton } from '@/components/animate-ui/components/buttons/icon';
+import { toast } from 'sonner';
 
 const TURN_TIMEOUT = 30;
 const BETTING_TIMEOUT = 15;
@@ -1028,7 +1030,9 @@ export default function BlackjackMultiTablePage() {
           {/* Tip dealer button — top center */}
           {address && wsConnected && wsClient && myPosition !== null && (
             <div className="flex flex-col items-center" style={{ position: 'relative', zIndex: 12 }}>
-              <button
+              <IconButton
+                variant="tip"
+                size="tip"
                 onClick={async () => {
                   if (tipAnimating) return;
                   playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
@@ -1044,10 +1048,9 @@ export default function BlackjackMultiTablePage() {
                   } catch (e) { setError((e as Error).message); setTipAnimating(false); }
                 }}
                 disabled={tipAnimating}
-                className="px-3 py-1 rounded bg-amber-900/50 border border-amber-600/40 text-amber-300 text-[11px] font-medium hover:bg-amber-800/60 transition-all disabled:opacity-50"
               >
                 Tip 2,000
-              </button>
+              </IconButton>
 
               {/* Chip animation — flies up to dealer */}
               {tipAnimating && (
@@ -1457,12 +1460,16 @@ export default function BlackjackMultiTablePage() {
 }
 
 const CHAT_MAX_LENGTH = 150;
-const CHAT_BURST_LIMIT = 3;
+const CHAT_BURST_LIMIT = 7;
 const CHAT_COOLDOWN_MS = 30_000;
+/** Don’t spam toast if user keeps tapping Send while on cooldown */
+const CHAT_COOLDOWN_TOAST_THROTTLE_MS = 4000;
 
 function ChatInput({ onSend }: { onSend: (text: string) => void }) {
   const [text, setText] = useState('');
   const sentTimestamps = useRef<number[]>([]);
+  const lastCooldownToastAt = useRef(0);
+  const maxLengthToastShownForDraft = useRef(false);
   const [cooldownEnd, setCooldownEnd] = useState(0);
   const [cooldownLeft, setCooldownLeft] = useState(0);
 
@@ -1479,7 +1486,16 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
     const msg = text.trim();
     if (!msg) return;
     const now = Date.now();
-    if (now < cooldownEnd) return;
+    if (now < cooldownEnd) {
+      if (now - lastCooldownToastAt.current >= CHAT_COOLDOWN_TOAST_THROTTLE_MS) {
+        lastCooldownToastAt.current = now;
+        const s = Math.max(1, Math.ceil((cooldownEnd - now) / 1000));
+        toast.message('Chat cooldown', {
+          description: `Wait ${s}s — you’re sending messages too fast.`,
+        });
+      }
+      return;
+    }
 
     // Prune timestamps older than cooldown window
     sentTimestamps.current = sentTimestamps.current.filter(t => now - t < CHAT_COOLDOWN_MS);
@@ -1487,13 +1503,19 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
     if (sentTimestamps.current.length >= CHAT_BURST_LIMIT) {
       const end = sentTimestamps.current[0] + CHAT_COOLDOWN_MS;
       setCooldownEnd(end);
-      setCooldownLeft(Math.ceil((end - now) / 1000));
+      const s = Math.ceil((end - now) / 1000);
+      setCooldownLeft(s);
+      lastCooldownToastAt.current = now;
+      toast.warning('Slow down', {
+        description: `${CHAT_BURST_LIMIT} messages in 30s — wait ${s}s before chatting again.`,
+      });
       return;
     }
 
     sentTimestamps.current.push(now);
     onSend(msg);
     setText('');
+    maxLengthToastShownForDraft.current = false;
   };
 
   const onCooldown = cooldownLeft > 0;
@@ -1504,7 +1526,17 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
       <div className="relative flex-1">
         <Input
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={e => {
+            const v = e.target.value;
+            setText(v);
+            if (v.length >= CHAT_MAX_LENGTH && !maxLengthToastShownForDraft.current) {
+              maxLengthToastShownForDraft.current = true;
+              toast.message('Character limit', {
+                description: `${CHAT_MAX_LENGTH} characters max per message.`,
+              });
+            }
+            if (v.length < CHAT_MAX_LENGTH) maxLengthToastShownForDraft.current = false;
+          }}
           placeholder={onCooldown ? `Wait ${cooldownLeft}s…` : 'Table chat…'}
           className="h-7 text-xs bg-white/10 border-white/20 text-slate-200 placeholder:text-white/30 pr-8"
           maxLength={CHAT_MAX_LENGTH}

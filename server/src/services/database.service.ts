@@ -1959,6 +1959,32 @@ export class DatabaseService {
     return result.rows[0] ? this.normalizeGame(result.rows[0]) : null;
   }
 
+  /** Multiplayer blackjack: one row per player per round (used as history `id` for verify links). */
+  async getBlackjackMultiRoundSeatWithRound(seatId: string): Promise<{ seat: any; round: any } | null> {
+    const id = typeof seatId === 'string' ? seatId.trim() : seatId;
+    if (!id) return null;
+    const seatResult = await this.pool.query(`SELECT * FROM blackjack_multi_round_seats WHERE id = $1`, [id]);
+    if (!seatResult.rows[0]) return null;
+    const seat = seatResult.rows[0];
+    const roundResult = await this.pool.query(`SELECT * FROM blackjack_multi_rounds WHERE id = $1`, [seat.round_id]);
+    if (!roundResult.rows[0]) return null;
+    return { seat, round: roundResult.rows[0] };
+  }
+
+  /** Load a completed round and all seats (seat_position ASC). Used for verify-by-round-id when exactly one seat. */
+  async getBlackjackMultiRoundWithSeats(roundId: string): Promise<{ round: any; seats: any[] } | null> {
+    const id = typeof roundId === 'string' ? roundId.trim() : roundId;
+    if (!id) return null;
+    const roundResult = await this.pool.query(`SELECT * FROM blackjack_multi_rounds WHERE id = $1`, [id]);
+    if (!roundResult.rows[0]) return null;
+    const round = roundResult.rows[0];
+    const seatsResult = await this.pool.query(
+      `SELECT * FROM blackjack_multi_round_seats WHERE round_id = $1 ORDER BY seat_position ASC`,
+      [id],
+    );
+    return { round, seats: seatsResult.rows };
+  }
+
   async getSessionGames(sessionId: string): Promise<Game[]> {
     const query = `
       SELECT * FROM games

@@ -18,11 +18,10 @@ import {
   Calendar,
   Clock,
   Crown,
-  Copy,
-  Check,
   Wallet,
   ShieldAlert,
 } from 'lucide-react'
+import { CopyButton } from '@/components/ui/copy-button'
 import { toast } from 'sonner'
 import { formatEther } from 'viem'
 import {
@@ -85,7 +84,6 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
   const { address: connectedAddress } = useAccount()
   const isAdmin = isAdminWallet(connectedAddress)
   const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'creator' | 'audit'>('stats')
-  const [addressCopied, setAddressCopied] = useState(false)
   const { displayName, profileImageUrl, avatarConfig } = useProfileForAddress(playerAddress ?? null)
 
   if (isLoading) {
@@ -349,15 +347,6 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
     ...(playerAddress ? [{ id: 'audit' as const, label: 'Audit', icon: ShieldAlert }] : []),
   ]
 
-  const handleCopyAddress = () => {
-    if (!playerAddress) return
-    navigator.clipboard.writeText(playerAddress).then(() => {
-      setAddressCopied(true)
-      toast.success('Address copied')
-      setTimeout(() => setAddressCopied(false), 2000)
-    }).catch(() => toast.error('Failed to copy'))
-  }
-
   return (
     <div className="space-y-6">
       {/* Address: avatar if present, full address, copy — no box */}
@@ -380,15 +369,15 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
           <span className="font-mono text-xs sm:text-sm text-cyan-300/90 break-all min-w-0" title={playerAddress}>
             {playerAddress}
           </span>
-          <button
-            type="button"
-            onClick={handleCopyAddress}
-            className="shrink-0 p-1.5 rounded text-white/60 hover:text-white transition-colors"
+          <CopyButton
+            content={playerAddress}
+            copyToast="Address copied"
+            variant="ghost"
+            size="default"
+            className="p-1.5 h-9 w-9 text-white/60 hover:text-white"
             title="Copy address"
             aria-label="Copy address"
-          >
-            {addressCopied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-          </button>
+          />
         </div>
       )}
 

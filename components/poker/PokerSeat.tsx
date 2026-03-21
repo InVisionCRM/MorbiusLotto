@@ -6,10 +6,26 @@ import { toBigIntSafe } from '@/lib/safe-bigint';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, MessageCircle, Plus } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  Flame,
+  Frown,
+  Gift,
+  Menu,
+  MessageCircle,
+  Music2,
+  Plus,
+  Smile,
+  SmilePlus,
+  Trophy,
+  UserCircle,
+  UserPlus,
+  Zap,
+} from 'lucide-react';
 import AvatarPreview, { type Emotion } from './avatar/AvatarPreview';
-import { DEFAULT_AVATAR_CONFIG } from './avatar/CharacterCreator';
 import { FloatingDock } from '@/components/ui/floating-dock';
+import { RadialMenu, type RadialMenuItem } from '@/components/ui/radial-menu';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
 
@@ -191,6 +207,23 @@ const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
   { title: 'Sink',      emotion: 'sink'      },
 ];
 
+const EMOTION_RADIAL_ICONS: Partial<Record<Emotion, LucideIcon>> = {
+  happy: Smile,
+  wink: SmilePlus,
+  surprised: Zap,
+  angry: Flame,
+  sad: Frown,
+  dance: Music2,
+  jackpot: Trophy,
+  sink: ArrowDownToLine,
+};
+
+const OPPONENT_RADIAL_ITEMS: RadialMenuItem[] = [
+  { id: 'profile', label: 'Profile', icon: UserCircle },
+  { id: 'follow', label: 'Follow', icon: UserPlus },
+  { id: 'gift', label: 'Gift', icon: Gift },
+];
+
 // ── PokerSeat ─────────────────────────────────────────────────────────────
 
 export interface PokerSeatProps {
@@ -217,6 +250,8 @@ export interface PokerSeatProps {
   onAnimationReaction?: (emotion: Emotion) => void;
   /** Called when any player clicks an opponent's avatar. */
   onOpponentClick?: (address: string) => void;
+  /** Right-click radial on opponent: profile, follow/unfollow, gift (wired in table page). */
+  onOpponentRadialAction?: (action: 'profile' | 'follow' | 'gift', address: string) => void;
   /** When provided with setQuickChatPhrases and onOpenEditQuickChat, QuickChat uses this state and Edit QuickChat is opened by parent (e.g. header Settings). */
   quickChatPhrases?: string[];
   setQuickChatPhrases?: (phrases: string[]) => void;
@@ -225,7 +260,7 @@ export interface PokerSeatProps {
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat }: PokerSeatProps) {
+export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayEmoji: propsOverlayEmoji, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -256,8 +291,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
   const [overlayEmoji, setOverlayEmoji] = useState<string | null>(null);
   const [overlayPhrase, setOverlayPhrase] = useState<string | null>(null);
 
-  // Avatar animation picker (current player only)
-  const [animationPickerOpen, setAnimationPickerOpen] = useState(false);
+  /** Right-click emotion radial (current player) — drives slouch while open. */
+  const [emotionRadialOpen, setEmotionRadialOpen] = useState(false);
   const [localEmotion, setLocalEmotion] = useState<Emotion | null>(null);
   const localEmotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const avatarRef = useRef<HTMLDivElement | null>(null);
@@ -281,7 +316,29 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
   }, [isCurrentPlayer]);
 
   // Slouch while any menu is open
-  const hasMenuOpen = quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || animationPickerOpen;
+  const hasMenuOpen = quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || emotionRadialOpen;
+
+  const emotionRadialItems = useMemo(
+    () =>
+      AVATAR_ANIMATIONS.map(({ title, emotion }) => ({
+        id: emotion,
+        label: title,
+        icon: EMOTION_RADIAL_ICONS[emotion] ?? Smile,
+      })),
+    [],
+  );
+
+  const handleOpponentRadialSelect = useCallback(
+    (item: RadialMenuItem) => {
+      const addr = seat.playerAddress;
+      if (!addr || !onOpponentRadialAction) return;
+      const id = String(item.id);
+      if (id === 'profile' || id === 'follow' || id === 'gift') {
+        onOpponentRadialAction(id, addr);
+      }
+    },
+    [onOpponentRadialAction, seat.playerAddress],
+  );
 
   // Active emotion: menu-open slouch > broadcast (from server) > local (just clicked) > action-driven
   const activeEmotion: Emotion = hasMenuOpen ? 'slouch' : (propsOverlayEmotion ?? localEmotion ?? avatarEmotion);
@@ -311,7 +368,6 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
       setQuickMenuOpen(true);
       setEmojiPickerOpen(false);
       setQuickChatPickerOpen(false);
-      setAnimationPickerOpen(false);
     }, LONG_PRESS_MS);
   }, [isCurrentPlayer, clearLongPress]);
 
@@ -324,20 +380,9 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
     setQuickMenuOpen(true);
     setEmojiPickerOpen(false);
     setQuickChatPickerOpen(false);
-    setAnimationPickerOpen(false);
-  }, [isCurrentPlayer]);
-
-  const handleAvatarClick = useCallback((e: React.MouseEvent) => {
-    if (!isCurrentPlayer) return;
-    e.stopPropagation();
-    setAnimationPickerOpen(prev => !prev);
-    setQuickMenuOpen(false);
-    setEmojiPickerOpen(false);
-    setQuickChatPickerOpen(false);
   }, [isCurrentPlayer]);
 
   const handleAnimationSelect = useCallback((emotion: Emotion) => {
-    setAnimationPickerOpen(false);
     onAnimationReaction?.(emotion);
     setLocalEmotion(emotion);
     if (localEmotionTimerRef.current) clearTimeout(localEmotionTimerRef.current);
@@ -396,7 +441,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
 
   // Close menus when clicking outside
   useEffect(() => {
-    const isOpen = quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || animationPickerOpen;
+    const isOpen = quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || emotionRadialOpen;
     if (!isOpen || !isCurrentPlayer) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -408,11 +453,10 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
       setQuickMenuOpen(false);
       setEmojiPickerOpen(false);
       setQuickChatPickerOpen(false);
-      setAnimationPickerOpen(false);
     };
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
-  }, [isCurrentPlayer, quickMenuOpen, emojiPickerOpen, quickChatPickerOpen, animationPickerOpen]);
+  }, [isCurrentPlayer, quickMenuOpen, emojiPickerOpen, quickChatPickerOpen, emotionRadialOpen]);
 
   const activeAction =
     lastAction && lastAction.action !== 'blind' ? lastAction.action :
@@ -554,103 +598,109 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
         </div>
       )}
 
-      {/* ── Avatar with circular timer + role badges + animation picker ── */}
+      {/* ── Avatar with circular timer + role badges + radial animation menu (right-click) ── */}
       <div className="relative flex-shrink-0" style={{ zIndex: 1 }}>
-
-        {/* Animation picker — above avatar, current player only */}
-        <AnimatePresence>
-          {isCurrentPlayer && animationPickerOpen && (
-            <motion.div
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-50"
-              initial={{ opacity: 0, scale: 0.9, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 8 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            >
-              <div
-                className="rounded-2xl p-3 max-h-[70vh] overflow-y-auto overflow-x-hidden"
-                style={{
-                  background: 'rgba(10,10,10,0.97)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
-                  width: 320,
-                  scrollbarWidth: 'thin',
-                  scrollbarColor: 'rgba(255,255,255,0.2) transparent',
-                }}
-              >
-                <div className="grid grid-cols-6 gap-2">
-                  {AVATAR_ANIMATIONS.map(({ title, emotion }) => (
-                    <button
-                      key={emotion}
-                      type="button"
-                      onClick={() => handleAnimationSelect(emotion)}
-                      className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors"
-                    >
-                      <AvatarPreview
-                        config={seat.avatarConfig ?? DEFAULT_AVATAR_CONFIG}
-                        emotion={emotion}
-                        compact
-                        className="w-14 h-14"
-                      />
-                      <span className="text-[10px] font-medium text-zinc-300 leading-none">{title}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Circular timer ring around avatar */}
         {isActing && timeLeft != null && (
           <CircularTimerRing size={100} timeLeft={timeLeft} maxTime={maxTime} />
         )}
 
-        {/* Avatar circle */}
-        <div
-          ref={avatarRef}
-          className="relative rounded-full overflow-hidden"
-          style={{
-            width: 100,
-            height: 100,
-            border: isActing
-              ? '2px solid transparent'
-              : isCurrentPlayer
-                ? '2px solid rgba(251,191,36,0.6)'
-                : '2px solid rgba(255,255,255,0.18)',
-            background: 'rgba(0,0,0,0.6)',
-            cursor: (isCurrentPlayer || (!isCurrentPlayer && onOpponentClick && seat.playerAddress)) ? 'pointer' : 'default',
-            boxShadow: isCurrentPlayer ? '0 0 0 1px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.6)',
-          }}
-          onClick={isCurrentPlayer ? handleAvatarClick : (onOpponentClick && seat.playerAddress ? () => onOpponentClick(seat.playerAddress!) : undefined)}
-          title={isCurrentPlayer ? 'Click to animate' : (onOpponentClick && seat.playerAddress ? 'View profile' : undefined)}
-        >
-          {seat.avatarConfig ? (
-            <AvatarPreview
-              config={seat.avatarConfig}
-              emotion={activeEmotion}
-              compact
-              trackMouse={isCurrentPlayer && !mouseIdle}
-              forceAsleep={seat.status === 'sitting_out'}
-              roamEyes={(isCurrentPlayer && mouseIdle) || (!isCurrentPlayer && !isActing && seat.status !== 'sitting_out')}
-              className="w-full h-full"
-            />
-          ) : (
+        {/* Avatar circle — emotion radial (current player, right-click); opponent actions radial when wired */}
+        {(() => {
+          const avatarCard = (
             <div
-              className="w-full h-full flex items-center justify-center font-bold"
+              ref={avatarRef}
+              className="relative select-none overflow-hidden rounded-full outline-none"
               style={{
-                color: isCurrentPlayer ? '#fde68a' : '#e2e8f0',
-                fontSize: 32,
-                background: 'linear-gradient(135deg, rgba(30,30,50,1), rgba(10,10,20,1))',
+                width: 100,
+                height: 100,
+                border: isActing
+                  ? '2px solid transparent'
+                  : isCurrentPlayer
+                    ? '2px solid rgba(251,191,36,0.6)'
+                    : '2px solid rgba(255,255,255,0.18)',
+                background: 'rgba(0,0,0,0.6)',
+                cursor: (isCurrentPlayer || (!isCurrentPlayer && onOpponentClick && seat.playerAddress)) ? 'pointer' : 'default',
+                boxShadow: isCurrentPlayer ? '0 0 0 1px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.6)',
               }}
+              onClick={
+                isCurrentPlayer
+                  ? undefined
+                  : onOpponentClick && seat.playerAddress
+                    ? () => onOpponentClick(seat.playerAddress!)
+                    : undefined
+              }
+              title={
+                isCurrentPlayer
+                  ? onAnimationReaction
+                    ? 'Right-click for avatar animations'
+                    : undefined
+                  : onOpponentClick && seat.playerAddress
+                    ? onOpponentRadialAction
+                      ? 'Left-click: profile · Right-click: actions'
+                      : 'View profile'
+                    : undefined
+              }
             >
-              {(seat.displayName?.trim() || seat.playerAddress?.slice(-2) || '?')[0].toUpperCase()}
+              {seat.avatarConfig ? (
+                <AvatarPreview
+                  config={seat.avatarConfig}
+                  emotion={activeEmotion}
+                  compact
+                  trackMouse={isCurrentPlayer && !mouseIdle}
+                  forceAsleep={seat.status === 'sitting_out'}
+                  roamEyes={(isCurrentPlayer && mouseIdle) || (!isCurrentPlayer && !isActing && seat.status !== 'sitting_out')}
+                  className="w-full h-full"
+                />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center font-bold"
+                  style={{
+                    color: isCurrentPlayer ? '#fde68a' : '#e2e8f0',
+                    fontSize: 32,
+                    background: 'linear-gradient(135deg, rgba(30,30,50,1), rgba(10,10,20,1))',
+                  }}
+                >
+                  {(seat.displayName?.trim() || seat.playerAddress?.slice(-2) || '?')[0].toUpperCase()}
+                </div>
+              )}
+              {isCurrentPlayer && (
+                <div className="pointer-events-none absolute inset-0 rounded-full bg-black/0 transition-colors hover:bg-black/20" />
+              )}
             </div>
-          )}
-          {isCurrentPlayer && (
-            <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors rounded-full pointer-events-none" />
-          )}
-        </div>
+          );
+
+          if (isCurrentPlayer && onAnimationReaction) {
+            return (
+              <RadialMenu
+                menuItems={emotionRadialItems}
+                onSelect={(item) => handleAnimationSelect(item.id as Emotion)}
+                onOpenChange={setEmotionRadialOpen}
+                showLabels
+                size={200}
+                iconSize={14}
+                bandWidth={42}
+              >
+                {avatarCard}
+              </RadialMenu>
+            );
+          }
+          if (!isCurrentPlayer && onOpponentRadialAction && seat.playerAddress) {
+            return (
+              <RadialMenu
+                menuItems={OPPONENT_RADIAL_ITEMS}
+                onSelect={handleOpponentRadialSelect}
+                size={200}
+                iconSize={16}
+                bandWidth={44}
+              >
+                {avatarCard}
+              </RadialMenu>
+            );
+          }
+          return avatarCard;
+        })()}
 
         {/* Role badges — bottom of avatar */}
         {(seat.isDealer || seat.isSmallBlind || seat.isBigBlind) && (
@@ -687,7 +737,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
 
         {/* Backdrop to close all menus */}
         <AnimatePresence>
-          {isCurrentPlayer && (quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || animationPickerOpen) && (
+          {isCurrentPlayer && (quickMenuOpen || emojiPickerOpen || quickChatPickerOpen || emotionRadialOpen) && (
             <motion.div
               className="fixed inset-0 z-[45]"
               initial={{ opacity: 0 }}
@@ -698,7 +748,6 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 setQuickMenuOpen(false);
                 setEmojiPickerOpen(false);
                 setQuickChatPickerOpen(false);
-                setAnimationPickerOpen(false);
               }}
               aria-hidden
             />
@@ -827,7 +876,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               </button>
             )}
             <button ref={quickMenuButtonRef} type="button"
-              onClick={(e) => { e.stopPropagation(); setQuickMenuOpen(true); setEmojiPickerOpen(false); setQuickChatPickerOpen(false); setAnimationPickerOpen(false); }}
+              onClick={(e) => { e.stopPropagation(); setQuickMenuOpen(true); setEmojiPickerOpen(false); setQuickChatPickerOpen(false); }}
               className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-white/15 transition-all"
               style={{ color: 'var(--poker-text)', background: 'rgba(0,0,0,0.75)' }} aria-label="Quick menu">
               <MessageCircle className="h-3.5 w-3.5" />

@@ -10,12 +10,10 @@ import {
   Trophy,
   TrendingUp,
   TrendingDown,
-  Copy,
-  Check,
   ExternalLink,
   Zap,
 } from 'lucide-react'
-import { toast } from 'sonner'
+import { CopyButton } from '@/components/ui/copy-button'
 import {
   Area,
   AreaChart,
@@ -69,21 +67,8 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
   const { drops, stats, isLoading } = usePlinkoHistory()
 
   const [activeTab, setActiveTab] = useState<'stats' | 'history'>('stats')
-  const [addressCopied, setAddressCopied] = useState(false)
   const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'profit'>('newest')
   const { displayName, profileImageUrl, avatarConfig } = useProfileForAddress(playerAddress)
-
-  const handleCopyAddress = () => {
-    if (!playerAddress) return
-    navigator.clipboard
-      .writeText(playerAddress)
-      .then(() => {
-        setAddressCopied(true)
-        toast.success('Address copied')
-        setTimeout(() => setAddressCopied(false), 2000)
-      })
-      .catch(() => toast.error('Failed to copy'))
-  }
 
   const sortedForChart = useMemo(() => {
     return [...drops].sort((a, b) => a.timestamp - b.timestamp)
@@ -163,15 +148,15 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
             <span className="font-mono text-xs sm:text-sm text-cyan-300/90 break-all min-w-0" title={playerAddress}>
               {playerAddress}
             </span>
-            <button
-              type="button"
-              onClick={handleCopyAddress}
-              className="shrink-0 p-1.5 rounded text-white/60 hover:text-white transition-colors"
+            <CopyButton
+              content={playerAddress}
+              copyToast="Address copied"
+              variant="ghost"
+              size="default"
+              className="p-1.5 h-9 w-9 text-white/60 hover:text-white"
               title="Copy address"
               aria-label="Copy address"
-            >
-              {addressCopied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-            </button>
+            />
           </div>
         )}
         <div
@@ -256,15 +241,15 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
         <span className="font-mono text-xs sm:text-sm text-cyan-300/90 break-all min-w-0" title={playerAddress}>
           {playerAddress}
         </span>
-        <button
-          type="button"
-          onClick={handleCopyAddress}
-          className="shrink-0 p-1.5 rounded text-white/60 hover:text-white transition-colors"
+        <CopyButton
+          content={playerAddress!}
+          copyToast="Address copied"
+          variant="ghost"
+          size="default"
+          className="p-1.5 h-9 w-9 text-white/60 hover:text-white"
           title="Copy address"
           aria-label="Copy address"
-        >
-          {addressCopied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-        </button>
+        />
       </div>
 
       <div className="flex gap-2 border-b border-white/10 mb-4">

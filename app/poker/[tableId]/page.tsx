@@ -28,6 +28,7 @@ import { usePokerSounds } from '@/hooks/use-poker-sounds';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { useProfileWs } from '@/contexts/profile-ws-context';
 import { useQueryClient } from '@tanstack/react-query';
+import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { toast } from 'sonner';
 
 const POKER_CHAT_BUBBLE_DURATION_MS = 5000;
@@ -452,6 +453,63 @@ export default function PokerTablePage() {
     [tableId, mySeatIndex],
   );
 
+  const onOpponentRadialAction = useCallback(
+    async (action: 'profile' | 'follow' | 'gift', addr: string) => {
+      const me = normalizedAddress;
+      if (action === 'profile') {
+        setOpponentProfileAddress(addr);
+        return;
+      }
+      if (action === 'gift') {
+        toast.info('Gifts coming soon');
+        return;
+      }
+      if (action === 'follow') {
+        if (!me) {
+          toast.error('Connect your wallet to follow players');
+          return;
+        }
+        try {
+          const isFollowing = await queryClient.fetchQuery({
+            queryKey: ['isFollowing', me, addr],
+            queryFn: async () => {
+              const res = await fetch(
+                `/api/player/${addr}/is-following?follower=${encodeURIComponent(me)}`,
+              );
+              if (!res.ok) throw new Error('Failed to check follow status');
+              const data = await res.json();
+              return data.isFollowing as boolean;
+            },
+          });
+
+          if (isFollowing) {
+            const res = await fetch(`/api/player/${addr}/follow`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ follower: me }),
+            });
+            if (!res.ok) throw new Error('Failed to unfollow');
+            toast.success('Unfollowed');
+          } else {
+            const res = await fetch(`/api/player/${addr}/follow`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ follower: me }),
+            });
+            if (!res.ok) throw new Error('Failed to follow');
+            toast.success('Following');
+          }
+          await queryClient.invalidateQueries({ queryKey: ['isFollowing', me, addr] });
+          await queryClient.invalidateQueries({ queryKey: ['followCounts', addr] });
+          await queryClient.invalidateQueries({ queryKey: ['followCounts', me] });
+        } catch {
+          toast.error('Could not update follow');
+        }
+      }
+    },
+    [normalizedAddress, queryClient],
+  );
+
   const mySeat = mySeatIndex >= 0 && state ? state.seats[mySeatIndex] : null;
   const canAct =
     !!hand &&
@@ -769,7 +827,9 @@ export default function PokerTablePage() {
             {/* Tip dealer button — top center overlay */}
             {normalizedAddress && wsConnected && wsClient && mySeat && (
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
-                <button
+                <IconButton
+                  variant="tip"
+                  size="tip"
                   onClick={async () => {
                     if (tipAnimating) return;
                     sounds.play('call', ps('PlayerClickConfirmation1.mp3'));
@@ -783,10 +843,9 @@ export default function PokerTablePage() {
                     setTimeout(() => setTipAnimating(false), 900);
                   }}
                   disabled={tipAnimating}
-                  className="px-3 py-1 rounded bg-amber-900/50 border border-amber-600/40 text-amber-300 text-[11px] font-medium hover:bg-amber-800/60 transition-all disabled:opacity-50 backdrop-blur-sm"
                 >
                   Tip 2,000
-                </button>
+                </IconButton>
                 {tipAnimating && (
                   <div className="absolute pointer-events-none" style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}>
                     <div className="tip-chip-fly">
@@ -814,6 +873,7 @@ export default function PokerTablePage() {
                 onReUpClick={mySeat ? () => setShowDepositModal(true) : undefined}
                 onMenuClick={mySeat ? () => setShowAvatarModal(true) : undefined}
                 onOpponentClick={(addr) => setOpponentProfileAddress(addr)}
+                onOpponentRadialAction={onOpponentRadialAction}
                 quickChatPhrases={quickChatPhrases}
                 setQuickChatPhrases={setQuickChatPhrases}
                 onOpenEditQuickChat={() => setShowEditQuickChatModal(true)}

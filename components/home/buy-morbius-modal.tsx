@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { CopyButton } from '@/components/ui/copy-button'
 
 interface BuyMorbiusModalProps {
   open: boolean
@@ -12,17 +12,7 @@ interface BuyMorbiusModalProps {
 const MORBIUS_CONTRACT_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1'
 
 export function BuyMorbiusModal({ open, onOpenChange }: BuyMorbiusModalProps) {
-  const [copied, setCopied] = useState(false)
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(MORBIUS_CONTRACT_ADDRESS)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000) // Reset after 2 seconds
-    } catch (err) {
-      console.error('Failed to copy: ', err)
-    }
-  }
+  const [copiedLabel, setCopiedLabel] = useState(false)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -46,22 +36,19 @@ export function BuyMorbiusModal({ open, onOpenChange }: BuyMorbiusModalProps) {
                 {MORBIUS_CONTRACT_ADDRESS}
               </div>
             </div>
-            <Button
-              onClick={copyToClipboard}
-              className="px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-medium text-sm rounded transition-colors"
-            >
-              {copied ? (
-                <>
-                  <i className="fas fa-check mr-1"></i>
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <i className="fas fa-copy mr-1"></i>
-                  Copy
-                </>
-              )}
-            </Button>
+            <div className="inline-flex items-center gap-2 px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-medium text-sm rounded transition-colors shrink-0">
+              <CopyButton
+                content={MORBIUS_CONTRACT_ADDRESS}
+                onCopiedChange={(c) => setCopiedLabel(!!c)}
+                toastOnError={false}
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-white hover:bg-white/15"
+                title="Copy contract address"
+                aria-label="Copy contract address"
+              />
+              <span>{copiedLabel ? 'Copied!' : 'Copy'}</span>
+            </div>
           </div>
         </div>
 

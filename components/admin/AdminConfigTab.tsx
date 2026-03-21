@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, RefreshCw, Copy } from 'lucide-react';
+import { Settings, RefreshCw } from 'lucide-react';
+import { CopyButton } from '@/components/ui/copy-button';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -68,17 +69,6 @@ function WeiCalculator() {
   const [morbiusInput, setMorbiusInput] = useState('');
   const weiResult = morbusToWei(morbiusInput);
 
-  const copyWei = () => {
-    if (!weiResult) {
-      toast.error('Enter a MORBIUS amount first');
-      return;
-    }
-    navigator.clipboard.writeText(weiResult).then(
-      () => toast.success('Wei copied to clipboard'),
-      () => toast.error('Copy failed')
-    );
-  };
-
   return (
     <ContractSection title="MORBIUS → Wei">
       <p className="text-[11px] text-slate-500 mb-2">Convert MORBIUS amount to wei (18 decimals) for contract calls.</p>
@@ -99,16 +89,16 @@ function WeiCalculator() {
             <code className="text-[11px] font-mono text-slate-300 bg-slate-800/80 border border-slate-600 rounded px-2 py-1.5 break-all max-w-full">
               {weiResult}
             </code>
-            <Button
+            <CopyButton
+              content={weiResult}
+              copyToast="Wei copied to clipboard"
               type="button"
-              size="sm"
               variant="outline"
-              className="h-7 text-xs border-slate-600 text-slate-300 shrink-0"
-              onClick={copyWei}
-            >
-              <Copy className="w-3.5 h-3.5 mr-1" />
-              Copy
-            </Button>
+              size="sm"
+              className="h-7 text-xs border-slate-600 text-slate-300 shrink-0 px-2"
+              title="Copy wei"
+              aria-label="Copy wei"
+            />
           </div>
         ) : null}
       </div>

@@ -67,31 +67,32 @@ export default function PlinkoTopPlayers() {
 
   return (
     <>
-      <div className="rounded-xl overflow-hidden" style={PANEL_STYLE}>
-        <div className="px-3 py-2 border-b border-white/10">
-          <h3 className="text-cyan-300 font-semibold text-sm">Top Players</h3>
+      <div className="w-full min-w-0 overflow-hidden rounded-xl" style={PANEL_STYLE}>
+        <div className="border-b border-white/10 px-3 py-2">
+          <h3 className="text-sm font-semibold text-cyan-300">Top Players</h3>
         </div>
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow className="border-white/10 hover:bg-transparent">
-              <TableHead className="text-white/70 font-medium">#</TableHead>
-              <TableHead className="text-white/70 font-medium">Player</TableHead>
-              <TableHead className="text-white/70 font-medium text-center">Drops</TableHead>
-              <TableHead className="text-center text-white/70 font-medium">Wagered</TableHead>
-              <TableHead className="text-right text-white/70 font-medium">P/L</TableHead>
-              <TableHead className="text-right text-white/70 font-medium">Win %</TableHead>
+              <TableHead className="w-[16.666%] text-white/70 font-medium">#</TableHead>
+              <TableHead className="w-[16.666%] text-center text-white/70 font-medium">Player</TableHead>
+              <TableHead className="w-[16.666%] text-center text-white/70 font-medium">Drops</TableHead>
+              <TableHead className="w-[16.666%] text-center text-white/70 font-medium">Wagered</TableHead>
+              <TableHead className="w-[16.666%] text-right text-white/70 font-medium">P/L</TableHead>
+              <TableHead className="w-[16.666%] text-right text-white/70 font-medium">Win %</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {list.map((e: PlinkoTopPlayerEntry) => (
               <TableRow key={e.wallet_address} className="border-white/5 hover:bg-white/5">
-                <TableCell className="text-white/90">
-                  <span className={e.rank <= 3 ? 'text-amber-300 font-bold' : 'text-white/60'}>{e.rank}</span>
+                <TableCell className="min-w-0 text-white/90">
+                  <span className={e.rank <= 3 ? 'font-bold text-amber-300' : 'text-white/60'}>{e.rank}</span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="min-w-0 text-center">
                   <button
+                    type="button"
                     onClick={() => setSelectedAddress(e.wallet_address)}
-                    className="text-cyan-400 hover:text-cyan-300 font-mono"
+                    className="font-mono text-cyan-400 hover:text-cyan-300"
                   >
                     {shortAddress(e.wallet_address)}
                   </button>
@@ -101,7 +102,8 @@ export default function PlinkoTopPlayers() {
                 <TableCell
                   className={`text-right tabular-nums ${e.profit_loss >= 0n ? 'text-emerald-400' : 'text-red-400'}`}
                 >
-                  {e.profit_loss >= 0n ? '+' : ''}{formatMorbius(e.profit_loss)}
+                  {e.profit_loss >= 0n ? '+' : ''}
+                  {formatMorbius(e.profit_loss)}
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-white/80">{e.win_rate.toFixed(1)}%</TableCell>
               </TableRow>

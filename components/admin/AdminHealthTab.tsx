@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { formatEther, parseEther } from 'viem';
-import { Activity, RefreshCw, CheckCircle, XCircle, Copy, Loader2, Gift, X } from 'lucide-react';
+import { Activity, RefreshCw, CheckCircle, XCircle, Loader2, Gift, X } from 'lucide-react';
+import { CopyButton } from '@/components/ui/copy-button';
 import { Tooltip, Legend, ResponsiveContainer, Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import {
   BLACKJACK_ADDRESS,
@@ -88,13 +89,6 @@ function formatMorbius(wei: string): string {
     return '0';
   }
 }
-
-function copyToClipboard(text: string) {
-  void navigator.clipboard.writeText(text).then(() => {
-    toast.success('Copied to clipboard', { duration: 1500 });
-  });
-}
-
 
 function truncateAddress(address: string, start = 6, end = 4): string {
   if (address.length <= start + end) return address;
@@ -424,15 +418,18 @@ function WalletCard({ label, address, morbiusWei, lowWarning }: { label: string;
     <div className={HEALTH_CARD_CLASS}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">{label}</span>
-        <button
-          type="button"
-          onClick={() => copyToClipboard(address)}
-          className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1 shrink-0"
-          title="Copy address"
-        >
-          <Copy className="w-3 h-3" />
-          {truncateAddress(address, 5, 4)}
-        </button>
+        <div className="font-mono text-[10px] text-slate-500 flex items-center gap-1 shrink-0">
+          <CopyButton
+            content={address}
+            copyToast="Copied to clipboard"
+            variant="ghost"
+            size="xs"
+            className="h-5 w-5 p-0 text-slate-500 hover:text-cyan-300"
+            title="Copy address"
+            aria-label="Copy address"
+          />
+          <span className="hover:text-cyan-300">{truncateAddress(address, 5, 4)}</span>
+        </div>
       </div>
       <div>
         <p className="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wide">MORBIUS</p>
@@ -479,15 +476,18 @@ function FundableGameCard({
     <div className={HEALTH_CARD_CLASS}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">{game.label}</span>
-        <button
-          type="button"
-          onClick={() => copyToClipboard(game.address)}
-          className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1 shrink-0"
-          title="Copy address"
-        >
-          <Copy className="w-3 h-3" />
-          {truncateAddress(game.address, 5, 4)}
-        </button>
+        <div className="font-mono text-[10px] text-slate-500 flex items-center gap-1 shrink-0">
+          <CopyButton
+            content={game.address}
+            copyToast="Copied to clipboard"
+            variant="ghost"
+            size="xs"
+            className="h-5 w-5 p-0 text-slate-500 hover:text-cyan-300"
+            title="Copy address"
+            aria-label="Copy address"
+          />
+          <span className="hover:text-cyan-300">{truncateAddress(game.address, 5, 4)}</span>
+        </div>
       </div>
       <div>
         <p className="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wide">In contract</p>
@@ -577,15 +577,18 @@ function BlackjackContractsMergedCard({ contracts }: { contracts: BlackjackContr
             <div key={contract.contractAddress} className="border-b border-slate-700/50 pb-3 last:border-0 last:pb-0">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-medium text-slate-300 uppercase tracking-wide">{contract.label}</span>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(contract.contractAddress)}
-                  className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 flex items-center gap-1"
-                  title="Copy address"
-                >
-                  <Copy className="w-3 h-3" />
-                  {truncateAddress(contract.contractAddress, 5, 4)}
-                </button>
+                <div className="font-mono text-[10px] text-slate-500 flex items-center gap-1">
+                  <CopyButton
+                    content={contract.contractAddress}
+                    copyToast="Copied to clipboard"
+                    variant="ghost"
+                    size="xs"
+                    className="h-5 w-5 p-0 text-slate-500 hover:text-cyan-300"
+                    title="Copy address"
+                    aria-label="Copy address"
+                  />
+                  <span className="hover:text-cyan-300">{truncateAddress(contract.contractAddress, 5, 4)}</span>
+                </div>
               </div>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-[10px] text-slate-500">Reserves</span>
@@ -604,10 +607,18 @@ function BlackjackContractsMergedCard({ contracts }: { contracts: BlackjackContr
                     <ul className="space-y-1 text-[10px] font-mono text-slate-400 max-h-28 overflow-y-auto mt-2 pl-1 border-l border-slate-700/50">
                       {contract.addressesWithReserve.map(({ address: addr, reserve }) => (
                         <li key={addr} className="flex justify-between gap-2">
-                          <button type="button" onClick={() => copyToClipboard(addr)} className="hover:text-cyan-300 flex items-center gap-1">
-                            <Copy className="w-2.5 h-2.5 shrink-0" />
+                          <span className="hover:text-cyan-300 flex items-center gap-1">
+                            <CopyButton
+                              content={addr}
+                              copyToast="Copied to clipboard"
+                              variant="ghost"
+                              size="xs"
+                              className="h-4 w-4 min-h-4 min-w-4 p-0 shrink-0 text-slate-400 hover:text-cyan-300"
+                              title="Copy address"
+                              aria-label="Copy address"
+                            />
                             {addr.slice(0, 8)}…{addr.slice(-6)}
-                          </button>
+                          </span>
                           <span className="text-slate-300 tabular-nums shrink-0">{formatMorbius(reserve)}</span>
                         </li>
                       ))}
@@ -1315,13 +1326,18 @@ export default function AdminHealthTab() {
                           <div className="space-y-0.5 max-h-40 overflow-y-auto">
                             {data.tipStats.tippers.map((t) => (
                               <div key={t.address} className="flex items-center justify-between text-xs py-0.5 px-1 rounded hover:bg-white/5">
-                                <button
-                                  onClick={() => copyToClipboard(t.address)}
-                                  className="text-slate-400 hover:text-white font-mono transition-colors"
-                                  title={t.address}
-                                >
-                                  {truncateAddress(t.address)}
-                                </button>
+                                <div className="text-slate-400 hover:text-white font-mono transition-colors flex items-center gap-1 min-w-0">
+                                  <CopyButton
+                                    content={t.address}
+                                    copyToast="Copied to clipboard"
+                                    variant="ghost"
+                                    size="xs"
+                                    className="h-4 w-4 shrink-0 p-0 text-slate-400 hover:text-white"
+                                    title={t.address}
+                                    aria-label="Copy address"
+                                  />
+                                  <span className="truncate">{truncateAddress(t.address)}</span>
+                                </div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-amber-300 font-medium">{formatMorbius(t.totalWei)}</span>
                                   <span className="text-slate-600 text-[10px]">({t.count}x)</span>
@@ -1576,15 +1592,18 @@ export default function AdminHealthTab() {
                   return (
                     <div key={entry.key} className="flex items-center gap-2 flex-wrap">
                       <span className="capitalize text-slate-400 w-32 shrink-0">{entry.label}</span>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(entry.address)}
-                        className="font-mono text-[10px] text-cyan-300/90 hover:text-cyan-200 break-all text-left bg-slate-800/80 px-2 py-1 rounded border border-slate-600 hover:border-cyan-500/40 flex items-center gap-1.5 max-w-full"
-                        title="Copy full address"
-                      >
-                        <Copy className="w-3 h-3 shrink-0" />
-                        {entry.address}
-                      </button>
+                      <div className="font-mono text-[10px] text-cyan-300/90 break-all text-left bg-slate-800/80 px-2 py-1 rounded border border-slate-600 hover:border-cyan-500/40 flex items-center gap-1.5 max-w-full">
+                        <CopyButton
+                          content={entry.address}
+                          copyToast="Copied to clipboard"
+                          variant="ghost"
+                          size="xs"
+                          className="h-5 w-5 shrink-0 p-0 text-cyan-300/90 hover:text-cyan-200"
+                          title="Copy full address"
+                          aria-label="Copy full address"
+                        />
+                        <span className="hover:text-cyan-200">{entry.address}</span>
+                      </div>
                     </div>
                   );
                 })}
@@ -1668,15 +1687,18 @@ export default function AdminHealthTab() {
                             {rewardsClaimsData.holderClaims.map((c, i) => (
                               <tr key={`h-${i}-${c.walletAddress}-${c.claimedAt}`} className="border-b border-slate-700/50 hover:bg-slate-800/50">
                                 <td className="py-1.5 px-3">
-                                  <button
-                                    type="button"
-                                    onClick={() => copyToClipboard(c.walletAddress)}
-                                    className="font-mono text-cyan-300/90 hover:text-cyan-200 flex items-center gap-1"
-                                    title="Copy"
-                                  >
-                                    <Copy className="w-3 h-3 shrink-0" />
+                                  <div className="font-mono text-cyan-300/90 hover:text-cyan-200 flex items-center gap-1">
+                                    <CopyButton
+                                      content={c.walletAddress}
+                                      copyToast="Copied to clipboard"
+                                      variant="ghost"
+                                      size="xs"
+                                      className="h-5 w-5 shrink-0 p-0 text-cyan-300/90 hover:text-cyan-200"
+                                      title="Copy"
+                                      aria-label="Copy address"
+                                    />
                                     {truncateAddress(c.walletAddress, 8, 6)}
-                                  </button>
+                                  </div>
                                 </td>
                                 <td className="py-1.5 px-3 text-right font-mono text-slate-300">
                                   {formatMorbius(c.rewardAmount)} MORBIUS
@@ -1720,15 +1742,18 @@ export default function AdminHealthTab() {
                             {rewardsClaimsData.lpClaims.map((c, i) => (
                               <tr key={`lp-${i}-${c.walletAddress}-${c.claimedAt}`} className="border-b border-slate-700/50 hover:bg-slate-800/50">
                                 <td className="py-1.5 px-3">
-                                  <button
-                                    type="button"
-                                    onClick={() => copyToClipboard(c.walletAddress)}
-                                    className="font-mono text-cyan-300/90 hover:text-cyan-200 flex items-center gap-1"
-                                    title="Copy"
-                                  >
-                                    <Copy className="w-3 h-3 shrink-0" />
+                                  <div className="font-mono text-cyan-300/90 hover:text-cyan-200 flex items-center gap-1">
+                                    <CopyButton
+                                      content={c.walletAddress}
+                                      copyToast="Copied to clipboard"
+                                      variant="ghost"
+                                      size="xs"
+                                      className="h-5 w-5 shrink-0 p-0 text-cyan-300/90 hover:text-cyan-200"
+                                      title="Copy"
+                                      aria-label="Copy address"
+                                    />
                                     {truncateAddress(c.walletAddress, 8, 6)}
-                                  </button>
+                                  </div>
                                 </td>
                                 <td className="py-1.5 px-3 text-right font-mono text-slate-300">
                                   {formatMorbius(c.rewardAmount)} MORBIUS

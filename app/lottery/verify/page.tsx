@@ -11,8 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import Footer from '@/components/PLINKO/Footer'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { formatUnits } from 'viem'
-import { CheckCircle, AlertTriangle, Info, Shield, Hash, Eye, Copy, ExternalLink } from 'lucide-react'
-import { toast } from 'sonner'
+import { CheckCircle, AlertTriangle, Info, Shield, Hash, Eye, ExternalLink } from 'lucide-react'
+import { CopyButton } from '@/components/ui/copy-button'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
 
 interface VerificationResult {
@@ -201,11 +201,6 @@ function LotteryVerifyContent() {
       return () => clearTimeout(timer)
     }
   }, [urlTxHash, txHash, verifyWithTxHash])
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
-    toast.success(`${label} copied to clipboard`)
-  }
 
   const pulseScanUrl = (hash: string) =>
     `https://scan.pulsechain.com/tx/${hash}`
@@ -435,13 +430,12 @@ function LotteryVerifyContent() {
                   <div className="bg-white/5 p-4 rounded border border-white/10">
                     <div className="flex items-center justify-between mb-2">
                       <Label className="text-white/80">Server Seed Hash (Committed)</Label>
-                      <Button
+                      <CopyButton
+                        content={playData.server_seed_hash || ''}
+                        copyToast="Server seed hash copied to clipboard"
                         variant="ghost"
                         size="sm"
-                        onClick={() => copyToClipboard(playData.server_seed_hash || '', 'Server seed hash')}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
+                      />
                     </div>
                     <code className="text-xs text-cyan-300 break-all block">{playData.server_seed_hash || 'N/A'}</code>
                     <p className="text-xs text-white/60 mt-1">This hash was committed before the play</p>
@@ -450,13 +444,12 @@ function LotteryVerifyContent() {
                   <div className="bg-white/5 p-4 rounded border border-white/10">
                     <div className="flex items-center justify-between mb-2">
                       <Label className="text-white/80">Server Seed (Revealed)</Label>
-                      <Button
+                      <CopyButton
+                        content={playData.server_seed || ''}
+                        copyToast="Server seed copied to clipboard"
                         variant="ghost"
                         size="sm"
-                        onClick={() => copyToClipboard(playData.server_seed || '', 'Server seed')}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
+                      />
                     </div>
                     <code className="text-xs text-purple-300 break-all block">{playData.server_seed || 'N/A'}</code>
                     <p className="text-xs text-white/60 mt-1">Revealed after play for verification</p>
@@ -465,13 +458,12 @@ function LotteryVerifyContent() {
                   <div className="bg-white/5 p-4 rounded border border-white/10">
                     <div className="flex items-center justify-between mb-2">
                       <Label className="text-white/80">Client Seed</Label>
-                      <Button
+                      <CopyButton
+                        content={playData.client_seed}
+                        copyToast="Client seed copied to clipboard"
                         variant="ghost"
                         size="sm"
-                        onClick={() => copyToClipboard(playData.client_seed, 'Client seed')}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
+                      />
                     </div>
                     <code className="text-xs text-blue-300 break-all block">{playData.client_seed}</code>
                     <p className="text-xs text-white/60 mt-1">Your client seed (or &apos;default&apos; if not provided)</p>

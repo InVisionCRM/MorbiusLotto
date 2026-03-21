@@ -12,8 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import Footer from '@/components/PLINKO/Footer'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { formatUnits } from 'viem'
-import { CheckCircle, AlertTriangle, Info, Shield, Hash, Eye, Copy, ExternalLink } from 'lucide-react'
-import { toast } from 'sonner'
+import { CheckCircle, AlertTriangle, Info, Shield, Hash, Eye, ExternalLink } from 'lucide-react'
+import { CopyButton } from '@/components/ui/copy-button'
 import PlayingCard from '@/components/BLACKJACK/PlayingCard'
 import { Card as CardType } from '@/app/BLACKJACK/types'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
@@ -29,6 +29,8 @@ interface VerificationResult {
 
 interface GameVerificationData {
   gameId: string
+  /** single (default) | multiplayer — multi uses different deal order; cards may be verified server-side */
+  gameMode?: 'single' | 'multiplayer'
   playerHands: Array<{
     cards: number[]
     total: number
@@ -48,6 +50,12 @@ interface GameVerificationData {
   rngVersion: number
   nonce: number
   result: string
+  /** Multiplayer: full deck replay verified on blackjack server */
+  serverCardsVerified?: boolean
+  roundId?: string
+  tableId?: string
+  seatPosition?: number
+  bettingSeatCount?: number
 }
 
 function BlackjackVerifyContent() {
@@ -205,7 +213,9 @@ function BlackjackVerifyContent() {
       let cardErrors: Array<{ position: number; expected: number; actual: number }> = []
       let recalculatedDeck: number[] = []
 
-      if (hashVerified && Number(data.rngVersion) === 2) {
+      if (hashVerified && data.gameMode === 'multiplayer' && typeof data.serverCardsVerified === 'boolean') {
+        cardsVerified = data.serverCardsVerified
+      } else if (hashVerified && Number(data.rngVersion) === 2) {
         // V2: Fisher-Yates shuffle — nonce must be numeric (game number)
         const nonce = Number(data.gameNumber)
         if (Number.isNaN(nonce)) {
@@ -307,11 +317,6 @@ function BlackjackVerifyContent() {
       return () => clearTimeout(timer)
     }
   }, [urlGameId])
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
-    toast.success(`${label} copied to clipboard`)
-  }
 
   return (
     <GlobalMainNav page="blackjack" showBackArrow backArrowHref="/BLACKJACK" backArrowLabel="Back to Blackjack">
@@ -434,8 +439,12 @@ function BlackjackVerifyContent() {
                   </div>
                   <p className="text-sm text-white/70">
                     {verificationResult.cardsVerified
-                      ? 'All cards match recalculated deck'
-                      : `${verificationResult.cardErrors?.length || 0} card mismatch(es) detected`}
+                      ? gameData.gameMode === 'multiplayer'
+                        ? 'Deck replay matches stored round (multiplayer deal order, verified on server)'
+                        : 'All cards match recalculated deck'
+                      : gameData.gameMode === 'multiplayer'
+                        ? 'Server could not match the shuffled deck to this round’s stored cards and actions'
+                        : `${verificationResult.cardErrors?.length || 0} card mismatch(es) detected`}
                   </p>
                 </div>
               </div>
@@ -450,6 +459,22 @@ function BlackjackVerifyContent() {
                   <div className="text-sm text-white/60 mb-1">Game ID</div>
                   <div className="font-mono text-sm text-white break-all">{gameData.gameId}</div>
                 </div>
+                {gameData.gameMode === 'multiplayer' && (
+                  <div>
+                    <div className="text-sm text-white/60 mb-1">Table / seat</div>
+                    <div className="text-sm text-white/90">
+                      {gameData.tableId && (
+                        <span className="font-mono break-all">Table {gameData.tableId}</span>
+                      )}
+                      {gameData.seatPosition != null && (
+                        <span className="ml-2">· Seat {gameData.seatPosition + 1}</span>
+                      )}
+                      {gameData.bettingSeatCount != null && gameData.bettingSeatCount > 1 && (
+                        <span className="text-white/60"> · {gameData.bettingSeatCount} players this round</span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <div className="text-sm text-white/60 mb-1">Result</div>
                   <Badge variant="outline" className="border-cyan-400/30 text-cyan-300">
@@ -536,13 +561,12 @@ function BlackjackVerifyContent() {
                 <div className="bg-white/5 p-4 rounded border border-white/10">
                   <div className="flex items-center justify-between mb-2">
                     <Label className="text-white/80">Server Seed Hash (Committed)</Label>
-                    <Button
+                    <CopyButton
+                      content={gameData.serverSeedHash || ''}
+                      copyToast="Server seed hash copied to clipboard"
                       variant="ghost"
                       size="sm"
-                      onClick={() => copyToClipboard(gameData.serverSeedHash || '', 'Server seed hash')}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
+                    />
                   </div>
                   <code className="text-xs text-cyan-300 break-all block">
                     {gameData.serverSeedHash || 'N/A'}
@@ -555,13 +579,12 @@ function BlackjackVerifyContent() {
                 <div className="bg-white/5 p-4 rounded border border-white/10">
                   <div className="flex items-center justify-between mb-2">
                     <Label className="text-white/80">Server Seed (Revealed)</Label>
-                    <Button
+                    <CopyButton
+                      content={gameData.serverSeed || ''}
+                      copyToast="Server seed copied to clipboard"
                       variant="ghost"
                       size="sm"
-                      onClick={() => copyToClipboard(gameData.serverSeed || '', 'Server seed')}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
+                    />
                   </div>
                   <code className="text-xs text-purple-300 break-all block">
                     {gameData.serverSeed || 'N/A'}
@@ -574,13 +597,12 @@ function BlackjackVerifyContent() {
                 <div className="bg-white/5 p-4 rounded border border-white/10">
                   <div className="flex items-center justify-between mb-2">
                     <Label className="text-white/80">Client Seed</Label>
-                    <Button
+                    <CopyButton
+                      content={gameData.clientSeed}
+                      copyToast="Client seed copied to clipboard"
                       variant="ghost"
                       size="sm"
-                      onClick={() => copyToClipboard(gameData.clientSeed, 'Client seed')}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
+                    />
                   </div>
                   <code className="text-xs text-blue-300 break-all block">
                     {gameData.clientSeed}

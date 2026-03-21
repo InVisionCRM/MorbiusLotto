@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Loader2, ArrowDownCircle, ArrowUpCircle, RefreshCw, Copy, Check, Flag } from 'lucide-react';
+import { X, Loader2, ArrowDownCircle, ArrowUpCircle, RefreshCw, Check, Flag } from 'lucide-react';
+import { CopyButton } from '@/components/ui/copy-button';
 import { useAccount, usePublicClient } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
 import {
@@ -192,7 +193,6 @@ export function GameWalletModal({
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [txLoaded, setTxLoaded] = useState(false);
-  const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
 
   // ── Wallet balances ────────────────────────────────────────────────────
@@ -399,12 +399,6 @@ export function GameWalletModal({
       fetchTxHistory();
     }
   }, [tab, txLoaded, txLoading, fetchTxHistory]);
-
-  const copyHash = (hash: string) => {
-    navigator.clipboard.writeText(hash).catch(() => {});
-    setCopiedHash(hash);
-    setTimeout(() => setCopiedHash(null), 2000);
-  };
 
   // ── Notify deposit ─────────────────────────────────────────────────────
   const notifyDeposit = async (txHash: string, amountWei: bigint) => {
@@ -1133,7 +1127,6 @@ export function GameWalletModal({
                             const date = new Date(tx.created_at);
                             const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                             const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-                            const isCopied = copiedHash === tx.tx_hash;
                             return (
                               <div
                                 key={i}
@@ -1155,14 +1148,15 @@ export function GameWalletModal({
                                     <div className="flex items-center gap-2 text-xs text-gray-500">
                                       <span>{dateStr} · {timeStr}</span>
                                       {tx.tx_hash && (
-                                        <button
-                                          onClick={() => copyHash(tx.tx_hash!)}
-                                          className="hover:text-black transition-colors"
-                                        >
-                                          {isCopied
-                                            ? <Check size={10} className="text-green-500" />
-                                            : <Copy size={10} />}
-                                        </button>
+                                        <CopyButton
+                                          content={tx.tx_hash}
+                                          copyToast="Copied to clipboard"
+                                          variant="ghost"
+                                          size="xs"
+                                          className="h-5 w-5 p-0 text-gray-500 hover:text-gray-900"
+                                          title="Copy transaction hash"
+                                          aria-label="Copy transaction hash"
+                                        />
                                       )}
                                     </div>
                                   </div>

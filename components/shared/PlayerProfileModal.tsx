@@ -3,7 +3,8 @@
 import React, { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Gift, UserPlus, UserCheck, Copy, Check } from 'lucide-react'
+import { Gift, UserPlus, UserCheck } from 'lucide-react'
+import { CopyButton } from '@/components/ui/copy-button'
 import { useAccount } from 'wagmi'
 import { useInventory } from '@/hooks/use-cosmetics'
 import { useProfileForAddress } from '@/hooks/use-player-profile'
@@ -44,7 +45,7 @@ interface PlayerProfileModalProps {
 
 export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', modalZIndex }: PlayerProfileModalProps) {
   const [giftOpen, setGiftOpen] = useState(false)
-  const [copiedAddress, setCopiedAddress] = useState(false)
+  const [copiedLabel, setCopiedLabel] = useState(false)
 
   const { address: myAddress } = useAccount()
   const me = myAddress?.toLowerCase() ?? null
@@ -54,15 +55,6 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', mod
   const { data: counts } = useFollowCounts(address)
   const { data: isFollowing, isLoading: isFollowingLoading } = useIsFollowing(me, address)
   const { follow, unfollow } = useFollowMutation(me, address)
-
-  const handleCopyAddress = () => {
-    navigator.clipboard.writeText(address).then(() => {
-      setCopiedAddress(true)
-      setTimeout(() => setCopiedAddress(false), 1400)
-    }).catch(() => {
-      setCopiedAddress(false)
-    })
-  }
 
   if (!address) return null
 
@@ -97,15 +89,19 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', mod
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="text-white/70 text-xs font-mono break-all">{address}</div>
-                  <button
-                    type="button"
-                    onClick={handleCopyAddress}
-                    className="inline-flex items-center gap-1 text-[11px] text-white/80 hover:text-white transition-colors rounded px-1.5 py-0.5 border border-white/15 bg-white/5"
-                    title="Copy wallet address"
-                  >
-                    {copiedAddress ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    {copiedAddress ? 'Copied' : 'Copy'}
-                  </button>
+                  <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 border border-white/15 bg-white/5">
+                    <CopyButton
+                      content={address}
+                      onCopiedChange={(c) => setCopiedLabel(!!c)}
+                      toastOnError={false}
+                      variant="ghost"
+                      size="xs"
+                      className="h-7 w-7 p-0 text-white/80 hover:text-white hover:bg-white/10"
+                      title="Copy wallet address"
+                      aria-label="Copy wallet address"
+                    />
+                    <span className="text-[11px] text-white/80">{copiedLabel ? 'Copied' : 'Copy'}</span>
+                  </span>
                 </div>
               </div>
               {!isOwnProfile && (

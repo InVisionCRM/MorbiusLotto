@@ -24,7 +24,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { FileUpload } from '@/components/ui/file-upload';
-import { Plus, Pencil, Trash2, ExternalLink, ImageIcon, Copy, Database } from 'lucide-react';
+import { Plus, Pencil, Trash2, ExternalLink, ImageIcon, Database } from 'lucide-react';
+import { CopyButton } from '@/components/ui/copy-button';
 import {
   BLACKJACK_IMAGE_BACKGROUNDS,
   BLACKJACK_VIDEO_BACKGROUNDS,
@@ -286,14 +287,15 @@ export default function AdminTablesTab() {
                           <span className="font-mono text-[10px] text-slate-400" title={row.token_contract_address}>
                             {row.token_contract_address}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => navigator.clipboard.writeText(row.token_contract_address!)}
-                            className="p-0.5 rounded text-slate-500 hover:text-cyan-400 hover:bg-slate-700/50"
+                          <CopyButton
+                            content={row.token_contract_address!}
+                            copyToast="Address copied"
+                            variant="ghost"
+                            size="xs"
+                            className="p-0.5 h-7 w-7 text-slate-500 hover:text-cyan-400 hover:bg-slate-700/50"
                             title="Copy address"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
+                            aria-label="Copy address"
+                          />
                           <a
                             href={`https://dexscreener.com/pulsechain/${row.token_contract_address}`}
                             target="_blank"

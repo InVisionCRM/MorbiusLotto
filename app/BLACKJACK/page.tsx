@@ -26,6 +26,7 @@ import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/compo
 import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
 import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
+import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { useTournament, TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
@@ -2742,7 +2743,9 @@ export default function BlackjackPage() {
             {/* Tip dealer button — top center overlay */}
             {address && wsConnected && wsClient && (
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
-                <button
+                <IconButton
+                  variant="tip"
+                  size="tip"
                   onClick={async () => {
                     if (tipAnimating) return;
                     playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
@@ -2759,10 +2762,9 @@ export default function BlackjackPage() {
                     setTimeout(() => setTipAnimating(false), 900);
                   }}
                   disabled={tipAnimating}
-                  className="px-3 py-1 rounded bg-amber-900/50 border border-amber-600/40 text-amber-300 text-[11px] font-medium hover:bg-amber-800/60 transition-all disabled:opacity-50 backdrop-blur-sm"
                 >
                   Tip 2,000
-                </button>
+                </IconButton>
                 {tipAnimating && (
                   <div
                     className="absolute pointer-events-none"
@@ -2977,36 +2979,36 @@ export default function BlackjackPage() {
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
 
               <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
-                <TabsList className="grid w-full grid-cols-3 h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1">
+                <TabsList className="grid h-11 w-full max-w-full grid-cols-3 gap-1 rounded-xl border border-cyan-500/30 bg-black/40 p-1">
                   <TabsTrigger
                     value="recent-games"
-                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                    className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
                   >
                     Recent Games
                   </TabsTrigger>
                   <TabsTrigger
                     value="recent-play"
-                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                    className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
                   >
                     Recent Play
                   </TabsTrigger>
                   <TabsTrigger
                     value="leaderboard"
-                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                    className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
                   >
                     Leaderboard
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="recent-games" className="mt-4 focus-visible:outline-none">
+                <TabsContent value="recent-games" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
                   <BlackjackRecentGames compact title="Recent Games" />
                 </TabsContent>
 
-                <TabsContent value="recent-play" className="mt-4 focus-visible:outline-none">
+                <TabsContent value="recent-play" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
                   <BlackjackRecentPlays compact title="Recent Play" />
                 </TabsContent>
 
-                <TabsContent value="leaderboard" className="mt-4 focus-visible:outline-none">
+                <TabsContent value="leaderboard" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
                   <BlackjackTopPlayers />
                 </TabsContent>
               </Tabs>
