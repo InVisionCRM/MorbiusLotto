@@ -1,4 +1,9 @@
 import { logger } from './logger';
+import type { AvatarConfig, AvatarPayload } from './avatar-payload';
+import { parseAvatarPayload, mergeV1AvatarPartial, AVATAR_V1_DEFAULTS } from './avatar-payload';
+
+export type { AvatarConfig, AvatarPayload };
+export { parseAvatarPayload, mergeV1AvatarPartial, AVATAR_V1_DEFAULTS };
 
 export interface WebSocketMessage {
   type: string;
@@ -33,7 +38,7 @@ export interface ChatMessagePayload {
   displayName?: string | null;
   /** Legacy uploaded image; used when avatarConfig is absent */
   profileImageUrl?: string | null;
-  /** Morbius character avatar (same shape as poker AvatarConfig) */
+  /** Morbius character avatar (v1 procedural — see parseAvatarPayload) */
   avatarConfig?: Record<string, unknown> | null;
   text: string;
   timestamp: string; // ISO
@@ -103,29 +108,6 @@ export interface PokerTableSummary {
   emptySeats: number;
 }
 
-/** Pixel-avatar config for poker table display (skin, hair, eyes, etc.). */
-export interface AvatarConfig {
-  skinColor: string;
-  hairStyle: string;
-  hairColor: string;
-  accessoryColor?: string;
-  eyeShape: string;
-  eyeColor: string;
-  noseShape: string;
-  lipShape: string;
-  accessory: string;
-  shirtColor: string;
-  shirtStyle: string;
-  hat: string;
-  hatColor: string;
-  necklace: string;
-  mouthAccessory: string;
-  backgroundImage: string;
-  overlayImage: string;
-  faceShape: string;
-  customPattern: string;
-}
-
 export interface PokerSeatState {
   position: number;
   playerAddress: string | null;
@@ -139,7 +121,7 @@ export interface PokerSeatState {
   currentBet: string;
   displayName?: string | null;
   profileImageUrl?: string | null;
-  avatarConfig?: AvatarConfig | null;
+  avatarConfig?: AvatarPayload | null;
 }
 
 export interface PokerCurrentHand {
@@ -198,7 +180,7 @@ export interface BJMultiSeatState {
   pendingBet: string;
   displayName?: string | null;
   profileImageUrl?: string | null;
-  avatarConfig?: Record<string, unknown> | null;
+  avatarConfig?: AvatarPayload | null;
   betAmount: string;
   hands: BJMultiHandObj[];
   activeHandIndex: number;
@@ -818,7 +800,7 @@ export class BlackjackWebSocketClient {
    * Requires connected wallet. Use on('display_name_set', handler) for the response.
    * Optionally pass profileImageUrl and/or avatarConfig; get_profile and display_name_set responses include avatarConfig.
    */
-  async setDisplayName(displayName: string, profileImageUrl?: string | null, avatarConfig?: AvatarConfig | null, bio?: string | null, xHandle?: string | null, tgHandle?: string | null): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: AvatarConfig | null; bio: string | null; xHandle: string | null; tgHandle: string | null }> {
+  async setDisplayName(displayName: string, profileImageUrl?: string | null, avatarConfig?: AvatarPayload | null, bio?: string | null, xHandle?: string | null, tgHandle?: string | null): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: AvatarPayload | null; bio: string | null; xHandle: string | null; tgHandle: string | null }> {
     const payload: Record<string, unknown> = { displayName };
     if (profileImageUrl !== undefined) payload.profileImageUrl = profileImageUrl;
     if (avatarConfig !== undefined) payload.avatarConfig = avatarConfig;
@@ -831,7 +813,7 @@ export class BlackjackWebSocketClient {
   /**
    * Get current profile (display name, profile image URL, avatar config, bio, social handles) for the connected wallet.
    */
-  async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null; avatarConfig: AvatarConfig | null; bio: string | null; xHandle: string | null; tgHandle: string | null }> {
+  async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null; avatarConfig: AvatarPayload | null; bio: string | null; xHandle: string | null; tgHandle: string | null }> {
     return this.sendRequest('get_profile', {});
   }
 

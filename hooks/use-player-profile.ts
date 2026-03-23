@@ -3,7 +3,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
 import { formatEther } from 'viem'
-import type { AvatarConfig } from '@/lib/websocket-client'
+import type { AvatarPayload } from '@/lib/websocket-client'
+import { parseAvatarPayload } from '@/lib/avatar-payload'
 
 export interface PlayerProfileStats {
   total_games: number
@@ -34,7 +35,7 @@ export interface PlayerProfileGame {
 export interface DisplayProfile {
   displayName: string | null
   profileImageUrl: string | null
-  avatarConfig: AvatarConfig | null
+  avatarConfig: AvatarPayload | null
   bio: string | null
   xHandle: string | null
   tgHandle: string | null
@@ -56,7 +57,7 @@ export function useProfile() {
       return {
         displayName: data.displayName ?? null,
         profileImageUrl: data.profileImageUrl ?? null,
-        avatarConfig: data.avatarConfig && typeof data.avatarConfig === 'object' ? (data.avatarConfig as AvatarConfig) : null,
+        avatarConfig: parseAvatarPayload(data.avatarConfig),
         bio: data.bio ?? null,
         xHandle: data.xHandle ?? null,
         tgHandle: data.tgHandle ?? null,
@@ -91,7 +92,7 @@ export function useProfileForAddress(address: string | null) {
       return {
         displayName: data.displayName ?? null,
         profileImageUrl: data.profileImageUrl ?? null,
-        avatarConfig: data.avatarConfig && typeof data.avatarConfig === 'object' ? (data.avatarConfig as AvatarConfig) : null,
+        avatarConfig: parseAvatarPayload(data.avatarConfig),
         bio: data.bio ?? null,
         xHandle: data.xHandle ?? null,
         tgHandle: data.tgHandle ?? null,

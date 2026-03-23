@@ -484,3 +484,25 @@ body {
 
 /* RainbowKit Modal Fix - No longer needed since transform moved to wrapper */
 /* Modals render to body, which is now untransformed, so they center correctly */
+
+/* ── Sidebar collapse: CSS transitions instead of per-element Framer Motion ── */
+.sidebar-label {
+  display: inline-block;
+  max-width: 200px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.2s ease-in-out, opacity 0.2s ease-in-out;
+}
+[data-sidebar-open="false"] .sidebar-label {
+  max-width: 0;
+  opacity: 0;
+}
+[data-sidebar-open="false"] .sidebar-item {
+  justify-content: center;
+  gap: 0;
+}
+[data-sidebar-open="true"] .sidebar-item {
+  justify-content: flex-start;
+  gap: 0.5rem;
+}

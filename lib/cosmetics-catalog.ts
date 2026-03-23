@@ -3,6 +3,8 @@
  * Used on both frontend and backend (Node-safe, no browser APIs).
  */
 
+import { PICKER_HAT_COLORS_FREE } from './avatar-editor-options';
+
 export type ItemTier = 'common' | 'uncommon' | 'rare' | 'legendary';
 
 export type AvatarField =
@@ -17,8 +19,11 @@ export type AvatarField =
   | 'lipShape'
   | 'accessory'
   | 'hat'
+  | 'hatColor'
   | 'necklace'
   | 'mouthAccessory'
+  | 'makeup'
+  | 'facialHair'
   | 'shirtColor'
   | 'shirtStyle'
   | 'backgroundImage'
@@ -49,27 +54,36 @@ export const FREE_VALUES: Record<AvatarField, Set<string>> = {
     '#4A3B32', '#3E2723', '#2D221E', '#1A1110',
   ]),
   hairStyle: new Set([
-    'Bald', 'Short', 'Buzz', 'Fade', 'Long Straight', 'Long Wavy',
+    'Bald', 'Short', 'Buzz', 'Long Straight', 'Long Wavy',
     'Curly', 'Afro', 'Bob', 'Ponytail',
   ]),
   hairColor: new Set([
     '#090806', '#2C222B', '#71635A', '#B7A69E',
     '#DCD0BA', '#FFF5E1', '#A56B46', '#B55239',
   ]),
-  accessoryColor: new Set([
-    '#111111', '#333333', 'rgba(0,0,0,0.85)',
-    'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
-  ]),
+  accessoryColor: new Set(['#111111', '#333333', 'rgba(0,0,0,0.85)']),
   // All free — no paid variants
   eyeShape:  new Set(['Round', 'Almond', 'Narrow', 'Wide']),
   eyeColor:  new Set(['#634e34', '#2e536f', '#3d671d', '#1c7847', '#497665', '#000000', '#5c4033', '#8a9a5b', '#4682b4', '#8B5CF6', '#F43F5E']),
-  faceShape: new Set(['Square', 'Round', 'Oval', 'Heart', 'Diamond']),
-  noseShape: new Set(['Small', 'Wide', 'Pointy', 'Button']),
-  lipShape:  new Set(['Thin', 'Full', 'Smile', 'Smirk', 'Pout']),
-  accessory: new Set(['None', 'Sunglasses']),
+  faceShape: new Set(['Square', 'Round']),
+  noseShape: new Set(['Small']),
+  lipShape:  new Set(['Thin', 'Smile']),
+  accessory: new Set(['None', 'Glasses', 'Sunglasses']),
   hat: new Set(['None', 'Cap', 'Beanie']),
+  hatColor: new Set(PICKER_HAT_COLORS_FREE),
   necklace: new Set(['None']),
   mouthAccessory: new Set(['None', 'Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask']),
+  makeup: new Set([
+    'None',
+    'Blush Soft',
+    'Blush Rosy',
+    'Contour',
+    'Highlighter',
+    'Freckles',
+    'Eye Shadow',
+    'Glam Full',
+  ]),
+  facialHair: new Set(['None', 'Eyelashes', 'Stubble', 'Mustache', 'Goatee', 'Short Beard', 'Full Beard', 'Soul Patch']),
   shirtColor: new Set([
     '#ef4444', '#3b82f6', '#22c55e', '#ffffff', '#9ca3af', '#3f3f46', '#000000',
   ]),
@@ -155,12 +169,11 @@ const SKIN_ITEMS: CosmeticItem[] = [
 
 // ── Hair styles ───────────────────────────────────────────────────────────────
 const HAIR_STYLE_ITEMS: CosmeticItem[] = [
-  item('hair_style_spiky',      'Spiky',      'common',    [{ field: 'hairStyle', value: 'Spiky' }]),
   item('hair_style_messy',      'Messy',      'common',    [{ field: 'hairStyle', value: 'Messy' }]),
   item('hair_style_pigtails',   'Pigtails',   'uncommon',  [{ field: 'hairStyle', value: 'Pigtails' }]),
-  item('hair_style_mullet',     'Mullet',     'rare',      [{ field: 'hairStyle', value: 'Mullet' }]),
   item('hair_style_mohawk',     'Mohawk',     'legendary', [{ field: 'hairStyle', value: 'Mohawk' }]),
   item('hair_style_dreadlocks', 'Dreadlocks', 'legendary', [{ field: 'hairStyle', value: 'Dreadlocks' }]),
+  item('hair_style_dreads_fade', 'Dreads Fade', 'rare',     [{ field: 'hairStyle', value: 'Dreads Fade' }]),
 ];
 
 // ── Hair colors ───────────────────────────────────────────────────────────────
@@ -194,15 +207,25 @@ const ACCESSORY_ITEMS: CosmeticItem[] = [
   item('acc_glasses',   'Glasses',         'common',    [{ field: 'accessory', value: 'Glasses' }]),
   item('acc_earrings',  'Earrings',        'common',    [{ field: 'accessory', value: 'Earrings' }]),
   item('acc_aviators',  'Aviators',        'uncommon',  [{ field: 'accessory', value: 'Aviators' }]),
-  item('acc_wayfarers', 'Wayfarers',       'uncommon',  [{ field: 'accessory', value: 'Wayfarers' }]),
   item('acc_headband',  'Headband',        'uncommon',  [{ field: 'accessory', value: 'Headband' }]),
-  item('acc_round',     'Round Glasses',   'rare',      [{ field: 'accessory', value: 'Round Glasses' }]),
   item('acc_cyberpunk', 'Cyberpunk Visor', 'legendary', [{ field: 'accessory', value: 'Cyberpunk' }]),
 ];
 
+/** Retired from shop/UI; keeps acc_round → value for existing mints. */
+const LEGACY_ROUND_GLASSES_RETIRED: CosmeticItem[] = [
+  item('acc_round', 'Round Glasses', 'rare', [{ field: 'accessory', value: 'Round Glasses' }]),
+];
+
 /** Keys `acc_shades_vN` match AdminCosmeticsTab `toItemKey` for accessory + Shades VN. */
-const SHADES_VARIANT_ITEMS: CosmeticItem[] = Array.from({ length: 10 }, (_, i) => {
+const SHADES_VARIANT_ITEMS: CosmeticItem[] = Array.from({ length: 3 }, (_, i) => {
   const n = i + 1;
+  const value = `Shades V${n}`;
+  return item(`acc_shades_v${n}`, value, 'uncommon', [{ field: 'accessory', value }]);
+});
+
+/** Retired from shop/UI; still maps value → itemKey so existing mints enforce ownership. */
+const LEGACY_SHADES_RETIRED_ITEMS: CosmeticItem[] = Array.from({ length: 7 }, (_, i) => {
+  const n = i + 4;
   const value = `Shades V${n}`;
   return item(`acc_shades_v${n}`, value, 'uncommon', [{ field: 'accessory', value }]);
 });
@@ -216,18 +239,35 @@ const HAT_ITEMS: CosmeticItem[] = [
 ];
 
 /** Keys `hat_hat_vN` match AdminCosmeticsTab `toItemKey` for hat + Hat VN. */
-const HAT_VARIANT_ITEMS: CosmeticItem[] = Array.from({ length: 10 }, (_, i) => {
-  const n = i + 1;
-  const value = `Hat V${n}`;
-  return item(`hat_hat_v${n}`, value, 'uncommon', [{ field: 'hat', value }]);
-});
+const HAT_VARIANT_NUMBERS = [1, 2, 3, 4, 5, 7, 8, 10] as const;
+const HAT_VARIANT_ITEMS: CosmeticItem[] = HAT_VARIANT_NUMBERS.map((n) =>
+  item(`hat_hat_v${n}`, `Hat V${n}`, 'uncommon', [{ field: 'hat', value: `Hat V${n}` }]),
+);
+
+/** Retired hat shapes — not in shop/UI; keeps value → itemKey for existing mints. */
+const LEGACY_HAT_RETIRED_ITEMS: CosmeticItem[] = [
+  item('hat_hat_v6', 'Hat V6', 'uncommon', [{ field: 'hat', value: 'Hat V6' }]),
+  item('hat_hat_v9', 'Hat V9', 'uncommon', [{ field: 'hat', value: 'Hat V9' }]),
+];
+
+/** Legendary hat tints — same hexes as skin legendary spectrum (`skin_orange_red`, etc.). */
+const HAT_COLOR_LEGENDARY_ITEMS: CosmeticItem[] = [
+  item('hat_clr_phoenix', 'Hat Tint: Phoenix', 'legendary', [{ field: 'hatColor', value: '#FF4500' }]),
+  item('hat_clr_magenta', 'Hat Tint: Magenta', 'legendary', [{ field: 'hatColor', value: '#FF00FF' }]),
+  item('hat_clr_cyan', 'Hat Tint: Cyan', 'legendary', [{ field: 'hatColor', value: '#00FFFF' }]),
+  item('hat_clr_canary', 'Hat Tint: Canary', 'legendary', [{ field: 'hatColor', value: '#FFFF00' }]),
+  item('hat_clr_toxic', 'Hat Tint: Toxic Green', 'legendary', [{ field: 'hatColor', value: '#7FFF00' }]),
+];
 
 // ── Necklaces ─────────────────────────────────────────────────────────────────
 const NECKLACE_ITEMS: CosmeticItem[] = [
   item('neck_silver',  'Silver Chain', 'common',    [{ field: 'necklace', value: 'Silver Chain' }]),
-  item('neck_pearl',   'Pearl',        'uncommon',  [{ field: 'necklace', value: 'Pearl' }]),
   item('neck_gold',    'Gold Chain',   'rare',      [{ field: 'necklace', value: 'Gold Chain' }]),
-  item('neck_pendant', 'Pendant',      'legendary', [{ field: 'necklace', value: 'Pendant' }]),
+];
+
+const LEGACY_NECKLACE_RETIRED_ITEMS: CosmeticItem[] = [
+  item('neck_pearl', 'Pearl', 'uncommon', [{ field: 'necklace', value: 'Pearl' }]),
+  item('neck_pendant', 'Pendant', 'legendary', [{ field: 'necklace', value: 'Pendant' }]),
 ];
 
 // ── Shirt colors ──────────────────────────────────────────────────────────────
@@ -272,13 +312,15 @@ const SHIRT_STYLE_ITEMS: CosmeticItem[] = PAID_SHIRT_STYLES.map(style =>
   item(adminShirtStyleItemKey(style), style, 'uncommon', [{ field: 'shirtStyle', value: style }]),
 );
 
-// ── Patterns (unlock url(#pattern) for skin, hair, AND shirt) ─────────────────
+// ── Patterns (unlock url(#pattern) for skin, hair, shirt, glasses, hat) ───────
 function patternItem(name: string, displayName: string, tier: ItemTier): CosmeticItem {
   const val = `url(#${name})`;
   return item(`pattern_${name}`, displayName, tier, [
-    { field: 'skinColor',  value: val },
-    { field: 'hairColor',  value: val },
-    { field: 'shirtColor', value: val },
+    { field: 'skinColor',     value: val },
+    { field: 'hairColor',     value: val },
+    { field: 'shirtColor',    value: val },
+    { field: 'accessoryColor', value: val },
+    { field: 'hatColor',      value: val },
   ]);
 }
 
@@ -294,6 +336,11 @@ const PATTERN_ITEMS: CosmeticItem[] = [
 
 // (feature_custom_bg removed — backgrounds are now individual items per background image)
 
+/** Same itemKey as former layered-avatar shop row — inventory continuity; no avatar unlock (legacy collectible). */
+const LEGACY_V2_CATALOG_STUBS: CosmeticItem[] = [
+  item('avatar_v2_bg_stars', 'Legacy: Starfield (collectible)', 'uncommon', []),
+];
+
 // ─── Full catalog export ──────────────────────────────────────────────────────
 export const ITEM_CATALOG: CosmeticItem[] = [
   ...SKIN_ITEMS,
@@ -303,17 +350,20 @@ export const ITEM_CATALOG: CosmeticItem[] = [
   ...SHADES_VARIANT_ITEMS,
   ...HAT_ITEMS,
   ...HAT_VARIANT_ITEMS,
+  ...HAT_COLOR_LEGENDARY_ITEMS,
   ...NECKLACE_ITEMS,
   ...SHIRT_COLOR_ITEMS,
   ...SHIRT_STYLE_ITEMS,
   ...PATTERN_ITEMS,
+  ...LEGACY_V2_CATALOG_STUBS,
 ];
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────────
 
 /** Map from "field:value" → itemKey for O(1) lookup */
 const _valueToItemKey = new Map<string, string>();
-for (const ci of ITEM_CATALOG) {
+
+for (const ci of [...ITEM_CATALOG, ...LEGACY_SHADES_RETIRED_ITEMS, ...LEGACY_HAT_RETIRED_ITEMS, ...LEGACY_ROUND_GLASSES_RETIRED, ...LEGACY_NECKLACE_RETIRED_ITEMS]) {
   for (const u of ci.unlocks) {
     if (u.value !== '__any_non_empty__') {
       _valueToItemKey.set(`${u.field}:${u.value}`, ci.itemKey);
@@ -345,8 +395,10 @@ export function getLockedFields(
 ): LockedField[] {
   const locked: LockedField[] = [];
   const fields: AvatarField[] = [
-    'skinColor', 'hairStyle', 'hairColor', 'accessoryColor', 'accessory',
-    'hat', 'necklace', 'mouthAccessory', 'shirtColor', 'shirtStyle', 'backgroundImage', 'overlayImage',
+    'skinColor', 'hairStyle', 'hairColor', 'accessoryColor', 'eyeShape', 'eyeColor', 'faceShape',
+    'noseShape', 'lipShape', 'accessory', 'hat', 'hatColor', 'necklace', 'mouthAccessory', 'makeup', 'facialHair',
+    'shirtColor', 'shirtStyle',
+    'backgroundImage', 'overlayImage',
   ];
   for (const field of fields) {
     const value = config[field];
@@ -359,6 +411,26 @@ export function getLockedFields(
     }
   }
   return locked;
+}
+
+/**
+ * For each avatar field, values the player may use: free defaults plus anything
+ * unlocked by an owned catalog item.
+ */
+export function getUnlockedValuesPerField(ownedItemKeys: Set<string>): Record<AvatarField, string[]> {
+  const result = {} as Record<AvatarField, string[]>;
+  for (const field of Object.keys(FREE_VALUES) as AvatarField[]) {
+    const freeSet = FREE_VALUES[field];
+    const values = new Set<string>(freeSet ?? []);
+    for (const catalogItem of ITEM_CATALOG) {
+      if (!ownedItemKeys.has(catalogItem.itemKey)) continue;
+      for (const u of catalogItem.unlocks) {
+        if (u.field === field && u.value !== '__any_non_empty__') values.add(u.value);
+      }
+    }
+    result[field] = [...values];
+  }
+  return result;
 }
 
 /** Returns true if the address is in the ADMIN_WALLETS env var (case-insensitive). */

@@ -5,6 +5,17 @@ import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { CosmeticsService } from './cosmetics.service';
 import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
+import {
+  assertCashBlindsValid,
+  assertCashChipMultiple,
+  engineChipsToWeiRounded,
+  enginePotChipsToPotWei,
+  getPokerChipWei,
+  getPokerRakeWallet,
+  splitBigIntEqually,
+  totalPotChips,
+  weiToEngineChips,
+} from '../lib/poker-chip-scale';
 import { logger } from '../utils/logger';
 import crypto from 'crypto';
 
@@ -103,11 +114,10 @@ function chevtekStreetToPoker(round: BettingRound | undefined, hasWinners: boole
   }
 }
 
-function totalPot(table: Table): number {
-  const potSum = table.pots.reduce((sum, p) => sum + p.amount, 0);
-  const betSum = table.players.reduce((sum, p) => sum + (p?.bet ?? 0), 0);
-  return potSum + betSum;
-}
+// ---------------------------------------------------------------------------
+// Rake configuration (cash games only — tournaments use virtual chips)
+// ---------------------------------------------------------------------------
+const RAKE_PERCENT = 5; // 5% of each pot
 
 // ---------------------------------------------------------------------------
 // PokerGameService
@@ -118,6 +128,8 @@ export class PokerGameService {
   private postHandCallback: ((tableId: string, handNumber: number) => Promise<void>) | null = null;
   private notifyCallback: ((room: string, type: string, payload: any) => void) | null = null;
   private activeTables: Map<string, Table> = new Map();
+  /** Per-table mutex to serialize playerAction / autoFold / leaveTable calls. */
+  private tableLocks: Map<string, Promise<void>> = new Map();
 
   constructor(
     private dbService: DatabaseService,
@@ -141,6 +153,47 @@ export class PokerGameService {
 
   private getPool(): Pool {
     return this.dbService.getPool();
+  }
+
+  /**
+   * Serialize async operations on a given table so that concurrent
+   * playerAction / autoFold / leaveTable calls cannot interleave.
+   */
+  private async withTableLock<T>(tableId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.tableLocks.get(tableId) ?? Promise.resolve();
+    let resolve!: () => void;
+    const next = new Promise<void>((r) => { resolve = r; });
+    this.tableLocks.set(tableId, next);
+    try {
+      await prev; // wait for any in-flight operation on this table
+      return await fn();
+    } finally {
+      resolve();
+      // Clean up when no further work is queued
+      if (this.tableLocks.get(tableId) === next) {
+        this.tableLocks.delete(tableId);
+      }
+    }
+  }
+
+  /** Cached cash vs tournament + chip wei; invalidated on table delete. */
+  private scalingCache = new Map<string, { tournament: boolean; chipWei: bigint }>();
+
+  private invalidateTableScaling(tableId: string): void {
+    this.scalingCache.delete(tableId);
+  }
+
+  private async getTableScaling(tableId: string): Promise<{ tournament: boolean; chipWei: bigint }> {
+    const cached = this.scalingCache.get(tableId);
+    if (cached) return cached;
+    const pool = this.getPool();
+    const r = await pool.query('SELECT tournament_mode FROM poker_tables WHERE id = $1', [tableId]);
+    if (r.rows.length === 0) throw new Error('Table not found');
+    const tournament = !!r.rows[0].tournament_mode;
+    const chipWei = getPokerChipWei();
+    const v = { tournament, chipWei };
+    this.scalingCache.set(tableId, v);
+    return v;
   }
 
   private normalizeAddress(addr: string): string {
@@ -179,6 +232,7 @@ export class PokerGameService {
   }
 
   async createTable(smallBlind: bigint, bigBlind: bigint, maxSeats: number): Promise<string> {
+    assertCashBlindsValid(smallBlind, bigBlind);
     const pool = this.getPool();
     const r = await pool.query(
       `INSERT INTO poker_tables (small_blind, big_blind, max_seats, status)
@@ -194,20 +248,31 @@ export class PokerGameService {
     const tableRow = await pool.query('SELECT id FROM poker_tables WHERE id = $1', [tableId]);
     if (tableRow.rows.length === 0) return false;
 
-    const seats = await pool.query(
-      'SELECT player_address, stack FROM poker_seats WHERE table_id = $1',
-      [tableId]
-    );
-    for (const row of seats.rows) {
-      const stack = BigInt(row.stack ?? '0');
-      if (stack > 0n && row.player_address) {
-        await this.dbService.addBalanceToAddress(row.player_address, stack);
-        logger.info('Poker admin delete table: credited stack', { tableId, playerAddress: row.player_address, stack: stack.toString() });
+    await this.dbService.withTransaction(async (client) => {
+      // Lock the table row to prevent concurrent deletes or joins
+      await client.query('SELECT id FROM poker_tables WHERE id = $1 FOR UPDATE', [tableId]);
+
+      const seats = await client.query(
+        'SELECT player_address, stack FROM poker_seats WHERE table_id = $1',
+        [tableId]
+      );
+      for (const row of seats.rows) {
+        const stack = BigInt(row.stack ?? '0');
+        if (stack > 0n && row.player_address) {
+          await client.query(
+            `INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
+             ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`,
+            [row.player_address.toLowerCase(), stack.toString()]
+          );
+          logger.info('Poker admin delete table: credited stack', { tableId, playerAddress: row.player_address, stack: stack.toString() });
+        }
       }
-    }
+
+      await client.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);
+    });
 
     this.activeTables.delete(tableId);
-    await pool.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);
+    this.invalidateTableScaling(tableId);
     logger.info('Poker admin delete table', { tableId });
     return true;
   }
@@ -217,9 +282,13 @@ export class PokerGameService {
   // ---------------------------------------------------------------------------
 
   async joinTable(tableId: string, playerAddress: string, buyInChips: string): Promise<PokerTableState> {
+    return this.withTableLock(tableId, () => this._joinTable(tableId, playerAddress, buyInChips));
+  }
+
+  private async _joinTable(tableId: string, playerAddress: string, buyInChips: string): Promise<PokerTableState> {
     const normalized = this.normalizeAddress(playerAddress);
     const buyIn = BigInt(buyInChips);
-    if (buyIn <= 0n) throw new Error('Buy-in must be positive');
+    assertCashChipMultiple(buyIn, 'Buy-in');
 
     const position = await this.dbService.withTransaction(async (client) => {
       // Lock the player row first — serializes concurrent join attempts by the same wallet
@@ -228,6 +297,18 @@ export class PokerGameService {
         [normalized]
       );
       if (playerLock.rows.length === 0) throw new Error('Player not found');
+
+      // Prevent sitting at multiple cash tables simultaneously
+      const otherSeat = await client.query(
+        `SELECT s.table_id FROM poker_seats s
+         JOIN poker_tables t ON t.id = s.table_id
+         WHERE LOWER(s.player_address) = LOWER($1)
+           AND (t.tournament_mode IS NULL OR t.tournament_mode = FALSE)`,
+        [normalized]
+      );
+      if (otherSeat.rows.length > 0) {
+        throw new Error('Already seated at another cash table. Leave that table first.');
+      }
 
       const tableResult = await client.query(
         'SELECT id, small_blind, big_blind, max_seats FROM poker_tables WHERE id = $1',
@@ -277,10 +358,11 @@ export class PokerGameService {
     const activeTable = this.activeTables.get(tableId);
     if (activeTable && !activeTable.currentRound) {
       try {
+        const buyInChips = weiToEngineChips(buyIn);
         if (position === 0) {
-          activeTable.sitDown(normalized, Number(buyIn));
+          activeTable.sitDown(normalized, buyInChips);
         } else {
-          activeTable.sitDown(normalized, Number(buyIn), position);
+          activeTable.sitDown(normalized, buyInChips, position);
         }
       } catch {
         // If sitDown fails (e.g. already seated from previous run), ignore
@@ -310,6 +392,10 @@ export class PokerGameService {
   }
 
   async leaveTable(tableId: string, playerAddress: string): Promise<PokerTableState | null> {
+    return this.withTableLock(tableId, () => this._leaveTable(tableId, playerAddress));
+  }
+
+  private async _leaveTable(tableId: string, playerAddress: string): Promise<PokerTableState | null> {
     const normalized = this.normalizeAddress(playerAddress);
     const pool = this.getPool();
 
@@ -318,8 +404,6 @@ export class PokerGameService {
       [tableId, normalized]
     );
     if (seatResult.rows.length === 0) throw new Error('Not seated at this table');
-
-    const stack = BigInt(seatResult.rows[0].stack || '0');
 
     const activeHandResult = await pool.query(
       `SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1`,
@@ -341,12 +425,27 @@ export class PokerGameService {
       }
     }
 
-    await pool.query('DELETE FROM poker_seats WHERE table_id = $1 AND player_address = $2', [tableId, normalized]);
-    if (stack > 0n) {
-      await this.dbService.addBalanceToAddress(playerAddress, stack);
-    }
+    // Atomically remove seat and credit balance so a failed credit cannot strand chips.
+    const creditedStack = await this.dbService.withTransaction(async (client) => {
+      const del = await client.query(
+        `DELETE FROM poker_seats WHERE table_id = $1 AND LOWER(player_address) = LOWER($2) RETURNING stack`,
+        [tableId, normalized]
+      );
+      if (del.rows.length === 0) {
+        throw new Error('Not seated at this table');
+      }
+      const stack = BigInt(del.rows[0].stack || '0');
+      if (stack > 0n) {
+        await client.query(
+          `INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
+           ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`,
+          [normalized, stack.toString()]
+        );
+      }
+      return stack;
+    });
 
-    logger.info('Poker leave', { tableId, playerAddress: normalized, stack: stack.toString() });
+    logger.info('Poker leave', { tableId, playerAddress: normalized, stack: creditedStack.toString() });
 
     return this.getTableState(tableId, null);
   }
@@ -358,6 +457,7 @@ export class PokerGameService {
     playerAddress: string,
     table: Table
   ): Promise<void> {
+    const scaling = await this.getTableScaling(tableId);
     const handRow = await pool.query('SELECT street FROM poker_hands WHERE id = $1', [handId]);
     if (handRow.rows.length === 0) return;
     const street = handRow.rows[0].street;
@@ -396,20 +496,38 @@ export class PokerGameService {
       );
     } else {
       // Update acting position and pot
-      const pot = totalPot(table);
+      const potChips = totalPotChips(table);
+      const potStr = scaling.tournament
+        ? String(Math.max(0, Math.round(potChips)))
+        : enginePotChipsToPotWei(potChips, scaling.chipWei).toString();
       const actingPos = table.currentPosition ?? null;
       await pool.query(
         'UPDATE poker_hands SET acting_position = $2, pot_amount = $3::NUMERIC, turn_started_at = NOW() WHERE id = $1',
-        [handId, actingPos, pot.toString()]
+        [handId, actingPos, potStr]
       );
-      await this.syncSeatsFromTable(pool, tableId, table);
+      await this.syncSeatsFromTable(pool, tableId, table, scaling);
     }
   }
 
   async addChips(tableId: string, playerAddress: string, amount: string): Promise<PokerTableState> {
+    return this.withTableLock(tableId, () => this._addChips(tableId, playerAddress, amount));
+  }
+
+  private async _addChips(tableId: string, playerAddress: string, amount: string): Promise<PokerTableState> {
     const normalized = this.normalizeAddress(playerAddress);
     const chips = BigInt(amount);
-    if (chips <= 0n) throw new Error('Amount must be positive');
+    assertCashChipMultiple(chips, 'Amount');
+
+    const pool = this.getPool();
+
+    // Block adding chips while a hand is in progress — syncSeatsFromTable would overwrite them
+    const activeHand = await pool.query(
+      'SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1',
+      [tableId]
+    );
+    if (activeHand.rows.length > 0) {
+      throw new Error('Cannot add chips while a hand is in progress. Wait for the current hand to finish.');
+    }
 
     await this.dbService.withTransaction(async (client) => {
       // Lock the player row to serialize concurrent addChips calls
@@ -458,7 +576,8 @@ export class PokerGameService {
     if (tableRow.rows.length === 0) throw new Error('Table not found');
     const tbl = tableRow.rows[0];
     const maxSeats = Number(tbl.max_seats) || 6;
-    const bigBlind = Number(tbl.big_blind ?? 0);
+    const scaling = await this.getTableScaling(tableId);
+    const bigBlindWei = BigInt(tbl.big_blind ?? 0);
 
     // Load DB seats
     const seatsResult = await pool.query(
@@ -487,8 +606,13 @@ export class PokerGameService {
       if (liveTable && s) {
         const livePlayer = liveTable.players[pos];
         if (livePlayer && livePlayer.id === s.playerAddress) {
-          stack = livePlayer.stackSize.toString();
-          currentBet = livePlayer.bet.toString();
+          if (scaling.tournament) {
+            stack = String(Math.max(0, Math.round(livePlayer.stackSize)));
+            currentBet = String(Math.max(0, Math.round(livePlayer.bet)));
+          } else {
+            stack = engineChipsToWeiRounded(livePlayer.stackSize).toString();
+            currentBet = engineChipsToWeiRounded(livePlayer.bet).toString();
+          }
         }
       }
 
@@ -591,22 +715,29 @@ export class PokerGameService {
 
       // toCall and minRaise from live table
       let toCall = '0';
-      let minRaise = bigBlind.toString();
+      let minRaise = bigBlindWei.toString();
 
       if (liveTable && liveTable.currentRound && actingPosition != null) {
         const actor = liveTable.players[actingPosition];
         if (actor) {
-          const toCallNum = liveTable.currentBet !== undefined
+          const toCallChips = liveTable.currentBet !== undefined
             ? Math.max(0, liveTable.currentBet - actor.bet)
             : 0;
-          toCall = toCallNum.toString();
-          const minRaiseNum = (liveTable.currentBet ?? 0) + Math.max(liveTable.lastRaise ?? bigBlind, bigBlind);
-          minRaise = minRaiseNum.toString();
+          const bigBlindChips = scaling.tournament ? Number(bigBlindWei) : weiToEngineChips(bigBlindWei);
+          const minRaiseChips = (liveTable.currentBet ?? 0)
+            + Math.max(liveTable.lastRaise ?? bigBlindChips, bigBlindChips);
+          if (scaling.tournament) {
+            toCall = String(Math.max(0, Math.round(toCallChips)));
+            minRaise = String(Math.max(0, Math.round(minRaiseChips)));
+          } else {
+            toCall = engineChipsToWeiRounded(toCallChips).toString();
+            minRaise = engineChipsToWeiRounded(minRaiseChips).toString();
+          }
         }
       } else if (actingPosition != null) {
-        // Fall back to DB-computed values
-        const lastRaiseSize = Number(h.last_raise_size ?? 0);
-        const minRaiseIncrement = Math.max(lastRaiseSize, bigBlind);
+        // Fall back to DB-computed values (amounts already in table units: wei or virtual chips)
+        const lastRaiseSizeWei = BigInt(h.last_raise_size ?? 0);
+        const minRaiseIncrement = lastRaiseSizeWei > bigBlindWei ? lastRaiseSizeWei : bigBlindWei;
         // toCall: from actions
         const contribResult = await pool.query(
           `SELECT player_address, SUM(amount) AS total FROM poker_hand_actions
@@ -624,7 +755,7 @@ export class PokerGameService {
         }
         const toCallBig = maxContrib > myContrib ? maxContrib - myContrib : 0n;
         toCall = toCallBig.toString();
-        minRaise = (toCallBig + BigInt(minRaiseIncrement)).toString();
+        minRaise = (toCallBig + minRaiseIncrement).toString();
       }
 
       // Last action
@@ -645,7 +776,9 @@ export class PokerGameService {
 
       // Pot: prefer live table total
       const potStr = liveTable && liveTable.currentRound
-        ? totalPot(liveTable).toString()
+        ? (scaling.tournament
+            ? String(Math.max(0, Math.round(totalPotChips(liveTable))))
+            : enginePotChipsToPotWei(totalPotChips(liveTable), scaling.chipWei).toString())
         : (h.pot_amount?.toString() ?? '0');
 
       // Update seat flags
@@ -740,6 +873,8 @@ export class PokerGameService {
 
   async startHand(tableId: string): Promise<PokerTableState | null> {
     const pool = this.getPool();
+    const scaling = await this.getTableScaling(tableId);
+
     const tableResult = await pool.query(
       'SELECT id, small_blind, big_blind, max_seats, hand_number, button_position FROM poker_tables WHERE id = $1',
       [tableId]
@@ -747,8 +882,22 @@ export class PokerGameService {
     if (tableResult.rows.length === 0) throw new Error('Table not found');
     const tblRow = tableResult.rows[0];
     const maxSeats = Number(tblRow.max_seats) || 6;
-    const sb = Number(tblRow.small_blind);
-    const bb = Number(tblRow.big_blind);
+
+    const sbWei = BigInt(tblRow.small_blind ?? 0);
+    const bbWei = BigInt(tblRow.big_blind ?? 0);
+    let sb: number;
+    let bb: number;
+    if (scaling.tournament) {
+      sb = Number(sbWei);
+      bb = Number(bbWei);
+      if (!Number.isFinite(sb) || !Number.isFinite(bb) || sb <= 0 || bb <= 0) {
+        throw new Error('Invalid blinds');
+      }
+    } else {
+      assertCashBlindsValid(sbWei, bbWei);
+      sb = weiToEngineChips(sbWei);
+      bb = weiToEngineChips(bbWei);
+    }
 
     const seatsResult = await pool.query(
       'SELECT position, player_address, stack FROM poker_seats WHERE table_id = $1 ORDER BY position',
@@ -757,8 +906,7 @@ export class PokerGameService {
     const withStack = seatsResult.rows.filter((r: any) => BigInt(r.stack ?? '0') > 0n);
     if (withStack.length < 2) return null;
 
-    // Build or reset the in-memory Table
-    // We use minBuyIn=0 to allow any stack size
+    // Build or reset the in-memory Table (chevtek uses integer "chips", not wei)
     const table = new Table(0, sb, bb);
     // autoMoveDealer=true: chevtek will advance dealer each hand. We need to
     // prime the dealer position so the FIRST call to dealCards() moves correctly.
@@ -770,11 +918,14 @@ export class PokerGameService {
     for (const seat of withStack) {
       const pos = Number(seat.position);
       const addr = (seat.player_address || '').toLowerCase();
-      const stack = Number(BigInt(seat.stack));
+      const stackWei = BigInt(seat.stack ?? '0');
+      const stackChips = scaling.tournament
+        ? Number(stackWei)
+        : weiToEngineChips(stackWei);
       if (pos === 0) {
-        table.sitDown(addr, stack);
+        table.sitDown(addr, stackChips);
       } else {
-        table.sitDown(addr, stack, pos);
+        table.sitDown(addr, stackChips, pos);
       }
     }
 
@@ -827,7 +978,11 @@ export class PokerGameService {
     const bbBlind = bbPlayer ? bbPlayer.bet : bb;
 
     // Insert hand into DB
-    const pot = totalPot(table);
+    const potChips0 = totalPotChips(table);
+    const potStr0 = scaling.tournament
+      ? String(Math.max(0, Math.round(potChips0)))
+      : enginePotChipsToPotWei(potChips0, scaling.chipWei).toString();
+    const lastRaiseSizeStr = scaling.tournament ? String(Math.round(bb)) : bbWei.toString();
     const handInsert = await pool.query(
       `INSERT INTO poker_hands
          (table_id, hand_number, button_position, server_seed_hash, server_seed, client_seed,
@@ -841,9 +996,9 @@ export class PokerGameService {
         serverSeedHash,
         serverSeed,
         clientSeed,
-        pot.toString(),
+        potStr0,
         table.currentPosition ?? null,
-        bb.toString(),
+        lastRaiseSizeStr,
       ]
     );
     const handId: string = handInsert.rows[0].id;
@@ -857,20 +1012,24 @@ export class PokerGameService {
       );
     }
 
-    // Insert blind actions
+    // Insert blind actions (amounts in table units: wei for cash, virtual chips for tournament)
+    const blindAmountStr = (chips: number) =>
+      scaling.tournament
+        ? String(Math.max(0, Math.round(chips)))
+        : engineChipsToWeiRounded(chips).toString();
     let actionOrder = 1;
     if (sbPlayer) {
       await pool.query(
         `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
          VALUES ($1, $2, 'preflop', 'blind', $3::NUMERIC, $4)`,
-        [handId, sbPlayer.id, sbBlind.toString(), actionOrder++]
+        [handId, sbPlayer.id, blindAmountStr(sbBlind), actionOrder++]
       );
     }
     if (bbPlayer) {
       await pool.query(
         `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
          VALUES ($1, $2, 'preflop', 'blind', $3::NUMERIC, $4)`,
-        [handId, bbPlayer.id, bbBlind.toString(), actionOrder++]
+        [handId, bbPlayer.id, blindAmountStr(bbBlind), actionOrder++]
       );
     }
 
@@ -881,7 +1040,7 @@ export class PokerGameService {
     );
 
     // Sync seat stacks (blinds already deducted by chevtek)
-    await this.syncSeatsFromTable(pool, tableId, table);
+    await this.syncSeatsFromTable(pool, tableId, table, scaling);
 
     return this.getTableState(tableId, null);
   }
@@ -891,6 +1050,16 @@ export class PokerGameService {
   // ---------------------------------------------------------------------------
 
   async playerAction(
+    tableId: string,
+    handId: string,
+    playerAddress: string,
+    action: string,
+    amount?: string
+  ): Promise<PokerTableState> {
+    return this.withTableLock(tableId, () => this._playerAction(tableId, handId, playerAddress, action, amount));
+  }
+
+  private async _playerAction(
     tableId: string,
     handId: string,
     playerAddress: string,
@@ -907,6 +1076,8 @@ export class PokerGameService {
     );
     if (handRow.rows.length === 0) throw new Error('Hand not found or already completed');
 
+    const scaling = await this.getTableScaling(tableId);
+
     // Get or reconstruct live table
     let table = this.activeTables.get(tableId);
     if (!table) {
@@ -922,14 +1093,14 @@ export class PokerGameService {
     // Capture street before action (for DB recording)
     const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
 
-    // Perform action
     const tableRow = await pool.query(
       'SELECT big_blind FROM poker_tables WHERE id = $1',
       [tableId]
     );
-    const bb = Number(tableRow.rows[0].big_blind);
-    /** Effective amount for bet/raise (clamped to stack); used for DB record. */
-    let effectiveActionAmount: number | null = null;
+    const bbWei = BigInt(tableRow.rows[0]?.big_blind ?? 0);
+    const bbChips = scaling.tournament ? Number(bbWei) : weiToEngineChips(bbWei);
+
+    let actionAmountDb = '0';
 
     switch (action) {
       case 'fold':
@@ -938,25 +1109,53 @@ export class PokerGameService {
       case 'check':
         actor.checkAction();
         break;
-      case 'call':
+      case 'call': {
+        // Capture the call amount BEFORE callAction (which zeroes the difference)
+        const callChips = (table.currentBet ?? 0) - actor.bet;
         actor.callAction();
+        if (callChips > 0) {
+          actionAmountDb = scaling.tournament
+            ? String(Math.max(0, Math.round(callChips)))
+            : engineChipsToWeiRounded(callChips).toString();
+        }
         break;
+      }
       case 'bet': {
-        let amt = Number(amount ?? '0');
-        if (!Number.isFinite(amt) || amt < 0) amt = 0;
-        amt = Math.min(amt, actor.stackSize);
-        if (amt === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
-        effectiveActionAmount = amt;
-        actor.betAction(amt);
+        let amtChips: number;
+        if (scaling.tournament) {
+          const raw = BigInt(amount ?? '0');
+          amtChips = Math.min(Number(raw), actor.stackSize);
+          if (!Number.isFinite(amtChips) || amtChips < 0) amtChips = 0;
+        } else {
+          const wei = BigInt(amount ?? '0');
+          assertCashChipMultiple(wei, 'Bet');
+          amtChips = weiToEngineChips(wei);
+          amtChips = Math.min(amtChips, actor.stackSize);
+        }
+        if (amtChips === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
+        actor.betAction(amtChips);
+        actionAmountDb = scaling.tournament
+          ? String(Math.max(0, Math.round(amtChips)))
+          : engineChipsToWeiRounded(amtChips).toString();
         break;
       }
       case 'raise': {
-        let amt = Number(amount ?? '0');
-        if (!Number.isFinite(amt) || amt < 0) amt = 0;
-        amt = Math.min(amt, actor.stackSize);
-        if (amt === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
-        effectiveActionAmount = amt;
-        actor.raiseAction(amt);
+        let amtChips: number;
+        if (scaling.tournament) {
+          const raw = BigInt(amount ?? '0');
+          amtChips = Math.min(Number(raw), actor.stackSize);
+          if (!Number.isFinite(amtChips) || amtChips < 0) amtChips = 0;
+        } else {
+          const wei = BigInt(amount ?? '0');
+          assertCashChipMultiple(wei, 'Raise');
+          amtChips = weiToEngineChips(wei);
+          amtChips = Math.min(amtChips, actor.stackSize);
+        }
+        if (amtChips === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
+        actor.raiseAction(amtChips);
+        actionAmountDb = scaling.tournament
+          ? String(Math.max(0, Math.round(amtChips)))
+          : engineChipsToWeiRounded(amtChips).toString();
         break;
       }
       default:
@@ -982,14 +1181,10 @@ export class PokerGameService {
     );
     const nextOrder = Number(orderResult.rows[0].next_order);
 
-    // Record action (use effective clamped amount for bet/raise)
-    const actionAmount = effectiveActionAmount !== null
-      ? effectiveActionAmount
-      : (action === 'fold' || action === 'check' ? 0 : Number(amount ?? '0'));
     await pool.query(
       `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
        VALUES ($1, $2, $3, $4, $5::NUMERIC, $6)`,
-      [handId, normalized, streetBefore, action, actionAmount.toString(), nextOrder]
+      [handId, normalized, streetBefore, action, actionAmountDb, nextOrder]
     );
 
     if (isShowdown) {
@@ -1003,9 +1198,17 @@ export class PokerGameService {
     } else {
       // Update community cards, pot, acting position, street
       const communityInts = table.communityCards.map(cardToInt);
-      const pot = totalPot(table);
+      const potChips = totalPotChips(table);
+      const potStr = scaling.tournament
+        ? String(Math.max(0, Math.round(potChips)))
+        : enginePotChipsToPotWei(potChips, scaling.chipWei).toString();
       const actingPos = table.currentPosition ?? null;
-      const lastRaise = table.lastRaise ?? bb;
+      const lrChips = table.lastRaise ?? bbChips;
+      const lastRaiseSizeDb = streetChanged
+        ? (scaling.tournament ? String(Math.round(bbChips)) : bbWei.toString())
+        : (scaling.tournament
+            ? String(Math.max(0, Math.round(lrChips)))
+            : engineChipsToWeiRounded(lrChips).toString());
 
       await pool.query(
         `UPDATE poker_hands
@@ -1018,15 +1221,15 @@ export class PokerGameService {
           newStreet,
           JSON.stringify(communityInts),
           actingPos,
-          pot.toString(),
-          (streetChanged ? bb : lastRaise).toString(),
+          potStr,
+          lastRaiseSizeDb,
           // Reset turn_started_at when actor changes or street changes
           actingPos !== (handRow.rows[0].acting_position != null ? Number(handRow.rows[0].acting_position) : null) || streetChanged,
         ]
       );
 
       // Sync seat stacks
-      await this.syncSeatsFromTable(pool, tableId, table);
+      await this.syncSeatsFromTable(pool, tableId, table, scaling);
       await this.broadcastState(tableId);
     }
 
@@ -1038,27 +1241,68 @@ export class PokerGameService {
   // ---------------------------------------------------------------------------
 
   private async persistShowdown(pool: Pool, tableId: string, handId: string, table: Table): Promise<void> {
-    // Credit stacks from chevtek's showdown calculation
-    // table.winners is the overall winner list; table.pots[].winners has per-pot winners
+    const scaling = await this.getTableScaling(tableId);
+    const chipWei = scaling.chipWei;
     const resultWinners: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[] = [];
 
-    // We need to know how much each player won — compute by comparing pre/post stacks.
-    // Chevtek already credited stackSize in showdown(). We sync those values to DB.
-    await this.syncSeatsFromTable(pool, tableId, table);
-
-    // Build winners list from table.pots, explicitly skipping folded players.
-    // chevtek's gatherBets() has an early-return when bettingPlayers.length <= 1
-    // (e.g. everyone checked the river) that skips removing folded players from
-    // pot.eligiblePlayers, so findWinners() can incorrectly include them.
-    const winnerAmounts = new Map<string, number>();
+    // Integer chip split per pot (no float drift), then convert to wei for cash.
+    const winnerChips = new Map<string, bigint>();
     for (const pot of table.pots) {
       if (!pot.winners || pot.winners.length === 0) continue;
       const nonFoldedWinners = pot.winners.filter((w: any) => !w.folded);
       if (nonFoldedWinners.length === 0) continue;
-      const share = pot.amount / nonFoldedWinners.length;
-      for (const w of nonFoldedWinners) {
-        winnerAmounts.set(w.id, (winnerAmounts.get(w.id) ?? 0) + share);
+      const potChips = BigInt(Math.max(0, Math.round(pot.amount)));
+      const ids = nonFoldedWinners.map((w: any) => w.id as string);
+      const shares = splitBigIntEqually(potChips, ids.length);
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        winnerChips.set(id, (winnerChips.get(id) ?? 0n) + shares[i]);
       }
+    }
+
+    // Compute per-player rake (cash games only) and build winner amounts for the result payload.
+    let totalRake = 0n;
+    const rakeByAddr = new Map<string, bigint>(); // per-winner rake in wei
+    const rakedWinnerAmounts = new Map<string, bigint>();
+    if (scaling.tournament) {
+      for (const [addr, ch] of winnerChips) {
+        rakedWinnerAmounts.set(addr, ch);
+      }
+    } else {
+      for (const [addr, ch] of winnerChips) {
+        const grossWei = ch * chipWei;
+        const rake = (grossWei * BigInt(RAKE_PERCENT)) / 100n;
+        rakedWinnerAmounts.set(addr, grossWei - rake);
+        rakeByAddr.set(addr, rake);
+        totalRake += rake;
+      }
+    }
+
+    // Sync engine stacks → DB, applying rake deduction atomically for cash games.
+    // For winners: write (engineStack * chipWei - playerRake) instead of syncing then subtracting.
+    // For non-winners: write engineStack * chipWei (or virtual chips for tournaments).
+    for (const player of table.players) {
+      if (!player) continue;
+      let stackStr: string;
+      if (scaling.tournament) {
+        stackStr = String(Math.max(0, Math.round(player.stackSize)));
+      } else {
+        const grossWei = engineChipsToWeiRounded(player.stackSize);
+        const playerRake = rakeByAddr.get(player.id) ?? 0n;
+        const netWei = grossWei - playerRake;
+        stackStr = (netWei > 0n ? netWei : 0n).toString();
+      }
+      await pool.query(
+        'UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND player_address = $2',
+        [tableId, player.id, stackStr]
+      );
+    }
+
+    // Credit rake wallet
+    const rakeWallet = getPokerRakeWallet();
+    if (totalRake > 0n && !scaling.tournament) {
+      await this.dbService.addBalanceToAddress(rakeWallet, totalRake);
+      logger.info('Poker rake collected', { handId, tableId, rake: totalRake.toString(), wallet: rakeWallet });
     }
 
     // Get hole cards from DB for hand names
@@ -1073,7 +1317,7 @@ export class PokerGameService {
     }
     const communityInts = table.communityCards.map(cardToInt);
 
-    for (const [addr, amount] of winnerAmounts) {
+    for (const [addr, amount] of rakedWinnerAmounts) {
       const holeCards = holeCardsByAddr.get(addr) ?? [];
       const allCards = [...holeCards, ...communityInts];
       let handName: string | undefined;
@@ -1086,16 +1330,15 @@ export class PokerGameService {
           handName = livePlayer.hand.descr ?? undefined;
         }
       }
-      resultWinners.push({ address: addr, amount: Math.round(amount).toString(), handName, winningCardIndices });
+      resultWinners.push({ address: addr, amount: amount.toString(), handName, winningCardIndices });
     }
 
-    const communityInts2 = table.communityCards.map(cardToInt);
     await pool.query(
       `UPDATE poker_hands
        SET completed_at = NOW(), street = 'showdown', acting_position = NULL,
-           community_cards = $2::JSONB, result = $3::JSONB
+           community_cards = $2::JSONB, result = $3::JSONB, rake_amount = $4::NUMERIC
        WHERE id = $1`,
-      [handId, JSON.stringify(communityInts2), JSON.stringify({ winners: resultWinners })]
+      [handId, JSON.stringify(communityInts), JSON.stringify({ winners: resultWinners }), totalRake.toString()]
     );
     await pool.query('UPDATE poker_tables SET status = $2 WHERE id = $1', [tableId, 'waiting']);
 
@@ -1128,107 +1371,114 @@ export class PokerGameService {
     const folded: string[] = [];
     for (const row of timedOut.rows) {
       try {
-        let table = this.activeTables.get(row.table_id);
-        if (!table) {
-          table = await this.reconstructTable(row.table_id, pool);
-          this.activeTables.set(row.table_id, table);
-        }
-
-        const actor = table.currentActor;
-        if (!actor) continue;
-
-        const actingAddr = actor.id;
-
-        // Capture street before
-        const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
-
-        // Fold
-        actor.foldAction();
-
-        // Record fold action
-        const orderResult = await pool.query(
-          'SELECT COALESCE(MAX("order"), 0) + 1 AS next_order FROM poker_hand_actions WHERE hand_id = $1',
-          [row.hand_id]
-        );
-        const nextOrder = Number(orderResult.rows[0].next_order);
-        await pool.query(
-          `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
-           VALUES ($1, $2, $3, 'fold', 0, $4)`,
-          [row.hand_id, actingAddr, streetBefore, nextOrder]
-        );
-
-        if (!table.currentRound && table.winners) {
-          await this.persistShowdown(pool, row.table_id, row.hand_id, table);
-          await this.broadcastState(row.table_id);
-          const tid = row.table_id;
-          setTimeout(async () => {
-            await this.tryStartNextHand(tid);
-            await this.broadcastState(tid);
-          }, 5000);
-        } else {
-          const communityInts = table.communityCards.map(cardToInt);
-          const pot = totalPot(table);
-          const actingPos = table.currentPosition ?? null;
-          const newStreet = chevtekStreetToPoker(table.currentRound, false);
-          await pool.query(
-            `UPDATE poker_hands
-             SET street = $2, community_cards = $3::JSONB, acting_position = $4,
-                 pot_amount = $5::NUMERIC, turn_started_at = NOW()
-             WHERE id = $1`,
-            [row.hand_id, newStreet, JSON.stringify(communityInts), actingPos, pot.toString()]
-          );
-          await this.syncSeatsFromTable(pool, row.table_id, table);
-          await this.broadcastState(row.table_id);
-        }
-
-        folded.push(actingAddr);
-        logger.info('Auto-folded timed-out turn', { handId: row.hand_id, player: actingAddr });
-
-        // Track consecutive timeouts and auto-kick/sit-out AFK players
-        try {
-          const tableInfoResult = await pool.query(
-            'SELECT tournament_mode FROM poker_tables WHERE id = $1',
-            [row.table_id]
-          );
-          const isTournament = tableInfoResult.rows[0]?.tournament_mode ?? false;
-
-          const timeoutResult = await pool.query(
-            `UPDATE poker_seats
-             SET consecutive_timeouts = consecutive_timeouts + 1
-             WHERE table_id = $1 AND player_address = $2
-             RETURNING consecutive_timeouts`,
-            [row.table_id, actingAddr]
-          );
-          const consecutiveTimeouts = Number(timeoutResult.rows[0]?.consecutive_timeouts ?? 0);
-
-          if (consecutiveTimeouts >= 6) {
-            if (isTournament) {
-              // Sit them out — they bleed blinds and bust naturally (no kick; they paid a buy-in)
-              await pool.query(
-                `UPDATE poker_seats SET status = 'sitting_out', consecutive_timeouts = 0
-                 WHERE table_id = $1 AND player_address = $2`,
-                [row.table_id, actingAddr]
-              );
-              this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_sitting_out', {
-                tableId: row.table_id,
-                playerAddress: actingAddr,
-                reason: 'afk',
-              });
-              logger.info('Tournament AFK player marked sitting_out', { tableId: row.table_id, player: actingAddr });
-            } else {
-              // Cash game — kick and return stack
-              await this.leaveTable(row.table_id, actingAddr);
-              this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_kicked', {
-                tableId: row.table_id,
-                playerAddress: actingAddr,
-                reason: 'afk',
-              });
-              logger.info('Cash game AFK player kicked', { tableId: row.table_id, player: actingAddr });
-            }
+        // Serialize with player actions on the same table
+        await this.withTableLock(row.table_id, async () => {
+          const scaling = await this.getTableScaling(row.table_id);
+          let table = this.activeTables.get(row.table_id);
+          if (!table) {
+            table = await this.reconstructTable(row.table_id, pool);
+            this.activeTables.set(row.table_id, table);
           }
-        } catch (kickErr) {
-          logger.error('Error handling AFK kick/sitout', { handId: row.hand_id, player: actingAddr, error: kickErr });
-        }
+
+          const actor = table.currentActor;
+          if (!actor) return;
+
+          const actingAddr = actor.id;
+
+          // Capture street before
+          const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
+
+          // Fold
+          actor.foldAction();
+
+          // Record fold action
+          const orderResult = await pool.query(
+            'SELECT COALESCE(MAX("order"), 0) + 1 AS next_order FROM poker_hand_actions WHERE hand_id = $1',
+            [row.hand_id]
+          );
+          const nextOrder = Number(orderResult.rows[0].next_order);
+          await pool.query(
+            `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
+             VALUES ($1, $2, $3, 'fold', 0, $4)`,
+            [row.hand_id, actingAddr, streetBefore, nextOrder]
+          );
+
+          if (!table.currentRound && table.winners) {
+            await this.persistShowdown(pool, row.table_id, row.hand_id, table);
+            await this.broadcastState(row.table_id);
+            const tid = row.table_id;
+            setTimeout(async () => {
+              await this.tryStartNextHand(tid);
+              await this.broadcastState(tid);
+            }, 5000);
+          } else {
+            const communityInts = table.communityCards.map(cardToInt);
+            const potChips = totalPotChips(table);
+            const potStr = scaling.tournament
+              ? String(Math.max(0, Math.round(potChips)))
+              : enginePotChipsToPotWei(potChips, scaling.chipWei).toString();
+            const actingPos = table.currentPosition ?? null;
+            const newStreet = chevtekStreetToPoker(table.currentRound, false);
+            await pool.query(
+              `UPDATE poker_hands
+               SET street = $2, community_cards = $3::JSONB, acting_position = $4,
+                   pot_amount = $5::NUMERIC, turn_started_at = NOW()
+               WHERE id = $1`,
+              [row.hand_id, newStreet, JSON.stringify(communityInts), actingPos, potStr]
+            );
+            await this.syncSeatsFromTable(pool, row.table_id, table, scaling);
+            await this.broadcastState(row.table_id);
+          }
+
+          folded.push(actingAddr);
+          logger.info('Auto-folded timed-out turn', { handId: row.hand_id, player: actingAddr });
+
+          // Track consecutive timeouts and auto-kick/sit-out AFK players
+          try {
+            const tableInfoResult = await pool.query(
+              'SELECT tournament_mode FROM poker_tables WHERE id = $1',
+              [row.table_id]
+            );
+            const isTournament = tableInfoResult.rows[0]?.tournament_mode ?? false;
+
+            const timeoutResult = await pool.query(
+              `UPDATE poker_seats
+               SET consecutive_timeouts = consecutive_timeouts + 1
+               WHERE table_id = $1 AND player_address = $2
+               RETURNING consecutive_timeouts`,
+              [row.table_id, actingAddr]
+            );
+            const consecutiveTimeouts = Number(timeoutResult.rows[0]?.consecutive_timeouts ?? 0);
+
+            if (consecutiveTimeouts >= 6) {
+              if (isTournament) {
+                // Sit them out — they bleed blinds and bust naturally (no kick; they paid a buy-in)
+                await pool.query(
+                  `UPDATE poker_seats SET status = 'sitting_out', consecutive_timeouts = 0
+                   WHERE table_id = $1 AND player_address = $2`,
+                  [row.table_id, actingAddr]
+                );
+                this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_sitting_out', {
+                  tableId: row.table_id,
+                  playerAddress: actingAddr,
+                  reason: 'afk',
+                });
+                logger.info('Tournament AFK player marked sitting_out', { tableId: row.table_id, player: actingAddr });
+              } else {
+                // Cash game — kick and return stack (call _leaveTable directly; we already hold the lock)
+                await this._leaveTable(row.table_id, actingAddr);
+                this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_kicked', {
+                  tableId: row.table_id,
+                  playerAddress: actingAddr,
+                  reason: 'afk',
+                });
+                logger.info('Cash game AFK player kicked', { tableId: row.table_id, player: actingAddr });
+              }
+            }
+          } catch (kickErr) {
+            logger.error('Error handling AFK kick/sitout', { handId: row.hand_id, player: actingAddr, error: kickErr });
+          }
+        });
       } catch (err) {
         logger.error('Error auto-folding timed-out turn', { handId: row.hand_id, error: err });
       }
@@ -1241,15 +1491,31 @@ export class PokerGameService {
   // ---------------------------------------------------------------------------
 
   private async reconstructTable(tableId: string, pool: Pool): Promise<Table> {
+    const scaling = await this.getTableScaling(tableId);
+
     const tblRow = await pool.query(
       'SELECT small_blind, big_blind, max_seats, button_position, hand_number FROM poker_tables WHERE id = $1',
       [tableId]
     );
     if (tblRow.rows.length === 0) throw new Error('Table not found');
     const tbl = tblRow.rows[0];
-    const sb = Number(tbl.small_blind);
-    const bb = Number(tbl.big_blind);
+    const sbWei = BigInt(tbl.small_blind ?? 0);
+    const bbWei = BigInt(tbl.big_blind ?? 0);
     const maxSeats = Number(tbl.max_seats) || 6;
+
+    let sb: number;
+    let bb: number;
+    if (scaling.tournament) {
+      sb = Number(sbWei);
+      bb = Number(bbWei);
+      if (!Number.isFinite(sb) || !Number.isFinite(bb) || sb <= 0 || bb <= 0) {
+        throw new Error('Invalid blinds');
+      }
+    } else {
+      assertCashBlindsValid(sbWei, bbWei);
+      sb = weiToEngineChips(sbWei);
+      bb = weiToEngineChips(bbWei);
+    }
 
     const activeHand = await pool.query(
       `SELECT * FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL ORDER BY created_at DESC LIMIT 1`,
@@ -1269,11 +1535,12 @@ export class PokerGameService {
         if (!seat.player_address || BigInt(seat.stack ?? '0') === 0n) continue;
         const pos = Number(seat.position);
         const addr = (seat.player_address || '').toLowerCase();
-        const stack = Number(BigInt(seat.stack));
+        const stackWei = BigInt(seat.stack ?? '0');
+        const stackChips = scaling.tournament ? Number(stackWei) : weiToEngineChips(stackWei);
         if (pos === 0) {
-          table.sitDown(addr, stack);
+          table.sitDown(addr, stackChips);
         } else {
-          table.sitDown(addr, stack, pos);
+          table.sitDown(addr, stackChips, pos);
         }
       }
       if (tbl.button_position != null) {
@@ -1291,38 +1558,39 @@ export class PokerGameService {
     );
     const dealtAddrs = new Set(holeCardsResult.rows.map((r: any) => r.player_address));
 
-    // Sit only dealt players (using their stacks from DB seats)
-    // We need stacks BEFORE any street betting for the replay to work.
-    // We'll sit them with current DB stack and let replay reconstruct.
-    // Actually, we need to compute their stacks AT THE START of the hand.
-    // The easiest approach: sit with current stack + what they've bet/committed so far.
     const actionsResult = await pool.query(
       `SELECT player_address, action, amount FROM poker_hand_actions WHERE hand_id = $1 ORDER BY "order"`,
       [hand.id]
     );
 
-    // Compute chips committed per player (bet/raise/call/blind)
-    const committed = new Map<string, number>();
+    const committedNum = new Map<string, number>();
+    const committedWei = new Map<string, bigint>();
     for (const row of actionsResult.rows) {
       const addr = (row.player_address || '').toLowerCase();
-      if (['bet', 'raise', 'call', 'blind'].includes(row.action)) {
-        committed.set(addr, (committed.get(addr) ?? 0) + Number(row.amount ?? 0));
+      if (!['bet', 'raise', 'call', 'blind'].includes(row.action)) continue;
+      if (scaling.tournament) {
+        committedNum.set(addr, (committedNum.get(addr) ?? 0) + Number(row.amount ?? 0));
+      } else {
+        const a = BigInt(row.amount ?? '0');
+        committedWei.set(addr, (committedWei.get(addr) ?? 0n) + a);
       }
-    }
-
-    // Sit players with reconstructed starting stacks
-    const seatMap = new Map<number, any>();
-    for (const seat of seatsResult.rows) {
-      seatMap.set(Number(seat.position), seat);
     }
 
     for (const seat of seatsResult.rows) {
       const addr = (seat.player_address || '').toLowerCase();
       if (!dealtAddrs.has(addr)) continue;
       const pos = Number(seat.position);
-      const currentStack = Number(BigInt(seat.stack ?? '0'));
-      const totalCommitted = committed.get(addr) ?? 0;
-      const startingStack = currentStack + totalCommitted;
+      let startingStack: number;
+      if (scaling.tournament) {
+        const currentStack = Number(BigInt(seat.stack ?? '0'));
+        const totalCommitted = committedNum.get(addr) ?? 0;
+        startingStack = currentStack + totalCommitted;
+      } else {
+        const currentStackWei = BigInt(seat.stack ?? '0');
+        const totalCommittedWei = committedWei.get(addr) ?? 0n;
+        const startingStackWei = currentStackWei + totalCommittedWei;
+        startingStack = weiToEngineChips(startingStackWei);
+      }
 
       if (pos === 0) {
         table.sitDown(addr, startingStack);
@@ -1430,8 +1698,20 @@ export class PokerGameService {
           case 'fold': actor.foldAction(); break;
           case 'check': actor.checkAction(); break;
           case 'call': actor.callAction(); break;
-          case 'bet': actor.betAction(Number(actionRow.amount)); break;
-          case 'raise': actor.raiseAction(Number(actionRow.amount)); break;
+          case 'bet': {
+            const chips = scaling.tournament
+              ? Number(actionRow.amount)
+              : weiToEngineChips(BigInt(actionRow.amount ?? '0'));
+            actor.betAction(chips);
+            break;
+          }
+          case 'raise': {
+            const chips = scaling.tournament
+              ? Number(actionRow.amount)
+              : weiToEngineChips(BigInt(actionRow.amount ?? '0'));
+            actor.raiseAction(chips);
+            break;
+          }
         }
       } catch (err) {
         logger.warn('Reconstruct: replay action failed', { tableId, action: actionRow.action, err });
@@ -1447,37 +1727,47 @@ export class PokerGameService {
   // ---------------------------------------------------------------------------
 
   private async tryStartNextHand(tableId: string): Promise<void> {
-    const pool = this.getPool();
+    return this.withTableLock(tableId, async () => {
+      const pool = this.getPool();
 
-    const activeHand = await pool.query(
-      'SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1',
-      [tableId]
-    );
-    if (activeHand.rows.length > 0) return;
+      const activeHand = await pool.query(
+        'SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1',
+        [tableId]
+      );
+      if (activeHand.rows.length > 0) return;
 
-    // Remove players from in-memory table (cleanup for next hand)
-    this.activeTables.delete(tableId);
+      // Remove players from in-memory table (cleanup for next hand)
+      this.activeTables.delete(tableId);
 
-    const seatsResult = await pool.query(
-      'SELECT stack FROM poker_seats WHERE table_id = $1',
-      [tableId]
-    );
-    const withStack = seatsResult.rows.filter((r: any) => BigInt(r.stack ?? '0') > 0n);
-    if (withStack.length < 2) return;
+      const seatsResult = await pool.query(
+        'SELECT stack FROM poker_seats WHERE table_id = $1',
+        [tableId]
+      );
+      const withStack = seatsResult.rows.filter((r: any) => BigInt(r.stack ?? '0') > 0n);
+      if (withStack.length < 2) return;
 
-    await this.startHand(tableId);
+      await this.startHand(tableId);
+    });
   }
 
   // ---------------------------------------------------------------------------
   // syncSeatsFromTable
   // ---------------------------------------------------------------------------
 
-  private async syncSeatsFromTable(pool: Pool, tableId: string, table: Table): Promise<void> {
+  private async syncSeatsFromTable(
+    pool: Pool,
+    tableId: string,
+    table: Table,
+    scaling: { tournament: boolean; chipWei: bigint }
+  ): Promise<void> {
     for (const player of table.players) {
       if (!player) continue;
+      const stackStr = scaling.tournament
+        ? String(Math.max(0, Math.round(player.stackSize)))
+        : engineChipsToWeiRounded(player.stackSize).toString();
       await pool.query(
         'UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND player_address = $2',
-        [tableId, player.id, player.stackSize.toString()]
+        [tableId, player.id, stackStr]
       );
     }
   }
@@ -1579,6 +1869,7 @@ export class PokerGameService {
   async deleteTableTournament(tableId: string): Promise<void> {
     const pool = this.getPool();
     this.activeTables.delete(tableId);
+    this.invalidateTableScaling(tableId);
     await pool.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);
     logger.info('Poker tournament table deleted (no balance credit)', { tableId });
   }

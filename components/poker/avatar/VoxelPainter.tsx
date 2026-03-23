@@ -3,17 +3,16 @@
 import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { HexColorPicker } from 'react-colorful';
 import { Eraser, Trash2, Eye, EyeOff, ChevronDown, ChevronUp, Plus, Loader2, Check, AlertTriangle, Upload, Shuffle } from 'lucide-react';
-import AvatarPreview from './AvatarPreview';
+import AvatarView from './AvatarView';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog';
 import { angleToSvgCoords, parseGradient, serializeGradient, type GradientDef } from '@/lib/gradient-utils';
 import { rasterizeAvatarConfigToGrid } from './avatar-to-voxel-grid';
+import { AVATAR_VIEWBOX_W as GRID, AVATAR_VIEWBOX_H as GRID_H } from '@/lib/avatar-viewbox';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const GRID = 24;   // viewBox width
-const GRID_H = 28; // viewBox height (taller to show full shirt)
-const CELL = 20;   // px per cell in the painter
+/** px per cell — total frame matches v1 viewBox 48×56 (10px/cell → ~480×560 canvas). */
+const CELL = 10;
 
 const MORBIUS_PRICE: Record<ItemTier, number> = {
   common: 1_000, uncommon: 10_000, rare: 25_000, legendary: 100_000,
@@ -25,6 +24,7 @@ const DEFAULT_CONFIG: AvatarConfig = {
   eyeShape: 'Round', eyeColor: '#634e34', noseShape: 'Small',
   lipShape: 'Smile', accessory: 'None', shirtColor: '#3b82f6',
   hat: 'None', hatColor: '', shirtStyle: 'Default', necklace: 'None', mouthAccessory: 'None',
+  makeup: 'None', facialHair: 'None',
   backgroundImage: '', overlayImage: '', faceShape: 'Round', customPattern: '',
 };
 
@@ -353,7 +353,7 @@ function gridFromImageBitmap(img: HTMLImageElement): Grid {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export type VoxelPainterHandle = {
-  /** Rasterizes the avatar at 24×28 and loads into the grid; opens the painter panel. */
+  /** Rasterizes the avatar at 48×56 and loads into the grid; opens the painter panel. */
   importFromAvatarConfig: (config: AvatarConfig) => Promise<void>;
 };
 
@@ -463,7 +463,7 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
     img.onload = () => {
       try {
         setGrid(gridFromImageBitmap(img));
-        setSuccess('Image sampled into grid (24×28)');
+        setSuccess('Image sampled into grid (48×56)');
       } catch {
         setErr('Could not sample image');
       } finally {
@@ -624,7 +624,7 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
                     className="absolute inset-0 pointer-events-none"
                     style={{ opacity: 1, zIndex: 1 }}
                   >
-                    <AvatarPreview
+                    <AvatarView
                       config={{ ...refConfig, overlayImage: '' }}
                       emotion="neutral"
                       compact={false}
@@ -694,7 +694,7 @@ const VoxelPainter = forwardRef<VoxelPainterHandle, { address: string; onCreated
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-zinc-700 text-zinc-400 hover:text-cyan-300 hover:border-cyan-600/50 transition-colors"
-                    title="Upload image — scaled to 24×28 cells (transparent where alpha is low)"
+                    title="Upload image — scaled to 48×56 cells (transparent where alpha is low)"
                   >
                     <Upload size={11} /> Upload image
                   </button>

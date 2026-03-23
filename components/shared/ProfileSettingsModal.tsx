@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useProfile } from '@/hooks/use-player-profile'
 import { useQueryClient } from '@tanstack/react-query'
-import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
+import AvatarView from '@/components/poker/avatar/AvatarView'
 import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator'
 import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal'
 
@@ -130,7 +130,7 @@ export default function ProfileSettingsModal({
           </div>
           <div className="flex items-center gap-3">
             <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-cyan-500/30 bg-slate-800 shrink-0">
-              <AvatarPreview
+              <AvatarView
                 config={avatarConfig ?? DEFAULT_AVATAR_CONFIG}
                 emotion="neutral"
                 compact

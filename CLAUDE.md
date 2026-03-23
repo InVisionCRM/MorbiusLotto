@@ -63,3 +63,7 @@ cd contracts && npx hardhat test
 - Token search: `api.scan.pulsechain.com/api/v2/search?q=`
 - Token details: `api.scan.pulsechain.com/api/v2/tokens/{address}`
 - Logo fallback: DexScreener API
+
+**Avatar / cosmetics (planned follow-ups)**:
+- **Animations**: hair/features drifting off-head during motion — revisit anchoring / rigging in `AvatarPreview` later.
+- **Props**: expand mouth/hand props (e.g. cigar + smoke); easier authoring pipeline later. Picker option lists live in `lib/avatar-editor-options.ts`; catalog + `AvatarPreview` render paths stay separate — props work does not conflict with that file.

@@ -52,10 +52,12 @@ import { formatEther, parseEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
+import { useProfile } from '@/hooks/use-player-profile';
 import { useTokenApproval } from '@/hooks/use-token-approval';
 import { useAudio, AudioManager } from '@/hooks/use-audio';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 import { AdSpace } from '@/components/shared/AdSpace';
+import AvatarView from '@/components/poker/avatar/AvatarView';
 
 // Intro screen component
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -755,6 +757,7 @@ export default function BlackjackPage() {
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const { openProfileSettings } = useProfileSettingsModal();
+  const { avatarConfig } = useProfile();
 
   // View state
   const [currentView, setCurrentView] = useState<'game' | 'history' | 'stats' | 'analytics'>('game');
@@ -2790,6 +2793,33 @@ export default function BlackjackPage() {
               />
             )}
 
+            {/* Player avatar — bottom-right on table */}
+            {address && (
+              <div className="pointer-events-auto absolute bottom-4 right-4 z-20">
+                <button
+                  type="button"
+                  onClick={() => openProfileSettings()}
+                  className="flex h-32 w-32 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-cyan-500/30 bg-black/40 shadow-lg ring-1 ring-white/10 backdrop-blur-sm transition-colors hover:border-cyan-400/50 hover:bg-black/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                  title="Profile & avatar"
+                  aria-label="Open profile and avatar settings"
+                >
+                  {avatarConfig ? (
+                    <AvatarView
+                      config={avatarConfig}
+                      emotion="neutral"
+                      trackMouse
+                      compact
+                      className="h-full w-full"
+                    />
+                  ) : (
+                    <span className="text-3xl font-bold text-white/80">
+                      {(profileDisplayName?.trim()?.[0] ?? address.slice(2, 3)).toUpperCase()}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+
           </div>
 
         </div>
@@ -2886,9 +2916,9 @@ export default function BlackjackPage() {
         </div>
         </div>
 
-        {/* Table profile + player dashboard */}
-        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-start">
-          <div>
+        {/* Table profile + player dashboard — items-stretch + h-full so token card / iframe match dashboard height */}
+        <section className="mt-4 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2 lg:gap-6">
+          <div className="flex min-h-0 flex-col lg:h-full">
             <TableTokenProfileCard
               key={`${theme}-${useVideoBackground ? videoSource : imageSource}`}
               themeKind={theme}
@@ -2898,7 +2928,7 @@ export default function BlackjackPage() {
               onChangeTableClick={() => setThemeModalOpen(true)}
             />
           </div>
-          <div>
+          <div className="flex min-h-0 flex-col lg:h-full">
             {address && playerStats ? (
               <PlayerStatsDashboard
                 stats={playerStats}
@@ -2909,7 +2939,7 @@ export default function BlackjackPage() {
               />
             ) : (
               <div
-                className="min-h-[420px] lg:min-h-[520px] rounded-xl overflow-hidden flex items-center justify-center px-6 text-center text-white/60"
+                className="flex min-h-[420px] flex-1 items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 lg:min-h-[520px] lg:h-full"
                 style={{
                   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
                   boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',

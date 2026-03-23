@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@/lib/utils";
-import React, { useState, createContext, useContext } from "react";
+import React, { useState, createContext, useContext, useCallback } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconMenu2, IconX } from "@tabler/icons-react";
 interface Links {
@@ -101,27 +101,29 @@ export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
 export const DesktopSidebar = ({
   className,
   children,
-  ...props
+  style,
 }: React.ComponentProps<typeof motion.div>) => {
   const { open, setOpen, animate } = useSidebar();
+  const handleMouseEnter = useCallback(() => setOpen(true), [setOpen]);
+  const handleMouseLeave = useCallback(() => setOpen(false), [setOpen]);
   return (
     <>
-      <motion.div
+      <div
         className={cn(
           // z-20: sit above page-level fixed full-viewport layers (e.g. home bg) that share the viewport
-          "min-h-screen px-3 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 overflow-hidden rounded-r-xl relative z-20",
+          "min-h-screen px-3 py-4 hidden md:flex md:flex-col shrink-0 overflow-hidden rounded-r-xl relative z-20 transition-[width] duration-200 ease-in-out",
           className
         )}
-        animate={{
-          width: animate ? (open ? "300px" : "60px") : "300px",
+        style={{
+          width: animate ? (open ? 300 : 60) : 300,
+          ...(style as React.CSSProperties),
         }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        {...props}
+        data-sidebar-open={open}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
-        {children}
-      </motion.div>
+        {children as React.ReactNode}
+      </div>
     </>
   );
 };
@@ -211,35 +213,28 @@ export type SidebarLinkProps = {
   className?: string;
 } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'className'>;
 
-export const SidebarLink = ({
+export const SidebarLink = React.memo(({
   link,
   className,
   ...props
 }: SidebarLinkProps) => {
-  const { open, animate } = useSidebar();
   return (
     <a
       href={link.href}
       className={cn(
-        "flex items-center justify-start gap-2 group/sidebar py-2",
+        "sidebar-item flex items-center group/sidebar py-2",
         className
       )}
       {...props}
     >
       {link.icon}
-
-      <motion.span
-        animate={{
-          opacity: animate ? (open ? 1 : 0) : 1,
-        }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-        className="text-inherit text-sm group-hover/sidebar:translate-x-1 transition-transform duration-150 whitespace-nowrap inline-block !p-0 !m-0"
-      >
+      <span className="sidebar-label text-inherit text-sm group-hover/sidebar:translate-x-1 transition-transform duration-150 !p-0 !m-0">
         {link.label}
-      </motion.span>
+      </span>
     </a>
   );
-};
+});
+SidebarLink.displayName = "SidebarLink";
 
 export interface SidebarButtonProps {
   label: string;
@@ -249,33 +244,27 @@ export interface SidebarButtonProps {
   className?: string;
 }
 
-export const SidebarButton = ({
+export const SidebarButton = React.memo(({
   label,
   icon,
   onClick,
   active = false,
   className,
 }: SidebarButtonProps) => {
-  const { open, animate } = useSidebar();
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center justify-start gap-2 group/sidebar py-2 w-full text-left",
+        "sidebar-item flex items-center group/sidebar py-2 w-full",
         className
       )}
     >
       {icon}
-      <motion.span
-        animate={{
-          opacity: animate ? (open ? 1 : 0) : 1,
-        }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-        className="text-inherit text-sm group-hover/sidebar:translate-x-1 transition-transform duration-150 whitespace-nowrap inline-block !p-0 !m-0"
-      >
+      <span className="sidebar-label text-inherit text-sm group-hover/sidebar:translate-x-1 transition-transform duration-150 !p-0 !m-0">
         {label}
-      </motion.span>
+      </span>
     </button>
   );
-};
+});
+SidebarButton.displayName = "SidebarButton";

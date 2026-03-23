@@ -22,6 +22,7 @@ import { MerkleDropsService } from './services/merkle-drops.service';
 import { MerkleDropsLPService } from './services/merkle-lp-drops.service';
 import { CosmeticsService } from './services/cosmetics.service';
 import { isAdminWallet, getLockedFields, ITEM_CATALOG } from './lib/cosmetics-catalog';
+import { getPokerChipWei } from './lib/poker-chip-scale';
 import { logger } from './utils/logger';
 import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
@@ -244,8 +245,9 @@ async function initializeServices() {
     const pokerGameService = new PokerGameService(dbService, pfService);
     const existingTables = await pokerGameService.listTables();
     if (existingTables.length === 0) {
-      await pokerGameService.createTable(10n, 20n, 6);
-      logger.info('Poker: created default table (10/20, 6 seats)');
+      const pcw = getPokerChipWei();
+      await pokerGameService.createTable(pcw * 10n, pcw * 20n, 6);
+      logger.info('Poker: created default table (10/20 chips, 6 seats; chip wei = %s)', pcw.toString());
     }
 
     // Clear stale/incomplete poker hands from previous server sessions.
@@ -381,11 +383,9 @@ async function initializeServices() {
         if (avatarConfig && !isAdminWallet(normalizedAddress)) {
           const inventory = await cosmeticsService.getInventory(normalizedAddress);
           const ownedSet = new Set(inventory);
-
-          // Static catalog check
           const locked = getLockedFields(avatarConfig as Record<string, string>, ownedSet);
           if (locked.length > 0) {
-            const names = locked.map(l => l.displayName ?? l.itemKey ?? l.value).join(', ');
+            const names = locked.map((l) => l.displayName ?? l.itemKey ?? l.value).join(', ');
             return res.status(403).json({
               error: `Avatar contains items you don\'t own: ${names}`,
               lockedItems: locked,
@@ -406,7 +406,7 @@ async function initializeServices() {
             if (dbLocked.length > 0) {
               return res.status(403).json({
                 error: `Avatar contains items you don't own: ${dbLocked.join(', ')}`,
-                lockedItems: dbLocked.map(k => ({ itemKey: k, value: null, field: null })),
+                lockedItems: dbLocked.map((k) => ({ itemKey: k, value: null, field: null })),
               });
             }
           }

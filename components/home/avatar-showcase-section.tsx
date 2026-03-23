@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from 'react'
 import type { AvatarConfig } from '@/lib/websocket-client'
-import AvatarPreview, { type Emotion } from '@/components/poker/avatar/AvatarPreview'
+import AvatarView, { type Emotion } from '@/components/poker/avatar/AvatarView'
 import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog'
 import { cn } from '@/lib/utils'
 import { homeSectionSubtitleClass, homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
@@ -27,6 +27,8 @@ const DEMO_BASE: AvatarConfig = {
   hatColor: '',
   necklace: 'None',
   mouthAccessory: 'Cigar',
+  makeup: 'None',
+  facialHair: 'None',
   backgroundImage: '',
   overlayImage: '',
   faceShape: 'Square',
@@ -146,7 +148,7 @@ export function AvatarShowcaseSection() {
                   animate={{ y: [0, -4, 0] }}
                   transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
                 >
-                  <AvatarPreview
+                  <AvatarView
                     config={config}
                     emotion={emotion}
                     glassesAnimationKey={glassesAnimationKey}

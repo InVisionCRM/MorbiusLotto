@@ -4,14 +4,23 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { Package, Search, Pencil, Check, X, Loader2, AlertTriangle, RefreshCw, Plus, ChevronDown, ChevronUp, Shuffle, Paintbrush, Users, LayoutGrid, ExternalLink, Gift } from 'lucide-react';
 import { CopyButton } from '@/components/ui/copy-button';
-import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog';
+import { FREE_VALUES, MAX_SUPPLY, type AvatarField, type ItemTier } from '@/lib/cosmetics-catalog';
 import PixelBackgroundUploader from '@/components/poker/avatar/PixelBackgroundUploader';
 import GradientBuilder from '@/components/poker/avatar/GradientBuilder';
 import VoxelPainter, { type VoxelPainterHandle } from '@/components/poker/avatar/VoxelPainter';
-import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
+import AvatarView from '@/components/poker/avatar/AvatarView';
 import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import { parseGradient, serializeGradient, DEFAULT_GRADIENT } from '@/lib/gradient-utils';
+import { parseGradient, serializeGradient, DEFAULT_GRADIENT, gradientDefToCssLinearBackground } from '@/lib/gradient-utils';
+import {
+  PICKER_ACCESSORIES,
+  PICKER_EYE_SHAPES,
+  PICKER_HAIR_STYLES,
+  PICKER_HATS,
+  PICKER_MOUTH_ACCESSORIES,
+  PICKER_NECKLACES,
+  PICKER_SHIRT_STYLES,
+} from '@/lib/avatar-editor-options';
 
 const MORBIUS_PRICE: Record<ItemTier, number> = {
   common: 1_000, uncommon: 10_000, rare: 25_000, legendary: 100_000,
@@ -37,6 +46,35 @@ const TIER_SORT: Record<ItemTier, number> = {
   common: 0, uncommon: 1, rare: 2, legendary: 3,
 };
 
+/** Admin catalog filter — matches `ItemRow.unlocks[].field` (patterns unlock multiple). */
+const APPLIES_TO_LABELS: Record<AvatarField, string> = {
+  skinColor: 'Skin color',
+  hairColor: 'Hair color',
+  hairStyle: 'Hair style',
+  accessoryColor: 'Glasses / accessory color',
+  eyeShape: 'Eye shape',
+  eyeColor: 'Eye color',
+  faceShape: 'Face shape',
+  noseShape: 'Nose',
+  lipShape: 'Lips',
+  accessory: 'Face accessory',
+  hat: 'Hat',
+  hatColor: 'Hat color',
+  necklace: 'Necklace',
+  mouthAccessory: 'Mouth',
+  makeup: 'Makeup',
+  facialHair: 'Facial hair',
+  shirtColor: 'Shirt color',
+  shirtStyle: 'Shirt style',
+  backgroundImage: 'Background',
+  overlayImage: 'Overlay',
+  customPattern: 'Custom pattern',
+};
+
+const APPLIES_TO_FIELDS_SORTED: AvatarField[] = (Object.keys(FREE_VALUES) as AvatarField[]).sort((a, b) =>
+  APPLIES_TO_LABELS[a].localeCompare(APPLIES_TO_LABELS[b]),
+);
+
 function shortAddr(addr: string): string {
   if (!addr || addr.length < 12) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -54,27 +92,112 @@ interface ItemRow {
   unlocks: Array<{ field: string; value: string }>;
 }
 
-/** Returns the hex color value for an item if it's a plain color unlock, else null. */
-function itemHexColor(item: ItemRow): string | null {
-  const v = item.unlocks[0]?.value ?? '';
-  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : null;
+/** Strip CSS `url("...")` wrappers (same idea as SVG `<image href>`). */
+function normalizeCatalogRasterUrl(raw: string): string {
+  let s = raw.trim();
+  if (!s) return '';
+  if (/^url\s*\(/i.test(s) && s.endsWith(')')) {
+    s = s.slice(s.indexOf('(') + 1, -1).trim();
+    if (
+      (s.startsWith('"') && s.endsWith('"')) ||
+      (s.startsWith("'") && s.endsWith("'"))
+    ) {
+      s = s.slice(1, -1);
+    }
+  }
+  return s.trim();
 }
 
-function ItemSwatch({ item, size = 'sm' }: { item: ItemRow; size?: 'sm' | 'md' | 'lg' }) {
-  const hex = itemHexColor(item);
-  const dim =
+/** Solid fill for swatch: #RGB, #RRGGBB, #RRGGBBAA, or rgb()/rgba(). */
+function unlockSolidCss(value: string): string | null {
+  const v = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/i.test(v)) return v;
+  if (/^#[0-9a-fA-F]{8}$/i.test(v)) return v;
+  if (/^#[0-9a-fA-F]{3}$/i.test(v)) {
+    const [, x] = v.match(/^#([0-9a-fA-F]{3})$/i)!;
+    return `#${x[0]}${x[0]}${x[1]}${x[1]}${x[2]}${x[2]}`.toLowerCase();
+  }
+  if (/^rgba?\(/i.test(v)) return v;
+  return null;
+}
+
+/**
+ * Catalog card preview — was only plain #RRGGBB; most shop items are gradients, URLs, patterns, or style names.
+ */
+function CatalogItemPreview({ item, size = 'sm' }: { item: ItemRow; size?: 'sm' | 'md' | 'lg' }) {
+  const v = item.unlocks[0]?.value ?? '';
+  const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => {
+    setImgFailed(false);
+  }, [v]);
+
+  const dimClass =
     size === 'lg'
-      ? 'w-14 h-14 rounded-xl'
+      ? 'w-[min(100%,7.5rem)] h-24 rounded-xl'
       : size === 'md'
         ? 'w-12 h-12 rounded-xl'
         : 'w-5 h-5 rounded';
-  if (hex) {
-    return <div className={`${dim} shrink-0 ring-1 ring-white/10`} style={{ backgroundColor: hex }} />;
+
+  const solid = unlockSolidCss(v);
+  if (solid) {
+    return (
+      <div className={`${dimClass} shrink-0 ring-1 ring-white/10`} style={{ backgroundColor: solid }} />
+    );
   }
+
+  const grad = parseGradient(v);
+  if (grad) {
+    return (
+      <div
+        className={`${dimClass} shrink-0 ring-1 ring-white/10`}
+        style={{ backgroundImage: gradientDefToCssLinearBackground(grad) }}
+      />
+    );
+  }
+
+  const patternMatch = /^\s*url\s*\(\s*#([^)]+)\)\s*$/i.exec(v);
+  if (patternMatch || /^\s*url\s*\(\s*#/i.test(v)) {
+    const name = patternMatch?.[1] ?? v.replace(/^[\s\S]*?#\s*/i, '').replace(/\)\s*$/, '').trim();
+    return (
+      <div
+        className={`${dimClass} shrink-0 ring-1 ring-violet-500/35 bg-gradient-to-br from-violet-950/90 to-zinc-900 flex flex-col items-center justify-center gap-0.5 px-1 overflow-hidden`}
+        title={`Pattern: ${name}`}
+      >
+        <Paintbrush size={size === 'lg' ? 20 : 12} className="text-violet-300/85 shrink-0" />
+        {size === 'lg' && (
+          <span className="text-[8px] text-violet-200/80 font-mono truncate max-w-full leading-tight">{name}</span>
+        )}
+      </div>
+    );
+  }
+
+  const raster = v && !v.startsWith('{') ? normalizeCatalogRasterUrl(v) : '';
+  const rasterOk =
+    raster &&
+    !raster.startsWith('url(') &&
+    (raster.startsWith('data:') ||
+      raster.startsWith('http://') ||
+      raster.startsWith('https://') ||
+      raster.startsWith('/'));
+
+  if (rasterOk && !imgFailed) {
+    return (
+      <img
+        src={raster}
+        alt=""
+        className={`${dimClass} shrink-0 object-cover ring-1 ring-white/10 bg-zinc-800`}
+        onError={() => setImgFailed(true)}
+      />
+    );
+  }
+
   return (
-    <div className={`${dim} shrink-0 bg-zinc-700 ring-1 ring-white/10 flex items-center justify-center`}>
+    <div
+      className={`${dimClass} shrink-0 bg-zinc-700 ring-1 ring-white/10 flex items-center justify-center`}
+      title={v ? `${item.displayName} — non-color unlock (e.g. style name)` : 'No unlock value'}
+    >
       <span
-        className={`${size === 'sm' ? 'text-[8px]' : 'text-[10px]'} text-zinc-400 font-bold leading-none`}
+        className={`${size === 'sm' ? 'text-[8px]' : 'text-[10px]'} text-zinc-400 font-bold leading-none text-center px-0.5 line-clamp-2`}
       >
         {item.displayName.slice(0, 2).toUpperCase()}
       </span>
@@ -89,26 +212,54 @@ interface EditState {
   shopListed: boolean;
 }
 
-// ─── Color field options ───────────────────────────────────────────────────────
+// ─── Color field options (select lists aligned with `lib/avatar-editor-options` where possible) ──
 
-const ITEM_FIELDS = [
-  { value: 'skinColor',       label: 'Skin Color',      inputType: 'color',  options: [] },
-  { value: 'hairColor',       label: 'Hair Color',      inputType: 'color',  options: [] },
-  { value: 'accessoryColor',  label: 'Glasses Color',   inputType: 'color',  options: [] },
-  { value: 'hairStyle',       label: 'Hair Style',      inputType: 'select', options: ['Spiky', 'Messy', 'Pigtails', 'Mullet', 'Mohawk', 'Dreadlocks', 'Updo', 'Braids', 'Cornrows', 'Dreads Fade'] },
-  { value: 'eyeShape',        label: 'Eye Shape',       inputType: 'select', options: ['Round', 'Almond', 'Narrow', 'Wide', 'Eye V1', 'Eye V2', 'Eye V3', 'Eye V4', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10'] },
-  { value: 'shirtColor',      label: 'Shirt Color',     inputType: 'color',  options: [] },
-  { value: 'shirtStyle',      label: 'Shirt Style',     inputType: 'select', options: ['Default','Tuxedo','Cheetah Print','Hawaiian','Pinstripe','Flannel','Denim Jacket','Leather Jacket','Varsity','Hoodie','Camo','Suit','Blazer','Kimono','Polo','Zebra Print','Leopard Print','Snake Skin','Tie-Dye','Neon Crop','Biker','Sailor','Space Suit','Grim Reaper','Golden Armor','Streetwear V1','Streetwear V2','Streetwear V3','Streetwear V4','Streetwear V5','Streetwear V6','Streetwear V7','Streetwear V8','Streetwear V9','Streetwear V10'] },
-  { value: 'backgroundImage', label: 'Background',      inputType: 'url',    options: [] },
-  { value: 'overlayImage',    label: 'Overlay',         inputType: 'url',    options: [] },
-  { value: 'accessory',       label: 'Accessory',       inputType: 'select', options: ['Glasses', 'Aviators', 'Wayfarers', 'Round Glasses', 'Cyberpunk', 'Shades V1', 'Shades V2', 'Shades V3', 'Shades V4', 'Shades V5', 'Shades V6', 'Shades V7', 'Shades V8', 'Shades V9', 'Shades V10', 'Earrings', 'Headband'] },
-  { value: 'hat',             label: 'Hat',             inputType: 'select', options: ['Top Hat', 'Cowboy', 'Crown', 'Bandana', 'Hat V1', 'Hat V2', 'Hat V3', 'Hat V4', 'Hat V5', 'Hat V6', 'Hat V7', 'Hat V8', 'Hat V9', 'Hat V10'] },
-  { value: 'hatColor',        label: 'Hat Color',       inputType: 'color',  options: [] },
-  { value: 'necklace',        label: 'Necklace',        inputType: 'select', options: ['Gold Chain', 'Silver Chain', 'Pearl', 'Pendant'] },
-  { value: 'mouthAccessory',  label: 'Mouth',           inputType: 'select', options: ['Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'] },
-] as const;
+type ItemField =
+  | 'skinColor'
+  | 'hairColor'
+  | 'accessoryColor'
+  | 'hairStyle'
+  | 'eyeShape'
+  | 'shirtColor'
+  | 'shirtStyle'
+  | 'backgroundImage'
+  | 'overlayImage'
+  | 'accessory'
+  | 'hat'
+  | 'hatColor'
+  | 'necklace'
+  | 'mouthAccessory';
 
-type ItemField = typeof ITEM_FIELDS[number]['value'];
+/** Shop-oriented accessory presets (exclude free `None` + default `Sunglasses`). */
+const ADMIN_ACCESSORY_SELECT = PICKER_ACCESSORIES.filter((a) => a !== 'None' && a !== 'Sunglasses');
+/** Shop hats only (exclude free None / Cap / Beanie). */
+const ADMIN_HAT_SELECT = PICKER_HATS.filter((h) => h !== 'None' && h !== 'Cap' && h !== 'Beanie');
+/** Hair styles not in `FREE_VALUES` — same strings as player picker, mintable via catalog. */
+const ADMIN_HAIR_STYLE_SELECT = PICKER_HAIR_STYLES.filter((h) => !FREE_VALUES.hairStyle.has(h));
+const ADMIN_NECKLACE_SELECT = PICKER_NECKLACES.filter((n) => n !== 'None');
+const ADMIN_MOUTH_SELECT = PICKER_MOUTH_ACCESSORIES.filter((m) => m !== 'None');
+
+const ITEM_FIELDS: ReadonlyArray<{
+  value: ItemField;
+  label: string;
+  inputType: 'color' | 'select' | 'url';
+  options: readonly string[];
+}> = [
+  { value: 'skinColor', label: 'Skin Color', inputType: 'color', options: [] },
+  { value: 'hairColor', label: 'Hair Color', inputType: 'color', options: [] },
+  { value: 'accessoryColor', label: 'Glasses Color', inputType: 'color', options: [] },
+  { value: 'hairStyle', label: 'Hair Style', inputType: 'select', options: ADMIN_HAIR_STYLE_SELECT },
+  { value: 'eyeShape', label: 'Eye Shape', inputType: 'select', options: PICKER_EYE_SHAPES },
+  { value: 'shirtColor', label: 'Shirt Color', inputType: 'color', options: [] },
+  { value: 'shirtStyle', label: 'Shirt Style', inputType: 'select', options: PICKER_SHIRT_STYLES },
+  { value: 'backgroundImage', label: 'Background', inputType: 'url', options: [] },
+  { value: 'overlayImage', label: 'Overlay', inputType: 'url', options: [] },
+  { value: 'accessory', label: 'Accessory', inputType: 'select', options: ADMIN_ACCESSORY_SELECT },
+  { value: 'hat', label: 'Hat', inputType: 'select', options: ADMIN_HAT_SELECT },
+  { value: 'hatColor', label: 'Hat Color', inputType: 'color', options: [] },
+  { value: 'necklace', label: 'Necklace', inputType: 'select', options: ADMIN_NECKLACE_SELECT },
+  { value: 'mouthAccessory', label: 'Mouth', inputType: 'select', options: ADMIN_MOUTH_SELECT },
+];
 
 function shortHash(str: string): string {
   let h = 0;
@@ -222,7 +373,7 @@ function VoxelPainterDashboardCard({
         <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold text-zinc-100">Voxel painter</div>
           <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
-            24×28 grid — overlays & backgrounds. Variant cards can send a preview here while collapsed.
+            48×56 grid — overlays & backgrounds. Variant cards can send a preview here while collapsed.
           </p>
         </div>
         {open ? <ChevronUp size={16} className="text-zinc-500 shrink-0" /> : <ChevronDown size={16} className="text-zinc-500 shrink-0" />}
@@ -263,10 +414,10 @@ interface BuilderState {
   tier: ItemTier;
 }
 
-const SHIRT_VARIANTS = ['Streetwear V1', 'Streetwear V2', 'Streetwear V3', 'Streetwear V4', 'Streetwear V5', 'Streetwear V6', 'Streetwear V7', 'Streetwear V8', 'Streetwear V9', 'Streetwear V10'] as const;
-const HAT_VARIANTS = ['Hat V1', 'Hat V2', 'Hat V3', 'Hat V4', 'Hat V5', 'Hat V6', 'Hat V7', 'Hat V8', 'Hat V9', 'Hat V10'] as const;
-const SHADES_VARIANTS = ['Shades V1', 'Shades V2', 'Shades V3', 'Shades V4', 'Shades V5', 'Shades V6', 'Shades V7', 'Shades V8', 'Shades V9', 'Shades V10'] as const;
-const EYE_VARIANTS = ['Eye V1', 'Eye V2', 'Eye V3', 'Eye V4', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10'] as const;
+const SHIRT_VARIANTS = PICKER_SHIRT_STYLES.filter((s) => s.startsWith('Streetwear '));
+const HAT_VARIANTS = PICKER_HATS.filter((h) => /^Hat V\d+$/.test(h));
+const SHADES_VARIANTS = ['Shades V1', 'Shades V2', 'Shades V3'] as const;
+const EYE_VARIANTS = PICKER_EYE_SHAPES.filter((s) => /^Eye V\d+$/.test(s));
 
 /** Variant-review groups → same item_key rules as Create New Item (`toItemKey`). */
 const VARIANT_REVIEW_SYNC_SPEC: ReadonlyArray<{
@@ -346,11 +497,11 @@ function DreadlocksVariantReviewPanel({
           return (
             <div key={variant} className="bg-zinc-800/60 border border-zinc-700 rounded-lg p-2">
               <div className="mx-auto w-20 h-24 rounded-md bg-zinc-900/60 border border-zinc-700 overflow-hidden">
-                <AvatarPreview config={previewConfig} emotion="neutral" className="w-full h-full" compact />
+                <AvatarView config={previewConfig} emotion="neutral" className="w-full h-full" compact />
               </div>
               <div className="mt-1.5 flex items-center justify-center gap-2">
                 <div className="w-9 h-9 rounded-full overflow-hidden border border-zinc-600 bg-zinc-900/60">
-                  <AvatarPreview config={previewConfig} emotion="neutral" className="w-full h-full" compact />
+                  <AvatarView config={previewConfig} emotion="neutral" className="w-full h-full" compact />
                 </div>
                 <div className="text-[10px] text-zinc-300 font-medium leading-tight">{variant}</div>
               </div>
@@ -382,7 +533,7 @@ function DreadlocksVariantReviewPanel({
                 type="button"
                 onClick={() => void voxelPainterRef.current?.importFromAvatarConfig(previewConfig)}
                 className="mt-1.5 w-full flex items-center justify-center gap-1 px-1.5 py-1 rounded text-[10px] font-medium border border-cyan-500/35 text-cyan-300/90 hover:text-white hover:border-cyan-400/50 hover:bg-cyan-950/30 transition-colors"
-                title="Open Voxel Painter with this preview as a 24×28 grid (full avatar snapshot — erase/recolor, then save as overlay/background)"
+                title="Open Voxel Painter with this preview as a 48×56 grid (full avatar snapshot — erase/recolor, then save as overlay/background)"
               >
                 <Paintbrush size={10} /> Voxel painter
               </button>
@@ -517,9 +668,9 @@ function DreadlocksVariantReviewPanel({
         )}
       </div>
       {renderCards('Shirt variants x10', 'shirt', SHIRT_VARIANTS, (variant) => ({ shirtStyle: variant }))}
-      {renderCards('Hat variants x10', 'hat', HAT_VARIANTS, (variant) => ({ hat: variant }))}
-      {renderCards('Sunglasses variants x10', 'shades', SHADES_VARIANTS, (variant) => ({ accessory: variant }))}
-      {renderCards('Eye-type variants x10', 'eye', EYE_VARIANTS, (variant) => ({ eyeShape: variant }))}
+      {renderCards('Hat variants (V1–V5, V7–V8, V10)', 'hat', HAT_VARIANTS, (variant) => ({ hat: variant }))}
+      {renderCards('Sunglasses variants x3', 'shades', SHADES_VARIANTS, (variant) => ({ accessory: variant }))}
+      {renderCards('Eye-type variants (V1–V4, V10)', 'eye', EYE_VARIANTS, (variant) => ({ eyeShape: variant }))}
         </div>
       )}
     </div>
@@ -762,7 +913,7 @@ function ItemBuilderPanel({
 
             {/* ── Left column: live avatar preview ── */}
             <div className="shrink-0 w-44 border-r border-zinc-800 bg-zinc-800/30 flex flex-col items-center justify-center gap-2 p-4 sticky top-0">
-              <AvatarPreview config={previewConfig} emotion="neutral" className="w-full aspect-[6/7]" />
+              <AvatarView config={previewConfig} emotion="neutral" className="w-full aspect-[6/7]" />
               <span className="text-[9px] text-zinc-500 uppercase tracking-wide font-medium">{fieldDef.label} · live</span>
             </div>
 
@@ -1450,6 +1601,7 @@ export default function AdminCosmeticsTab() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState<ItemTier | 'all'>('all');
+  const [applyFieldFilter, setApplyFieldFilter] = useState<AvatarField | 'all'>('all');
   const [editKey, setEditKey] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1573,6 +1725,10 @@ export default function AdminCosmeticsTab() {
 
   const filtered = items.filter(i => {
     if (tierFilter !== 'all' && i.tier !== tierFilter) return false;
+    if (applyFieldFilter !== 'all') {
+      const hit = i.unlocks.some(u => u.field === applyFieldFilter);
+      if (!hit) return false;
+    }
     if (search && !i.displayName.toLowerCase().includes(search.toLowerCase()) && !i.itemKey.includes(search.toLowerCase())) return false;
     return true;
   });
@@ -1684,8 +1840,8 @@ export default function AdminCosmeticsTab() {
               </p>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex flex-col lg:flex-row lg:flex-wrap items-stretch lg:items-end gap-3">
+            <div className="relative flex-1 max-w-md min-w-0">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
                 value={search}
@@ -1694,7 +1850,23 @@ export default function AdminCosmeticsTab() {
                 className="w-full bg-zinc-900/80 border border-zinc-700/80 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <label className="flex flex-col gap-1 min-w-[12rem] max-w-xs">
+              <span className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold">Applies to</span>
+              <select
+                value={applyFieldFilter}
+                onChange={e => setApplyFieldFilter(e.target.value as AvatarField | 'all')}
+                className="w-full bg-zinc-900/80 border border-zinc-700/80 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/40"
+                title="Show items that unlock this avatar field (patterns may unlock several)"
+              >
+                <option value="all">All fields</option>
+                {APPLIES_TO_FIELDS_SORTED.map(f => (
+                  <option key={f} value={f}>
+                    {APPLIES_TO_LABELS[f]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-0.5 bg-zinc-900/80 border border-zinc-700/80 rounded-lg p-0.5">
                 {(['all', ...TIERS] as const).map(t => (
                   <button
@@ -1768,7 +1940,7 @@ export default function AdminCosmeticsTab() {
                               'radial-gradient(circle at 50% 35%, rgba(34, 211, 238, 0.10), transparent 62%)',
                           }}
                         />
-                        <ItemSwatch item={item} size="lg" />
+                        <CatalogItemPreview item={item} size="lg" />
                       </div>
 
                       {/* Card body */}
@@ -1878,7 +2050,7 @@ export default function AdminCosmeticsTab() {
                 </div>
                 <div className="flex flex-col sm:flex-row items-start gap-5">
                   <div className="flex flex-col items-center gap-2 shrink-0">
-                    <ItemSwatch item={editingItem} size="lg" />
+                    <CatalogItemPreview item={editingItem} size="lg" />
                     <p className="text-xs text-amber-300/90 tabular-nums font-medium">{editingItem.priceMorbius.toLocaleString()} MORBIUS</p>
                   </div>
                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full min-w-0">

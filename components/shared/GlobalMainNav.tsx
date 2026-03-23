@@ -1,9 +1,8 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useGameLock } from '@/contexts/game-lock-context';
 import { useLocale, SUPPORTED_LOCALES } from '@/contexts/locale-context';
-import { motion } from 'motion/react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -23,16 +22,18 @@ import { BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLA
 import { isAdminWallet } from '@/lib/admin';
 import type { BlackjackThemeKind } from '@/app/BLACKJACK/constants';
 import type { TableOption } from '@/hooks/use-blackjack-tables';
-import ThemeSelectionModal from '@/components/BLACKJACK/ThemeSelectionModal';
-import HowToPlayModal from '@/components/PLINKO/HowToPlayModal';
-import SwapModal from '@/components/PLINKO/SwapModal';
-import { SelfExclusionModal } from '@/components/ResponsibleGaming/SelfExclusionModal';
-import { ReportModal } from '@/components/shared/ReportModal';
-import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal';
-import ProfileSettingsModal from '@/components/shared/ProfileSettingsModal';
 import { useQueryClient } from '@tanstack/react-query';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
+
+// Lazy-load modals — only pulled into the bundle when first opened
+const ThemeSelectionModal = lazy(() => import('@/components/BLACKJACK/ThemeSelectionModal'));
+const HowToPlayModal = lazy(() => import('@/components/PLINKO/HowToPlayModal'));
+const SwapModal = lazy(() => import('@/components/PLINKO/SwapModal'));
+const SelfExclusionModal = lazy(() => import('@/components/ResponsibleGaming/SelfExclusionModal').then(m => ({ default: m.SelfExclusionModal })));
+const ReportModal = lazy(() => import('@/components/shared/ReportModal').then(m => ({ default: m.ReportModal })));
+const ProfileAvatarModal = lazy(() => import('@/components/shared/ProfileAvatarModal').then(m => ({ default: m.ProfileAvatarModal })));
+const ProfileSettingsModal = lazy(() => import('@/components/shared/ProfileSettingsModal'));
 
 export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'home';
 
@@ -66,6 +67,17 @@ const SIDEBAR_PANEL_STYLE = {
   boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.67), inset 0 -3px 6px rgba(0, 0, 0, 0.65), 0 1px 3px rgba(17, 179, 208, 0.86)',
   border: '1px inset rgba(60, 60, 60, 0.5)',
 } as const;
+
+/** Section header — uses CSS .sidebar-label for transition, no context needed */
+const SectionLabel = React.memo(function SectionLabel({ label }: { label: string }) {
+  return (
+    <div className="px-2 py-1 overflow-hidden">
+      <span className="sidebar-label text-xs text-white uppercase tracking-wider">
+        {label}
+      </span>
+    </div>
+  );
+});
 
 export interface GlobalMainNavProps {
   children?: React.ReactNode;
@@ -119,7 +131,7 @@ export interface GlobalMainNavProps {
   onShowKenoPrizePool?: () => void;
   onShowKenoHistory?: () => void;
 
-  /** Open player profile modal (game-specific dashboard). When set, sidebar Dashboard uses this. Pass no arg on home for "all games" with dropdown; pass game on Plinko/Keno to open that game. */
+  /** Open player profile modal (game-specific history/stats). When set, sidebar "My History" uses this. Pass no arg on home for "all games" with dropdown; pass game on Plinko/Keno to open that game. */
   onOpenPlayerProfile?: (game?: 'plinko' | 'keno' | 'lottery' | 'blackjack') => void;
 
   // Home / shared
@@ -147,11 +159,11 @@ function useNavPage(pageProp?: NavPage): NavPage {
   return 'home';
 }
 
-function LanguageSelect({ open }: { open: boolean }) {
+const LanguageSelect = React.memo(function LanguageSelect() {
   const { locale, setLocale, localeLabel } = useLocale();
   return (
-    <div className="px-2 py-2">
-      <motion.div animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="flex items-center gap-2">
+    <div className="px-2 py-2 sidebar-label">
+      <div className="flex items-center gap-2">
         <span className="text-sm text-white whitespace-nowrap truncate min-w-0">{localeLabel}</span>
         <select
           value={locale}
@@ -166,12 +178,21 @@ function LanguageSelect({ open }: { open: boolean }) {
             </option>
           ))}
         </select>
-      </motion.div>
+      </div>
     </div>
   );
-}
+});
 
-function NavContent(props: {
+const otherGameIcon = (g: OtherGameNavItem) =>
+  g.icon === 'blackjack' ? (
+    <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
+      <Image src="/BlackJack/Cards/PNG/AS.png" alt="" width={20} height={20} className="object-contain" />
+    </span>
+  ) : (
+    <i className={`fas ${g.icon} w-5 text-center text-white shrink-0`} aria-hidden />
+  );
+
+interface NavContentProps {
   page: NavPage;
   onOpenDepositModal?: () => void;
   currentView?: string;
@@ -210,7 +231,9 @@ function NavContent(props: {
   onSignOut?: () => void;
   onOpenReport: () => void;
   onOpenProfileModal?: () => void;
-}) {
+}
+
+const NavContent = React.memo(function NavContent(props: NavContentProps) {
   const { open } = useSidebar();
   const {
     page,
@@ -253,27 +276,31 @@ function NavContent(props: {
     onOpenProfileModal,
   } = props;
 
-  const navItem = (label: string, icon: string, active?: boolean) =>
-    `text-white shrink-0 ${active ? 'text-cyan-400' : ''}`;
   const btnClass = (active: boolean) =>
     active ? 'bg-cyan-500/20 text-cyan-300' : 'text-white hover:bg-white/5';
 
-  const otherGamesFiltered = OTHER_GAMES.filter((g) => {
-    if ('comingSoon' in g && g.comingSoon) return true;
-    if (!isOtherGameLinked(g)) return false;
-    const gamePage =
-      g.href === '/BLACKJACK' ? 'blackjack' : g.href === '/PLINKO' ? 'plinko' : g.href === '/lottery' ? 'lottery' : 'keno';
-    return gamePage !== page;
-  });
+  const otherGamesFiltered = useMemo(
+    () =>
+      OTHER_GAMES.filter((g) => {
+        if ('comingSoon' in g && g.comingSoon) return true;
+        if (!isOtherGameLinked(g)) return false;
+        const gamePage =
+          g.href === '/BLACKJACK' ? 'blackjack' : g.href === '/PLINKO' ? 'plinko' : g.href === '/lottery' ? 'lottery' : 'keno';
+        return gamePage !== page;
+      }),
+    [page],
+  );
 
-  const otherGameIcon = (g: OtherGameNavItem) =>
-    g.icon === 'blackjack' ? (
-      <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
-        <Image src="/BlackJack/Cards/PNG/AS.png" alt="" width={20} height={20} className="object-contain" />
-      </span>
-    ) : (
-      <i className={`fas ${g.icon} w-5 text-center text-white shrink-0`} aria-hidden />
-    );
+  const handleOpenThemeModal = useCallback(() => setThemeModalOpen(true), [setThemeModalOpen]);
+  const handleToggleSound = useCallback(() => onSoundChange?.(!soundEnabled), [onSoundChange, soundEnabled]);
+  const handleOpenPlinkoProfile = useCallback(() => onOpenPlayerProfile?.('plinko'), [onOpenPlayerProfile]);
+  const handleOpenKenoProfile = useCallback(() => onOpenPlayerProfile?.('keno'), [onOpenPlayerProfile]);
+  const handleOpenAllProfile = useCallback(() => onOpenPlayerProfile?.(), [onOpenPlayerProfile]);
+  const handleOpenProfileOrModal = useCallback(() => {
+    if (onOpenProfileSettings) onOpenProfileSettings();
+    else onOpenProfileModal?.();
+  }, [onOpenProfileSettings, onOpenProfileModal]);
+  const handleOpenProfileModal = useCallback(() => onOpenProfileModal?.(), [onOpenProfileModal]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -282,27 +309,27 @@ function NavContent(props: {
         <div className="shrink-0 py-2">
           <Link
             href={backArrowHref}
-            className="flex items-center gap-2 text-white/70 hover:text-white transition-colors px-2"
+            className="sidebar-item flex items-center text-white/70 hover:text-white transition-colors px-2"
             title={backArrowLabel}
           >
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-sm whitespace-nowrap">
+            <span className="sidebar-label text-sm">
               {backArrowLabel || 'Back'}
-            </motion.span>
+            </span>
           </Link>
         </div>
       )}
       {/* Logo / Brand */}
       <div className="shrink-0 py-4">
-        <Link href="/" className="flex items-center gap-2 group/sidebar" aria-label="MORBIUS.IO Home">
+        <Link href="/" className="sidebar-item flex items-center group/sidebar" aria-label="MORBIUS.IO Home">
           <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
             <Image src="/morbius/MorbiusLogo (3).png" alt="" width={24} height={24} className="object-contain" />
           </span>
-          <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-base font-semibold text-white whitespace-nowrap overflow-hidden">
+          <span className="sidebar-label text-base font-semibold text-white">
             MORBIUS.IO
-          </motion.span>
+          </span>
         </Link>
       </div>
 
@@ -322,21 +349,18 @@ function NavContent(props: {
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5">
         <SidebarLink link={{ label: 'Home', href: '/', icon: <i className="fas fa-home w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
 
-        {/* Page-specific primary nav (Blackjack: Play, Analytics, Tournament, Table theme, Sound) */}
+        {/* Page-specific primary nav */}
         {page === 'blackjack' && (
           <>
-            <SidebarButton label="Play" icon={<i className={`fas fa-play w-5 text-center shrink-0 ${navItem('', 'fa-play', currentView === 'game')}`} aria-hidden />} onClick={() => onViewChange?.('game')} active={currentView === 'game'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'game')}`} />
+            <SidebarButton label="Play" icon={<i className={`fas fa-play w-5 text-center shrink-0 ${currentView === 'game' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('game')} active={currentView === 'game'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'game')}`} />
             {isDeployer && (
-              <SidebarButton label="Analytics" icon={<i className={`fas fa-chart-line w-5 text-center shrink-0 ${navItem('', 'fa-chart-line', currentView === 'analytics')}`} aria-hidden />} onClick={() => onViewChange?.('analytics')} active={currentView === 'analytics'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'analytics')}`} />
+              <SidebarButton label="Analytics" icon={<i className={`fas fa-chart-line w-5 text-center shrink-0 ${currentView === 'analytics' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('analytics')} active={currentView === 'analytics'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'analytics')}`} />
             )}
-            {/* {onTournamentLobby && (
-              <SidebarButton label="Tournament Lobby" icon={<i className="fas fa-trophy w-5 text-center text-white shrink-0" aria-hidden />} onClick={onTournamentLobby} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-            )} */}
             {onThemeChange && (
-              <SidebarButton label="Table theme" icon={<i className="fas fa-palette w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => setThemeModalOpen(true)} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              <SidebarButton label="Table theme" icon={<i className="fas fa-palette w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenThemeModal} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
             )}
             {onSoundChange !== undefined && (
-              <SidebarButton label={soundEnabled ? 'Sound On' : 'Sound Off'} icon={<i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${soundEnabled ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onSoundChange(!soundEnabled)} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              <SidebarButton label={soundEnabled ? 'Sound On' : 'Sound Off'} icon={<i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${soundEnabled ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={handleToggleSound} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
             )}
           </>
         )}
@@ -345,25 +369,21 @@ function NavContent(props: {
           <SidebarButton label={plinkoSoundEnabled ? 'Sound On' : 'Sound Off'} icon={<i className={`fas ${plinkoSoundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${plinkoSoundEnabled ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={onPlinkoSoundToggle} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
         )}
 
-        {/* My Stuff - page-specific */}
+        {/* My Stuff */}
         <div className="pt-2 mt-2 border-t border-white/10">
-          <div className="px-2 py-1 overflow-hidden">
-            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">My Stuff</motion.span>
-          </div>
+          <SectionLabel label="My Stuff" />
 
           {page === 'blackjack' && (
-            <>
-              <SidebarButton label="Dashboard" icon={<i className={`fas fa-chart-bar w-5 text-center shrink-0 ${currentView === 'stats' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('stats')} active={currentView === 'stats'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'stats')}`} />
-            </>
+            <SidebarButton label="My History" icon={<i className={`fas fa-chart-bar w-5 text-center shrink-0 ${currentView === 'stats' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('stats')} active={currentView === 'stats'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'stats')}`} />
           )}
 
           {page === 'plinko' && (
             <>
               {onOpenHowToPlay && <SidebarButton label="How to Play" icon={<i className="fas fa-question-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenHowToPlay} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
               {onOpenPlayerProfile ? (
-                <SidebarButton label="Dashboard" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenPlayerProfile('plinko')} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenPlinkoProfile} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
               ) : (
-                <SidebarLink link={{ label: 'Dashboard', href: '/plinko-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+                <SidebarLink link={{ label: 'My History', href: '/plinko-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
               )}
               {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
             </>
@@ -371,7 +391,7 @@ function NavContent(props: {
 
           {page === 'lottery' && (
             <>
-              {onShowLotteryDashboard && <SidebarButton label="Dashboard" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowLotteryDashboard} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
+              {onShowLotteryDashboard && <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowLotteryDashboard} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
               {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
             </>
           )}
@@ -380,27 +400,25 @@ function NavContent(props: {
             <>
               {onShowKenoPrizePool && <SidebarButton label="Prize Pool" icon={<i className="fas fa-trophy w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowKenoPrizePool} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
               {onOpenPlayerProfile ? (
-                <SidebarButton label="Dashboard" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenPlayerProfile('keno')} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenKenoProfile} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
               ) : (
-                <SidebarLink link={{ label: 'Dashboard', href: '/keno-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+                <SidebarLink link={{ label: 'My History', href: '/keno-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
               )}
             </>
           )}
 
           {page === 'home' && onOpenPlayerProfile && (
-            <SidebarButton label="Player Dashboard" icon={<i className="fas fa-chart-pie w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenPlayerProfile()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+            <SidebarButton label="Player Dashboard" icon={<i className="fas fa-chart-pie w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenAllProfile} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           )}
 
-          <SidebarButton label="Profile" icon={<i className="fas fa-user-edit w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenProfileSettings ? onOpenProfileSettings() : onOpenProfileModal?.()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarButton label="Avatar" icon={<i className="fas fa-user-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={() => onOpenProfileModal?.()} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label="Profile" icon={<i className="fas fa-user-edit w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenProfileOrModal} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label="Avatar" icon={<i className="fas fa-user-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenProfileModal} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <i className="fas fa-gift w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
         </div>
 
-        {/* Other Games - exclude current page */}
+        {/* Other Games */}
         <div className="pt-2 mt-2 border-t border-white/10">
-          <div className="px-2 py-1 overflow-hidden">
-            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Other Games</motion.span>
-          </div>
+          <SectionLabel label="Other Games" />
           {otherGamesFiltered.map((g) =>
             'comingSoon' in g && g.comingSoon ? (
               <div
@@ -430,18 +448,14 @@ function NavContent(props: {
 
         {/* Advertising */}
         <div className="pt-2 mt-2 border-t border-white/10">
-          <div className="px-2 py-1 overflow-hidden">
-            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Advertising</motion.span>
-          </div>
+          <SectionLabel label="Advertising" />
           <SidebarLink link={{ label: 'Add Table', href: '/marketing', icon: <i className="fas fa-plus-square w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <i className="fas fa-bullhorn w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
         </div>
 
         {/* Other */}
         <div className="pt-2 mt-2 border-t border-white/10">
-          <div className="px-2 py-1 overflow-hidden">
-            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Other</motion.span>
-          </div>
+          <SectionLabel label="Other" />
           <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <i className="fas fa-search w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
@@ -453,23 +467,23 @@ function NavContent(props: {
 
         {/* Language */}
         <div className="pt-2 mt-2 border-t border-white/10">
-          <div className="px-2 py-1 overflow-hidden">
-            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Language</motion.span>
-          </div>
-          <LanguageSelect open={open} />
+          <SectionLabel label="Language" />
+          <LanguageSelect />
         </div>
 
-        {/* Morbius */}
+        {/* Morbius — only mount data-fetching components when sidebar is open */}
         <div className="pt-2 mt-2 border-t border-white/10 overflow-hidden">
-          <div className="px-2 py-1">
-            <motion.span animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="text-xs text-white uppercase tracking-wider whitespace-nowrap">Morbius</motion.span>
-          </div>
-          <motion.div animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="px-2 py-1">
-            <MorbiusBurnedDisplay variant="inline" className="text-white text-xs" labelClassName="text-white text-xs" />
-          </motion.div>
-          <motion.div animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="px-2 py-1">
-            <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
-          </motion.div>
+          <SectionLabel label="Morbius" />
+          {open && (
+            <>
+              <div className="px-2 py-1">
+                <MorbiusBurnedDisplay variant="inline" className="text-white text-xs" labelClassName="text-white text-xs" useAnimatedNumbers={false} />
+              </div>
+              <div className="px-2 py-1">
+                <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
+              </div>
+            </>
+          )}
           <SidebarLink link={{ label: 'Claim', href: '/claim', icon: <i className="fas fa-coins w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Swap', href: '/swap', icon: <i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
           <SidebarLink link={{ label: 'Provide LP', href: 'https://pulsex.com', icon: <i className="fas fa-tint w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
@@ -501,7 +515,7 @@ function NavContent(props: {
       </div>
     </div>
   );
-}
+});
 
 export default function GlobalMainNav({
   children,
@@ -567,11 +581,14 @@ export default function GlobalMainNav({
   const [profileAvatarModalOpen, setProfileAvatarModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const effectiveOnOpenResponsibleGaming = onOpenResponsibleGaming ?? (() => setResponsibleGamingOpen(true));
+  const effectiveOnOpenResponsibleGaming = useCallback(
+    () => (onOpenResponsibleGaming ? onOpenResponsibleGaming() : setResponsibleGamingOpen(true)),
+    [onOpenResponsibleGaming],
+  );
   const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook;
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook;
 
-  const handleInternalSaveProfile = async (name: string, img: string | null, bio: string | null, x: string | null, tg: string | null) => {
+  const handleInternalSaveProfile = useCallback(async (name: string, img: string | null, bio: string | null, x: string | null, tg: string | null) => {
     if (!address) return;
     const res = await fetch('/api/player/profile', {
       method: 'POST',
@@ -580,31 +597,60 @@ export default function GlobalMainNav({
     });
     if (!res.ok) throw new Error('Failed to save profile');
     queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
-  };
-  const effectiveOnOpenProfileSettings = onOpenProfileSettings ?? (() => setProfileSettingsOpen(true));
+  }, [address, queryClient]);
+
+  const effectiveOnOpenProfileSettings = useCallback(
+    () => (onOpenProfileSettings ? onOpenProfileSettings() : setProfileSettingsOpen(true)),
+    [onOpenProfileSettings],
+  );
 
   const isThemeModalControlled = onThemeModalOpenChange !== undefined;
   const themeModalOpen = isThemeModalControlled ? (themeModalOpenProp ?? false) : internalThemeModalOpen;
-  const setThemeModalOpen = isThemeModalControlled ? onThemeModalOpenChange : setInternalThemeModalOpen;
+  const setThemeModalOpen = useCallback(
+    (v: boolean) => (isThemeModalControlled ? onThemeModalOpenChange(v) : setInternalThemeModalOpen(v)),
+    [isThemeModalControlled, onThemeModalOpenChange],
+  );
 
   const isDeployer = Boolean(address && BLACKJACK_DEPLOYER_WALLET && address.toLowerCase() === BLACKJACK_DEPLOYER_WALLET);
   const isAdmin = isAdminWallet(address);
 
-  const handleOpenHowToPlay = onOpenHowToPlay ?? (() => setHowToPlayOpen(true));
-  const handleOpenSwap = onOpenSwap ?? (() => setSwapOpen(true));
+  const handleOpenHowToPlay = useCallback(
+    () => (onOpenHowToPlay ? onOpenHowToPlay() : setHowToPlayOpen(true)),
+    [onOpenHowToPlay],
+  );
+  const handleOpenSwap = useCallback(
+    () => (onOpenSwap ? onOpenSwap() : setSwapOpen(true)),
+    [onOpenSwap],
+  );
+  const handleOpenReport = useCallback(() => setReportOpen(true), []);
+  const handleOpenProfileModal = useCallback(() => setProfileAvatarModalOpen(true), []);
+  const handleCloseThemeModal = useCallback(() => setThemeModalOpen(false), [setThemeModalOpen]);
+  const handleCloseResponsibleGaming = useCallback(() => setResponsibleGamingOpen(false), []);
+  const handleCloseReport = useCallback(() => setReportOpen(false), []);
+  const handleCloseProfileAvatar = useCallback(() => setProfileAvatarModalOpen(false), []);
+  const handleProfileAvatarSave = useCallback(() => queryClient.invalidateQueries({ queryKey: ['playerProfile'] }), [queryClient]);
+  const handleCloseProfileSettings = useCallback(() => setProfileSettingsOpen(false), []);
 
-  const mobileBarContent = (
-    <div className="flex items-center gap-2 min-w-0">
-      <WalletMenu
-        onOpenDepositModal={onOpenDepositModal}
-        profileDisplayName={effectiveProfileDisplayName}
-        profileImageUrl={effectiveProfileImageUrl}
-        onOpenProfileSettings={effectiveOnOpenProfileSettings}
-        dropdownPlacement="below"
-        variant="default"
-        className="shrink-0"
-      />
-    </div>
+  const noopImageSource = useCallback(() => {}, []);
+  const noopVideoSource = useCallback(() => {}, []);
+  const noopVideoSync = useCallback(() => {}, []);
+  const noopVideoPos = useCallback(() => {}, []);
+
+  const mobileBarContent = useMemo(
+    () => (
+      <div className="flex items-center gap-2 min-w-0">
+        <WalletMenu
+          onOpenDepositModal={onOpenDepositModal}
+          profileDisplayName={effectiveProfileDisplayName}
+          profileImageUrl={effectiveProfileImageUrl}
+          onOpenProfileSettings={effectiveOnOpenProfileSettings}
+          dropdownPlacement="below"
+          variant="default"
+          className="shrink-0"
+        />
+      </div>
+    ),
+    [onOpenDepositModal, effectiveProfileDisplayName, effectiveProfileImageUrl, effectiveOnOpenProfileSettings],
   );
 
   return (
@@ -648,8 +694,8 @@ export default function GlobalMainNav({
             onOpenAuthModal={onOpenAuthModal}
             isAuthenticated={isAuthenticated}
             onSignOut={onSignOut}
-            onOpenReport={() => setReportOpen(true)}
-            onOpenProfileModal={() => setProfileAvatarModalOpen(true)}
+            onOpenReport={handleOpenReport}
+            onOpenProfileModal={handleOpenProfileModal}
           />
         </SidebarBody>
         <div
@@ -660,53 +706,50 @@ export default function GlobalMainNav({
         </div>
       </div>
 
-      {page === 'blackjack' && onThemeChange && (
-        <ThemeSelectionModal
-          open={themeModalOpen}
-          onClose={() => setThemeModalOpen(false)}
-          theme={theme}
-          imageSource={imageSource ?? DEFAULT_BLACKJACK_IMAGE_ID}
-          videoSource={videoSource}
-          onThemeChange={onThemeChange}
-          onImageSourceChange={onImageSourceChange ?? (() => {})}
-          onVideoSourceChange={onVideoSourceChange ?? (() => {})}
-          imageOptions={imageOptions}
-          videoOptions={videoOptions}
-          videoSyncToClock={videoSyncToClock}
-          onVideoSyncToClockChange={onVideoSyncToClockChange ?? (() => {})}
-          videoPosition={videoPosition}
-          onVideoPositionChange={onVideoPositionChange ?? (() => {})}
-        />
-      )}
-
-      {page === 'plinko' && <HowToPlayModal open={howToPlayOpen} onOpenChange={setHowToPlayOpen} />}
-      {(page === 'plinko' || page === 'lottery') && <SwapModal open={swapOpen} onOpenChange={setSwapOpen} />}
-      <SelfExclusionModal
-        isOpen={responsibleGamingOpen}
-        onClose={() => setResponsibleGamingOpen(false)}
-      />
-      <ReportModal
-        isOpen={reportOpen}
-        onClose={() => setReportOpen(false)}
-        balance={reserveBalance}
-      />
-      <ProfileAvatarModal
-        open={profileAvatarModalOpen}
-        onClose={() => setProfileAvatarModalOpen(false)}
-        onSave={() => queryClient.invalidateQueries({ queryKey: ['playerProfile'] })}
-      />
-      {!onOpenProfileSettings && (
-        <ProfileSettingsModal
-          open={profileSettingsOpen}
-          onClose={() => setProfileSettingsOpen(false)}
-          displayName={effectiveProfileDisplayName ?? ''}
-          profileImageUrl={effectiveProfileImageUrl}
-          bio={bioFromHook}
-          xHandle={xHandleFromHook}
-          tgHandle={tgHandleFromHook}
-          onSave={handleInternalSaveProfile}
-        />
-      )}
+      {/* Lazy-loaded modals — only rendered when open */}
+      <Suspense fallback={null}>
+        {page === 'blackjack' && onThemeChange && themeModalOpen && (
+          <ThemeSelectionModal
+            open={themeModalOpen}
+            onClose={handleCloseThemeModal}
+            theme={theme}
+            imageSource={imageSource ?? DEFAULT_BLACKJACK_IMAGE_ID}
+            videoSource={videoSource}
+            onThemeChange={onThemeChange}
+            onImageSourceChange={onImageSourceChange ?? noopImageSource}
+            onVideoSourceChange={onVideoSourceChange ?? noopVideoSource}
+            imageOptions={imageOptions}
+            videoOptions={videoOptions}
+            videoSyncToClock={videoSyncToClock}
+            onVideoSyncToClockChange={onVideoSyncToClockChange ?? noopVideoSync}
+            videoPosition={videoPosition}
+            onVideoPositionChange={onVideoPositionChange ?? noopVideoPos}
+          />
+        )}
+        {page === 'plinko' && howToPlayOpen && <HowToPlayModal open={howToPlayOpen} onOpenChange={setHowToPlayOpen} />}
+        {(page === 'plinko' || page === 'lottery') && swapOpen && <SwapModal open={swapOpen} onOpenChange={setSwapOpen} />}
+        {responsibleGamingOpen && (
+          <SelfExclusionModal isOpen={responsibleGamingOpen} onClose={handleCloseResponsibleGaming} />
+        )}
+        {reportOpen && (
+          <ReportModal isOpen={reportOpen} onClose={handleCloseReport} balance={reserveBalance} />
+        )}
+        {profileAvatarModalOpen && (
+          <ProfileAvatarModal open={profileAvatarModalOpen} onClose={handleCloseProfileAvatar} onSave={handleProfileAvatarSave} />
+        )}
+        {!onOpenProfileSettings && profileSettingsOpen && (
+          <ProfileSettingsModal
+            open={profileSettingsOpen}
+            onClose={handleCloseProfileSettings}
+            displayName={effectiveProfileDisplayName ?? ''}
+            profileImageUrl={effectiveProfileImageUrl}
+            bio={bioFromHook}
+            xHandle={xHandleFromHook}
+            tgHandle={tgHandleFromHook}
+            onSave={handleInternalSaveProfile}
+          />
+        )}
+      </Suspense>
     </Sidebar>
   );
 }

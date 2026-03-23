@@ -1,12 +1,11 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { motion } from 'motion/react'
 import { useRouter } from 'next/navigation'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useProfile } from '@/hooks/use-player-profile'
-import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
+import AvatarView from '@/components/poker/avatar/AvatarView'
 import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator'
 
 export interface WalletMenuProps {
@@ -114,14 +113,14 @@ export function WalletMenu({
             onClick={() => setIsWalletDropdownOpen(!isWalletDropdownOpen)}
             className={
               variant === 'sidebar'
-                ? 'flex items-center gap-2 w-full text-left rounded-lg px-2 py-2 text-white text-sm font-medium transition-colors hover:bg-white/5 justify-start'
+                ? 'sidebar-item flex items-center w-full rounded-lg py-2 px-2 text-white text-sm font-medium transition-colors hover:bg-white/5'
                 : 'flex items-center gap-2 px-2 py-1 rounded-sm text-white text-sm font-bold transition-all hover:bg-white/5'
             }
             style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))' } : undefined}
             aria-label={isWalletDropdownOpen ? 'Close wallet menu' : 'Open wallet menu'}
           >
-            <div className={`rounded-full overflow-hidden flex-shrink-0 ${variant === 'sidebar' ? 'w-5 h-5' : 'w-7 h-7'}`}>
-              <AvatarPreview
+            <div className={`rounded-full overflow-hidden flex-shrink-0 transition-all duration-200 ${variant === 'sidebar' ? (sidebarOpen ? 'w-5 h-5' : 'w-[34px] h-[34px]') : 'w-7 h-7'}`}>
+              <AvatarView
                 config={avatarConfig ?? DEFAULT_AVATAR_CONFIG}
                 compact
                 className="w-full h-full"
@@ -129,23 +128,15 @@ export function WalletMenu({
             </div>
             {variant === 'sidebar' ? (
               <>
-                <motion.span
-                  animate={{ opacity: sidebarOpen ? 1 : 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  className="text-white truncate min-w-0 text-sm whitespace-nowrap"
-                >
+                <span className="sidebar-label text-white truncate min-w-0 text-sm">
                   {effectiveProfileDisplayName ?? `…${address.slice(-4)}`}
-                </motion.span>
-                <motion.span
-                  animate={{ opacity: sidebarOpen ? 1 : 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  className="flex-shrink-0"
-                >
+                </span>
+                <span className="sidebar-label flex-shrink-0">
                   <i
                     className={`fas fa-chevron-down text-white text-sm transition-transform ${isWalletDropdownOpen ? 'rotate-180' : ''}`}
                     aria-hidden
                   />
-                </motion.span>
+                </span>
               </>
             ) : (
               <>
@@ -239,22 +230,16 @@ export function WalletMenu({
               onClick={openConnectModal}
               className={
                 variant === 'sidebar'
-                  ? 'flex items-center justify-start gap-2 w-full text-left rounded-lg px-2 py-2 text-white/70 text-sm font-medium transition-colors hover:bg-white/5 hover:text-white'
+                  ? 'sidebar-item flex items-center w-full rounded-lg px-2 py-2 text-white/70 text-sm font-medium transition-colors hover:bg-white/5 hover:text-white'
                   : 'flex items-center gap-2 px-3 py-1 rounded-sm text-white/50 text-sm font-bold transition-all hover:scale-105 active:scale-95'
               }
               style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))' } : undefined}
             >
               <i className="fas fa-wallet w-5 text-center text-cyan-400 shrink-0" aria-hidden />
               {variant === 'sidebar' ? (
-                <>
-                  <motion.span
-                    animate={{ opacity: sidebarOpen ? 1 : 0 }}
-                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className="text-cyan-400 whitespace-nowrap"
-                  >
-                    Connect
-                  </motion.span>
-                </>
+                <span className="sidebar-label text-cyan-400">
+                  Connect
+                </span>
               ) : (
                 <>
                   <span className="text-cyan-400">Connect</span>

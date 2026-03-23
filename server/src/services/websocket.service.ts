@@ -155,8 +155,7 @@ export class WebSocketService {
     this.publicClient = getPublicClient();
     
     this.contractAddress = BLACKJACK_ADDRESS;
-    console.log('[WebSocketService] Using BLACKJACK_ADDRESS:', this.contractAddress);
-    console.log('[WebSocketService] REQUIRE_WS_AUTH:', REQUIRE_WS_AUTH, 'DISABLE_WS_AUTH:', DISABLE_WS_AUTH);
+    logger.info('WebSocketService init', { contractAddress: this.contractAddress, REQUIRE_WS_AUTH, DISABLE_WS_AUTH });
 
     this.wss.on('connection', this.handleConnection.bind(this));
 
@@ -340,7 +339,7 @@ export class WebSocketService {
       // Strict mode: generate auth challenge, client must sign to proceed
       const authNonce = crypto.randomBytes(32).toString('hex');
       ws.authNonce = authNonce;
-      console.log('[WS Auth] Strict mode: sending auth_challenge', { connectionId, claimedAddress, noncePrefix: authNonce.slice(0, 8) });
+      logger.info('WS Auth: sending auth_challenge', { connectionId, claimedAddress, noncePrefix: authNonce.slice(0, 8) });
 
       this.sendMessage(ws, {
         type: 'auth_challenge',
@@ -348,12 +347,12 @@ export class WebSocketService {
       });
     } else {
       // No challenge: trust query-param address (DISABLE_WS_AUTH or REQUIRE_WS_AUTH=false)
-      console.log('[WS Auth] No challenge:', DISABLE_WS_AUTH ? 'DISABLE_WS_AUTH' : 'REQUIRE_WS_AUTH=false', 'claimedAddress=', claimedAddress, 'connectionId=', connectionId);
+      logger.info('WS Auth: no challenge', { reason: DISABLE_WS_AUTH ? 'DISABLE_WS_AUTH' : 'REQUIRE_WS_AUTH=false', claimedAddress, connectionId });
 
       if (claimedAddress) {
         ws.playerAddress = claimedAddress;
         ws.isAuthenticated = true;
-        console.log('[WS Auth] Auto-auth for', claimedAddress);
+        logger.info('WS Auth: auto-auth', { claimedAddress });
 
         try {
           const player = await this.dbService.getOrCreatePlayer(claimedAddress);
@@ -763,20 +762,20 @@ export class WebSocketService {
   private async handleAuthResponse(ws: WebSocketClient, message: WebSocketMessage) {
     try {
       const { address, signature } = message.payload as { address?: string; signature?: `0x${string}` };
-      console.log('[WS Auth] Received auth_response', { connectionId: ws.connectionId, address, signaturePrefix: signature?.slice(0, 10) });
+      logger.info('WS Auth: received auth_response', { connectionId: ws.connectionId, address, signaturePrefix: signature?.slice(0, 10) });
 
       if (!address || !signature) {
-        console.log('[WS Auth] Missing address or signature');
+        logger.warn('WS Auth: missing address or signature');
         return this.sendError(ws, 'address and signature required', message.requestId);
       }
 
       if (!ws.authNonce) {
-        console.log('[WS Auth] No auth nonce pending for connection', ws.connectionId);
+        logger.warn('WS Auth: no auth nonce pending', { connectionId: ws.connectionId });
         return this.sendError(ws, 'No auth challenge pending', message.requestId);
       }
 
       const normalizedAddress = address.toLowerCase() as `0x${string}`;
-      console.log('[WS Auth] Verifying EIP-712 signature for', normalizedAddress, 'nonce:', ws.authNonce.slice(0, 8));
+      logger.info('WS Auth: verifying EIP-712 signature', { address: normalizedAddress, noncePrefix: ws.authNonce.slice(0, 8) });
 
       // Verify EIP-712 typed data signature
       const valid = await verifyTypedData({
@@ -789,12 +788,12 @@ export class WebSocketService {
       });
 
       if (!valid) {
-        console.log('[WS Auth] Signature verification FAILED for', normalizedAddress);
+        logger.warn('WS Auth: signature verification failed', { address: normalizedAddress });
         return this.sendError(ws, 'Invalid signature', message.requestId);
       }
 
       // Auth successful
-      console.log('[WS Auth] Signature verified, auth successful for', normalizedAddress);
+      logger.info('WS Auth: auth successful', { address: normalizedAddress });
       ws.playerAddress = normalizedAddress;
       ws.isAuthenticated = true;
       ws.authNonce = undefined; // consume nonce
@@ -1498,8 +1497,8 @@ export class WebSocketService {
     'dance', 'flex', 'jump', 'spin', 'think', 'love', 'money',
     'sick', 'cool', 'sleepy', 'shock', 'ghost', 'ninja', 'king',
     'poker', 'jackpot', 'chips', 'cards', 'dice',
-    'slouch', 'yawn', 'bored', 'nod', 'shrug',
-    'drift', 'sink', 'breathe', 'lean', 'tilt',
+    'yawn', 'nod', 'shrug',
+    'breathe', 'lean', 'tilt',
   ]);
 
   private async handlePokerAvatarEmotion(ws: WebSocketClient, message: WebSocketMessage) {
@@ -1538,6 +1537,9 @@ export class WebSocketService {
     try {
       if (!this.pokerGameService || !ws.playerAddress) {
         return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+      }
+      if (!isAdminWallet(ws.playerAddress)) {
+        return this.sendError(ws, 'Only admins can create poker tables', message.requestId);
       }
       const payload = message.payload as { smallBlind?: string; bigBlind?: string; maxSeats?: number };
       const smallBlindStr = payload?.smallBlind != null ? String(payload.smallBlind) : undefined;

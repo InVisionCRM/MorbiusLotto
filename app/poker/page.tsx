@@ -10,13 +10,12 @@ import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { PokerTableSummary, PokerSeatState } from '@/lib/websocket-client';
 import Footer from '@/components/BIG-WHEEL/Footer';
-import { FloatingPokerChips } from '@/components/home/FloatingPokerChips';
 import { Theme } from '@/lib/theme';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { GameFAQ } from '@/components/shared/GameFAQ';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { isAdminWallet } from '@/lib/admin';
-import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
+// import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 
 /** Format a wei string to human-readable chips (e.g. "10000000000000000000" -> "10") */
 function formatChips(wei: string): string {
@@ -315,93 +314,211 @@ export default function PokerLobbyPage() {
 
   return (
     <>
-      <div className="relative min-h-screen h-full w-full flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
-        <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.1),transparent_70%)] pointer-events-none" />
-        <FloatingPokerChips />
+      <div className="relative min-h-screen h-full w-full flex flex-col bg-gradient-to-b from-[#080c14] via-slate-950 to-[#080c14] text-white">
+        <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
         <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
-          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4 mb-4 sm:mb-8">
-            <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-              <Link href="/" className="text-cyan-500 hover:text-cyan-400 text-xs sm:text-sm">← Back</Link>
-              <button
-                type="button"
-                onClick={() => setShowHowToPlay(true)}
-                className="text-slate-400 hover:text-cyan-400 text-xs sm:text-sm"
-              >
-                How to Play
-              </button>
-              <Link
-                href="/poker/demo?tutorial=1"
-                className="text-slate-400 hover:text-cyan-400 text-xs sm:text-sm"
-              >
-                Interactive tutorial
-              </Link>
-              {isConnected && (
-                <>
-                  {balance != null && (
-                    <span className="text-slate-300 text-xs sm:text-sm">
-                      Balance: <span className="text-cyan-400 font-medium">{formatChips(balance)}</span> chips
-                    </span>
+          {/* ── Hero Section ── */}
+          <div
+            className="relative rounded-3xl overflow-hidden mb-6 sm:mb-8 border border-cyan-400/10"
+            style={{
+              background: 'linear-gradient(170deg, #0c1929 0%, #0a0f1a 40%, #0d1117 100%)',
+              boxShadow: '0 0 80px rgba(34,211,238,0.07), 0 2px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(34,211,238,0.1)',
+            }}
+          >
+            {/* Top glow line */}
+            <div className="h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
+
+            {/* Decorative card fan — positioned behind content */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] pointer-events-none select-none opacity-[0.04]">
+              <div className="relative w-[400px] h-[300px]">
+                {[
+                  { r: -25, x: -60, y: 0 },
+                  { r: -10, x: -20, y: -10 },
+                  { r: 5, x: 20, y: -10 },
+                  { r: 20, x: 60, y: 0 },
+                ].map((c, i) => (
+                  <div
+                    key={i}
+                    className="absolute left-1/2 top-1/2 w-[140px] h-[200px] rounded-2xl border-2 border-white/30 bg-white/10"
+                    style={{
+                      transform: `translate(-50%, -50%) rotate(${c.r}deg) translateX(${c.x}px) translateY(${c.y}px)`,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="relative overflow-hidden">
+              {/* Layered radial glows */}
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(34,211,238,0.18),transparent_70%)] pointer-events-none" />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_20%_100%,rgba(59,130,246,0.08),transparent_60%)] pointer-events-none" />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_80%_100%,rgba(99,102,241,0.06),transparent_60%)] pointer-events-none" />
+
+              {/* Subtle grid overlay */}
+              <div
+                className="absolute inset-0 pointer-events-none opacity-[0.03]"
+                style={{
+                  backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+                  backgroundSize: '40px 40px',
+                }}
+              />
+
+              {/* Top bar */}
+              <div className="relative flex justify-between items-center px-5 sm:px-10 pt-5 sm:pt-8">
+                <Link href="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-cyan-400 text-xs sm:text-sm font-medium transition-colors">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                  Lobby
+                </Link>
+                {isConnected && (
+                  <div className="flex items-center gap-2.5">
+                    {balance != null && (
+                      <div
+                        className="flex items-center gap-2 px-4 py-2 rounded-full border border-cyan-500/20"
+                        style={{ background: 'rgba(8,12,20,0.8)', boxShadow: 'inset 0 1px 0 rgba(34,211,238,0.08)' }}
+                      >
+                        <span className="text-sm font-bold text-cyan-400 tabular-nums">{formatChips(balance)}</span>
+                        <span className="text-[11px] text-slate-500 font-medium">MORBIUS</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowDepositModal(true)}
+                      className="px-4 py-2 rounded-full text-white text-xs sm:text-sm font-semibold hover:-translate-y-0.5 transition-all"
+                      style={{
+                        background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                        boxShadow: '0 2px 12px rgba(6,182,212,0.3), inset 0 1px 0 rgba(255,255,255,0.15)',
+                      }}
+                    >
+                      + Get Chips
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Centered hero content */}
+              <div className="relative text-center px-5 sm:px-10 pt-10 sm:pt-14 pb-12 sm:pb-16">
+                {/* Live badge */}
+                <div
+                  className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full mb-6 sm:mb-8"
+                  style={{
+                    background: 'rgba(34,211,238,0.06)',
+                    border: '1px solid rgba(34,211,238,0.15)',
+                    boxShadow: '0 0 20px rgba(34,211,238,0.08)',
+                  }}
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
+                  </span>
+                  <span className="text-[11px] sm:text-xs font-bold tracking-[0.2em] uppercase text-cyan-400">
+                    {tables.length > 0 ? `${tables.length} Live Table${tables.length !== 1 ? 's' : ''}` : 'No Active Tables'}
+                  </span>
+                </div>
+
+                {/* Main title */}
+                <h1
+                  className="text-5xl sm:text-6xl md:text-7xl font-black tracking-[-3px] leading-[1] mb-4"
+                  style={{
+                    background: 'linear-gradient(180deg, #ffffff 0%, #e2e8f0 40%, #64748b 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))',
+                  }}
+                >
+                  Texas Hold&apos;em
+                </h1>
+                <p className="text-sm sm:text-base text-slate-500 mb-10 sm:mb-12 max-w-md mx-auto">
+                  No-limit multiplayer poker. Join a table or start your own.
+                </p>
+
+                {/* CTA buttons */}
+                <div className="flex justify-center gap-3 flex-wrap">
+                  {isConnected && (
+                    <button
+                      type="button"
+                      onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6 })}
+                      className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
+                      style={{
+                        background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                        boxShadow: '0 4px 24px rgba(6,182,212,0.3), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
+                      }}
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
+                      Create Table
+                    </button>
                   )}
                   <button
                     type="button"
-                    onClick={() => setShowDepositModal(true)}
-                    className="text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-700 hover:to-blue-700"
+                    onClick={() => setShowHowToPlay(true)}
+                    className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                    style={{
+                      background: 'rgba(30,41,59,0.5)',
+                      border: '1px solid rgba(51,65,85,0.5)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                    }}
                   >
-                    Get chips
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                    How to Play
                   </button>
-                </>
-              )}
+                  <Link
+                    href="/poker/demo?tutorial=1"
+                    className="flex items-center px-5 py-3.5 rounded-2xl text-slate-600 hover:text-slate-300 text-sm font-medium transition-colors"
+                  >
+                    Tutorial
+                  </Link>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <h1 className="text-lg sm:text-2xl md:text-3xl font-bold text-cyan-400">Texas Hold&apos;em</h1>
-              {isConnected && (
-                <button
-                  type="button"
-                  onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6 })}
-                  className="px-2 py-1.5 sm:px-4 sm:py-2 rounded-lg border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 text-xs sm:text-sm"
-                >
-                  Create table
-                </button>
-              )}
+
+            {/* Tab bar */}
+            <div className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 border-t border-white/[0.04]" style={{ background: 'rgba(0,0,0,0.2)' }}>
+              <button
+                type="button"
+                onClick={() => setActiveTab('cash')}
+                className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  activeTab === 'cash'
+                    ? 'bg-cyan-500/[0.12] text-cyan-400'
+                    : 'text-slate-600 hover:text-slate-400'
+                }`}
+              >
+                Cash Games
+                {tables.length > 0 && activeTab === 'cash' && (
+                  <span className="ml-2 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400">{tables.length}</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('tournaments')}
+                className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  activeTab === 'tournaments'
+                    ? 'bg-cyan-500/[0.12] text-cyan-400'
+                    : 'text-slate-600 hover:text-slate-400'
+                }`}
+              >
+                Tournaments
+                <span className="ml-2 text-[9px] sm:text-[10px] font-bold tracking-wider uppercase text-amber-400/80">Soon</span>
+              </button>
             </div>
           </div>
-          <p className="text-slate-400 mb-4 sm:mb-6 text-xs sm:text-base">Multiplayer no-limit Hold&apos;em. Join a table and play.</p>
 
-          {/* Tab switcher */}
-          <div className="flex gap-1 mb-4 sm:mb-6 bg-slate-900/50 rounded-xl p-1 w-fit">
-            <button
-              type="button"
-              onClick={() => setActiveTab('cash')}
-              className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                activeTab === 'cash'
-                  ? 'bg-cyan-500/20 text-cyan-400 shadow'
-                  : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Cash Games
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('tournaments')}
-              className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                activeTab === 'tournaments'
-                  ? 'bg-yellow-500/20 text-yellow-400 shadow'
-                  : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Tournaments
-            </button>
-          </div>
-
-          {/* Tournament Lobby */}
+          {/* Tournament Coming Soon */}
           {activeTab === 'tournaments' && (
-            <PokerTournamentLobby
-              wsClient={wsClient}
-              myAddress={address?.toLowerCase()}
-              onGoToTable={(tableId, tournamentId) => {
-                router.push(`/poker/${tableId}?tournament=${tournamentId}`);
-              }}
-            />
+            <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-cyan-500/[0.08] border border-cyan-500/15 flex items-center justify-center text-3xl sm:text-4xl mb-5">
+                🏆
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-200 mb-2">Tournaments Coming Soon</h3>
+              <p className="text-sm sm:text-base text-slate-500 max-w-md leading-relaxed mb-6">
+                Multi-table tournaments with structured blind levels, guaranteed prize pools, and satellite qualifiers are on the way.
+              </p>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                </span>
+                <span className="text-xs sm:text-sm font-medium text-amber-400/90">In Development</span>
+              </div>
+            </div>
           )}
 
           {activeTab === 'cash' && error && <p className="text-red-400 mb-4">{error}</p>}

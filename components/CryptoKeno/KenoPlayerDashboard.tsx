@@ -32,7 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
+import AvatarView from '@/components/poker/avatar/AvatarView'
 import { useProfileForAddress } from '@/hooks/use-player-profile'
 import { useKenoPlayerStats } from '@/hooks/use-keno-results'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
@@ -179,7 +179,7 @@ export function KenoPlayerDashboard({ playerAddress }: KenoPlayerDashboardProps)
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
           {avatarConfig ? (
             <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded overflow-hidden bg-black/30">
-              <AvatarPreview config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
+              <AvatarView config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
             </div>
           ) : profileImageUrl ? (
             <img

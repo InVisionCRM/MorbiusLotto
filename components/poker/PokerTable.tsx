@@ -57,13 +57,13 @@ export interface PokerTableProps {
   /** Per-seat quick reaction (emoji or phrase) to show above seat; key = seat index. */
   reactionBySeatIndex?: Record<number, { type: 'emoji' | 'phrase'; value: string }>;
   /** Per-seat avatar emotion broadcast to table (so all players see the same animation). */
-  broadcastEmotionBySeatIndex?: Record<number, import('@/components/poker/avatar/AvatarPreview').Emotion>;
+  broadcastEmotionBySeatIndex?: Record<number, import('@/components/poker/avatar/AvatarView').Emotion>;
   /** Called when current player selects an emoji reaction (broadcast to table). */
   onEmojiReaction?: (emoji: string) => void;
   /** Called when current player selects a phrase reaction (broadcast to table). */
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
-  onAnimationReaction?: (emotion: import('@/components/poker/avatar/AvatarPreview').Emotion) => void;
+  onAnimationReaction?: (emotion: import('@/components/poker/avatar/AvatarView').Emotion) => void;
   /** Called when any player clicks an opponent's avatar. */
   onOpponentClick?: (address: string) => void;
   /** Right-click radial on opponent (profile / follow / gift). */

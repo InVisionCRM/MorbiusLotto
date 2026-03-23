@@ -52,7 +52,7 @@ export default function RootLayout({
         {/* Google Fonts */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Autour+One&family=Climate+Crisis:YEAR@1979&family=Grandstander:ital,wght@0,700;1,700&family=Jost:wght@400;700&family=Monoton&family=Noto+Sans+Mono:wdth,wght@95.2,100..900&family=Poppins:wght@400;500;600;700&family=Prosto+One&family=Mitr:wght@700&family=Russo+One&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Autour+One&family=Climate+Crisis:YEAR@1979&family=Grandstander:ital,wght@0,700;1,700&family=Jost:wght@400;700&family=Monoton&family=Noto+Sans+Mono:wdth,wght@95.2,100..900&family=Poppins:wght@400;500;600;700&family=Prosto+One&family=Mitr:wght@700&family=Russo+One&family=Krona+One&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
         {/* Font Awesome for PLINKO icons */}
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </head>

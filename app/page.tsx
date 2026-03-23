@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { HeroSection } from '@/components/home/hero-section'
+// import { DevLogSection } from '@/components/home/dev-log-section'
 import { SocialsSection } from '@/components/home/socials-section'
 import { GamesSection } from '@/components/home/games-section'
 import { AvatarShowcaseSection } from '@/components/home/avatar-showcase-section'
@@ -44,8 +45,7 @@ export default function HomePage() {
             fill
             className="select-none object-cover opacity-[0.05]"
             sizes="100vw"
-            priority
-            quality={85}
+            quality={45}
           />
         </div>
 
@@ -65,33 +65,17 @@ export default function HomePage() {
                 .
               </p>
             </FirstVisitNotification>
-            <style jsx global>{`
-              ::-webkit-scrollbar {
-                width: 4px;
-              }
-
-              ::-webkit-scrollbar-track {
-                background: transparent;
-              }
-
-              ::-webkit-scrollbar-thumb {
-                background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.5) 50%, rgb(6, 182, 212) 100%);
-                border-radius: 2px;
-              }
-
-              ::-webkit-scrollbar-thumb:hover {
-                background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.7) 50%, rgb(6, 182, 212) 100%);
-              }
-            `}</style>
 
             <HeroSection
               onOpenPlayerProfile={address ? () => { setPlayerProfileGame('all'); setPlayerProfileOpen(true) } : undefined}
               onOpenAuthModal={() => setLoginOpen(true)}
             />
 
+            {/* Dev log — temporarily disabled
             <div className="w-full pt-24 md:pt-32 lg:pt-40">
-              <SocialsSection />
+              <DevLogSection />
             </div>
+            */}
 
             <section className="w-full flex flex-col items-center pt-10 md:pt-16">
               <GamesSection />
@@ -99,6 +83,8 @@ export default function HomePage() {
 
             <div className="flex w-full flex-col items-center gap-y-20 px-4 py-12 md:gap-y-28 md:py-20">
               <MorbiusInfoSection />
+
+              <SocialsSection />
 
               <TokenomicsSection />
 

@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Poker Lobby Header — Design Mockups</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0a0e14;
+    color: #fff;
+    padding: 40px 20px;
+  }
+
+  .mockup-label {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 16px;
+    padding-top: 60px;
+  }
+  .mockup-label:first-child { padding-top: 0; }
+  .mockup-desc {
+    text-align: center;
+    font-size: 14px;
+    color: #94a3b8;
+    margin-bottom: 32px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.6;
+  }
+
+  .divider {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #1e293b, transparent);
+  }
+
+  /* ============================================ */
+  /* OPTION A — Cinematic Hero                    */
+  /* ============================================ */
+  .option-a {
+    max-width: 900px;
+    margin: 0 auto 60px;
+    background: linear-gradient(180deg, #0f172a 0%, #0a0e14 100%);
+    border-radius: 24px;
+    overflow: hidden;
+    border: 1px solid rgba(34, 211, 238, 0.08);
+  }
+
+  .option-a .hero {
+    position: relative;
+    padding: 48px 40px 40px;
+    overflow: hidden;
+  }
+
+  .option-a .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(34, 211, 238, 0.12) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 80% at 80% 100%, rgba(99, 102, 241, 0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .option-a .hero::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 10%, rgba(34, 211, 238, 0.3) 50%, transparent 90%);
+  }
+
+  .option-a .top-bar {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+  }
+
+  .option-a .back-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .option-a .back-link:hover { color: #22d3ee; }
+  .option-a .back-link svg { width: 16px; height: 16px; }
+
+  .option-a .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .option-a .balance-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 100px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(34, 211, 238, 0.15);
+    font-size: 13px;
+    color: #94a3b8;
+  }
+  .option-a .balance-pill .amount {
+    color: #22d3ee;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .option-a .btn-deposit {
+    padding: 8px 20px;
+    border-radius: 100px;
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .option-a .btn-deposit:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(6, 182, 212, 0.3);
+  }
+
+  .option-a .hero-content {
+    position: relative;
+    text-align: center;
+  }
+
+  .option-a .game-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 100px;
+    background: rgba(34, 211, 238, 0.08);
+    border: 1px solid rgba(34, 211, 238, 0.15);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #22d3ee;
+    margin-bottom: 20px;
+  }
+  .option-a .game-badge .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #22d3ee;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  .option-a h1 {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #fff 30%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+  }
+
+  .option-a .subtitle {
+    font-size: 16px;
+    color: #64748b;
+    font-weight: 400;
+    margin-bottom: 32px;
+  }
+
+  .option-a .hero-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .option-a .btn-create {
+    padding: 12px 28px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .option-a .btn-create:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(6, 182, 212, 0.25);
+  }
+  .option-a .btn-create svg { width: 16px; height: 16px; }
+
+  .option-a .btn-secondary {
+    padding: 12px 24px;
+    border-radius: 14px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+  .option-a .btn-secondary:hover {
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.3);
+    background: rgba(30, 41, 59, 0.8);
+  }
+
+  /* Tabs below hero */
+  .option-a .tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 20px 40px;
+    border-top: 1px solid rgba(30, 41, 59, 0.8);
+  }
+  .option-a .tab {
+    padding: 10px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+  .option-a .tab.active {
+    background: rgba(34, 211, 238, 0.12);
+    color: #22d3ee;
+  }
+  .option-a .tab.inactive {
+    background: transparent;
+    color: #64748b;
+  }
+  .option-a .tab.inactive:hover { color: #94a3b8; }
+
+  .option-a .tab-count {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: rgba(34, 211, 238, 0.15);
+    color: #22d3ee;
+    margin-left: 8px;
+  }
+
+  /* ============================================ */
+  /* OPTION B — Compact Toolbar                   */
+  /* ============================================ */
+  .option-b {
+    max-width: 900px;
+    margin: 0 auto 60px;
+    background: #0f172a;
+    border-radius: 24px;
+    overflow: hidden;
+    border: 1px solid rgba(30, 41, 59, 0.6);
+  }
+
+  .option-b .header {
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .option-b .row-1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .option-b .title-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .option-b .back-btn {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #94a3b8;
+    transition: all 0.2s;
+  }
+  .option-b .back-btn:hover {
+    background: rgba(30, 41, 59, 0.9);
+    color: #e2e8f0;
+  }
+  .option-b .back-btn svg { width: 18px; height: 18px; }
+
+  .option-b h1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #f1f5f9;
+  }
+  .option-b h1 span {
+    color: #22d3ee;
+  }
+
+  .option-b .live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #4ade80;
+    padding: 4px 12px;
+    border-radius: 100px;
+    background: rgba(74, 222, 128, 0.08);
+    border: 1px solid rgba(74, 222, 128, 0.15);
+  }
+  .option-b .live-badge .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #4ade80;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  .option-b .right-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .option-b .chip-balance {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(34, 211, 238, 0.12);
+  }
+  .option-b .chip-balance .icon {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: #fff;
+  }
+  .option-b .chip-balance .val {
+    font-size: 14px;
+    font-weight: 700;
+    color: #22d3ee;
+    font-variant-numeric: tabular-nums;
+  }
+  .option-b .chip-balance .label {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 500;
+  }
+
+  .option-b .btn-sm {
+    padding: 10px 20px;
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+  .option-b .btn-sm.ghost {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    color: #94a3b8;
+  }
+  .option-b .btn-sm.ghost:hover { color: #e2e8f0; border-color: #475569; }
+  .option-b .btn-sm.primary {
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    color: #fff;
+  }
+  .option-b .btn-sm.primary:hover {
+    box-shadow: 0 4px 16px rgba(6, 182, 212, 0.25);
+  }
+
+  .option-b .row-2 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid rgba(30, 41, 59, 0.8);
+  }
+
+  .option-b .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(30, 41, 59, 0.6);
+  }
+  .option-b .tab {
+    padding: 8px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+  .option-b .tab.active {
+    background: rgba(34, 211, 238, 0.15);
+    color: #22d3ee;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  }
+  .option-b .tab.inactive {
+    background: transparent;
+    color: #64748b;
+  }
+  .option-b .tab.inactive:hover { color: #94a3b8; }
+
+  .option-b .help-links {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+  .option-b .help-link {
+    font-size: 13px;
+    color: #64748b;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .option-b .help-link:hover { color: #94a3b8; }
+  .option-b .help-link svg { width: 14px; height: 14px; }
+
+
+  /* ============================================ */
+  /* OPTION C — Split Hero with Card Art          */
+  /* ============================================ */
+  .option-c {
+    max-width: 900px;
+    margin: 0 auto 60px;
+    background: linear-gradient(135deg, #0f172a 0%, #1a1033 100%);
+    border-radius: 24px;
+    overflow: hidden;
+    border: 1px solid rgba(139, 92, 246, 0.1);
+  }
+
+  .option-c .hero {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 32px;
+    padding: 40px;
+    overflow: hidden;
+  }
+
+  .option-c .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 80% at 80% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .option-c .back-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    margin-bottom: 24px;
+  }
+  .option-c .back-link:hover { color: #c4b5fd; }
+  .option-c .back-link svg { width: 16px; height: 16px; }
+
+  .option-c .hero-left {
+    position: relative;
+    z-index: 1;
+  }
+
+  .option-c .type-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #8b5cf6;
+    margin-bottom: 12px;
+  }
+
+  .option-c h1 {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
+    color: #f8fafc;
+    margin-bottom: 8px;
+  }
+
+  .option-c .subtitle {
+    font-size: 16px;
+    color: #64748b;
+    margin-bottom: 28px;
+    line-height: 1.5;
+  }
+  .option-c .subtitle strong { color: #c4b5fd; font-weight: 600; }
+
+  .option-c .stats-row {
+    display: flex;
+    gap: 32px;
+    margin-bottom: 28px;
+  }
+  .option-c .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .option-c .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f1f5f9;
+    font-variant-numeric: tabular-nums;
+  }
+  .option-c .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+
+  .option-c .hero-btns {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .option-c .btn-create {
+    padding: 12px 28px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .option-c .btn-create:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(139, 92, 246, 0.3);
+  }
+  .option-c .btn-create svg { width: 16px; height: 16px; }
+
+  .option-c .btn-outline {
+    padding: 12px 24px;
+    border-radius: 14px;
+    background: transparent;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #c4b5fd;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+  .option-c .btn-outline:hover {
+    background: rgba(139, 92, 246, 0.08);
+    border-color: rgba(139, 92, 246, 0.5);
+  }
+
+  .option-c .btn-ghost {
+    padding: 12px 20px;
+    border-radius: 14px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .option-c .btn-ghost:hover { color: #c4b5fd; }
+
+  /* Card art */
+  .option-c .hero-right {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+  }
+
+  .option-c .card-stack {
+    position: relative;
+    width: 120px;
+    height: 168px;
+  }
+  .option-c .playing-card {
+    position: absolute;
+    width: 100px;
+    height: 140px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, #1e1b4b, #312e81);
+    border: 2px solid rgba(139, 92, 246, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: #c4b5fd;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  .option-c .playing-card:nth-child(1) {
+    transform: rotate(-12deg) translateX(-10px);
+    z-index: 1;
+  }
+  .option-c .playing-card:nth-child(2) {
+    transform: rotate(4deg) translateX(10px);
+    z-index: 2;
+  }
+  .option-c .playing-card:nth-child(3) {
+    transform: rotate(18deg) translateX(28px) translateY(-4px);
+    z-index: 3;
+  }
+
+  .option-c .glow-ring {
+    position: absolute;
+    width: 240px; height: 240px;
+    border-radius: 50%;
+    border: 1px solid rgba(139, 92, 246, 0.1);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    animation: glow-pulse 4s ease-in-out infinite;
+  }
+  @keyframes glow-pulse {
+    0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.05); }
+  }
+
+  /* Bottom bar */
+  .option-c .bottom-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 40px;
+    border-top: 1px solid rgba(30, 41, 59, 0.5);
+    background: rgba(10, 14, 20, 0.4);
+  }
+
+  .option-c .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.6);
+  }
+  .option-c .tab {
+    padding: 8px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+  .option-c .tab.active {
+    background: rgba(139, 92, 246, 0.15);
+    color: #c4b5fd;
+  }
+  .option-c .tab.inactive {
+    background: transparent;
+    color: #64748b;
+  }
+  .option-c .tab.inactive:hover { color: #94a3b8; }
+
+  .option-c .wallet-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .option-c .chip-bal {
+    font-size: 14px;
+    font-weight: 600;
+    color: #c4b5fd;
+    font-variant-numeric: tabular-nums;
+  }
+  .option-c .chip-label {
+    font-size: 12px;
+    color: #64748b;
+  }
+  .option-c .btn-add-chips {
+    padding: 8px 18px;
+    border-radius: 100px;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    color: #c4b5fd;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .option-c .btn-add-chips:hover {
+    background: rgba(139, 92, 246, 0.25);
+  }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .option-a h1 { font-size: 32px; }
+    .option-a .hero { padding: 32px 20px 28px; }
+    .option-a .tab-bar { padding: 16px 20px; }
+
+    .option-b .header { padding: 16px 20px; }
+    .option-b h1 { font-size: 20px; }
+
+    .option-c .hero {
+      grid-template-columns: 1fr;
+      padding: 28px 20px;
+    }
+    .option-c .hero-right { display: none; }
+    .option-c h1 { font-size: 32px; }
+    .option-c .bottom-bar { padding: 12px 20px; flex-wrap: wrap; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- =========================================== -->
+<!-- OPTION A — Cinematic Hero                   -->
+<!-- =========================================== -->
+<p class="mockup-label">Option A — Cinematic Hero</p>
+<p class="mockup-desc">
+  Full-width hero block with centered title, subtle radial glow, and prominent CTA.
+  Balance + deposit tucked into top-right. Feels like a high-end poker client launch screen.
+</p>
+
+<div class="option-a">
+  <div class="hero">
+    <div class="top-bar">
+      <a href="#" class="back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Lobby
+      </a>
+      <div class="top-actions">
+        <div class="balance-pill">
+          <span class="amount">12,500</span>
+          <span>MORBIUS</span>
+        </div>
+        <button class="btn-deposit">+ Get Chips</button>
+      </div>
+    </div>
+
+    <div class="hero-content">
+      <div class="game-badge">
+        <span class="dot"></span>
+        Live Tables
+      </div>
+      <h1>Texas Hold'em</h1>
+      <p class="subtitle">No-Limit multiplayer poker. Join a table or start your own.</p>
+      <div class="hero-actions">
+        <button class="btn-create">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Create Table
+        </button>
+        <button class="btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          How to Play
+        </button>
+        <button class="btn-secondary">Tutorial</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab active">Cash Games <span class="tab-count">4</span></button>
+    <button class="tab inactive">Tournaments</button>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- =========================================== -->
+<!-- OPTION B — Compact Toolbar                  -->
+<!-- =========================================== -->
+<p class="mockup-label">Option B — Compact Toolbar</p>
+<p class="mockup-desc">
+  Dense, information-rich header. Title + actions on row 1, tabs + help on row 2.
+  No wasted vertical space — tables are immediately visible. Feels like PokerStars' desktop client.
+</p>
+
+<div class="option-b">
+  <div class="header">
+    <div class="row-1">
+      <div class="title-group">
+        <button class="back-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <h1>Texas <span>Hold'em</span></h1>
+        <span class="live-badge"><span class="dot"></span> 4 Tables Live</span>
+      </div>
+      <div class="right-actions">
+        <div class="chip-balance">
+          <div class="icon">M</div>
+          <div>
+            <div class="val">12,500</div>
+            <div class="label">MORBIUS chips</div>
+          </div>
+        </div>
+        <button class="btn-sm ghost">+ Chips</button>
+        <button class="btn-sm primary">Create Table</button>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="tabs">
+        <button class="tab active">Cash Games</button>
+        <button class="tab inactive">Tournaments</button>
+      </div>
+      <div class="help-links">
+        <a href="#" class="help-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          How to Play
+        </a>
+        <a href="#" class="help-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><circle cx="12" cy="12" r="10"/></svg>
+          Tutorial
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- =========================================== -->
+<!-- OPTION C — Split Hero with Card Art         -->
+<!-- =========================================== -->
+<p class="mockup-label">Option C — Split Hero with Card Art</p>
+<p class="mockup-desc">
+  Two-column layout with decorative card fan on the right.
+  Live stats (tables, players) surface useful info. Purple accent gives it a VIP/high-stakes feel.
+  Balance + tabs live in a compact footer bar below the hero.
+</p>
+
+<div class="option-c">
+  <div class="hero">
+    <div class="hero-left">
+      <a href="#" class="back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back to Casino
+      </a>
+      <p class="type-label">No-Limit Poker</p>
+      <h1>Texas Hold'em</h1>
+      <p class="subtitle">Multiplayer cash games and tournaments.<br/>Real stakes, <strong>provably fair</strong>.</p>
+
+      <div class="stats-row">
+        <div class="stat">
+          <span class="stat-value">4</span>
+          <span class="stat-label">Live Tables</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">12</span>
+          <span class="stat-label">Players Online</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">5%</span>
+          <span class="stat-label">Rake</span>
+        </div>
+      </div>
+
+      <div class="hero-btns">
+        <button class="btn-create">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Create Table
+        </button>
+        <button class="btn-outline">How to Play</button>
+        <button class="btn-ghost">Tutorial</button>
+      </div>
+    </div>
+
+    <div class="hero-right">
+      <div class="glow-ring"></div>
+      <div class="card-stack">
+        <div class="playing-card">A♠</div>
+        <div class="playing-card">K♥</div>
+        <div class="playing-card">Q♦</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="tabs">
+      <button class="tab active">Cash Games</button>
+      <button class="tab inactive">Tournaments</button>
+    </div>
+    <div class="wallet-section">
+      <span class="chip-bal">12,500</span>
+      <span class="chip-label">MORBIUS</span>
+      <button class="btn-add-chips">+ Get Chips</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

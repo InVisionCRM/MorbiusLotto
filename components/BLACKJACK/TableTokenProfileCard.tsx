@@ -40,10 +40,14 @@ export function TableTokenProfileCard({
 }: TableTokenProfileCardProps) {
   const profile = getTableProfile(themeKind, themeId);
 
+  const stretchProfile = !compact
+
   return (
     <div
-      className={`rounded-xl min-w-0 overflow-hidden flex flex-col border border-cyan-500/30 ${
-        compact ? 'min-h-[280px] md:min-h-[300px]' : 'min-h-[420px] lg:min-h-[520px]'
+      className={`rounded-xl min-w-0 flex flex-col border border-cyan-500/30 ${
+        compact
+          ? 'min-h-[280px] overflow-hidden md:min-h-[300px]'
+          : 'min-h-[320px] overflow-hidden lg:h-full lg:min-h-0'
       }`}
       style={PANEL_STYLE}
     >
@@ -63,7 +67,13 @@ export function TableTokenProfileCard({
           <span className="text-slate-400 text-xs shrink-0">Change Table</span>
         )}
       </div>
-      <div className="flex-1 min-h-0 overflow-auto p-2">
+      <div
+        className={
+          stretchProfile
+            ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-2'
+            : 'min-h-0 flex-1 overflow-auto p-2'
+        }
+      >
         <TableProfile
           name={profile?.name ?? undefined}
           tokenAddress={profile?.token_contract_address ?? undefined}
@@ -72,6 +82,7 @@ export function TableTokenProfileCard({
           ticker={profile?.ticker ?? undefined}
           websiteUrl={profile?.website_url ?? undefined}
           iframeUrl={profile?.iframe_url ?? undefined}
+          fillHeight={stretchProfile}
         />
       </div>
     </div>

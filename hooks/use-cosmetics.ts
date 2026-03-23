@@ -1,8 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { getItemKeyForValue, getLockedFields, isAdminWallet, ITEM_CATALOG, type AvatarField, type CosmeticItem, type LockedField } from '@/lib/cosmetics-catalog';
-import type { AvatarConfig } from '@/lib/websocket-client';
+import {
+  getItemKeyForValue,
+  getLockedFields,
+  isAdminWallet,
+  ITEM_CATALOG,
+  type AvatarField,
+  type CosmeticItem,
+  type LockedField,
+} from '@/lib/cosmetics-catalog';
+import type { AvatarConfig, AvatarPayload } from '@/lib/websocket-client';
 
 export type { CosmeticItem, LockedField, AvatarField };
 export { getItemKeyForValue, getLockedFields, ITEM_CATALOG };
@@ -66,13 +74,17 @@ export function useInventory(address: string | undefined) {
     return ownedSet.has(itemKey);
   };
 
-  /** Returns all locked fields in the given avatar config. */
   const lockedIn = (config: Partial<AvatarConfig>, adminBypass = false): LockedField[] => {
     if (adminBypass) return [];
     return getLockedFields(config as Record<string, string>, ownedSet);
   };
 
-  return { items, ownedSet, loading, refresh, owns, canUse, lockedIn };
+  const lockedInPayload = (payload: AvatarPayload | null | undefined, adminBypass = false): LockedField[] => {
+    if (adminBypass || !payload) return [];
+    return getLockedFields(payload as Record<string, string>, ownedSet);
+  };
+
+  return { items, ownedSet, loading, refresh, owns, canUse, lockedIn, lockedInPayload };
 }
 
 /**

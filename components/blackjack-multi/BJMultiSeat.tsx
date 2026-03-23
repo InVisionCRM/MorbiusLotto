@@ -4,8 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { formatEther } from 'viem';
 import { CardValue, Suit } from '@/app/BLACKJACK/types';
 import PlayingCard from '@/components/BLACKJACK/PlayingCard';
-import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
-import type { AvatarConfig } from '@/lib/websocket-client';
+import AvatarView from '@/components/poker/avatar/AvatarView';
 import type { BJMultiSeatState, BJMultiHandObj } from '@/lib/websocket-client';
 import { UserPlus, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -91,8 +90,8 @@ export default function BJMultiSeat({ seat, position, isMe, isEmpty, isActing, p
           {/* Avatar */}
           <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-700 shrink-0">
             {seat?.avatarConfig ? (
-              <AvatarPreview
-                config={seat.avatarConfig as unknown as AvatarConfig}
+              <AvatarView
+                config={seat.avatarConfig}
                 emotion="neutral"
                 className="w-full h-full"
               />

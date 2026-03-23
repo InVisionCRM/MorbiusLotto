@@ -24,7 +24,7 @@ import {
   Legend,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import AvatarPreview from '@/components/poker/avatar/AvatarPreview'
+import AvatarView from '@/components/poker/avatar/AvatarView'
 import {
   Table,
   TableBody,
@@ -133,7 +133,7 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
             {avatarConfig ? (
               <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded overflow-hidden bg-black/30">
-                <AvatarPreview config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
+                <AvatarView config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
               </div>
             ) : profileImageUrl ? (
               <img
@@ -226,7 +226,7 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
       <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
         {avatarConfig ? (
           <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded overflow-hidden bg-black/30">
-            <AvatarPreview config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
+            <AvatarView config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
           </div>
         ) : profileImageUrl ? (
           <img

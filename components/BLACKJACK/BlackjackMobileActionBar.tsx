@@ -75,9 +75,9 @@ export function BlackjackMobileActionBar({
       className={`w-full h-full mt-0.5 sm:mt-1 px-2 sm:px-4 py-0.5 sm:pt-1 sm:pb-1 ${alwaysVisible ? '' : 'md:hidden'}`}
     >
       {/* Mobile layout: row 1 = HIT, STAND, DOUBLE, SPLIT (grid-4); row 2 = REBET | DEAL — matches BettingPanelMobile height */}
-      <div className="flex flex-col h-full gap-2 sm:gap-4 w-full max-w-full">
-        {/* Row 1: HIT, STAND, DOUBLE, SPLIT — always 4 columns */}
-        <div className="grid grid-cols-4 gap-2 sm:gap-2.5 w-full flex-1 min-h-0">
+      <div className="flex flex-col h-full gap-2 sm:gap-3 w-full max-w-full">
+        {/* Row 1: compact fixed height — do not flex-1 or h-full or row steals space from REBET/DEAL */}
+        <div className="grid grid-cols-4 gap-2 sm:gap-2.5 w-full shrink-0">
           {/* HIT */}
           <button
           type="button"
@@ -89,15 +89,15 @@ export function BlackjackMobileActionBar({
           }}
           disabled={!canHit}
           aria-label="Hit"
-          className={`action-bar-btn min-h-[62px] h-full sm:min-h-[72px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-red-400/50 transition-all duration-150 text-xs sm:text-sm ${canHit ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          className={`action-bar-btn h-[52px] sm:h-[58px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-red-400/50 transition-all duration-150 text-xs sm:text-sm ${canHit ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
           style={{
             background: 'linear-gradient(180deg, #ef4444 0%, #b91c1c 50%, #991b1b 100%)',
             boxShadow: canHit ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <span className="flex flex-col items-center justify-center gap-0.5">
-            <Plus className="w-6 h-6 sm:w-7 sm:h-7 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
-            <span className="text-white/95 text-[11px] sm:text-[13px] font-semibold drop-shadow-sm leading-tight">Hit</span>
+          <span className="flex flex-col items-center justify-center gap-0 sm:gap-0.5">
+            <Plus className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
+            <span className="text-white/95 text-[10px] sm:text-[12px] font-semibold drop-shadow-sm leading-tight">Hit</span>
           </span>
         </button>
 
@@ -107,15 +107,15 @@ export function BlackjackMobileActionBar({
           onClick={() => canStand && onAction(Action.STAND)}
           disabled={!canStand}
           aria-label="Stand"
-          className={`action-bar-btn min-h-[62px] h-full sm:min-h-[72px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-blue-400/50 transition-all duration-150 text-xs sm:text-sm ${canStand ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          className={`action-bar-btn h-[52px] sm:h-[58px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-blue-400/50 transition-all duration-150 text-xs sm:text-sm ${canStand ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
           style={{
             background: 'linear-gradient(180deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.8) 50%, rgba(29, 78, 216, 0.9) 100%)',
             boxShadow: canStand ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <span className="flex flex-col items-center justify-center gap-0.5">
-            <Hand className="w-6 h-6 sm:w-7 sm:h-7 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
-            <span className="text-white/95 text-[11px] sm:text-[13px] font-semibold drop-shadow-sm leading-tight">Stand</span>
+          <span className="flex flex-col items-center justify-center gap-0 sm:gap-0.5">
+            <Hand className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
+            <span className="text-white/95 text-[10px] sm:text-[12px] font-semibold drop-shadow-sm leading-tight">Stand</span>
           </span>
         </button>
 
@@ -130,15 +130,15 @@ export function BlackjackMobileActionBar({
           }}
           disabled={!canDoubleDown}
           aria-label="Double down"
-          className={`action-bar-btn min-h-[62px] h-full sm:min-h-[72px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-amber-400/50 transition-all duration-150 text-xs sm:text-sm ${canDoubleDown ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          className={`action-bar-btn h-[52px] sm:h-[58px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-amber-400/50 transition-all duration-150 text-xs sm:text-sm ${canDoubleDown ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
           style={{
             background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 50%, #b45309 100%)',
             boxShadow: canDoubleDown ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <span className="flex flex-col items-center justify-center gap-0.5">
-            <Copy className="w-6 h-6 sm:w-7 sm:h-7 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
-            <span className="text-white/95 text-[11px] sm:text-[13px] font-semibold drop-shadow-sm leading-tight">Double</span>
+          <span className="flex flex-col items-center justify-center gap-0 sm:gap-0.5">
+            <Copy className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
+            <span className="text-white/95 text-[10px] sm:text-[12px] font-semibold drop-shadow-sm leading-tight">Double</span>
           </span>
         </button>
 
@@ -153,21 +153,21 @@ export function BlackjackMobileActionBar({
           }}
           disabled={!canSplit}
           aria-label="Split"
-          className={`action-bar-btn min-h-[62px] h-full sm:min-h-[72px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-emerald-400/50 transition-all duration-150 text-xs sm:text-sm ${canSplit ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
+          className={`action-bar-btn h-[52px] sm:h-[58px] flex items-center justify-center rounded-lg sm:rounded-xl border-2 border-emerald-400/50 transition-all duration-150 text-xs sm:text-sm ${canSplit ? 'cursor-pointer' : 'pointer-events-none cursor-not-allowed opacity-50'}`}
           style={{
             background: 'linear-gradient(180deg, #10b981 0%, #059669 50%, #047857 100%)',
             boxShadow: canSplit ? '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.2)',
           }}
         >
-          <span className="flex flex-col items-center justify-center gap-0.5">
-            <Split className="w-6 h-6 sm:w-7 sm:h-7 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
-            <span className="text-white/95 text-[11px] sm:text-[13px] font-semibold drop-shadow-sm leading-tight">Split</span>
+          <span className="flex flex-col items-center justify-center gap-0 sm:gap-0.5">
+            <Split className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-sm shrink-0" strokeWidth={2.5} aria-hidden />
+            <span className="text-white/95 text-[10px] sm:text-[12px] font-semibold drop-shadow-sm leading-tight">Split</span>
           </span>
         </button>
         </div>
 
         {/* REBET | DEAL row */}
-        {!hideDealRow && <div className="flex items-center gap-2 w-full flex-1 min-h-0">
+        {!hideDealRow && <div className="flex items-center gap-2 w-full flex-1 min-h-[48px] sm:min-h-[52px]">
         <div className="flex-1 flex h-full rounded-lg sm:rounded-xl overflow-hidden">
           {onRebetAndDeal && (
             <button

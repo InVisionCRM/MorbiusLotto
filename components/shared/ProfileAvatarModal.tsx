@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import CharacterCreator, { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
+import { parseAvatarPayload } from '@/lib/avatar-payload';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProfileWs } from '@/contexts/profile-ws-context';
 import { useInventory } from '@/hooks/use-cosmetics';
@@ -38,31 +39,9 @@ export interface ProfileAvatarModalProps {
   onSave?: () => void;
 }
 
-function normalizeAvatarConfig(c: unknown): AvatarConfig {
-  if (c != null && typeof c === 'object' && 'skinColor' in c) {
-    const o = c as Record<string, unknown>;
-    return {
-      skinColor: typeof o.skinColor === 'string' ? o.skinColor : DEFAULT_AVATAR_CONFIG.skinColor,
-      hairStyle: typeof o.hairStyle === 'string' ? o.hairStyle : DEFAULT_AVATAR_CONFIG.hairStyle,
-      hairColor: typeof o.hairColor === 'string' ? o.hairColor : DEFAULT_AVATAR_CONFIG.hairColor,
-      eyeShape: typeof o.eyeShape === 'string' ? o.eyeShape : DEFAULT_AVATAR_CONFIG.eyeShape,
-      eyeColor: typeof o.eyeColor === 'string' ? o.eyeColor : DEFAULT_AVATAR_CONFIG.eyeColor,
-      noseShape: typeof o.noseShape === 'string' ? o.noseShape : DEFAULT_AVATAR_CONFIG.noseShape,
-      lipShape: typeof o.lipShape === 'string' ? o.lipShape : DEFAULT_AVATAR_CONFIG.lipShape,
-      accessory: typeof o.accessory === 'string' ? o.accessory : DEFAULT_AVATAR_CONFIG.accessory,
-      shirtColor: typeof o.shirtColor === 'string' ? o.shirtColor : DEFAULT_AVATAR_CONFIG.shirtColor,
-      shirtStyle: typeof o.shirtStyle === 'string' ? o.shirtStyle : DEFAULT_AVATAR_CONFIG.shirtStyle,
-      hat: typeof o.hat === 'string' ? o.hat : DEFAULT_AVATAR_CONFIG.hat,
-      hatColor: typeof o.hatColor === 'string' ? o.hatColor : DEFAULT_AVATAR_CONFIG.hatColor,
-      necklace: typeof o.necklace === 'string' ? o.necklace : DEFAULT_AVATAR_CONFIG.necklace,
-      mouthAccessory: typeof o.mouthAccessory === 'string' ? o.mouthAccessory : DEFAULT_AVATAR_CONFIG.mouthAccessory,
-      backgroundImage: typeof o.backgroundImage === 'string' ? o.backgroundImage : DEFAULT_AVATAR_CONFIG.backgroundImage,
-      overlayImage: typeof o.overlayImage === 'string' ? o.overlayImage : DEFAULT_AVATAR_CONFIG.overlayImage,
-      faceShape: typeof o.faceShape === 'string' ? o.faceShape : DEFAULT_AVATAR_CONFIG.faceShape,
-      customPattern: typeof o.customPattern === 'string' ? o.customPattern : DEFAULT_AVATAR_CONFIG.customPattern,
-    };
-  }
-  return DEFAULT_AVATAR_CONFIG;
+function hydrateAvatarFromServer(raw: unknown): AvatarConfig {
+  const parsed = parseAvatarPayload(raw);
+  return parsed != null ? { ...parsed } : DEFAULT_AVATAR_CONFIG;
 }
 
 function readCosmeticShopPins(): Set<string> {
@@ -147,14 +126,14 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         const profile = await wsClient.getProfile();
         setDisplayName(profile.displayName ?? '');
         setProfileImageUrl(profile.profileImageUrl ?? null);
-        setConfig(normalizeAvatarConfig(profile.avatarConfig));
+        setConfig(hydrateAvatarFromServer(profile.avatarConfig));
       } else if (address) {
         const res = await fetch(`/api/player/${address}/profile`);
         if (!res.ok) throw new Error('Failed to load profile');
         const data = await res.json();
         setDisplayName(data.displayName ?? '');
         setProfileImageUrl(data.profileImageUrl ?? null);
-        setConfig(normalizeAvatarConfig(data.avatarConfig));
+        setConfig(hydrateAvatarFromServer(data.avatarConfig));
       } else {
         setDisplayName('');
         setProfileImageUrl(null);
@@ -189,17 +168,19 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
       const { getLockedFields } = await import('@/lib/cosmetics-catalog');
       const locked = getLockedFields(config as unknown as Record<string, string>, ownedSet);
       if (locked.length > 0) {
-        const names = locked.map(l => l.displayName ?? l.value).join(', ');
+        const names = locked.map((l) => l.displayName ?? l.value).join(', ');
         setError(`You don't own: ${names}. Purchase or receive these as a gift to save.`);
         return;
       }
     }
 
+    const avatarPayload = config;
+
     setSaving(true);
     setError(null);
     try {
       if (wsClient?.isConnected()) {
-        await wsClient.setDisplayName(name, profileImageUrl, config);
+        await wsClient.setDisplayName(name, profileImageUrl, avatarPayload);
         onSave?.();
         onClose();
         return;
@@ -215,7 +196,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
           address,
           displayName: name,
           profileImageUrl: profileImageUrl ?? null,
-          avatarConfig: config,
+          avatarConfig: avatarPayload,
         }),
       });
       if (!res.ok) {
@@ -355,39 +336,42 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                   )}
                 </div>
               ) : (
-              <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
-                <CharacterCreator
-                  config={config}
-                  onChange={setConfig}
-                  displayName={displayName}
-                  onDisplayNameChange={setDisplayName}
-                  compact
-                  ownedItems={ownedSet}
-                  isAdmin={adminBypass}
-                  onLockedItemClick={setPurchaseSheetKey}
-                  pinnedItemKeys={cosmeticShopPins}
-                  pinnedRandomFields={randomizePinnedFields}
-                  onToggleRandomPin={toggleRandomPin}
-                />
-                <AnimatePresence>
-                  {purchaseSheetKey && (
-                    <motion.div
-                      className="absolute bottom-0 left-0 right-0 z-10 shadow-2xl"
-                      initial={{ y: '100%' }}
-                      animate={{ y: 0 }}
-                      exit={{ y: '100%' }}
-                      transition={{ type: 'spring', damping: 35, stiffness: 400 }}
-                    >
-                      <ItemPurchaseSheet
-                        itemKey={purchaseSheetKey}
-                        onClose={() => setPurchaseSheetKey(null)}
-                        onPurchased={() => { refreshInventory(); setPurchaseSheetKey(null); }}
-                        buyerAddress={address}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <CharacterCreator
+                    config={config}
+                    onChange={setConfig}
+                    displayName={displayName}
+                    onDisplayNameChange={setDisplayName}
+                    compact
+                    ownedItems={ownedSet}
+                    isAdmin={adminBypass}
+                    onLockedItemClick={setPurchaseSheetKey}
+                    pinnedItemKeys={cosmeticShopPins}
+                    pinnedRandomFields={randomizePinnedFields}
+                    onToggleRandomPin={toggleRandomPin}
+                  />
+                  <AnimatePresence>
+                    {purchaseSheetKey && (
+                      <motion.div
+                        className="absolute bottom-0 left-0 right-0 z-10 shadow-2xl"
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%' }}
+                        transition={{ type: 'spring', damping: 35, stiffness: 400 }}
+                      >
+                        <ItemPurchaseSheet
+                          itemKey={purchaseSheetKey}
+                          onClose={() => setPurchaseSheetKey(null)}
+                          onPurchased={() => {
+                            refreshInventory();
+                            setPurchaseSheetKey(null);
+                          }}
+                          buyerAddress={address}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               )}
 
               {error && (

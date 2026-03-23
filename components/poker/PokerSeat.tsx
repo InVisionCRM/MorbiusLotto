@@ -8,7 +8,6 @@ import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import {
-  ArrowDownToLine,
   Flame,
   Frown,
   Gift,
@@ -23,7 +22,7 @@ import {
   UserPlus,
   Zap,
 } from 'lucide-react';
-import AvatarPreview, { type Emotion } from './avatar/AvatarPreview';
+import AvatarView, { type Emotion } from './avatar/AvatarView';
 import { FloatingDock } from '@/components/ui/floating-dock';
 import { RadialMenu, type RadialMenuItem } from '@/components/ui/radial-menu';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
@@ -204,7 +203,6 @@ const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
   { title: 'Sad',       emotion: 'sad'       },
   { title: 'Dance',     emotion: 'dance'     },
   { title: 'Jackpot',   emotion: 'jackpot'   },
-  { title: 'Sink',      emotion: 'sink'      },
 ];
 
 const EMOTION_RADIAL_ICONS: Partial<Record<Emotion, LucideIcon>> = {
@@ -215,7 +213,6 @@ const EMOTION_RADIAL_ICONS: Partial<Record<Emotion, LucideIcon>> = {
   sad: Frown,
   dance: Music2,
   jackpot: Trophy,
-  sink: ArrowDownToLine,
 };
 
 const OPPONENT_RADIAL_ITEMS: RadialMenuItem[] = [
@@ -341,7 +338,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
   );
 
   // Active emotion: menu-open slouch > broadcast (from server) > local (just clicked) > action-driven
-  const activeEmotion: Emotion = hasMenuOpen ? 'slouch' : (propsOverlayEmotion ?? localEmotion ?? avatarEmotion);
+  const activeEmotion: Emotion = hasMenuOpen ? 'neutral' : (propsOverlayEmotion ?? localEmotion ?? avatarEmotion);
 
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -644,7 +641,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               }
             >
               {seat.avatarConfig ? (
-                <AvatarPreview
+                <AvatarView
                   config={seat.avatarConfig}
                   emotion={activeEmotion}
                   compact

@@ -10,9 +10,8 @@ import { usePokerPlayerStats } from '@/hooks/use-poker-stats';
 import { useIsFollowing, useFollowMutation, useFollowCounts } from '@/hooks/use-follow';
 import { useProfileForAddress } from '@/hooks/use-player-profile';
 import { useAccount } from 'wagmi';
-import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
-import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
-import type { AvatarConfig } from '@/lib/websocket-client';
+import AvatarView from '@/components/poker/avatar/AvatarView';
+import type { AvatarPayload } from '@/lib/websocket-client';
 
 function formatChips(wei: string | number): string {
   try {
@@ -28,7 +27,7 @@ function formatChips(wei: string | number): string {
 export interface PokerOpponentProfileCardProps {
   address: string;
   displayName?: string | null;
-  avatarConfig?: AvatarConfig | null;
+  avatarConfig?: AvatarPayload | null;
   onClose: () => void;
   onViewFullProfile: (address: string) => void;
 }
@@ -116,7 +115,7 @@ export function PokerOpponentProfileCard({
               }}
             >
               {avatarConfig ? (
-                <AvatarPreview config={avatarConfig} emotion="neutral" compact className="w-full h-full" />
+                <AvatarView config={avatarConfig} emotion="neutral" compact className="w-full h-full" />
               ) : (
                 <div
                   className="w-full h-full flex items-center justify-center font-bold text-xl"

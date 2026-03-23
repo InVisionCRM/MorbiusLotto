@@ -2,10 +2,9 @@
 
 import { createRoot, type Root } from 'react-dom/client';
 import type { AvatarConfig } from '@/lib/websocket-client';
+import { parseAvatarPayload } from '@/lib/avatar-payload';
 import AvatarPreview from './AvatarPreview';
-
-const W = 24;
-const H = 28;
+import { AVATAR_VIEWBOX_W as W, AVATAR_VIEWBOX_H as H } from '@/lib/avatar-viewbox';
 
 export type AvatarVoxelGrid = (string | null)[][];
 
@@ -27,16 +26,11 @@ function buildGridFromImageData(data: ImageData): AvatarVoxelGrid {
   return grid;
 }
 
-/**
- * Renders AvatarPreview off-screen, rasterizes SVG to 24×28 pixels, returns voxel grid (one hex per cell).
- * Used to seed the voxel painter from any avatar config (e.g. variant review cards).
- */
-export function rasterizeAvatarConfigToGrid(config: AvatarConfig): Promise<AvatarVoxelGrid> {
+function rasterizeV1SvgToGrid(config: AvatarConfig): Promise<AvatarVoxelGrid> {
   return new Promise((resolve, reject) => {
     const host = document.createElement('div');
     host.setAttribute('aria-hidden', 'true');
-    host.style.cssText =
-      'position:fixed;left:-9999px;top:0;width:24px;height:28px;overflow:hidden;pointer-events:none;visibility:hidden';
+    host.style.cssText = `position:fixed;left:-9999px;top:0;width:${W}px;height:${H}px;overflow:hidden;pointer-events:none;visibility:hidden`;
     document.body.appendChild(host);
 
     let root: Root | null = createRoot(host);
@@ -112,4 +106,13 @@ export function rasterizeAvatarConfigToGrid(config: AvatarConfig): Promise<Avata
       });
     });
   });
+}
+
+/** Rasterize stored avatar config to a 48×56 voxel grid (v1 SVG only). */
+export function rasterizeAvatarConfigToGrid(config: unknown): Promise<AvatarVoxelGrid> {
+  const parsed = parseAvatarPayload(config);
+  if (!parsed) {
+    return Promise.reject(new Error('No avatar config'));
+  }
+  return rasterizeV1SvgToGrid(parsed);
 }

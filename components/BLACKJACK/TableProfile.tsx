@@ -44,6 +44,8 @@ export interface TableProfileProps {
   websiteUrl?: string
   /** Optional iframe URL (e.g. table website embed or custom chart). When set, this is used. When unset and tokenAddress is present, defaults to scan.morbius.io/geicko for that token. When no token, only this custom iframe is shown if provided. */
   iframeUrl?: string
+  /** When true, outer layout is flex column and the iframe grows to fill remaining height (pair with a stretched parent). */
+  fillHeight?: boolean
 }
 
 export function TableProfile({
@@ -56,6 +58,7 @@ export function TableProfile({
   ticker: tickerProp,
   websiteUrl: websiteUrlProp,
   iframeUrl: iframeUrlProp,
+  fillHeight = false,
 }: TableProfileProps) {
   const [data, setData] = useState<DexScreenerTokenResponse | null>(null)
   const [loading, setLoading] = useState(!!tokenAddress)
@@ -104,6 +107,19 @@ export function TableProfile({
   const morbiusUrl = hasToken ? `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress!)}` : ''
   const iframeSrc = (iframeUrlProp?.trim() || (hasToken ? morbiusUrl : '')) || ''
 
+  const iframeEl = (
+    <iframe
+      src={iframeSrc}
+      title={hasToken && !iframeUrlProp?.trim() ? 'Token chart' : 'Embed'}
+      className={
+        fillHeight
+          ? 'absolute inset-0 h-full w-full min-h-[200px] border-0'
+          : 'w-full min-h-[600px] border-0'
+      }
+      sandbox="allow-scripts allow-same-origin"
+    />
+  )
+
   const panelStyle = {
     background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
     boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
@@ -111,14 +127,26 @@ export function TableProfile({
   }
 
   return (
-    <section className="w-full pt-1 pb-2 px-2 sm:px-4">
+    <section
+      className={
+        fillHeight
+          ? 'flex h-full min-h-0 w-full flex-col py-1 px-2 sm:px-4'
+          : 'w-full pt-1 pb-2 px-2 sm:px-4'
+      }
+    >
       <div
-        className="rounded-2xl overflow-hidden border-2 border-cyan-500/30 w-full"
+        className={
+          fillHeight
+            ? 'flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border-2 border-cyan-500/30'
+            : 'w-full rounded-2xl overflow-hidden border-2 border-cyan-500/30'
+        }
         style={panelStyle}
       >
-        <div className="flex flex-col">
+        <div className={fillHeight ? 'flex min-h-0 flex-1 flex-col' : 'flex flex-col'}>
           {/* Token info: logo, name, ticker, description, buy + dex links */}
-          <div className="p-3 sm:p-4 flex flex-col justify-center gap-4">
+          <div
+            className={`p-3 sm:p-4 flex flex-col justify-center gap-4 ${fillHeight ? 'min-h-0 shrink-0' : ''}`}
+          >
             <div className="flex flex-col items-center gap-3">
               {loading && !logoUrlProp ? (
                 <div className="w-20 h-20 rounded-full bg-slate-700 animate-pulse shrink-0" />
@@ -213,17 +241,17 @@ export function TableProfile({
                 <span className="text-red-400/80 text-xs">Token data unavailable</span>
               )}
             </div>
-            {iframeSrc && (
+            {iframeSrc && !fillHeight && (
               <div className="w-full rounded-lg overflow-hidden border border-cyan-500/30 bg-slate-900/80">
-                <iframe
-                  src={iframeSrc}
-                  title={hasToken && !iframeUrlProp?.trim() ? 'Token chart' : 'Embed'}
-                  className="w-full min-h-[600px] border-0"
-                  sandbox="allow-scripts allow-same-origin"
-                />
+                {iframeEl}
               </div>
             )}
           </div>
+          {iframeSrc && fillHeight && (
+            <div className="relative mx-3 mb-3 min-h-[220px] flex-1 overflow-hidden rounded-lg border border-cyan-500/30 bg-slate-900/80 sm:mx-4 sm:mb-4">
+              {iframeEl}
+            </div>
+          )}
         </div>
       </div>
     </section>

@@ -4,10 +4,10 @@ import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useChat } from '@/hooks/use-chat';
 import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
-import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
-import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
+import AvatarView from '@/components/poker/avatar/AvatarView';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
-import type { AvatarConfig, BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
+import { parseAvatarPayload } from '@/lib/avatar-payload';
+import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 
 /** Plinko-style dark panel shell */
 const CHAT_SHELL_STYLE: React.CSSProperties = {
@@ -30,11 +30,6 @@ const EMOJI_LIST = [
   '😀', '😂', '🤣','👍', '👎', '👏','👋', '💪',
   '❤️', '💯', '🔥','🎉', '👀', '🤔', '😎', '🥳', '🙃',
 ];
-
-function mergeChatAvatarConfig(raw: unknown): AvatarConfig | null {
-  if (raw == null || typeof raw !== 'object') return null;
-  return { ...DEFAULT_AVATAR_CONFIG, ...(raw as Partial<AvatarConfig>) };
-}
 
 function formatTime(iso: string): string {
   try {
@@ -96,13 +91,13 @@ function ChatMessageAvatar({
   isOwnMessage: boolean;
   onOwnClick?: () => void;
 }) {
-  const config = mergeChatAvatarConfig(msg.avatarConfig);
+  const avatarPayload = parseAvatarPayload(msg.avatarConfig);
   const imgUrl = msg.profileImageUrl?.trim() || null;
 
   const inner = (
     <>
-      {config ? (
-        <AvatarPreview config={config} compact className="h-full w-full" emotion="neutral" />
+      {avatarPayload ? (
+        <AvatarView config={msg.avatarConfig} compact className="h-full w-full" emotion="neutral" />
       ) : imgUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={imgUrl} alt="" className="h-full w-full object-cover" />

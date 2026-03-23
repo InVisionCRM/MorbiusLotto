@@ -1,64 +1,35 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import AvatarPreview from './AvatarPreview';
+import AvatarView from './AvatarView';
 import { randomizeConfig } from './CharacterCreator';
-import { Lock, Shuffle, Pin } from 'lucide-react';
+import { Lock, Shuffle } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import type { AvatarRandomizeFieldKey } from '@/lib/avatar-randomize-pins';
 import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
-import { AvatarPatternDefs } from '@/lib/avatar-svg-patterns';
+import {
+  PICKER_ACCESSORIES,
+  PICKER_ACCESSORY_COLORS,
+  PICKER_EYE_COLORS,
+  PICKER_EYE_SHAPES,
+  PICKER_FACE_SHAPES,
+  PICKER_HAIR_COLORS,
+  PICKER_HAIR_STYLES,
+  PICKER_HATS,
+  PICKER_HAT_COLORS,
+  PICKER_LIP_SHAPES,
+  PICKER_MOUTH_ACCESSORIES,
+  PICKER_MAKEUPS,
+  PICKER_FACIAL_HAIRS,
+  PICKER_NECKLACES,
+  PICKER_SHIRT_COLORS,
+  PICKER_SHIRT_STYLES,
+  PICKER_SKIN_COLORS,
+} from '@/lib/avatar-editor-options';
 import { useCatalog } from '@/hooks/use-cosmetics';
-
-// ── data ──────────────────────────────────────────────────────────────────
-
-const SkinColors = [
-  '#FFF5EE', '#FFE4E1', '#FFDAB9', '#FFCDB2', '#FFB4A2', '#FFDBAC', '#F1C27D', '#E0AC69', '#C68642',
-  '#8D5524', '#7B4B2A', '#5C3A21', '#4A3B32', '#3E2723', '#2D221E', '#1A1110', '#E5989B', '#B5838D',
-  '#6D6875', '#4A4E69', '#22223B', '#39FF14', '#88CCFF', '#FF0000', '#8A2BE2', '#FF69B4', '#FFD700',
-  '#C0C0C0', '#556B2F', '#E0FFFF', '#FF4500', '#FF00FF', '#00FFFF', '#FFFF00', '#000080', '#7FFF00',
-  '#FFC0CB', '#F8F8FF', '#050505',
-  'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
-];
-const HairColors = [
-  '#090806', '#2C222B', '#71635A', '#B7A69E', '#D6C4C2', '#CABFB1', '#DCD0BA', '#FFF5E1', '#E6CEA8',
-  '#E5C8A8', '#DEBC99', '#B89778', '#A56B46', '#B55239', '#8D4A43', '#91553D', '#533D32', '#3B3024',
-  '#554838', '#4E433F', '#504444', '#6A4E42', '#A7856A', '#977961', '#E11D48', '#2563EB', '#16A34A', '#9333EA',
-  'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
-];
-const EyeColors = [
-  '#634e34', '#2e536f', '#3d671d', '#1c7847', '#497665',
-  '#000000', '#5c4033', '#8a9a5b', '#4682b4', '#8B5CF6', '#F43F5E',
-];
-const ShirtColors = [
-  '#ef4444', '#b91c1c', '#7f1d1d', '#f97316', '#c2410c',
-  '#eab308', '#a16207', '#22c55e', '#15803d', '#14532d',
-  '#10b981', '#3b82f6', '#1d4ed8', '#1e3a8a', '#06b6d4',
-  '#a855f7', '#7e22ce', '#4c1d95', '#d946ef', '#ec4899',
-  '#be185d', '#ffffff', '#9ca3af', '#3f3f46', '#000000',
-  'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
-];
-const AccessoryColors = [
-  '#111111', '#333333', 'rgba(0,0,0,0.85)',
-  'url(#tiger)', 'url(#zebra)', 'url(#leopard)', 'url(#camo)', 'url(#rainbow)', 'url(#galaxy)', 'url(#checkerboard)',
-];
-const HairStyles = ['Bald', 'Short', 'Buzz', 'Fade', 'Long Straight', 'Long Wavy', 'Ponytail', 'Curly', 'Spiky', 'Bob', 'Mohawk', 'Dreadlocks', 'Afro', 'Mullet', 'Pigtails', 'Messy'];
-const FaceShapes = ['Square', 'Round', 'Oval', 'Heart', 'Diamond'];
-const EyeShapes = ['Round', 'Almond', 'Narrow', 'Wide', 'Eye V1', 'Eye V2', 'Eye V3', 'Eye V4', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10'];
-const NoseShapes = ['Small', 'Wide', 'Pointy', 'Button'];
-const LipShapes = ['Thin', 'Full', 'Smile', 'Smirk', 'Pout'];
-const Accessories = ['None', 'Glasses', 'Sunglasses', 'Aviators', 'Wayfarers', 'Round Glasses', 'Cyberpunk', 'Shades V1', 'Shades V2', 'Shades V3', 'Shades V4', 'Shades V5', 'Shades V6', 'Shades V7', 'Shades V8', 'Shades V9', 'Shades V10', 'Earrings', 'Headband'];
-const Hats = ['None', 'Cap', 'Beanie', 'Top Hat', 'Cowboy', 'Crown', 'Bandana', 'Hat V1', 'Hat V2', 'Hat V3', 'Hat V4', 'Hat V5', 'Hat V6', 'Hat V7', 'Hat V8', 'Hat V9', 'Hat V10'];
-const Necklaces = ['None', 'Gold Chain', 'Silver Chain', 'Pearl', 'Pendant'];
-const MouthAccessories = ['None', 'Cigar', 'Cigarette', 'Pipe', 'Bubblegum', 'Medical Mask'];
-const ShirtStyles = [
-  'Default', 'Tuxedo', 'Cheetah Print', 'Hawaiian', 'Pinstripe', 'Flannel',
-  'Denim Jacket', 'Leather Jacket', 'Varsity', 'Hoodie', 'Camo', 'Suit',
-  'Blazer', 'Kimono', 'Polo', 'Zebra Print', 'Leopard Print', 'Snake Skin',
-  'Tie-Dye', 'Neon Crop', 'Biker', 'Sailor', 'Space Suit', 'Grim Reaper', 'Golden Armor',
-  'Streetwear V1', 'Streetwear V2', 'Streetwear V3', 'Streetwear V4', 'Streetwear V5',
-  'Streetwear V6', 'Streetwear V7', 'Streetwear V8', 'Streetwear V9', 'Streetwear V10',
-];
+import { ColorSwatch } from './ColorSwatch';
 
 // ── category config ────────────────────────────────────────────────────────
 
@@ -79,14 +50,16 @@ const CATS: Category[] = [
   { id: 'hairc', label: 'Hair Color',       short: 'H.CLR', field: 'hairColor',      type: 'color' },
   { id: 'eyes',  label: 'Eye Shape',        short: 'EYES',  field: 'eyeShape',       type: 'shape' },
   { id: 'eyec',  label: 'Eye Color',        short: 'E.CLR', field: 'eyeColor',       type: 'color' },
-  { id: 'nose',  label: 'Nose',             short: 'NOSE',  field: 'noseShape',      type: 'shape' },
   { id: 'lips',  label: 'Lips',             short: 'LIPS',  field: 'lipShape',       type: 'shape' },
+  { id: 'makeup', label: 'Makeup',          short: 'MU',    field: 'makeup',         type: 'shape' },
+  { id: 'fhair', label: 'Facial Hair',     short: 'F.H',   field: 'facialHair',     type: 'shape' },
   { id: 'mouth', label: 'Mouth',            short: 'MOUTH', field: 'mouthAccessory', type: 'shape' },
   { id: 'shirt', label: 'Shirt Color',      short: 'SHIRT', field: 'shirtColor',     type: 'color' },
   { id: 'sstyle',label: 'Shirt Style',      short: 'STYLE', field: 'shirtStyle',     type: 'shape' },
   { id: 'glass', label: 'Glasses & Extras', short: 'GLASS', field: 'accessory',      type: 'shape' },
   { id: 'glassc',label: 'Glasses Color',    short: 'G.CLR', field: 'accessoryColor', type: 'color' },
   { id: 'hat',   label: 'Hat',              short: 'HAT',   field: 'hat',            type: 'shape' },
+  { id: 'hatc',  label: 'Hat Color',        short: 'H.CLR', field: 'hatColor',       type: 'color' },
   { id: 'neck',  label: 'Necklace',         short: 'NECK',  field: 'necklace',       type: 'shape' },
   { id: 'bg',    label: 'Background',       short: 'BG',    field: 'backgroundImage', type: 'bg'   },
 ];
@@ -108,6 +81,7 @@ type Props = {
 
 export default function CharacterCreatorMobile({ config, onChange, displayName, onDisplayNameChange, ownedItems, isAdmin = false, onLockedItemClick, pinnedItemKeys, pinnedRandomFields, onToggleRandomPin }: Props) {
   const [activeId, setActiveId] = useState('skin');
+  const lockSwitchId = useId();
   const { items: catalogItems } = useCatalog();
 
   const activeCat = CATS.find(c => c.id === activeId)!;
@@ -116,21 +90,23 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
 
   const getOptions = (cat: Category): string[] => {
     switch (cat.id) {
-      case 'skin':  return SkinColors;
-      case 'hairc': return HairColors;
-      case 'shirt': return ShirtColors;
-      case 'sstyle':return ShirtStyles;
-      case 'glass': return Accessories;
-      case 'glassc': return AccessoryColors;
-      case 'neck':  return Necklaces;
-      case 'face':  return FaceShapes;
-      case 'hair':  return HairStyles;
-      case 'eyes':  return EyeShapes;
-      case 'eyec':  return EyeColors;
-      case 'nose':  return NoseShapes;
-      case 'lips':  return LipShapes;
-      case 'mouth': return MouthAccessories;
-      case 'hat':   return Hats;
+      case 'skin':  return PICKER_SKIN_COLORS;
+      case 'hairc': return PICKER_HAIR_COLORS;
+      case 'shirt': return PICKER_SHIRT_COLORS;
+      case 'sstyle':return PICKER_SHIRT_STYLES;
+      case 'glass': return PICKER_ACCESSORIES;
+      case 'glassc': return PICKER_ACCESSORY_COLORS;
+      case 'neck':  return PICKER_NECKLACES;
+      case 'face':  return PICKER_FACE_SHAPES;
+      case 'hair':  return PICKER_HAIR_STYLES;
+      case 'eyes':  return PICKER_EYE_SHAPES;
+      case 'eyec':  return PICKER_EYE_COLORS;
+      case 'lips':  return PICKER_LIP_SHAPES;
+      case 'makeup': return PICKER_MAKEUPS;
+      case 'fhair': return PICKER_FACIAL_HAIRS;
+      case 'mouth': return PICKER_MOUTH_ACCESSORIES;
+      case 'hat':   return PICKER_HATS;
+      case 'hatc':  return PICKER_HAT_COLORS;
       default:      return [];
     }
   };
@@ -153,6 +129,8 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
   };
 
   const currentVal = activeCat.field ? (config[activeCat.field] as string ?? '') : '';
+  const activeCatRandomPinned =
+    activeCat.field != null ? (pinnedRandomFields?.has(activeCat.field) ?? false) : false;
 
   const isLocked = (field: AvatarField, value: string): boolean => {
     if (isAdmin || !ownedItems) return false;
@@ -163,11 +141,6 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
 
   return (
     <div className="flex h-full bg-zinc-900 overflow-hidden">
-      {/* Hidden SVG providing pattern defs for color swatches */}
-      <svg width="0" height="0" className="absolute">
-        <defs><AvatarPatternDefs /></defs>
-      </svg>
-
       {/* ── Left vertical tab sidebar ──────────────────────────────── */}
       <div className="w-[72px] min-w-[72px] flex-shrink-0 flex flex-col overflow-y-auto scrollbar-hide border-r border-zinc-800 bg-zinc-950">
         {CATS.map(cat => (
@@ -200,7 +173,7 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
         )}
 
         {/* Avatar — right under name */}
-        <AvatarPreview config={config} roamEyes className="w-36 aspect-[6/7] flex-shrink-0" />
+        <AvatarView config={config} roamEyes className="w-36 aspect-[6/7] flex-shrink-0" />
 
         {/* Randomize All */}
         <div className="flex flex-col items-center gap-1 flex-shrink-0 w-full max-w-[280px]">
@@ -214,7 +187,7 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
           </button>
           {onToggleRandomPin && (
             <p className="text-[9px] text-zinc-500 text-center leading-snug px-1">
-              Amber pushpin by the category name keeps that part (colors, styles, background).
+              Turn on Lock Item for a category to keep it when you Randomize All.
             </p>
           )}
         </div>
@@ -225,25 +198,31 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
             <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest min-w-0">
               {activeCat.label}
             </p>
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               {activeCat.field && onToggleRandomPin && (
-                <button
-                  type="button"
-                  aria-pressed={pinnedRandomFields?.has(activeCat.field) ?? false}
-                  title={
-                    pinnedRandomFields?.has(activeCat.field)
-                      ? 'Unpin — will change on Randomize All'
-                      : 'Pin — keep on Randomize All'
-                  }
-                  onClick={() => onToggleRandomPin(activeCat.field as AvatarRandomizeFieldKey)}
-                  className={`p-1 rounded-md touch-manipulation transition-colors ${
-                    pinnedRandomFields?.has(activeCat.field)
-                      ? 'text-amber-400 bg-amber-500/15'
-                      : 'text-zinc-600 hover:text-cyan-300 hover:bg-zinc-800'
-                  }`}
-                >
-                  <Pin size={12} className={pinnedRandomFields?.has(activeCat.field) ? 'fill-amber-400/35' : ''} strokeWidth={2} />
-                </button>
+                <>
+                  <Label
+                    htmlFor={lockSwitchId}
+                    className="cursor-pointer text-zinc-400 font-medium whitespace-nowrap text-[9px]"
+                  >
+                    Lock Item
+                  </Label>
+                  <Switch
+                    id={lockSwitchId}
+                    checked={activeCatRandomPinned}
+                    onCheckedChange={(next) => {
+                      if (next !== activeCatRandomPinned) {
+                        onToggleRandomPin(activeCat.field as AvatarRandomizeFieldKey);
+                      }
+                    }}
+                    title={
+                      activeCatRandomPinned
+                        ? 'Unlock — will change on Randomize All'
+                        : 'Lock — keep on Randomize All'
+                    }
+                    className="touch-manipulation scale-90 origin-right"
+                  />
+                </>
               )}
               {activeCat.type !== 'bg' && activeCat.field && (
                 <button
@@ -297,36 +276,51 @@ export default function CharacterCreatorMobile({ config, onChange, displayName, 
 
           {/* Color grid — inline */}
           {activeCat.type === 'color' && activeCat.field && (
-            <div className="grid grid-cols-6 gap-2 w-full">
-              {getOptions(activeCat).map(c => {
-                const locked = isLocked(activeCat.field as AvatarField, c);
-                const lockedKey = locked ? (getItemKeyForValue(activeCat.field as AvatarField, c) ?? undefined) : undefined;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => {
-                      if (locked && lockedKey) onLockedItemClick?.(lockedKey);
-                      else update(activeCat.field!, c);
-                    }}
-                    aria-label={`Select ${c}${locked ? ' (locked)' : ''}`}
-                    className={`relative w-10 h-10 rounded-full overflow-hidden touch-manipulation transition-transform ${
-                      currentVal === c
-                        ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-zinc-900 scale-105'
-                        : locked ? 'ring-1 ring-yellow-500/40 active:scale-95' : 'ring-1 ring-white/10 active:scale-95'
-                    }`}
-                  >
-                    <svg viewBox="0 0 100 100" className="w-full h-full" style={{ imageRendering: 'pixelated' }}>
-                      <rect width="100" height="100" fill={c} />
-                    </svg>
-                    {locked && (
-                      <span className="absolute inset-0 flex items-center justify-center bg-black/55 pointer-events-none">
-                        <Lock size={10} className="text-yellow-400" />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+            <div className="flex flex-col gap-2 w-full">
+              {activeCat.field === 'hatColor' && (
+                <button
+                  type="button"
+                  onClick={() => update('hatColor', '')}
+                  className={`self-start rounded-lg border text-xs font-medium px-3 py-1.5 touch-manipulation transition-colors ${
+                    !currentVal
+                      ? 'border-indigo-500 bg-indigo-600/20 text-indigo-200'
+                      : 'border-zinc-600 bg-zinc-800 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                  }`}
+                >
+                  Default (hat style)
+                </button>
+              )}
+              <div className="grid grid-cols-6 gap-2 w-full">
+                {getOptions(activeCat).map(c => {
+                  const locked = isLocked(activeCat.field as AvatarField, c);
+                  const lockedKey = locked ? (getItemKeyForValue(activeCat.field as AvatarField, c) ?? undefined) : undefined;
+                  const selected =
+                    activeCat.field === 'hatColor' && !currentVal ? false : currentVal === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => {
+                        if (locked && lockedKey) onLockedItemClick?.(lockedKey);
+                        else update(activeCat.field!, c);
+                      }}
+                      aria-label={`Select ${c}${locked ? ' (locked)' : ''}`}
+                      className={`relative w-10 h-10 rounded-full overflow-hidden touch-manipulation transition-transform ${
+                        selected
+                          ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-zinc-900 scale-105'
+                          : locked ? 'ring-1 ring-yellow-500/40 active:scale-95' : 'ring-1 ring-white/10 active:scale-95'
+                      }`}
+                    >
+                      <ColorSwatch value={c} />
+                      {locked && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/55 pointer-events-none">
+                          <Lock size={10} className="text-yellow-400" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

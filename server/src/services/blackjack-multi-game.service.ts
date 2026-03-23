@@ -165,11 +165,57 @@ export class BlackjackMultiGameService {
   }
 
   async deleteTable(tableId: string): Promise<boolean> {
-    const result = await this.pool.query(
-      `DELETE FROM blackjack_multi_tables WHERE id = $1 RETURNING id`,
-      [tableId],
-    );
-    return (result.rowCount ?? 0) > 0;
+    const release = await this.tableLocks.acquire(tableId);
+    try {
+      return await this.dbService.withTransaction(async (client) => {
+        // Lock the table row
+        const tableResult = await client.query(
+          `SELECT id FROM blackjack_multi_tables WHERE id = $1 FOR UPDATE`,
+          [tableId],
+        );
+        if (tableResult.rows.length === 0) return false;
+
+        // Refund pending bets on seats
+        const seats = await client.query(
+          `SELECT player_address, pending_bet FROM blackjack_multi_seats WHERE table_id = $1`,
+          [tableId],
+        );
+        for (const seat of seats.rows) {
+          const pending = BigInt(seat.pending_bet || '0');
+          if (pending > 0n) {
+            await client.query(
+              `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+              [seat.player_address, pending.toString()],
+            );
+          }
+        }
+
+        // Refund committed (unsettled) round bets
+        const unsettledBets = await client.query(
+          `SELECT rs.player_address, rs.bet_amount, rs.hands
+           FROM blackjack_multi_round_seats rs
+           JOIN blackjack_multi_rounds r ON r.id = rs.round_id
+           WHERE r.table_id = $1 AND rs.settled = FALSE`,
+          [tableId],
+        );
+        for (const rs of unsettledBets.rows) {
+          const betAmount = BigInt(rs.bet_amount || '0');
+          if (betAmount > 0n) {
+            await client.query(
+              `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+              [rs.player_address, betAmount.toString()],
+            );
+          }
+        }
+
+        // Now safe to cascade delete
+        await client.query(`DELETE FROM blackjack_multi_tables WHERE id = $1`, [tableId]);
+        return true;
+      });
+    } finally {
+      this.tableLocks.delete(tableId);
+      release();
+    }
   }
 
   /** Tip the dealer (house). Deducts from player balance, credits deployer wallet. */
@@ -285,15 +331,32 @@ export class BlackjackMultiGameService {
       if (seatResult.rows.length === 0) throw new Error('Not seated at this table');
       const seat = seatResult.rows[0];
 
-      const pendingBet = BigInt(seat.pending_bet || '0');
-      if (pendingBet > 0n) {
-        await this.dbService.addPlayerBalance(normalized, pendingBet);
-      }
-
-      await this.pool.query(
-        `DELETE FROM blackjack_multi_seats WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      // Block leaving if the player has an active (unsettled) round seat.
+      // The auto-stand timeout will handle their hand if they disconnect.
+      const activeRoundSeat = await this.pool.query(
+        `SELECT rs.id FROM blackjack_multi_round_seats rs
+         JOIN blackjack_multi_rounds r ON r.id = rs.round_id
+         WHERE r.table_id = $1 AND LOWER(rs.player_address) = LOWER($2) AND rs.settled = FALSE`,
         [tableId, normalized],
       );
+      if (activeRoundSeat.rows.length > 0) {
+        throw new Error('Cannot leave while you have an active hand. Wait for the round to finish.');
+      }
+
+      // Refund pending bet atomically with seat deletion
+      const pendingBet = BigInt(seat.pending_bet || '0');
+      await this.dbService.withTransaction(async (client) => {
+        if (pendingBet > 0n) {
+          await client.query(
+            `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+            [normalized, pendingBet.toString()],
+          );
+        }
+        await client.query(
+          `DELETE FROM blackjack_multi_seats WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+          [tableId, normalized],
+        );
+      });
       this.audit(tableId, 'leave_table', null, normalized, { refundedBet: pendingBet.toString() });
 
       return this.getTableState(tableId);
@@ -317,6 +380,11 @@ export class BlackjackMultiGameService {
       if (tableResult.rows.length === 0) throw new Error('Table not found');
       const table = tableResult.rows[0];
 
+      // Only accept bets during betting (or waiting/completed which transition to betting)
+      if (table.status === 'playing' || table.status === 'dealer_turn') {
+        throw new Error('Cannot place bets while a round is in progress. Wait for the current round to finish.');
+      }
+
       const minBet = BigInt(table.min_bet);
       const maxBet = BigInt(table.max_bet);
       if (betAmount < minBet) throw new Error(`Minimum bet is ${minBet}`);
@@ -330,21 +398,39 @@ export class BlackjackMultiGameService {
       if (seatResult.rows.length === 0) throw new Error('Not seated at this table');
       const seat = seatResult.rows[0];
 
-      // Refund previous pending bet before taking new one
+      // Atomic: refund previous pending bet, deduct new bet, update seat — all in one transaction
       const prevPending = BigInt(seat.pending_bet || '0');
-      if (prevPending > 0n) {
-        await this.dbService.addPlayerBalance(normalized, prevPending);
-      }
+      await this.dbService.withTransaction(async (client) => {
+        // Lock player row to serialize concurrent balance changes
+        const playerLock = await client.query(
+          `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
+          [normalized],
+        );
+        if (playerLock.rows.length === 0) throw new Error('Player not found');
 
-      // Validate and deduct new bet
-      const balance = await this.dbService.getPlayerBalance(normalized);
-      if (balance < betAmount) throw new Error('Insufficient balance');
-      await this.dbService.deductPlayerBalance(normalized, betAmount);
+        const currentBalance = BigInt(playerLock.rows[0].balance || '0');
+        // Net change: refund old pending, deduct new bet
+        const netDeduction = betAmount - prevPending;
+        if (netDeduction > 0n) {
+          if (currentBalance < netDeduction) throw new Error('Insufficient balance');
+          await client.query(
+            `UPDATE players SET balance = balance - $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+            [normalized, netDeduction.toString()],
+          );
+        } else if (netDeduction < 0n) {
+          // New bet is smaller — refund the difference
+          await client.query(
+            `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+            [normalized, (-netDeduction).toString()],
+          );
+        }
+        // else netDeduction === 0 — same amount, no balance change needed
 
-      await this.pool.query(
-        `UPDATE blackjack_multi_seats SET pending_bet = $1 WHERE table_id = $2 AND LOWER(player_address) = LOWER($3)`,
-        [betAmount.toString(), tableId, normalized],
-      );
+        await client.query(
+          `UPDATE blackjack_multi_seats SET pending_bet = $1 WHERE table_id = $2 AND LOWER(player_address) = LOWER($3)`,
+          [betAmount.toString(), tableId, normalized],
+        );
+      });
       this.audit(tableId, 'place_bet', null, normalized, { betAmount: betAmount.toString() });
 
       // If table is still 'waiting' or 'completed', advance it to 'betting'
@@ -389,177 +475,182 @@ export class BlackjackMultiGameService {
   async startRound(tableId: string): Promise<BJMultiTableState> {
     const release = await this.tableLocks.acquire(tableId);
     try {
-      const tableResult = await this.pool.query(
-        `SELECT * FROM blackjack_multi_tables WHERE id = $1`, [tableId],
-      );
-      if (tableResult.rows.length === 0) throw new Error('Table not found');
-      const table = tableResult.rows[0];
-      if (table.status !== 'betting') throw new Error('Table is not in betting phase');
-
-      // Load seats
-      const seatsResult = await this.pool.query(
-        `SELECT * FROM blackjack_multi_seats WHERE table_id = $1 ORDER BY position ASC`,
-        [tableId],
-      );
-      const allSeats = seatsResult.rows;
-
-      // Seats with a bet → they play this round
-      const bettingSeats = allSeats.filter(s => BigInt(s.pending_bet || '0') > 0n);
-      // Seats without a bet → sit out and increment counter
-      const nonBettingSeats = allSeats.filter(s => BigInt(s.pending_bet || '0') === 0n);
-
-      for (const seat of nonBettingSeats) {
-        const newCount = (seat.consecutive_sit_outs || 0) + 1;
-        if (newCount >= 3) {
-          // Kick player
-          await this.pool.query(
-            `DELETE FROM blackjack_multi_seats WHERE id = $1`, [seat.id],
-          );
-          logger.info('BJMulti: kicked player for 3 consecutive sit-outs', {
-            tableId, position: seat.position, playerAddress: seat.player_address,
-          });
-        } else {
-          await this.pool.query(
-            `UPDATE blackjack_multi_seats SET status = 'sitting_out', consecutive_sit_outs = $1 WHERE id = $2`,
-            [newCount, seat.id],
-          );
-        }
-      }
-
-      if (bettingSeats.length === 0) {
-        // No one bet — go back to waiting
-        await this.pool.query(
-          `UPDATE blackjack_multi_tables SET status = 'waiting' WHERE id = $1`, [tableId],
-        );
-        return this.getTableState(tableId);
-      }
-
-      // Reuse the existing betting round (created when first player joined), or get next round number
-      const existingRoundResult = await this.pool.query(
-        `SELECT * FROM blackjack_multi_rounds WHERE table_id = $1 AND status = 'betting' ORDER BY created_at DESC LIMIT 1`,
-        [tableId],
-      );
-      const existingRound = existingRoundResult.rows[0] ?? null;
-
-      const roundNumResult = await this.pool.query(
-        `SELECT COALESCE(MAX(round_number), 0) AS last FROM blackjack_multi_rounds WHERE table_id = $1`,
-        [tableId],
-      );
-      const roundNumber = existingRound
-        ? Number(existingRound.round_number)
-        : Number(roundNumResult.rows[0].last) + 1;
-
-      // Generate provably fair deck
-      const serverSeed = this.pfService.generateServerSeed();
-      const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
-      const clientSeed = 'default';
-      const deck = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, roundNumber);
-
-      // Initial deal: s0c1, s1c1, …, dealer_c1, s0c2, s1c2, …, dealer_c2
-      let dp = 0;
-      const initialCards1: number[] = bettingSeats.map(() => { const d = this.drawCard(deck, dp); dp = d.dp; return d.card; });
-      const dc1 = this.drawCard(deck, dp); dp = dc1.dp; const dealerCard1 = dc1.card;
-      const initialCards2: number[] = bettingSeats.map(() => { const d = this.drawCard(deck, dp); dp = d.dp; return d.card; });
-      const dc2 = this.drawCard(deck, dp); dp = dc2.dp; const dealerCard2 = dc2.card;
-      const dealerCards = [dealerCard1, dealerCard2];
-      const dealerTotObj = this.pfService.calculateHandTotalV2(dealerCards);
-
-      let roundId: string;
-      if (existingRound) {
-        // Update the placeholder betting round with real seeds
-        await this.pool.query(
-          `UPDATE blackjack_multi_rounds SET
-             server_seed = $1, server_seed_hash = $2, client_seed = $3,
-             dealer_cards = $4, dealer_total = $5, dealer_has_ace = $6,
-             status = 'playing'
-           WHERE id = $7`,
-          [serverSeed, serverSeedHash, clientSeed,
-           JSON.stringify(dealerCards), dealerTotObj.total, dealerTotObj.hasAce,
-           existingRound.id],
-        );
-        roundId = existingRound.id;
-      } else {
-        // Fallback: insert a new round
-        const roundResult = await this.pool.query(
-          `INSERT INTO blackjack_multi_rounds
-             (table_id, round_number, dealer_cards, dealer_total, dealer_has_ace,
-              server_seed, server_seed_hash, client_seed, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'playing')
-           RETURNING id`,
-          [tableId, roundNumber, JSON.stringify(dealerCards), dealerTotObj.total, dealerTotObj.hasAce,
-           serverSeed, serverSeedHash, clientSeed],
-        );
-        roundId = roundResult.rows[0].id;
-      }
-
-      // Create round_seat rows for each betting seat
-      for (let i = 0; i < bettingSeats.length; i++) {
-        const seat = bettingSeats[i];
-        const betAmount = BigInt(seat.pending_bet);
-        const cards = [initialCards1[i], initialCards2[i]];
-        const handTot = this.pfService.calculateHandTotalV2(cards);
-        const isBlackjack = this.pfService.isNaturalBlackjackV2(cards);
-        const canSplit = this.canSplit(cards);
-
-        const initialHand: BJMultiHandObj = {
-          cards,
-          total: handTot.total,
-          hasAce: handTot.hasAce,
-          isBlackjack,
-          isBust: false,
-          betAmount: betAmount.toString(),
-          payout: '0',
-          actions: [],
-          canHit: !isBlackjack,
-          canStand: !isBlackjack,
-          canDoubleDown: !isBlackjack,
-          canSplit: !isBlackjack && canSplit,
-        };
-
-        await this.pool.query(
-          `INSERT INTO blackjack_multi_round_seats
-             (round_id, seat_position, player_address, bet_amount, hands, active_hand_index)
-           VALUES ($1, $2, $3, $4, $5, 0)`,
-          [roundId, seat.position, seat.player_address, betAmount.toString(), JSON.stringify([initialHand])],
-        );
-
-        // Reset pending bet on the seat
-        await this.pool.query(
-          `UPDATE blackjack_multi_seats SET pending_bet = 0, status = 'active', consecutive_sit_outs = 0 WHERE id = $1`,
-          [seat.id],
-        );
-      }
-
-      // Check if any seat has immediate blackjack — they don't need to act
-      // Find first non-blackjack betting seat for first turn
-      const firstActingSeat = await this.firstActiveTurnSeat(roundId, bettingSeats);
-      const now = new Date().toISOString();
-
-      if (firstActingSeat !== null) {
-        // Check for dealer blackjack — if dealer has BJ, all non-BJ seats lose immediately
-        const dealerBlackjack = this.pfService.isNaturalBlackjackV2(dealerCards);
-        if (dealerBlackjack) {
-          await this.settleRoundInternal(tableId, roundId, deck, dp);
-          return this.getTableState(tableId);
-        }
-
-        await this.pool.query(
-          `UPDATE blackjack_multi_rounds SET acting_seat_position = $1, turn_started_at = $2 WHERE id = $3`,
-          [firstActingSeat, now, roundId],
-        );
-        await this.pool.query(
-          `UPDATE blackjack_multi_tables SET status = 'playing' WHERE id = $1`, [tableId],
-        );
-      } else {
-        // All seats blackjack or no active seats — go straight to dealer
-        await this.runDealerTurnInternal(tableId, roundId, deck, dp);
-        return this.getTableState(tableId);
-      }
-
-      return this.getTableState(tableId);
+      return await this._startRoundInternal(tableId);
     } finally {
       release();
     }
+  }
+
+  /** Internal start-round logic — caller MUST hold the table lock. */
+  private async _startRoundInternal(tableId: string): Promise<BJMultiTableState> {
+    const tableResult = await this.pool.query(
+      `SELECT * FROM blackjack_multi_tables WHERE id = $1`, [tableId],
+    );
+    if (tableResult.rows.length === 0) throw new Error('Table not found');
+    const table = tableResult.rows[0];
+    if (table.status !== 'betting') throw new Error('Table is not in betting phase');
+
+    // Load seats
+    const seatsResult = await this.pool.query(
+      `SELECT * FROM blackjack_multi_seats WHERE table_id = $1 ORDER BY position ASC`,
+      [tableId],
+    );
+    const allSeats = seatsResult.rows;
+
+    // Seats with a bet → they play this round
+    const bettingSeats = allSeats.filter(s => BigInt(s.pending_bet || '0') > 0n);
+    // Seats without a bet → sit out and increment counter
+    const nonBettingSeats = allSeats.filter(s => BigInt(s.pending_bet || '0') === 0n);
+
+    for (const seat of nonBettingSeats) {
+      const newCount = (seat.consecutive_sit_outs || 0) + 1;
+      if (newCount >= 3) {
+        // Kick player
+        await this.pool.query(
+          `DELETE FROM blackjack_multi_seats WHERE id = $1`, [seat.id],
+        );
+        logger.info('BJMulti: kicked player for 3 consecutive sit-outs', {
+          tableId, position: seat.position, playerAddress: seat.player_address,
+        });
+      } else {
+        await this.pool.query(
+          `UPDATE blackjack_multi_seats SET status = 'sitting_out', consecutive_sit_outs = $1 WHERE id = $2`,
+          [newCount, seat.id],
+        );
+      }
+    }
+
+    if (bettingSeats.length === 0) {
+      // No one bet — go back to waiting
+      await this.pool.query(
+        `UPDATE blackjack_multi_tables SET status = 'waiting' WHERE id = $1`, [tableId],
+      );
+      return this.getTableState(tableId);
+    }
+
+    // Reuse the existing betting round (created when first player joined), or get next round number
+    const existingRoundResult = await this.pool.query(
+      `SELECT * FROM blackjack_multi_rounds WHERE table_id = $1 AND status = 'betting' ORDER BY created_at DESC LIMIT 1`,
+      [tableId],
+    );
+    const existingRound = existingRoundResult.rows[0] ?? null;
+
+    const roundNumResult = await this.pool.query(
+      `SELECT COALESCE(MAX(round_number), 0) AS last FROM blackjack_multi_rounds WHERE table_id = $1`,
+      [tableId],
+    );
+    const roundNumber = existingRound
+      ? Number(existingRound.round_number)
+      : Number(roundNumResult.rows[0].last) + 1;
+
+    // Generate provably fair deck
+    const serverSeed = this.pfService.generateServerSeed();
+    const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
+    const clientSeed = 'default';
+    const deck = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, roundNumber);
+
+    // Initial deal: s0c1, s1c1, …, dealer_c1, s0c2, s1c2, …, dealer_c2
+    let dp = 0;
+    const initialCards1: number[] = bettingSeats.map(() => { const d = this.drawCard(deck, dp); dp = d.dp; return d.card; });
+    const dc1 = this.drawCard(deck, dp); dp = dc1.dp; const dealerCard1 = dc1.card;
+    const initialCards2: number[] = bettingSeats.map(() => { const d = this.drawCard(deck, dp); dp = d.dp; return d.card; });
+    const dc2 = this.drawCard(deck, dp); dp = dc2.dp; const dealerCard2 = dc2.card;
+    const dealerCards = [dealerCard1, dealerCard2];
+    const dealerTotObj = this.pfService.calculateHandTotalV2(dealerCards);
+
+    let roundId: string;
+    if (existingRound) {
+      // Update the placeholder betting round with real seeds
+      await this.pool.query(
+        `UPDATE blackjack_multi_rounds SET
+           server_seed = $1, server_seed_hash = $2, client_seed = $3,
+           dealer_cards = $4, dealer_total = $5, dealer_has_ace = $6,
+           status = 'playing'
+         WHERE id = $7`,
+        [serverSeed, serverSeedHash, clientSeed,
+         JSON.stringify(dealerCards), dealerTotObj.total, dealerTotObj.hasAce,
+         existingRound.id],
+      );
+      roundId = existingRound.id;
+    } else {
+      // Fallback: insert a new round
+      const roundResult = await this.pool.query(
+        `INSERT INTO blackjack_multi_rounds
+           (table_id, round_number, dealer_cards, dealer_total, dealer_has_ace,
+            server_seed, server_seed_hash, client_seed, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'playing')
+         RETURNING id`,
+        [tableId, roundNumber, JSON.stringify(dealerCards), dealerTotObj.total, dealerTotObj.hasAce,
+         serverSeed, serverSeedHash, clientSeed],
+      );
+      roundId = roundResult.rows[0].id;
+    }
+
+    // Create round_seat rows for each betting seat
+    for (let i = 0; i < bettingSeats.length; i++) {
+      const seat = bettingSeats[i];
+      const betAmount = BigInt(seat.pending_bet);
+      const cards = [initialCards1[i], initialCards2[i]];
+      const handTot = this.pfService.calculateHandTotalV2(cards);
+      const isBlackjack = this.pfService.isNaturalBlackjackV2(cards);
+      const canSplit = this.canSplit(cards);
+
+      const initialHand: BJMultiHandObj = {
+        cards,
+        total: handTot.total,
+        hasAce: handTot.hasAce,
+        isBlackjack,
+        isBust: false,
+        betAmount: betAmount.toString(),
+        payout: '0',
+        actions: [],
+        canHit: !isBlackjack,
+        canStand: !isBlackjack,
+        canDoubleDown: !isBlackjack,
+        canSplit: !isBlackjack && canSplit,
+      };
+
+      await this.pool.query(
+        `INSERT INTO blackjack_multi_round_seats
+           (round_id, seat_position, player_address, bet_amount, hands, active_hand_index)
+         VALUES ($1, $2, $3, $4, $5, 0)`,
+        [roundId, seat.position, seat.player_address, betAmount.toString(), JSON.stringify([initialHand])],
+      );
+
+      // Reset pending bet on the seat
+      await this.pool.query(
+        `UPDATE blackjack_multi_seats SET pending_bet = 0, status = 'active', consecutive_sit_outs = 0 WHERE id = $1`,
+        [seat.id],
+      );
+    }
+
+    // Check if any seat has immediate blackjack — they don't need to act
+    // Find first non-blackjack betting seat for first turn
+    const firstActingSeat = await this.firstActiveTurnSeat(roundId, bettingSeats);
+    const now = new Date().toISOString();
+
+    if (firstActingSeat !== null) {
+      // Check for dealer blackjack — if dealer has BJ, all non-BJ seats lose immediately
+      const dealerBlackjack = this.pfService.isNaturalBlackjackV2(dealerCards);
+      if (dealerBlackjack) {
+        await this.settleRoundInternal(tableId, roundId, deck, dp);
+        return this.getTableState(tableId);
+      }
+
+      await this.pool.query(
+        `UPDATE blackjack_multi_rounds SET acting_seat_position = $1, turn_started_at = $2 WHERE id = $3`,
+        [firstActingSeat, now, roundId],
+      );
+      await this.pool.query(
+        `UPDATE blackjack_multi_tables SET status = 'playing' WHERE id = $1`, [tableId],
+      );
+    } else {
+      // All seats blackjack or no active seats — go straight to dealer
+      await this.runDealerTurnInternal(tableId, roundId, deck, dp);
+      return this.getTableState(tableId);
+    }
+
+    return this.getTableState(tableId);
   }
 
   /**
@@ -767,8 +858,6 @@ export class BlackjackMultiGameService {
    */
   async handleBettingTimeout(tableId: string): Promise<void> {
     const release = await this.tableLocks.acquire(tableId);
-    let shouldBroadcast = false;
-    let revertedToWaiting = false;
     try {
       const tableResult = await this.pool.query(
         `SELECT * FROM blackjack_multi_tables WHERE id = $1`, [tableId],
@@ -791,27 +880,15 @@ export class BlackjackMultiGameService {
           `UPDATE blackjack_multi_rounds SET status = 'completed', completed_at = NOW()
            WHERE table_id = $1 AND status = 'betting'`, [tableId],
         );
-        shouldBroadcast = true;
-        revertedToWaiting = true;
-        return;
+      } else {
+        // Start round directly while holding the lock — no gap for interleaving
+        await this._startRoundInternal(tableId);
       }
-      shouldBroadcast = true;
     } finally {
       release();
     }
 
-    if (revertedToWaiting) {
-      if (this.broadcastCallback) {
-        await this.broadcastCallback(tableId).catch(err =>
-          logger.error('BJMulti: broadcast error after betting timeout', err),
-        );
-      }
-      return;
-    }
-
-    // Start round outside of lock (startRound acquires its own lock)
-    await this.startRound(tableId);
-    if (shouldBroadcast && this.broadcastCallback) {
+    if (this.broadcastCallback) {
       await this.broadcastCallback(tableId).catch(err =>
         logger.error('BJMulti: broadcast error after betting timeout', err),
       );
@@ -1256,75 +1333,83 @@ export class BlackjackMultiGameService {
       `SELECT * FROM blackjack_multi_round_seats WHERE round_id = $1`, [roundId],
     );
 
-    for (const rs of rsResult.rows) {
-      // Guard: skip seats already settled (prevents double-crediting)
-      if (rs.settled) {
-        logger.warn('BJMulti: skipping already-settled seat', { roundId, seatId: rs.id });
-        continue;
-      }
-
-      const hands: BJMultiHandObj[] = rs.hands;
-      let totalPayout = 0n;
-
-      for (const hand of hands) {
-        if (hand.isBlackjack) {
-          if (dealerBlackjack) {
-            hand.result = 'push';
-            hand.payout = hand.betAmount; // return stake
-          } else {
-            hand.result = 'blackjack';
-            // 3:2 blackjack payout: bet * 5 / 2, rounded up to avoid truncation
-            const bjBet = BigInt(hand.betAmount);
-            hand.payout = ((bjBet * 5n + 1n) / 2n).toString();
-          }
-        } else if (hand.isBust) {
-          hand.result = 'loss';
-          hand.payout = '0';
-        } else if (dealerBlackjack) {
-          hand.result = 'loss';
-          hand.payout = '0';
-        } else if (dealerTotal > 21) {
-          hand.result = 'win';
-          hand.payout = (BigInt(hand.betAmount) * 2n).toString();
-        } else if (hand.total > dealerTotal) {
-          hand.result = 'win';
-          hand.payout = (BigInt(hand.betAmount) * 2n).toString();
-        } else if (hand.total < dealerTotal) {
-          hand.result = 'loss';
-          hand.payout = '0';
-        } else {
-          hand.result = 'push';
-          hand.payout = hand.betAmount;
+    // Wrap all seat settlements + round completion in a single transaction.
+    // If the server crashes mid-settlement, the entire transaction rolls back
+    // and no seats are left in an inconsistent settled/unsettled state.
+    await this.dbService.withTransaction(async (client) => {
+      for (const rs of rsResult.rows) {
+        // Guard: skip seats already settled (prevents double-crediting)
+        if (rs.settled) {
+          logger.warn('BJMulti: skipping already-settled seat', { roundId, seatId: rs.id });
+          continue;
         }
-        totalPayout += BigInt(hand.payout);
+
+        const hands: BJMultiHandObj[] = rs.hands;
+        let totalPayout = 0n;
+
+        for (const hand of hands) {
+          if (hand.isBlackjack) {
+            if (dealerBlackjack) {
+              hand.result = 'push';
+              hand.payout = hand.betAmount; // return stake
+            } else {
+              hand.result = 'blackjack';
+              // 3:2 blackjack payout: bet * 5 / 2, rounded up to avoid truncation
+              const bjBet = BigInt(hand.betAmount);
+              hand.payout = ((bjBet * 5n + 1n) / 2n).toString();
+            }
+          } else if (hand.isBust) {
+            hand.result = 'loss';
+            hand.payout = '0';
+          } else if (dealerBlackjack) {
+            hand.result = 'loss';
+            hand.payout = '0';
+          } else if (dealerTotal > 21) {
+            hand.result = 'win';
+            hand.payout = (BigInt(hand.betAmount) * 2n).toString();
+          } else if (hand.total > dealerTotal) {
+            hand.result = 'win';
+            hand.payout = (BigInt(hand.betAmount) * 2n).toString();
+          } else if (hand.total < dealerTotal) {
+            hand.result = 'loss';
+            hand.payout = '0';
+          } else {
+            hand.result = 'push';
+            hand.payout = hand.betAmount;
+          }
+          totalPayout += BigInt(hand.payout);
+        }
+
+        // Determine overall result for the seat
+        const hasWin = hands.some(h => h.result === 'win' || h.result === 'blackjack');
+        const allPush = hands.every(h => h.result === 'push');
+        const overallResult = hasWin ? 'win' : allPush ? 'push' : 'loss';
+
+        await client.query(
+          `UPDATE blackjack_multi_round_seats SET hands = $1, result = $2, payout = $3, settled = TRUE WHERE id = $4`,
+          [JSON.stringify(hands), overallResult, totalPayout.toString(), rs.id],
+        );
+
+        // Credit payout
+        if (totalPayout > 0n) {
+          await client.query(
+            `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+            [rs.player_address, totalPayout.toString()],
+          );
+        }
       }
 
-      // Determine overall result for the seat
-      const hasWin = hands.some(h => h.result === 'win' || h.result === 'blackjack');
-      const allPush = hands.every(h => h.result === 'push');
-      const overallResult = hasWin ? 'win' : allPush ? 'push' : 'loss';
-
-      await this.pool.query(
-        `UPDATE blackjack_multi_round_seats SET hands = $1, result = $2, payout = $3, settled = TRUE WHERE id = $4`,
-        [JSON.stringify(hands), overallResult, totalPayout.toString(), rs.id],
+      // Reveal server seed and mark complete.
+      // Table goes to 'completed' (NOT 'waiting') so getTableState still returns round
+      // data (dealer cards, results, payouts). The timer watchdog transitions to betting later.
+      await client.query(
+        `UPDATE blackjack_multi_rounds SET status = 'completed', completed_at = NOW() WHERE id = $1`,
+        [roundId],
       );
-
-      // Credit payout
-      if (totalPayout > 0n) {
-        await this.dbService.addPlayerBalance(rs.player_address, totalPayout);
-      }
-    }
-
-    // Reveal server seed and mark complete.
-    // Table goes to 'completed' (NOT 'waiting') so getTableState still returns round
-    // data (dealer cards, results, payouts). The timer watchdog transitions to betting later.
-    await this.pool.query(
-      `UPDATE blackjack_multi_rounds SET status = 'completed', completed_at = NOW() WHERE id = $1`,
-      [roundId],
-    );
-    await this.pool.query(
-      `UPDATE blackjack_multi_tables SET status = 'completed' WHERE id = $1`, [tableId],
-    );
+      await client.query(
+        `UPDATE blackjack_multi_tables SET status = 'completed' WHERE id = $1`, [tableId],
+      );
+    });
     this.audit(tableId, 'settle', roundId, null, { dealerTotal, dealerBlackjack, seatCount: rsResult.rows.length });
   }
 

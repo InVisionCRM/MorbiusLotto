@@ -2,37 +2,16 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import AvatarPreview, { type Emotion } from './AvatarPreview';
+import { AVATAR_V1_DEFAULTS } from '@/lib/avatar-payload';
+import AvatarView, { type Emotion } from './AvatarView';
 import AvatarControls from './AvatarControls';
 import CharacterCreatorMobile from './CharacterCreatorMobile';
 import { motion } from 'framer-motion';
 import { Palette, Scissors, Eye, Smile, Sparkles, Shirt, Image as ImageIcon, Glasses, Shuffle } from 'lucide-react';
-import { ITEM_CATALOG } from '@/lib/cosmetics-catalog';
+import { ITEM_CATALOG, getUnlockedValuesPerField, type AvatarField } from '@/lib/cosmetics-catalog';
 import type { AvatarRandomizeFieldKey } from '@/lib/avatar-randomize-pins';
 
-export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
-  skinColor: '#F1C27D',
-  hairStyle: 'Short',
-  hairColor: '#3B3024',
-  accessoryColor: '#111111',
-  eyeShape: 'Almond',
-  eyeColor: '#5c4033',
-  noseShape: 'Small',
-  lipShape: 'Smile',
-  accessory: 'None',
-  shirtColor: '#3f3f46',
-  shirtStyle: 'Default',
-  hat: 'None',
-  hatColor: '',
-  necklace: 'None',
-  mouthAccessory: 'None',
-  backgroundImage: '',
-  overlayImage: '',
-  faceShape: 'Square',
-  customPattern: '',
-};
-
-function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+export const DEFAULT_AVATAR_CONFIG: AvatarConfig = AVATAR_V1_DEFAULTS;
 
 export type RandomizeConfigOptions = {
   /** Catalog item keys pinned in the shop — unlock fields applied after the random roll. */
@@ -43,39 +22,37 @@ export type RandomizeConfigOptions = {
   pinnedFields?: Set<string>;
 };
 
-/** @param ownedItems Reserved for future owned-only random pools */
+/** Randomizes only values the player may use: free tier plus cosmetics they own. */
 export function randomizeConfig(ownedItems?: Set<string>, options?: RandomizeConfigOptions): AvatarConfig {
-  void ownedItems;
-  const skinColors = ['#FFF5EE','#FFE4E1','#FFDAB9','#FFCDB2','#FFB4A2','#FFDBAC','#F1C27D','#E0AC69','#C68642','#8D5524','#7B4B2A','#5C3A21','#4A3B32','#3E2723','#2D221E','#1A1110'];
-  const hairStyles = ['Bald','Short','Buzz','Fade','Long Straight','Long Wavy','Ponytail','Curly','Bob'];
-  const hairColors = ['#090806','#2C222B','#71635A','#B7A69E','#D6C4C2','#CABFB1','#DCD0BA','#FFF5E1','#E6CEA8','#E5C8A8','#DEBC99','#B89778','#A56B46','#B55239','#8D4A43','#91553D','#533D32','#3B3024'];
-  const eyeShapes = ['Round','Almond','Narrow','Wide'];
-  const eyeColors = ['#634e34','#2e536f','#3d671d','#1c7847','#497665','#000000','#5c4033','#8a9a5b','#4682b4'];
-  const noseShapes = ['Small','Wide','Pointy','Button'];
-  const lipShapes = ['Thin','Full','Smile','Smirk','Pout'];
-  const faceShapes = ['Square','Round','Oval','Heart','Diamond'];
-  const shirtColors = ['#ef4444','#3b82f6','#22c55e','#ffffff','#9ca3af','#3f3f46','#000000'];
+  const unlocked = getUnlockedValuesPerField(ownedItems ?? new Set());
+  const roll = (field: AvatarField, fallback: string): string => {
+    const pool = unlocked[field];
+    if (!pool?.length) return fallback;
+    return pool[Math.floor(Math.random() * pool.length)]!;
+  };
 
   const base: AvatarConfig = {
-    skinColor: pick(skinColors),
-    hairStyle: pick(hairStyles),
-    hairColor: pick(hairColors),
-    accessoryColor: '#111111',
-    eyeShape: pick(eyeShapes),
-    eyeColor: pick(eyeColors),
-    noseShape: pick(noseShapes),
-    lipShape: pick(lipShapes),
-    accessory: 'None',
-    faceShape: pick(faceShapes),
-    shirtColor: pick(shirtColors),
-    shirtStyle: 'Default',
-    hat: 'None',
-    hatColor: '',
-    necklace: 'None',
-    mouthAccessory: 'None',
-    backgroundImage: '',
-    overlayImage: '',
-    customPattern: '',
+    skinColor: roll('skinColor', DEFAULT_AVATAR_CONFIG.skinColor),
+    hairStyle: roll('hairStyle', DEFAULT_AVATAR_CONFIG.hairStyle),
+    hairColor: roll('hairColor', DEFAULT_AVATAR_CONFIG.hairColor),
+    accessoryColor: roll('accessoryColor', DEFAULT_AVATAR_CONFIG.accessoryColor),
+    eyeShape: roll('eyeShape', DEFAULT_AVATAR_CONFIG.eyeShape),
+    eyeColor: roll('eyeColor', DEFAULT_AVATAR_CONFIG.eyeColor),
+    noseShape: 'Small',
+    lipShape: roll('lipShape', DEFAULT_AVATAR_CONFIG.lipShape),
+    accessory: roll('accessory', 'None'),
+    faceShape: roll('faceShape', DEFAULT_AVATAR_CONFIG.faceShape),
+    shirtColor: roll('shirtColor', DEFAULT_AVATAR_CONFIG.shirtColor),
+    shirtStyle: roll('shirtStyle', 'Default'),
+    hat: roll('hat', 'None'),
+    hatColor: roll('hatColor', ''),
+    necklace: roll('necklace', 'None'),
+    mouthAccessory: roll('mouthAccessory', 'None'),
+    makeup: roll('makeup', 'None'),
+    facialHair: roll('facialHair', 'None'),
+    backgroundImage: roll('backgroundImage', ''),
+    overlayImage: roll('overlayImage', ''),
+    customPattern: roll('customPattern', ''),
   };
 
   const shopPins = options?.pinnedItemKeys;
@@ -242,7 +219,7 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
           ) : (
             <h1 className={`font-bold text-zinc-100 tracking-tight ${compact ? 'text-sm' : 'text-2xl mb-8'}`}>Player Profile</h1>
           )}
-          <AvatarPreview config={config} emotion={emotion} glassesAnimationKey={glassesAnimationKey} roamEyes className={compact ? 'w-36 sm:w-44 aspect-[6/7]' : undefined} />
+          <AvatarView config={config} emotion={emotion} glassesAnimationKey={glassesAnimationKey} roamEyes className={compact ? 'w-36 sm:w-44 aspect-[6/7]' : undefined} />
 
           <div className={`w-full ${compact ? '' : 'mt-8 text-center'}`}>
             {compact ? (
@@ -274,7 +251,7 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
                 </div>
                 {onToggleRandomPin && (
                   <p className="text-[9px] text-zinc-500 text-center max-w-[220px] mt-1 leading-snug">
-                    Amber pushpin on each section keeps that part when you Randomize (any color or item).
+                    Lock Item on each section keeps that part when you Randomize (any color or item).
                   </p>
                 )}
               </>

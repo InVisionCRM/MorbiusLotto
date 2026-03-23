@@ -13,7 +13,7 @@ import type { PokerTableState, ChatMessagePayload } from '@/lib/websocket-client
 import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
 import { PokerTable } from '@/components/poker/PokerTable';
-import type { Emotion } from '@/components/poker/avatar/AvatarPreview';
+import type { Emotion } from '@/components/poker/avatar/AvatarView';
 import { PokerActions } from '@/components/poker/PokerActions';
 import { PokerDepositModal } from '@/components/poker/PokerDepositModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';

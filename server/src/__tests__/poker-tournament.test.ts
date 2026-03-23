@@ -671,7 +671,8 @@ describe('9 - regression', () => {
 
   it('cash game poker tables still appear in listTables (tournament_mode=FALSE)', async () => {
     // Create a normal cash game table
-    const tableId = await pokerGameService.createTable(25n, 50n, 6);
+    const chipWei = 10n ** 15n;
+    const tableId = await pokerGameService.createTable(chipWei * 25n, chipWei * 50n, 6);
     createdPokerTableIds.push(tableId);
 
     const tables = await pokerGameService.listTables();

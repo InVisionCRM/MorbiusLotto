@@ -3101,6 +3101,7 @@ export class DatabaseService {
     pot_amount: string;
     community_cards: number[];
     result: { winners: Array<{ address: string; amount: string; handName?: string }> } | null;
+    rakeAmount: string;
     completed_at: string;
     myContributed: string;
     myWon: string;
@@ -3115,6 +3116,7 @@ export class DatabaseService {
         h.pot_amount::TEXT,
         h.community_cards,
         h.result,
+        h.rake_amount::TEXT AS rake_amount,
         h.completed_at AT TIME ZONE 'UTC' AS completed_at,
         (SELECT COALESCE(SUM(a.amount), 0)::TEXT FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1)) AS my_contributed,
         (SELECT COALESCE(SUM((w->>'amount')::numeric), 0)::TEXT FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) AS my_won,
@@ -3137,6 +3139,7 @@ export class DatabaseService {
       pot_amount: String(r.pot_amount ?? '0'),
       community_cards: Array.isArray(r.community_cards) ? r.community_cards : (r.community_cards ? JSON.parse(JSON.stringify(r.community_cards)) : []),
       result: r.result,
+      rakeAmount: String(r.rake_amount ?? '0'),
       completed_at: r.completed_at ? new Date(r.completed_at).toISOString() : '',
       myContributed: String(r.my_contributed ?? '0'),
       myWon: String(r.my_won ?? '0'),

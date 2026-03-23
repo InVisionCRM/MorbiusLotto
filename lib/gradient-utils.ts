@@ -1,5 +1,5 @@
 /**
- * Gradient utilities shared between AvatarPreview, AvatarControls, GradientBuilder, and AdminCosmeticsTab.
+ * Gradient utilities shared between AvatarPreview (v1 SVG), AvatarControls, GradientBuilder, and AdminCosmeticsTab.
  *
  * Gradient values are stored as compact JSON strings (no spaces, stable key order).
  * Always use serializeGradient() to produce the string — never JSON.stringify directly —
@@ -44,6 +44,25 @@ export function parseGradient(value: string): GradientDef | null {
     // not valid JSON
   }
   return null;
+}
+
+/**
+ * CSS `linear-gradient(...)` string for previews (admin catalog cards, etc.).
+ * Stop opacity is applied via 8-digit hex when the stop color is `#RRGGBB`.
+ */
+export function gradientDefToCssLinearBackground(def: GradientDef): string {
+  const parts = def.stops.map((s) => {
+    let c = s.color.trim();
+    const op = Math.min(1, Math.max(0, s.opacity));
+    if (c.startsWith('#') && c.length === 7 && op < 1) {
+      const a = Math.round(op * 255)
+        .toString(16)
+        .padStart(2, '0');
+      c = `${c}${a}`;
+    }
+    return `${c} ${Math.round(s.offset * 100)}%`;
+  });
+  return `linear-gradient(${def.angle}deg, ${parts.join(', ')})`;
 }
 
 /**

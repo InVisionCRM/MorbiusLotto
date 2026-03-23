@@ -18,8 +18,8 @@ import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboar
 import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
-import AvatarPreview from '@/components/poker/avatar/AvatarPreview';
-import type { Emotion } from '@/components/poker/avatar/AvatarPreview';
+import AvatarView from '@/components/poker/avatar/AvatarView';
+import type { Emotion } from '@/components/poker/avatar/AvatarView';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { UserPlus, MessageCircle, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 import { CardValue, Suit } from '@/app/BLACKJACK/types';
@@ -90,7 +90,6 @@ const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
   { title: 'Sad',       emotion: 'sad'       },
   { title: 'Dance',     emotion: 'dance'     },
   { title: 'Jackpot',   emotion: 'jackpot'   },
-  { title: 'Sink',      emotion: 'sink'      },
 ];
 
 
@@ -349,7 +348,7 @@ function Seat({
                 }}
               >
                 {seat?.avatarConfig ? (
-                  <AvatarPreview
+                  <AvatarView
                     config={seat.avatarConfig as unknown as AvatarConfig}
                     emotion={activeEmotion}
                     trackMouse={isMe}
@@ -382,7 +381,7 @@ function Seat({
                       >
                         <div className="w-7 h-7 rounded-full overflow-hidden">
                           {seat?.avatarConfig && (
-                            <AvatarPreview
+                            <AvatarView
                               config={seat.avatarConfig as unknown as AvatarConfig}
                               emotion={emotion}
                               compact
@@ -1415,8 +1414,8 @@ export default function BlackjackMultiTablePage() {
       </div>
 
       {/* Table token profile + player dashboard */}
-      <section className="md:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-start">
-        <div>
+      <section className="md:col-span-2 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2 lg:gap-6">
+        <div className="flex min-h-0 flex-col lg:h-full">
           <TableTokenProfileCard
             themeKind={(state?.themeKind ?? 'video') as 'image' | 'video'}
             themeId={state?.themeId ?? 'glowingTable'}
@@ -1424,7 +1423,7 @@ export default function BlackjackMultiTablePage() {
             getTableProfile={getTableProfile}
           />
         </div>
-        <div>
+        <div className="flex min-h-0 flex-col lg:h-full">
           {address && playerStats ? (
             <PlayerStatsDashboard
               stats={playerStats}
@@ -1434,7 +1433,7 @@ export default function BlackjackMultiTablePage() {
             />
           ) : (
             <div
-              className="min-h-[420px] lg:min-h-[520px] rounded-xl overflow-hidden flex items-center justify-center px-6 text-center text-white/60"
+              className="flex min-h-[420px] flex-1 items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 lg:min-h-[520px] lg:h-full"
               style={{
                 background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
                 boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
