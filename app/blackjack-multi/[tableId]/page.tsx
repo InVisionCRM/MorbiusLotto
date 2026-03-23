@@ -209,18 +209,21 @@ function Seat({
       {/* Cards area */}
       {isEmpty ? (
         <div
-          className={`flex flex-col items-center justify-center gap-1.5 rounded-xl px-5 py-5 min-h-[100px] border-2 border-dashed transition-all ${
-            canTakeSeat ? 'border-cyan-400/40 hover:border-cyan-400/70 hover:bg-cyan-900/20 cursor-pointer hover:scale-105' : 'border-white/15'
+          className={`flex flex-col items-center justify-center gap-2 rounded-xl px-6 py-6 min-h-[110px] border-2 border-dashed transition-all ${
+            canTakeSeat
+              ? 'border-cyan-400/70 bg-cyan-900/20 hover:border-cyan-300 hover:bg-cyan-800/30 cursor-pointer hover:scale-105 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+              : 'border-white/25 bg-white/[0.03]'
           }`}
+          style={position === 1 ? { marginTop: 'auto', marginBottom: '25px' } : undefined}
           onClick={canTakeSeat ? onTakeSeat : undefined}
         >
           {canTakeSeat && (
             <>
-              <UserPlus className="w-7 h-7 text-cyan-400/60" />
-              <span className="text-xs font-medium text-cyan-400/60">Seat {position + 1}</span>
+              <UserPlus className="w-8 h-8 text-cyan-400/80" />
+              <span className="text-xs font-semibold text-cyan-400/80 tracking-wide">Seat {position + 1}</span>
             </>
           )}
-          {!canTakeSeat && <span className="text-xs text-white/25">Seat {position + 1}</span>}
+          {!canTakeSeat && <span className="text-xs text-white/35 font-medium">Seat {position + 1}</span>}
         </div>
       ) : (
         <>
@@ -511,12 +514,26 @@ export default function BlackjackMultiTablePage() {
 
   // Chat dropdown overlay
   const [chatOpen, setChatOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('chat');
+  // Track completed rounds for History tab
+  const [roundHistory, setRoundHistory] = useState<Array<{
+    roundNumber: number; roundId: string | null; dealerTotal: number; dealerCards: number[];
+    seats: Array<{ position: number; playerAddress: string; hands: any[]; payout: string; result: string }>;
+    timestamp: number;
+  }>>([]);
 
   // Win notification — reuses WinNotification from single player
   const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
   const prevPhaseRef = useRef<string>('');
   const chartRef = useRef<BlackjackRealTimeBetChartRef>(null);
   const lastChartRoundRef = useRef<number>(0);
+
+  // Trigger Recharts remeasure when chart tab becomes visible
+  useEffect(() => {
+    if (activeTab === 'chart') {
+      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    }
+  }, [activeTab]);
 
   /** Outcome audio + win toast — deferred until dealer cards are fully revealed (single-player parity). */
   type PendingDealerOutcome = {
@@ -662,6 +679,29 @@ export default function BlackjackMultiTablePage() {
             result: kind,
           });
           lastChartRoundRef.current = roundNo;
+
+          // Track round for History tab
+          setRoundHistory(prev => {
+            if (prev.some(r => r.roundNumber === roundNo)) return prev;
+            const entry = {
+              roundNumber: roundNo,
+              roundId: state.currentRoundId,
+              dealerTotal: state.dealerTotal,
+              dealerCards: [...(state.dealerCards ?? [])],
+              seats: state.seats
+                .filter(s => s.playerAddress && s.hands.length > 0)
+                .map(s => ({
+                  position: s.position,
+                  playerAddress: s.playerAddress!,
+                  hands: s.hands.map(h => ({ ...h })),
+                  payout: s.payout || '0',
+                  result: s.hands.some(hh => hh.result === 'win' || hh.result === 'blackjack') ? 'win'
+                    : s.hands.every(hh => hh.result === 'push') ? 'push' : 'loss',
+                })),
+              timestamp: Date.now(),
+            };
+            return [entry, ...prev].slice(0, 50);
+          });
         }
       } else {
         fetchBalance();
@@ -1356,7 +1396,7 @@ export default function BlackjackMultiTablePage() {
             boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
           }}
         >
-          <Tabs defaultValue="chat" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="w-full grid grid-cols-4 bg-black/40 rounded-none border-b border-cyan-500/15 h-9 p-0">
               <TabsTrigger value="chat" className="rounded-none data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-300 data-[state=active]:shadow-none text-white/50 text-xs gap-1.5 h-full">
                 <MessageCircle className="w-3.5 h-3.5" />
@@ -1376,60 +1416,127 @@ export default function BlackjackMultiTablePage() {
               </TabsTrigger>
             </TabsList>
 
-            {/* Chat tab */}
-            <TabsContent value="chat" className="mt-0 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold text-cyan-300/90 uppercase tracking-wide">Table chat</h3>
-                {chatMessages.length > 0 && (
-                  <span className="text-[10px] text-white/40 tabular-nums">{chatMessages.length} msgs</span>
+            {/* Tab content area — relative wrapper so chart can be absolutely positioned when hidden */}
+            <div className="relative">
+              {/* Chat tab */}
+              <TabsContent value="chat" className="mt-0 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold text-cyan-300/90 uppercase tracking-wide">Table chat</h3>
+                  {chatMessages.length > 0 && (
+                    <span className="text-[10px] text-white/40 tabular-nums">{chatMessages.length} msgs</span>
+                  )}
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-0.5 min-h-[140px] pr-1">
+                  {chatMessages.slice(-24).map(m => (
+                    <div key={m.id} className="text-xs text-white/75 break-words">
+                      <span className="text-cyan-400 font-medium">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
+                      {m.text}
+                    </div>
+                  ))}
+                  {chatMessages.length === 0 && (
+                    <div className="text-xs text-white/35 text-center py-6">No messages yet</div>
+                  )}
+                </div>
+                {address && wsConnected ? (
+                  <ChatInput onSend={sendChatMessage} />
+                ) : (
+                  <p className="text-[11px] text-white/40 text-center py-1">Connect wallet to chat</p>
                 )}
-              </div>
-              <div className="max-h-48 overflow-y-auto space-y-0.5 min-h-[140px] pr-1">
-                {chatMessages.slice(-24).map(m => (
-                  <div key={m.id} className="text-xs text-white/75 break-words">
-                    <span className="text-cyan-400 font-medium">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
-                    {m.text}
-                  </div>
-                ))}
-                {chatMessages.length === 0 && (
-                  <div className="text-xs text-white/35 text-center py-6">No messages yet</div>
-                )}
-              </div>
-              {address && wsConnected ? (
-                <ChatInput onSend={sendChatMessage} />
-              ) : (
-                <p className="text-[11px] text-white/40 text-center py-1">Connect wallet to chat</p>
-              )}
-            </TabsContent>
+              </TabsContent>
 
-            {/* Chart tab — forceMount so ref stays alive for addGameResult calls */}
-            <TabsContent value="chart" className="mt-0 p-3 data-[state=inactive]:hidden" forceMount>
-              <div className="h-64 md:h-72 min-w-0">
-                <BlackjackRealTimeBetChart
-                  ref={chartRef}
-                  sessionStartTime={Number(state?.roundNumber ?? 0)}
+              {/* Chart — always mounted so ref survives for addGameResult; hidden via opacity when inactive (visibility:hidden + absolute keeps dimensions for Recharts) */}
+              <div
+                className={activeTab === 'chart' ? 'p-3' : 'absolute top-0 left-0 right-0 opacity-0 pointer-events-none'}
+                aria-hidden={activeTab !== 'chart'}
+              >
+                <div className="h-64 md:h-72 min-w-0">
+                  <BlackjackRealTimeBetChart
+                    ref={chartRef}
+                    sessionStartTime={Number(state?.roundNumber ?? 0)}
+                  />
+                </div>
+              </div>
+
+              {/* Rules tab */}
+              <TabsContent value="rules" className="mt-0 p-3 max-h-80 overflow-y-auto">
+                <GameFAQ
+                  game="blackjack"
+                  addresses={[
+                    { label: 'Blackjack Contract', address: BLACKJACK_ADDRESS },
+                    { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+                  ]}
                 />
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            {/* Rules tab */}
-            <TabsContent value="rules" className="mt-0 p-3 max-h-80 overflow-y-auto">
-              <GameFAQ
-                game="blackjack"
-                addresses={[
-                  { label: 'Blackjack Contract', address: BLACKJACK_ADDRESS },
-                  { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
-                ]}
-              />
-            </TabsContent>
-
-            {/* History tab — placeholder */}
-            <TabsContent value="history" className="mt-0 p-3">
-              <div className="flex flex-col items-center justify-center py-10 text-white/35 text-sm gap-2">
-                <History className="w-8 h-8 text-white/20" />
-                <p>Table history coming soon</p>
-              </div>
-            </TabsContent>
+              {/* History tab — live round history from this session */}
+              <TabsContent value="history" className="mt-0 p-3">
+                {roundHistory.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-white/35 text-sm gap-2">
+                    <History className="w-8 h-8 text-white/20" />
+                    <p>No rounds played yet this session</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                    {roundHistory.map(r => {
+                      const mySeatEntry = r.seats.find(s => s.playerAddress.toLowerCase() === address?.toLowerCase());
+                      return (
+                        <div key={r.roundNumber} className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white/70">Round #{r.roundNumber}</span>
+                            <span className="text-[10px] text-white/40">{new Date(r.timestamp).toLocaleTimeString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-white/50">Dealer:</span>
+                            <div className="flex gap-0.5">
+                              {r.dealerCards.map((c, ci) => {
+                                const suits = ['♠', '♥', '♦', '♣'];
+                                const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+                                const suit = suits[Math.floor(c / 13)];
+                                const rank = ranks[c % 13];
+                                const isRed = suit === '♥' || suit === '♦';
+                                return (
+                                  <span key={ci} className={`px-1 py-0.5 rounded text-[10px] font-bold border border-white/10 bg-black/30 ${isRed ? 'text-red-400' : 'text-white/80'}`}>
+                                    {rank}{suit}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            <span className="text-white/60 font-bold">{r.dealerTotal}</span>
+                          </div>
+                          {mySeatEntry && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-white/50">You:</span>
+                              {mySeatEntry.hands.map((h: any, hi: number) => (
+                                <div key={hi} className="flex gap-0.5">
+                                  {(h.cards ?? []).map((c: number, ci: number) => {
+                                    const suits = ['♠', '♥', '♦', '♣'];
+                                    const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+                                    const suit = suits[Math.floor(c / 13)];
+                                    const rank = ranks[c % 13];
+                                    const isRed = suit === '♥' || suit === '♦';
+                                    return (
+                                      <span key={ci} className={`px-1 py-0.5 rounded text-[10px] font-bold border border-white/10 bg-black/30 ${isRed ? 'text-red-400' : 'text-white/80'}`}>
+                                        {rank}{suit}
+                                      </span>
+                                    );
+                                  })}
+                                  <span className="text-white/60 font-bold">{h.total}</span>
+                                </div>
+                              ))}
+                              <span className={`font-bold text-[10px] uppercase ${
+                                mySeatEntry.result === 'win' ? 'text-emerald-400' : mySeatEntry.result === 'push' ? 'text-yellow-400' : 'text-red-400'
+                              }`}>
+                                {mySeatEntry.result === 'win' ? `+${formatMorbius(mySeatEntry.payout)}` : mySeatEntry.result}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+            </div>
           </Tabs>
         </div>
 
