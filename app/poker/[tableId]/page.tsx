@@ -939,7 +939,6 @@ export default function PokerTablePage() {
               roomId={pokerChatRoomId}
               tableId={tableId}
               state={state}
-              bottomOffset={state && mySeat ? 108 : 0}
               mobileOpenRequestSerial={activityMobileOpenSerial}
             />
           )}

@@ -161,14 +161,23 @@ export function PokerActions({
     border: '1px solid rgba(255,255,255,0.15)',
     ['--tw-ring-color' as string]: 'rgba(255,255,255,0.3)',
   };
-  const actionBtnClass = [
-    'font-jost',
-    'bg-black',
-    'text-cyan-400',
-    'active:text-purple-500',
-    'disabled:bg-slate-900/50',
-    'disabled:text-slate-400',
-  ].join(' ');
+  const foldBtnClass = 'font-jost text-white disabled:opacity-40 disabled:pointer-events-none';
+  const foldBtnStyle = {
+    ...actionBtnBaseStyle,
+    background: 'linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%)',
+  };
+  const checkBtnClass = 'font-jost text-white disabled:opacity-40 disabled:pointer-events-none';
+  const checkBtnStyle = {
+    ...actionBtnBaseStyle,
+    background: canCheck
+      ? 'linear-gradient(180deg, #2563eb 0%, #1e40af 100%)'
+      : 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)',
+  };
+  const primaryBtnClass = 'font-jost text-white disabled:opacity-40 disabled:pointer-events-none';
+  const primaryBtnStyle = {
+    ...actionBtnBaseStyle,
+    background: 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)',
+  };
   const quickSizeClass = [
     'font-jost',
     'bg-black',
@@ -196,14 +205,14 @@ export function PokerActions({
         className="sm:hidden"
         style={{ ...barStyle, paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))', paddingLeft: 'max(8px, env(safe-area-inset-left, 8px))', paddingRight: 'max(8px, env(safe-area-inset-right, 8px))' }}
       >
-        <div className="flex items-center justify-center gap-1 pt-1.5 pb-1">
+        <div className="grid grid-cols-4 gap-1 pt-1.5 pb-1 px-0.5">
           {quickSizes.map((q) => (
             <button
               key={q.label}
               type="button"
               onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
               disabled={!canAct || stackAmt === 0n}
-              className={`h-7 px-2.5 text-[11px] rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
+              className={`h-9 text-[11px] rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
               style={actionBtnBaseStyle}
             >
               {q.label}
@@ -216,8 +225,8 @@ export function PokerActions({
               type="button"
               onClick={handleFoldWithSound}
               disabled={!canAct}
-              className={`flex-1 h-11 min-w-0 rounded-sm text-xs tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none ${actionBtnClass}`}
-              style={actionBtnBaseStyle}
+              className={`flex-1 h-11 min-w-0 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
+              style={foldBtnStyle}
             >
               Fold
             </button>
@@ -225,8 +234,8 @@ export function PokerActions({
               type="button"
               onClick={handleSecondary}
               disabled={!canAct}
-              className={`flex-1 h-11 min-w-0 rounded-sm text-xs tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none truncate px-1 ${actionBtnClass}`}
-              style={actionBtnBaseStyle}
+              className={`flex-1 h-11 min-w-0 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] truncate px-1 ${checkBtnClass}`}
+              style={checkBtnStyle}
             >
               {secondaryLabel}
             </button>
@@ -234,8 +243,8 @@ export function PokerActions({
               type="button"
               onClick={handlePrimary}
               disabled={!canAct || !hasValidAmount}
-              className={`flex-1 h-11 min-w-0 rounded-sm text-xs tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 truncate px-1 ${actionBtnClass}`}
-              style={actionBtnBaseStyle}
+              className={`flex-1 h-11 min-w-0 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] truncate px-1 ${primaryBtnClass}`}
+              style={primaryBtnStyle}
             >
               {primaryLabel}
             </button>
@@ -287,16 +296,16 @@ export function PokerActions({
         </div>
       </div>
 
-      {/* ── Desktop: full-width bar ── */}
+      {/* ── Desktop / tablet (sm+): larger touch targets on md+ for readability ── */}
       <div className="hidden sm:block" style={barStyle}>
-        <div className="flex items-center justify-end gap-1 px-2 pt-1.5">
+        <div className="flex items-center justify-end gap-1.5 px-2 md:px-3 pt-1.5 md:pt-2">
           {quickSizes.map((q) => (
             <button
               key={q.label}
               type="button"
               onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
               disabled={!canAct || stackAmt === 0n}
-              className={`h-7 px-2.5 text-[11px] rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
+              className={`h-8 md:h-10 px-2.5 md:px-3 text-[11px] md:text-sm rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
               style={actionBtnBaseStyle}
             >
               {q.label}
@@ -304,16 +313,16 @@ export function PokerActions({
           ))}
         </div>
         <div
-          className="flex items-stretch gap-1.5 px-2 pb-2 pt-1"
+          className="flex items-stretch gap-1.5 md:gap-2 px-2 md:px-3 pb-2 md:pb-3 pt-1 md:pt-1.5"
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))' }}
         >
-          <div className="flex gap-1.5 flex-1 min-w-0">
+          <div className="flex gap-1.5 md:gap-2 flex-1 min-w-0">
             <button
               type="button"
               onClick={handleFoldWithSound}
               disabled={!canAct}
-              className={`flex-1 h-12 min-w-0 rounded-sm text-sm tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none ${actionBtnClass}`}
-              style={actionBtnBaseStyle}
+              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
+              style={foldBtnStyle}
             >
               Fold
             </button>
@@ -321,8 +330,8 @@ export function PokerActions({
               type="button"
               onClick={handleSecondary}
               disabled={!canAct}
-              className={`flex-1 h-12 min-w-0 rounded-sm text-sm tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none truncate px-2 ${actionBtnClass}`}
-              style={actionBtnBaseStyle}
+              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] truncate px-2 ${checkBtnClass}`}
+              style={checkBtnStyle}
             >
               {secondaryLabel}
             </button>
@@ -330,13 +339,13 @@ export function PokerActions({
               type="button"
               onClick={handlePrimary}
               disabled={!canAct || !hasValidAmount}
-              className={`flex-1 h-12 min-w-0 rounded-sm text-sm tracking-wide transition-all hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 truncate px-2 ${actionBtnClass}`}
-              style={actionBtnBaseStyle}
+              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] truncate px-2 ${primaryBtnClass}`}
+              style={primaryBtnStyle}
             >
               {primaryLabel}
             </button>
           </div>
-          <div className="flex items-center gap-1 shrink-0" style={{ width: '44%' }}>
+          <div className="flex items-center gap-1 md:gap-1.5 shrink-0 w-[44%] md:w-[48%] min-w-0">
             <input
               inputMode="numeric"
               pattern="[0-9,]*"
@@ -344,7 +353,7 @@ export function PokerActions({
               value={customAmount}
               onChange={(e) => setCustomAmount(e.target.value)}
               disabled={!canAct}
-              className="h-12 w-16 rounded-sm text-sm font-jost font-bold tabular-nums text-center outline-none focus:ring-1 transition disabled:pointer-events-none"
+              className="h-12 md:h-14 w-16 md:w-[5.25rem] rounded-sm text-sm md:text-base font-jost font-bold tabular-nums text-center outline-none focus:ring-1 transition disabled:pointer-events-none"
               style={inputStyle}
               aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
             />
@@ -352,7 +361,7 @@ export function PokerActions({
               type="button"
               onClick={() => nudge(-1)}
               disabled={!canAct || !hasValidAmount}
-              className={`h-12 w-8 rounded-sm text-lg transition-all hover:brightness-125 active:scale-95 active:text-purple-500 disabled:pointer-events-none flex items-center justify-center shrink-0 font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
+              className={`h-12 md:h-14 w-8 md:w-10 rounded-sm text-lg md:text-xl transition-all hover:brightness-125 active:scale-95 active:text-purple-500 disabled:pointer-events-none flex items-center justify-center shrink-0 font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
               style={{ border: '1px solid rgba(255,255,255,0.12)' }}
             >
               −
@@ -366,7 +375,7 @@ export function PokerActions({
                 value={sliderVal}
                 onChange={handleSlider}
                 disabled={!canAct || stackAmt === 0n}
-                className="poker-slider w-full disabled:pointer-events-none"
+                className="poker-slider poker-slider-desktop w-full disabled:pointer-events-none"
                 aria-label="Bet size slider"
               />
             </div>
@@ -374,7 +383,7 @@ export function PokerActions({
               type="button"
               onClick={() => nudge(1)}
               disabled={!canAct || !hasValidAmount}
-              className={`h-12 w-8 rounded-sm text-lg transition-all hover:brightness-125 active:scale-95 active:text-purple-500 disabled:pointer-events-none flex items-center justify-center shrink-0 font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
+              className={`h-12 md:h-14 w-8 md:w-10 rounded-sm text-lg md:text-xl transition-all hover:brightness-125 active:scale-95 active:text-purple-500 disabled:pointer-events-none flex items-center justify-center shrink-0 font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
               style={{ border: '1px solid rgba(255,255,255,0.12)' }}
             >
               +
@@ -396,6 +405,22 @@ export function PokerActions({
             #c0392b ${((sliderVal - minChips) / Math.max(1, maxChips - minChips)) * 100}%,
             rgba(255,255,255,0.18) ${((sliderVal - minChips) / Math.max(1, maxChips - minChips)) * 100}%
           );
+        }
+        .poker-slider-desktop {
+          height: 5px;
+        }
+        @media (min-width: 768px) {
+          .poker-slider-desktop {
+            height: 6px;
+          }
+          .poker-slider-desktop::-webkit-slider-thumb {
+            width: 20px;
+            height: 20px;
+          }
+          .poker-slider-desktop::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+          }
         }
         .poker-slider::-webkit-slider-thumb {
           -webkit-appearance: none;

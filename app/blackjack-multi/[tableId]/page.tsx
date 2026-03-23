@@ -1312,10 +1312,10 @@ export default function BlackjackMultiTablePage() {
               </div>
             )}
 
-            {/* 3 SEATS — CSS grid + per-column justify (reliable vs ad-hoc transforms); outer columns align start/end */}
+            {/* 3 SEATS — CSS grid; outer seats inset from edges so they stay visible on mobile */}
             <div
               className="grid w-full max-w-4xl grid-cols-3 gap-2 sm:gap-3 md:gap-4 mx-auto"
-              style={{ transform: 'translateY(6px)' }}
+              style={{ transform: 'translateY(6px)', padding: '0 4%' }}
             >
               {POSITIONS.map(pos => {
                 const seat = state?.seats.find(s => s.position === pos);
@@ -1324,8 +1324,8 @@ export default function BlackjackMultiTablePage() {
                 const align =
                   pos === 0 ? 'flex justify-start' : pos === 2 ? 'flex justify-end' : 'flex justify-center';
                 const seatNudge =
-                  pos === 0 ? { transform: 'translate(10px, -10px)' } :
-                  pos === 2 ? { transform: 'translate(-10px, -10px)' } : {};
+                  pos === 0 ? { transform: 'translate(30px, -14px)' } :
+                  pos === 2 ? { transform: 'translate(-30px, -14px)' } : {};
                 return (
                   <div key={pos} className={`min-w-0 ${align}`} style={seatNudge}>
                     <Seat

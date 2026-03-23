@@ -1,47 +1,35 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { parseEther } from 'viem';
-import { PokerSeat, PokerChipStack } from '@/components/poker/PokerSeat';
-import { PokerBoard } from '@/components/poker/PokerBoard';
+import { formatEther, parseEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 import { PokerActions } from '@/components/poker/PokerActions';
 import { PokerTutorialOverlay } from '@/components/poker/PokerTutorialOverlay';
-import { getPokerThemeVars } from '@/lib/poker-themes';
+import { PokerTable } from '@/components/poker/PokerTable';
+import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
+import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
+import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
 import { TUTORIAL_STEPS } from '@/lib/poker-tutorial-script';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { PokerSeatState } from '@/lib/websocket-client';
+import type { PokerCurrentHand, PokerSeatState, PokerTableState } from '@/lib/websocket-client';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const W = (n: number) => parseEther(String(n)).toString();
-const MY_ADDR  = '0x0000000000000000000000000000000000000000';
+const DEMO_TABLE_ID = 'demo';
+const DEMO_HAND_ID = 'demo-hand';
 
-/**
- * 10-seat positions as fractions of [tableWidth, tableHeight].
- * Seat 0 = you (bottom center). Evenly distributed around the oval edge.
- */
-const SEAT_ANCHORS = [
-  { fx: 0.50, fy: 0.90 }, // 0 — you (bottom center)
-  { fx: 0.72, fy: 0.83 }, // 1 — bottom right
-  { fx: 0.89, fy: 0.63 }, // 2 — right lower
-  { fx: 0.89, fy: 0.36 }, // 3 — right upper
-  { fx: 0.72, fy: 0.13 }, // 4 — top right
-  { fx: 0.50, fy: 0.06 }, // 5 — top center
-  { fx: 0.28, fy: 0.13 }, // 6 — top left
-  { fx: 0.11, fy: 0.36 }, // 7 — left upper
-  { fx: 0.11, fy: 0.63 }, // 8 — left lower
-  { fx: 0.28, fy: 0.83 }, // 9 — bottom left
-];
+/** Distinct demo addresses (seat i → `playerAddress`). */
+function demoPlayerAddress(i: number): string {
+  return `0x${(i + 1).toString(16).padStart(40, '0')}`;
+}
 
-/** Pot anchor — center of the table */
-const POT_ANCHOR = { fx: 0.50, fy: 0.50 };
+const DEMO_MY_ADDRESS = demoPlayerAddress(0);
 
-// ── Fake seat definitions ──────────────────────────────────────────────────
+// ── Fake seat metadata (no address — paired with demoPlayerAddress) ────────
 
-interface FakeSeat {
-  addr: string;
+interface FakeSeatMeta {
   stack: number;
   isDealer?: boolean;
   isSB?: boolean;
@@ -49,56 +37,141 @@ interface FakeSeat {
   lastAction?: string;
   bet?: number;
   folded?: boolean;
-  acting?: boolean;
-  showBacks?: boolean;
 }
 
-const FAKE_SEATS: FakeSeat[] = [
-  { addr: MY_ADDR,               stack: 9000 },                                                  // 0 — you
-  { addr: '0x...cafe', stack: 5200,  lastAction: 'call',  bet: 200,  showBacks: true },          // 1
-  { addr: '0x...dead', stack: 8100,  isDealer: true,                  showBacks: true },          // 2
-  { addr: '0x...beef', stack: 3400,  lastAction: 'raise', bet: 800,  showBacks: true },          // 3
-  { addr: '0x...fade', stack: 12000, folded: true },                                             // 4
-  { addr: '0x...babe', stack: 6800,  acting: true,                    showBacks: true },          // 5
-  { addr: '0x...face', stack: 4100,  lastAction: 'check',             showBacks: true },          // 6
-  { addr: '0x...deed', stack: 9300,  isSB: true, lastAction: 'call', bet: 100, showBacks: true }, // 7
-  { addr: '0x...feed', stack: 7600,  isBB: true, lastAction: 'bet',  bet: 400, showBacks: true }, // 8
-  { addr: '0x...dec0', stack: 2900,  folded: true },                                             // 9
+const FAKE_META: FakeSeatMeta[] = [
+  { stack: 9000 },
+  { stack: 5200, lastAction: 'call', bet: 200 },
+  { stack: 8100, isDealer: true },
+  { stack: 3400, lastAction: 'raise', bet: 800 },
+  { stack: 12000, folded: true },
+  { stack: 6800 },
+  { stack: 4100, lastAction: 'check' },
+  { stack: 9300, isSB: true, lastAction: 'call', bet: 100 },
+  { stack: 7600, isBB: true, lastAction: 'bet', bet: 400 },
+  { stack: 2900, folded: true },
 ];
 
-function makeSeat(f: FakeSeat, overrideBet?: number, overrideFolded?: boolean, overrideActing?: boolean): PokerSeatState {
+type Phase =
+  | 'idle'
+  | 'dealt'
+  | 'my-bet'
+  | 'opp-raise'
+  | 'flop'
+  | 'turn'
+  | 'river'
+  | 'showdown'
+  | 'my-fold';
+
+function phaseToStreet(phase: Phase): PokerCurrentHand['street'] {
+  switch (phase) {
+    case 'flop':
+      return 'flop';
+    case 'turn':
+      return 'turn';
+    case 'river':
+      return 'river';
+    case 'showdown':
+      return 'showdown';
+    default:
+      return 'preflop';
+  }
+}
+
+function buildDemoTableState(args: {
+  phase: Phase;
+  pot: number;
+  myBet: number;
+  oppBet: number;
+  myActing: boolean;
+  myFolded: boolean;
+  myLastAction: string | null;
+  holeCards: number[] | null | undefined;
+  communityCards: number[];
+}): PokerTableState {
+  const seats: PokerSeatState[] = FAKE_META.map((meta, i) => {
+    const addr = demoPlayerAddress(i);
+    const isMe = i === 0;
+    const bet = isMe ? args.myBet : i === 3 ? args.oppBet : meta.bet ?? 0;
+    const folded = isMe ? args.myFolded : !!meta.folded;
+    const acting = isMe && args.myActing;
+    const stackWei = Math.max(0, meta.stack - bet);
+    return {
+      position: i,
+      playerAddress: addr,
+      stack: W(stackWei),
+      status: 'active',
+      isDealer: !!meta.isDealer,
+      isSmallBlind: !!meta.isSB,
+      isBigBlind: !!meta.isBB,
+      isActing: acting,
+      folded,
+      currentBet: W(bet),
+    };
+  });
+
+  const oppAddr = demoPlayerAddress(3).toLowerCase();
+
+  let lastAction: PokerCurrentHand['lastAction'] = null;
+  if (args.phase === 'idle') {
+    lastAction = null;
+  } else if (args.phase === 'opp-raise') {
+    lastAction = { position: 3, action: 'raise', amount: W(args.oppBet) };
+  } else if (args.myLastAction) {
+    lastAction = { position: 0, action: args.myLastAction, amount: W(args.myBet) };
+  } else if (args.phase === 'my-bet') {
+    lastAction = { position: 3, action: 'raise', amount: W(args.oppBet) };
+  } else {
+    for (let i = 1; i < FAKE_META.length; i++) {
+      const m = FAKE_META[i];
+      if (m.lastAction) {
+        lastAction = { position: i, action: m.lastAction, amount: W(m.bet ?? 0) };
+        break;
+      }
+    }
+  }
+
+  // Idle + no pot: no hand (matches live empty table). Idle + pot: synthetic hand so pot/board chrome matches live "between streets" testing.
+  const currentHand: PokerCurrentHand | null =
+    args.phase === 'idle' && args.pot === 0
+      ? null
+      : {
+          handId: DEMO_HAND_ID,
+          street: phaseToStreet(args.phase),
+          communityCards: [...args.communityCards],
+          pot: W(args.pot),
+          actingPosition: args.myActing ? 0 : null,
+          lastAction,
+          minRaise: W(200),
+          toCall: W(Math.max(0, args.oppBet - args.myBet)),
+          turnStartedAt: args.myActing ? new Date().toISOString() : null,
+          showdownHands:
+            args.phase === 'showdown'
+              ? { [oppAddr]: [10, 23] }
+              : undefined,
+          winners:
+            args.phase === 'showdown'
+              ? [
+                  {
+                    address: demoPlayerAddress(3),
+                    amount: W(args.pot),
+                    handName: 'Two pair',
+                  },
+                ]
+              : undefined,
+        };
+
   return {
-    position: 0,
-    playerAddress: f.addr === MY_ADDR ? f.addr : f.addr,
-    stack: W(f.stack - (overrideBet ?? f.bet ?? 0)),
+    tableId: DEMO_TABLE_ID,
+    smallBlind: W(10),
+    bigBlind: W(20),
+    maxSeats: 10,
     status: 'active',
-    isDealer:    !!f.isDealer,
-    isSmallBlind: !!f.isSB,
-    isBigBlind:  !!f.isBB,
-    isActing:    overrideActing ?? !!f.acting,
-    folded:      overrideFolded ?? !!f.folded,
-    currentBet:  W(overrideBet ?? f.bet ?? 0),
+    seats,
+    currentHand,
+    myHoleCards: args.holeCards ?? null,
   };
 }
-
-// ── Flying chip (PNG) ─────────────────────────────────────────────────────
-
-function FlyChipImg() {
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src="/PokerChips/blackpokerchip000.png" alt="" aria-hidden width={26} height={26} />;
-}
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
-interface FlyingChip {
-  id: string;
-  startX: number;
-  startY: number;
-  dx: number;
-  dy: number;
-}
-
-type Phase = 'idle' | 'dealt' | 'my-bet' | 'opp-raise' | 'flop' | 'turn' | 'river' | 'showdown' | 'my-fold';
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -107,35 +180,24 @@ export default function PokerDemoPage() {
   const router = useRouter();
   const isTutorial = searchParams.get('tutorial') === '1';
 
-  const themeVars  = getPokerThemeVars('classic');
-  const tableRef   = useRef<HTMLDivElement>(null);
-  const [dims, setDims] = useState({ w: 640, h: 500 });
+  const pokerTheme = DEFAULT_POKER_THEME;
+  const themeVars = getPokerThemeVars(pokerTheme);
+  const cyberpunk = pokerTheme === 'cyberpunk';
 
-  useEffect(() => {
-    const el = tableRef.current;
-    if (!el) return;
-    const update = () => setDims({ w: el.offsetWidth, h: el.offsetHeight });
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const tableAreaRef = useRef<HTMLDivElement>(null);
+  const [activityMobileOpenSerial, setActivityMobileOpenSerial] = useState(0);
 
-  // ── Tutorial step (when in tutorial mode) ─────────────────────────────────
   const [tutorialStepIndex, setTutorialStepIndex] = useState(0);
 
-  // ── Game state ────────────────────────────────────────────────────────────
-  const [phase,      setPhase]      = useState<Phase>('idle');
-  const [pot,        setPot]        = useState(0);
-  const [myBet,      setMyBet]      = useState(0);
-  const [oppBet,     setOppBet]     = useState(0);
-  const [myActing,   setMyActing]   = useState(false);
-  const [myFolded,   setMyFolded]   = useState(false);
-  const [timeLeft,   setTimeLeft]   = useState<number | undefined>();
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [pot, setPot] = useState(0);
+  const [myBet, setMyBet] = useState(0);
+  const [oppBet, setOppBet] = useState(0);
+  const [myActing, setMyActing] = useState(false);
+  const [myFolded, setMyFolded] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number | undefined>();
   const [myLastAction, setMyLastAction] = useState<string | null>(null);
-  const [flyingChips, setFlyingChips]  = useState<FlyingChip[]>([]);
 
-  // When in tutorial mode, sync all state from the current step
   useEffect(() => {
     if (!isTutorial || !TUTORIAL_STEPS[tutorialStepIndex]) return;
     const s = TUTORIAL_STEPS[tutorialStepIndex].state;
@@ -147,305 +209,288 @@ export default function PokerDemoPage() {
     setMyFolded(s.myFolded);
     setMyLastAction(s.myLastAction);
     setTimeLeft(s.timeLeft);
-    setFlyingChips([]);
   }, [isTutorial, tutorialStepIndex]);
 
-  // ── Chip flight helper ────────────────────────────────────────────────────
-
-  const flyChip = useCallback(
-    (seatIndex: number, onLand: () => void) => {
-      const HALF = 12;
-      const src = SEAT_ANCHORS[seatIndex];
-      const startX = src.fx * dims.w - HALF;
-      const startY = src.fy * dims.h - HALF;
-      const potX   = POT_ANCHOR.fx * dims.w - HALF;
-      const potY   = POT_ANCHOR.fy * dims.h - HALF;
-      const chip: FlyingChip = { id: `${Date.now()}-${Math.random()}`, startX, startY, dx: potX - startX, dy: potY - startY };
-      setFlyingChips(prev => [...prev, chip]);
-      setTimeout(() => {
-        setFlyingChips(prev => prev.filter(c => c.id !== chip.id));
-        onLand();
-      }, 520);
-    },
-    [dims],
+  const stepState = isTutorial && TUTORIAL_STEPS[tutorialStepIndex] ? TUTORIAL_STEPS[tutorialStepIndex].state : null;
+  const holeCards = stepState?.holeCards ?? (phase !== 'idle' ? [1, 14] : undefined);
+  const communityCards = stepState?.communityCards ?? (
+    phase === 'flop'
+      ? [0, 13, 26]
+      : phase === 'turn'
+        ? [0, 13, 26, 39]
+        : phase === 'river' || phase === 'showdown'
+          ? [0, 13, 26, 39, 12]
+          : []
   );
 
-  // ── Sequences ─────────────────────────────────────────────────────────────
+  const demoState = buildDemoTableState({
+    phase,
+    pot,
+    myBet,
+    oppBet,
+    myActing,
+    myFolded,
+    myLastAction,
+    holeCards: holeCards ?? null,
+    communityCards,
+  });
 
   function deal() {
-    setPhase('dealt'); setMyActing(true); setPot(150); setMyBet(0);
-    setOppBet(0); setMyFolded(false); setMyLastAction(null); setTimeLeft(22);
+    setPhase('dealt');
+    setMyActing(true);
+    setPot(150);
+    setMyBet(0);
+    setOppBet(0);
+    setMyFolded(false);
+    setMyLastAction(null);
+    setTimeLeft(22);
   }
 
   function doMyBet() {
-    setMyActing(false); setTimeLeft(undefined); setMyLastAction('bet'); setPhase('my-bet');
-    flyChip(0, () => { setMyBet(500); setPot(p => p + 500); });
+    setMyActing(false);
+    setTimeLeft(undefined);
+    setMyLastAction('bet');
+    setPhase('my-bet');
+    setMyBet(500);
+    setPot((p) => p + 500);
   }
 
   function doOppRaise() {
     setPhase('opp-raise');
-    flyChip(3, () => { setOppBet(1500); setPot(p => p + 1500); setMyActing(true); setTimeLeft(18); });
+    setOppBet(1500);
+    setPot((p) => p + 1500);
+    setMyActing(true);
+    setTimeLeft(18);
   }
 
-  function doFlop()  { setPhase('flop');  setMyActing(false); setMyBet(0); setOppBet(0); setMyLastAction(null); }
-  function doTurn()  { setPhase('turn');  }
-  function doRiver() { setPhase('river'); }
-  function doShow()  { setPhase('showdown'); }
+  function doFlop() {
+    setPhase('flop');
+    setMyActing(false);
+    setMyBet(0);
+    setOppBet(0);
+    setMyLastAction(null);
+  }
+  function doTurn() {
+    setPhase('turn');
+  }
+  function doRiver() {
+    setPhase('river');
+  }
+  function doShow() {
+    setPhase('showdown');
+  }
 
   function doFold() {
-    setMyActing(false); setMyFolded(true); setMyLastAction('fold'); setTimeLeft(undefined); setPhase('my-fold');
+    setMyActing(false);
+    setMyFolded(true);
+    setMyLastAction('fold');
+    setTimeLeft(undefined);
+    setPhase('my-fold');
   }
 
   function reset() {
-    setPhase('idle'); setPot(0); setMyBet(0); setOppBet(0);
-    setMyActing(false); setMyFolded(false); setMyLastAction(null); setFlyingChips([]); setTimeLeft(undefined);
+    setPhase('idle');
+    setPot(0);
+    setMyBet(0);
+    setOppBet(0);
+    setMyActing(false);
+    setMyFolded(false);
+    setMyLastAction(null);
+    setTimeLeft(undefined);
   }
-
-  // ── Derived ───────────────────────────────────────────────────────────────
-
-  const stepState = isTutorial && TUTORIAL_STEPS[tutorialStepIndex] ? TUTORIAL_STEPS[tutorialStepIndex].state : null;
-  const holeCards = stepState?.holeCards ?? (phase !== 'idle' ? [1, 14] : undefined);
-  const oppShowdown = phase === 'showdown' ? [10, 23] : undefined;
-  const communityCards = stepState?.communityCards ?? (
-    phase === 'flop'                          ? [0, 13, 26]           :
-    phase === 'turn'                          ? [0, 13, 26, 39]       :
-    phase === 'river' || phase === 'showdown' ? [0, 13, 26, 39, 12]  : []
-  );
-
-  // Build per-seat state; seat 0 = me, seat 3 gets oppBet override
-  function seatState(i: number): PokerSeatState {
-    const f = FAKE_SEATS[i];
-    const isMe = i === 0;
-    return makeSeat(
-      f,
-      isMe ? myBet : (i === 3 ? oppBet : undefined),
-      isMe ? myFolded : undefined,
-      isMe ? myActing : undefined,
-    );
-  }
-
-  function seatLastAction(i: number): { action: string; amount: string } | null {
-    if (i === 0) return myLastAction ? { action: myLastAction, amount: W(myBet) } : null;
-    if (i === 3 && phase === 'opp-raise') return { action: 'raise', amount: W(1500) };
-    const f = FAKE_SEATS[i];
-    return f.lastAction ? { action: f.lastAction, amount: W(f.bet ?? 0) } : null;
-  }
-
-  // ── Buttons ───────────────────────────────────────────────────────────────
 
   const BTNS = [
-    { label: '① Deal',          fn: deal,       disabled: phase !== 'idle' },
-    { label: '② My Bet 500',    fn: doMyBet,    disabled: !myActing },
-    { label: '③ Opp Raise 1500',fn: doOppRaise, disabled: phase !== 'my-bet' },
-    { label: '④ Flop',          fn: doFlop,     disabled: phase === 'idle' || phase === 'flop' },
-    { label: '⑤ Turn',          fn: doTurn,     disabled: phase !== 'flop' },
-    { label: '⑥ River',         fn: doRiver,    disabled: phase !== 'turn' },
-    { label: '⑦ Showdown',      fn: doShow,     disabled: phase !== 'river' },
-    { label: '⑧ My Fold',       fn: doFold,     disabled: !myActing },
-    { label: '↺ Reset',         fn: reset,      disabled: false, danger: true },
+    { label: '① Deal', fn: deal, disabled: phase !== 'idle', danger: false },
+    { label: '② My Bet 500', fn: doMyBet, disabled: !myActing, danger: false },
+    { label: '③ Opp Raise 1500', fn: doOppRaise, disabled: phase !== 'my-bet', danger: false },
+    { label: '④ Flop', fn: doFlop, disabled: phase === 'idle' || phase === 'flop', danger: false },
+    { label: '⑤ Turn', fn: doTurn, disabled: phase !== 'flop', danger: false },
+    { label: '⑥ River', fn: doRiver, disabled: phase !== 'turn', danger: false },
+    { label: '⑦ Showdown', fn: doShow, disabled: phase !== 'river', danger: false },
+    { label: '⑧ My Fold', fn: doFold, disabled: !myActing, danger: false },
+    { label: '↺ Reset', fn: reset, disabled: false, danger: true },
   ];
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const fmtChips = (wei: string) => {
+    try {
+      const n = Number(formatEther(toBigIntSafe(wei)));
+      return Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    } catch {
+      return wei;
+    }
+  };
 
   return (
-    <div
-      className="flex flex-col"
-      style={{
-        ...themeVars as React.CSSProperties,
-        minHeight: '100dvh',
-        background: 'rgb(2 6 23)',
-        color: 'var(--poker-text)',
-        overflow: 'hidden',
-      }}
-    >
-      {/* ── Tutorial top bar (when in tutorial mode) ── */}
-      {isTutorial && (
+    <PokerThemeProvider themeId={pokerTheme}>
+      <div
+        className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
+        style={{
+          ...themeVars as React.CSSProperties,
+          height: '100dvh',
+          background: 'rgb(2 6 23)',
+          color: 'var(--poker-text)',
+          overflow: 'hidden',
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)',
+        }}
+      >
+        {isTutorial && (
+          <div
+            className="flex-shrink-0 flex items-center justify-between px-3 py-2 z-30"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.5)' }}
+          >
+            <span className="text-[10px] font-semibold" style={{ color: 'var(--poker-accent)' }}>
+              Poker tutorial
+            </span>
+            <Link
+              href="/poker"
+              className="text-[10px] font-semibold hover:opacity-80 transition-opacity"
+              style={{ color: 'var(--poker-accent)' }}
+            >
+              Back to lobby
+            </Link>
+          </div>
+        )}
+
+        {/* Same top bar shell as /poker/[tableId] */}
         <div
-          className="flex-shrink-0 flex items-center justify-between px-3 py-2"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.5)' }}
+          className="flex-shrink-0 flex items-center justify-between px-2 z-30 gap-2"
+          style={{
+            background: 'rgba(10,10,10,0.96)',
+            borderBottom: '1px solid rgba(255,255,255,0.07)',
+            paddingTop: 'max(8px, env(safe-area-inset-top, 0px))',
+            paddingBottom: '8px',
+          }}
         >
-          <span className="text-[10px] font-semibold" style={{ color: 'var(--poker-accent)' }}>
-            Poker tutorial
-          </span>
           <Link
             href="/poker"
-            className="text-[10px] font-semibold hover:opacity-80 transition-opacity"
-            style={{ color: 'var(--poker-accent)' }}
+            className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide flex items-center hover:brightness-125 active:scale-[0.97] transition-all shrink-0"
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              color: 'rgba(255,255,255,0.75)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+            }}
           >
-            Back to lobby
+            ← Lobby
           </Link>
-        </div>
-      )}
-
-      {/* ── Compact control strip (hidden in tutorial mode) ── */}
-      {!isTutorial && (
-        <div
-          className="flex-shrink-0 flex flex-wrap gap-1 px-2 py-1.5 items-center"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.5)' }}
-        >
-          <span className="text-[10px] mr-1" style={{ color: 'var(--poker-accent)' }}>
-            Demo · <span style={{ color: 'var(--poker-chip)' }}>{phase}</span>
-          </span>
-          {BTNS.map(({ label, fn, disabled, danger }) => (
+          <div className="flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5">
+            <span className="text-[10px] text-[rgba(255,255,255,0.45)] tabular-nums truncate text-center w-full">
+              Demo · {fmtChips(demoState.smallBlind)}/{fmtChips(demoState.bigBlind)} ·{' '}
+              {demoState.seats.filter((s) => s.playerAddress).length}/{demoState.maxSeats} seats
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
-              key={label}
               type="button"
-              onClick={fn}
-              disabled={disabled}
-              className="px-2 py-0.5 rounded-sm border text-[10px] font-semibold transition hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed"
+              onClick={() => router.push('/poker')}
+              className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97]"
               style={{
-                borderColor: danger ? 'var(--poker-danger)' : 'var(--poker-accent)',
-                color:        danger ? 'var(--poker-danger)' : 'var(--poker-accent)',
-                background:   danger ? 'color-mix(in srgb, var(--poker-danger) 10%, transparent)' : 'color-mix(in srgb, var(--poker-accent) 10%, transparent)',
+                background: 'linear-gradient(180deg, #8b1a1a 0%, #6b1111 100%)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.12)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)',
               }}
             >
-              {label}
+              Leave
             </button>
-          ))}
-        </div>
-      )}
-
-      {/* ── TABLE ──────────────────────────────────────────────────────────── */}
-      <div
-        ref={tableRef}
-        className="flex-1 relative"
-        style={{ minHeight: 0, overflow: 'visible' }}
-        data-tutorial-target="table"
-      >
-        {/* Felt oval */}
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            left: '4%', top: '5%', width: '92%', height: '88%',
-            borderRadius: '50%',
-            background: 'radial-gradient(ellipse at 50% 38%, rgb(30,110,50) 0%, rgb(15,72,30) 48%, rgb(9,50,20) 100%)',
-            boxShadow:
-              '0 0 0 5px rgba(255,255,255,0.04), ' +
-              '0 0 0 10px rgba(0,0,0,0.3), ' +
-              '0 16px 80px rgba(0,0,0,0.85), ' +
-              'inset 0 2px 50px rgba(0,0,0,0.5)',
-          }}
-        />
-        {/* Rail groove */}
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            left: '3%', top: '3%', width: '94%', height: '92%',
-            borderRadius: '50%',
-            border: '4px solid rgba(60,30,5,0.65)',
-            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
-          }}
-        />
-
-        {/* Community board — center of felt */}
-        <div
-          className="absolute flex items-center justify-center"
-          style={{ left: '20%', top: '37%', width: '60%', height: '24%', zIndex: 10 }}
-          data-tutorial-target="community-cards"
-        >
-          <PokerBoard communityCards={communityCards} pot={W(pot)} dataTutorialTargetPot={isTutorial} />
+          </div>
         </div>
 
-        {/* Flying chips */}
-        {flyingChips.map((chip) => (
-          <motion.div
-            key={chip.id}
-            className="absolute z-50 pointer-events-none"
-            style={{ left: chip.startX, top: chip.startY }}
-            initial={{ x: 0, y: 0, scale: 1.2, opacity: 1, rotate: 0 }}
-            animate={{ x: chip.dx, y: chip.dy, scale: 0.4, opacity: 0, rotate: 540 }}
-            transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-          >
-            <FlyChipImg />
-          </motion.div>
-        ))}
-
-        {/* Chip stacks — positioned between each seat and the pot */}
-        <AnimatePresence>
-          {SEAT_ANCHORS.map((anchor, i) => {
-            const state = seatState(i);
-            const hasBet = (() => { try { return BigInt(state.currentBet || '0') > 0n; } catch { return false; } })();
-            if (!hasBet) return null;
-            const frac = i === 0 ? 0.57 : 0.28;
-            const cfx = anchor.fx + (POT_ANCHOR.fx - anchor.fx) * frac;
-            const cfy = anchor.fy + (POT_ANCHOR.fy - anchor.fy) * frac;
-            return (
-              <motion.div
-                key={`chips-${i}`}
-                className="absolute pointer-events-none"
-                style={{
-                  left: `${cfx * 100}%`,
-                  top:  `${cfy * 100}%`,
-                  transform: 'translate(-50%, -50%)',
-                  zIndex: 25,
-                }}
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-              >
-                <PokerChipStack weiAmount={state.currentBet} />
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-
-        {/* 10 seats */}
-        {SEAT_ANCHORS.map((anchor, i) => (
+        {!isTutorial && (
           <div
-            key={i}
-            className="absolute z-20"
-            style={{
-              left: `${anchor.fx * 100}%`,
-              top:  `${anchor.fy * 100}%`,
-              transform: 'translate(-50%, -50%)',
-            }}
-            data-tutorial-target={`seat-${i}`}
+            className="flex-shrink-0 flex flex-wrap gap-1 px-2 py-1.5 items-center z-20"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.45)' }}
           >
-            <PokerSeat
-              seat={seatState(i)}
-              index={i}
-              holeCards={i === 0 ? holeCards : (i === 3 && phase === 'showdown' ? oppShowdown : undefined)}
-              isCurrentPlayer={i === 0}
-              showCardBacks={i !== 0 && FAKE_SEATS[i].showBacks && phase !== 'idle'}
-              lastAction={seatLastAction(i)}
-              timeLeft={
-                i === 0 ? (myActing ? timeLeft : undefined) :
-                i === 5 ? 11 : undefined
-              }
+            <span className="text-[10px] mr-1 shrink-0" style={{ color: 'var(--poker-accent)' }}>
+              Scene · <span style={{ color: 'var(--poker-chip)' }}>{phase}</span>
+            </span>
+            {BTNS.map(({ label, fn, disabled, danger }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={fn}
+                disabled={disabled}
+                className="px-2 py-0.5 rounded-sm border text-[10px] font-semibold transition hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed"
+                style={{
+                  borderColor: danger ? 'var(--poker-danger)' : 'var(--poker-accent)',
+                  color: danger ? 'var(--poker-danger)' : 'var(--poker-accent)',
+                  background: danger
+                    ? 'color-mix(in srgb, var(--poker-danger) 10%, transparent)'
+                    : 'color-mix(in srgb, var(--poker-accent) 10%, transparent)',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Table region — same flex + maxWidth as live table page */}
+        <div
+          ref={tableAreaRef}
+          className="flex-1 relative"
+          style={{
+            minHeight: 0,
+            maxWidth: 'min(100vw, calc((100dvh - 160px) * 2.4))',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            width: '100%',
+          }}
+        >
+          <PokerTable
+            state={demoState}
+            currentPlayerAddress={DEMO_MY_ADDRESS}
+            timeLeft={timeLeft}
+            tutorialTargets={isTutorial}
+            dataTutorialTargetPot={isTutorial}
+            onLeave={() => router.push('/poker')}
+            onRequestMobileActivity={() => setActivityMobileOpenSerial((n) => n + 1)}
+          />
+        </div>
+
+        {/* Bottom row — same grid as /poker/[tableId] */}
+        <div className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_1fr_minmax(280px,1fr)] gap-0 min-h-0">
+          <div className="hidden md:block min-w-0 md:order-1" />
+          <div className="hidden md:block min-w-0 md:order-2" />
+          <div className="order-1 md:order-3 flex-shrink-0 min-w-0" data-tutorial-target="action-bar">
+            <PokerActions
+              canAct={myActing}
+              canCheck={false}
+              minRaise={W(200)}
+              stack={W(Math.max(0, 9000 - myBet))}
+              callAmount={oppBet > myBet ? W(oppBet - myBet) : '0'}
+              pot={W(pot)}
+              onFold={doFold}
+              onCheck={() => {}}
+              onCall={() => {}}
+              onBet={() => {}}
+              onRaise={() => {}}
             />
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* ── Action bar ── */}
-      <div className="flex-shrink-0" data-tutorial-target="action-bar">
-        <PokerActions
-          canAct={myActing}
-          canCheck={false}
-          minRaise={W(200)}
-          stack={W(Math.max(0, 9000 - myBet))}
-          callAmount={oppBet > myBet ? W(oppBet - myBet) : '0'}
-          pot={W(pot)}
-          onFold={doFold}
-          onCheck={() => {}}
-          onCall={() => {}}
-          onBet={() => {}}
-          onRaise={() => {}}
+        {/* Match live page: no WS — empty roomId skips internal chat client */}
+        <PokerActivityFeed
+          wsClient={null}
+          wsConnected={false}
+          roomId=""
+          tableId={DEMO_TABLE_ID}
+          state={demoState}
+          mobileOpenRequestSerial={activityMobileOpenSerial}
         />
-      </div>
 
-      {/* ── Tutorial overlay ── */}
-      {isTutorial && (
-        <PokerTutorialOverlay
-          stepIndex={tutorialStepIndex}
-          steps={TUTORIAL_STEPS}
-          onNext={() => setTutorialStepIndex((i) => Math.min(i + 1, TUTORIAL_STEPS.length - 1))}
-          onBack={() => setTutorialStepIndex((i) => Math.max(0, i - 1))}
-          onSkip={() => router.push('/poker')}
-          containerRef={tableRef}
-        />
-      )}
-    </div>
+        {isTutorial && (
+          <PokerTutorialOverlay
+            stepIndex={tutorialStepIndex}
+            steps={TUTORIAL_STEPS}
+            onNext={() => setTutorialStepIndex((i) => Math.min(i + 1, TUTORIAL_STEPS.length - 1))}
+            onBack={() => setTutorialStepIndex((i) => Math.max(0, i - 1))}
+            onSkip={() => router.push('/poker')}
+            containerRef={tableAreaRef}
+          />
+        )}
+      </div>
+    </PokerThemeProvider>
   );
 }

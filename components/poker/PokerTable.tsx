@@ -31,14 +31,19 @@ const POT_ANCHOR = { fx: 0.50, fy: 0.47 };
 
 // Compute evenly-spaced seat positions around the table oval for any seat count.
 // Seat 0 is always bottom-center (current player); seats go clockwise.
-function computeSeatAnchors(n: number): Array<{ fx: number; fy: number }> {
+// When `mobileNudge` is true, seat 0 (bottom-center) is pushed down so it
+// sits just above the betting controls on narrow viewports.
+function computeSeatAnchors(n: number, mobileNudge = false): Array<{ fx: number; fy: number }> {
   const cx = 0.50, cy = 0.45;
   const rx = 0.44, ry = 0.36;
   return Array.from({ length: n }, (_, i) => {
     const theta = Math.PI / 2 - (i / n) * 2 * Math.PI;
+    let fy = parseFloat((cy + ry * Math.sin(theta)).toFixed(4));
+    // Push bottom player (i=0) closer to the controls on mobile
+    if (i === 0 && mobileNudge) fy = Math.min(0.92, fy + 0.10);
     return {
       fx: parseFloat((cx + rx * Math.cos(theta)).toFixed(4)),
-      fy: parseFloat((cy + ry * Math.sin(theta)).toFixed(4)),
+      fy,
     };
   });
 }
@@ -79,9 +84,13 @@ export interface PokerTableProps {
   onOpenEditQuickChat?: () => void;
   /** Open Activity drawer on mobile (narrow viewport); parent bumps `PokerActivityFeed` serial. */
   onRequestMobileActivity?: () => void;
+  /** Add `data-tutorial-target` on table, board, seats (for `/poker/demo` tutorial). */
+  tutorialTargets?: boolean;
+  /** Wrap pot for tutorial spotlight (forwarded to `PokerBoard`). */
+  dataTutorialTargetPot?: boolean;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, tutorialTargets, dataTutorialTargetPot }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [, setDims] = useState({ w: 640, h: 500 });
   /** Below Tailwind `md` — hide heavy seat avatars to reduce crowding on phones. */
@@ -107,7 +116,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
   const hand = state.currentHand;
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
-  const seatAnchors = computeSeatAnchors(state.seats.length);
+  const seatAnchors = computeSeatAnchors(state.seats.length, hideSeatAvatars);
   const actingPosition = hand?.actingPosition ?? null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
   const winnerSeatIndices = isShowdownWithWinners
@@ -165,7 +174,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   };
 
   return (
-    <div ref={tableRef} className="absolute inset-0" style={{ overflow: 'visible' }}>
+    <div
+      ref={tableRef}
+      className="absolute inset-0"
+      style={{ overflow: 'visible' }}
+      {...(tutorialTargets ? { 'data-tutorial-target': 'table' } : {})}
+    >
 
       {/* Tournament HUD overlay */}
       {tournamentHUD && (
@@ -244,12 +258,14 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       <div
         className="absolute flex items-center justify-center"
         style={{ left: '20%', top: '38%', width: '60%', height: '22%', zIndex: 10 }}
+        {...(tutorialTargets ? { 'data-tutorial-target': 'community-cards' } : {})}
       >
         {hand ? (
           <PokerBoard
             communityCards={hand.communityCards}
             pot={hand.pot}
             winningCardIndices={winningCardIndices}
+            dataTutorialTargetPot={dataTutorialTargetPot}
           />
         ) : (
           <span
@@ -387,6 +403,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               top:  `${anchor.fy * 100}%`,
               transform: 'translate(-50%, -50%)',
             }}
+            {...(tutorialTargets ? { 'data-tutorial-target': `seat-${displaySlot}` } : {})}
           >
             <PokerSeat {...seatProps(idx)} />
           </div>

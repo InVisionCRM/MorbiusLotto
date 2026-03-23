@@ -18,7 +18,6 @@ import {
   Zap,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getApiUrlOptional } from '@/lib/api-urls'
 import { CardDisplay } from '@/components/poker/CardDisplay'
 
 // ---------------------------------------------------------------------------
@@ -121,16 +120,15 @@ interface PokerTableDashboardProps {
 
 export function PokerTableDashboard({ tableId }: PokerTableDashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'hands'>('overview')
-  const apiUrl = getApiUrlOptional()
 
   const { data, isLoading, error } = useQuery<TableDashboardData>({
     queryKey: ['pokerTableDashboard', tableId],
     queryFn: async () => {
-      const res = await fetch(`${apiUrl}/api/poker/table/${tableId}/dashboard`)
+      const res = await fetch(`/api/poker/table/${tableId}/dashboard`)
       if (!res.ok) throw new Error('Failed to fetch table dashboard')
       return res.json()
     },
-    enabled: !!apiUrl && !!tableId,
+    enabled: !!tableId,
     refetchInterval: 10_000,
   })
 

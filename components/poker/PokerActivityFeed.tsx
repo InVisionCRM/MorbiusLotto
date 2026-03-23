@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -113,8 +113,6 @@ export interface PokerActivityFeedProps {
   state: PokerTableState | null;
   /** When true, desktop panel is in-flow (no fixed) so it can sit in a grid column */
   embedInLayout?: boolean;
-  /** Extra bottom offset (px) for the fixed desktop panel — use when a bottom bar is in the layout */
-  bottomOffset?: number;
   /**
    * Increment (e.g. `n => n + 1` from parent) to open the mobile Activity drawer programmatically.
    * Used by the poker seat player radial on narrow viewports.
@@ -122,15 +120,17 @@ export interface PokerActivityFeedProps {
   mobileOpenRequestSerial?: number;
 }
 
+/** Desktop fixed panel: tall enough to read, capped by viewport below top nav. */
+const DESKTOP_ACTIVITY_HEIGHT = 'min(520px, calc(100dvh - 112px))';
+
 export function PokerActivityFeed({
-  wsClient, wsConnected, roomId, tableId, state, embedInLayout = false, bottomOffset = 0,
+  wsClient, wsConnected, roomId, tableId, state, embedInLayout = false,
   mobileOpenRequestSerial = 0,
 }: PokerActivityFeedProps) {
   const { messages, sendMessage, connected } = useChat(roomId, { wsClient, wsConnected });
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [input, setInput] = useState('');
-  const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const lastMobileOpenRequestRef = useRef(0);
 
@@ -260,10 +260,10 @@ export function PokerActivityFeed({
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (listRef.current && !collapsed) {
+    if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [entries, collapsed]);
+  }, [entries]);
 
   // ── Send ──────────────────────────────────────────────────────────────────
   const handleSend = useCallback((e: React.FormEvent) => {
@@ -304,7 +304,7 @@ export function PokerActivityFeed({
           style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}
         >
           {/* Winner line */}
-          <div className="flex items-center gap-1 text-[11px]">
+          <div className="flex items-center gap-1 text-[12px] md:text-[13px]">
             <span style={{ color: 'rgba(34,197,94,0.9)' }}>🏆</span>
             <span className="font-mono" style={{ color: 'rgba(255,255,255,0.7)' }}>{name}</span>
             <span style={{ color: 'rgba(34,197,94,0.9)' }}>won</span>
@@ -343,7 +343,7 @@ export function PokerActivityFeed({
       const name = entry.playerAddr ? shortAddr(entry.playerAddr) : seatLabel(entry.seatIndex, state);
       const amtStr = entry.amount ? fmtWei(entry.amount) : '';
       return (
-        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[11px] leading-snug">
+        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[12px] md:text-[13px] leading-snug">
           <span className="font-mono shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>{name}</span>
           <span className="shrink-0 font-medium" style={{ color }}>{label}</span>
           {amtStr && (
@@ -355,7 +355,7 @@ export function PokerActivityFeed({
     if (entry.kind === 'reaction') {
       const name = seatLabel(entry.seatIndex, state);
       return (
-        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[11px] leading-snug">
+        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[12px] md:text-[13px] leading-snug">
           <span className="font-mono shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>{name}</span>
           <span style={{ color: 'rgba(255,255,255,0.75)' }}>{entry.value}</span>
         </div>
@@ -364,7 +364,7 @@ export function PokerActivityFeed({
     // chat
     const name = entry.displayName?.trim() || shortAddr(entry.sender);
     return (
-      <div key={entry.id} className="px-2.5 py-[2px] text-[11px] leading-snug">
+      <div key={entry.id} className="px-2.5 py-[2px] text-[12px] md:text-[13px] leading-snug">
         <span className="font-medium" style={{ color: 'rgba(34,211,238,0.8)' }}>{name}: </span>
         <span className="break-words" style={{ color: 'rgba(255,255,255,0.8)' }}>{entry.text}</span>
       </div>
@@ -387,16 +387,6 @@ export function PokerActivityFeed({
           Activity
         </span>
         <div className="flex items-center gap-1">
-          {/* Collapse toggle — desktop only */}
-          <button
-            type="button"
-            onClick={() => setCollapsed((v) => !v)}
-            className="hidden md:flex w-5 h-5 items-center justify-center rounded text-[10px] transition hover:bg-white/10"
-            style={{ color: 'rgba(255,255,255,0.35)' }}
-            aria-label={collapsed ? 'Expand' : 'Collapse'}
-          >
-            {collapsed ? '▲' : '▼'}
-          </button>
           {/* Close — mobile drawer only */}
           <button
             type="button"
@@ -410,78 +400,79 @@ export function PokerActivityFeed({
         </div>
       </div>
 
-      {!collapsed && (
-        <>
-          {/* Feed */}
-          <div
-            ref={listRef}
-            className="flex-1 overflow-y-auto min-h-0 py-1"
-            style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.08) transparent' }}
-          >
-            {entries.length === 0 && (
-              <div className="px-2.5 py-2 text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                Waiting for activity…
-              </div>
-            )}
-            {entries.map(renderEntry)}
+      {/* Feed */}
+      <div
+        ref={listRef}
+        className="flex-1 overflow-y-auto min-h-0 py-1 text-[12px] md:text-[13px] leading-snug"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.08) transparent' }}
+      >
+        {entries.length === 0 && (
+          <div className="px-2.5 py-2" style={{ color: 'rgba(255,255,255,0.2)' }}>
+            Waiting for activity…
           </div>
+        )}
+        {entries.map(renderEntry)}
+      </div>
 
-          {/* Input */}
-          <form
-            onSubmit={handleSend}
-            className="flex shrink-0 items-center gap-1.5 px-2 py-1.5"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
-          >
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value.slice(0, CHAT_MAX_LEN))}
-              onKeyDown={handleKeyDown}
-              placeholder={connected ? 'Message…' : 'Connecting…'}
-              disabled={!connected}
-              maxLength={CHAT_MAX_LEN}
-              className="flex-1 min-w-0 px-2.5 py-1.5 rounded text-[12px] text-white placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition"
-              style={{
-                background: 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(255,255,255,0.1)',
-              }}
-            />
-            <button
-              type="submit"
-              disabled={!connected || !input.trim()}
-              className="shrink-0 px-2.5 py-1.5 rounded text-[12px] font-semibold text-white transition-colors disabled:opacity-25 disabled:pointer-events-none"
-              style={{ background: 'rgba(34,211,238,0.7)' }}
-            >
-              Send
-            </button>
-          </form>
-        </>
-      )}
+      {/* Input */}
+      <form
+        onSubmit={handleSend}
+        className="flex shrink-0 items-center gap-1.5 px-2 py-1.5"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
+      >
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value.slice(0, CHAT_MAX_LEN))}
+          onKeyDown={handleKeyDown}
+          placeholder={connected ? 'Message…' : 'Connecting…'}
+          disabled={!connected}
+          maxLength={CHAT_MAX_LEN}
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded text-[12px] md:text-[13px] text-white placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition"
+          style={{
+            background: 'rgba(255,255,255,0.07)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        />
+        <button
+          type="submit"
+          disabled={!connected || !input.trim()}
+          className="shrink-0 px-2.5 py-1.5 rounded text-[12px] md:text-[13px] font-semibold text-white transition-colors disabled:opacity-25 disabled:pointer-events-none"
+          style={{ background: 'rgba(34,211,238,0.7)' }}
+        >
+          Send
+        </button>
+      </form>
     </div>
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const desktopPanelStyle = {
+  const desktopPanelStyle: CSSProperties = {
     background: 'rgba(6,8,12,0.88)',
     border: '1px solid rgba(255,255,255,0.08)',
     boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
     backdropFilter: 'blur(10px)',
-    transition: 'height 0.2s ease',
   };
 
   return (
     <>
-      {/* Desktop: persistent panel — fixed (legacy) or in-flow when embedInLayout */}
+      {/* Desktop: persistent panel — fixed bottom-left (readable height) or in-flow when embedInLayout */}
       <div
         className={
           embedInLayout
             ? 'hidden md:flex flex-col rounded-lg overflow-hidden h-full min-h-0 w-full'
-            : 'hidden md:flex fixed left-4 z-30 flex-col rounded-lg overflow-hidden'
+            : 'hidden md:flex fixed z-30 flex-col rounded-lg overflow-hidden'
         }
         style={
           embedInLayout
-            ? { ...desktopPanelStyle, height: collapsed ? 32 : '100%' }
-            : { ...desktopPanelStyle, width: 272, height: collapsed ? 32 : 320, bottom: `${16 + bottomOffset}px` }
+            ? { ...desktopPanelStyle, height: '100%' }
+            : {
+                ...desktopPanelStyle,
+                width: 300,
+                height: DESKTOP_ACTIVITY_HEIGHT,
+                left: 'max(12px, env(safe-area-inset-left, 0px))',
+                bottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
+              }
         }
       >
         {panelContent}
