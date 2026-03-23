@@ -98,6 +98,52 @@ export function usePokerPlayerStats(address: string | null) {
   });
 }
 
+export interface PokerPlayerTableStats extends PokerPlayerStats {
+  hands_history: Array<{
+    hand_number: number;
+    completed_at: string;
+    my_contributed: string;
+    my_won: string;
+    result_type: 'win' | 'loss' | 'fold';
+  }>;
+}
+
+export function usePokerPlayerTableStats(tableId: string | null, address: string | null) {
+  return useQuery<PokerPlayerTableStats>({
+    queryKey: ['pokerPlayerTableStats', tableId, address],
+    queryFn: async () => {
+      if (!tableId || !address) throw new Error('Table ID and address required');
+      const res = await fetch(`/api/poker/table/${tableId}/player/${address}/stats`);
+      if (!res.ok) throw new Error('Failed to fetch poker table stats');
+      const data = await res.json();
+      return {
+        total_hands: data.total_hands ?? 0,
+        hands_won: data.hands_won ?? 0,
+        win_rate: data.win_rate ?? 0,
+        total_wagered: String(data.total_wagered ?? '0'),
+        total_won: String(data.total_won ?? '0'),
+        profit_loss: String(data.profit_loss ?? '0'),
+        roi: data.roi ?? 0,
+        current_streak: data.current_streak ?? 0,
+        best_streak: data.best_streak ?? 0,
+        biggest_pot_won: String(data.biggest_pot_won ?? '0'),
+        biggest_loss: String(data.biggest_loss ?? '0'),
+        hands_history: Array.isArray(data.hands_history)
+          ? data.hands_history.map((h: any) => ({
+              hand_number: h.hand_number ?? 0,
+              completed_at: h.completed_at ?? '',
+              my_contributed: String(h.my_contributed ?? '0'),
+              my_won: String(h.my_won ?? '0'),
+              result_type: h.result_type ?? 'loss',
+            }))
+          : [],
+      };
+    },
+    enabled: !!tableId && !!address,
+    refetchInterval: 15_000,
+  });
+}
+
 export function usePokerHandDetail(handId: string | null, playerAddress: string | null) {
   return useQuery<PokerHandDetail | null>({
     queryKey: ['pokerHandDetail', handId, playerAddress],

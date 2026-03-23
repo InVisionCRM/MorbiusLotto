@@ -26,6 +26,9 @@ import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
 import { usePokerSounds } from '@/hooks/use-poker-sounds';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { useProfileWs } from '@/contexts/profile-ws-context';
+import { isAdminWallet } from '@/lib/admin';
+import { PokerTableDashboard } from '@/components/poker/PokerTableDashboard';
+import { PokerPlayerTableDashboard } from '@/components/poker/PokerPlayerTableDashboard';
 import { useQueryClient } from '@tanstack/react-query';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { toast } from 'sonner';
@@ -55,7 +58,10 @@ export default function PokerTablePage() {
   const [statsModalAddress, setStatsModalAddress] = useState<string | null>(null);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [showMyStats, setShowMyStats] = useState(false);
   const [opponentProfileAddress, setOpponentProfileAddress] = useState<string | null>(null);
+  const isAdmin = isAdminWallet(address);
   /** Chat bubbles above seats: id, senderAddress (lowercase), text, expiresAt. Cleared after 5s. */
   const [seatBubbles, setSeatBubbles] = useState<Array<{ id: string; senderAddress: string; text: string; expiresAt: number }>>([]);
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -781,6 +787,36 @@ export default function PokerTablePage() {
                   Stats
                 </button>
               )}
+              {normalizedAddress && (
+                <button
+                  type="button"
+                  onClick={() => { setShowMyStats(v => !v); if (showDashboard) setShowDashboard(false); }}
+                  className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
+                  style={{
+                    background: showMyStats ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.07)',
+                    color: showMyStats ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.75)',
+                    border: `1px solid ${showMyStats ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                  }}
+                >
+                  My Table
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => { setShowDashboard(v => !v); if (showMyStats) setShowMyStats(false); }}
+                  className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
+                  style={{
+                    background: showDashboard ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.07)',
+                    color: showDashboard ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.75)',
+                    border: `1px solid ${showDashboard ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                  }}
+                >
+                  Dashboard
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleLeaveClick}
@@ -807,6 +843,20 @@ export default function PokerTablePage() {
             </div>
           )}
 
+          {/* Dashboard overlay — replaces table when admin toggles dashboard */}
+          {showDashboard && isAdmin && (
+            <div className="flex-1 relative overflow-y-auto" style={{ minHeight: 0 }}>
+              <PokerTableDashboard tableId={tableId} />
+            </div>
+          )}
+
+          {/* Player table stats — replaces table when player toggles My Table */}
+          {showMyStats && normalizedAddress && !showDashboard && (
+            <div className="flex-1 relative overflow-y-auto" style={{ minHeight: 0 }}>
+              <PokerPlayerTableDashboard tableId={tableId} playerAddress={normalizedAddress} />
+            </div>
+          )}
+
           {/* Table — fills all remaining height between nav and controls bar */}
           <div
             className="flex-1 relative"
@@ -816,6 +866,7 @@ export default function PokerTablePage() {
               marginLeft: 'auto',
               marginRight: 'auto',
               width: '100%',
+              display: showDashboard || showMyStats ? 'none' : undefined,
             }}
           >
             {/* Tip dealer button — top center overlay */}

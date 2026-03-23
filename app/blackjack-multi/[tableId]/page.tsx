@@ -21,7 +21,10 @@ import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/compo
 import AvatarView from '@/components/poker/avatar/AvatarView';
 import type { Emotion } from '@/components/poker/avatar/AvatarView';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import { UserPlus, MessageCircle, ChevronDown, Volume2, VolumeX } from 'lucide-react';
+import { UserPlus, MessageCircle, ChevronDown, Volume2, VolumeX, BarChart3, HelpCircle, History } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { GameFAQ } from '@/components/shared/GameFAQ';
+import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { CardValue, Suit } from '@/app/BLACKJACK/types';
 import Image from 'next/image';
 import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTING_OPEN, SOUNDS_BETTING_CLOSED, SOUNDS_DEALER_PHRASE, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_DEALER_BLACKJACK, SOUNDS_TIP, SOUND_PUSH, pickRandom } from '@/app/BLACKJACK/constants';
@@ -1341,46 +1344,89 @@ export default function BlackjackMultiTablePage() {
           </div>
         )}
 
-        {/* Realtime chart — directly under betting controls */}
-        <div className="w-full min-w-0 shrink-0">
-          <div className="h-64 md:h-72 min-w-0">
-            <BlackjackRealTimeBetChart
-              ref={chartRef}
-              sessionStartTime={Number(state?.roundNumber ?? 0)}
-            />
-          </div>
-        </div>
-
-        {/* Desktop: table chat always visible under chart (mobile keeps overlay chat) */}
+        {/* Tabbed info panel — Chat / Chart / Rules / History */}
         <div
-          className="hidden md:flex md:flex-col w-full min-w-0 gap-2 rounded-xl p-3 shrink-0 border border-cyan-500/25"
+          className="w-full min-w-0 shrink-0 rounded-xl border border-cyan-500/25 overflow-hidden"
           style={{
             background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.85), rgba(40, 40, 40, 0.65))',
             boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
           }}
         >
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-xs font-semibold text-cyan-300/90 uppercase tracking-wide">Table chat</h3>
-            {chatMessages.length > 0 && (
-              <span className="text-[10px] text-white/40 tabular-nums">{chatMessages.length} msgs</span>
-            )}
-          </div>
-          <div className="max-h-40 overflow-y-auto space-y-0.5 min-h-[120px] pr-1">
-            {chatMessages.slice(-24).map(m => (
-              <div key={m.id} className="text-xs text-white/75 break-words">
-                <span className="text-cyan-400 font-medium">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
-                {m.text}
+          <Tabs defaultValue="chat" className="w-full">
+            <TabsList className="w-full grid grid-cols-4 bg-black/40 rounded-none border-b border-cyan-500/15 h-9 p-0">
+              <TabsTrigger value="chat" className="rounded-none data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-300 data-[state=active]:shadow-none text-white/50 text-xs gap-1.5 h-full">
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Chat</span>
+              </TabsTrigger>
+              <TabsTrigger value="chart" className="rounded-none data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-300 data-[state=active]:shadow-none text-white/50 text-xs gap-1.5 h-full">
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Chart</span>
+              </TabsTrigger>
+              <TabsTrigger value="rules" className="rounded-none data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-300 data-[state=active]:shadow-none text-white/50 text-xs gap-1.5 h-full">
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Rules</span>
+              </TabsTrigger>
+              <TabsTrigger value="history" className="rounded-none data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-300 data-[state=active]:shadow-none text-white/50 text-xs gap-1.5 h-full">
+                <History className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">History</span>
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Chat tab */}
+            <TabsContent value="chat" className="mt-0 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold text-cyan-300/90 uppercase tracking-wide">Table chat</h3>
+                {chatMessages.length > 0 && (
+                  <span className="text-[10px] text-white/40 tabular-nums">{chatMessages.length} msgs</span>
+                )}
               </div>
-            ))}
-            {chatMessages.length === 0 && (
-              <div className="text-xs text-white/35 text-center py-6">No messages yet</div>
-            )}
-          </div>
-          {address && wsConnected ? (
-            <ChatInput onSend={sendChatMessage} />
-          ) : (
-            <p className="text-[11px] text-white/40 text-center py-1">Connect wallet to chat</p>
-          )}
+              <div className="max-h-48 overflow-y-auto space-y-0.5 min-h-[140px] pr-1">
+                {chatMessages.slice(-24).map(m => (
+                  <div key={m.id} className="text-xs text-white/75 break-words">
+                    <span className="text-cyan-400 font-medium">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
+                    {m.text}
+                  </div>
+                ))}
+                {chatMessages.length === 0 && (
+                  <div className="text-xs text-white/35 text-center py-6">No messages yet</div>
+                )}
+              </div>
+              {address && wsConnected ? (
+                <ChatInput onSend={sendChatMessage} />
+              ) : (
+                <p className="text-[11px] text-white/40 text-center py-1">Connect wallet to chat</p>
+              )}
+            </TabsContent>
+
+            {/* Chart tab */}
+            <TabsContent value="chart" className="mt-0 p-3">
+              <div className="h-64 md:h-72 min-w-0">
+                <BlackjackRealTimeBetChart
+                  ref={chartRef}
+                  sessionStartTime={Number(state?.roundNumber ?? 0)}
+                />
+              </div>
+            </TabsContent>
+
+            {/* Rules tab */}
+            <TabsContent value="rules" className="mt-0 p-3 max-h-80 overflow-y-auto">
+              <GameFAQ
+                game="blackjack"
+                addresses={[
+                  { label: 'Blackjack Contract', address: BLACKJACK_ADDRESS },
+                  { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+                ]}
+              />
+            </TabsContent>
+
+            {/* History tab — placeholder */}
+            <TabsContent value="history" className="mt-0 p-3">
+              <div className="flex flex-col items-center justify-center py-10 text-white/35 text-sm gap-2">
+                <History className="w-8 h-8 text-white/20" />
+                <p>Table history coming soon</p>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* MY TURN — reuses BlackjackMobileActionBar from single player */}

@@ -1295,6 +1295,41 @@ async function initializeServices() {
     });
 
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    app.get('/api/poker/table/:tableId/dashboard', async (req, res) => {
+      try {
+        const { tableId } = req.params;
+        if (!tableId || !UUID_REGEX.test(tableId)) {
+          return res.status(400).json({ error: 'Invalid table ID' });
+        }
+        const data = await dbService.getPokerTableDashboardStats(tableId);
+        if (!data.table) {
+          return res.status(404).json({ error: 'Table not found' });
+        }
+        sendJson(res, data);
+      } catch (error) {
+        logger.error('Error fetching poker table dashboard:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.get('/api/poker/table/:tableId/player/:address/stats', async (req, res) => {
+      try {
+        const { tableId, address } = req.params;
+        if (!tableId || !UUID_REGEX.test(tableId)) {
+          return res.status(400).json({ error: 'Invalid table ID' });
+        }
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+        const data = await dbService.getPokerPlayerTableStats(tableId, address);
+        sendJson(res, data);
+      } catch (error) {
+        logger.error('Error fetching poker player table stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     app.get('/api/poker/hands/:handId', async (req, res) => {
       try {
         const { handId } = req.params;

@@ -794,7 +794,9 @@ export class PokerGameService {
         if (liveTable) {
           const livePlayer = liveTable.players[pos];
           if (livePlayer && livePlayer.id === seat.playerAddress) {
-            seat.currentBet = livePlayer.bet.toString();
+            seat.currentBet = scaling.tournament
+              ? String(Math.max(0, Math.round(livePlayer.bet)))
+              : engineChipsToWeiRounded(livePlayer.bet).toString();
           }
         }
       }
