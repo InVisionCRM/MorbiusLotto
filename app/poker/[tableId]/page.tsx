@@ -66,12 +66,14 @@ export default function PokerTablePage() {
   const [seatBubbles, setSeatBubbles] = useState<Array<{ id: string; senderAddress: string; text: string; expiresAt: number }>>([]);
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const reactionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
-  /** Per-seat quick reaction (emoji or phrase) shown above seat; cleared after 2s. */
-  const [reactionBySeatIndex, setReactionBySeatIndex] = useState<Record<number, { type: 'emoji' | 'phrase'; value: string }>>({});
+  /** Per-seat QuickChat phrase shown above seat; cleared after 2s. */
+  const [reactionBySeatIndex, setReactionBySeatIndex] = useState<Record<number, string>>({});
   const [broadcastEmotionBySeatIndex, setBroadcastEmotionBySeatIndex] = useState<Record<number, Emotion>>({});
   const emotionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const clientRef = useRef<BlackjackWebSocketClient | null>(null);
   const [tipAnimating, setTipAnimating] = useState(false);
+  /** Bumped to open Activity drawer from seat radial on mobile. */
+  const [activityMobileOpenSerial, setActivityMobileOpenSerial] = useState(0);
   const fetchSeqRef = useRef(0);
 
   const normalizedAddress = address?.toLowerCase() ?? null;
@@ -204,13 +206,13 @@ export default function PokerTablePage() {
     };
   }, [pokerChatRoomId]);
 
-  // Quick reactions (emoji/phrase) — broadcast to table, show above seat for 2s
+  // QuickChat phrases — broadcast to table, show above seat for 2s
   useEffect(() => {
     const client = clientRef.current;
     if (!client || !tableId) return;
 
-    const onQuickReaction = (payload: { tableId?: string; seatIndex?: number; type?: 'emoji' | 'phrase'; value?: string }) => {
-      if (payload.tableId !== tableId || payload.seatIndex == null || (payload.type !== 'emoji' && payload.type !== 'phrase')) return;
+    const onQuickReaction = (payload: { tableId?: string; seatIndex?: number; type?: string; value?: string }) => {
+      if (payload.tableId !== tableId || payload.seatIndex == null || payload.type !== 'phrase') return;
       const seatIndex = payload.seatIndex;
       const value = typeof payload.value === 'string' ? payload.value.trim() : '';
       if (!value) return;
@@ -220,7 +222,7 @@ export default function PokerTablePage() {
         reactionTimeoutsRef.current.delete(seatIndex);
       }
 
-      setReactionBySeatIndex((prev) => ({ ...prev, [seatIndex]: { type: payload.type!, value } }));
+      setReactionBySeatIndex((prev) => ({ ...prev, [seatIndex]: value }));
 
       const t = setTimeout(() => {
         setReactionBySeatIndex((prev) => {
@@ -409,32 +411,12 @@ export default function PokerTablePage() {
   const hand = state?.currentHand;
   const mySeatIndex = state ? state.seats.findIndex((s) => s.playerAddress === normalizedAddress) : -1;
 
-  const onEmojiReaction = useCallback(
-    (emoji: string) => {
-      const client = clientRef.current;
-      if (!client?.isConnected() || !tableId || mySeatIndex < 0) return;
-      client.sendPokerQuickReaction(tableId, 'emoji', emoji);
-      setReactionBySeatIndex((prev) => ({ ...prev, [mySeatIndex]: { type: 'emoji', value: emoji } }));
-      if (reactionTimeoutsRef.current.has(mySeatIndex)) clearTimeout(reactionTimeoutsRef.current.get(mySeatIndex)!);
-      const t = setTimeout(() => {
-        setReactionBySeatIndex((prev) => {
-          const next = { ...prev };
-          delete next[mySeatIndex];
-          return next;
-        });
-        reactionTimeoutsRef.current.delete(mySeatIndex);
-      }, POKER_QUICK_REACTION_DURATION_MS);
-      reactionTimeoutsRef.current.set(mySeatIndex, t);
-    },
-    [tableId, mySeatIndex],
-  );
-
   const onPhraseReaction = useCallback(
     (phrase: string) => {
       const client = clientRef.current;
       if (!client?.isConnected() || !tableId || mySeatIndex < 0) return;
-      client.sendPokerQuickReaction(tableId, 'phrase', phrase);
-      setReactionBySeatIndex((prev) => ({ ...prev, [mySeatIndex]: { type: 'phrase', value: phrase } }));
+      client.sendPokerQuickPhrase(tableId, phrase);
+      setReactionBySeatIndex((prev) => ({ ...prev, [mySeatIndex]: phrase }));
       if (reactionTimeoutsRef.current.has(mySeatIndex)) clearTimeout(reactionTimeoutsRef.current.get(mySeatIndex)!);
       const t = setTimeout(() => {
         setReactionBySeatIndex((prev) => {
@@ -908,11 +890,11 @@ export default function PokerTablePage() {
                 state={state}
                 currentPlayerAddress={normalizedAddress}
                 onLeave={handleLeaveClick}
+                onRequestMobileActivity={() => setActivityMobileOpenSerial((n) => n + 1)}
                 timeLeft={timeLeft}
                 chatBubbleBySeatIndex={chatBubbleBySeatIndex}
                 reactionBySeatIndex={reactionBySeatIndex}
                 broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
-                onEmojiReaction={mySeatIndex >= 0 ? onEmojiReaction : undefined}
                 onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
                 onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}
                 onReUpClick={mySeat ? () => setShowDepositModal(true) : undefined}
@@ -958,6 +940,7 @@ export default function PokerTablePage() {
               tableId={tableId}
               state={state}
               bottomOffset={state && mySeat ? 108 : 0}
+              mobileOpenRequestSerial={activityMobileOpenSerial}
             />
           )}
         </div>

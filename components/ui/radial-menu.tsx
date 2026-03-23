@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 import { motion, type Transition } from 'motion/react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
@@ -270,5 +271,205 @@ export function RadialMenu({
         </ContextMenu.Content>
       </ContextMenu.Portal>
     </ContextMenu.Root>
+  );
+}
+
+// ── Click / tap radial (fixed position from anchor) — for poker seat player menu, etc. ──
+
+export type RadialMenuFloatingProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  menuItems: RadialMenuItem[];
+  onSelect: (item: RadialMenuItem) => void;
+  size?: number;
+  iconSize?: number;
+  bandWidth?: number;
+  innerGap?: number;
+  outerGap?: number;
+  outerRingWidth?: number;
+  showLabels?: boolean;
+};
+
+/**
+ * Same wedge UI as {@link RadialMenu} but opens on demand (left click / tap).
+ * Renders in a portal, positioned above the anchor element’s center.
+ */
+export function RadialMenuFloating({
+  open,
+  onOpenChange,
+  anchorRef,
+  menuItems,
+  onSelect,
+  size = 260,
+  iconSize = 18,
+  bandWidth = 50,
+  innerGap = 8,
+  outerGap = 8,
+  outerRingWidth = 12,
+  showLabels = true,
+}: RadialMenuFloatingProps) {
+  const [coords, setCoords] = React.useState<{ left: number; top: number } | null>(null);
+  const radius = size / 2;
+  const outerRingOuterRadius = radius;
+  const outerRingInnerRadius = outerRingOuterRadius - outerRingWidth;
+  const wedgeOuterRadius = outerRingInnerRadius - outerGap;
+  const wedgeInnerRadius = wedgeOuterRadius - bandWidth;
+  const iconRingRadius = (wedgeOuterRadius + wedgeInnerRadius) / 2;
+  const centerRadius = Math.max(wedgeInnerRadius - innerGap, 0);
+  const slice = menuItems.length > 0 ? 360 / menuItems.length : 0;
+  const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
+  const labelBox = showLabels ? iconSize * 2.8 : iconSize * 2;
+
+  const updatePosition = React.useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    // Float menu center slightly above avatar center
+    setCoords({ left: cx, top: cy - Math.min(48, rect.height * 0.35) });
+  }, [anchorRef]);
+
+  React.useLayoutEffect(() => {
+    if (!open) {
+      setCoords(null);
+      setActiveIndex(null);
+      return;
+    }
+    updatePosition();
+    const onScrollOrResize = () => updatePosition();
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [open, updatePosition, menuItems.length, size]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onOpenChange(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onOpenChange]);
+
+  if (!open || typeof document === 'undefined' || menuItems.length === 0 || !coords) {
+    return null;
+  }
+
+  return createPortal(
+    <>
+      <button
+        type="button"
+        aria-label="Close menu"
+        className="fixed inset-0 z-[108] cursor-default bg-black/40 md:bg-black/25"
+        onClick={() => onOpenChange(false)}
+      />
+      <div
+        className="pointer-events-none fixed z-[110]"
+        style={{
+          left: coords.left,
+          top: coords.top,
+          transform: 'translate(-50%, -50%)',
+          width: size,
+          height: size,
+        }}
+      >
+        <div
+          className="pointer-events-auto relative size-full"
+          role="menu"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <motion.div
+            className="absolute inset-0 rounded-full shadow-xl"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={menuTransition}
+          />
+          <svg
+            className="absolute inset-0 size-full"
+            viewBox={`${-radius} ${-radius} ${radius * 2} ${radius * 2}`}
+            aria-hidden={false}
+          >
+            {menuItems.map((item, index) => {
+              const Icon = item.icon;
+              const midDeg = START_ANGLE + slice * index;
+              const { x: iconX, y: iconY } = polarToCartesian(iconRingRadius, midDeg);
+              const isActive = activeIndex === index;
+
+              return (
+                <g
+                  key={String(item.id)}
+                  className="cursor-pointer"
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onMouseLeave={() => setActiveIndex(null)}
+                >
+                  <motion.path
+                    d={slicePath(index, menuItems.length, outerRingOuterRadius, outerRingInnerRadius)}
+                    className={cn({
+                      'fill-neutral-200 dark:fill-neutral-700': isActive,
+                      'fill-neutral-100 dark:fill-neutral-800': !isActive,
+                    })}
+                    initial={false}
+                    transition={wedgeTransition}
+                  />
+                  <motion.path
+                    d={slicePath(index, menuItems.length, wedgeOuterRadius, wedgeInnerRadius)}
+                    className={cn(
+                      'stroke-neutral-300 stroke-1 dark:stroke-neutral-600',
+                      {
+                        'fill-neutral-200 dark:fill-neutral-700': isActive,
+                        'fill-neutral-100 dark:fill-neutral-800': !isActive,
+                      },
+                    )}
+                    initial={false}
+                    transition={wedgeTransition}
+                  />
+                  <foreignObject
+                    x={iconX - labelBox / 2}
+                    y={iconY - labelBox / 2}
+                    width={labelBox}
+                    height={labelBox}
+                  >
+                    <div className="flex size-full flex-col items-center justify-center gap-0.5">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-label={item.label}
+                        className={cn(
+                          'flex size-full flex-col items-center justify-center rounded-full text-neutral-600 outline-none dark:text-neutral-400',
+                          {
+                            'text-neutral-900 dark:text-neutral-50': isActive,
+                          },
+                        )}
+                        onClick={() => onSelect(item)}
+                      >
+                        <Icon style={{ height: iconSize, width: iconSize }} />
+                        {showLabels && (
+                          <span className="max-w-[52px] truncate text-center text-[7px] font-medium leading-tight text-neutral-600 dark:text-neutral-300">
+                            {item.label}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  </foreignObject>
+                </g>
+              );
+            })}
+            <circle
+              cx={0}
+              cy={0}
+              r={centerRadius}
+              className="fill-neutral-100 stroke-1 opacity-50 stroke-neutral-400 dark:fill-neutral-950 dark:stroke-neutral-600"
+            />
+            <circle cx={0} cy={0} r={3} className="fill-none stroke-neutral-400 dark:stroke-neutral-600" />
+          </svg>
+        </div>
+      </div>
+    </>,
+    document.body,
   );
 }

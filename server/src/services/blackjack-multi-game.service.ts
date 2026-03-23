@@ -5,6 +5,9 @@ import { CosmeticsService } from './cosmetics.service';
 import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
 import { logger } from '../utils/logger';
 
+/** Kick from table after this many consecutive timeouts (betting window + in-round auto-stand). */
+const BJ_MULTI_AFK_KICK_AFTER = 3;
+
 // ---------------------------------------------------------------------------
 // Shared per-key mutex (copied from blackjack-game.service.ts pattern)
 // ---------------------------------------------------------------------------
@@ -49,7 +52,7 @@ export interface BJMultiSeatState {
   position: number;
   playerAddress: string | null;
   seatStatus: 'active' | 'sitting_out';
-  consecutiveSitOuts: number;
+  consecutiveTimeouts: number;
   pendingBet: string;          // bet staged in betting phase
   displayName?: string | null;
   profileImageUrl?: string | null;
@@ -427,7 +430,7 @@ export class BlackjackMultiGameService {
         // else netDeduction === 0 — same amount, no balance change needed
 
         await client.query(
-          `UPDATE blackjack_multi_seats SET pending_bet = $1 WHERE table_id = $2 AND LOWER(player_address) = LOWER($3)`,
+          `UPDATE blackjack_multi_seats SET pending_bet = $1, consecutive_timeouts = 0 WHERE table_id = $2 AND LOWER(player_address) = LOWER($3)`,
           [betAmount.toString(), tableId, normalized],
         );
       });
@@ -497,28 +500,8 @@ export class BlackjackMultiGameService {
     );
     const allSeats = seatsResult.rows;
 
-    // Seats with a bet → they play this round
+    // Seats with a bet → they play this round (AFK counters handled in handleBettingTimeout).
     const bettingSeats = allSeats.filter(s => BigInt(s.pending_bet || '0') > 0n);
-    // Seats without a bet → sit out and increment counter
-    const nonBettingSeats = allSeats.filter(s => BigInt(s.pending_bet || '0') === 0n);
-
-    for (const seat of nonBettingSeats) {
-      const newCount = (seat.consecutive_sit_outs || 0) + 1;
-      if (newCount >= 3) {
-        // Kick player
-        await this.pool.query(
-          `DELETE FROM blackjack_multi_seats WHERE id = $1`, [seat.id],
-        );
-        logger.info('BJMulti: kicked player for 3 consecutive sit-outs', {
-          tableId, position: seat.position, playerAddress: seat.player_address,
-        });
-      } else {
-        await this.pool.query(
-          `UPDATE blackjack_multi_seats SET status = 'sitting_out', consecutive_sit_outs = $1 WHERE id = $2`,
-          [newCount, seat.id],
-        );
-      }
-    }
 
     if (bettingSeats.length === 0) {
       // No one bet — go back to waiting
@@ -619,7 +602,7 @@ export class BlackjackMultiGameService {
 
       // Reset pending bet on the seat
       await this.pool.query(
-        `UPDATE blackjack_multi_seats SET pending_bet = 0, status = 'active', consecutive_sit_outs = 0 WHERE id = $1`,
+        `UPDATE blackjack_multi_seats SET pending_bet = 0, status = 'active', consecutive_timeouts = 0 WHERE id = $1`,
         [seat.id],
       );
     }
@@ -686,6 +669,11 @@ export class BlackjackMultiGameService {
       const rs = rsResult.rows[0];
       if (rs.seat_position !== round.acting_seat_position) throw new Error('Not your turn');
 
+      await this.pool.query(
+        `UPDATE blackjack_multi_seats SET consecutive_timeouts = 0 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+        [tableId, normalized],
+      );
+
       // Idempotency check: reject duplicate action IDs
       if (actionId && rs.last_action_id === actionId) {
         logger.warn('BJMulti: duplicate actionId rejected', { tableId, actionId, seat: rs.seat_position });
@@ -741,22 +729,42 @@ export class BlackjackMultiGameService {
       );
       if (roundResult.rows.length === 0) return;
       const round = roundResult.rows[0];
+      const actingPos = round.acting_seat_position as number;
 
-      logger.info('BJMulti: auto-standing timed-out turn', {
-        tableId, roundId: round.id, actingSeat: round.acting_seat_position,
-      });
-      this.audit(tableId, 'auto_stand', round.id, null, { seatPosition: round.acting_seat_position });
-
-      // Stand the acting seat's current hand
       const rsResult = await this.pool.query(
         `SELECT * FROM blackjack_multi_round_seats WHERE round_id = $1 AND seat_position = $2`,
-        [round.id, round.acting_seat_position],
+        [round.id, actingPos],
       );
       if (rsResult.rows.length === 0) {
         await this.advanceTurn(tableId, round.id);
         return;
       }
       const rs = rsResult.rows[0];
+
+      const timeoutUp = await this.pool.query(
+        `UPDATE blackjack_multi_seats
+         SET consecutive_timeouts = consecutive_timeouts + 1
+         WHERE table_id = $1 AND position = $2
+         RETURNING consecutive_timeouts`,
+        [tableId, actingPos],
+      );
+      if (timeoutUp.rows.length === 0) {
+        logger.warn('BJMulti: auto-stand missing seat row for acting position', { tableId, actingPos });
+        await this.advanceTurn(tableId, round.id);
+        return;
+      }
+      const newTimeoutCount = Number(timeoutUp.rows[0].consecutive_timeouts ?? 0);
+
+      if (newTimeoutCount >= BJ_MULTI_AFK_KICK_AFTER) {
+        await this.kickActingPlayerMidRoundAfk(tableId, round.id, actingPos, rs, String(rs.player_address));
+        return;
+      }
+
+      logger.info('BJMulti: auto-standing timed-out turn', {
+        tableId, roundId: round.id, actingSeat: actingPos, consecutiveTimeouts: newTimeoutCount,
+      });
+      this.audit(tableId, 'auto_stand', round.id, null, { seatPosition: actingPos, consecutiveTimeouts: newTimeoutCount });
+
       const hands: BJMultiHandObj[] = rs.hands;
       const hi = rs.active_hand_index ?? 0;
       if (hands[hi]) {
@@ -771,7 +779,6 @@ export class BlackjackMultiGameService {
         [JSON.stringify(hands), rs.id],
       );
 
-      // If same seat has another active hand (e.g. after split), advance to it instead of next seat
       const nextInSeat = hands.findIndex((h, i) => i > hi && (h.canHit || h.canStand));
       if (nextInSeat !== -1) {
         await this.pool.query(
@@ -866,8 +873,41 @@ export class BlackjackMultiGameService {
       const table = tableResult.rows[0];
       if (table.status !== 'betting') return;
 
-      const seatsResult = await this.pool.query(
-        `SELECT * FROM blackjack_multi_seats WHERE table_id = $1`, [tableId],
+      let seatsResult = await this.pool.query(
+        `SELECT * FROM blackjack_multi_seats WHERE table_id = $1 ORDER BY position ASC`,
+        [tableId],
+      );
+
+      for (const seat of seatsResult.rows) {
+        const hasBet = BigInt(seat.pending_bet || '0') > 0n;
+        if (hasBet) {
+          await this.pool.query(
+            `UPDATE blackjack_multi_seats SET consecutive_timeouts = 0, status = 'active' WHERE id = $1`,
+            [seat.id],
+          );
+        } else {
+          const prev = Number(seat.consecutive_timeouts ?? 0);
+          const newCount = prev + 1;
+          if (newCount >= BJ_MULTI_AFK_KICK_AFTER) {
+            await this.pool.query(`DELETE FROM blackjack_multi_seats WHERE id = $1`, [seat.id]);
+            logger.info('BJMulti: kicked player for AFK (betting phase)', {
+              tableId, position: seat.position, playerAddress: seat.player_address, consecutiveTimeouts: newCount,
+            });
+            this.audit(tableId, 'kick_afk_betting', null, seat.player_address, {
+              consecutiveTimeouts: newCount, position: seat.position,
+            });
+          } else {
+            await this.pool.query(
+              `UPDATE blackjack_multi_seats SET consecutive_timeouts = $1, status = 'sitting_out' WHERE id = $2`,
+              [newCount, seat.id],
+            );
+          }
+        }
+      }
+
+      seatsResult = await this.pool.query(
+        `SELECT * FROM blackjack_multi_seats WHERE table_id = $1 ORDER BY position ASC`,
+        [tableId],
       );
       const bettingSeats = seatsResult.rows.filter(s => BigInt(s.pending_bet || '0') > 0n);
       if (bettingSeats.length === 0) {
@@ -976,7 +1016,7 @@ export class BlackjackMultiGameService {
           position: pos,
           playerAddress: null,
           seatStatus: 'active' as const,
-          consecutiveSitOuts: 0,
+          consecutiveTimeouts: 0,
           pendingBet: '0',
           betAmount: '0',
           hands: [],
@@ -995,7 +1035,7 @@ export class BlackjackMultiGameService {
         position: pos,
         playerAddress: seat.player_address,
         seatStatus: seat.status,
-        consecutiveSitOuts: seat.consecutive_sit_outs,
+        consecutiveTimeouts: Number(seat.consecutive_timeouts ?? 0),
         pendingBet: seat.pending_bet || '0',
         displayName: profile?.displayName ?? null,
         profileImageUrl: profile?.profileImageUrl ?? null,
@@ -1242,6 +1282,47 @@ export class BlackjackMultiGameService {
     await this.pool.query(
       `UPDATE blackjack_multi_rounds SET turn_started_at = NOW() WHERE id = $1`, [round.id],
     );
+  }
+
+  /**
+   * Refund all chips in play for this round seat, remove round + table seat, then advance play.
+   * Caller must hold the table lock.
+   */
+  private async kickActingPlayerMidRoundAfk(
+    tableId: string,
+    roundId: string,
+    actingSeatPosition: number,
+    rs: { id: string; hands: BJMultiHandObj[] },
+    playerAddress: string,
+  ): Promise<void> {
+    const norm = playerAddress.toLowerCase();
+    let refund = 0n;
+    for (const h of rs.hands) {
+      refund += BigInt(h.betAmount || '0');
+    }
+
+    await this.dbService.withTransaction(async (client) => {
+      if (refund > 0n) {
+        await client.query(
+          `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+          [norm, refund.toString()],
+        );
+      }
+      await client.query(`DELETE FROM blackjack_multi_round_seats WHERE id = $1`, [rs.id]);
+      await client.query(
+        `DELETE FROM blackjack_multi_seats WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+        [tableId, norm],
+      );
+    });
+
+    logger.info('BJMulti: kicked player for AFK (mid-round)', {
+      tableId, roundId, position: actingSeatPosition, playerAddress: norm, refund: refund.toString(),
+    });
+    this.audit(tableId, 'kick_afk_mid_round', roundId, norm, {
+      refund: refund.toString(), seatPosition: actingSeatPosition,
+    });
+
+    await this.advanceTurn(tableId, roundId);
   }
 
   /**

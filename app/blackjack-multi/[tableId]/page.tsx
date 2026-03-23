@@ -21,7 +21,7 @@ import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/compo
 import AvatarView from '@/components/poker/avatar/AvatarView';
 import type { Emotion } from '@/components/poker/avatar/AvatarView';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import { UserPlus, MessageCircle, ChevronDown, Volume2, VolumeX, BarChart3, HelpCircle, History } from 'lucide-react';
+import { UserPlus, MessageCircle, Volume2, VolumeX, BarChart3, HelpCircle, History, Music, Play, Pause, SkipForward, Settings2, Mic, MicOff } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { GameFAQ } from '@/components/shared/GameFAQ';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -36,6 +36,8 @@ import { toast } from 'sonner';
 
 const TURN_TIMEOUT = 30;
 const BETTING_TIMEOUT = 15;
+/** Must match server BJ_MULTI_AFK_KICK_AFTER — shown in seat UI */
+const AFK_TIMEOUTS_BEFORE_KICK = 3;
 
 function resolveTheme(kind: 'video' | 'image', id: string) {
   if (kind === 'video') {
@@ -421,6 +423,20 @@ function Seat({
               {balanceLabel != null && (
                 <span className="text-[11px] text-white/90 tabular-nums leading-tight">{balanceLabel}</span>
               )}
+              {seat && (seat.consecutiveTimeouts ?? 0) > 0 && (
+                <span
+                  className={`text-[9px] font-semibold tabular-nums mt-0.5 leading-tight rounded px-1.5 py-0.5 border max-w-[118px] ${
+                    (seat.consecutiveTimeouts ?? 0) >= AFK_TIMEOUTS_BEFORE_KICK - 1
+                      ? 'border-orange-500/45 bg-orange-950/55 text-orange-100/95'
+                      : 'border-cyan-500/30 bg-gradient-to-r from-slate-900/90 to-slate-800/90 text-cyan-100/85'
+                  }`}
+                  style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)' }}
+                  title="Each missed betting window or turn timeout (auto-stand) adds one. At 3 you are removed from the table and mid-round chips are refunded."
+                >
+                  {(seat.consecutiveTimeouts ?? 0)}/{AFK_TIMEOUTS_BEFORE_KICK} idle
+                  {isMe ? ' — act or lose seat' : ''}
+                </span>
+              )}
             </div>
           </div>
         </>
@@ -455,13 +471,67 @@ export default function BlackjackMultiTablePage() {
 
   // Sound effects
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const { playSound } = useAudio(soundEnabled);
+  const [dealerVoiceEnabled, setDealerVoiceEnabled] = useState(true);
+  const [sfxEnabled, setSfxEnabled] = useState(true);
+  const [soundPanelOpen, setSoundPanelOpen] = useState(false);
+  const { playSound: _playSound } = useAudio(soundEnabled);
+  // Wrap playSound to respect SFX toggle
+  const playSound = useCallback((path: string, volume?: number) => {
+    if (!sfxEnabled) return;
+    _playSound(path, volume);
+  }, [sfxEnabled, _playSound]);
   const dealerVoiceRef = useRef<{ source: AudioBufferSourceNode; gain: GainNode } | null>(null);
   const prevSeatAddrsRef = useRef<(string | null)[]>([null, null, null]);
 
+  // Background music player
+  const MUSIC_PLAYLIST = useMemo(() => [
+    '/BlackJack/music/Sera-di-Blackjack.mp3',
+    '/BlackJack/music/Winning-Big.mp3',
+    '/BlackJack/music/Lucky-Ducky.mp3',
+    '/BlackJack/music/Smooth-Gains.mp3',
+    '/BlackJack/music/Top-Tier.mp3',
+    '/BlackJack/music/Chances.mp3',
+  ] as const, []);
+  const [musicTrackIndex, setMusicTrackIndex] = useState(0);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(25);
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const el = musicAudioRef.current;
+    if (el) el.volume = musicVolume / 100;
+  }, [musicVolume]);
+
+  const handleMusicEnded = useCallback(() => {
+    setMusicTrackIndex((prev) => (prev + 1) % MUSIC_PLAYLIST.length);
+    setIsMusicPlaying(false);
+  }, [MUSIC_PLAYLIST.length]);
+
+  useEffect(() => {
+    const el = musicAudioRef.current;
+    if (!el) return;
+    el.volume = musicVolume / 100;
+    if (isMusicPlaying) el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+  }, [musicTrackIndex, musicVolume, isMusicPlaying]);
+
+  const toggleMusic = useCallback(() => {
+    const el = musicAudioRef.current;
+    if (!el) return;
+    if (isMusicPlaying) {
+      el.pause();
+      setIsMusicPlaying(false);
+    } else {
+      el.play().then(() => setIsMusicPlaying(true)).catch(() => {});
+    }
+  }, [isMusicPlaying]);
+
+  const nextTrack = useCallback(() => {
+    setMusicTrackIndex((prev) => (prev + 1) % MUSIC_PLAYLIST.length);
+  }, [MUSIC_PLAYLIST.length]);
+
   // Play a dealer voice line on a dedicated channel (stops any currently playing voice)
   const playDealerVoice = useCallback(async (path: string, volume = 0.5) => {
-    if (!soundEnabled) return;
+    if (!soundEnabled || !dealerVoiceEnabled) return;
     // Stop any currently playing dealer voice
     if (dealerVoiceRef.current) {
       try { dealerVoiceRef.current.source.stop(); } catch { /* already stopped */ }
@@ -485,7 +555,7 @@ export default function BlackjackMultiTablePage() {
     } catch {
       playSound(path, volume);
     }
-  }, [soundEnabled, playSound]);
+  }, [soundEnabled, dealerVoiceEnabled, playSound]);
 
   // Dealer random phrase timer during betting
   const dealerPhraseTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -513,7 +583,6 @@ export default function BlackjackMultiTablePage() {
   } : null;
 
   // Chat dropdown overlay
-  const [chatOpen, setChatOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
   // Track completed rounds for History tab
   const [roundHistory, setRoundHistory] = useState<Array<{
@@ -989,7 +1058,7 @@ export default function BlackjackMultiTablePage() {
         }
       `}</style>
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] gap-2 md:gap-4 min-h-0 pt-14 md:pt-14" style={{ scrollbarGutter: 'stable both-edges' }}>
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] gap-2 md:gap-4 min-h-0 pt-11 md:pt-14" style={{ scrollbarGutter: 'stable both-edges' }}>
 
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
@@ -1254,8 +1323,11 @@ export default function BlackjackMultiTablePage() {
                 const isMe = seat?.playerAddress?.toLowerCase() === address?.toLowerCase();
                 const align =
                   pos === 0 ? 'flex justify-start' : pos === 2 ? 'flex justify-end' : 'flex justify-center';
+                const seatNudge =
+                  pos === 0 ? { transform: 'translate(10px, -10px)' } :
+                  pos === 2 ? { transform: 'translate(-10px, -10px)' } : {};
                 return (
-                  <div key={pos} className={`min-w-0 ${align}`}>
+                  <div key={pos} className={`min-w-0 ${align}`} style={seatNudge}>
                     <Seat
                       seat={seat ?? null}
                       position={pos}
@@ -1280,50 +1352,125 @@ export default function BlackjackMultiTablePage() {
 
         </div>
 
-        {/* Mobile: chat toggle + panel on table overlay; md+: chat lives in sidebar only */}
-        <div className="absolute left-2 bottom-2 md:bottom-auto md:top-12 z-20 md:max-w-none" style={{ maxWidth: '280px' }}>
-          <div className="flex items-center gap-1.5">
-            <div className="contents md:hidden">
-              <button
-                type="button"
-                onClick={() => setChatOpen(o => !o)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-black/60 border border-white/15 text-white/70 hover:text-white hover:bg-black/75 transition-colors text-xs backdrop-blur-sm"
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-                <span>Chat</span>
-                <ChevronDown className={`w-3 h-3 transition-transform ${chatOpen ? 'rotate-180' : ''}`} />
-                {chatMessages.length > 0 && !chatOpen && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                )}
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSoundEnabled(e => !e)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-black/60 border border-white/15 text-white/70 hover:text-white hover:bg-black/75 transition-colors text-xs backdrop-blur-sm"
-              title={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
+        {/* Sound settings — top-left of table */}
+        <div className="absolute left-2 top-10 z-20">
+          <button
+            type="button"
+            onClick={() => setSoundPanelOpen(o => !o)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-black/60 border border-white/15 text-white/70 hover:text-white hover:bg-black/75 transition-colors text-xs backdrop-blur-sm"
+            title="Sound settings"
+          >
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-red-400" />}
+            <Settings2 className="w-3 h-3" />
+          </button>
+          {soundPanelOpen && (
+            <div
+              className="mt-1 bg-black/90 border border-white/15 rounded-lg p-3 backdrop-blur-md w-[220px] space-y-2.5"
+              onClick={(e) => e.stopPropagation()}
             >
-              {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-red-400" />}
-              <span>{soundEnabled ? 'Sounds' : 'Muted'}</span>
-            </button>
-          </div>
-          {chatOpen && (
-            <div className="mt-1 bg-black/80 border border-white/15 rounded p-2.5 backdrop-blur-md w-[260px] md:hidden">
-              <div className="max-h-32 overflow-y-auto space-y-0.5 min-h-0">
-                {chatMessages.slice(-12).map(m => (
-                  <div key={m.id} className="text-xs text-white/70">
-                    <span className="text-cyan-400">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
-                    {m.text}
+              {/* Master toggle */}
+              <label className="flex items-center justify-between cursor-pointer group">
+                <span className="text-[11px] text-white/70 font-medium uppercase tracking-wide">Master</span>
+                <button
+                  type="button"
+                  onClick={() => setSoundEnabled(e => !e)}
+                  className={`w-8 h-4.5 rounded-full relative transition-colors ${soundEnabled ? 'bg-cyan-600' : 'bg-white/15'}`}
+                >
+                  <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${soundEnabled ? 'left-[calc(100%-18px)]' : 'left-0.5'}`} />
+                </button>
+              </label>
+
+              {/* Dealer voice toggle */}
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-[11px] text-white/60 flex items-center gap-1.5">
+                  {dealerVoiceEnabled ? <Mic className="w-3 h-3" /> : <MicOff className="w-3 h-3 text-red-400" />}
+                  Dealer Voice
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDealerVoiceEnabled(e => !e)}
+                  className={`w-8 h-4.5 rounded-full relative transition-colors ${dealerVoiceEnabled && soundEnabled ? 'bg-cyan-600' : 'bg-white/15'}`}
+                  disabled={!soundEnabled}
+                >
+                  <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${dealerVoiceEnabled && soundEnabled ? 'left-[calc(100%-18px)]' : 'left-0.5'}`} />
+                </button>
+              </label>
+
+              {/* SFX toggle */}
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-[11px] text-white/60 flex items-center gap-1.5">
+                  <Volume2 className="w-3 h-3" />
+                  Sound Effects
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSfxEnabled(e => !e)}
+                  className={`w-8 h-4.5 rounded-full relative transition-colors ${sfxEnabled && soundEnabled ? 'bg-cyan-600' : 'bg-white/15'}`}
+                  disabled={!soundEnabled}
+                >
+                  <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${sfxEnabled && soundEnabled ? 'left-[calc(100%-18px)]' : 'left-0.5'}`} />
+                </button>
+              </label>
+
+              {/* Divider */}
+              <div className="border-t border-white/10" />
+
+              {/* Music player */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-white/70 font-medium uppercase tracking-wide flex items-center gap-1.5">
+                    <Music className="w-3 h-3" />
+                    Music
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={toggleMusic}
+                      className="p-1 rounded hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                      title={isMusicPlaying ? 'Pause' : 'Play'}
+                    >
+                      {isMusicPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={nextTrack}
+                      className="p-1 rounded hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                      title="Next track"
+                    >
+                      <SkipForward className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                ))}
-                {chatMessages.length === 0 && (
-                  <div className="text-xs text-white/30 text-center py-2">No messages yet</div>
-                )}
+                </div>
+                {/* Track name */}
+                <div className="text-[10px] text-white/40 truncate">
+                  {MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '').replace(/-/g, ' ') ?? 'Unknown'}
+                </div>
+                {/* Volume slider */}
+                <div className="flex items-center gap-2">
+                  <VolumeX className="w-3 h-3 text-white/30 shrink-0" />
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={musicVolume}
+                    onChange={(e) => setMusicVolume(Number(e.target.value))}
+                    className="w-full h-1 rounded-full appearance-none bg-white/15 accent-cyan-500 cursor-pointer"
+                    style={{ accentColor: '#06b6d4' }}
+                  />
+                  <Volume2 className="w-3 h-3 text-white/30 shrink-0" />
+                </div>
               </div>
-              {address && wsConnected && <ChatInput onSend={sendChatMessage} />}
             </div>
           )}
         </div>
+
+        {/* Hidden audio element for background music */}
+        <audio
+          ref={musicAudioRef}
+          src={MUSIC_PLAYLIST[musicTrackIndex]}
+          onEnded={handleMusicEnded}
+          preload="auto"
+        />
       </div>
 
       {/* ── Controls — sidebar on md+, below table on mobile ── */}
@@ -1351,7 +1498,19 @@ export default function BlackjackMultiTablePage() {
             />
             {/* CONFIRM BET button — only active during betting phase */}
             {state?.phase === 'betting' && !hasBet && (
-              <div className="px-2">
+              <div className="px-2 space-y-2">
+                {(mySeat?.consecutiveTimeouts ?? 0) > 0 && (
+                  <div
+                    className={`rounded-lg border px-2.5 py-1.5 text-center text-[11px] font-semibold leading-snug ${
+                      (mySeat?.consecutiveTimeouts ?? 0) >= AFK_TIMEOUTS_BEFORE_KICK - 1
+                        ? 'border-orange-500/40 bg-orange-950/40 text-orange-100'
+                        : 'border-cyan-500/30 bg-slate-900/80 text-cyan-100/90'
+                    }`}
+                    style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}
+                  >
+                    Idle warning {(mySeat?.consecutiveTimeouts ?? 0)}/{AFK_TIMEOUTS_BEFORE_KICK}: confirm a bet or you will be removed from the seat.
+                  </div>
+                )}
                 {(() => {
                   const betOk = parseInt(betAmount || '0', 10) >= 500;
                   return (
@@ -1542,7 +1701,19 @@ export default function BlackjackMultiTablePage() {
 
         {/* MY TURN — reuses BlackjackMobileActionBar from single player */}
         {isMyTurn && activeHand && (
-          <div className="w-full max-w-xl mx-auto">
+          <div className="w-full max-w-xl mx-auto space-y-2">
+            {(mySeat?.consecutiveTimeouts ?? 0) > 0 && (
+              <div
+                className={`rounded-lg border px-2.5 py-1.5 text-center text-[11px] font-semibold leading-snug ${
+                  (mySeat?.consecutiveTimeouts ?? 0) >= AFK_TIMEOUTS_BEFORE_KICK - 1
+                    ? 'border-orange-500/40 bg-orange-950/40 text-orange-100'
+                    : 'border-cyan-500/30 bg-slate-900/80 text-cyan-100/90'
+                }`}
+                style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}
+              >
+                Turn idle {(mySeat?.consecutiveTimeouts ?? 0)}/{AFK_TIMEOUTS_BEFORE_KICK}: act before the timer or you will be auto-stood and may lose your seat.
+              </div>
+            )}
             <BlackjackMobileActionBar
               onAction={(action) => doAction(action as 'hit' | 'stand' | 'double_down' | 'split')}
               isPlaying={true}

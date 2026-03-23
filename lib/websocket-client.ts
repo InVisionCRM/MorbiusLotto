@@ -176,7 +176,8 @@ export interface BJMultiSeatState {
   position: number;
   playerAddress: string | null;
   seatStatus: 'active' | 'sitting_out';
-  consecutiveSitOuts: number;
+  /** Betting + in-round auto-stand timeouts; kick at 3 (server). */
+  consecutiveTimeouts: number;
   pendingBet: string;
   displayName?: string | null;
   profileImageUrl?: string | null;
@@ -762,11 +763,11 @@ export class BlackjackWebSocketClient {
   }
 
   /**
-   * Send a quick reaction (emoji or phrase) to the table. Server broadcasts to all players at the table.
-   * Must be seated. Use on('poker_quick_reaction', handler) to receive; payload is { tableId, seatIndex, type: 'emoji'|'phrase', value: string }.
+   * Send a QuickChat phrase to the table. Server broadcasts to all players at the table.
+   * Must be seated. Use on('poker_quick_reaction', handler) to receive; payload is { tableId, seatIndex, type: 'phrase', value: string }.
    */
-  sendPokerQuickReaction(tableId: string, type: 'emoji' | 'phrase', value: string): void {
-    this.send({ type: 'poker_quick_reaction', payload: { tableId, type, value } });
+  sendPokerQuickPhrase(tableId: string, phrase: string): void {
+    this.send({ type: 'poker_quick_reaction', payload: { tableId, type: 'phrase', value: phrase } });
   }
 
   /**

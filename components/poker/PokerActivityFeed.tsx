@@ -30,7 +30,6 @@ type ReactionEntry = {
   kind: 'reaction';
   id: string;
   seatIndex: number;
-  reactionType: 'emoji' | 'phrase';
   value: string;
   ts: number;
 };
@@ -116,10 +115,16 @@ export interface PokerActivityFeedProps {
   embedInLayout?: boolean;
   /** Extra bottom offset (px) for the fixed desktop panel — use when a bottom bar is in the layout */
   bottomOffset?: number;
+  /**
+   * Increment (e.g. `n => n + 1` from parent) to open the mobile Activity drawer programmatically.
+   * Used by the poker seat player radial on narrow viewports.
+   */
+  mobileOpenRequestSerial?: number;
 }
 
 export function PokerActivityFeed({
   wsClient, wsConnected, roomId, tableId, state, embedInLayout = false, bottomOffset = 0,
+  mobileOpenRequestSerial = 0,
 }: PokerActivityFeedProps) {
   const { messages, sendMessage, connected } = useChat(roomId, { wsClient, wsConnected });
 
@@ -127,6 +132,13 @@ export function PokerActivityFeed({
   const [input, setInput] = useState('');
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const lastMobileOpenRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (mobileOpenRequestSerial <= lastMobileOpenRequestRef.current) return;
+    lastMobileOpenRequestRef.current = mobileOpenRequestSerial;
+    setMobileOpen(true);
+  }, [mobileOpenRequestSerial]);
 
   const listRef = useRef<HTMLDivElement>(null);
   const seenMsgIdsRef = useRef<Set<string>>(new Set());
@@ -192,16 +204,16 @@ export function PokerActivityFeed({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.currentHand?.lastAction, state?.currentHand?.handId]);
 
-  // ── Track quick reactions ─────────────────────────────────────────────────
+  // ── Track QuickChat phrases ───────────────────────────────────────────────
   useEffect(() => {
     if (!wsClient || !tableId) return;
     const handler = (payload: {
       tableId?: string;
       seatIndex?: number;
-      type?: 'emoji' | 'phrase';
+      type?: string;
       value?: string;
     }) => {
-      if (payload.tableId !== tableId || payload.seatIndex == null) return;
+      if (payload.tableId !== tableId || payload.seatIndex == null || payload.type !== 'phrase') return;
       const value = typeof payload.value === 'string' ? payload.value.trim() : '';
       if (!value) return;
       setEntries((prev) => [
@@ -210,7 +222,6 @@ export function PokerActivityFeed({
           kind: 'reaction',
           id: `reaction-${Date.now()}-${payload.seatIndex}`,
           seatIndex: payload.seatIndex!,
-          reactionType: payload.type ?? 'emoji',
           value,
           ts: Date.now(),
         },

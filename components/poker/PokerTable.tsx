@@ -46,21 +46,20 @@ function computeSeatAnchors(n: number): Array<{ fx: number; fy: number }> {
 export interface PokerTableProps {
   state: TableState;
   currentPlayerAddress: string | null;
+  /** Leave table (e.g. opens confirm); wired from seat radial and header. */
   onLeave?: () => void;
   timeLeft?: number;
   /** Chat bubble text to show above each seat (key = seat index). Cleared after ~5s by parent. */
   chatBubbleBySeatIndex?: Record<number, string>;
   /** Called when current player clicks re-up (+). Opens deposit/re-up modal when provided. */
   onReUpClick?: () => void;
-  /** Called when current player clicks the hamburger menu button on the nametag. */
+  /** Avatar creator / profile editor; opened from current player seat radial. */
   onMenuClick?: () => void;
-  /** Per-seat quick reaction (emoji or phrase) to show above seat; key = seat index. */
-  reactionBySeatIndex?: Record<number, { type: 'emoji' | 'phrase'; value: string }>;
+  /** Per-seat QuickChat phrase to show above seat; key = seat index. */
+  reactionBySeatIndex?: Record<number, string>;
   /** Per-seat avatar emotion broadcast to table (so all players see the same animation). */
   broadcastEmotionBySeatIndex?: Record<number, import('@/components/poker/avatar/AvatarView').Emotion>;
-  /** Called when current player selects an emoji reaction (broadcast to table). */
-  onEmojiReaction?: (emoji: string) => void;
-  /** Called when current player selects a phrase reaction (broadcast to table). */
+  /** Called when current player selects a QuickChat phrase (broadcast to table). */
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
   onAnimationReaction?: (emotion: import('@/components/poker/avatar/AvatarView').Emotion) => void;
@@ -78,11 +77,23 @@ export interface PokerTableProps {
   setQuickChatPhrases?: (phrases: string[]) => void;
   /** Called when user wants to open Edit QuickChat (e.g. from seat picker or header Settings). */
   onOpenEditQuickChat?: () => void;
+  /** Open Activity drawer on mobile (narrow viewport); parent bumps `PokerActivityFeed` serial. */
+  onRequestMobileActivity?: () => void;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onEmojiReaction, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [, setDims] = useState({ w: 640, h: 500 });
+  /** Below Tailwind `md` — hide heavy seat avatars to reduce crowding on phones. */
+  const [hideSeatAvatars, setHideSeatAvatars] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const sync = () => setHideSeatAvatars(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   useEffect(() => {
     const el = tableRef.current;
@@ -137,10 +148,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       chatBubble: chatBubbleBySeatIndex?.[idx] ?? null,
       onReUpClick,
       onMenuClick,
-      overlayEmoji: reactionBySeatIndex?.[idx]?.type === 'emoji' ? reactionBySeatIndex[idx].value : null,
-      overlayPhrase: reactionBySeatIndex?.[idx]?.type === 'phrase' ? reactionBySeatIndex[idx].value : null,
+      overlayPhrase: reactionBySeatIndex?.[idx] ?? null,
       overlayEmotion: broadcastEmotionBySeatIndex?.[idx] ?? null,
-      onEmojiReaction: onEmojiReaction,
       onPhraseReaction: onPhraseReaction,
       onAnimationReaction: onAnimationReaction,
       onOpponentClick: onOpponentClick,
@@ -148,6 +157,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       quickChatPhrases,
       setQuickChatPhrases,
       onOpenEditQuickChat,
+      hideSeatAvatar: hideSeatAvatars,
+      onLeaveTable: onLeave,
+      onRequestMobileActivity,
+      includeActivityInPlayerRadial: hideSeatAvatars,
     };
   };
 

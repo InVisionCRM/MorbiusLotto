@@ -1467,8 +1467,8 @@ export class WebSocketService {
       if (!tableId || typeof tableId !== 'string') {
         return this.sendError(ws, 'tableId required', message.requestId);
       }
-      if (type !== 'emoji' && type !== 'phrase') {
-        return this.sendError(ws, 'type must be emoji or phrase', message.requestId);
+      if (type !== 'phrase') {
+        return this.sendError(ws, 'type must be phrase', message.requestId);
       }
       const val = typeof value === 'string' ? value.trim() : '';
       if (!val || val.length > 200) {
