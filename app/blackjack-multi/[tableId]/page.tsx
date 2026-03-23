@@ -209,18 +209,18 @@ function Seat({
       {/* Cards area */}
       {isEmpty ? (
         <div
-          className={`flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-4 min-h-[80px] border-2 border-dashed transition-all cursor-pointer ${
-            canTakeSeat ? 'border-white/20 hover:border-cyan-400/50 hover:bg-cyan-900/10' : 'border-white/10'
+          className={`flex flex-col items-center justify-center gap-1.5 rounded-xl px-5 py-5 min-h-[100px] border-2 border-dashed transition-all ${
+            canTakeSeat ? 'border-cyan-400/40 hover:border-cyan-400/70 hover:bg-cyan-900/20 cursor-pointer hover:scale-105' : 'border-white/15'
           }`}
           onClick={canTakeSeat ? onTakeSeat : undefined}
         >
           {canTakeSeat && (
             <>
-              <UserPlus className="w-6 h-6 text-white/30" />
-              <span className="text-xs text-white/30">Seat {position + 1}</span>
+              <UserPlus className="w-7 h-7 text-cyan-400/60" />
+              <span className="text-xs font-medium text-cyan-400/60">Seat {position + 1}</span>
             </>
           )}
-          {!canTakeSeat && <span className="text-xs text-white/20">Seat {position + 1}</span>}
+          {!canTakeSeat && <span className="text-xs text-white/25">Seat {position + 1}</span>}
         </div>
       ) : (
         <>
@@ -273,7 +273,7 @@ function Seat({
                       <div className="flex">
                         {hand.cards.map((c, ci) => (
                           <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
-                            <PlayingCard card={indexToCard(c)} owner="player" className="" size="small" />
+                            <PlayingCard card={indexToCard(c)} owner="player" className="" size="normal" />
                           </div>
                         ))}
                       </div>
@@ -305,7 +305,7 @@ function Seat({
             /* Placeholder cards when seated but no hand yet */
             <div className="flex gap-0 min-h-[120px] items-center justify-center">
               {phase !== 'waiting' && phase !== 'betting' ? null : (
-                <div className="w-14 h-20 rounded-lg border border-dashed border-white/10" />
+                <div className="w-20 h-28 rounded-lg border border-dashed border-white/10" />
               )}
             </div>
           )}
@@ -851,7 +851,11 @@ export default function BlackjackMultiTablePage() {
     try {
       await wsClient.sendRequest('bj_multi_place_bet', { tableId, amount: parseEther(String(amt)).toString() });
       fetchBalance();
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) {
+      const msg = (e as Error).message;
+      // Suppress race-condition errors that aren't actionable
+      if (!msg.includes('not in betting phase')) setError(msg);
+    }
   }, [wsClient, tableId, betAmount, fetchBalance, playSound]);
 
   const doAction = useCallback(async (action: 'hit' | 'stand' | 'double_down' | 'split') => {
@@ -1139,7 +1143,7 @@ export default function BlackjackMultiTablePage() {
                         card={indexToCard(c)}
                         owner="dealer"
                         className=""
-                        size="small"
+                        size="normal"
                         index={i}
                         isNewCard={i >= 2 && i === visibleDealerCards - 1}
                       />
@@ -1149,14 +1153,14 @@ export default function BlackjackMultiTablePage() {
                 {/* Face-down hole card during playing phase (server only sends 1 card) */}
                 {state?.phase === 'playing' && (state.dealerCards?.length ?? 0) === 1 && (
                   <div className="card-overlap-dealer" style={{ zIndex: 1 }}>
-                    <PlayingCard card={{ value: 1 as CardValue, suit: 'spades' }} hidden owner="dealer" className="" size="small" />
+                    <PlayingCard card={{ value: 1 as CardValue, suit: 'spades' }} hidden owner="dealer" className="" size="normal" />
                   </div>
                 )}
                 {/* Empty placeholders before deal */}
                 {(!state || (state.dealerCards?.length ?? 0) === 0) && (
                   <>
-                    <div className="w-14 h-20 rounded-lg border border-dashed border-white/10 mr-[-18px]" />
-                    <div className="w-14 h-20 rounded-lg border border-dashed border-white/10" />
+                    <div className="w-20 h-28 rounded-lg border border-dashed border-white/10 mr-[-18px]" />
+                    <div className="w-20 h-28 rounded-lg border border-dashed border-white/10" />
                   </>
                 )}
               </div>
@@ -1398,8 +1402,8 @@ export default function BlackjackMultiTablePage() {
               )}
             </TabsContent>
 
-            {/* Chart tab */}
-            <TabsContent value="chart" className="mt-0 p-3">
+            {/* Chart tab — forceMount so ref stays alive for addGameResult calls */}
+            <TabsContent value="chart" className="mt-0 p-3 data-[state=inactive]:hidden" forceMount>
               <div className="h-64 md:h-72 min-w-0">
                 <BlackjackRealTimeBetChart
                   ref={chartRef}

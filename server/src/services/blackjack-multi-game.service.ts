@@ -1397,6 +1397,24 @@ export class BlackjackMultiGameService {
             [rs.player_address, totalPayout.toString()],
           );
         }
+
+        // Fan out settled hands into game_hands so history/verification use one table
+        for (let hi = 0; hi < hands.length; hi++) {
+          const h = hands[hi];
+          const hTotal = this.pfService.calculateHandTotalV2(h.cards);
+          await this.dbService.createGameHandInTx(client, rs.id, {
+            hand_index: hi,
+            cards: h.cards,
+            total: hTotal.total,
+            has_ace: hTotal.hasAce,
+            is_blackjack: Boolean(h.isBlackjack),
+            is_bust: Boolean(h.isBust),
+            bet_amount: BigInt(h.betAmount || '0'),
+            result: (h.result as any) ?? 'loss',
+            payout: BigInt(h.payout || '0'),
+            actions: h.actions ?? [],
+          });
+        }
       }
 
       // Reveal server seed and mark complete.

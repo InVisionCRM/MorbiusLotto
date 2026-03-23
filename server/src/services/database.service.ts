@@ -1802,6 +1802,35 @@ export class DatabaseService {
     return this.normalizeGameHand(result.rows[0]);
   }
 
+  /**
+   * Insert a game_hand row using a provided transaction client.
+   * Used by multiplayer settlement to fan out JSONB hands into normalised rows
+   * inside the same transaction that settles balances.
+   */
+  async createGameHandInTx(client: any, gameId: string, handData: Partial<GameHand>): Promise<void> {
+    const query = `
+      INSERT INTO game_hands (
+        game_id, hand_index, cards, total, has_ace, is_blackjack, is_bust,
+        bet_amount, result, payout, actions, completed_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::NUMERIC, $9, $10::NUMERIC, $11, NOW())
+    `;
+    const values = [
+      gameId,
+      handData.hand_index ?? 0,
+      JSON.stringify(handData.cards ?? []),
+      handData.total ?? 0,
+      handData.has_ace ?? false,
+      handData.is_blackjack ?? false,
+      handData.is_bust ?? false,
+      (handData.bet_amount ?? 0n).toString(),
+      handData.result ?? 'loss',
+      (handData.payout ?? 0n).toString(),
+      JSON.stringify(handData.actions ?? []),
+    ];
+    await client.query(query, values);
+  }
+
   async updateGameHand(handId: string, updates: Partial<GameHand>): Promise<void> {
     const fields = [];
     const values = [];
@@ -1862,14 +1891,47 @@ export class DatabaseService {
   }
 
   async getGameHands(gameId: string): Promise<GameHand[]> {
+    // game_hands now stores both single-player and multiplayer hands
+    // (multiplayer hands are fanned out at settlement time).
     const query = `
       SELECT * FROM game_hands
       WHERE game_id = $1
       ORDER BY hand_index ASC
     `;
     const result = await this.pool.query(query, [gameId]);
-    const hands = result.rows.map((r: any) => this.normalizeGameHand(r));
-    return hands;
+    if (result.rows.length > 0) {
+      return result.rows.map((r: any) => this.normalizeGameHand(r));
+    }
+
+    // Legacy fallback for multiplayer games settled before migration 084.
+    // Reads hands from the JSONB column on blackjack_multi_round_seats.
+    const multiQuery = `
+      SELECT s.id, s.round_id AS game_id, s.hands, s.result AS seat_result, s.payout AS seat_payout
+      FROM blackjack_multi_round_seats s
+      WHERE s.id = $1
+    `;
+    const multiResult = await this.pool.query(multiQuery, [gameId]);
+    if (multiResult.rows.length === 0) return [];
+
+    const row = multiResult.rows[0];
+    const rawHands = typeof row.hands === 'string' ? JSON.parse(row.hands) : (row.hands ?? []);
+    if (!Array.isArray(rawHands) || rawHands.length === 0) return [];
+
+    return rawHands.map((h: any, idx: number) => ({
+      id: `${row.id}-${idx}`,
+      game_id: gameId,
+      hand_index: idx,
+      cards: Array.isArray(h.cards) ? h.cards : [],
+      total: Number(h.total ?? 0),
+      has_ace: Boolean(h.hasAce),
+      is_blackjack: Boolean(h.isBlackjack),
+      is_bust: Boolean(h.isBust),
+      bet_amount: this.toBigInt(h.betAmount ?? '0'),
+      result: h.result ?? row.seat_result ?? 'loss',
+      payout: this.toBigInt(h.payout ?? '0'),
+      actions: Array.isArray(h.actions) ? h.actions : [],
+      created_at: new Date(),
+    }));
   }
 
   async updateGame(gameId: string, updates: Partial<Game>): Promise<void> {
