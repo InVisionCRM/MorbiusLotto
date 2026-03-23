@@ -115,7 +115,7 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal }: HeroSectio
         </div>
       </div>
 
-      <h1 className="font-russo-one pointer-events-none absolute top-25 left-1/2 z-10 w-full max-w-4xl -translate-x-1/2 px-4 text-center">
+      <h1 className="font-russo-one pointer-events-none absolute top-20 left-1/2 z-10 w-full max-w-4xl -translate-x-1/2 px-4 text-center">
         <span className="block text-lg font-black tracking-tight text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)]">
           DEFI GAMING,
         </span>
