@@ -11,7 +11,6 @@ import type { PokerTableState as TableState } from '@/lib/websocket-client';
 import { PokerTournamentHUD } from './tournament/PokerTournamentHUD';
 import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
-import { Boxes } from '@/components/ui/background-boxes';
 import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 
@@ -40,6 +39,9 @@ function formatChips(wei: string | number): string {
 }
 
 const POT_ANCHOR = { fx: 0.50, fy: 0.47 };
+const ADJACENT_SEAT_VERTICAL_NUDGE_PX = 50;
+const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 25;
+const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -25;
 
 // Compute evenly-spaced seat positions around the table oval for any seat count.
 // Seat 0 is always bottom-center (current player); seats go clockwise.
@@ -107,7 +109,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const [, setDims] = useState({ w: 640, h: 500 });
   /** Below Tailwind `md` — hide heavy seat avatars to reduce crowding on phones. */
   const [hideSeatAvatars, setHideSeatAvatars] = useState(false);
-  const { effect: tableEffect, feltGradient } = usePokerTableEffect();
+  const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -176,6 +178,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const winnerAmount = firstWinner?.amount ?? hand?.pot ?? '0';
   const winnerHandName = firstWinner?.handName;
   const winningCardIndices = firstWinner?.winningCardIndices ?? [];
+  // Showdown chip destination: land above winner cards (not avatar center).
+  const winnerChipYOffsetPx = hideSeatAvatars ? 62 : 86;
 
   const seatProps = (idx: number) => {
     const seat = state.seats[idx];
@@ -243,23 +247,23 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           boxShadow: '0 32px 100px rgba(0,0,0,0.95), 0 10px 40px rgba(0,0,0,0.8)',
         }}
       >
-        {/* Outer gold trim — 8px ring */}
+        {/* Outer trim — 8px ring */}
         <div style={{
           flex: 1, borderRadius: '9999px', display: 'flex', padding: '8px',
-          background: 'linear-gradient(170deg, #d4a82a 0%, #8a6010 30%, #c89828 50%, #8a6010 70%, #d4a82a 100%)',
-          boxShadow: 'inset 0 1px 4px rgba(255,230,120,0.35), inset 0 -1px 4px rgba(0,0,0,0.5)',
+          background: railStyle.outerRing,
+          boxShadow: railStyle.outerGlow,
         }}>
-          {/* Dark wood/leather cushion — 20px ring */}
+          {/* Dark cushion — 20px ring */}
           <div style={{
             flex: 1, borderRadius: '9999px', display: 'flex', padding: '20px',
-            background: 'linear-gradient(180deg, #1c1508 0%, #0e0c04 50%, #181304 100%)',
+            background: railStyle.cushion,
             boxShadow: 'inset 0 4px 16px rgba(0,0,0,0.85), inset 0 -2px 8px rgba(0,0,0,0.6)',
           }}>
-            {/* Inner gold trim — 6px ring */}
+            {/* Inner trim — 6px ring */}
             <div style={{
               flex: 1, borderRadius: '9999px', display: 'flex', padding: '6px',
-              background: 'linear-gradient(170deg, #b08820 0%, #6a4c0c 30%, #a07818 50%, #6a4c0c 70%, #b08820 100%)',
-              boxShadow: 'inset 0 1px 3px rgba(255,210,80,0.3)',
+              background: railStyle.innerRing,
+              boxShadow: railStyle.innerGlow,
             }}>
               {/* Felt surface — color from user preference */}
               <div style={{
@@ -294,15 +298,27 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                     </div>
                   </>
                 )}
-                {!hideSeatAvatars && tableEffect === 'boxes' && (
+                {/* Marketing logo — admin-set, rendered centered on felt */}
+                {state.tableLogo && (
                   <div
                     style={{
                       position: 'absolute', inset: 0, pointerEvents: 'none',
-                      opacity: 0.08,
-                      mixBlendMode: 'screen',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: state.tableLogoOpacity ?? 0.12,
                     }}
                   >
-                    <Boxes rowCount={30} colCount={20} />
+                    <img
+                      src={`/Marketing/LOGOS/${state.tableLogo}`}
+                      alt=""
+                      draggable={false}
+                      style={{
+                        maxWidth: '38%',
+                        maxHeight: '44%',
+                        objectFit: 'contain',
+                        filter: 'grayscale(0.15)',
+                        userSelect: 'none',
+                      }}
+                    />
                   </div>
                 )}
                 {/* Felt sheen — sits above effects to preserve the 3D depth / shadow */}
@@ -366,7 +382,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         {isShowdownWithWinners && firstWinnerAddr && hand && (
           <motion.div
             key="winner-banner"
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-40 w-[min(92vw,560px)]"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[120] w-[min(92vw,560px)]"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
@@ -424,7 +440,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             }}
             animate={{
               left: `${firstWinnerAnchor.fx * 100}%`,
-              top: `${firstWinnerAnchor.fy * 100}%`,
+              top: `calc(${firstWinnerAnchor.fy * 100}% - ${winnerChipYOffsetPx}px)`,
             }}
             exit={{ opacity: 0 }}
             transition={{
@@ -489,6 +505,16 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           : idx;
         const anchor = seatAnchors[displaySlot];
         if (!anchor) return null;
+        const isRightAdjacentSeat = displaySlot === 1;
+        const isLeftAdjacentSeat = displaySlot === state.seats.length - 1;
+        const seatTranslateX = isRightAdjacentSeat
+          ? RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
+          : isLeftAdjacentSeat
+            ? LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
+            : 0;
+        const seatTranslateY = (isRightAdjacentSeat || isLeftAdjacentSeat)
+          ? -ADJACENT_SEAT_VERTICAL_NUDGE_PX
+          : 0;
         return (
           <div
             key={idx}
@@ -496,7 +522,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             style={{
               left: `${anchor.fx * 100}%`,
               top:  `${anchor.fy * 100}%`,
-              transform: 'translate(-50%, -50%)',
+              transform: `translate(calc(-50% + ${seatTranslateX}px), calc(-50% + ${seatTranslateY}px))`,
             }}
             {...(tutorialTargets ? { 'data-tutorial-target': `seat-${displaySlot}` } : {})}
           >

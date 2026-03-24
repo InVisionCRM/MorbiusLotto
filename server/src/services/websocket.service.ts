@@ -624,6 +624,11 @@ export class WebSocketService {
           await this.handlePokerCreateTable(ws, message);
           break;
 
+        case 'poker_update_table_logo':
+          if (!this.requireAuth(ws, message)) return;
+          await this.handlePokerUpdateTableLogo(ws, message);
+          break;
+
         case 'poker_quick_reaction':
           if (!this.requireAuth(ws, message)) return;
           await this.handlePokerQuickReaction(ws, message);
@@ -1558,6 +1563,31 @@ export class WebSocketService {
     } catch (error) {
       logger.error('Error creating poker table:', error);
       this.sendError(ws, (error as Error).message || 'Failed to create table', message.requestId);
+    }
+  }
+
+  private async handlePokerUpdateTableLogo(ws: WebSocketClient, message: WebSocketMessage) {
+    try {
+      if (!this.pokerGameService || !ws.playerAddress) {
+        return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+      }
+      if (!isAdminWallet(ws.playerAddress)) {
+        return this.sendError(ws, 'Only admins can update table logo', message.requestId);
+      }
+      const payload = message.payload as { tableId?: string; logo?: string | null; opacity?: number };
+      const tableId = payload?.tableId;
+      if (!tableId) {
+        return this.sendError(ws, 'tableId required', message.requestId);
+      }
+      const logo = payload.logo ?? null;
+      const opacity = typeof payload.opacity === 'number' ? payload.opacity : 0.12;
+      await this.pokerGameService.updateTableLogo(tableId, logo, opacity);
+      this.sendMessage(ws, { type: 'poker_update_table_logo', payload: { success: true }, requestId: message.requestId });
+      // Broadcast updated state so all players see the new logo
+      await this.broadcastPokerTableState(tableId);
+    } catch (error) {
+      logger.error('Error updating poker table logo:', error);
+      this.sendError(ws, (error as Error).message || 'Failed to update table logo', message.requestId);
     }
   }
 

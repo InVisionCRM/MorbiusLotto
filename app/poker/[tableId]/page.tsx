@@ -701,6 +701,19 @@ export default function PokerTablePage() {
             <div className="flex items-center justify-end gap-1.5 shrink-0 relative">
               <button
                 type="button"
+                onClick={() => setShowSoundsModal(true)}
+                className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97] sm:hidden"
+                style={{
+                  background: 'rgba(255,255,255,0.07)',
+                  color: 'rgba(255,255,255,0.75)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                }}
+              >
+                Sounds
+              </button>
+              <button
+                type="button"
                 onClick={() => setSettingsMenuOpen((o) => !o)}
                 className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
                 style={{
@@ -730,16 +743,8 @@ export default function PokerTablePage() {
                   >
                     <button
                       type="button"
-                      onClick={() => { setShowSoundsModal(true); setSettingsMenuOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10"
-                      style={{ color: 'rgba(255,255,255,0.9)' }}
-                    >
-                      Sounds
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => { setShowTableSettingsModal(true); setSettingsMenuOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10"
                       style={{ color: 'rgba(255,255,255,0.9)' }}
                     >
                       Table Appearance
@@ -782,7 +787,7 @@ export default function PokerTablePage() {
                     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
                   }}
                 >
-                  My Table
+                  Table
                 </button>
               )}
               {isAdmin && (
@@ -966,6 +971,11 @@ export default function PokerTablePage() {
         <PokerTableSettingsModal
           isOpen={showTableSettingsModal}
           onClose={() => setShowTableSettingsModal(false)}
+          isAdmin={isAdmin}
+          currentLogo={state?.tableLogo}
+          currentLogoOpacity={state?.tableLogoOpacity}
+          wsClient={wsClient}
+          tableId={tableId}
         />
         <EditQuickChatModal
           open={showEditQuickChatModal}

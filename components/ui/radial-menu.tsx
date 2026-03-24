@@ -147,12 +147,12 @@ function RadialSliceIconLabel({
   return (
     <>
       <Icon
-        className={cn('shrink-0 text-black', isActive && 'scale-105')}
+        className={cn('shrink-0 text-white', isActive && 'scale-105')}
         style={{ height: iconSize, width: iconSize }}
         strokeWidth={2.35}
       />
       {showLabels && (
-        <span className="max-w-[68px] truncate text-center text-[11px] font-extrabold leading-snug text-black">
+        <span className="max-w-[68px] truncate text-center text-[11px] font-extrabold leading-snug text-white">
           {item.label}
         </span>
       )}
@@ -210,19 +210,6 @@ function RadialWedgeGraphics({
       onMouseEnter={() => setActiveIndex(index)}
       onMouseLeave={() => setActiveIndex(null)}
     >
-      <motion.path
-        d={slicePath(index, menuItems.length, outerRingOuterRadius, outerRingInnerRadius)}
-        fill={isActive ? c.outerActive : c.outer}
-        stroke={c.stroke}
-        strokeWidth={0.75}
-        vectorEffect="non-scaling-stroke"
-        initial={false}
-        transition={wedgeTransition}
-        onClick={(e) => {
-          e.stopPropagation();
-          onWedgeBackgroundSelect?.();
-        }}
-      />
       <motion.path
         d={slicePath(index, menuItems.length, wedgeOuterRadius, wedgeInnerRadius)}
         fill={isActive ? c.innerActive : c.inner}
@@ -325,7 +312,7 @@ export function RadialMenu({
                     onFocus={() => setActiveIndex(index)}
                     onSelect={() => onSelect?.(item)}
                     aria-label={item.label}
-                    className="flex size-full flex-col items-center justify-center rounded-full text-black outline-none focus-visible:ring-2 focus-visible:ring-black/40"
+                    className="flex size-full flex-col items-center justify-center rounded-full text-white outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                   >
                     <RadialSliceIconLabel item={item} iconSize={iconSize} isActive={activeIndex === index} showLabels={showLabels} />
                   </ContextMenu.Item>
@@ -466,7 +453,7 @@ export function RadialMenuFloating({
                   type="button"
                   role="menuitem"
                   aria-label={item.label}
-                  className="flex size-full flex-col items-center justify-center rounded-full text-black outline-none focus-visible:ring-2 focus-visible:ring-black/40"
+                  className="flex size-full flex-col items-center justify-center rounded-full text-white outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                   onClick={() => onSelect(item)}
                 >
                   <RadialSliceIconLabel item={item} iconSize={iconSize} isActive={activeIndex === index} showLabels={showLabels} />

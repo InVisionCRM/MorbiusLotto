@@ -1,20 +1,67 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   usePokerTableEffect,
   TABLE_EFFECT_OPTIONS,
   FELT_COLOR_PRESETS,
+  RAIL_COLOR_PRESETS,
   type TableEffectId,
 } from '@/hooks/use-poker-table-effect';
+import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  /** When true, shows admin-only Table Graphics section. */
+  isAdmin?: boolean;
+  /** Current logo filename from table state (server-set). */
+  currentLogo?: string | null;
+  /** Current logo opacity from table state (server-set). */
+  currentLogoOpacity?: number | null;
+  /** WebSocket client for admin logo updates. */
+  wsClient?: BlackjackWebSocketClient | null;
+  /** Table ID for admin logo updates. */
+  tableId?: string;
 };
 
-export function PokerTableSettingsModal({ isOpen, onClose }: Props) {
-  const { effect, setEffect, feltColor, setFeltColor } = usePokerTableEffect();
+export function PokerTableSettingsModal({ isOpen, onClose, isAdmin, currentLogo, currentLogoOpacity, wsClient, tableId }: Props) {
+  const { effect, setEffect, feltColor, setFeltColor, railColor, setRailColor } = usePokerTableEffect();
+
+  // Admin logo state — seeded from server state
+  const [logoFiles, setLogoFiles] = useState<string[]>([]);
+  const [selectedLogo, setSelectedLogo] = useState<string | null>(currentLogo ?? null);
+  const [opacity, setOpacity] = useState(currentLogoOpacity ?? 0.12);
+  const [saving, setSaving] = useState(false);
+
+  // Sync from server state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedLogo(currentLogo ?? null);
+      setOpacity(currentLogoOpacity ?? 0.12);
+    }
+  }, [isOpen, currentLogo, currentLogoOpacity]);
+
+  // Load available logo files from the public directory listing API
+  useEffect(() => {
+    if (!isOpen || !isAdmin) return;
+    fetch('/api/poker/logos')
+      .then(r => r.ok ? r.json() : { files: [] })
+      .then((data: { files: string[] }) => setLogoFiles(data.files ?? []))
+      .catch(() => setLogoFiles([]));
+  }, [isOpen, isAdmin]);
+
+  const handleSaveLogo = useCallback(async () => {
+    if (!wsClient || !tableId) return;
+    setSaving(true);
+    try {
+      await wsClient.pokerUpdateTableLogo(tableId, selectedLogo, opacity);
+    } catch { /* toast error handled by WS */ }
+    setSaving(false);
+  }, [wsClient, tableId, selectedLogo, opacity]);
+
+  // Detect if admin has unsaved changes
+  const logoChanged = selectedLogo !== (currentLogo ?? null) || opacity !== (currentLogoOpacity ?? 0.12);
 
   if (!isOpen) return null;
 
@@ -24,7 +71,7 @@ export function PokerTableSettingsModal({ isOpen, onClose }: Props) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="pointer-events-auto w-full max-w-sm rounded-xl overflow-hidden"
+        className="pointer-events-auto w-full max-w-sm rounded-xl overflow-hidden max-h-[90dvh] overflow-y-auto"
         style={{
           background: 'rgba(8,10,16,0.92)',
           backdropFilter: 'blur(16px)',
@@ -109,6 +156,162 @@ export function PokerTableSettingsModal({ isOpen, onClose }: Props) {
               ))}
             </div>
           </div>
+
+          {/* Rail color */}
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-white/35 mb-1.5">Rail Color</div>
+            <div className="grid grid-cols-6 gap-1.5">
+              {RAIL_COLOR_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setRailColor(preset.id)}
+                  className="flex flex-col items-center gap-1 p-1.5 rounded-lg border transition-all"
+                  style={{
+                    background: railColor === preset.id ? 'rgba(34,211,238,0.08)' : 'transparent',
+                    borderColor: railColor === preset.id ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <div
+                    className="w-7 h-7 rounded-full shrink-0 border"
+                    style={{
+                      background: preset.swatch,
+                      borderColor: railColor === preset.id ? 'rgba(34,211,238,0.6)' : 'rgba(255,255,255,0.1)',
+                    }}
+                  />
+                  <span
+                    className="text-[9px] font-bold leading-none"
+                    style={{ color: railColor === preset.id ? 'rgba(34,211,238,0.9)' : 'rgba(255,255,255,0.45)' }}
+                  >
+                    {preset.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Admin: Table Graphics ────────────────────────────────── */}
+          {isAdmin && (
+            <div className="pt-2 mt-1 border-t border-amber-400/15">
+              <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'rgba(251,191,36,0.7)' }}>
+                Admin — Table Graphics
+              </div>
+
+              {/* Logo selector */}
+              <div className="mb-2">
+                <div className="text-[10px] font-medium text-white/40 mb-1.5">Logo</div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {/* "None" option */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLogo(null)}
+                    className="flex flex-col items-center gap-1 p-2 rounded-lg border transition-all"
+                    style={{
+                      background: selectedLogo === null ? 'rgba(251,191,36,0.08)' : 'transparent',
+                      borderColor: selectedLogo === null ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.06)',
+                    }}
+                  >
+                    <div
+                      className="w-8 h-8 rounded border flex items-center justify-center"
+                      style={{
+                        borderColor: selectedLogo === null ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.1)',
+                        background: 'rgba(255,255,255,0.03)',
+                      }}
+                    >
+                      <span className="text-[10px] text-white/30">Off</span>
+                    </div>
+                    <span
+                      className="text-[8px] font-bold leading-none"
+                      style={{ color: selectedLogo === null ? 'rgba(251,191,36,0.9)' : 'rgba(255,255,255,0.4)' }}
+                    >
+                      None
+                    </span>
+                  </button>
+
+                  {logoFiles.map((file) => (
+                    <button
+                      key={file}
+                      type="button"
+                      onClick={() => setSelectedLogo(file)}
+                      className="flex flex-col items-center gap-1 p-2 rounded-lg border transition-all"
+                      style={{
+                        background: selectedLogo === file ? 'rgba(251,191,36,0.08)' : 'transparent',
+                        borderColor: selectedLogo === file ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      <div
+                        className="w-8 h-8 rounded border overflow-hidden flex items-center justify-center"
+                        style={{
+                          borderColor: selectedLogo === file ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.1)',
+                          background: 'rgba(0,0,0,0.4)',
+                        }}
+                      >
+                        <img
+                          src={`/Marketing/LOGOS/${file}`}
+                          alt={file}
+                          className="max-w-full max-h-full object-contain"
+                          draggable={false}
+                        />
+                      </div>
+                      <span
+                        className="text-[8px] font-bold leading-none truncate max-w-full"
+                        style={{ color: selectedLogo === file ? 'rgba(251,191,36,0.9)' : 'rgba(255,255,255,0.4)' }}
+                      >
+                        {file.replace(/\.[^.]+$/, '')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {logoFiles.length === 0 && (
+                  <p className="text-[10px] text-white/25 mt-1">
+                    No logos found. Add images to <span className="font-mono text-white/35">public/Marketing/LOGOS/</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Opacity slider */}
+              {selectedLogo && (
+                <div className="mb-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-medium text-white/40">Opacity</span>
+                    <span className="text-[10px] font-bold tabular-nums" style={{ color: 'rgba(251,191,36,0.8)' }}>
+                      {Math.round(opacity * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={Math.round(opacity * 100)}
+                    onChange={(e) => setOpacity(Number(e.target.value) / 100)}
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, rgba(251,191,36,0.6) 0%, rgba(251,191,36,0.6) ${opacity * 100}%, rgba(255,255,255,0.08) ${opacity * 100}%, rgba(255,255,255,0.08) 100%)`,
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Save button */}
+              {logoChanged && (
+                <button
+                  type="button"
+                  onClick={handleSaveLogo}
+                  disabled={saving}
+                  className="w-full py-1.5 rounded-lg border text-[11px] font-bold uppercase tracking-wide transition-all"
+                  style={{
+                    background: 'rgba(251,191,36,0.12)',
+                    borderColor: 'rgba(251,191,36,0.35)',
+                    color: 'rgba(251,191,36,0.95)',
+                    opacity: saving ? 0.5 : 1,
+                  }}
+                >
+                  {saving ? 'Saving…' : 'Apply Logo'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -150,6 +150,10 @@ export interface PokerTableState {
   seats: PokerSeatState[];
   currentHand: PokerCurrentHand | null;
   myHoleCards: number[] | null;
+  /** Marketing logo filename (admin-set, e.g. "partner.png"). Null = no logo. */
+  tableLogo?: string | null;
+  /** Logo opacity (0–1). Default 0.12. */
+  tableLogoOpacity?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -760,6 +764,11 @@ export class BlackjackWebSocketClient {
   /** Create a new table. Auth required. Returns the new table id. */
   async pokerCreateTable(smallBlind: string, bigBlind: string, maxSeats: number = 6): Promise<{ tableId: string }> {
     return this.sendRequest('poker_create_table', { smallBlind, bigBlind, maxSeats });
+  }
+
+  /** Admin-only: update the marketing logo displayed on the table felt. */
+  async pokerUpdateTableLogo(tableId: string, logo: string | null, opacity: number): Promise<{ success: boolean }> {
+    return this.sendRequest('poker_update_table_logo', { tableId, logo, opacity });
   }
 
   /**

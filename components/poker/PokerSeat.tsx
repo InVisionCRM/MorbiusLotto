@@ -192,6 +192,48 @@ function CircularTimerRing({ size, timeLeft, maxTime }: { size: number; timeLeft
   );
 }
 
+function RectTimerRing({ timeLeft, maxTime }: { timeLeft: number; maxTime: number }) {
+  const progress = Math.max(0, Math.min(1, timeLeft / maxTime));
+  const hue = progress * 120;
+  const color = `hsl(${hue}, 90%, 52%)`;
+  const perimeter = 2 * (96 + 40);
+  return (
+    <svg
+      aria-hidden
+      className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] pointer-events-none z-10"
+      viewBox="0 0 100 44"
+      preserveAspectRatio="none"
+    >
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="40"
+        rx="8"
+        ry="8"
+        fill="none"
+        stroke="rgba(255,255,255,0.10)"
+        strokeWidth="2.5"
+      />
+      <rect
+        x="2"
+        y="2"
+        width="96"
+        height="40"
+        rx="8"
+        ry="8"
+        fill="none"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray={perimeter}
+        strokeDashoffset={perimeter * (1 - progress)}
+        style={{ filter: `drop-shadow(0 0 4px ${color})`, transition: 'stroke-dashoffset 1s linear, stroke 0.5s ease' }}
+      />
+    </svg>
+  );
+}
+
 // ── Avatar animation dock items ────────────────────────────────────────────
 
 const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
@@ -613,8 +655,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 bottom: 0,
                 zIndex: ci,
                 ...(showMyCards
-                  ? { width: 'clamp(54px, 13vw, 70px)', height: 'clamp(70px, 17vw, 90px)', left: ci === 0 ? '0' : 'clamp(30px, 7vw, 40px)' }
-                  : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', left: ci === 0 ? '0' : 'clamp(20px, 5vw, 26px)' }),
+                  ? { width: 'clamp(54px, 13vw, 70px)', height: 'clamp(70px, 17vw, 90px)', left: ci === 0 ? '0' : 'clamp(22px, 5.6vw, 30px)' }
+                  : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', left: ci === 0 ? '0' : 'clamp(14px, 3.8vw, 20px)' }),
                 transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
                 transformOrigin: 'bottom center',
                 filter: isFolded ? 'grayscale(1) opacity(0.5)' : undefined,
@@ -853,7 +895,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               ? () => onOpponentClick(seat.playerAddress!)
               : undefined;
           const badgeEl = (
-            <div
+          <div
               ref={badgeRef}
               role={isCurrentPlayer ? 'button' : opponentTapProfile ? 'button' : undefined}
               onClick={
@@ -889,6 +931,9 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 ...((isCurrentPlayer || opponentTapProfile) ? { cursor: 'pointer' } : {}),
               }}
             >
+          {hideSeatAvatar && isActing && timeLeft != null && (
+            <RectTimerRing timeLeft={timeLeft} maxTime={maxTime} />
+          )}
           <div className="py-1 px-2.5 flex items-center justify-center">
             <div className="flex flex-col items-center min-w-0 text-center">
               <div className="font-bold truncate leading-tight" style={{ color: isCurrentPlayer ? '#fde68a' : '#e2e8f0', fontSize: 'clamp(11px, 2vw, 13px)', maxWidth: 96 }}>

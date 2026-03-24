@@ -75,6 +75,10 @@ export interface PokerTableState {
   currentHand: PokerCurrentHand | null;
   /** Hole cards only for the requesting player */
   myHoleCards: number[] | null;
+  /** Marketing logo filename (admin-set). Null = no logo. */
+  tableLogo?: string | null;
+  /** Logo opacity (0–1). */
+  tableLogoOpacity?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -570,7 +574,7 @@ export class PokerGameService {
     const forPlayerAddr = forPlayer ? this.normalizeAddress(forPlayer) : null;
 
     const tableRow = await pool.query(
-      'SELECT id, small_blind, big_blind, max_seats, status FROM poker_tables WHERE id = $1',
+      'SELECT id, small_blind, big_blind, max_seats, status, table_logo, table_logo_opacity FROM poker_tables WHERE id = $1',
       [tableId]
     );
     if (tableRow.rows.length === 0) throw new Error('Table not found');
@@ -866,7 +870,22 @@ export class PokerGameService {
       seats,
       currentHand,
       myHoleCards,
+      tableLogo: tbl.table_logo ?? null,
+      tableLogoOpacity: tbl.table_logo_opacity != null ? Number(tbl.table_logo_opacity) : null,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // updateTableLogo — admin-only: set or clear marketing logo on felt
+  // ---------------------------------------------------------------------------
+
+  async updateTableLogo(tableId: string, logo: string | null, opacity: number): Promise<void> {
+    const pool = this.getPool();
+    const clampedOpacity = Math.max(0, Math.min(1, opacity));
+    await pool.query(
+      'UPDATE poker_tables SET table_logo = $2, table_logo_opacity = $3 WHERE id = $1',
+      [tableId, logo, clampedOpacity]
+    );
   }
 
   // ---------------------------------------------------------------------------
