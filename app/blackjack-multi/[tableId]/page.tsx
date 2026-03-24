@@ -17,7 +17,9 @@ import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
-import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
+import BlackjackMultiRealTimeBetChart, {
+  type BlackjackMultiRealTimeBetChartRef,
+} from '@/components/BLACKJACK/BlackjackMultiRealTimeBetChart';
 import AvatarView from '@/components/poker/avatar/AvatarView';
 import type { Emotion } from '@/components/poker/avatar/AvatarView';
 import type { AvatarConfig } from '@/lib/websocket-client';
@@ -594,7 +596,7 @@ export default function BlackjackMultiTablePage() {
   // Win notification — reuses WinNotification from single player
   const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
   const prevPhaseRef = useRef<string>('');
-  const chartRef = useRef<BlackjackRealTimeBetChartRef>(null);
+  const chartRef = useRef<BlackjackMultiRealTimeBetChartRef>(null);
   const lastChartRoundRef = useRef<number>(0);
 
   // Trigger Recharts remeasure when chart tab becomes visible
@@ -1609,7 +1611,7 @@ export default function BlackjackMultiTablePage() {
                 aria-hidden={activeTab !== 'chart'}
               >
                 <div className="h-64 md:h-72 min-w-0">
-                  <BlackjackRealTimeBetChart
+                  <BlackjackMultiRealTimeBetChart
                     ref={chartRef}
                     sessionStartTime={chartSessionStartTime.current}
                   />
