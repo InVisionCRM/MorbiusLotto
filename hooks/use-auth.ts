@@ -24,6 +24,15 @@ export function useAuth() {
     }
   }, [isConnected])
 
+  // Invalidate session when the connected account changes (wallet switch without disconnect)
+  useEffect(() => {
+    if (!isConnected || !address || !session) return
+    if (session.address.toLowerCase() !== address.toLowerCase()) {
+      setSession(null)
+      clearSession()
+    }
+  }, [isConnected, address, session])
+
   // Sign in function
   const signIn = useCallback(async (): Promise<boolean> => {
     if (!address || !isConnected) {

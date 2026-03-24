@@ -131,7 +131,7 @@ export function useHexJackpot() {
       setIsLoading(true)
       try {
         const res = await fetch(
-          `https://scan.pulsechain.box/api/v2/addresses/${LOTTERY_INSTANT_ADDRESS}/token-balances`
+          `https://api.scan.pulsechain.com/api/v2/addresses/${LOTTERY_INSTANT_ADDRESS}/token-balances`
         )
         if (!res.ok) throw new Error(`API error: ${res.status}`)
         const json = await res.json()

@@ -13,7 +13,7 @@ interface ContractAddressProps {
 export function ContractAddress({
   address,
   label,
-  explorerUrl = 'https://scan.pulsechain.box/address/',
+  explorerUrl = 'https://scan.pulsechain.com/address/',
   className = ''
 }: ContractAddressProps) {
   return (

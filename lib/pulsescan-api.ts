@@ -3,7 +3,7 @@
  * Used as a fallback/complement to direct RPC calls
  */
 
-const PULSESCAN_API_BASE = 'https://scan.pulsechain.box/api/v2'
+const PULSESCAN_API_BASE = 'https://api.scan.pulsechain.com/api/v2'
 
 export interface PulseScanLog {
   address: {

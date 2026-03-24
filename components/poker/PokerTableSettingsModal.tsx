@@ -20,77 +20,58 @@ export function PokerTableSettingsModal({ isOpen, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Table settings"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-x-0 top-0 z-50 flex justify-center pt-2 px-2 pointer-events-none"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
-        style={{ boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}
+        className="pointer-events-auto w-full max-w-sm rounded-xl overflow-hidden"
+        style={{
+          background: 'rgba(8,10,16,0.92)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(34,211,238,0.2)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div
-          className="flex items-center justify-between px-4 py-3 border-b border-white/5"
-          style={{ background: 'rgba(0,0,0,0.25)' }}
-        >
-          <div>
-            <div className="text-[13px] font-extrabold tracking-wide uppercase" style={{ color: 'rgba(34,211,238,0.95)' }}>
-              Table Appearance
-            </div>
-            <div className="text-[11px] text-white/50">
-              <span className="hidden md:inline">Background effects &amp; felt color</span>
-              <span className="md:hidden">Felt color</span>
-            </div>
-          </div>
+        <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+          <span className="text-[11px] font-extrabold tracking-wide uppercase" style={{ color: 'rgba(34,211,238,0.9)' }}>
+            Table Appearance
+          </span>
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-xl transition-all hover:bg-white/10 flex items-center justify-center"
-            style={{ color: 'rgba(255,255,255,0.7)' }}
+            className="w-6 h-6 rounded-lg transition-all hover:bg-white/10 flex items-center justify-center text-[10px]"
+            style={{ color: 'rgba(255,255,255,0.6)' }}
             aria-label="Close"
           >
             ✕
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-4 flex flex-col gap-4">
+        <div className="p-3 flex flex-col gap-3">
           {/* Effect selector — hidden on mobile since effects are PC only */}
           <div className="hidden md:block">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-white/40 mb-2">
-              Table Effect
-            </div>
-            <div className="flex flex-col gap-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-white/35 mb-1.5">Effect</div>
+            <div className="flex gap-1.5">
               {TABLE_EFFECT_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}
                   type="button"
                   onClick={() => setEffect(opt.id as TableEffectId)}
-                  className="flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left"
+                  className="flex-1 px-2 py-1.5 rounded-lg border text-center transition-all"
                   style={{
-                    background: effect === opt.id ? 'rgba(34,211,238,0.08)' : 'rgba(0,0,0,0.2)',
-                    borderColor: effect === opt.id ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.05)',
+                    background: effect === opt.id ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
+                    borderColor: effect === opt.id ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.06)',
                   }}
                 >
-                  <div
-                    className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
-                    style={{
-                      borderColor: effect === opt.id ? 'rgba(34,211,238,0.9)' : 'rgba(255,255,255,0.25)',
-                    }}
+                  <span
+                    className="text-[11px] font-bold"
+                    style={{ color: effect === opt.id ? 'rgba(34,211,238,0.95)' : 'rgba(255,255,255,0.6)' }}
                   >
-                    {effect === opt.id && (
-                      <div className="w-2 h-2 rounded-full" style={{ background: 'rgba(34,211,238,0.9)' }} />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[12px] font-bold" style={{ color: effect === opt.id ? 'rgba(34,211,238,0.95)' : 'rgba(255,255,255,0.85)' }}>
-                      {opt.label}
-                    </div>
-                    <div className="text-[11px] text-white/40">{opt.description}</div>
-                  </div>
+                    {opt.label}
+                  </span>
                 </button>
               ))}
             </div>
@@ -98,28 +79,29 @@ export function PokerTableSettingsModal({ isOpen, onClose }: Props) {
 
           {/* Felt color */}
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-white/40 mb-2">
-              Felt Color
-            </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-white/35 mb-1.5">Felt Color</div>
+            <div className="grid grid-cols-6 gap-1.5">
               {FELT_COLOR_PRESETS.map((preset) => (
                 <button
                   key={preset.id}
                   type="button"
                   onClick={() => setFeltColor(preset.id)}
-                  className="flex items-center gap-2.5 p-2 rounded-lg border transition-all"
+                  className="flex flex-col items-center gap-1 p-1.5 rounded-lg border transition-all"
                   style={{
-                    background: feltColor === preset.id ? 'rgba(34,211,238,0.08)' : 'rgba(0,0,0,0.2)',
-                    borderColor: feltColor === preset.id ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.05)',
+                    background: feltColor === preset.id ? 'rgba(34,211,238,0.08)' : 'transparent',
+                    borderColor: feltColor === preset.id ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.06)',
                   }}
                 >
                   <div
-                    className="w-6 h-6 rounded-full shrink-0 border border-white/10"
-                    style={{ background: preset.gradient }}
+                    className="w-7 h-7 rounded-full shrink-0 border"
+                    style={{
+                      background: preset.gradient,
+                      borderColor: feltColor === preset.id ? 'rgba(34,211,238,0.6)' : 'rgba(255,255,255,0.1)',
+                    }}
                   />
                   <span
-                    className="text-[11px] font-bold"
-                    style={{ color: feltColor === preset.id ? 'rgba(34,211,238,0.95)' : 'rgba(255,255,255,0.7)' }}
+                    className="text-[9px] font-bold leading-none"
+                    style={{ color: feltColor === preset.id ? 'rgba(34,211,238,0.9)' : 'rgba(255,255,255,0.45)' }}
                   >
                     {preset.label}
                   </span>
@@ -127,17 +109,6 @@ export function PokerTableSettingsModal({ isOpen, onClose }: Props) {
               ))}
             </div>
           </div>
-        </div>
-
-        <div className="px-4 py-3 border-t border-white/5 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-2 rounded-lg text-[12px] font-bold transition-all hover:brightness-125"
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.75)' }}
-          >
-            Done
-          </button>
         </div>
       </div>
     </div>

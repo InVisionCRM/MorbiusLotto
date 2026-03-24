@@ -375,7 +375,7 @@ export function PokerActivityFeed({
 
   // ── Shared panel content ──────────────────────────────────────────────────
   const panelContent = (
-    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: '"Orbitron", sans-serif' }}>
+    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: '"Russo One", sans-serif' }}>
       {/* Header */}
       <div
         className="flex items-center justify-between px-2.5 shrink-0"

@@ -312,7 +312,7 @@ export function KenoTicket({
           {transactionHash && (
             <div className="mt-2">
               <a
-                href={`https://scan.pulsechain.box/tx/${transactionHash}`}
+                href={`https://scan.pulsechain.com/tx/${transactionHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-[9px] font-bold text-white/70 hover:text-purple-400 "

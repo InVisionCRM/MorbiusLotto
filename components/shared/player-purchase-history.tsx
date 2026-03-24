@@ -78,7 +78,7 @@ interface PlayerPurchaseHistoryProps {
   onExpandEntry?: (entry: PurchaseEntry) => Promise<RoundDetail[]>
 }
 
-const defaultPulseUrl = (tx: string) => `https://scan.pulsechain.box/tx/${tx}`
+const defaultPulseUrl = (tx: string) => `https://scan.pulsechain.com/tx/${tx}`
 
 export function PlayerPurchaseHistory({
   title = 'Player Statistics',

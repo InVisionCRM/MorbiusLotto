@@ -202,7 +202,7 @@ export function RoundFinalizedTransactions() {
               </div>
             </div>
             <a
-              href={`https://scan.pulsechain.box/tx/${tx.transactionHash}`}
+              href={`https://scan.pulsechain.com/tx/${tx.transactionHash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-2 py-1 text-xs bg-white/10 hover:bg-white/20 rounded transition-colors flex-shrink-0"

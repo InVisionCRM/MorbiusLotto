@@ -25,7 +25,7 @@ export const pulsechain = defineChain({
   blockExplorers: {
     default: {
       name: 'PulseScan',
-      url: 'https://scan.pulsechain.box',
+      url: 'https://scan.pulsechain.com',
     },
   },
   contracts: {

@@ -24,7 +24,7 @@ import { batchAnalyzeTransactions } from '@/lib/transaction-analyzer'
 import { formatMORBIUS, formatPLS } from '@/lib/format-utils'
 import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55'
 
-const pulseUrl = (tx: string) => `https://scan.pulsechain.box/tx/${tx}`
+const pulseUrl = (tx: string) => `https://scan.pulsechain.com/tx/${tx}`
 
 const formatTime = (iso: string | number | null | undefined) => {
   if (!iso) return '—'

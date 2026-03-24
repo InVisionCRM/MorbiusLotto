@@ -675,7 +675,7 @@ export default function PokerTablePage() {
         >
           {/* Top nav bar */}
           <div
-            className="grid flex-shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-2 z-30"
+            className="grid flex-shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-2 z-30 font-russo-one"
             style={{
               background: 'rgba(10,10,10,0.96)',
               borderBottom: '1px solid rgba(255,255,255,0.07)',

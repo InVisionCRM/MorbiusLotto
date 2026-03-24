@@ -28,9 +28,9 @@ export function useContractBalance() {
         setIsLoading(true)
         setError(null)
 
-        // Fetch token balances from scan.pulsechain.box
+        // Fetch token balances from PulseScan API
         const response = await fetch(
-          `https://scan.pulsechain.box/api/v2/addresses/${LOTTERY_INSTANT_ADDRESS}/token-balances`
+          `https://api.scan.pulsechain.com/api/v2/addresses/${LOTTERY_INSTANT_ADDRESS}/token-balances`
         )
 
         if (!response.ok) {

@@ -325,7 +325,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                   </CardContent>
                 </Card>
               ) : (
-                <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700 overflow-hidden">
+                <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700 overflow-visible">
                   <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
                     <CardTitle className="text-white flex items-center gap-2">
                       <History className="w-5 h-5" />
@@ -433,9 +433,9 @@ function HandReplay({
   }
   const hasDetail = detail && detail.id === entry.id;
   return (
-    <div className="px-3 pb-3 pt-1 border-t border-gray-700/60 space-y-3">
-      <div className="flex flex-wrap gap-4 items-start">
-        <div>
+    <div className="px-3 pb-3 pt-1 border-t border-gray-700/60 space-y-3 overflow-visible">
+      <div className="flex flex-wrap gap-5 sm:gap-6 items-start">
+        <div className="shrink-0 min-w-0 max-w-full">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Community</p>
           <div className="flex gap-1 flex-wrap">
             {(hasDetail ? detail!.community_cards : entry.community_cards).map((cardIdx, i) => (
@@ -447,16 +447,16 @@ function HandReplay({
           </div>
         </div>
         {hasDetail && detail!.holeCards && detail!.holeCards.length > 0 && (
-          <div>
+          <div className="shrink-0 min-w-[11rem] sm:min-w-[12.5rem] md:min-w-[14rem] px-1 overflow-visible">
             <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Your cards</p>
-            <div className="flex gap-1">
+            <div className="flex gap-1.5 justify-start overflow-visible">
               {detail!.holeCards.map((cardIdx, i) => (
-                <CardDisplay key={i} cardIndex={cardIdx} small />
+                <CardDisplay key={i} cardIndex={cardIdx} small className="shrink-0" />
               ))}
             </div>
           </div>
         )}
-        <div>
+        <div className="shrink-0">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Pot</p>
           <p className="text-sm text-white font-medium">{formatChips(entry.pot_amount)}</p>
         </div>

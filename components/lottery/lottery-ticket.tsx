@@ -243,7 +243,7 @@ export function LotteryTicket({
           {transactionHash && (
             <div className="text-[9px] font-bold text-black">
               <a
-                href={`https://scan.pulsechain.box/tx/${transactionHash}`}
+                href={`https://scan.pulsechain.com/tx/${transactionHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className=" hover:text-purple-700"

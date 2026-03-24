@@ -63,7 +63,7 @@ function BracketWinnersModal({ roundId, bracket, payoutPerWinner }: BracketWinne
   }
 
   const openBlockExplorer = (address: string) => {
-    window.open(`https://scan.pulsechain.box/address/${address}`, '_blank')
+    window.open(`https://scan.pulsechain.com/address/${address}`, '_blank')
   }
 
   return (
