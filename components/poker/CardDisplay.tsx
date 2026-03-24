@@ -33,6 +33,8 @@ export interface CardDisplayProps {
   className?: string;
   /** Stagger delay in seconds for deal animation */
   dealDelay?: number;
+  /** Show a centered white badge with large rank+suit text (used on community cards). */
+  showCenterRankSuitOverlay?: boolean;
 }
 
 const dealVariants = {
@@ -51,7 +53,32 @@ const dealVariants = {
   }),
 };
 
-export function CardDisplay({ cardIndex, small, faceDown, isWinningCard, className = '', dealDelay = 0 }: CardDisplayProps) {
+function getSuitSymbol(suit: number): string {
+  switch (suit) {
+    case 0:
+      return '♥';
+    case 1:
+      return '♦';
+    case 2:
+      return '♣';
+    default:
+      return '♠';
+  }
+}
+
+function getSuitColor(suit: number): string {
+  return suit === 0 || suit === 1 ? '#dc2626' : '#111827';
+}
+
+export function CardDisplay({
+  cardIndex,
+  small,
+  faceDown,
+  isWinningCard,
+  className = '',
+  dealDelay = 0,
+  showCenterRankSuitOverlay = false,
+}: CardDisplayProps) {
   const sizeClasses = small
     ? 'w-10 h-14 sm:w-11 sm:h-[62px] md:w-12 md:h-[68px] lg:w-14 lg:h-20 xl:w-16 xl:h-[88px]'
     : 'w-14 h-20 sm:w-16 sm:h-24 lg:w-[72px] lg:h-[100px] xl:w-20 xl:h-28';
@@ -64,6 +91,9 @@ export function CardDisplay({ cardIndex, small, faceDown, isWinningCard, classNa
   const isFaceDown = faceDown || (cardIndex != null && (cardIndex < 0 || cardIndex > 51));
   const isEmpty = !isFaceDown && cardIndex == null;
   const isFaceUp = !isFaceDown && !isEmpty;
+
+  const rank = isFaceUp ? (cardIndex! % 13) : 0;
+  const suit = isFaceUp ? Math.floor(cardIndex! / 13) : 0;
 
   return (
     <div className={`poker-card-wrapper ${className}`} style={{ perspective: 600 }}>
@@ -107,14 +137,25 @@ export function CardDisplay({ cardIndex, small, faceDown, isWinningCard, classNa
           key={`card-${cardIndex}`}
           variants={dealVariants}
           initial="hidden"
-          animate="visible"
+          animate={{
+            opacity: 1,
+            y: isWinningCard ? -20 : 0,
+            scale: isWinningCard ? 1.12 : 1,
+            rotateX: 0,
+          }}
           custom={dealDelay}
           className={`relative ${sizeClasses} overflow-hidden bg-white rounded-md`}
           style={{
             boxShadow: isWinningCard
-              ? `${cardShadow}, 0 0 0 2px rgba(34, 211, 238, 0.85), 0 0 14px rgba(34, 211, 238, 0.4)`
+              ? `${cardShadow}, 0 10px 24px rgba(0,0,0,0.55), 0 0 0 4px rgba(34, 211, 238, 0.95), 0 0 26px rgba(34, 211, 238, 0.55)`
               : cardShadow,
             transformStyle: 'preserve-3d',
+          }}
+          transition={{
+            delay: dealDelay,
+            type: 'spring',
+            stiffness: 260,
+            damping: 18,
           }}
         >
           <Image
@@ -125,12 +166,35 @@ export function CardDisplay({ cardIndex, small, faceDown, isWinningCard, classNa
             className="w-full h-full object-cover"
             priority
           />
+          {showCenterRankSuitOverlay && (
+            <div
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none rounded-md flex items-center justify-center"
+              style={{
+                width: '54%',
+                aspectRatio: '1 / 1',
+                background: 'rgba(255,255,255,0.95)',
+                border: '1px solid rgba(0,0,0,0.18)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+              }}
+            >
+              <span
+                className="font-bold leading-none"
+                style={{
+                  color: getSuitColor(suit),
+                  fontSize: 'clamp(18px, 3.2vw, 28px)',
+                  textShadow: '0 1px 0 rgba(255,255,255,0.5)',
+                }}
+              >
+                {RANK_NAMES[rank]}{getSuitSymbol(suit)}
+              </span>
+            </div>
+          )}
           <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: innerGlow }} />
           {isWinningCard && (
             <div
               className="absolute inset-0 pointer-events-none rounded-md"
               style={{
-                boxShadow: 'inset 0 0 0 1px rgba(34, 211, 238, 0.35)',
+                boxShadow: 'inset 0 0 0 2px rgba(34, 211, 238, 0.55)',
               }}
             />
           )}

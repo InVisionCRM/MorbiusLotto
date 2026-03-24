@@ -13,6 +13,7 @@ import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
 import { Boxes } from '@/components/ui/background-boxes';
 import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
+import { EncryptedText } from '@/components/ui/encrypted-text';
 
 const BEAM_PALETTES: BeamColorPalette[] = [
   { primary: '#18CCFC', accent: '#6344F5', tail: '#AE48FF' }, // cyan → purple → magenta
@@ -365,11 +366,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         {isShowdownWithWinners && firstWinnerAddr && hand && (
           <motion.div
             key="winner-banner"
-            className="absolute left-1/2 pointer-events-none z-40"
-            style={{
-              top: '9%',
-              transform: 'translate(-50%, -50%)',
-            }}
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-40 w-[min(92vw,560px)]"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
@@ -383,16 +380,31 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 border: '1px solid rgba(34, 211, 238, 0.35)',
               }}
             >
-              <span className="font-bold text-white" style={{ fontSize: 'clamp(13px, 2.2vw, 15px)' }}>
-                {isCurrentPlayerWinner ? 'You win!' : `${shortAddr(firstWinnerAddr)} wins`}
-              </span>
-              <span className="font-semibold tabular-nums" style={{ color: '#22c55e', fontSize: 'clamp(12px, 2vw, 14px)' }}>
-                +{formatChips(winnerAmount)}
-              </span>
+              <EncryptedText
+                text={isCurrentPlayerWinner ? 'You win!' : `${shortAddr(firstWinnerAddr)} wins`}
+                className="font-bold text-white"
+                revealDelayMs={26}
+                flipDelayMs={20}
+                encryptedClassName="text-cyan-200/80"
+                revealedClassName="text-white"
+              />
+              <EncryptedText
+                text={`+${formatChips(winnerAmount)}`}
+                className="font-semibold tabular-nums"
+                revealDelayMs={22}
+                flipDelayMs={18}
+                encryptedClassName="text-emerald-300/80"
+                revealedClassName="text-emerald-400"
+              />
               {winnerHandName && (
-                <span className="text-white/70 text-[11px] sm:text-xs uppercase tracking-wide">
-                  {winnerHandName}
-                </span>
+                <EncryptedText
+                  text={winnerHandName}
+                  className="text-[11px] sm:text-xs uppercase tracking-wide"
+                  revealDelayMs={24}
+                  flipDelayMs={20}
+                  encryptedClassName="text-cyan-300/70"
+                  revealedClassName="text-white/75"
+                />
               )}
             </div>
           </motion.div>
