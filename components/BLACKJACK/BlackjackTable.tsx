@@ -1240,6 +1240,99 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                             {hand.isBlackjack && <span className="text-yellow-400 font-black text-sm sm:text-2xl">BJ!</span>}
                             {hand.isBust && <span className="text-red-400 font-black text-sm sm:text-2xl">BUST</span>}
                           </div>
+                          {/* Bet chips + amount — same row / vertical center as hand total (non-split only) */}
+                          {!hasSplit && chipStack.length > 0 && (
+                            <div
+                              className={`relative ml-2.5 flex flex-shrink-0 items-center gap-2 pointer-events-none ${
+                                chipAnimationState === 'loss' ? 'chip-stack-lose' :
+                                chipAnimationState === 'win' ? 'chip-stack-win' : ''
+                              }`}
+                            >
+                              <div
+                                className="relative chip-stack-container"
+                                style={{
+                                  width: '52px',
+                                  height: `${Math.max(44, chipStack.length * 2 + 40)}px`,
+                                }}
+                              >
+                                {chipStack.map((chipValue, index) => {
+                                  const chipImage = getChipImage(chipValue);
+                                  const stackOffset = index * 2;
+                                  return (
+                                    <div
+                                      key={`original-${chipValue}-${index}`}
+                                      className={`absolute w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden ${
+                                        chipAnimationState === 'loss' ? 'chip-lose' : ''
+                                      }`}
+                                      style={{
+                                        background: `url('${chipImage}') center/contain no-repeat`,
+                                        border: '2px solid rgba(0, 0, 0, 0)',
+                                        bottom: `${stackOffset}px`,
+                                        left: '50%',
+                                        transform: 'translateX(-50%)',
+                                        zIndex: 10 + index,
+                                        animationDelay: chipAnimationState === 'loss' ? `${index * 0.05}s` : '0s',
+                                      }}
+                                    />
+                                  );
+                                })}
+                                {chipAnimationState === 'win' && (() => {
+                                  const totalBet = chipStack.reduce((sum, chip) => sum + chip, 0);
+                                  let payoutInTokens: number;
+                                  if (totalPayout > BigInt(0)) {
+                                    const payoutWei = Number(totalPayout);
+                                    const betWei = totalBet * 1e18;
+                                    const winningWei = payoutWei - betWei;
+                                    payoutInTokens = Math.floor(winningWei / 1e18);
+                                  } else {
+                                    if (gameResult === 'blackjack') {
+                                      payoutInTokens = Math.floor(totalBet * 1.5);
+                                    } else {
+                                      payoutInTokens = totalBet;
+                                    }
+                                  }
+                                  const winningChips: number[] = [];
+                                  let remaining = payoutInTokens;
+                                  const chipValues = [100000, 10000, 2500, 1000, 500];
+                                  for (const chipValue of chipValues) {
+                                    while (remaining >= chipValue) {
+                                      winningChips.push(chipValue);
+                                      remaining -= chipValue;
+                                    }
+                                  }
+                                  return winningChips.map((chipValue, index) => {
+                                    const chipImage = getChipImage(chipValue);
+                                    return (
+                                      <div
+                                        key={`win-${chipValue}-${index}`}
+                                        className="absolute w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden chip-win"
+                                        style={{
+                                          background: `url('${chipImage}') center/contain no-repeat`,
+                                          border: '2px solid rgba(0, 0, 0, 0)',
+                                          bottom: `${chipStack.length * 2 + 8}px`,
+                                          left: '50%',
+                                          transform: 'translateX(-50%)',
+                                          zIndex: 100 + index,
+                                          animationDelay: `${index * 0.2}s`,
+                                        }}
+                                      />
+                                    );
+                                  });
+                                })()}
+                              </div>
+                              <span
+                                className={`rounded-md px-2 py-1 bg-black/15 backdrop-blur-md font-black tabular-nums text-white text-base sm:text-xl ${
+                                  chipAnimationState !== 'none' ? 'opacity-0' : ''
+                                }`}
+                                style={{
+                                  textShadow: '0 1px 3px rgba(0, 0, 0, 0.85)',
+                                  transition: 'opacity 0.3s ease-out',
+                                }}
+                              >
+                                {chipStack.reduce((sum, chip) => sum + chip, 0)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
@@ -1617,106 +1710,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
         </div>
       {/* End Play Area */}
-
-      {/* Stacked Chip Display - On the table, above the betting panel. */}
-      {(chipStack.length > 0 && !hasSplit) && (
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-20 z-40 pointer-events-none">
-          <div
-            className={`relative chip-stack-container ${
-              chipAnimationState === 'loss' ? 'chip-stack-lose' :
-              chipAnimationState === 'win' ? 'chip-stack-win' : ''
-            }`}
-            style={{ width: '64px', height: `${Math.max(48, chipStack.length * 3 + 48)}px` }}
-          >
-            {/* Original bet chips - stay in place during win animation */}
-            {chipStack.map((chipValue, index) => {
-              const chipImage = getChipImage(chipValue);
-              const stackOffset = index * 3; // 3px offset per chip for stacking
-
-              return (
-                <div
-                  key={`original-${chipValue}-${index}`}
-                  className={`absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden ${
-                    chipAnimationState === 'loss' ? 'chip-lose' : ''
-                  }`}
-                  style={{
-                    background: `url('${chipImage}') center/contain no-repeat`,
-                    border: '2px solid rgba(0, 0, 0, 0)',
-                    bottom: `${stackOffset}px`,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 10 + index,
-                    animationDelay: chipAnimationState === 'loss' ? `${index * 0.05}s` : '0s',
-                  }}
-                />
-              );
-            })}
-            {/* Winning chips - animate in from top during win animation */}
-            {chipAnimationState === 'win' && (() => {
-              const totalBet = chipStack.reduce((sum, chip) => sum + chip, 0);
-              let payoutInTokens: number;
-              if (totalPayout > BigInt(0)) {
-                const payoutWei = Number(totalPayout);
-                const betWei = totalBet * 1e18;
-                const winningWei = payoutWei - betWei;
-                payoutInTokens = Math.floor(winningWei / 1e18);
-              } else {
-                if (gameResult === 'blackjack') {
-                  payoutInTokens = Math.floor(totalBet * 1.5);
-                } else {
-                  payoutInTokens = totalBet;
-                }
-              }
-              const winningChips: number[] = [];
-              let remaining = payoutInTokens;
-              const chipValues = [100000, 10000, 2500, 1000, 500];
-              for (const chipValue of chipValues) {
-                while (remaining >= chipValue) {
-                  winningChips.push(chipValue);
-                  remaining -= chipValue;
-                }
-              }
-              return winningChips.map((chipValue, index) => {
-                const chipImage = getChipImage(chipValue);
-                return (
-                  <div
-                    key={`win-${chipValue}-${index}`}
-                    className="absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden chip-win"
-                    style={{
-                      background: `url('${chipImage}') center/contain no-repeat`,
-                      border: '2px solid rgba(0, 0, 0, 0)',
-                      bottom: `${chipStack.length * 3 + 10}px`,
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      zIndex: 100 + index,
-                      animationDelay: `${index * 0.2}s`,
-                    }}
-                  />
-                );
-              });
-            })()}
-            {/* Total Bet Amount Display — below chip stack */}
-            <div
-              className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
-                chipAnimationState !== 'none' ? 'opacity-0' : ''
-              }`}
-              style={{
-                bottom: `-24px`,
-                transition: 'opacity 0.3s ease-out',
-              }}
-            >
-              <span
-                className="font-black text-1xl text-cyan-400"
-                style={{
-                  textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9)',
-                }}
-              >
-                {chipStack.reduce((sum, chip) => sum + chip, 0)}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Perfect Pairs chip stack + bet circle — left of main chip stack */}
       {onPerfectPairsBetChange && (

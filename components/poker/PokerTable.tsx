@@ -510,7 +510,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             ? LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
             : 0;
         const seatTranslateY = (isRightAdjacentSeat || isLeftAdjacentSeat)
-          ? -ADJACENT_SEAT_VERTICAL_NUDGE_PX
+          ? ADJACENT_SEAT_VERTICAL_NUDGE_PX
           : 0;
         return (
           <div

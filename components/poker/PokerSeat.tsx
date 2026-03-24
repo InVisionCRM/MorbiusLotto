@@ -617,36 +617,6 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
             zIndex: 0,
           }}
         >
-          <div
-            className="absolute left-1/2 pointer-events-none"
-            style={{
-              bottom: 'calc(100% + 15px)',
-              transform: 'translateX(-50%)',
-              zIndex: 5,
-            }}
-          >
-            <div
-              className="font-bold tabular-nums leading-tight flex items-center justify-center gap-1 px-1.5 py-0.5 rounded"
-              style={{
-                color: '#fbbf24',
-                fontSize: 'clamp(11px, 2.2vw, 13px)',
-                background: 'rgba(0,0,0,0.84)',
-                border: '1px solid rgba(251,191,36,0.35)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {formatChips(seat.stack)}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/morbius/MorbiusLogo%20(3).png"
-                alt=""
-                aria-hidden
-                className="shrink-0"
-                style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }}
-              />
-            </div>
-          </div>
           {[0, 1].map((ci) => (
             <div
               key={ci}
@@ -931,16 +901,14 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               <div className="font-bold truncate leading-tight" style={{ color: isCurrentPlayer ? '#fde68a' : '#e2e8f0', fontSize: 'clamp(11px, 2vw, 13px)', maxWidth: 96 }}>
                 {displayName}
               </div>
-              {hideSeatAvatar && (
-                <div
-                  className="font-bold tabular-nums leading-tight flex items-center justify-center gap-0.5"
-                  style={{ color: '#fbbf24', fontSize: 'clamp(9px, 1.8vw, 11px)', whiteSpace: 'nowrap' }}
-                >
-                  {formatChips(seat.stack)}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/morbius/MorbiusLogo%20(3).png" alt="" aria-hidden className="shrink-0" style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }} />
-                </div>
-              )}
+              <div
+                className="font-bold tabular-nums leading-tight flex items-center justify-center gap-0.5"
+                style={{ color: '#fbbf24', fontSize: 'clamp(9px, 1.8vw, 11px)', whiteSpace: 'nowrap' }}
+              >
+                {formatChips(seat.stack)}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/morbius/MorbiusLogo%20(3).png" alt="" aria-hidden className="shrink-0" style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }} />
+              </div>
             </div>
           </div>
           <AnimatePresence mode="wait">

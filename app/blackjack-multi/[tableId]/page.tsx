@@ -233,7 +233,7 @@ function Seat({
         <>
           {/* Hands */}
           {seat && seat.hands.length > 0 ? (
-            <div className={`flex min-h-[120px] justify-center items-start ${seat.hands.length > 1 ? 'flex-row gap-2' : 'flex-col items-center gap-3'}`}>
+            <div className={`flex min-h-[120px] justify-center items-start ${seat.hands.length > 1 ? 'flex-row gap-2' : 'flex-col items-center gap-1'}`}>
               {seat.hands.map((hand, hi) => {
                 const hasSplit = seat.hands.length > 1;
                 const isActiveHand = hasSplit && isActing && seat.activeHandIndex === hi;
@@ -298,6 +298,25 @@ function Seat({
                           {hand.isBust ? 'BUST' : hand.isBlackjack ? 'BJ!' : hand.total}
                         </span>
                       </div>
+                      {!hasSplit && seatTableBetWei(seat) > 0n && (
+                        <div className="ml-2.5 flex flex-shrink-0 items-center gap-2 pointer-events-none">
+                          <div className="relative h-9 w-9 flex-shrink-0">
+                            <div
+                              className="h-9 w-9 rounded-full"
+                              style={{
+                                background: `url('/PokerChips/greenpokerchip005.png') center/contain no-repeat`,
+                                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))',
+                              }}
+                            />
+                          </div>
+                          <span
+                            className="rounded-md px-2 py-1 bg-black/15 backdrop-blur-md text-white text-sm font-bold tabular-nums"
+                            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}
+                          >
+                            {formatMorbius(seatTableBetWei(seat).toString())}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     {hasSplit && phase !== 'betting' && BigInt(hand.betAmount || '0') > 0n && (
                       <span className="text-[10px] font-bold text-white/70 mt-0.5" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
@@ -317,8 +336,8 @@ function Seat({
             </div>
           )}
 
-          {/* Chip stack — pending bet (betting) or committed total (play through settle) */}
-          {seat && seatTableBetWei(seat) > 0n && (
+          {/* Chip stack — split (total) or no cards yet; single active hand shows chips inline with hand total */}
+          {seat && seatTableBetWei(seat) > 0n && seat.hands.length !== 1 && (
             <div className="flex flex-col items-center">
               <div className="relative w-10 h-10">
                 <div
@@ -329,7 +348,10 @@ function Seat({
                   }}
                 />
               </div>
-              <span className="text-white text-sm font-bold mt-0.5" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
+              <span
+                className="mt-0.5 rounded-md px-2 py-1 bg-black/15 backdrop-blur-md text-white text-sm font-bold tabular-nums"
+                style={{ textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}
+              >
                 {formatMorbius(seatTableBetWei(seat).toString())}
               </span>
             </div>
