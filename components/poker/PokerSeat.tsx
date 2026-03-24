@@ -793,11 +793,6 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               {seat.isBigBlind   && <RoleToken label="BB" />}
             </div>
           )}
-          {isActing && timeLeft != null && (
-            <div className="relative mx-auto flex items-center justify-center" style={{ width: 50, height: 50 }}>
-              <CircularTimerRing size={40} timeLeft={timeLeft} maxTime={maxTime} />
-            </div>
-          )}
         </div>
       )}
 
@@ -931,14 +926,21 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 ...((isCurrentPlayer || opponentTapProfile) ? { cursor: 'pointer' } : {}),
               }}
             >
-          {hideSeatAvatar && isActing && timeLeft != null && (
-            <RectTimerRing timeLeft={timeLeft} maxTime={maxTime} />
-          )}
           <div className="py-1 px-2.5 flex items-center justify-center">
             <div className="flex flex-col items-center min-w-0 text-center">
               <div className="font-bold truncate leading-tight" style={{ color: isCurrentPlayer ? '#fde68a' : '#e2e8f0', fontSize: 'clamp(11px, 2vw, 13px)', maxWidth: 96 }}>
                 {displayName}
               </div>
+              {hideSeatAvatar && (
+                <div
+                  className="font-bold tabular-nums leading-tight flex items-center justify-center gap-0.5"
+                  style={{ color: '#fbbf24', fontSize: 'clamp(9px, 1.8vw, 11px)', whiteSpace: 'nowrap' }}
+                >
+                  {formatChips(seat.stack)}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/morbius/MorbiusLogo%20(3).png" alt="" aria-hidden className="shrink-0" style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }} />
+                </div>
+              )}
             </div>
           </div>
           <AnimatePresence mode="wait">

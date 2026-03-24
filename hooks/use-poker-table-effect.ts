@@ -29,7 +29,7 @@ export const RAIL_COLOR_PRESETS = [
     id: 'gold',
     label: 'Gold',
     swatch: '#d4a82a',
-    activeSegment: '#22d3ee',
+
     outerRing: 'linear-gradient(170deg, #d4a82a 0%, #8a6010 30%, #c89828 50%, #8a6010 70%, #d4a82a 100%)',
     outerGlow: 'inset 0 1px 4px rgba(255,230,120,0.35), inset 0 -1px 4px rgba(0,0,0,0.5)',
     cushion: 'linear-gradient(180deg, #1c1508 0%, #0e0c04 50%, #181304 100%)',
@@ -40,7 +40,7 @@ export const RAIL_COLOR_PRESETS = [
     id: 'silver',
     label: 'Silver',
     swatch: '#a0a8b8',
-    activeSegment: '#f59e0b',
+
     outerRing: 'linear-gradient(170deg, #b0b8c8 0%, #6a7080 30%, #a0a8b8 50%, #6a7080 70%, #b0b8c8 100%)',
     outerGlow: 'inset 0 1px 4px rgba(200,210,230,0.35), inset 0 -1px 4px rgba(0,0,0,0.5)',
     cushion: 'linear-gradient(180deg, #141618 0%, #0c0e10 50%, #101214 100%)',
@@ -51,7 +51,7 @@ export const RAIL_COLOR_PRESETS = [
     id: 'rosegold',
     label: 'Rose Gold',
     swatch: '#c27a68',
-    activeSegment: '#22d3ee',
+
     outerRing: 'linear-gradient(170deg, #d4917a 0%, #a05840 30%, #c88068 50%, #a05840 70%, #d4917a 100%)',
     outerGlow: 'inset 0 1px 4px rgba(255,180,160,0.35), inset 0 -1px 4px rgba(0,0,0,0.5)',
     cushion: 'linear-gradient(180deg, #1c1210 0%, #0e0a08 50%, #181010 100%)',
@@ -62,7 +62,7 @@ export const RAIL_COLOR_PRESETS = [
     id: 'obsidian',
     label: 'Obsidian',
     swatch: '#2a2e36',
-    activeSegment: '#22d3ee',
+
     outerRing: 'linear-gradient(170deg, #3a3e48 0%, #1a1e26 30%, #2e3238 50%, #1a1e26 70%, #3a3e48 100%)',
     outerGlow: 'inset 0 1px 4px rgba(100,110,130,0.25), inset 0 -1px 4px rgba(0,0,0,0.6)',
     cushion: 'linear-gradient(180deg, #0e1014 0%, #080a0c 50%, #0c0e12 100%)',
@@ -73,7 +73,7 @@ export const RAIL_COLOR_PRESETS = [
     id: 'bronze',
     label: 'Bronze',
     swatch: '#a07040',
-    activeSegment: '#22d3ee',
+
     outerRing: 'linear-gradient(170deg, #b88050 0%, #705028 30%, #a87848 50%, #705028 70%, #b88050 100%)',
     outerGlow: 'inset 0 1px 4px rgba(220,170,100,0.35), inset 0 -1px 4px rgba(0,0,0,0.5)',
     cushion: 'linear-gradient(180deg, #181008 0%, #0c0804 50%, #140e06 100%)',
@@ -84,7 +84,7 @@ export const RAIL_COLOR_PRESETS = [
     id: 'emerald',
     label: 'Emerald',
     swatch: '#2a8a5a',
-    activeSegment: '#f59e0b',
+
     outerRing: 'linear-gradient(170deg, #38a870 0%, #1a6040 30%, #309860 50%, #1a6040 70%, #38a870 100%)',
     outerGlow: 'inset 0 1px 4px rgba(100,230,160,0.3), inset 0 -1px 4px rgba(0,0,0,0.5)',
     cushion: 'linear-gradient(180deg, #0a1810 0%, #06100a 50%, #081410 100%)',

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,55 +36,6 @@ function formatChips(wei: string | number): string {
   } catch {
     return String(wei);
   }
-}
-
-/**
- * Build a conic-gradient CSS background that segments the outer rail ring into
- * `seatCount` equal arcs with dark gaps between them. The active seat's segment
- * uses the rail preset's `activeSegment` color; all others use the `swatch`.
- * A semi-transparent linear gradient is layered on top for metallic sheen.
- *
- * Seat display-slot 0 = bottom center (current player), going clockwise — this
- * matches `computeSeatAnchors`.
- */
-const WINNER_SEGMENT_COLOR = '#22c55e';
-
-function buildSegmentedRailBg(
-  seatCount: number,
-  activeDisplaySlot: number | null,
-  winnerDisplaySlots: number[],
-  swatch: string,
-  activeColor: string,
-): string {
-  if (seatCount < 2) return swatch;
-
-  const segDeg = 360 / seatCount;
-  const gapDeg = 3;
-  const halfGap = gapDeg / 2;
-  // Rotate so segment 0 is centered at 180° (bottom)
-  const fromDeg = 180 - segDeg / 2;
-
-  const winnerSet = new Set(winnerDisplaySlots);
-
-  const stops: string[] = [];
-  for (let i = 0; i < seatCount; i++) {
-    const s = i * segDeg;
-    const e = (i + 1) * segDeg;
-    const color = winnerSet.has(i)
-      ? WINNER_SEGMENT_COLOR
-      : i === activeDisplaySlot ? activeColor : swatch;
-    stops.push(`#0a0c10 ${s}deg ${s + halfGap}deg`);
-    stops.push(`${color} ${s + halfGap}deg ${e - halfGap}deg`);
-    if (i === seatCount - 1) {
-      stops.push(`#0a0c10 ${e - halfGap}deg ${e}deg`);
-    }
-  }
-
-  // Metallic sheen overlay + segmented conic underneath
-  return [
-    'linear-gradient(170deg, rgba(255,255,255,0.18) 0%, transparent 25%, rgba(255,255,255,0.08) 50%, transparent 75%, rgba(255,255,255,0.18) 100%)',
-    `conic-gradient(from ${fromDeg}deg, ${stops.join(', ')})`,
-  ].join(', ');
 }
 
 const POT_ANCHOR = { fx: 0.50, fy: 0.47 };
@@ -211,20 +162,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
   const seatAnchors = computeSeatAnchors(state.seats.length, hideSeatAvatars);
   const actingPosition = hand?.actingPosition ?? null;
-  const actingDisplaySlot = actingPosition !== null && mySeatIndex >= 0
-    ? (actingPosition - mySeatIndex + state.seats.length) % state.seats.length
-    : actingPosition;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
   const winnerSeatIndices = isShowdownWithWinners
     ? (hand!.winners!.map((w) => state.seats.findIndex((s) => s.playerAddress === w.address)).filter((i) => i >= 0) as number[])
     : [];
   const winnerDisplaySlots = winnerSeatIndices.map(
     (idx) => (mySeatIndex >= 0 ? (idx - mySeatIndex + state.seats.length) % state.seats.length : idx)
-  );
-  const segmentedRailBg = useMemo(
-    () => buildSegmentedRailBg(state.seats.length, actingDisplaySlot, winnerDisplaySlots, railStyle.swatch, railStyle.activeSegment),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.seats.length, actingDisplaySlot, winnerDisplaySlots.join(','), railStyle.swatch, railStyle.activeSegment],
   );
   const firstWinnerAnchor = winnerDisplaySlots.length > 0 ? seatAnchors[winnerDisplaySlots[0]] : null;
   const firstWinner = isShowdownWithWinners ? hand!.winners![0] : null;
@@ -304,10 +247,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           boxShadow: '0 32px 100px rgba(0,0,0,0.95), 0 10px 40px rgba(0,0,0,0.8)',
         }}
       >
-        {/* Outer trim — segmented 8px ring (highlights acting player's segment) */}
+        {/* Outer trim — 8px ring */}
         <div style={{
           flex: 1, borderRadius: '9999px', display: 'flex', padding: '8px',
-          background: segmentedRailBg,
+          background: railStyle.outerRing,
           boxShadow: railStyle.outerGlow,
         }}>
           {/* Dark cushion — 20px ring */}
@@ -526,12 +469,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           const hasBet = toBigIntSafe(seat.currentBet ?? 0) > 0n;
           if (!hasBet) return null;
 
-          const frac = displaySlot === 0 ? 0.45 : 0.28;
-          let cfx = anchor.fx + (POT_ANCHOR.fx - anchor.fx) * frac;
-          let cfy = anchor.fy + (POT_ANCHOR.fy - anchor.fy) * frac;
-
-          // Offset bottom player's chips to the right so they don't overlap cards
-          if (displaySlot === 0) cfx += 0.10;
+          const frac = displaySlot === 0 ? 0.55 : 0.38;
+          const cfx = anchor.fx + (POT_ANCHOR.fx - anchor.fx) * frac;
+          const cfy = anchor.fy + (POT_ANCHOR.fy - anchor.fy) * frac;
 
           return (
             <motion.div

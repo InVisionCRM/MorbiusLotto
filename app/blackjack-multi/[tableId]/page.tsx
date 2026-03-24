@@ -1611,7 +1611,7 @@ export default function BlackjackMultiTablePage() {
                 <div className="h-64 md:h-72 min-w-0">
                   <BlackjackRealTimeBetChart
                     ref={chartRef}
-                    sessionStartTime={Number(state?.roundNumber ?? 0)}
+                    sessionStartTime={chartSessionStartTime.current}
                   />
                 </div>
               </div>
