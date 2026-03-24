@@ -2795,7 +2795,7 @@ export default function BlackjackPage() {
 
             {/* Player avatar — bottom-right on table */}
             {address && (
-              <div className="pointer-events-auto absolute bottom-4 right-4 z-20">
+              <div className="pointer-events-auto absolute bottom-4 right-4 z-20 hidden md:block">
                 <button
                   type="button"
                   onClick={() => openProfileSettings()}
