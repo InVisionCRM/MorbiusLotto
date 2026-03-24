@@ -1,7 +1,7 @@
 import { connectorsForWallets } from '@rainbow-me/rainbowkit'
 import type { Wallet } from '@rainbow-me/rainbowkit'
 import { createConfig, http, fallback } from 'wagmi'
-import { injected } from 'wagmi/connectors'
+import { injected } from '@wagmi/core'
 import { pulsechain } from './chains'
 import {
   metaMaskWallet,
