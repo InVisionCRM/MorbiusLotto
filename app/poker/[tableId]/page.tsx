@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
@@ -22,6 +21,7 @@ import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 import { PokerOpponentProfileCard } from '@/components/poker/PokerOpponentProfileCard';
 import { CardDisplay } from '@/components/poker/CardDisplay';
 import { PokerSoundsSettingsModal } from '@/components/poker/PokerSoundsSettingsModal';
+import { PokerTableSettingsModal } from '@/components/poker/PokerTableSettingsModal';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
 import { usePokerSounds } from '@/hooks/use-poker-sounds';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
@@ -511,6 +511,7 @@ export default function PokerTablePage() {
   const ps = (file: string) => `/POKER/PokerSounds/${file}`;
   const sounds = usePokerSounds();
   const [showSoundsModal, setShowSoundsModal] = useState(false);
+  const [showTableSettingsModal, setShowTableSettingsModal] = useState(false);
   const [showEditQuickChatModal, setShowEditQuickChatModal] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases();
@@ -672,7 +673,7 @@ export default function PokerTablePage() {
         >
           {/* Top nav bar */}
           <div
-            className="flex-shrink-0 flex items-center justify-between px-2 z-30 gap-2"
+            className="grid flex-shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-2 z-30"
             style={{
               background: 'rgba(10,10,10,0.96)',
               borderBottom: '1px solid rgba(255,255,255,0.07)',
@@ -680,20 +681,9 @@ export default function PokerTablePage() {
               paddingBottom: '8px',
             }}
           >
-            <Link
-              href="/poker"
-              className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide flex items-center hover:brightness-125 active:scale-[0.97] transition-all shrink-0"
-              style={{
-                background: 'rgba(255,255,255,0.07)',
-                color: 'rgba(255,255,255,0.75)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-              }}
-            >
-              ← Lobby
-            </Link>
+            <div aria-hidden className="min-w-0" />
             {state && (
-              <div className="flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5">
+              <div className="flex flex-col items-center justify-center min-w-0 gap-0.5">
                 {state.myHoleCards && state.myHoleCards.length >= 2 && (
                   <div className="flex items-center justify-center gap-px p-px sm:hidden">
                     <CardDisplay cardIndex={state.myHoleCards[0]} small className="!w-[37px] !h-[52px] min-w-0 shrink-0 overflow-hidden [&>*]:!w-full [&>*]:!h-full [&>*]:!min-w-0 [&>*]:!min-h-0" />
@@ -705,7 +695,8 @@ export default function PokerTablePage() {
                 </span>
               </div>
             )}
-            <div className="flex items-center gap-1.5 shrink-0 relative">
+            {!state && <div className="min-w-0" />}
+            <div className="flex items-center justify-end gap-1.5 shrink-0 relative">
               <button
                 type="button"
                 onClick={() => setSettingsMenuOpen((o) => !o)}
@@ -742,6 +733,14 @@ export default function PokerTablePage() {
                       style={{ color: 'rgba(255,255,255,0.9)' }}
                     >
                       Sounds
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowTableSettingsModal(true); setSettingsMenuOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                      style={{ color: 'rgba(255,255,255,0.9)' }}
+                    >
+                      Table Appearance
                     </button>
                     <button
                       type="button"
@@ -961,6 +960,10 @@ export default function PokerTablePage() {
         <PokerSoundsSettingsModal
           isOpen={showSoundsModal}
           onClose={() => setShowSoundsModal(false)}
+        />
+        <PokerTableSettingsModal
+          isOpen={showTableSettingsModal}
+          onClose={() => setShowTableSettingsModal(false)}
         />
         <EditQuickChatModal
           open={showEditQuickChatModal}

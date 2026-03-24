@@ -11,6 +11,8 @@ import type { PokerTableState as TableState } from '@/lib/websocket-client';
 import { PokerTournamentHUD } from './tournament/PokerTournamentHUD';
 import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
+import { Boxes } from '@/components/ui/background-boxes';
+import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
 
 const BEAM_PALETTES: BeamColorPalette[] = [
   { primary: '#18CCFC', accent: '#6344F5', tail: '#AE48FF' }, // cyan → purple → magenta
@@ -104,6 +106,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const [, setDims] = useState({ w: 640, h: 500 });
   /** Below Tailwind `md` — hide heavy seat avatars to reduce crowding on phones. */
   const [hideSeatAvatars, setHideSeatAvatars] = useState(false);
+  const { effect: tableEffect, feltGradient } = usePokerTableEffect();
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -257,42 +260,57 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               background: 'linear-gradient(170deg, #b08820 0%, #6a4c0c 30%, #a07818 50%, #6a4c0c 70%, #b08820 100%)',
               boxShadow: 'inset 0 1px 3px rgba(255,210,80,0.3)',
             }}>
-              {/* Navy felt surface */}
+              {/* Felt surface — color from user preference */}
               <div style={{
                 flex: 1, borderRadius: '9999px', position: 'relative', overflow: 'hidden',
-                background: 'radial-gradient(ellipse at 50% 35%, #1f2e54 0%, #131e3a 45%, #0c1428 75%, #080e1e 100%)',
+                background: feltGradient,
                 boxShadow: 'inset 0 8px 40px rgba(0,0,0,0.55), inset 0 -4px 20px rgba(0,0,0,0.4)',
                 outline: '1px dashed rgba(255,255,255,0.08)',
                 outlineOffset: '-10px',
               }}>
-                {/* Animated beams — A/B layers cross-fade over 15s */}
-                <div
-                  style={{
-                    position: 'absolute', inset: 0, pointerEvents: 'none',
-                    opacity: activeBeamLayer === 'A' ? 0.12 : 0,
-                    mixBlendMode: 'screen',
-                    transition: 'opacity 15s ease',
-                  }}
-                >
-                  <BackgroundBeams palette={paletteA} />
-                </div>
-                <div
-                  style={{
-                    position: 'absolute', inset: 0, pointerEvents: 'none',
-                    opacity: activeBeamLayer === 'B' ? 0.12 : 0,
-                    mixBlendMode: 'screen',
-                    transition: 'opacity 15s ease',
-                  }}
-                >
-                  <BackgroundBeams palette={paletteB} />
-                </div>
-                {/* Felt sheen — sits above beams to preserve the 3D depth / shadow */}
+                {/* Animated effects — PC only (skip on mobile to save GPU) */}
+                {!hideSeatAvatars && tableEffect === 'beams' && (
+                  <>
+                    <div
+                      style={{
+                        position: 'absolute', inset: 0, pointerEvents: 'none',
+                        opacity: activeBeamLayer === 'A' ? 0.12 : 0,
+                        mixBlendMode: 'screen',
+                        transition: 'opacity 15s ease',
+                      }}
+                    >
+                      <BackgroundBeams palette={paletteA} />
+                    </div>
+                    <div
+                      style={{
+                        position: 'absolute', inset: 0, pointerEvents: 'none',
+                        opacity: activeBeamLayer === 'B' ? 0.12 : 0,
+                        mixBlendMode: 'screen',
+                        transition: 'opacity 15s ease',
+                      }}
+                    >
+                      <BackgroundBeams palette={paletteB} />
+                    </div>
+                  </>
+                )}
+                {!hideSeatAvatars && tableEffect === 'boxes' && (
+                  <div
+                    style={{
+                      position: 'absolute', inset: 0, pointerEvents: 'none',
+                      opacity: 0.08,
+                      mixBlendMode: 'screen',
+                    }}
+                  >
+                    <Boxes rowCount={30} colCount={20} />
+                  </div>
+                )}
+                {/* Felt sheen — sits above effects to preserve the 3D depth / shadow */}
                 <div style={{
                   position: 'absolute', inset: 0,
                   background: 'radial-gradient(ellipse at 50% 18%, rgba(255,255,255,0.05) 0%, transparent 55%)',
                   pointerEvents: 'none',
                 }} />
-                {/* Felt inner shadow overlay — keeps the inset depth on top of beams */}
+                {/* Felt inner shadow overlay — keeps the inset depth on top of effects */}
                 <div style={{
                   position: 'absolute', inset: 0, pointerEvents: 'none',
                   boxShadow: 'inset 0 8px 40px rgba(0,0,0,0.45), inset 0 -4px 20px rgba(0,0,0,0.35)',

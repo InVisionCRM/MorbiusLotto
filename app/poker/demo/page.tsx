@@ -343,18 +343,18 @@ export default function PokerDemoPage() {
               Poker tutorial
             </span>
             <Link
-              href="/poker"
+              href="/"
               className="text-[10px] font-semibold hover:opacity-80 transition-opacity"
               style={{ color: 'var(--poker-accent)' }}
             >
-              Back to lobby
+              Back to Home
             </Link>
           </div>
         )}
 
         {/* Same top bar shell as /poker/[tableId] */}
         <div
-          className="flex-shrink-0 flex items-center justify-between px-2 z-30 gap-2"
+          className="grid flex-shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-2 z-30"
           style={{
             background: 'rgba(10,10,10,0.96)',
             borderBottom: '1px solid rgba(255,255,255,0.07)',
@@ -362,25 +362,14 @@ export default function PokerDemoPage() {
             paddingBottom: '8px',
           }}
         >
-          <Link
-            href="/poker"
-            className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide flex items-center hover:brightness-125 active:scale-[0.97] transition-all shrink-0"
-            style={{
-              background: 'rgba(255,255,255,0.07)',
-              color: 'rgba(255,255,255,0.75)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-            }}
-          >
-            ← Lobby
-          </Link>
-          <div className="flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5">
+          <div aria-hidden className="min-w-0" />
+          <div className="flex flex-col items-center justify-center min-w-0 gap-0.5">
             <span className="text-[10px] text-[rgba(255,255,255,0.45)] tabular-nums truncate text-center w-full">
               Demo · {fmtChips(demoState.smallBlind)}/{fmtChips(demoState.bigBlind)} ·{' '}
               {demoState.seats.filter((s) => s.playerAddress).length}/{demoState.maxSeats} seats
             </span>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center justify-end gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => router.push('/poker')}
