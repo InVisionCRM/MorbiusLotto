@@ -47,6 +47,24 @@ const wedgeTransition: Transition = {
 const FULL_CIRCLE = 360;
 const START_ANGLE = -90;
 
+/** Shared SVG defs: cyan outer ring + optional filters (glass menu). */
+function RadialMenuSvgDefs({ idPrefix }: { idPrefix: string }) {
+  return (
+    <defs>
+      <linearGradient id={`${idPrefix}-outer`} x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#a5f3fc" stopOpacity={0.95} />
+        <stop offset="45%" stopColor="#22d3ee" stopOpacity={1} />
+        <stop offset="100%" stopColor="#0891b2" stopOpacity={0.9} />
+      </linearGradient>
+      <linearGradient id={`${idPrefix}-outer-active`} x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#ecfeff" stopOpacity={1} />
+        <stop offset="50%" stopColor="#22d3ee" stopOpacity={1} />
+        <stop offset="100%" stopColor="#06b6d4" stopOpacity={1} />
+      </linearGradient>
+    </defs>
+  );
+}
+
 function degToRad(deg: number) {
   return (deg * Math.PI) / 180;
 }
@@ -131,6 +149,7 @@ export function RadialMenu({
 
   const itemRefs = React.useRef<(HTMLElement | null)[]>([]);
   const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
+  const gradId = React.useId().replace(/:/g, '');
 
   const resetActive = () => setActiveIndex(null);
 
@@ -145,7 +164,7 @@ export function RadialMenu({
     <ContextMenu.Root onOpenChange={handleOpenChange} modal={modal}>
       <ContextMenu.Trigger asChild={children != null}>
         {children ?? (
-          <div className="flex size-20 select-none items-center justify-center rounded-lg border-2 border-dashed border-white/20 outline-none">
+          <div className="flex size-20 select-none items-center justify-center rounded-lg border border-cyan-500/30 bg-black/15 font-poppins text-[10px] text-cyan-300/80 outline-none backdrop-blur-sm">
             Right-click here.
           </div>
         )}
@@ -153,7 +172,7 @@ export function RadialMenu({
 
       <ContextMenu.Portal>
         <ContextMenu.Content
-          className="z-[100] min-w-0 border-0 bg-transparent p-0 shadow-none outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          className="z-[100] min-w-0 border-0 bg-transparent p-0 shadow-none outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-90 data-[state=open]:duration-200"
           style={{ width: size, height: size }}
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
@@ -166,8 +185,8 @@ export function RadialMenu({
             }}
           >
             <motion.div
-              className="absolute inset-0 rounded-full shadow-xl"
-              initial={{ opacity: 0, scale: 0.5 }}
+              className="absolute inset-0 rounded-full bg-black/15 shadow-[0_8px_40px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-md"
+              initial={{ opacity: 0, scale: 0.82 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={menuTransition}
             />
@@ -175,6 +194,7 @@ export function RadialMenu({
               className="absolute inset-0 size-full"
               viewBox={`${-radius} ${-radius} ${radius * 2} ${radius * 2}`}
             >
+              <RadialMenuSvgDefs idPrefix={gradId} />
               {menuItems.map((item, index) => {
                 const Icon = item.icon;
                 const midDeg = START_ANGLE + slice * index;
@@ -198,10 +218,8 @@ export function RadialMenu({
                         outerRingOuterRadius,
                         outerRingInnerRadius,
                       )}
-                      className={cn({
-                        'fill-neutral-200 dark:fill-neutral-700': isActive,
-                        'fill-neutral-100 dark:fill-neutral-800': !isActive,
-                      })}
+                      fill={isActive ? `url(#${gradId}-outer-active)` : `url(#${gradId}-outer)`}
+                      className="stroke-cyan-400/50 stroke-[0.5]"
                       initial={false}
                       transition={wedgeTransition}
                     />
@@ -213,11 +231,8 @@ export function RadialMenu({
                         wedgeInnerRadius,
                       )}
                       className={cn(
-                        'stroke-neutral-300 stroke-1 dark:stroke-neutral-600',
-                        {
-                          'fill-neutral-200 dark:fill-neutral-700': isActive,
-                          'fill-neutral-100 dark:fill-neutral-800': !isActive,
-                        },
+                        'stroke-cyan-500/35 stroke-1',
+                        isActive ? 'fill-cyan-400/15' : 'fill-white/[0.06]',
                       )}
                       initial={false}
                       transition={wedgeTransition}
@@ -229,7 +244,7 @@ export function RadialMenu({
                       width={labelBox}
                       height={labelBox}
                     >
-                      <div className="flex size-full flex-col items-center justify-center gap-0.5">
+                      <div className="flex size-full flex-col items-center justify-center gap-0.5 font-poppins">
                         <ContextMenu.Item
                           ref={(el) => {
                             itemRefs.current[index] = el as HTMLElement | null;
@@ -239,16 +254,22 @@ export function RadialMenu({
                             onSelect?.(item);
                           }}
                           aria-label={item.label}
-                          className={cn(
-                            'flex size-full flex-col items-center justify-center rounded-full text-neutral-600 outline-none dark:text-neutral-400',
-                            {
-                              'text-neutral-900 dark:text-neutral-50': isActive,
-                            },
-                          )}
+                          className="flex size-full flex-col items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50"
                         >
-                          <Icon style={{ height: iconSize, width: iconSize }} />
+                          <Icon
+                            className={cn(
+                              'shrink-0 drop-shadow-[0_0_10px_rgba(34,211,238,0.85)]',
+                              isActive ? 'text-cyan-100' : 'text-cyan-300',
+                            )}
+                            style={{ height: iconSize, width: iconSize }}
+                          />
                           {showLabels && (
-                            <span className="max-w-[52px] truncate text-center text-[7px] font-medium leading-tight text-neutral-600 dark:text-neutral-300">
+                            <span
+                              className={cn(
+                                'max-w-[52px] truncate bg-gradient-to-b from-cyan-200 via-cyan-400 to-cyan-500 bg-clip-text text-center text-[7px] font-semibold leading-tight text-transparent',
+                                isActive && 'from-white via-cyan-200 to-cyan-300',
+                              )}
+                            >
                               {item.label}
                             </span>
                           )}
@@ -263,9 +284,9 @@ export function RadialMenu({
                 cx={0}
                 cy={0}
                 r={centerRadius}
-                className="fill-neutral-100 stroke-1 opacity-50 stroke-neutral-400 dark:fill-neutral-950 dark:stroke-neutral-600"
+                className="fill-black/15 stroke-cyan-500/40 stroke-1"
               />
-              <circle cx={0} cy={0} r={3} className="fill-none stroke-neutral-400 dark:stroke-neutral-600" />
+              <circle cx={0} cy={0} r={3} className="fill-none stroke-cyan-400/70" />
             </svg>
           </div>
         </ContextMenu.Content>
@@ -310,6 +331,7 @@ export function RadialMenuFloating({
   showLabels = true,
 }: RadialMenuFloatingProps) {
   const [coords, setCoords] = React.useState<{ left: number; top: number } | null>(null);
+  const gradId = React.useId().replace(/:/g, '');
   const radius = size / 2;
   const outerRingOuterRadius = radius;
   const outerRingInnerRadius = outerRingOuterRadius - outerRingWidth;
@@ -365,7 +387,7 @@ export function RadialMenuFloating({
       <button
         type="button"
         aria-label="Close menu"
-        className="fixed inset-0 z-[108] cursor-default bg-black/40 md:bg-black/25"
+        className="fixed inset-0 z-[108] cursor-default bg-black/15 backdrop-blur-md"
         onClick={() => onOpenChange(false)}
       />
       <div
@@ -384,8 +406,8 @@ export function RadialMenuFloating({
           onClick={(e) => e.stopPropagation()}
         >
           <motion.div
-            className="absolute inset-0 rounded-full shadow-xl"
-            initial={{ opacity: 0, scale: 0.5 }}
+            className="absolute inset-0 rounded-full bg-black/15 shadow-[0_8px_40px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-md"
+            initial={{ opacity: 0, scale: 0.82 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={menuTransition}
           />
@@ -394,6 +416,7 @@ export function RadialMenuFloating({
             viewBox={`${-radius} ${-radius} ${radius * 2} ${radius * 2}`}
             aria-hidden={false}
           >
+            <RadialMenuSvgDefs idPrefix={gradId} />
             {menuItems.map((item, index) => {
               const Icon = item.icon;
               const midDeg = START_ANGLE + slice * index;
@@ -409,21 +432,16 @@ export function RadialMenuFloating({
                 >
                   <motion.path
                     d={slicePath(index, menuItems.length, outerRingOuterRadius, outerRingInnerRadius)}
-                    className={cn({
-                      'fill-neutral-200 dark:fill-neutral-700': isActive,
-                      'fill-neutral-100 dark:fill-neutral-800': !isActive,
-                    })}
+                    fill={isActive ? `url(#${gradId}-outer-active)` : `url(#${gradId}-outer)`}
+                    className="stroke-cyan-400/50 stroke-[0.5]"
                     initial={false}
                     transition={wedgeTransition}
                   />
                   <motion.path
                     d={slicePath(index, menuItems.length, wedgeOuterRadius, wedgeInnerRadius)}
                     className={cn(
-                      'stroke-neutral-300 stroke-1 dark:stroke-neutral-600',
-                      {
-                        'fill-neutral-200 dark:fill-neutral-700': isActive,
-                        'fill-neutral-100 dark:fill-neutral-800': !isActive,
-                      },
+                      'stroke-cyan-500/35 stroke-1',
+                      isActive ? 'fill-cyan-400/15' : 'fill-white/[0.06]',
                     )}
                     initial={false}
                     transition={wedgeTransition}
@@ -434,22 +452,28 @@ export function RadialMenuFloating({
                     width={labelBox}
                     height={labelBox}
                   >
-                    <div className="flex size-full flex-col items-center justify-center gap-0.5">
+                    <div className="flex size-full flex-col items-center justify-center gap-0.5 font-poppins">
                       <button
                         type="button"
                         role="menuitem"
                         aria-label={item.label}
-                        className={cn(
-                          'flex size-full flex-col items-center justify-center rounded-full text-neutral-600 outline-none dark:text-neutral-400',
-                          {
-                            'text-neutral-900 dark:text-neutral-50': isActive,
-                          },
-                        )}
+                        className="flex size-full flex-col items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50"
                         onClick={() => onSelect(item)}
                       >
-                        <Icon style={{ height: iconSize, width: iconSize }} />
+                        <Icon
+                          className={cn(
+                            'shrink-0 drop-shadow-[0_0_10px_rgba(34,211,238,0.85)]',
+                            isActive ? 'text-cyan-100' : 'text-cyan-300',
+                          )}
+                          style={{ height: iconSize, width: iconSize }}
+                        />
                         {showLabels && (
-                          <span className="max-w-[52px] truncate text-center text-[7px] font-medium leading-tight text-neutral-600 dark:text-neutral-300">
+                          <span
+                            className={cn(
+                              'max-w-[52px] truncate bg-gradient-to-b from-cyan-200 via-cyan-400 to-cyan-500 bg-clip-text text-center text-[7px] font-semibold leading-tight text-transparent',
+                              isActive && 'from-white via-cyan-200 to-cyan-300',
+                            )}
+                          >
                             {item.label}
                           </span>
                         )}
@@ -463,9 +487,9 @@ export function RadialMenuFloating({
               cx={0}
               cy={0}
               r={centerRadius}
-              className="fill-neutral-100 stroke-1 opacity-50 stroke-neutral-400 dark:fill-neutral-950 dark:stroke-neutral-600"
+              className="fill-black/15 stroke-cyan-500/40 stroke-1"
             />
-            <circle cx={0} cy={0} r={3} className="fill-none stroke-neutral-400 dark:stroke-neutral-600" />
+            <circle cx={0} cy={0} r={3} className="fill-none stroke-cyan-400/70" />
           </svg>
         </div>
       </div>

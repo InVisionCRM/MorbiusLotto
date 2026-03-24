@@ -32,7 +32,7 @@ function AnimatedPotValue({ pot }: { pot: string }) {
 
   return (
     <motion.span
-      className="font-jost text-xl sm:text-2xl font-bold tabular-nums drop-shadow-[0_0_10px_var(--poker-accent)]"
+      className="font-jost text-2xl sm:text-3xl font-bold tabular-nums drop-shadow-[0_0_10px_var(--poker-accent)]"
       style={{ color: 'var(--poker-text)' }}
     >
       {display}
@@ -44,10 +44,23 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
   const potNum = useMemo(() => parsePotNum(pot), [pot]);
 
   const potInner = (
-    <>
+    <div
+      className="flex flex-col items-center px-4 py-1.5 rounded-xl"
+      style={{
+        background: 'rgba(255,255,255,0.04)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
+      }}
+    >
       <span className="font-jost-normal text-[var(--poker-danger)] text-[10px] tracking-[var(--poker-tracking)] uppercase">POT</span>
-      <AnimatedPotValue pot={pot} />
-    </>
+      <div className="flex items-center gap-1.5">
+        <AnimatedPotValue pot={pot} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" className="w-5 h-5 sm:w-6 sm:h-6 rounded-full" />
+      </div>
+    </div>
   );
 
   return (

@@ -120,8 +120,9 @@ export interface PokerActivityFeedProps {
   mobileOpenRequestSerial?: number;
 }
 
-/** Desktop fixed panel: tall enough to read, capped by viewport below top nav. */
-const DESKTOP_ACTIVITY_HEIGHT = 'min(520px, calc(100dvh - 112px))';
+/** Desktop fixed panel heights: expanded vs collapsed. */
+const DESKTOP_ACTIVITY_HEIGHT_EXPANDED = 'min(520px, calc(100dvh - 112px))';
+const DESKTOP_ACTIVITY_HEIGHT_COLLAPSED = 'min(180px, calc((100dvh - 112px) * 0.33))';
 
 export function PokerActivityFeed({
   wsClient, wsConnected, roomId, tableId, state, embedInLayout = false,
@@ -131,6 +132,7 @@ export function PokerActivityFeed({
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [input, setInput] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const lastMobileOpenRequestRef = useRef(0);
 
@@ -373,7 +375,7 @@ export function PokerActivityFeed({
 
   // ── Shared panel content ──────────────────────────────────────────────────
   const panelContent = (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: '"Orbitron", sans-serif' }}>
       {/* Header */}
       <div
         className="flex items-center justify-between px-2.5 shrink-0"
@@ -387,6 +389,16 @@ export function PokerActivityFeed({
           Activity
         </span>
         <div className="flex items-center gap-1">
+          {/* Expand/collapse — desktop only */}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="hidden md:flex w-5 h-5 items-center justify-center rounded text-[11px] transition hover:bg-white/10"
+            style={{ color: 'rgba(255,255,255,0.4)' }}
+            aria-label={expanded ? 'Collapse' : 'Expand'}
+          >
+            {expanded ? '▾' : '▴'}
+          </button>
           {/* Close — mobile drawer only */}
           <button
             type="button"
@@ -469,7 +481,8 @@ export function PokerActivityFeed({
             : {
                 ...desktopPanelStyle,
                 width: 300,
-                height: DESKTOP_ACTIVITY_HEIGHT,
+                height: expanded ? DESKTOP_ACTIVITY_HEIGHT_EXPANDED : DESKTOP_ACTIVITY_HEIGHT_COLLAPSED,
+                transition: 'height 0.25s ease',
                 left: 'max(12px, env(safe-area-inset-left, 0px))',
                 bottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
               }

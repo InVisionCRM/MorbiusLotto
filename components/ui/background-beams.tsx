@@ -3,8 +3,19 @@ import React from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
+export interface BeamColorPalette {
+  /** Primary beam color (start + main stroke) */
+  primary: string;
+  /** Mid-gradient accent */
+  accent: string;
+  /** Tail color */
+  tail: string;
+}
+
+const DEFAULT_PALETTE: BeamColorPalette = { primary: '#18CCFC', accent: '#6344F5', tail: '#AE48FF' };
+
 export const BackgroundBeams = React.memo(
-  ({ className, wideTop = false, title }: { className?: string; wideTop?: boolean; title?: string }) => {
+  ({ className, wideTop = false, title, palette = DEFAULT_PALETTE }: { className?: string; wideTop?: boolean; title?: string; palette?: BeamColorPalette }) => {
     const paths = [
       "M-380 -189C-380 -189 -312 216 152 343C616 470 684 875 684 875",
       "M-373 -197C-373 -197 -305 208 159 335C623 462 691 867 691 867",
@@ -114,10 +125,10 @@ export const BackgroundBeams = React.memo(
                   delay: Math.random() * 10,
                 }}
               >
-                <stop stopColor="#18CCFC" stopOpacity="0"></stop>
-                <stop stopColor="#18CCFC"></stop>
-                <stop offset="32.5%" stopColor="#6344F5"></stop>
-                <stop offset="100%" stopColor="#AE48FF" stopOpacity="0"></stop>
+                <stop stopColor={palette.primary} stopOpacity="0"></stop>
+                <stop stopColor={palette.primary}></stop>
+                <stop offset="32.5%" stopColor={palette.accent}></stop>
+                <stop offset="100%" stopColor={palette.tail} stopOpacity="0"></stop>
               </motion.linearGradient>
             ))}
 

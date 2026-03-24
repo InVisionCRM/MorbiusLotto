@@ -1,9 +1,10 @@
 /**
  * Section title / subtitle styles aligned with `components/marketing/AdvertisingSection.tsx`:
  * `font-bold`, white + `from-indigo-400 to-cyan-400` gradient accents, larger than the ad page default.
+ * Font: **Poppins** (same as `body` in `app/globals.css` and `font-poppins` in Tailwind).
  */
 export const homeSectionTitleClass =
-  'text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight mb-3'
+  'font-poppins text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight mb-3'
 
 /** Use on a `<span>` inside the title for gradient text (or wrap full title). */
 export const homeSectionTitleGradientClass =
@@ -14,4 +15,4 @@ export const homeSectionSubtitleClass =
 
 /** Secondary in-section headings (e.g. card headers). */
 export const homeSectionHeading2Class =
-  'text-2xl md:text-3xl lg:text-4xl font-bold text-white tracking-tight'
+  'font-poppins text-2xl md:text-3xl lg:text-4xl font-bold text-white tracking-tight'

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +10,15 @@ import { CardDisplay } from './CardDisplay';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
 import { PokerTournamentHUD } from './tournament/PokerTournamentHUD';
 import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
+import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
+
+const BEAM_PALETTES: BeamColorPalette[] = [
+  { primary: '#18CCFC', accent: '#6344F5', tail: '#AE48FF' }, // cyan → purple → magenta
+  { primary: '#F59E0B', accent: '#DC2626', tail: '#9333EA' }, // gold → red → purple
+  { primary: '#10B981', accent: '#06B6D4', tail: '#3B82F6' }, // emerald → cyan → blue
+  { primary: '#F43F5E', accent: '#EC4899', tail: '#A855F7' }, // rose → pink → violet
+  { primary: '#D4A82A', accent: '#B08820', tail: '#8A6010' }, // gold trim tones (matches table)
+];
 
 function shortAddr(addr: string): string {
   if (!addr || addr.length < 10) return addr;
@@ -115,6 +124,35 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   }, []);
 
   const hand = state.currentHand;
+
+  // ── Beam color cycling: cross-fade two layers every 5 hands over 15s ─
+  // Two permanent beam layers (A/B). `activeBeamLayer` toggles which is
+  // visible; the CSS transition handles the 15s fade between them.
+  const handCountRef = useRef(0);
+  const lastBeamHandIdRef = useRef<string | null>(null);
+  const [activeBeamLayer, setActiveBeamLayer] = useState<'A' | 'B'>('A');
+  const [paletteA, setPaletteA] = useState<BeamColorPalette>(BEAM_PALETTES[0]);
+  const [paletteB, setPaletteB] = useState<BeamColorPalette>(BEAM_PALETTES[1]);
+
+  useEffect(() => {
+    const hid = hand?.handId;
+    if (!hid || hid === lastBeamHandIdRef.current) return;
+    lastBeamHandIdRef.current = hid;
+    handCountRef.current += 1;
+    if (handCountRef.current % 5 === 0) {
+      const nextIdx = (BEAM_PALETTES.indexOf(activeBeamLayer === 'A' ? paletteA : paletteB) + 1) % BEAM_PALETTES.length;
+      // Load the next palette into the hidden layer, then swap visibility
+      if (activeBeamLayer === 'A') {
+        setPaletteB(BEAM_PALETTES[nextIdx]);
+        setActiveBeamLayer('B');
+      } else {
+        setPaletteA(BEAM_PALETTES[nextIdx]);
+        setActiveBeamLayer('A');
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hand?.handId]);
+
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
   const seatAnchors = computeSeatAnchors(state.seats.length, hideSeatAvatars);
   const actingPosition = hand?.actingPosition ?? null;
@@ -227,11 +265,38 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 outline: '1px dashed rgba(255,255,255,0.08)',
                 outlineOffset: '-10px',
               }}>
-                {/* Felt sheen */}
+                {/* Animated beams — A/B layers cross-fade over 15s */}
+                <div
+                  style={{
+                    position: 'absolute', inset: 0, pointerEvents: 'none',
+                    opacity: activeBeamLayer === 'A' ? 0.12 : 0,
+                    mixBlendMode: 'screen',
+                    transition: 'opacity 15s ease',
+                  }}
+                >
+                  <BackgroundBeams palette={paletteA} />
+                </div>
+                <div
+                  style={{
+                    position: 'absolute', inset: 0, pointerEvents: 'none',
+                    opacity: activeBeamLayer === 'B' ? 0.12 : 0,
+                    mixBlendMode: 'screen',
+                    transition: 'opacity 15s ease',
+                  }}
+                >
+                  <BackgroundBeams palette={paletteB} />
+                </div>
+                {/* Felt sheen — sits above beams to preserve the 3D depth / shadow */}
                 <div style={{
                   position: 'absolute', inset: 0,
                   background: 'radial-gradient(ellipse at 50% 18%, rgba(255,255,255,0.05) 0%, transparent 55%)',
                   pointerEvents: 'none',
+                }} />
+                {/* Felt inner shadow overlay — keeps the inset depth on top of beams */}
+                <div style={{
+                  position: 'absolute', inset: 0, pointerEvents: 'none',
+                  boxShadow: 'inset 0 8px 40px rgba(0,0,0,0.45), inset 0 -4px 20px rgba(0,0,0,0.35)',
+                  borderRadius: '9999px',
                 }} />
               </div>
             </div>
