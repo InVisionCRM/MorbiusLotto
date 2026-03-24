@@ -10,6 +10,7 @@ import { PokerTutorialOverlay } from '@/components/poker/PokerTutorialOverlay';
 import { PokerTable } from '@/components/poker/PokerTable';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
+import { PokerTableEffectProvider } from '@/hooks/use-poker-table-effect';
 import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
 import { TUTORIAL_STEPS } from '@/lib/poker-tutorial-script';
 import type { PokerCurrentHand, PokerSeatState, PokerTableState } from '@/lib/websocket-client';
@@ -322,18 +323,19 @@ export default function PokerDemoPage() {
 
   return (
     <PokerThemeProvider themeId={pokerTheme}>
-      <div
-        className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
-        style={{
-          ...themeVars as React.CSSProperties,
-          height: '100dvh',
-          background: 'rgb(2 6 23)',
-          color: 'var(--poker-text)',
-          overflow: 'hidden',
-          paddingLeft: 'env(safe-area-inset-left, 0px)',
-          paddingRight: 'env(safe-area-inset-right, 0px)',
-        }}
-      >
+      <PokerTableEffectProvider>
+        <div
+          className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
+          style={{
+            ...themeVars as React.CSSProperties,
+            height: '100dvh',
+            background: 'rgb(2 6 23)',
+            color: 'var(--poker-text)',
+            overflow: 'hidden',
+            paddingLeft: 'env(safe-area-inset-left, 0px)',
+            paddingRight: 'env(safe-area-inset-right, 0px)',
+          }}
+        >
         {isTutorial && (
           <div
             className="flex-shrink-0 flex items-center justify-between px-3 py-2 z-30"
@@ -479,7 +481,8 @@ export default function PokerDemoPage() {
             containerRef={tableAreaRef}
           />
         )}
-      </div>
+        </div>
+      </PokerTableEffectProvider>
     </PokerThemeProvider>
   );
 }
