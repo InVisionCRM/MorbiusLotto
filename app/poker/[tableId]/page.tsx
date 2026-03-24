@@ -24,6 +24,7 @@ import { PokerSoundsSettingsModal } from '@/components/poker/PokerSoundsSettings
 import { PokerTableSettingsModal } from '@/components/poker/PokerTableSettingsModal';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
 import { usePokerSounds } from '@/hooks/use-poker-sounds';
+import { PokerTableEffectProvider } from '@/hooks/use-poker-table-effect';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { useProfileWs } from '@/contexts/profile-ws-context';
 import { isAdminWallet } from '@/lib/admin';
@@ -659,6 +660,7 @@ export default function PokerTablePage() {
 
   return (
     <PokerThemeProvider themeId={pokerTheme}>
+      <PokerTableEffectProvider>
         <div
           className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
           style={{
@@ -1037,6 +1039,7 @@ export default function PokerTablePage() {
             queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
           }}
         />
+      </PokerTableEffectProvider>
       </PokerThemeProvider>
   );
 }

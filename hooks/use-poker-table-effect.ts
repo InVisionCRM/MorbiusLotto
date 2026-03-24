@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext, createContext } from 'react';
 
 export type TableEffectId = 'beams' | 'boxes' | 'none';
 
@@ -23,7 +23,19 @@ export const FELT_COLOR_PRESETS = [
   { id: 'midnight', label: 'Midnight', gradient: 'radial-gradient(ellipse at 50% 35%, #0e1a2e 0%, #080f1c 45%, #050a14 75%, #02060c 100%)' },
 ];
 
-export function usePokerTableEffect() {
+// ── Context for shared state between PokerTable and settings modal ────
+
+interface TableEffectState {
+  effect: TableEffectId;
+  setEffect: (id: TableEffectId) => void;
+  feltColor: string;
+  setFeltColor: (id: string) => void;
+  feltGradient: string;
+}
+
+const TableEffectContext = createContext<TableEffectState | null>(null);
+
+export function PokerTableEffectProvider({ children }: { children: React.ReactNode }) {
   const [effect, setEffectState] = useState<TableEffectId>('beams');
   const [feltColor, setFeltColorState] = useState('navy');
 
@@ -53,5 +65,15 @@ export function usePokerTableEffect() {
 
   const feltGradient = FELT_COLOR_PRESETS.find(p => p.id === feltColor)?.gradient ?? FELT_COLOR_PRESETS[0].gradient;
 
-  return { effect, setEffect, feltColor, setFeltColor, feltGradient };
+  return React.createElement(
+    TableEffectContext.Provider,
+    { value: { effect, setEffect, feltColor, setFeltColor, feltGradient } },
+    children,
+  );
+}
+
+export function usePokerTableEffect(): TableEffectState {
+  const ctx = useContext(TableEffectContext);
+  if (!ctx) throw new Error('usePokerTableEffect must be used within PokerTableEffectProvider');
+  return ctx;
 }
