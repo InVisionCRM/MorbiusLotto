@@ -247,7 +247,7 @@ export function PokerTableSettingsModal({ isOpen, onClose, isAdmin, currentLogo,
                         }}
                       >
                         <img
-                          src={`/Marketing/LOGOS/${file}`}
+                          src={`/Marketing /LOGOS/${file}`}
                           alt={file}
                           className="max-w-full max-h-full object-contain"
                           draggable={false}
