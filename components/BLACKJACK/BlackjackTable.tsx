@@ -178,6 +178,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       bet: 2500,
     },
     {
+      label: 'Soft hand (A+8)',
+      player: { cards: [{ value: 1 as CardValue, suit: 'hearts' as Suit }, { value: 8 as CardValue, suit: 'diamonds' as Suit }], total: 19, hasAce: true, isBlackjack: false, isBust: false },
+      dealer: { cards: [{ value: 7 as CardValue, suit: 'clubs' as Suit }, { value: 10 as CardValue, suit: 'spades' as Suit }], total: 17, hasAce: false, isBlackjack: false, isBust: false },
+      bet: 3000,
+    },
+    {
       label: 'Blackjack',
       player: { cards: [{ value: 1 as CardValue, suit: 'spades' as Suit }, { value: 13 as CardValue, suit: 'hearts' as Suit }], total: 21, hasAce: true, isBlackjack: true, isBust: false },
       dealer: { cards: [{ value: 6 as CardValue, suit: 'clubs' as Suit }, { value: 10 as CardValue, suit: 'diamonds' as Suit }], total: 16, hasAce: false, isBlackjack: false, isBust: false },
@@ -1284,9 +1290,11 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                               gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
                             }`}>
                               <span className={`font-black relative z-10 transition-all duration-500 ${
-                                handIsWinner ? 'text-emerald-400 text-7xl' : isActiveHand ? 'text-white/90 text-6xl' : hasSplit ? 'text-white/50 text-6xl' : 'text-white/90 text-6xl'
-                              }`}>
-                                {hand.total}
+                                handIsWinner ? 'text-emerald-400' : isActiveHand ? 'text-white/90' : hasSplit ? 'text-white/50' : 'text-white/90'
+                              } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-4xl' : 'text-6xl'}`}>
+                                {hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21
+                                  ? <>{hand.total - 10}<span className="text-white/40">/</span>{hand.total}</>
+                                  : hand.total}
                               </span>
                             </div>
                             {hand.isBlackjack && <span className="text-yellow-400 font-black text-base sm:text-xl">BJ!</span>}
