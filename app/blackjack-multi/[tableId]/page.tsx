@@ -277,7 +277,27 @@ function Seat({
                         {isActiveHand && <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" aria-hidden />}
                       </div>
                     )}
-                    <div className="flex items-center">
+                    <div className="flex flex-col items-center">
+                      {/* Score counter — above cards, matching single-player glass-counter style */}
+                      {hand.cards.length > 0 && (
+                        <div className={`flex items-center gap-2 transition-transform duration-300 ${
+                          showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'card-counter-winner' : ''
+                        }`} style={{ marginBottom: -10, zIndex: 0 }}>
+                          <div className={`glass-counter relative w-16 h-16 flex items-center justify-center rounded-full transition-all duration-300 ${
+                            isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''
+                          }`}>
+                            <span className={`font-black relative z-10 transition-all duration-500 ${
+                              hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'text-emerald-400' : isActiveHand ? 'text-white/90' : hasSplit ? 'text-white/50' : 'text-white/90'
+                            } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-xl' : 'text-3xl'}`}>
+                              {hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21
+                                ? <>{hand.total - 10}<span className="text-white/40">/</span>{hand.total}</>
+                                : hand.total}
+                            </span>
+                          </div>
+                          {hand.isBlackjack && <span className="text-yellow-400 font-black text-sm">BJ!</span>}
+                          {hand.isBust && <span className="text-red-400 font-black text-sm">BUST</span>}
+                        </div>
+                      )}
                       <div className="flex">
                         {hand.cards.map((c, ci) => (
                           <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
@@ -285,29 +305,6 @@ function Seat({
                           </div>
                         ))}
                       </div>
-                      <div
-                        className={`ml-1 flex items-center gap-1 rounded-full transition-all duration-300 ${
-                          isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''
-                        }`}
-                        style={{ padding: isActing && seat.activeHandIndex === hi ? '4px' : '2px' }}
-                      >
-                        <span
-                          className={`font-black text-lg relative z-10 ${
-                            hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : isActiveHand ? 'text-white' : hasSplit ? 'text-white/75' : 'text-white'
-                          }`}
-                        >
-                          {hand.isBust ? 'BUST' : hand.isBlackjack ? 'BJ!' : hand.total}
-                        </span>
-                      </div>
-                      {!hasSplit && seatTableBetWei(seat) > 0n && (
-                        <div className="ml-2.5 flex flex-shrink-0 items-center pointer-events-none">
-                          <BetChip
-                            label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
-                            size="clamp(44px, 8vw, 56px)"
-                            chipSrc="/PokerChips/greenpokerchip005.png"
-                          />
-                        </div>
-                      )}
                     </div>
                     {hasSplit && phase !== 'betting' && BigInt(hand.betAmount || '0') > 0n && (
                       <span className="text-[10px] font-bold text-white/70 mt-0.5" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
@@ -327,9 +324,9 @@ function Seat({
             </div>
           )}
 
-          {/* Bet chip — split (total) or no cards yet */}
-          {seat && seatTableBetWei(seat) > 0n && seat.hands.length !== 1 && (
-            <div className="flex flex-col items-center">
+          {/* Bet chip — below cards, matching single-player positioning */}
+          {seat && seatTableBetWei(seat) > 0n && (
+            <div className="flex flex-col items-center mt-1">
               <BetChip
                 label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
                 size="clamp(44px, 8vw, 56px)"
@@ -1010,8 +1007,16 @@ export default function BlackjackMultiTablePage() {
   return (
     <GlobalMainNav page="blackjack" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
       <style>{`
-        .card-overlap-dealer { margin-left: -12px; }
-        .card-overlap-player { margin-left: -16px; }
+        /* Desktop: overlapping card margins — matches single-player */
+        @media (min-width: 641px) {
+          .card-overlap-dealer { margin-left: -15px; }
+          .card-overlap-player { margin-left: -25px; }
+        }
+        /* Mobile: card overlap — matches single-player */
+        @media (max-width: 640px) {
+          .card-overlap-dealer { margin-left: -12px; }
+          .card-overlap-player { margin-left: -18px; }
+        }
         .card-slide-in {
           animation: cardSlideIn 0.4s ease-out forwards;
         }
@@ -1041,6 +1046,7 @@ export default function BlackjackMultiTablePage() {
           from { opacity: 0; transform: translateY(-4px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        /* Card counter active border animation — matches single-player */
         @keyframes cyanGlow {
           0%, 100% {
             box-shadow: 0 0 8px rgba(34, 211, 238, 0.4),
@@ -1055,9 +1061,23 @@ export default function BlackjackMultiTablePage() {
             border-color: rgba(34, 211, 238, 0.7);
           }
         }
+        .glass-counter {
+          background: rgba(255, 255, 255, 0.1);
+          border: 1.5px solid rgba(255, 255, 255, 0.25);
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
+          box-shadow:
+            inset 0 0 10px 3px rgba(255, 255, 255, 0.3),
+            0 8px 32px rgba(0, 0, 0, 0.4),
+            0 2px 8px rgba(0, 0, 0, 0.2);
+        }
         .card-counter-active {
-          border: 2px solid rgba(34, 211, 238, 0.5);
+          border: 2px solid rgba(34, 211, 238, 0.6);
           animation: cyanGlow 2s ease-in-out infinite;
+          box-shadow:
+            0 4px 16px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.7),
+            0 0 12px rgba(34, 211, 238, 0.3);
         }
         .card-counter-winner {
           transform: scale(1.25);
@@ -1096,32 +1116,13 @@ export default function BlackjackMultiTablePage() {
           style={{ width: 800, height: 450, transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
         >
 
-          {/* Top bar — md+: phase pill centered (industry-standard three-zone header); mobile: pill stays in trailing cluster */}
+          {/* Top bar — phase badge on left, round info centered, controls on right */}
           <div className="relative flex items-center justify-between px-4 py-2 bg-black/30 backdrop-blur-sm">
-            <div className="text-xs text-white/50 min-w-0 shrink z-10 pr-2">
-              {state ? `Round #${state.roundNumber} · ${formatMorbius(state.minBet ?? '0')}–${formatMorbius(state.maxBet ?? '0')} MORBIUS` : 'Multiplayer Blackjack'}
-            </div>
-            {state && (
-              <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 hidden -translate-x-1/2 -translate-y-1/2 md:block">
-                <span
-                  className={`pointer-events-auto text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
-                    state.phase === 'betting'     ? 'bg-yellow-900/80 text-yellow-300' :
-                    state.phase === 'playing'     ? 'bg-green-900/80 text-green-300' :
-                    state.phase === 'dealer_turn' ? 'bg-blue-900/80 text-blue-300' :
-                    'bg-white/10 text-white/60'
-                  }`}
-                >
-                  {state.phase === 'waiting'     ? 'Waiting for players' :
-                   state.phase === 'betting'     ? 'Place your bets' :
-                   state.phase === 'playing'     ? 'Players acting' :
-                   state.phase === 'dealer_turn' ? 'Dealer turn' : 'Round complete'}
-                </span>
-              </div>
-            )}
-            <div className="flex items-center gap-2 z-10 shrink-0">
+            {/* Phase badge — left */}
+            <div className="z-10 shrink-0">
               {state && (
                 <span
-                  className={`md:hidden text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                  className={`text-sm px-3 py-1 rounded-full font-semibold whitespace-nowrap ${
                     state.phase === 'betting'     ? 'bg-yellow-900/80 text-yellow-300' :
                     state.phase === 'playing'     ? 'bg-green-900/80 text-green-300' :
                     state.phase === 'dealer_turn' ? 'bg-blue-900/80 text-blue-300' :
@@ -1134,6 +1135,15 @@ export default function BlackjackMultiTablePage() {
                    state.phase === 'dealer_turn' ? 'Dealer turn' : 'Round complete'}
                 </span>
               )}
+            </div>
+            {/* Round counter + min-max — centered */}
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
+              <span className="text-sm font-semibold text-white/70 whitespace-nowrap">
+                {state ? `Round #${state.roundNumber} · ${formatMorbius(state.minBet ?? '0')}–${formatMorbius(state.maxBet ?? '0')} MORBIUS` : 'Multiplayer Blackjack'}
+              </span>
+            </div>
+            {/* Controls — right */}
+            <div className="flex items-center gap-2 z-10 shrink-0">
               {(state as any)?.viewerCount > 0 && (
                 <span className="text-[10px] text-white/40 flex items-center gap-1">
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1141,7 +1151,7 @@ export default function BlackjackMultiTablePage() {
                 </span>
               )}
               {myPosition !== null && (
-                <button onClick={leaveSeat} className="text-xs text-white/40 hover:text-red-400 transition-colors">
+                <button onClick={leaveSeat} className="text-xs text-white/90 hover:text-red-400 transition-colors">
                   Leave seat
                 </button>
               )}
@@ -1247,7 +1257,7 @@ export default function BlackjackMultiTablePage() {
           <div className="flex-1 flex flex-col justify-center items-center gap-4 px-4 pb-4">
 
             {/* DEALER — progressive card reveal matching single-player */}
-            <div className="flex items-center justify-center" style={{ transform: 'translateY(-20px)' }}>
+            <div className="flex flex-col items-center justify-center" style={{ transform: 'translateY(-20px)' }}>
               <div className="flex">
                 {(state?.dealerCards ?? []).map((c, i) => {
                   // Only render cards up to visibleDealerCards count
@@ -1279,7 +1289,7 @@ export default function BlackjackMultiTablePage() {
                   </>
                 )}
               </div>
-              {/* Dealer total — visible count like single-player (up-card during play; builds during dealer reveal) */}
+              {/* Dealer total — glass-counter style matching single-player */}
               {state && visibleDealerCards > 0 && (state.dealerCards?.length ?? 0) > 0 && (() => {
                 const dCards = state.dealerCards;
                 const vis = Math.min(visibleDealerCards, dCards.length);
@@ -1289,21 +1299,18 @@ export default function BlackjackMultiTablePage() {
                 const bust = fullReveal && shown > 21;
                 const isDealerTurn = state.phase === 'dealer_turn';
                 return (
-                  <div className="ml-2 flex items-center gap-1">
-                    <div
-                      className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
-                        isDealerTurn ? 'card-counter-active' : ''
-                      }`}
-                      style={{ padding: isDealerTurn ? '6px' : '3px' }}
-                    >
-                      <span
-                        className={`font-black text-xl relative z-10 ${
-                          bust ? 'text-red-400' : naturalBj ? 'text-yellow-400' : 'text-white'
-                        }`}
-                      >
-                        {bust ? 'BUST' : naturalBj ? 'BJ' : shown}
+                  <div className={`flex items-center gap-2 transition-transform duration-300`} style={{ marginTop: -14, zIndex: 10 }}>
+                    <div className={`glass-counter relative w-16 h-16 flex items-center justify-center rounded-full transition-all duration-300 ${
+                      isDealerTurn ? 'card-counter-active' : ''
+                    }`}>
+                      <span className={`font-black text-3xl relative z-10 transition-all duration-500 ${
+                        bust ? 'text-red-400' : naturalBj ? 'text-yellow-400' : 'text-white/90'
+                      }`}>
+                        {shown}
                       </span>
                     </div>
+                    {naturalBj && <span className="text-yellow-400 font-black text-sm">BJ</span>}
+                    {bust && <span className="text-red-400 font-black text-sm">BUST</span>}
                   </div>
                 );
               })()}
@@ -1482,74 +1489,101 @@ export default function BlackjackMultiTablePage() {
       {/* ── Controls — sidebar on md+, below table on mobile ── */}
       <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-y-auto md:pt-4">
 
-        {/* Betting panel — always visible when seated, disabled when not in betting phase or bet already placed */}
+        {/* Betting + action controls — 2-col grid on mobile matching single-player, stacked on md+ sidebar */}
         {myPosition !== null && (
-          <div className="w-full max-w-none mx-auto space-y-2">
-            <BettingPanelMobile
-              onStartGame={() => {}} // not used — confirm bet button below handles this
-              isPlaying={state?.phase !== 'betting' || hasBet}
-              onBetAmountChange={(val) => setBetAmount(val)}
-              currentBetAmount={betAmount}
-              onHalfBet={() => {
-                const cur = parseInt(betAmount || '0', 10);
-                const half = Math.max(500, Math.floor(cur / 2));
-                setBetAmount(String(half));
-              }}
-              onDoubleBet={() => {
-                const cur = parseInt(betAmount || '0', 10);
-                const doubled = Math.min(50000, cur * 2);
-                setBetAmount(String(doubled));
-              }}
-              playerReserves={BigInt(playerBalance)}
-            />
-            {/* CONFIRM BET button — only active during betting phase */}
-            {state?.phase === 'betting' && !hasBet && (
-              <div className="px-2 space-y-2">
-                {(mySeat?.consecutiveTimeouts ?? 0) > 0 && (
-                  <div
-                    className={`rounded-lg border px-2.5 py-1.5 text-center text-[11px] font-semibold leading-snug ${
-                      (mySeat?.consecutiveTimeouts ?? 0) >= AFK_TIMEOUTS_BEFORE_KICK - 1
-                        ? 'border-orange-500/40 bg-orange-950/40 text-orange-100'
-                        : 'border-cyan-500/30 bg-slate-900/80 text-cyan-100/90'
-                    }`}
-                    style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}
-                  >
-                    Idle warning {(mySeat?.consecutiveTimeouts ?? 0)}/{AFK_TIMEOUTS_BEFORE_KICK}: confirm a bet or you will be removed from the seat.
-                  </div>
-                )}
-                {(() => {
-                  const betOk = parseInt(betAmount || '0', 10) >= 500;
-                  return (
-                    <button
-                      type="button"
-                      onClick={placeBet}
-                      disabled={!betOk}
-                      className={`w-full py-2.5 rounded-xl font-black text-sm tracking-wider transition-all border-2 ${
-                        betOk
-                          ? 'text-white border-emerald-400/45 active:scale-95 enabled:hover:brightness-105'
-                          : 'text-white/55 border-cyan-500/35 bg-[rgba(34,211,238,0.07)] cursor-not-allowed shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-                      }`}
-                      style={
-                        betOk
-                          ? {
-                              background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)',
-                              boxShadow: '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)',
+          <div className="flex flex-row md:flex-col items-stretch w-full">
+            <div className="w-1/2 md:w-full md:border-r-0 md:border-b border-r border-white/10 flex items-center min-w-0">
+              <BettingPanelMobile
+                onStartGame={() => {}} // not used — confirm bet button below handles this
+                isPlaying={state?.phase !== 'betting' || hasBet}
+                onBetAmountChange={(val) => setBetAmount(val)}
+                currentBetAmount={betAmount}
+                onHalfBet={() => {
+                  const cur = parseInt(betAmount || '0', 10);
+                  const half = Math.max(500, Math.floor(cur / 2));
+                  setBetAmount(String(half));
+                }}
+                onDoubleBet={() => {
+                  const cur = parseInt(betAmount || '0', 10);
+                  const doubled = Math.min(50000, cur * 2);
+                  setBetAmount(String(doubled));
+                }}
+                playerReserves={BigInt(playerBalance)}
+              />
+            </div>
+            <div className="w-1/2 md:w-full flex items-stretch min-w-0">
+              {isMyTurn && activeHand ? (
+                <BlackjackMobileActionBar
+                  onAction={(action) => doAction(action as 'hit' | 'stand' | 'double_down' | 'split')}
+                  isPlaying={true}
+                  canHit={activeHand.canHit}
+                  canStand={activeHand.canStand}
+                  canDoubleDown={activeHand.canDoubleDown}
+                  canSplit={activeHand.canSplit}
+                  canDeal={false}
+                  chipStackLength={0}
+                  lastBetAmount="0"
+                  soundEnabled={soundEnabled}
+                  onPlaySfx={playSound}
+                  alwaysVisible
+                  hideDealRow
+                />
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center gap-2 p-2">
+                  {state?.phase === 'betting' && !hasBet && (
+                    <>
+                      {(mySeat?.consecutiveTimeouts ?? 0) > 0 && (
+                        <div
+                          className={`rounded-lg border px-2.5 py-1.5 text-center text-[11px] font-semibold leading-snug w-full ${
+                            (mySeat?.consecutiveTimeouts ?? 0) >= AFK_TIMEOUTS_BEFORE_KICK - 1
+                              ? 'border-orange-500/40 bg-orange-950/40 text-orange-100'
+                              : 'border-cyan-500/30 bg-slate-900/80 text-cyan-100/90'
+                          }`}
+                          style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}
+                        >
+                          Idle {(mySeat?.consecutiveTimeouts ?? 0)}/{AFK_TIMEOUTS_BEFORE_KICK}
+                        </div>
+                      )}
+                      {(() => {
+                        const betOk = parseInt(betAmount || '0', 10) >= 500;
+                        return (
+                          <button
+                            type="button"
+                            onClick={placeBet}
+                            disabled={!betOk}
+                            className={`w-full py-2.5 rounded-xl font-black text-sm tracking-wider transition-all border-2 ${
+                              betOk
+                                ? 'text-white border-emerald-400/45 active:scale-95 enabled:hover:brightness-105'
+                                : 'text-white/55 border-cyan-500/35 bg-[rgba(34,211,238,0.07)] cursor-not-allowed shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                            }`}
+                            style={
+                              betOk
+                                ? {
+                                    background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)',
+                                    boxShadow: '0 4px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)',
+                                  }
+                                : undefined
                             }
-                          : undefined
-                      }
-                    >
-                      CONFIRM BET
-                    </button>
-                  );
-                })()}
-              </div>
-            )}
-            {/* Bet placed confirmation */}
-            {state?.phase === 'betting' && hasBet && (
-              <div className="text-center py-1 text-green-400 font-semibold text-sm">
-                Bet placed ({formatMorbius(mySeat?.pendingBet ?? '0')} MORBIUS) — waiting for round to start
-              </div>
-            )}
+                          >
+                            CONFIRM BET
+                          </button>
+                        );
+                      })()}
+                    </>
+                  )}
+                  {state?.phase === 'betting' && hasBet && (
+                    <div className="text-center py-1 text-green-400 font-semibold text-sm">
+                      Bet placed — waiting
+                    </div>
+                  )}
+                  {state?.phase !== 'betting' && !isMyTurn && (
+                    <div className="text-center text-white/30 text-xs py-2">
+                      Waiting...
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1705,38 +1739,7 @@ export default function BlackjackMultiTablePage() {
           </Tabs>
         </div>
 
-        {/* MY TURN — reuses BlackjackMobileActionBar from single player */}
-        {isMyTurn && activeHand && (
-          <div className="w-full max-w-xl mx-auto space-y-2">
-            {(mySeat?.consecutiveTimeouts ?? 0) > 0 && (
-              <div
-                className={`rounded-lg border px-2.5 py-1.5 text-center text-[11px] font-semibold leading-snug ${
-                  (mySeat?.consecutiveTimeouts ?? 0) >= AFK_TIMEOUTS_BEFORE_KICK - 1
-                    ? 'border-orange-500/40 bg-orange-950/40 text-orange-100'
-                    : 'border-cyan-500/30 bg-slate-900/80 text-cyan-100/90'
-                }`}
-                style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}
-              >
-                Turn idle {(mySeat?.consecutiveTimeouts ?? 0)}/{AFK_TIMEOUTS_BEFORE_KICK}: act before the timer or you will be auto-stood and may lose your seat.
-              </div>
-            )}
-            <BlackjackMobileActionBar
-              onAction={(action) => doAction(action as 'hit' | 'stand' | 'double_down' | 'split')}
-              isPlaying={true}
-              canHit={activeHand.canHit}
-              canStand={activeHand.canStand}
-              canDoubleDown={activeHand.canDoubleDown}
-              canSplit={activeHand.canSplit}
-              canDeal={false}
-              chipStackLength={0}
-              lastBetAmount="0"
-              soundEnabled={soundEnabled}
-              onPlaySfx={playSound}
-              alwaysVisible
-              hideDealRow
-            />
-          </div>
-        )}
+        {/* (Action bar is now integrated into the 2-col betting grid above) */}
 
         {/* Not seated CTA */}
         {state && myPosition === null && address && wsConnected && (
