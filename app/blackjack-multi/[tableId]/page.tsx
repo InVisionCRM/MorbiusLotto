@@ -183,6 +183,8 @@ function Seat({
   onToggleSoundPanel?: () => void;
   onSendChatMessage?: (msg: string) => void;
 }) {
+  // Rotation angle — left seat faces right toward dealer, right seat faces left
+  const seatRotation = position === 0 ? 12 : position === 2 ? -12 : 0;
   const turnRemaining = useCountdown(isActing ? turnStartedAt : null, TURN_TIMEOUT);
   const betRemaining = useCountdown(phase === 'betting' && !isEmpty ? bettingStartedAt : null, BETTING_TIMEOUT);
   const resultColor = (r: string | null | undefined) =>
@@ -316,11 +318,14 @@ function Seat({
   }, [onSendChatMessage]);
 
   return (
-    <div className="relative flex flex-col items-center gap-0 min-w-0 h-[250px] pt-2">
+    <div
+      className="relative flex flex-col items-center gap-0 min-w-0 h-[220px] justify-end pb-[48px]"
+      style={{ transform: seatRotation ? `rotate(${seatRotation}deg)` : undefined, transformOrigin: 'center bottom' }}
+    >
       {/* Cards area */}
       {isEmpty ? (
         <div
-          className={`flex flex-col items-center justify-center gap-2 rounded-xl px-6 py-6 min-h-[110px] border-2 border-dashed transition-all ${
+          className={`flex flex-col items-center justify-center gap-2 rounded-xl px-4 py-4 min-h-[80px] border-2 border-dashed transition-all ${
             canTakeSeat
               ? 'border-cyan-400/70 bg-cyan-900/20 hover:border-cyan-300 hover:bg-cyan-800/30 cursor-pointer hover:scale-105 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
               : 'border-white/25 bg-white/[0.03]'
@@ -340,7 +345,7 @@ function Seat({
         <>
           {/* Hands */}
           {seat && seat.hands.length > 0 ? (
-            <div className={`flex min-h-[120px] justify-center items-start ${seat.hands.length > 1 ? 'flex-row gap-2' : 'flex-col items-center gap-1'}`}>
+            <div className={`flex min-h-[80px] justify-center items-start ${seat.hands.length > 1 ? 'flex-row gap-2' : 'flex-col items-center gap-1'}`}>
               {seat.hands.map((hand, hi) => {
                 const hasSplit = seat.hands.length > 1;
                 const isActiveHand = hasSplit && isActing && seat.activeHandIndex === hi;
@@ -389,12 +394,12 @@ function Seat({
                         <div className={`flex items-center gap-2 transition-transform duration-300 ${
                           showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'card-counter-winner' : ''
                         }`} style={{ marginBottom: -10, zIndex: 0 }}>
-                          <div className={`glass-counter relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 ${
+                          <div className={`glass-counter relative w-14 h-14 flex items-center justify-center rounded-full transition-all duration-300 ${
                             isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''
                           }`}>
                             <span className={`font-black relative z-10 transition-all duration-500 ${
                               hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'text-emerald-400' : isActiveHand ? 'text-white/90' : hasSplit ? 'text-white/50' : 'text-white/90'
-                            } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-2xl' : 'text-4xl'}`}>
+                            } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-lg' : 'text-2xl'}`}>
                               {hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21
                                 ? <>{hand.total - 10}<span className="text-white/40">/</span>{hand.total}</>
                                 : hand.total}
@@ -407,15 +412,15 @@ function Seat({
                       <div className="relative flex">
                         {hand.cards.map((c, ci) => (
                           <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
-                            <PlayingCard card={indexToCard(c)} owner="player" className="" size="normal" />
+                            <PlayingCard card={indexToCard(c)} owner="player" className="" size="small" />
                           </div>
                         ))}
                         {/* BetChip — overlays top-right of 2nd hole card */}
                         {!hasSplit && seat && seatTableBetWei(seat) > 0n && hand.cards.length >= 2 && (
-                          <div className="absolute -top-3 -right-4" style={{ zIndex: 20 }}>
+                          <div className="absolute -top-2 -right-3" style={{ zIndex: 20 }}>
                             <BetChip
                               label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
-                              size="clamp(38px, 7vw, 48px)"
+                              size="clamp(32px, 6vw, 40px)"
                               chipSrc="/PokerChips/greenpokerchip005.png"
                             />
                           </div>
@@ -433,9 +438,9 @@ function Seat({
             </div>
           ) : (
             /* Placeholder cards when seated but no hand yet */
-            <div className="flex gap-0 min-h-[120px] items-center justify-center">
+            <div className="flex gap-0 min-h-[80px] items-center justify-center">
               {phase !== 'waiting' && phase !== 'betting' ? null : (
-                <div className="w-20 h-28 rounded-lg border border-dashed border-white/10" />
+                <div className="w-14 h-20 rounded-lg border border-dashed border-white/10" />
               )}
             </div>
           )}
@@ -1170,15 +1175,15 @@ export default function BlackjackMultiTablePage() {
   return (
     <GlobalMainNav page="blackjack" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
       <style>{`
-        /* Desktop: overlapping card margins — matches single-player */
+        /* Desktop: overlapping card margins — tighter for small cards */
         @media (min-width: 641px) {
           .card-overlap-dealer { margin-left: -15px; }
-          .card-overlap-player { margin-left: -25px; }
+          .card-overlap-player { margin-left: -18px; }
         }
-        /* Mobile: card overlap — matches single-player */
+        /* Mobile: card overlap */
         @media (max-width: 640px) {
           .card-overlap-dealer { margin-left: -12px; }
-          .card-overlap-player { margin-left: -18px; }
+          .card-overlap-player { margin-left: -14px; }
         }
         .card-slide-in {
           animation: cardSlideIn 0.4s ease-out forwards;
