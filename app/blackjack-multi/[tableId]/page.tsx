@@ -11,6 +11,7 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Input } from '@/components/ui/input';
 import { useChat } from '@/hooks/use-chat';
 import PlayingCard from '@/components/BLACKJACK/PlayingCard';
+import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { BlackjackMobileActionBar } from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile';
@@ -299,22 +300,12 @@ function Seat({
                         </span>
                       </div>
                       {!hasSplit && seatTableBetWei(seat) > 0n && (
-                        <div className="ml-2.5 flex flex-shrink-0 items-center gap-2 pointer-events-none">
-                          <div className="relative h-9 w-9 flex-shrink-0">
-                            <div
-                              className="h-9 w-9 rounded-full"
-                              style={{
-                                background: `url('/PokerChips/greenpokerchip005.png') center/contain no-repeat`,
-                                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))',
-                              }}
-                            />
-                          </div>
-                          <span
-                            className="rounded-md px-2 py-1 bg-black/15 backdrop-blur-md text-white text-sm font-bold tabular-nums"
-                            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}
-                          >
-                            {formatMorbius(seatTableBetWei(seat).toString())}
-                          </span>
+                        <div className="ml-2.5 flex flex-shrink-0 items-center pointer-events-none">
+                          <BetChip
+                            label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
+                            size="clamp(44px, 8vw, 56px)"
+                            chipSrc="/PokerChips/greenpokerchip005.png"
+                          />
                         </div>
                       )}
                     </div>
@@ -336,24 +327,14 @@ function Seat({
             </div>
           )}
 
-          {/* Chip stack — split (total) or no cards yet; single active hand shows chips inline with hand total */}
+          {/* Bet chip — split (total) or no cards yet */}
           {seat && seatTableBetWei(seat) > 0n && seat.hands.length !== 1 && (
             <div className="flex flex-col items-center">
-              <div className="relative w-10 h-10">
-                <div
-                  className="w-10 h-10 rounded-full"
-                  style={{
-                    background: `url('/PokerChips/greenpokerchip005.png') center/contain no-repeat`,
-                    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))',
-                  }}
-                />
-              </div>
-              <span
-                className="mt-0.5 rounded-md px-2 py-1 bg-black/15 backdrop-blur-md text-white text-sm font-bold tabular-nums"
-                style={{ textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}
-              >
-                {formatMorbius(seatTableBetWei(seat).toString())}
-              </span>
+              <BetChip
+                label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
+                size="clamp(44px, 8vw, 56px)"
+                chipSrc="/PokerChips/greenpokerchip005.png"
+              />
             </div>
           )}
 

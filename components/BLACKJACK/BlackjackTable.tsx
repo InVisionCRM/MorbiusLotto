@@ -3,9 +3,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { Hand, GameState, Action, GameResult, Card } from '@/app/BLACKJACK/types';
+import type { CardValue, Suit } from '@/app/BLACKJACK/types';
 import PlayingCard from './PlayingCard';
 import BettingPanel from './BettingPanel';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
+import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
+import { EncryptedText } from '@/components/ui/encrypted-text';
+import { useAccount } from 'wagmi';
+import { isAdminWallet } from '@/lib/admin';
 
 // Background music playlist moved to page.tsx to avoid duplicate audio instances
 
@@ -154,6 +159,60 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onOpenTournamentHistory,
   inTournament = false,
 }) => {
+  // ── Admin layout test: cycle through preset hands ───────────────────────────
+  const { address: adminCheckAddress } = useAccount();
+  const isAdmin = isAdminWallet(adminCheckAddress);
+  const [testHandIndex, setTestHandIndex] = useState<number | null>(null);
+
+  const TEST_SCENARIOS: { label: string; player: Hand; dealer: Hand; bet: number; split?: Hand[] }[] = [
+    {
+      label: '2 cards vs 2',
+      player: { cards: [{ value: 10 as CardValue, suit: 'spades' as Suit }, { value: 8 as CardValue, suit: 'hearts' as Suit }], total: 18, hasAce: false, isBlackjack: false, isBust: false },
+      dealer: { cards: [{ value: 7 as CardValue, suit: 'clubs' as Suit }, { value: 10 as CardValue, suit: 'diamonds' as Suit }], total: 17, hasAce: false, isBlackjack: false, isBust: false },
+      bet: 500,
+    },
+    {
+      label: '4 cards (hit)',
+      player: { cards: [{ value: 3 as CardValue, suit: 'hearts' as Suit }, { value: 5 as CardValue, suit: 'clubs' as Suit }, { value: 4 as CardValue, suit: 'diamonds' as Suit }, { value: 7 as CardValue, suit: 'spades' as Suit }], total: 19, hasAce: false, isBlackjack: false, isBust: false },
+      dealer: { cards: [{ value: 9 as CardValue, suit: 'spades' as Suit }, { value: 8 as CardValue, suit: 'hearts' as Suit }], total: 17, hasAce: false, isBlackjack: false, isBust: false },
+      bet: 2500,
+    },
+    {
+      label: 'Blackjack',
+      player: { cards: [{ value: 1 as CardValue, suit: 'spades' as Suit }, { value: 13 as CardValue, suit: 'hearts' as Suit }], total: 21, hasAce: true, isBlackjack: true, isBust: false },
+      dealer: { cards: [{ value: 6 as CardValue, suit: 'clubs' as Suit }, { value: 10 as CardValue, suit: 'diamonds' as Suit }], total: 16, hasAce: false, isBlackjack: false, isBust: false },
+      bet: 10000,
+    },
+    {
+      label: 'Bust (5 cards)',
+      player: { cards: [{ value: 6 as CardValue, suit: 'hearts' as Suit }, { value: 5 as CardValue, suit: 'diamonds' as Suit }, { value: 4 as CardValue, suit: 'clubs' as Suit }, { value: 3 as CardValue, suit: 'spades' as Suit }, { value: 7 as CardValue, suit: 'hearts' as Suit }], total: 25, hasAce: false, isBlackjack: false, isBust: true },
+      dealer: { cards: [{ value: 10 as CardValue, suit: 'spades' as Suit }, { value: 9 as CardValue, suit: 'clubs' as Suit }], total: 19, hasAce: false, isBlackjack: false, isBust: false },
+      bet: 75000,
+    },
+    {
+      label: 'Split hand',
+      player: { cards: [{ value: 8 as CardValue, suit: 'hearts' as Suit }, { value: 5 as CardValue, suit: 'clubs' as Suit }], total: 13, hasAce: false, isBlackjack: false, isBust: false },
+      dealer: { cards: [{ value: 10 as CardValue, suit: 'diamonds' as Suit }, { value: 6 as CardValue, suit: 'spades' as Suit }], total: 16, hasAce: false, isBlackjack: false, isBust: false },
+      bet: 1500,
+      split: [
+        { cards: [{ value: 8 as CardValue, suit: 'hearts' as Suit }, { value: 5 as CardValue, suit: 'clubs' as Suit }], total: 13, hasAce: false, isBlackjack: false, isBust: false },
+        { cards: [{ value: 8 as CardValue, suit: 'diamonds' as Suit }, { value: 10 as CardValue, suit: 'spades' as Suit }], total: 18, hasAce: false, isBlackjack: false, isBust: false },
+      ],
+    },
+  ];
+
+  const activeTest = testHandIndex !== null ? TEST_SCENARIOS[testHandIndex] : null;
+  // Show blackjack text when the Blackjack test scenario is active
+  useEffect(() => {
+    if (activeTest?.label === 'Blackjack') {
+      setBlackjackColorIndex(Math.floor(Math.random() * 5));
+      setShowBlackjackText(true);
+    } else if (activeTest) {
+      setShowBlackjackText(false);
+    }
+  }, [testHandIndex]);
+  // ── End admin layout test ───────────────────────────────────────────────────
+
   const videoSrc = videoSrcProp ?? BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const imageSrc = imageSrcProp ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
   const isExternalImage = /^https?:\/\//.test(imageSrc);
@@ -202,8 +261,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   }
   const tableVideoRef = useRef<HTMLVideoElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const [showBlackjackVideo, setShowBlackjackVideo] = useState(false);
-  const blackjackVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [showBlackjackText, setShowBlackjackText] = useState(false);
+  const [blackjackColorIndex, setBlackjackColorIndex] = useState(0);
 
   // Draggable widget state (all screens)
   const [widgetPosition, setWidgetPosition] = useState({ x: 0, y: 0 }); // Will be set from saved or default
@@ -502,22 +561,23 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     prevGameResult.current = gameResult;
   }, [gameResult, onChipAnimationComplete, chipStack.length]);
 
-  // Handle blackjack celebration video
+  // Handle blackjack celebration text
+  const BLACKJACK_COLORS = [
+    { encrypted: 'text-amber-400/60', revealed: 'bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 bg-clip-text text-transparent' },
+    { encrypted: 'text-purple-400/60', revealed: 'bg-gradient-to-r from-purple-400 via-fuchsia-400 to-pink-500 bg-clip-text text-transparent' },
+    { encrypted: 'text-cyan-400/60', revealed: 'bg-gradient-to-r from-cyan-300 via-teal-400 to-emerald-400 bg-clip-text text-transparent' },
+    { encrypted: 'text-rose-400/60', revealed: 'bg-gradient-to-r from-rose-400 via-red-400 to-orange-400 bg-clip-text text-transparent' },
+    { encrypted: 'text-emerald-400/60', revealed: 'bg-gradient-to-r from-emerald-300 via-green-400 to-lime-400 bg-clip-text text-transparent' },
+  ];
+
   useEffect(() => {
     if (gameResult === 'blackjack') {
-      setShowBlackjackVideo(true);
-      // Play video after a short delay to ensure it's visible
-      setTimeout(() => {
-        blackjackVideoRef.current?.play().catch(console.error);
-      }, 100);
+      setBlackjackColorIndex(Math.floor(Math.random() * BLACKJACK_COLORS.length));
+      setShowBlackjackText(true);
     } else {
-      setShowBlackjackVideo(false);
+      setShowBlackjackText(false);
     }
   }, [gameResult]);
-
-  const handleBlackjackVideoEnd = () => {
-    setShowBlackjackVideo(false);
-  };
 
   // PP chip animation — triggers alongside main gameResult when there's a PP bet
   useEffect(() => {
@@ -777,8 +837,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                        visibleDealerCards === 1;
 
   // Determine which player hands to display
-  const displayHands = playerHands && playerHands.length > 0 ? playerHands : [playerHand];
+  const displayHands = activeTest
+    ? (activeTest.split ?? [activeTest.player])
+    : (playerHands && playerHands.length > 0 ? playerHands : [playerHand]);
   const hasSplit = displayHands.length > 1;
+  const testDealerHand = activeTest ? activeTest.dealer : null;
+  const testChipStack = activeTest ? [activeTest.bet] : null;
 
   // Calculate visible dealer total (only count face-up cards)
   const getVisibleDealerTotal = () => {
@@ -832,7 +896,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   return (
     <div
       ref={tableContainerRef}
-      className="relative w-full max-w-full mx-auto blackjack-table flex flex-col flex-1 min-h-[380px] sm:min-h-[600px]"
+      className="relative isolate w-full max-w-full mx-auto blackjack-table flex flex-col flex-1 min-h-[380px] sm:min-h-[600px]"
       style={{
         boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.9), inset 0 -2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3)',
         border: '1px inset rgba(60, 60, 60, 0.5)',
@@ -937,22 +1001,28 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-      {/* Blackjack Celebration Video */}
-      {showBlackjackVideo && gameResult === 'blackjack' && (
-        <div className="absolute inset-0 z-[35] flex items-center justify-center pointer-events-none">
-          <video
-            ref={blackjackVideoRef}
-            src="/BlackJack/VIDEOS/AnimatedBLACKJACK .mp4"
-            className="max-w-[200px] max-h-[100px] border-2 border-cyan-500/80 object-contain"
-            onEnded={handleBlackjackVideoEnd}
-            playsInline
-            muted={true}
-          />
+      {/* Blackjack Celebration — Encrypted Text */}
+      {showBlackjackText && (
+        <div className="absolute inset-0 z-[35] flex items-center justify-center pointer-events-none blackjack-text-enter">
+          <div
+            className="px-8 py-4 sm:px-12 sm:py-5 rounded-2xl glass-distort-panel"
+          >
+            <div style={{ fontFamily: '"Orbitron", sans-serif' }}>
+              <EncryptedText
+                text="BLACKJACK"
+                revealDelayMs={100}
+                flipDelayMs={35}
+                className="text-4xl sm:text-5xl md:text-6xl font-black tracking-wider"
+                encryptedClassName={BLACKJACK_COLORS[blackjackColorIndex].encrypted}
+                revealedClassName={BLACKJACK_COLORS[blackjackColorIndex].revealed}
+              />
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Game Result Banner - Shows when game is complete and dealer reveal is done */}
-      {gameState === GameState.COMPLETE && gameResult && !isRevealing && visibleDealerCards >= dealerHand.cards.length && !cardsExiting && (
+      {/* Game Result Banner - Shows when game is complete and dealer reveal is done (not for blackjack — has its own animation) */}
+      {gameState === GameState.COMPLETE && gameResult && gameResult !== 'blackjack' && !isRevealing && visibleDealerCards >= dealerHand.cards.length && !cardsExiting && (
         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex justify-center pointer-events-none">
           <div
             className={`
@@ -1094,11 +1164,25 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         {/* Play Area — dealer and player in flow, centered as a group with gap between rows */}
         <div className="flex-1 flex flex-col justify-center items-center gap-12 sm:gap-6 min-h-0">
           {/* Dealer row — shifted up 30px via transform so it actually moves */}
-          {(() => {
+          {testDealerHand ? (
+            /* ── Admin test: render dealer cards directly (no reveal logic) ── */
+            <div className="flex flex-col items-center" style={{ transform: 'translateY(-30px)' }}>
+              <div className="flex gap-1 sm:gap-0">
+                {testDealerHand.cards.map((card, index) => (
+                  <div key={`dealer-card-${index}`} className={index > 0 ? 'card-overlap-dealer' : ''} style={{ zIndex: index }}>
+                    <PlayingCard card={card} owner="dealer" hidden={index === 1} className="" index={index} isNewCard={false} exiting={false} exitDelay={0} size="normal" />
+                  </div>
+                ))}
+              </div>
+              <div className="glass-counter relative w-24 h-24 flex items-center justify-center rounded-full" style={{ marginTop: -14, zIndex: 10 }}>
+                <span className="text-white/90 font-black text-6xl relative z-10">{testDealerHand.cards[0].value >= 10 ? 10 : testDealerHand.cards[0].value}</span>
+              </div>
+            </div>
+          ) : (() => {
             const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
             const dealerIsWinner = gameCompleteAndRevealed && gameResult === 'loss';
             return (
-              <div className="flex flex-row items-center justify-center" style={{ transform: 'translateY(-30px)' }}>
+              <div className="flex flex-col items-center justify-center" style={{ transform: 'translateY(-30px)' }}>
                 <div className="flex gap-1 sm:gap-0">
                   {dealerHand.cards.map((card, index) => {
                     if (index >= visibleDealerCards) return null;
@@ -1118,33 +1202,31 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                           isNewCard={index >= 2 && index === visibleDealerCards - 1}
                           exiting={cardsExiting}
                           exitDelay={0}
+                          size="normal"
                         />
                       </div>
                     );
                   })}
                 </div>
                 {visibleDealerCards > 0 && (
-                  <div className={`flex items-center gap-1 sm:gap-2 ml-2 sm:ml-3 transition-transform duration-300 ${dealerIsWinner ? 'card-counter-winner' : ''}`}>
-                    <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
+                  <div className={`flex items-center gap-2 transition-transform duration-300 ${dealerIsWinner ? 'card-counter-winner' : ''}`} style={{ marginTop: -14, zIndex: 10 }}>
+                    <div className={`glass-counter relative w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 ${
                       gameState === GameState.DEALER_TURN ? 'card-counter-active' : ''
-                    }`}
-                    style={{
-                      padding: gameState === GameState.DEALER_TURN ? '8px' : '4px',
-                    }}>
-                      <span className="text-white font-black text-lg sm:text-3xl relative z-10">
+                    }`}>
+                      <span className={`font-black relative z-10 transition-all duration-500 ${dealerIsWinner ? 'text-emerald-400 text-7xl' : 'text-white/90 text-6xl'}`}>
                         {dealerHand.isBlackjack ? dealerHand.total : (isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal()))}
                       </span>
                     </div>
-                    {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-sm sm:text-base">BUST</span>}
-                    {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-sm sm:text-base">BJ</span>}
+                    {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-base sm:text-lg">BUST</span>}
+                    {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-base sm:text-lg">BJ</span>}
                   </div>
                 )}
               </div>
             );
           })()}
 
-          {/* Player row — shifted down 70px from center */}
-          <div className="flex flex-col gap-2 items-center justify-center -mt-[24px]" style={{ transform: 'translateY(70px)' }}>
+          {/* Player row — shifted down from center, above the bet chip */}
+          <div className="flex flex-col gap-2 items-center justify-center" style={{ transform: 'translateY(clamp(10px, 4vh, 60px))' }}>
             <div className={`flex ${hasSplit ? 'gap-2' : 'gap-0'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
@@ -1176,24 +1258,40 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   >
                     {/* Hand Label for Split */}
                     {hasSplit && (
-                      <div className="mb-0 flex items-center gap-1 sm:gap-2">
-                        <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
-                          isActiveHand ? 'text-cyan-500' : 'text-white/40'
-                        }`}>
-                          Hand {handIndex + 1}
-                        </span>
+                      <div className={`mb-0 flex items-center gap-1.5 sm:gap-2 px-3 py-1 rounded-full transition-all duration-300 ${
+                        isActiveHand ? 'bg-cyan-500/20 border border-cyan-400/50' : 'bg-transparent'
+                      }`}>
                         {isActiveHand && (
-                          <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-cyan-400 rounded-full animate-pulse"></span>
+                          <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></span>
                         )}
+                        <span className={`font-bold uppercase tracking-wider transition-all duration-300 ${
+                          isActiveHand ? 'text-cyan-300 text-xs sm:text-sm' : isCompletedHand ? 'text-white/25 text-[10px] sm:text-xs' : 'text-white/40 text-[10px] sm:text-xs'
+                        }`}>
+                          {isActiveHand ? '▸ Hand ' : 'Hand '}{handIndex + 1}
+                        </span>
                       </div>
                     )}
 
-                    {/* Cards row + score always to the right of cards */}
+                    {/* Cards + counter on one row; chips then bet under cards (non-split) */}
                     {(() => {
                       const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
                       const handIsWinner = gameCompleteAndRevealed && (hand.result === 'win' || hand.result === 'blackjack');
                       return (
-                        <div className="flex items-center">
+                        <div className="flex flex-col items-center">
+                          {/* Score — above cards, only when cards are dealt */}
+                          {hand.cards.length > 0 && <div className={`flex items-center gap-2 transition-transform duration-300 ${handIsWinner ? 'card-counter-winner' : ''}`} style={{ marginBottom: -10, zIndex: 10 }}>
+                            <div className={`glass-counter relative w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 ${
+                              gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
+                            }`}>
+                              <span className={`font-black relative z-10 transition-all duration-500 ${
+                                handIsWinner ? 'text-emerald-400 text-7xl' : isActiveHand ? 'text-white/90 text-6xl' : hasSplit ? 'text-white/50 text-6xl' : 'text-white/90 text-6xl'
+                              }`}>
+                                {hand.total}
+                              </span>
+                            </div>
+                            {hand.isBlackjack && <span className="text-yellow-400 font-black text-base sm:text-xl">BJ!</span>}
+                            {hand.isBust && <span className="text-red-400 font-black text-base sm:text-xl">BUST</span>}
+                          </div>}
                           <div className="flex gap-0">
                             {hand.cards.map((card, cardIndex) => {
                               let isNewCard = false;
@@ -1223,129 +1321,17 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                               );
                             })}
                           </div>
-                          {/* Score — always to the right of cards */}
-                          <div className={`flex items-center gap-1 ml-2 sm:ml-3 transition-transform duration-300 ${handIsWinner ? 'card-counter-winner' : ''}`}>
-                            <div className={`relative flex items-center justify-center rounded-full transition-all duration-300 ${
-                              gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
-                            }`}
-                            style={{
-                              padding: gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? '6px' : '3px',
-                            }}>
-                              <span className={`font-black text-lg sm:text-3xl relative z-10 ${
-                                isActiveHand ? 'text-white' : hasSplit ? 'text-white/70' : 'text-white'
-                              }`}>
-                                {hand.total}
-                              </span>
-                            </div>
-                            {hand.isBlackjack && <span className="text-yellow-400 font-black text-sm sm:text-2xl">BJ!</span>}
-                            {hand.isBust && <span className="text-red-400 font-black text-sm sm:text-2xl">BUST</span>}
-                          </div>
-                          {/* Bet chips + amount — same row / vertical center as hand total (non-split only) */}
-                          {!hasSplit && chipStack.length > 0 && (
-                            <div
-                              className={`relative ml-2.5 flex flex-shrink-0 items-center gap-2 pointer-events-none ${
-                                chipAnimationState === 'loss' ? 'chip-stack-lose' :
-                                chipAnimationState === 'win' ? 'chip-stack-win' : ''
-                              }`}
-                            >
-                              <div
-                                className="relative chip-stack-container"
-                                style={{
-                                  width: '52px',
-                                  height: `${Math.max(44, chipStack.length * 2 + 40)}px`,
-                                }}
-                              >
-                                {chipStack.map((chipValue, index) => {
-                                  const chipImage = getChipImage(chipValue);
-                                  const stackOffset = index * 2;
-                                  return (
-                                    <div
-                                      key={`original-${chipValue}-${index}`}
-                                      className={`absolute w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden ${
-                                        chipAnimationState === 'loss' ? 'chip-lose' : ''
-                                      }`}
-                                      style={{
-                                        background: `url('${chipImage}') center/contain no-repeat`,
-                                        border: '2px solid rgba(0, 0, 0, 0)',
-                                        bottom: `${stackOffset}px`,
-                                        left: '50%',
-                                        transform: 'translateX(-50%)',
-                                        zIndex: 10 + index,
-                                        animationDelay: chipAnimationState === 'loss' ? `${index * 0.05}s` : '0s',
-                                      }}
-                                    />
-                                  );
-                                })}
-                                {chipAnimationState === 'win' && (() => {
-                                  const totalBet = chipStack.reduce((sum, chip) => sum + chip, 0);
-                                  let payoutInTokens: number;
-                                  if (totalPayout > BigInt(0)) {
-                                    const payoutWei = Number(totalPayout);
-                                    const betWei = totalBet * 1e18;
-                                    const winningWei = payoutWei - betWei;
-                                    payoutInTokens = Math.floor(winningWei / 1e18);
-                                  } else {
-                                    if (gameResult === 'blackjack') {
-                                      payoutInTokens = Math.floor(totalBet * 1.5);
-                                    } else {
-                                      payoutInTokens = totalBet;
-                                    }
-                                  }
-                                  const winningChips: number[] = [];
-                                  let remaining = payoutInTokens;
-                                  const chipValues = [100000, 10000, 2500, 1000, 500];
-                                  for (const chipValue of chipValues) {
-                                    while (remaining >= chipValue) {
-                                      winningChips.push(chipValue);
-                                      remaining -= chipValue;
-                                    }
-                                  }
-                                  return winningChips.map((chipValue, index) => {
-                                    const chipImage = getChipImage(chipValue);
-                                    return (
-                                      <div
-                                        key={`win-${chipValue}-${index}`}
-                                        className="absolute w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden chip-win"
-                                        style={{
-                                          background: `url('${chipImage}') center/contain no-repeat`,
-                                          border: '2px solid rgba(0, 0, 0, 0)',
-                                          bottom: `${chipStack.length * 2 + 8}px`,
-                                          left: '50%',
-                                          transform: 'translateX(-50%)',
-                                          zIndex: 100 + index,
-                                          animationDelay: `${index * 0.2}s`,
-                                        }}
-                                      />
-                                    );
-                                  });
-                                })()}
-                              </div>
-                              <span
-                                className={`rounded-md px-2 py-1 bg-black/15 backdrop-blur-md font-black tabular-nums text-white text-base sm:text-xl ${
-                                  chipAnimationState !== 'none' ? 'opacity-0' : ''
-                                }`}
-                                style={{
-                                  textShadow: '0 1px 3px rgba(0, 0, 0, 0.85)',
-                                  transition: 'opacity 0.3s ease-out',
-                                }}
-                              >
-                                {chipStack.reduce((sum, chip) => sum + chip, 0)}
-                              </span>
-                            </div>
-                          )}
+                          {/* Bet chip moved to absolute position at bottom: 80px (same as Perfect Pairs) */}
                         </div>
                       );
                     })()}
 
-                    {/* Chip Stack Under Each Split Hand */}
-                    {hasSplit && chipStack.length > 0 && (() => {
-                      // Determine animation state for this specific hand
+                    {/* Bet chip under each split hand */}
+                    {hasSplit && (testChipStack || chipStack).length > 0 && (() => {
                       const handResult = hand.result;
                       const isHandWin = handResult === 'win' || handResult === 'blackjack';
                       const isHandLoss = handResult === 'loss';
                       const showHandAnimation = gameState === GameState.COMPLETE && chipAnimationState !== 'none';
-
-                      // Get chips for this hand
                       const handChips = chipStack.slice(
                         handIndex === 0 ? 0 : Math.ceil(chipStack.length / 2),
                         handIndex === 0 ? Math.ceil(chipStack.length / 2) : chipStack.length
@@ -1353,86 +1339,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                       const handBetTotal = handChips.reduce((sum, chip) => sum + chip, 0);
 
                       return (
-                        <div className="mt-2 flex flex-col items-center">
-                          {/* Chips for this hand */}
-                          <div
-                            className={`relative ${
-                              showHandAnimation && isHandLoss ? 'chip-stack-lose' :
-                              showHandAnimation && isHandWin ? 'chip-stack-win' : ''
-                            }`}
-                            style={{
-                              width: '40px',
-                              height: `${Math.max(40, handChips.length * 2 + 40)}px`
-                            }}
-                          >
-                            {/* Original bet chips */}
-                            {handChips.map((chipValue, index) => {
-                              const chipImage = getChipImage(chipValue);
-                              const stackOffset = index * 2;
-
-                              return (
-                                <div
-                                  key={`split-chip-${handIndex}-${index}`}
-                                  className={`absolute w-10 h-10 rounded-full ${
-                                    showHandAnimation && isHandLoss ? 'chip-lose' : ''
-                                  }`}
-                                  style={{
-                                    background: `url('${chipImage}') center/contain no-repeat`,
-                                    bottom: `${stackOffset}px`,
-                                    left: '0',
-                                    zIndex: 10 + index,
-                                    animationDelay: showHandAnimation && isHandLoss ? `${index * 0.05}s` : '0s',
-                                  }}
-                                />
-                              );
-                            })}
-
-                            {/* Winning chips for this hand - animate in on win */}
-                            {showHandAnimation && isHandWin && (() => {
-                              // Calculate payout for this hand (1:1 for regular win)
-                              const payoutAmount = handBetTotal; // Win pays 1:1
-                              const winningChips: number[] = [];
-                              let remaining = payoutAmount;
-                              // Include tournament chip values (50, 100, 250) for small payouts
-                              const chipValues = [100000, 10000, 2500, 1000, 500, 250, 100, 50];
-
-                              for (const chipValue of chipValues) {
-                                while (remaining >= chipValue) {
-                                  winningChips.push(chipValue);
-                                  remaining -= chipValue;
-                                }
-                              }
-
-                              return winningChips.map((chipValue, index) => {
-                                const chipImage = getChipImage(chipValue);
-                                return (
-                                  <div
-                                    key={`split-win-chip-${handIndex}-${index}`}
-                                    className="absolute w-10 h-10 rounded-full chip-win"
-                                    style={{
-                                      background: `url('${chipImage}') center/contain no-repeat`,
-                                      bottom: `${handChips.length * 2 + 5}px`,
-                                      left: '0',
-                                      zIndex: 100 + index,
-                                      animationDelay: `${index * 0.2}s`,
-                                    }}
-                                  />
-                                );
-                              });
-                            })()}
-                          </div>
-                          {/* Bet amount for this hand */}
-                          <span
-                            className={`text-white font-bold text-2xl mt-1 ${
-                              showHandAnimation ? 'opacity-0' : ''
-                            }`}
-                            style={{
-                              textShadow: '1px 1px 3px rgba(0, 0, 0, 0.8)',
-                              transition: 'opacity 0.3s ease-out',
-                            }}
-                          >
-                            {handBetTotal}
-                          </span>
+                        <div className={`mt-2 flex flex-col items-center ${
+                          showHandAnimation && isHandLoss ? 'chip-stack-lose' :
+                          showHandAnimation && isHandWin ? 'chip-stack-win' : ''
+                        }`}>
+                          <BetChip
+                            label={showHandAnimation ? '' : formatChipLabel(handBetTotal)}
+                            amount={handBetTotal}
+                            size="clamp(48px, 8vw, 64px)"
+                            chipSrc={getChipImage(0)}
+                          />
                         </div>
                       );
                     })()}
@@ -1501,7 +1417,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   viewBox="0 0 12 12"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
-                  className="text-cyan-200"
+                  className="text-cyan-500"
                   style={{
                     transform: isHorizontal ? 'rotate(-45deg)' : 'rotate(0deg)',
                     transition: 'transform 0.2s',
@@ -1714,7 +1630,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       {/* Perfect Pairs chip stack + bet circle — left of main chip stack */}
       {onPerfectPairsBetChange && (
         <div
-          className="absolute z-40 pointer-events-auto flex flex-col items-center"
+          className="absolute z-[5] pointer-events-auto flex flex-col items-center"
           style={{
             left: 'calc(50% - 80px)',
             bottom: '80px',
@@ -1741,85 +1657,27 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               <span className="text-white font-black text-xs leading-none" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>×</span>
             </button>
           )}
-          {/* PP chip stack (visible when bet is placed and game is active or animation is running) */}
+          {/* PP bet chip (visible when bet is placed and game is active or animation is running) */}
           {ppChipStack.length > 0 && (isPlaying || ppChipAnimationState !== 'none') && (
-            <div
-              className={`relative pp-chip-stack-container ${
-                ppChipAnimationState === 'loss' ? 'chip-stack-lose' :
-                ppChipAnimationState === 'win' ? 'chip-stack-win' : ''
-              }`}
-              style={{ width: '64px', height: `${Math.max(48, ppChipStack.length * 3 + 48)}px`, marginBottom: '4px' }}
-            >
-              {ppChipStack.map((chipValue, index) => {
-                const chipImage = getChipImage(chipValue);
-                const stackOffset = index * 3;
-                return (
-                  <div
-                    key={`pp-chip-${index}`}
-                    className={`absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden ${
-                      ppChipAnimationState === 'loss' ? 'chip-lose' : ''
-                    }`}
-                    style={{
-                      background: `url('${chipImage}') center/contain no-repeat`,
-                      border: '2px solid rgba(0, 0, 0, 0)',
-                      bottom: `${stackOffset}px`,
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      zIndex: 10 + index,
-                      animationDelay: ppChipAnimationState === 'loss' ? `${index * 0.05}s` : '0s',
-                    }}
-                  />
-                );
-              })}
-              {/* PP winning chips — animate in on pair win */}
-              {ppChipAnimationState === 'win' && (() => {
-                const ppMultiplier = perfectPairsResult === 'perfect' ? 10 : perfectPairsResult === 'colored' ? 12 : 5;
-                const winAmount = perfectPairsBet * ppMultiplier;
-                const winChips: number[] = [];
-                let rem = winAmount;
-                const chipVals = [100000, 10000, 2500, 1000, 500];
-                for (const cv of chipVals) {
-                  while (rem >= cv) {
-                    winChips.push(cv);
-                    rem -= cv;
-                  }
-                }
-                return winChips.map((chipValue, index) => {
-                  const chipImage = getChipImage(chipValue);
-                  return (
-                    <div
-                      key={`pp-win-chip-${index}`}
-                      className="absolute w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden chip-win"
-                      style={{
-                        background: `url('${chipImage}') center/contain no-repeat`,
-                        border: '2px solid rgba(0, 0, 0, 0)',
-                        bottom: `${ppChipStack.length * 3 + 10}px`,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: 100 + index,
-                        animationDelay: `${index * 0.2}s`,
-                      }}
-                    />
-                  );
-                });
-              })()}
-              {/* PP bet label above stack */}
+            <div className="flex flex-col items-center" style={{ marginBottom: '4px' }}>
               <div
-                className={`absolute left-1/2 transform -translate-x-1/2 z-50 text-center ${
-                  ppChipAnimationState === 'loss' ? 'opacity-0' : ''
+                className={`${
+                  ppChipAnimationState === 'loss' ? 'chip-stack-lose' :
+                  ppChipAnimationState === 'win' ? 'chip-stack-win' : ''
                 }`}
-                style={{ top: '-20px', transition: 'opacity 0.3s ease-out' }}
               >
-                {ppChipAnimationState === 'win' && perfectPairsResult ? (
-                  <span className="font-black text-xs text-green-300 animate-pulse" style={{ textShadow: '0 0 8px rgba(74, 222, 128, 0.6), 2px 2px 6px rgba(0, 0, 0, 0.9)' }}>
-                    {perfectPairsResult === 'colored' ? 'COLORED 12:1' : perfectPairsResult === 'mixed' ? 'MIXED 5:1' : 'PERFECT 10:1'}
-                  </span>
-                ) : (
-                  <span className="font-black text-xs text-amber-300" style={{ textShadow: '2px 2px 6px rgba(0, 0, 0, 0.9)' }}>
-                    PP {perfectPairsBet >= 1000 ? `${(perfectPairsBet / 1000).toFixed(0)}K` : perfectPairsBet}
-                  </span>
-                )}
+                <BetChip
+                  label={ppChipAnimationState !== 'none' ? '' : `PP ${formatChipLabel(perfectPairsBet)}`}
+                  amount={perfectPairsBet}
+                  size="clamp(44px, 7vw, 56px)"
+                  chipSrc={getChipImage(0)}
+                />
               </div>
+              {ppChipAnimationState === 'win' && perfectPairsResult && (
+                <span className="font-black text-xs text-green-300 animate-pulse mt-1" style={{ textShadow: '0 0 8px rgba(74, 222, 128, 0.6), 2px 2px 6px rgba(0, 0, 0, 0.9)' }}>
+                  {perfectPairsResult === 'colored' ? 'COLORED 12:1' : perfectPairsResult === 'mixed' ? 'MIXED 5:1' : 'PERFECT 10:1'}
+                </span>
+              )}
             </div>
           )}
           {/* PP bet circle button (visible when not playing and no animation running) */}
@@ -1860,6 +1718,28 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               </span>
             </button>
           )}
+        </div>
+      )}
+
+      {/* Main bet chip — absolutely positioned at same bottom as Perfect Pairs (non-split only) */}
+      {!hasSplit && (testChipStack || chipStack).length > 0 && (
+        <div
+          className={`absolute z-20 pointer-events-none flex flex-col items-center ${
+            !testChipStack && chipAnimationState === 'loss' ? 'chip-stack-lose' :
+            !testChipStack && chipAnimationState === 'win' ? 'chip-stack-win' : ''
+          }`}
+          style={{
+            left: '50%',
+            bottom: '80px',
+            transform: 'translateX(-50%)',
+          }}
+        >
+          <BetChip
+            label={!testChipStack && chipAnimationState !== 'none' ? '' : formatChipLabel((testChipStack || chipStack).reduce((sum, chip) => sum + chip, 0))}
+            amount={(testChipStack || chipStack).reduce((sum, chip) => sum + chip, 0)}
+            size="clamp(56px, 10vw, 80px)"
+            chipSrc={getChipImage(0)}
+          />
         </div>
       )}
 
@@ -1913,7 +1793,20 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
         {/* Change Table - top right of table */}
         {onOpenTableThemeSelector && (
-          <div className="absolute top-2 right-2 z-50 pointer-events-auto flex">
+          <div className="absolute top-2 right-2 z-50 pointer-events-auto flex gap-1.5">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setTestHandIndex(prev => {
+                  if (prev === null) return 0;
+                  if (prev >= TEST_SCENARIOS.length - 1) return null;
+                  return prev + 1;
+                })}
+                className="text-yellow-300/90 hover:text-yellow-200 text-[10px] font-medium py-1 px-2 rounded-md border border-yellow-500/40 hover:border-yellow-400/60 bg-slate-900/80 hover:bg-slate-800/80 transition-colors"
+              >
+                {testHandIndex === null ? 'Test' : `${TEST_SCENARIOS[testHandIndex].label} ▸`}
+              </button>
+            )}
             <button
               type="button"
               onClick={onOpenTableThemeSelector}
@@ -2095,10 +1988,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           .card-overlap-player {
             margin-left: -18px;
           }
-          .blackjack-table .chip-stack-container {
-            transform: scale(0.9);
-            transform-origin: center bottom;
-          }
         }
 
         /* Card counter active border animation */
@@ -2117,15 +2006,72 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           }
         }
 
+        .glass-counter {
+          background: rgba(255, 255, 255, 0.1);
+          border: 1.5px solid rgba(255, 255, 255, 0.25);
+          backdrop-filter: url(#glass-distort) blur(4px);
+          -webkit-backdrop-filter: url(#glass-distort) blur(4px);
+          box-shadow:
+            inset 0 0 10px 3px rgba(255, 255, 255, 0.3),
+            0 8px 32px rgba(0, 0, 0, 0.4),
+            0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .glass-distort-panel {
+          background: rgba(255, 255, 255, 0.1);
+          border: 1.5px solid rgba(255, 255, 255, 0.25);
+          backdrop-filter: url(#glass-distort) blur(4px);
+          -webkit-backdrop-filter: url(#glass-distort) blur(4px);
+          box-shadow:
+            inset 0 0 10px 3px rgba(255, 255, 255, 0.3),
+            0 8px 32px rgba(0, 0, 0, 0.4),
+            0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
         .card-counter-active {
-          border: 2px solid rgba(34, 211, 238, 0.5);
+          border: 2px solid rgba(34, 211, 238, 0.6);
           animation: cyanGlow 2s ease-in-out infinite;
+          box-shadow:
+            0 4px 16px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.7),
+            0 0 12px rgba(34, 211, 238, 0.3);
         }
 
         .card-counter-winner {
           transform: scale(1.25);
         }
+
+        @keyframes blackjackFloat {
+          0% {
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+          }
+          30% {
+            opacity: 1;
+            transform: translateY(-4px) scale(1.02);
+          }
+          50% {
+            transform: translateY(0px) scale(1);
+          }
+          100% {
+            transform: translateY(0px) scale(1);
+          }
+        }
+
+        .blackjack-text-enter {
+          animation: blackjackFloat 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
       `}</style>
+
+      {/* SVG filter for thick glass distortion on counters */}
+      <svg width="0" height="0" style={{ position: 'absolute' }}>
+        <defs>
+          <filter id="glass-distort">
+            <feTurbulence type="turbulence" baseFrequency="0.04" numOctaves="2" seed="2" result="turbulence" />
+            <feDisplacementMap in="SourceGraphic" in2="turbulence" scale="6" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </defs>
+      </svg>
     </div>
   );
 };

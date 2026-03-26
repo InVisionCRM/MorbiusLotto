@@ -149,7 +149,22 @@ export default function BlackjackSidebar({
           <div className="text-sm text-white/90 space-y-4">
             <h3 className="text-base font-semibold text-cyan-300/95">Deposit & Withdraw</h3>
             <ul className="space-y-1 list-disc list-inside text-white/80">
-              <li><strong>Deposit:</strong> Game menu → Deposit to send MORBIUS to your reserve. Or click your reserve balance.</li>
+              <li><strong>Deposit:</strong> Click your reserve balance
+                <span
+                  className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 mx-1 align-middle text-xs font-bold text-white/80 whitespace-nowrap"
+                  style={{
+                    background: 'linear-gradient(145deg, rgb(0, 0, 0), rgb(1, 2, 3))',
+                    border: '1px solid rgb(16, 137, 217)',
+                    boxShadow: 'inset 1px 1px 2px rgb(0,0,0), 0 1px 4px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  0
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/morbius/MorbiusLogo (3).png" alt="" width={16} height={16} className="object-contain" />
+                  <i className="fas fa-chevron-down text-white/60" style={{ fontSize: 7 }} />
+                </span>
+                in the top left of the game table to deposit or withdraw.
+              </li>
               <li><strong>Withdraw:</strong> Withdraw anytime from the menu or by clicking your reserve.</li>
               <li>Bets use your reserve; winnings are added back.</li>
             </ul>

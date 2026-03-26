@@ -3,6 +3,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
+import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -70,53 +71,13 @@ function getActionStyle(action: string) {
 
 // ── Chip stack (exported for use at table level) ──────────────────────────
 
-const CHIP_SIZE    = 26;
-const CHIP_OVERLAP = 5;
-
-const CHIP_SRCS = [
-  { min: 1000, src: '/PokerChips/blackpokerchip000.png' },
-  { min: 100,  src: '/PokerChips/redpokerchip015.png'   },
-  { min: 10,   src: '/PokerChips/greenpokerchip005.png' },
-  { min: 0,    src: '/PokerChips/bluepokerchip010.png'  },
-] as const;
-
 export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
   let amount = 0;
   try { amount = Number(formatEther(toBigIntSafe(weiAmount))); } catch {}
   if (amount <= 0) return null;
 
-  const count   = Math.min(5, Math.max(1, Math.ceil(Math.log10(Math.max(amount + 1, 2)))));
-  const chipSrc = (CHIP_SRCS.find(c => amount >= c.min) ?? CHIP_SRCS[CHIP_SRCS.length - 1]).src;
-  const totalH  = CHIP_SIZE + (count - 1) * CHIP_OVERLAP;
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-      <div style={{ position: 'relative', width: CHIP_SIZE, height: totalH }}>
-        {Array.from({ length: count }, (_, i) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={i}
-            src={chipSrc}
-            alt=""
-            aria-hidden
-            style={{
-              position: 'absolute',
-              bottom: i * CHIP_OVERLAP,
-              left: 0,
-              width: CHIP_SIZE,
-              height: CHIP_SIZE,
-              filter: i > 0 ? 'drop-shadow(0 -2px 3px rgba(0,0,0,0.8))' : 'drop-shadow(0 1px 2px rgba(0,0,0,0.6))',
-            }}
-          />
-        ))}
-      </div>
-      <span style={{
-        color: '#fbbf24', fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-        background: 'rgba(0,0,0,0.80)', padding: '1px 5px', borderRadius: 3,
-      }}>
-        {formatChips(weiAmount)}
-      </span>
-    </div>
+    <BetChip label={formatChipLabel(Math.floor(amount))} amount={amount} size={26} />
   );
 }
 

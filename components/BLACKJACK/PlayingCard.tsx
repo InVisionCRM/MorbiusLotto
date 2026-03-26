@@ -11,7 +11,7 @@ interface PlayingCardProps {
   className?: string;
   index?: number;
   isNewCard?: boolean;
-  size?: 'large' | 'normal' | 'small';
+  size?: 'large' | 'medium' | 'normal' | 'small';
   /** When true, play clear-out animation (fade + slide down). */
   exiting?: boolean;
   /** Delay in seconds before clear-out animation (e.g. 0.15 for player stagger). */
@@ -61,9 +61,9 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
     return '0 2px 4px rgba(0, 0, 0, 0.2)';
   };
 
-  // Size classes: large = w-28 h-40 (112x160), normal = w-20 h-28 (80x112), small = w-14 h-20 (56x80)
-  const sizeClasses = size === 'large' ? 'w-28 h-40' : size === 'small' ? 'w-14 h-20' : 'w-20 h-28';
-  const imageSize = size === 'large' ? { width: 112, height: 160 } : size === 'small' ? { width: 56, height: 80 } : { width: 80, height: 112 };
+  // Size dimensions: large = 112x160, medium = 108x152, normal = 80x112, small = 56x80
+  const sizePx = size === 'large' ? { w: 112, h: 160 } : size === 'medium' ? { w: 108, h: 152 } : size === 'small' ? { w: 56, h: 80 } : { w: 80, h: 112 };
+  const imageSize = sizePx;
 
   // Initial state for new cards: start hidden and offset
   const initialStyle = isNewCard && !exiting ? {
@@ -74,8 +74,10 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
   if (hidden) {
     return (
       <div
-        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden rounded-lg`}
+        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative overflow-hidden rounded-lg`}
         style={{
+          width: sizePx.w,
+          height: sizePx.h,
           boxShadow: getCardShadow(),
           animationDelay: exiting ? `${animationDelay}s` : (isNewCard ? `${animationDelay}s` : '1s'),
           ...initialStyle,
@@ -85,8 +87,8 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
           <Image
             src="/Pulse Branding/Logo/ball.png"
             alt="Card back"
-            width={imageSize.width}
-            height={imageSize.height}
+            width={imageSize.w}
+            height={imageSize.h}
             className="w-full h-full object-cover"
             priority
           />
@@ -97,8 +99,10 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
 
   return (
     <div
-      className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative ${sizeClasses} overflow-hidden rounded-lg bg-white`}
+      className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative overflow-hidden rounded-lg bg-white`}
       style={{
+        width: sizePx.w,
+        height: sizePx.h,
         boxShadow: getCardShadow(),
         animationDelay: exiting ? `${animationDelay}s` : (isNewCard ? `${animationDelay}s` : '1s'),
         ...initialStyle,
@@ -107,8 +111,8 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
       <Image
         src={getCardImagePath()}
         alt={`${getValueString(card.value)} of ${card.suit}`}
-        width={imageSize.width}
-        height={imageSize.height}
+        width={imageSize.w}
+        height={imageSize.h}
         className="w-full h-full object-cover"
         priority
       />
