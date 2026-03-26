@@ -24,8 +24,13 @@ import BlackjackMultiRealTimeBetChart, {
 import AvatarView from '@/components/poker/avatar/AvatarView';
 import type { Emotion } from '@/components/poker/avatar/AvatarView';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import { UserPlus, MessageCircle, Volume2, VolumeX, BarChart3, HelpCircle, History, Music, Play, Pause, SkipForward, Settings2, Mic, MicOff } from 'lucide-react';
+import { UserPlus, MessageCircle, Volume2, VolumeX, BarChart3, HelpCircle, History, Music, Play, Pause, SkipForward, Settings2, Mic, MicOff, ArrowLeft, Flame, Frown, LogOut, Smile, SmilePlus, Trophy, UserRound, Wallet, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { RadialMenuFloating, type RadialMenuItem } from '@/components/ui/radial-menu';
+import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
+import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
+import { AnimatePresence, motion } from 'framer-motion';
 import { GameFAQ } from '@/components/shared/GameFAQ';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { CardValue, Suit } from '@/app/BLACKJACK/types';
@@ -100,6 +105,20 @@ const AVATAR_ANIMATIONS: { title: string; emotion: Emotion }[] = [
   { title: 'Jackpot',   emotion: 'jackpot'   },
 ];
 
+// Radial menu — emotion icons (matches poker)
+const EMOTION_RADIAL_ICONS: Record<string, LucideIcon> = {
+  happy: Smile,
+  wink: SmilePlus,
+  surprised: Zap,
+  angry: Flame,
+  sad: Frown,
+  dance: Trophy,
+  jackpot: Trophy,
+};
+
+const PHRASE_OVERLAY_DURATION_MS = 2000;
+const LOCAL_EMOTION_DURATION_MS_RADIAL = 3000;
+
 
 function indexToCard(idx: number) {
   const rank = (idx % 13) + 1;
@@ -152,6 +171,7 @@ function handTotalFromCardIndices(indices: number[], visibleCount: number): numb
 // ──────────────────────────────────────────────────────────────────────────────
 function Seat({
   seat, position, isMe, isEmpty, isActing, phase, onTakeSeat, canTakeSeat, turnStartedAt, bettingStartedAt, balanceLabel, onOpenProfile, showOutcomeLabel,
+  onLeaveSeat, onToggleSoundPanel, onSendChatMessage,
 }: {
   seat: BJMultiSeatState | null; position: number; isMe: boolean; isEmpty: boolean;
   isActing: boolean; phase: string; onTakeSeat: () => void; canTakeSeat: boolean;
@@ -159,6 +179,9 @@ function Seat({
   balanceLabel?: string | null;
   onOpenProfile?: (address: string) => void;
   showOutcomeLabel?: boolean;
+  onLeaveSeat?: () => void;
+  onToggleSoundPanel?: () => void;
+  onSendChatMessage?: (msg: string) => void;
 }) {
   const turnRemaining = useCountdown(isActing ? turnStartedAt : null, TURN_TIMEOUT);
   const betRemaining = useCountdown(phase === 'betting' && !isEmpty ? bettingStartedAt : null, BETTING_TIMEOUT);
@@ -169,8 +192,46 @@ function Seat({
 
   // Avatar animations — matches poker system
   const [localEmotion, setLocalEmotion] = useState<Emotion | null>(null);
-  const [animPickerOpen, setAnimPickerOpen] = useState(false);
   const localEmotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avatarRef = useRef<HTMLDivElement | null>(null);
+
+  // Radial menu state — matches poker pattern
+  const [playerRadialOpen, setPlayerRadialOpen] = useState(false);
+  const [playerRadialPage, setPlayerRadialPage] = useState<'main' | 'expressions'>('main');
+
+  // QuickChat state
+  const [quickChatPickerOpen, setQuickChatPickerOpen] = useState(false);
+  const [editQuickChatOpen, setEditQuickChatOpen] = useState(false);
+  const [overlayPhrase, setOverlayPhrase] = useState<string | null>(null);
+  const phraseOverlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
+  const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases();
+
+  // Emotion radial items
+  const emotionRadialItems = useMemo(
+    () =>
+      AVATAR_ANIMATIONS.map(({ title, emotion }) => ({
+        id: emotion,
+        label: title,
+        icon: EMOTION_RADIAL_ICONS[emotion] ?? Smile,
+      })),
+    [],
+  );
+
+  const emotionMenuWithBack = useMemo(
+    (): RadialMenuItem[] => [{ id: '_back', label: 'Back', icon: ArrowLeft }, ...emotionRadialItems],
+    [emotionRadialItems],
+  );
+
+  // Player main menu items
+  const playerMainMenuItems = useMemo((): RadialMenuItem[] => {
+    const items: RadialMenuItem[] = [];
+    if (onSendChatMessage) items.push({ id: 'quickchat', label: 'Chat', icon: MessageCircle });
+    items.push({ id: 'expressions', label: 'Moves', icon: Smile });
+    if (onToggleSoundPanel) items.push({ id: 'sounds', label: 'Sounds', icon: Volume2 });
+    if (onLeaveSeat) items.push({ id: 'leave', label: 'Leave', icon: LogOut });
+    return items;
+  }, [onSendChatMessage, onToggleSoundPanel, onLeaveSeat]);
 
   // Auto-emotion based on round result
   const resultEmotion: Emotion = useMemo(() => {
@@ -182,8 +243,9 @@ function Seat({
     return 'neutral';
   }, [seat?.result]);
 
-  // Priority: local pick > result-driven > neutral
-  const activeEmotion: Emotion = localEmotion ?? (phase === 'completed' ? resultEmotion : 'neutral');
+  const hasMenuOpen = quickChatPickerOpen || playerRadialOpen;
+  // Priority: menu-open neutral > local pick > result-driven > neutral
+  const activeEmotion: Emotion = hasMenuOpen ? 'neutral' : (localEmotion ?? (phase === 'completed' ? resultEmotion : 'neutral'));
   const canOpenProfile = !!seat?.playerAddress && !!onOpenProfile && !isMe;
   const seatOutcomeLabel = (() => {
     if (!seat || seat.hands.length === 0) return null;
@@ -197,11 +259,10 @@ function Seat({
     return null;
   })();
 
-  // Close animation picker when phase changes
-  useEffect(() => { setAnimPickerOpen(false); }, [phase]);
+  // Close radial menu when phase changes
+  useEffect(() => { setPlayerRadialOpen(false); setPlayerRadialPage('main'); setQuickChatPickerOpen(false); }, [phase]);
 
   const handleAnimationSelect = useCallback((emotion: Emotion) => {
-    setAnimPickerOpen(false);
     setLocalEmotion(emotion);
     if (localEmotionTimerRef.current) clearTimeout(localEmotionTimerRef.current);
     localEmotionTimerRef.current = setTimeout(() => {
@@ -209,8 +270,53 @@ function Seat({
     }, emotion === 'wink' ? AVATAR_EMOTION_WINK_MS : AVATAR_EMOTION_DURATION_MS);
   }, []);
 
+  const handlePlayerRadialSelect = useCallback(
+    (item: RadialMenuItem) => {
+      const id = String(item.id);
+      if (playerRadialPage === 'expressions') {
+        if (id === '_back') {
+          setPlayerRadialPage('main');
+          return;
+        }
+        handleAnimationSelect(item.id as Emotion);
+        setPlayerRadialOpen(false);
+        setPlayerRadialPage('main');
+        return;
+      }
+      if (id === 'expressions') {
+        setPlayerRadialPage('expressions');
+        return;
+      }
+      if (id === 'quickchat') {
+        setPlayerRadialOpen(false);
+        setPlayerRadialPage('main');
+        setQuickChatPickerOpen(true);
+        return;
+      }
+      if (id === 'sounds') onToggleSoundPanel?.();
+      else if (id === 'leave') onLeaveSeat?.();
+      setPlayerRadialOpen(false);
+      setPlayerRadialPage('main');
+    },
+    [playerRadialPage, handleAnimationSelect, onToggleSoundPanel, onLeaveSeat],
+  );
+
+  const handleQuickChatSelect = useCallback((phrase: string) => {
+    setQuickChatPickerOpen(false);
+    if (onSendChatMessage) {
+      onSendChatMessage(phrase);
+      return;
+    }
+    setOverlayPhrase(phrase);
+    if (phraseOverlayTimeoutRef.current) clearTimeout(phraseOverlayTimeoutRef.current);
+    phraseOverlayTimeoutRef.current = setTimeout(() => {
+      setOverlayPhrase(null);
+      phraseOverlayTimeoutRef.current = null;
+    }, PHRASE_OVERLAY_DURATION_MS);
+  }, [onSendChatMessage]);
+
   return (
-    <div className="relative flex flex-col items-center gap-2 min-w-0 h-[250px]">
+    <div className="relative flex flex-col items-center gap-0 min-w-0 h-[250px] pt-2">
       {/* Cards area */}
       {isEmpty ? (
         <div
@@ -283,12 +389,12 @@ function Seat({
                         <div className={`flex items-center gap-2 transition-transform duration-300 ${
                           showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'card-counter-winner' : ''
                         }`} style={{ marginBottom: -10, zIndex: 0 }}>
-                          <div className={`glass-counter relative w-16 h-16 flex items-center justify-center rounded-full transition-all duration-300 ${
+                          <div className={`glass-counter relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 ${
                             isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''
                           }`}>
                             <span className={`font-black relative z-10 transition-all duration-500 ${
                               hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'text-emerald-400' : isActiveHand ? 'text-white/90' : hasSplit ? 'text-white/50' : 'text-white/90'
-                            } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-xl' : 'text-3xl'}`}>
+                            } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-2xl' : 'text-4xl'}`}>
                               {hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21
                                 ? <>{hand.total - 10}<span className="text-white/40">/</span>{hand.total}</>
                                 : hand.total}
@@ -298,12 +404,22 @@ function Seat({
                           {hand.isBust && <span className="text-red-400 font-black text-sm">BUST</span>}
                         </div>
                       )}
-                      <div className="flex">
+                      <div className="relative flex">
                         {hand.cards.map((c, ci) => (
                           <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
                             <PlayingCard card={indexToCard(c)} owner="player" className="" size="normal" />
                           </div>
                         ))}
+                        {/* BetChip — overlays top-right of 2nd hole card */}
+                        {!hasSplit && seat && seatTableBetWei(seat) > 0n && hand.cards.length >= 2 && (
+                          <div className="absolute -top-3 -right-4" style={{ zIndex: 20 }}>
+                            <BetChip
+                              label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
+                              size="clamp(38px, 7vw, 48px)"
+                              chipSrc="/PokerChips/greenpokerchip005.png"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                     {hasSplit && phase !== 'betting' && BigInt(hand.betAmount || '0') > 0n && (
@@ -324,8 +440,8 @@ function Seat({
             </div>
           )}
 
-          {/* Bet chip — below cards, matching single-player positioning */}
-          {seat && seatTableBetWei(seat) > 0n && (
+          {/* BetChip for split hands — shown below cards */}
+          {seat && seat.hands.length > 1 && seatTableBetWei(seat) > 0n && (
             <div className="flex flex-col items-center mt-1">
               <BetChip
                 label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
@@ -339,23 +455,29 @@ function Seat({
             <span className="text-[9px] text-white/30">sitting out</span>
           )}
 
-          {/* Player avatar + name — pinned to bottom */}
-          <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 flex items-center gap-2">
+          {/* Player avatar + name — pinned to bottom, overlays cards */}
+          <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 flex items-center gap-2" style={{ zIndex: 25 }}>
             <div className="relative flex-shrink-0" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
               {isActing && <CircularTimerRing size={AVATAR_SIZE} timeLeft={turnRemaining} maxTime={TURN_TIMEOUT} />}
               {!isActing && phase === 'betting' && <CircularTimerRing size={AVATAR_SIZE} timeLeft={betRemaining} maxTime={BETTING_TIMEOUT} />}
               <div
+                ref={avatarRef}
                 className="w-full h-full rounded-full overflow-hidden bg-slate-800"
-                style={{ border: isMe ? '2px solid rgba(34,211,238,0.6)' : isActing ? '2px solid transparent' : '2px solid rgba(255,255,255,0.15)', cursor: isMe ? 'pointer' : 'default' }}
+                style={{
+                  border: isMe ? '2px solid rgba(34,211,238,0.6)' : isActing ? '2px solid transparent' : '2px solid rgba(255,255,255,0.15)',
+                  cursor: isMe || canOpenProfile ? 'pointer' : 'default',
+                }}
                 onClick={() => {
-                  if (isMe) {
-                    setAnimPickerOpen(o => !o);
+                  if (isMe && playerMainMenuItems.length > 0) {
+                    setPlayerRadialPage('main');
+                    setPlayerRadialOpen(true);
                     return;
                   }
                   if (canOpenProfile && seat?.playerAddress) {
                     onOpenProfile(seat.playerAddress);
                   }
                 }}
+                title={isMe ? 'Tap for player menu' : undefined}
               >
                 {seat?.avatarConfig ? (
                   <AvatarView
@@ -373,38 +495,6 @@ function Seat({
                   </div>
                 )}
               </div>
-
-              {/* Animation picker — appears above avatar on click (current player only) */}
-              {isMe && animPickerOpen && (
-                <div
-                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 bg-black/90 border border-white/20 rounded-lg p-1.5 backdrop-blur-md"
-                  style={{ width: 160 }}
-                >
-                  <div className="grid grid-cols-4 gap-1">
-                    {AVATAR_ANIMATIONS.map(({ title, emotion }) => (
-                      <button
-                        key={emotion}
-                        type="button"
-                        onClick={() => handleAnimationSelect(emotion)}
-                        className="flex flex-col items-center gap-0.5 p-1 rounded hover:bg-white/10 transition-colors"
-                        title={title}
-                      >
-                        <div className="w-7 h-7 rounded-full overflow-hidden">
-                          {seat?.avatarConfig && (
-                            <AvatarView
-                              config={seat.avatarConfig as unknown as AvatarConfig}
-                              emotion={emotion}
-                              compact
-                              className="w-full h-full"
-                            />
-                          )}
-                        </div>
-                        <span className="text-[7px] text-white/50 leading-none">{title}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {showOutcomeLabel && seatOutcomeLabel && (
                 <div className={`absolute left-1/2 -translate-x-1/2 top-full mt-[2px] text-[11px] font-bold whitespace-nowrap ${seatOutcomeLabel.cls}`}>
@@ -441,6 +531,79 @@ function Seat({
               )}
             </div>
           </div>
+
+          {/* Radial menu — floats above avatar (current player only) */}
+          {isMe && playerMainMenuItems.length > 0 && (
+            <RadialMenuFloating
+              open={playerRadialOpen}
+              onOpenChange={(o) => {
+                setPlayerRadialOpen(o);
+                if (!o) setPlayerRadialPage('main');
+              }}
+              anchorRef={avatarRef}
+              menuItems={playerRadialPage === 'main' ? playerMainMenuItems : emotionMenuWithBack}
+              onSelect={handlePlayerRadialSelect}
+              size={playerRadialPage === 'expressions' ? 220 : 260}
+              iconSize={playerRadialPage === 'expressions' ? 13 : 16}
+              bandWidth={playerRadialPage === 'expressions' ? 38 : 44}
+              showLabels
+            />
+          )}
+
+          {/* QuickChat picker — appears above avatar */}
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2" style={{ zIndex: 50 }}>
+            <div ref={menuContainerRef} className="w-max min-w-[120px]">
+              <AnimatePresence>
+                {isMe && quickChatPickerOpen && (
+                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 28 }}>
+                    <div className="rounded-xl overflow-hidden max-h-[min(280px,60vh)] overflow-y-auto min-w-[160px] max-w-[220px]"
+                      style={{ background: 'rgba(10,10,10,0.96)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 4px 20px rgba(0,0,0,0.6)' }}>
+                      {quickChatPhrases.map((phrase) => (
+                        <button key={phrase} type="button" onClick={() => handleQuickChatSelect(phrase)}
+                          className="w-full px-3 py-2 text-sm text-center hover:bg-white/10 transition-colors truncate text-white/80">{phrase}</button>
+                      ))}
+                      <button type="button" onClick={() => { setQuickChatPickerOpen(false); setEditQuickChatOpen(true); }}
+                        className="w-full px-3 py-2.5 text-sm font-medium text-center hover:bg-white/10 transition-colors flex items-center justify-center gap-2 border-t border-white/10 text-white/80">
+                        <span className="text-cyan-400">✎</span> Edit QuickChat
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* QuickChat backdrop */}
+          <AnimatePresence>
+            {isMe && quickChatPickerOpen && (
+              <motion.div
+                className="fixed inset-0 z-[45]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={() => setQuickChatPickerOpen(false)}
+                aria-hidden
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Phrase overlay bubble */}
+          <AnimatePresence>
+            {overlayPhrase && (
+              <motion.div
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-3 py-1.5 rounded-lg bg-black/90 border border-white/15 text-white text-xs font-medium whitespace-nowrap"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                style={{ zIndex: 40 }}
+              >
+                {overlayPhrase}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <EditQuickChatModal open={editQuickChatOpen} onClose={() => setEditQuickChatOpen(false)} selectedPhrases={quickChatPhrases} onSave={setQuickChatPhrases} />
         </>
       )}
     </div>
@@ -1084,7 +1247,7 @@ export default function BlackjackMultiTablePage() {
         }
       `}</style>
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] gap-2 md:gap-4 min-h-0 pt-11 md:pt-14" style={{ scrollbarGutter: 'stable both-edges' }}>
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-stretch gap-2 md:gap-4 min-h-0 pt-11 md:pt-14" style={{ scrollbarGutter: 'stable both-edges' }}>
 
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
@@ -1355,6 +1518,9 @@ export default function BlackjackMultiTablePage() {
                       balanceLabel={isMe ? formatMorbius(playerBalance.toString()) : null}
                       onOpenProfile={setSelectedProfileAddress}
                       showOutcomeLabel={showSeatOutcomeLabels}
+                      onLeaveSeat={isMe ? leaveSeat : undefined}
+                      onToggleSoundPanel={isMe ? () => setSoundPanelOpen(o => !o) : undefined}
+                      onSendChatMessage={isMe ? sendChatMessage : undefined}
                     />
                   </div>
                 );
@@ -1487,7 +1653,7 @@ export default function BlackjackMultiTablePage() {
       </div>
 
       {/* ── Controls — sidebar on md+, below table on mobile ── */}
-      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-y-auto md:pt-4">
+      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-hidden md:pt-4">
 
         {/* Betting + action controls — 2-col grid on mobile matching single-player, stacked on md+ sidebar */}
         {myPosition !== null && (
@@ -1587,15 +1753,15 @@ export default function BlackjackMultiTablePage() {
           </div>
         )}
 
-        {/* Tabbed info panel — Chat / Chart / Rules / History */}
+        {/* Tabbed info panel — Chat / Chart / Rules / History — grows to fill remaining sidebar height */}
         <div
-          className="w-full min-w-0 shrink-0 rounded-xl border border-cyan-500/25 overflow-hidden"
+          className="w-full min-w-0 md:flex-1 md:min-h-0 rounded-xl border border-cyan-500/25 overflow-hidden md:flex md:flex-col"
           style={{
             background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.85), rgba(40, 40, 40, 0.65))',
             boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
           }}
         >
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full md:flex md:flex-col md:flex-1 md:min-h-0">
             <TabsList className="w-full grid grid-cols-4 bg-black/40 rounded-none border-b border-cyan-500/15 h-9 p-0">
               <TabsTrigger value="chat" className="rounded-none data-[state=active]:bg-cyan-500/15 data-[state=active]:text-cyan-300 data-[state=active]:shadow-none text-white/50 text-xs gap-1.5 h-full">
                 <MessageCircle className="w-3.5 h-3.5" />
@@ -1616,7 +1782,7 @@ export default function BlackjackMultiTablePage() {
             </TabsList>
 
             {/* Tab content area — relative wrapper so chart can be absolutely positioned when hidden */}
-            <div className="relative">
+            <div className="relative md:flex-1 md:min-h-0 md:overflow-y-auto">
               {/* Chat tab */}
               <TabsContent value="chat" className="mt-0 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
