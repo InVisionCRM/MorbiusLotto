@@ -357,7 +357,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       {/* Community board — center of felt */}
       <div
         className="absolute flex items-center justify-center"
-        style={{ left: '20%', top: '38%', width: '60%', height: '22%', zIndex: 10 }}
+        style={{ left: '20%', top: '38%', width: '60%', height: '22%', zIndex: 25 }}
         {...(tutorialTargets ? { 'data-tutorial-target': 'community-cards' } : {})}
       >
         {hand ? (

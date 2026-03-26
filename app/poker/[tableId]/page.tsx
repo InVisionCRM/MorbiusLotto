@@ -19,7 +19,6 @@ import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 import { PokerOpponentProfileCard } from '@/components/poker/PokerOpponentProfileCard';
-import { CardDisplay } from '@/components/poker/CardDisplay';
 import { PokerSoundsSettingsModal } from '@/components/poker/PokerSoundsSettingsModal';
 import { PokerTableSettingsModal } from '@/components/poker/PokerTableSettingsModal';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
@@ -515,6 +514,7 @@ export default function PokerTablePage() {
   const [showTableSettingsModal, setShowTableSettingsModal] = useState(false);
   const [showEditQuickChatModal, setShowEditQuickChatModal] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [statsMenuOpen, setStatsMenuOpen] = useState(false);
   const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases();
 
   // ── Your turn sound ───────────────────────────────────────────────────────
@@ -686,12 +686,6 @@ export default function PokerTablePage() {
             <div aria-hidden className="min-w-0" />
             {state && (
               <div className="flex flex-col items-center justify-center min-w-0 gap-0.5">
-                {state.myHoleCards && state.myHoleCards.length >= 2 && (
-                  <div className="flex items-center justify-center gap-px p-px sm:hidden">
-                    <CardDisplay cardIndex={state.myHoleCards[0]} small className="!w-[37px] !h-[52px] min-w-0 shrink-0 overflow-hidden [&>*]:!w-full [&>*]:!h-full [&>*]:!min-w-0 [&>*]:!min-h-0" />
-                    <CardDisplay cardIndex={state.myHoleCards[1]} small className="!w-[37px] !h-[52px] min-w-0 shrink-0 overflow-hidden [&>*]:!w-full [&>*]:!h-full [&>*]:!min-w-0 [&>*]:!min-h-0" />
-                  </div>
-                )}
                 <span className="text-[10px] text-[rgba(255,255,255,0.45)] tabular-nums truncate text-center w-full">
                   {fmtChips(state.smallBlind)}/{fmtChips(state.bigBlind)} · {state.seats.filter(s => s.playerAddress).length}/{state.maxSeats} seats
                 </span>
@@ -699,71 +693,11 @@ export default function PokerTablePage() {
             )}
             {!state && <div className="min-w-0" />}
             <div className="flex items-center justify-end gap-1.5 shrink-0 relative">
-              <button
-                type="button"
-                onClick={() => setShowSoundsModal(true)}
-                className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97] sm:hidden"
-                style={{
-                  background: 'rgba(255,255,255,0.07)',
-                  color: 'rgba(255,255,255,0.75)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-                }}
-              >
-                Sounds
-              </button>
-              <button
-                type="button"
-                onClick={() => setSettingsMenuOpen((o) => !o)}
-                className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
-                style={{
-                  background: 'rgba(255,255,255,0.07)',
-                  color: 'rgba(255,255,255,0.75)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-                }}
-                aria-expanded={settingsMenuOpen}
-                aria-haspopup="true"
-              >
-                Settings
-              </button>
-              {settingsMenuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    aria-hidden
-                    onClick={() => setSettingsMenuOpen(false)}
-                  />
-                  <div
-                    className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border border-white/10 overflow-hidden"
-                    style={{
-                      background: 'rgba(10,10,10,0.98)',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => { setShowTableSettingsModal(true); setSettingsMenuOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10"
-                      style={{ color: 'rgba(255,255,255,0.9)' }}
-                    >
-                      Table Appearance
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowEditQuickChatModal(true); setSettingsMenuOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
-                      style={{ color: 'rgba(255,255,255,0.9)' }}
-                    >
-                      Edit QuickChat
-                    </button>
-                  </div>
-                </>
-              )}
-              {normalizedAddress && (
+              {/* Settings dropdown — includes Table Appearance, Sounds, Edit QuickChat */}
+              <div className="relative">
                 <button
                   type="button"
-                  onClick={() => { setStatsModalAddress(normalizedAddress); setShowStatsModal(true); }}
+                  onClick={() => { setSettingsMenuOpen((o) => !o); setStatsMenuOpen(false); }}
                   className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
                   style={{
                     background: 'rgba(255,255,255,0.07)',
@@ -771,39 +705,115 @@ export default function PokerTablePage() {
                     border: '1px solid rgba(255,255,255,0.1)',
                     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
                   }}
+                  aria-expanded={settingsMenuOpen}
+                  aria-haspopup="true"
                 >
-                  Stats
+                  Settings
                 </button>
-              )}
+                {settingsMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      aria-hidden
+                      onClick={() => setSettingsMenuOpen(false)}
+                    />
+                    <div
+                      className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border border-white/10 overflow-hidden"
+                      style={{
+                        background: 'rgba(10,10,10,0.98)',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => { setShowTableSettingsModal(true); setSettingsMenuOpen(false); }}
+                        className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10"
+                        style={{ color: 'rgba(255,255,255,0.9)' }}
+                      >
+                        Table Appearance
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowSoundsModal(true); setSettingsMenuOpen(false); }}
+                        className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                        style={{ color: 'rgba(255,255,255,0.9)' }}
+                      >
+                        Sounds
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowEditQuickChatModal(true); setSettingsMenuOpen(false); }}
+                        className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                        style={{ color: 'rgba(255,255,255,0.9)' }}
+                      >
+                        Edit QuickChat
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              {/* Stats dropdown — includes Player Stats, Table Stats, and (admin) Dashboard */}
               {normalizedAddress && (
-                <button
-                  type="button"
-                  onClick={() => { setShowMyStats(v => !v); if (showDashboard) setShowDashboard(false); }}
-                  className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
-                  style={{
-                    background: showMyStats ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.07)',
-                    color: showMyStats ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.75)',
-                    border: `1px solid ${showMyStats ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.1)'}`,
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-                  }}
-                >
-                  Table
-                </button>
-              )}
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => { setShowDashboard(v => !v); if (showMyStats) setShowMyStats(false); }}
-                  className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
-                  style={{
-                    background: showDashboard ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.07)',
-                    color: showDashboard ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.75)',
-                    border: `1px solid ${showDashboard ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.1)'}`,
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-                  }}
-                >
-                  Dashboard
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => { setStatsMenuOpen((o) => !o); setSettingsMenuOpen(false); }}
+                    className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
+                    style={{
+                      background: (showMyStats || showDashboard) ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.07)',
+                      color: (showMyStats || showDashboard) ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.75)',
+                      border: `1px solid ${(showMyStats || showDashboard) ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                    }}
+                    aria-expanded={statsMenuOpen}
+                    aria-haspopup="true"
+                  >
+                    Stats
+                  </button>
+                  {statsMenuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        aria-hidden
+                        onClick={() => setStatsMenuOpen(false)}
+                      />
+                      <div
+                        className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border border-white/10 overflow-hidden"
+                        style={{
+                          background: 'rgba(10,10,10,0.98)',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => { setStatsModalAddress(normalizedAddress); setShowStatsModal(true); setStatsMenuOpen(false); }}
+                          className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10"
+                          style={{ color: 'rgba(255,255,255,0.9)' }}
+                        >
+                          Player Stats
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowMyStats(v => !v); if (showDashboard) setShowDashboard(false); setStatsMenuOpen(false); }}
+                          className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                          style={{ color: showMyStats ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.9)' }}
+                        >
+                          Table Stats
+                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => { setShowDashboard(v => !v); if (showMyStats) setShowMyStats(false); setStatsMenuOpen(false); }}
+                            className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                            style={{ color: showDashboard ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.9)' }}
+                          >
+                            Poker Dashboard
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
               <button
                 type="button"

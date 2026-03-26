@@ -1279,7 +1279,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                       return (
                         <div className="flex flex-col items-center">
                           {/* Score — above cards, only when cards are dealt */}
-                          {hand.cards.length > 0 && <div className={`flex items-center gap-2 transition-transform duration-300 ${handIsWinner ? 'card-counter-winner' : ''}`} style={{ marginBottom: -10, zIndex: 10 }}>
+                          {hand.cards.length > 0 && <div className={`flex items-center gap-2 transition-transform duration-300 ${handIsWinner ? 'card-counter-winner' : ''}`} style={{ marginBottom: -10, zIndex: 0 }}>
                             <div className={`glass-counter relative w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 ${
                               gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
                             }`}>

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-function getBackendUrl(): string {
-  const url = process.env.BLACKJACK_SERVER_URL;
-  if (!url || url.trim() === '') {
-    throw new Error(
-      'Missing required env: BLACKJACK_SERVER_URL. Set it in your deployment (e.g. Vercel).'
-    );
-  }
+/** Same resolution as `app/api/blackjack/tables/route.ts` so poker admin dashboard hits the same backend as other games. */
+function getBackendUrl(): string | null {
+  const url =
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.BLACKJACK_SERVER_URL ||
+    process.env.NEXT_PUBLIC_BLACKJACK_SERVER_URL;
+  if (!url || url.trim() === '') return null;
   return url.trim();
 }
 
@@ -22,6 +22,13 @@ export async function GET(
 
   try {
     const backendUrl = getBackendUrl();
+    if (!backendUrl) {
+      return NextResponse.json(
+        { error: 'Backend API URL not configured' },
+        { status: 503 }
+      );
+    }
+
     const res = await fetch(`${backendUrl}/api/poker/table/${tableId}/dashboard`, {
       headers: { 'Content-Type': 'application/json' },
       next: { revalidate: 10 },

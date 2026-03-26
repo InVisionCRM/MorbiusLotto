@@ -77,7 +77,7 @@ export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
   if (amount <= 0) return null;
 
   return (
-    <BetChip label={formatChipLabel(Math.floor(amount))} amount={amount} size={26} />
+    <BetChip label={formatChipLabel(Math.floor(amount))} amount={amount} size={36} />
   );
 }
 
@@ -572,8 +572,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
         <div
           className="relative flex-shrink-0"
           style={{
-            width: showMyCards ? 'clamp(84px, 20vw, 110px)' : 'clamp(58px, 14vw, 74px)',
-            height: showMyCards ? 'clamp(72px, 18vw, 96px)' : 'clamp(50px, 12vw, 66px)',
+            width: showMyCards ? 'clamp(100px, 24vw, 140px)' : 'clamp(58px, 14vw, 74px)',
+            height: showMyCards ? 'clamp(88px, 22vw, 120px)' : 'clamp(50px, 12vw, 66px)',
             marginBottom: hideSeatAvatar ? -10 : -55,
             zIndex: 0,
           }}
@@ -586,7 +586,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 bottom: 0,
                 zIndex: ci,
                 ...(showMyCards
-                  ? { width: 'clamp(54px, 13vw, 70px)', height: 'clamp(70px, 17vw, 90px)', left: ci === 0 ? '0' : 'clamp(22px, 5.6vw, 30px)' }
+                  ? { width: 'clamp(66px, 16vw, 88px)', height: 'clamp(86px, 21vw, 114px)', left: ci === 0 ? '0' : 'clamp(28px, 7vw, 40px)' }
                   : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', left: ci === 0 ? '0' : 'clamp(14px, 3.8vw, 20px)' }),
                 transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
                 transformOrigin: 'bottom center',
@@ -609,6 +609,14 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               style={{ background: 'radial-gradient(circle, var(--poker-accent-muted), transparent 70%)' }}
               aria-hidden
             />
+          )}
+          {/* Role badges — top-right overlay on cards */}
+          {(seat.isDealer || seat.isSmallBlind || seat.isBigBlind) && (
+            <div className="absolute -top-1 -right-1 flex gap-0.5 z-20">
+              {seat.isDealer     && <RoleToken label="D"  />}
+              {seat.isSmallBlind && <RoleToken label="SB" />}
+              {seat.isBigBlind   && <RoleToken label="BB" />}
+            </div>
           )}
         </div>
       )}
@@ -706,24 +714,9 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
             return avatarCard;
           })()}
 
-          {/* Role badges — bottom of avatar */}
-          {(seat.isDealer || seat.isSmallBlind || seat.isBigBlind) && (
-            <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 z-10">
-              {seat.isDealer     && <RoleToken label="D"  />}
-              {seat.isSmallBlind && <RoleToken label="SB" />}
-              {seat.isBigBlind   && <RoleToken label="BB" />}
-            </div>
-          )}
         </div>
       ) : (
         <div className="relative flex flex-col items-center flex-shrink-0 gap-0.5" style={{ zIndex: 1 }}>
-          {(seat.isDealer || seat.isSmallBlind || seat.isBigBlind) && (
-            <div className="flex justify-center gap-0.5">
-              {seat.isDealer     && <RoleToken label="D"  />}
-              {seat.isSmallBlind && <RoleToken label="SB" />}
-              {seat.isBigBlind   && <RoleToken label="BB" />}
-            </div>
-          )}
         </div>
       )}
 
@@ -765,7 +758,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
       </AnimatePresence>
 
       {/* ── Buttons + badge ── */}
-      <div style={{ position: 'relative', display: 'inline-block' }}>
+      <div style={{ position: 'relative', display: 'inline-block', ...(hideSeatAvatar && hasCards ? { marginTop: -28, zIndex: 10 } : {}) }}>
 
         {/* Backdrop to close all menus */}
         <AnimatePresence>
