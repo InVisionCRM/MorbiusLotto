@@ -600,6 +600,7 @@ export default function BlackjackMultiTablePage() {
   const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
   const prevPhaseRef = useRef<string>('');
   const chartRef = useRef<BlackjackMultiRealTimeBetChartRef>(null);
+  const chartSessionStartTime = useRef<number>(Date.now());
   const lastChartRoundRef = useRef<number>(0);
 
   // Trigger Recharts remeasure when chart tab becomes visible
